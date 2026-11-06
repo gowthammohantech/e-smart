@@ -1,9 +1,12 @@
-import { and, asc, eq, ilike, or, sql } from 'drizzle-orm';
+import { and, asc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
 import type { Schema } from '@esmart/api-contract';
 import { normalizeGstin } from '@esmart/core/domain/gstin';
 import { schema } from '@esmart/db';
-import { defineHandlers } from '../../context';
+import { defineHandlers, type Deps } from '../../context';
+import { enqueue } from '../../jobs/queue';
+import { actorFor } from '../webhooks/handlers';
 import { ApiError, invalid, notFound } from '../../http/errors';
+import { takeAiAction } from '../../lib/aiUsage';
 import { recordChange, type DbOrTx } from '../../lib/audit';
 import { newId } from '../../lib/ids';
 import { compact } from '../../lib/wire';
@@ -60,7 +63,7 @@ async function toWire(db: DbOrTx, row: ExtractionRow, digits: number): Promise<S
 /** The supplier a bill is from: by GSTIN first, then by name (as the app's matchParty). */
 async function matchSupplier(db: DbOrTx, companyId: string, gstin: string | undefined, vendor: string | undefined): Promise<string | null> {
   const P = schema.parties;
-  const suppliers = and(eq(P.companyId, companyId), eq(P.kind, 'supplier'));
+  const suppliers = and(eq(P.companyId, companyId), inArray(P.kind, ['supplier', 'both']));
   if (gstin) {
     const [hit] = await db.select({ id: P.id }).from(P).where(and(suppliers, eq(P.taxId, normalizeGstin(gstin))));
     if (hit) return hit.id;
@@ -126,52 +129,89 @@ async function store(tx: DbOrTx, companyId: string, row: ExtractionRow, result: 
 }
 
 /**
- * OCR: createOcrExtraction, getOcrExtraction. The provider runs inline, so
- * the 202 already carries a completed (or failed) extraction; a queued
- * provider would return `processing` and finish in the background.
+ * Reads the attachment and stores what was found: the row goes to completed (or failed). Shared by the
+ * request (text read on the device, or a local provider) and the `ocr.extract` job (a network provider).
+ * A row already finished is left alone, so the job can run twice.
+ */
+async function runExtraction(deps: Deps, rowId: string, text: string | undefined): Promise<ExtractionRow | null> {
+  const [started] = await deps.db.select().from(X).where(eq(X.id, rowId));
+  if (!started || started.status === 'completed' || started.status === 'failed') return started ?? null;
+  const [attachment] = await deps.db.select().from(schema.attachments).where(eq(schema.attachments.id, started.attachmentId));
+  const [company] = await deps.db.select().from(schema.companies).where(eq(schema.companies.id, started.companyId));
+  if (!attachment || !company) return null;
+  const digits = await minorDigits(deps.db, company.baseCurrency.trim());
+  const now = deps.now();
+  let result: Extracted | null = null;
+  let error: string | null = null;
+  try {
+    const body = await deps.providers.storage.get(attachment.storageKey);
+    result = await deps.providers.ocr.extract({ kind: started.kind, file: body ? { body, mimeType: attachment.mimeType } : null, text });
+  } catch (err) {
+    if (err instanceof ApiError && err.code === 'FEATURE_UNAVAILABLE') throw err;
+    error = (err as Error).message || 'The OCR provider failed';
+  }
+  const actor = await actorFor(deps.db, started.createdBy, 'OCR');
+  return deps.db.transaction(async (tx) => {
+    const matchedPartyId = result ? await store(tx, started.companyId, started, result, digits) : null;
+    const [finished] = await tx
+      .update(X)
+      .set({ status: result ? 'completed' : 'failed', matchedPartyId, rawResponse: result, error, completedAt: now })
+      .where(eq(X.id, started.id))
+      .returning();
+    if (actor) {
+      await recordChange(tx, actor, { companyId: started.companyId, action: 'created', entityType: 'ocr_extraction', entityId: finished.id, entityLabel: `${started.kind} scan ${attachment.name}`, version: 1 });
+    }
+    return finished;
+  });
+}
+
+/** The `ocr.extract` job. */
+export async function runQueuedExtraction(deps: Deps, rowId: string) {
+  await runExtraction(deps, rowId, undefined);
+}
+
+/** Providers that answer in the request: text read on the device needs no network round trip. */
+const INLINE_PROVIDERS = new Set(['simulator', 'disabled']);
+
+/**
+ * OCR: createOcrExtraction, getOcrExtraction. Text the device already read (ML Kit) is parsed in the
+ * request, so the 202 carries a completed extraction, which is what the installed apps expect. An image
+ * alone, read by a network provider, is queued: the 202 says `queued` and getOcrExtraction has the result.
  */
 export const ocrHandlers = defineHandlers({
   async createOcrExtraction(ctx) {
     const { attachmentId, kind } = ctx.body;
     // Text already read on device (or by a test) skips recognition.
-    const text = ctx.body.text;
+    const text = typeof ctx.body.text === 'string' ? ctx.body.text : undefined;
     const ATT = schema.attachments;
     const [attachment] = await ctx.db.select().from(ATT).where(and(eq(ATT.companyId, ctx.company.id), eq(ATT.id, attachmentId)));
     if (!attachment) throw invalid('attachmentId', 'No such attachment in this company');
     if (attachment.status !== 'ready') throw invalid('attachmentId', 'Finish the upload before extracting', 'ATTACHMENT_NOT_READY');
     const provider = ctx.deps.providers.ocr;
     const digits = await minorDigits(ctx.db, ctx.company.baseCurrency.trim());
+    const inline = !!text?.trim() || INLINE_PROVIDERS.has(provider.name);
+    // A scan read by the provider comes from the monthly AI allowance; text the phone read is free.
+    const giveBack = text?.trim() ? null : await takeAiAction(ctx, 'ocr');
 
-    const [started] = await ctx.db
-      .insert(X)
-      .values({ id: newId('ocr'), companyId: ctx.company.id, attachmentId, kind, status: 'processing', provider: provider.name, createdBy: ctx.user.id, createdAt: ctx.now })
-      .returning();
+    const started = await ctx.db.transaction(async (tx) => {
+      const [row] = await tx
+        .insert(X)
+        .values({ id: newId('ocr'), companyId: ctx.company.id, attachmentId, kind, status: inline ? 'processing' : 'queued', provider: provider.name, createdBy: ctx.user.id, createdAt: ctx.now })
+        .returning();
+      if (!inline) await enqueue(tx, 'ocr.extract', { extractionId: row.id }, { maxAttempts: 3 });
+      return row;
+    });
+    if (!inline) return toWire(ctx.db, started, digits);
 
-    let result: Extracted | null = null;
-    let error: string | null = null;
     try {
-      const body = await ctx.deps.providers.storage.get(attachment.storageKey);
-      result = await provider.extract({ kind, file: body ? { body, mimeType: attachment.mimeType } : null, text: typeof text === 'string' ? text : undefined });
+      const row = await runExtraction(ctx.deps, started.id, text);
+      return toWire(ctx.db, row ?? started, digits);
     } catch (err) {
       // No recognition on this server: nothing was extracted, so leave no row behind.
-      if (err instanceof ApiError && err.code === 'FEATURE_UNAVAILABLE') {
-        await ctx.db.delete(X).where(eq(X.id, started.id));
-        throw err;
-      }
-      error = (err as Error).message || 'The OCR provider failed';
+      await ctx.db.delete(X).where(eq(X.id, started.id));
+      await giveBack?.();
+      throw err;
     }
-
-    const row = await ctx.db.transaction(async (tx) => {
-      const matchedPartyId = result ? await store(tx, ctx.company.id, started, result, digits) : null;
-      const [finished] = await tx
-        .update(X)
-        .set({ status: result ? 'completed' : 'failed', matchedPartyId, rawResponse: result, error, completedAt: ctx.now })
-        .where(eq(X.id, started.id))
-        .returning();
-      await recordChange(tx, ctx.user, { companyId: ctx.company.id, action: 'created', entityType: 'ocr_extraction', entityId: finished.id, entityLabel: `${kind} scan ${attachment.name}`, version: 1 });
-      return finished;
-    });
-    return toWire(ctx.db, row, digits);
   },
 
   async getOcrExtraction(ctx) {

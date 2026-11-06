@@ -1,9 +1,10 @@
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useRefreshOnFocus } from '../../remote/useRefreshOnFocus';
 import { Linking, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon, type IconName } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
@@ -15,36 +16,37 @@ import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { DocumentRow } from '@esmart/ui/components/DocumentRow';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { Sheet } from '@esmart/ui/components/Sheet';
-import { useToast } from '@esmart/ui/components/Toast';
+import { useServerSave } from '../../components/useServerSave';
 import { StatRow, StatTile } from '@esmart/ui/components/StatTile';
 
-import { Party } from '@esmart/core/types';
-import { buildOutstanding } from '@esmart/core/domain/receivables';
+import type { BusinessDocument, DocStatus, DocumentKind, Party, Payment } from '@esmart/core/types';
+import type { OutstandingDoc } from '@esmart/core/domain/receivables';
 import { formatMoney } from '@esmart/core/lib/format';
 import { formatDate } from '@esmart/core/lib/date';
-import { money, sum, zero } from '@esmart/core/lib/money';
+import { money, type Money } from '@esmart/core/lib/money';
 import { paymentMethodLabel } from '@esmart/core/labels';
 
 import { useAppStore } from '../../store/appStore';
-import { useBaseCurrency, usePartyHistory, usePayments } from '../../store/selectors';
+import { useBaseCurrency, usePartyOutstanding } from '../../store/selectors';
+import { useDocumentPages, useDocumentSummary, usePartyAging, usePaymentPages, usePartyRecord, type DocumentSummary } from '../../remote/queries';
 import { detailRouteFor } from '../documents/DocumentEditor';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { SplitPane } from '@esmart/ui/components/Layout';
 import { useGoBack } from '../../navigation/useGoBack';
+import { PaymentReminderSheet } from '../ledger/PaymentReminderSheet';
 
 type Tab = 'activity' | 'documents' | 'payments' | 'details';
 
 export function PartyDetail({ party }: { party: Party }) {
+  useRefreshOnFocus();
   const t = useTheme();
   const insets = useSafeAreaInsets();
-  const { t: tr } = useTranslation(['contacts', 'domain']);
+  const { t: tr } = useTranslation(['contacts', 'domain', 'common', 'nav', 'purchases', 'reports']);
   const router = useRouter();
   const goBack = useGoBack();
-  const toast = useToast();
+  const { run: serverSave } = useServerSave();
 
   const baseCurrency = useBaseCurrency();
-  const history = usePartyHistory(party.id);
-  const allPayments = usePayments();
   const removeParty = useAppStore((s) => s.removeParty);
 
   const [tab, setTab] = useState<Tab>('activity');
@@ -53,46 +55,53 @@ export function PartyDetail({ party }: { party: Party }) {
   const shownTab: Tab = desktop && tab === 'details' ? 'activity' : tab;
   const [actionsOpen, setActionsOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [reminderOpen, setReminderOpen] = useState(false);
 
-  const isCustomer = party.kind === 'customer';
+  // A party that is both reads like a customer, with what we owe them beside; a general contact has no account.
+  const isCustomer = party.kind !== 'supplier';
+  const isBoth = party.kind === 'both';
+  const canTransact = party.kind !== 'general';
 
-  const partyPayments = useMemo(
-    () => allPayments.filter((p) => p.partyId === party.id),
-    [allPayments, party.id],
-  );
-
+  // Everything below comes from the server, so the party's whole history needn't be on the device.
+  const record = usePartyRecord(party.id).data;
+  const aging = usePartyAging(party.id, isCustomer ? 'customer' : 'supplier').data;
   const outstanding = useMemo(
-    () => buildOutstanding(history.invoices, partyPayments),
-    [history.invoices, partyPayments],
+    () =>
+      (aging?.documents ?? []).map((o) => ({
+        document: { ...o.document, totals: { grandTotal: o.document?.grandTotal } } as unknown as BusinessDocument,
+        allocated: o.allocated as Money,
+        outstanding: o.outstanding as Money,
+        daysOverdue: o.daysOverdue ?? 0,
+        bucket: o.bucket,
+      })) as OutstandingDoc[],
+    [aging],
   );
 
-  const totalOutstanding = useMemo(
-    () =>
-      outstanding.length
-        ? sum(
-            outstanding.map((o) => money(Math.round(o.outstanding.minor * (o.document.exchangeRate || 1)), baseCurrency)),
-            baseCurrency,
-          )
-        : zero(baseCurrency),
-    [outstanding, baseCurrency],
-  );
+  // Open documents plus what is left of the opening balance: the server's figure, the device's until it answers.
+  const deviceOutstanding = usePartyOutstanding(party.id);
+  const totalOutstanding = (record?.outstanding as Money | undefined) ?? deviceOutstanding;
 
-  const lifetimeValue = useMemo(
-    () =>
-      history.invoices.length
-        ? sum(
-            history.invoices
-              .filter((d) => !['draft', 'cancelled'].includes(d.status))
-              .map((d) => money(Math.round(d.totals.grandTotal.minor * (d.exchangeRate || 1)), baseCurrency)),
-            baseCurrency,
-          )
-        : zero(baseCurrency),
-    [history.invoices, baseCurrency],
+  const billKind: DocumentKind = isCustomer ? 'invoice' : 'purchaseBill';
+  const billed = useDocumentSummary({ kinds: [billKind], partyId: party.id }).data;
+  // Drafts and cancelled documents don't count towards what was billed.
+  const lifetimeValue = money(
+    (billed?.byStatus ?? []).filter((b) => !['draft', 'cancelled', 'rejected'].includes(b.status)).reduce((a, b) => a + (b.total?.minor ?? 0), 0),
+    baseCurrency,
   );
+  const billCount = billed?.count ?? 0;
 
   const overdueCount = outstanding.filter((o) => o.daysOverdue > 0).length;
 
-  const contactAction = (icon: keyof typeof MaterialCommunityIcons.glyphMap, label: string, onPress: () => void, disabled?: boolean) => (
+  // The first page of each kind; "See all" opens the list filtered to this party.
+  const pagesOf = (kinds: DocumentKind[]) => ({ kinds, partyId: party.id });
+  const quotes = useDocumentPages(pagesOf([isCustomer ? 'quote' : 'purchaseOrder']));
+  const orders = useDocumentPages(pagesOf([isCustomer ? 'salesOrder' : 'goodsReceipt']));
+  const bills = useDocumentPages(pagesOf([billKind]));
+  const returns = useDocumentPages(pagesOf([isCustomer ? 'salesReturn' : 'purchaseReturn']));
+  const payments = usePaymentPages({ direction: isCustomer ? 'received' : 'paid', partyId: party.id });
+  const partyPayments = payments.rows as unknown as Payment[];
+
+  const contactAction = (icon: IconName, label: string, onPress: () => void, disabled?: boolean) => (
     <Pressable
       onPress={onPress}
       disabled={disabled}
@@ -116,7 +125,7 @@ export function PartyDetail({ party }: { party: Party }) {
           justifyContent: 'center',
         }}
       >
-        <MaterialCommunityIcons name={icon} size={19} color={t.c.primary} />
+        <Icon name={icon} size={19} color={t.c.primary} />
       </View>
       <Text variant="micro" tone="muted">
         {label}
@@ -124,20 +133,30 @@ export function PartyDetail({ party }: { party: Party }) {
     </Pressable>
   );
 
-  const renderDocuments = (docs: typeof history.all, emptyTitle: string) =>
+  const renderDocuments = (docs: DocumentSummary[], emptyTitle: string) =>
     docs.length === 0 ? (
       <EmptyState icon="file-outline" title={emptyTitle} compact />
     ) : (
       docs.map((d, i) => (
         <DocumentRow
           key={d.id}
-          document={d}
+          document={{ number: d.number ?? '', date: d.date!, status: d.status as DocStatus, totals: { grandTotal: d.grandTotal as Money } }}
           partyName={party.name}
           divider={i < docs.length - 1}
-          onPress={() => router.push(detailRouteFor(d.kind, d.id) as never)}
+          onPress={() => router.push(detailRouteFor(d.kind as DocumentKind, d.id!) as never)}
         />
       ))
     );
+  const listRoute: Partial<Record<DocumentKind, string>> = {
+    quote: '/(app)/sales/quotes',
+    salesOrder: '/(app)/sales/orders',
+    invoice: '/(app)/sales/invoices',
+    salesReturn: '/(app)/sales/returns',
+    purchaseOrder: '/(app)/purchases/orders',
+    goodsReceipt: '/(app)/purchases/receipts',
+    purchaseBill: '/(app)/purchases/bills',
+    purchaseReturn: '/(app)/purchases/returns',
+  };
 
   const headerCard = (
     <>
@@ -162,13 +181,13 @@ export function PartyDetail({ party }: { party: Party }) {
       </View>
 
       <View style={{ flexDirection: 'row', borderTopWidth: 1, borderTopColor: t.c.line, paddingTop: t.spacing.sm }}>
-        {contactAction('phone', 'Call', () => Linking.openURL(`tel:${party.phone}`), !party.phone)}
+        {contactAction('phone', tr('contacts:detail.call'), () => Linking.openURL(`tel:${party.phone}`), !party.phone)}
         {contactAction('whatsapp', 'WhatsApp', () => Linking.openURL(`https://wa.me/${(party.phone ?? '').replace(/[^0-9]/g, '')}`), !party.phone)}
-        {contactAction('email-outline', 'Email', () => Linking.openURL(`mailto:${party.email}`), !party.email)}
-        {contactAction(
+        {contactAction('email-outline', tr('contacts:form.email'), () => Linking.openURL(`mailto:${party.email}`), !party.email)}
+        {canTransact && contactAction(
           isCustomer ? 'file-document-edit-outline' : 'cart-outline',
-          isCustomer ? 'Invoice' : 'Bill',
-          () => router.push(isCustomer ? '/(app)/sales/invoices/new' : '/(app)/purchases/bills/new'),
+          isCustomer ? tr('nav:title.invoice') : tr('purchases:hub.bill'),
+          () => router.push(`${isCustomer ? '/(app)/sales/invoices/new' : '/(app)/purchases/bills/new'}?partyId=${party.id}`),
         )}
       </View>
     </Card>
@@ -178,17 +197,28 @@ export function PartyDetail({ party }: { party: Party }) {
     <>
     <StatRow>
       <StatTile
-        label={isCustomer ? 'Owes you' : 'You owe'}
+        label={isCustomer ? tr('contacts:detail.owesYou') : tr('reports:home.youOwe')}
         value={totalOutstanding}
         tone={totalOutstanding.minor > 0 ? (overdueCount > 0 ? 'bad' : 'warn') : 'good'}
         icon="clock-alert-outline"
-        caption={`${outstanding.length} open${overdueCount ? ` · ${overdueCount} overdue` : ''}`}
+        caption={
+          overdueCount
+            ? `${tr('contacts:detail.openCount', { count: outstanding.length })} · ${tr('contacts:detail.overdueCount', { count: overdueCount })}`
+            : tr('contacts:detail.openCount', { count: outstanding.length })
+        }
       />
+      {isBoth ? (
+        <StatTile
+          label={tr('contacts:detail.payable')}
+          value={((record as { payable?: Money } | undefined)?.payable) ?? { minor: 0, currency: party.currency }}
+          icon="cash-minus"
+        />
+      ) : null}
       <StatTile
-        label={isCustomer ? 'Total invoiced' : 'Total purchased'}
+        label={isCustomer ? tr('contacts:detail.totalInvoiced') : tr('contacts:detail.totalPurchased')}
         value={lifetimeValue}
         icon="chart-line"
-        caption={`${history.invoices.length} documents`}
+        caption={tr('contacts:detail.documentCount', { count: billCount })}
       />
     </StatRow>
     </>
@@ -206,7 +236,9 @@ export function PartyDetail({ party }: { party: Party }) {
               document={o.document}
               partyName={party.name}
               outstandingLabel={
-                o.daysOverdue > 0 ? `${o.daysOverdue}d overdue · ${formatMoney(o.outstanding)} left` : `${formatMoney(o.outstanding)} left`
+                o.daysOverdue > 0
+                  ? tr('contacts:detail.overdueLeft', { days: o.daysOverdue, amount: formatMoney(o.outstanding) })
+                  : tr('contacts:detail.amountLeft', { amount: formatMoney(o.outstanding) })
               }
               divider={i < outstanding.length - 1}
               onPress={() => router.push(detailRouteFor(o.document.kind, o.document.id) as never)}
@@ -219,21 +251,24 @@ export function PartyDetail({ party }: { party: Party }) {
     {shownTab === 'documents' ? (
       <View style={{ gap: t.spacing.lg }}>
         {[
-          { title: isCustomer ? 'Quotations' : 'Purchase orders', docs: isCustomer ? history.quotes : history.orders },
-          { title: isCustomer ? 'Sales orders' : 'Goods receipts', docs: isCustomer ? history.orders : history.deliveries },
-          { title: isCustomer ? 'Invoices' : 'Bills', docs: history.invoices },
-          { title: 'Returns', docs: history.returns },
+          { title: isCustomer ? tr('nav:title.quotations') : tr('nav:title.purchaseOrders'), pages: quotes, kind: (isCustomer ? 'quote' : 'purchaseOrder') as DocumentKind },
+          { title: isCustomer ? tr('nav:title.salesOrders') : tr('nav:title.goodsReceipts'), pages: orders, kind: (isCustomer ? 'salesOrder' : 'goodsReceipt') as DocumentKind },
+          { title: isCustomer ? tr('nav:title.invoices') : tr('contacts:detail.bills'), pages: bills, kind: billKind },
+          { title: tr('contacts:detail.returns'), pages: returns, kind: (isCustomer ? 'salesReturn' : 'purchaseReturn') as DocumentKind },
         ]
-          .filter((g) => g.docs.length > 0)
+          .filter((g) => g.pages.rows.length > 0)
           .map((g) => (
             <View key={g.title}>
               <Text variant="caption" tone="muted" weight="600" style={{ marginBottom: t.spacing.sm, textTransform: 'uppercase', letterSpacing: 0.6 }}>
                 {g.title}
               </Text>
-              <Card padded={false}>{renderDocuments(g.docs, 'None yet')}</Card>
+              <Card padded={false}>{renderDocuments(g.pages.rows, tr('contacts:detail.noneYet'))}</Card>
+              {g.pages.hasNextPage && listRoute[g.kind] ? (
+                <Button title={tr('common:action.seeAll')} variant="ghost" size="sm" onPress={() => router.push(`${listRoute[g.kind]}?party=${party.id}` as never)} />
+              ) : null}
             </View>
           ))}
-        {history.all.length === 0 ? (
+        {[quotes, orders, bills, returns].every((g) => !g.isLoading && g.rows.length === 0) ? (
           <Card padded={false}>
             <EmptyState illustration="no-documents" icon="file-outline" title={tr('contacts:detail.noDocuments')} compact />
           </Card>
@@ -262,7 +297,7 @@ export function PartyDetail({ party }: { party: Party }) {
                 backgroundColor: pressed ? t.c.card2 : 'transparent',
               })}
             >
-              <MaterialCommunityIcons
+              <Icon
                 name={p.direction === 'received' ? 'arrow-down' : 'arrow-up'}
                 size={19}
                 color={p.direction === 'received' ? t.c.good : t.c.bad}
@@ -289,21 +324,24 @@ export function PartyDetail({ party }: { party: Party }) {
     <>
     <Card style={{ gap: t.spacing.md }}>
       {[
-        { label: 'GSTIN', value: party.taxId ?? 'Not registered' },
-        { label: 'Phone', value: party.phone ?? '—' },
-        { label: 'Email', value: party.email ?? '—' },
-        { label: 'Currency', value: party.currency },
-        { label: 'Payment terms', value: party.paymentTermsDays === 0 ? 'Due on receipt' : `${party.paymentTermsDays} days` },
-        ...(party.creditLimit ? [{ label: 'Credit limit', value: formatMoney(party.creditLimit) }] : []),
-        { label: 'Opening balance', value: formatMoney(party.openingBalance) },
+        { label: 'GSTIN', value: party.taxId ?? tr('contacts:detail.notRegistered') },
+        { label: tr('contacts:form.phone'), value: party.phone ?? '—' },
+        { label: tr('contacts:form.email'), value: party.email ?? '—' },
+        { label: tr('contacts:form.currency'), value: party.currency },
         {
-          label: 'Billing address',
+          label: tr('contacts:form.paymentTerms'),
+          value: party.paymentTermsDays === 0 ? tr('contacts:form.dueOnReceipt') : tr('contacts:form.termsDays', { count: party.paymentTermsDays }),
+        },
+        ...(party.creditLimit ? [{ label: tr('contacts:form.creditLimit'), value: formatMoney(party.creditLimit) }] : []),
+        { label: tr('contacts:form.openingBalance'), value: formatMoney(party.openingBalance) },
+        {
+          label: tr('contacts:form.billingAddress'),
           value: [party.billingAddress?.line1, party.billingAddress?.city, party.billingAddress?.state, party.billingAddress?.postalCode]
             .filter(Boolean)
             .join(', ') || '—',
         },
-        { label: 'Added', value: formatDate(party.createdAt) },
-        ...(party.notes ? [{ label: 'Notes', value: party.notes }] : []),
+        { label: tr('contacts:detail.added'), value: formatDate(party.createdAt) },
+        ...(party.notes ? [{ label: tr('contacts:form.notes'), value: party.notes }] : []),
       ].map((r) => (
         <View key={r.label} style={{ flexDirection: 'row', justifyContent: 'space-between', gap: t.spacing.lg }}>
           <Text variant="small" tone="muted">
@@ -319,18 +357,20 @@ export function PartyDetail({ party }: { party: Party }) {
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       {desktop ? (
         <Stack.Screen
           options={{
             headerRight: () => (
               <View style={{ flexDirection: 'row', gap: t.spacing.sm }}>
                 <Button title={tr('contacts:detail.actions')} variant="ghost" icon="dots-horizontal" onPress={() => setActionsOpen(true)} />
-                <Button
-                  title={isCustomer ? 'Receive payment' : 'Pay'}
-                  icon={isCustomer ? 'cash-plus' : 'cash-minus'}
-                  onPress={() => router.push(`/(app)/payments/new?direction=${isCustomer ? 'received' : 'paid'}&partyId=${party.id}`)}
-                />
+                {canTransact ? (
+                  <Button
+                    title={isCustomer ? tr('common:quickAction.receivePayment') : tr('contacts:detail.pay')}
+                    icon={isCustomer ? 'cash-plus' : 'cash-minus'}
+                    onPress={() => router.push(`/(app)/payments/new?direction=${isCustomer ? 'received' : 'paid'}&partyId=${party.id}`)}
+                  />
+                ) : null}
               </View>
             ),
           }}
@@ -354,9 +394,9 @@ export function PartyDetail({ party }: { party: Party }) {
               <View style={{ gap: t.spacing.md }}>
                 <Segmented
                   options={[
-                    { value: 'activity', label: 'Open' },
-                    { value: 'documents', label: 'Documents' },
-                    { value: 'payments', label: 'Payments' },
+                    { value: 'activity', label: tr('contacts:detail.tabOpen') },
+                    { value: 'documents', label: tr('contacts:detail.tabDocuments') },
+                    { value: 'payments', label: tr('contacts:detail.tabPayments') },
                   ]}
                   value={tab}
                   onChange={(v) => setTab(v as Tab)}
@@ -374,10 +414,10 @@ export function PartyDetail({ party }: { party: Party }) {
             <View style={{ height: t.spacing.lg }} />
             <Segmented
               options={[
-                { value: 'activity', label: 'Open' },
-                { value: 'documents', label: 'Documents' },
-                { value: 'payments', label: 'Payments' },
-                { value: 'details', label: 'Details' },
+                { value: 'activity', label: tr('contacts:detail.tabOpen') },
+                { value: 'documents', label: tr('contacts:detail.tabDocuments') },
+                { value: 'payments', label: tr('contacts:detail.tabPayments') },
+                { value: 'details', label: tr('contacts:detail.tabDetails') },
               ]}
               value={tab}
               onChange={(v) => setTab(v as Tab)}
@@ -406,27 +446,40 @@ export function PartyDetail({ party }: { party: Party }) {
             gap: t.spacing.md,
           }}
         >
-          <Button
-            title={isCustomer ? 'Receive payment' : 'Pay'}
-            icon={isCustomer ? 'cash-plus' : 'cash-minus'}
-            onPress={() => router.push(`/(app)/payments/new?direction=${isCustomer ? 'received' : 'paid'}&partyId=${party.id}`)}
-            style={{ flex: 1 }}
-          />
+          {canTransact ? (
+            <Button
+              title={isCustomer ? tr('common:quickAction.receivePayment') : tr('contacts:detail.pay')}
+              icon={isCustomer ? 'cash-plus' : 'cash-minus'}
+              onPress={() => router.push(`/(app)/payments/new?direction=${isCustomer ? 'received' : 'paid'}&partyId=${party.id}`)}
+              style={{ flex: 1 }}
+            />
+          ) : null}
           <Button title={tr('contacts:detail.actions')} variant="ghost" icon="dots-horizontal" onPress={() => setActionsOpen(true)} style={{ flex: 1 }} />
         </View>
       )}
 
       <Sheet visible={actionsOpen} onClose={() => setActionsOpen(false)} title={party.name}>
         {[
-          { label: 'Edit contact', icon: 'pencil-outline' as const, onPress: () => router.push(isCustomer ? `/(app)/contacts/customers/${party.id}/edit` : `/(app)/contacts/suppliers/${party.id}/edit`) },
-          ...(isCustomer
+          { label: tr('contacts:detail.editContact'), icon: 'pencil-outline' as const, onPress: () => router.push(isCustomer ? `/(app)/contacts/customers/${party.id}/edit` : `/(app)/contacts/suppliers/${party.id}/edit`) },
+          { label: tr('contacts:detail.statement'), icon: 'book-open-outline' as const, onPress: () => router.push(`/(app)/contacts/${isCustomer ? 'customers' : 'suppliers'}/${party.id}/statement` as never) },
+          ...(!canTransact
+            ? []
+            : isCustomer
             ? [
-                { label: 'New invoice', icon: 'file-document-edit-outline' as const, onPress: () => router.push('/(app)/sales/invoices/new') },
-                { label: 'New quotation', icon: 'file-percent-outline' as const, onPress: () => router.push('/(app)/sales/quotes/new') },
-                { label: 'Send payment reminder', icon: 'bell-ring-outline' as const, onPress: () => toast.show(tr('contacts:detail.reminderQueued'), 'success') },
+                { label: tr('common:quickAction.newInvoice'), icon: 'file-document-edit-outline' as const, onPress: () => router.push(`/(app)/sales/invoices/new?partyId=${party.id}`) },
+                { label: tr('nav:title.newQuotation'), icon: 'file-percent-outline' as const, onPress: () => router.push(`/(app)/sales/quotes/new?partyId=${party.id}`) },
+                // Only when something is owed; it opens the same reminder as the aging screen.
+                ...(outstanding.length ? [{ label: tr('contacts:detail.sendReminder'), icon: 'bell-ring-outline' as const, onPress: () => setReminderOpen(true) }] : []),
+                // A party that is both is bought from too.
+                ...(isBoth
+                  ? [
+                      { label: tr('nav:title.newPurchaseBill'), icon: 'cart-outline' as const, onPress: () => router.push(`/(app)/purchases/bills/new?partyId=${party.id}`) },
+                      { label: tr('contacts:detail.pay'), icon: 'cash-minus' as const, onPress: () => router.push(`/(app)/payments/new?direction=paid&partyId=${party.id}`) },
+                    ]
+                  : []),
               ]
-            : [{ label: 'New purchase bill', icon: 'cart-outline' as const, onPress: () => router.push('/(app)/purchases/bills/new') }]),
-          { label: 'Delete contact', icon: 'trash-can-outline' as const, onPress: () => setConfirmDelete(true) },
+            : [{ label: tr('nav:title.newPurchaseBill'), icon: 'cart-outline' as const, onPress: () => router.push(`/(app)/purchases/bills/new?partyId=${party.id}`) }]),
+          { label: tr('contacts:detail.deleteContact'), icon: 'trash-can-outline' as const, onPress: () => setConfirmDelete(true) },
         ].map((a) => (
           <Pressable
             key={a.label}
@@ -447,7 +500,7 @@ export function PartyDetail({ party }: { party: Party }) {
               backgroundColor: pressed ? t.c.card2 : 'transparent',
             })}
           >
-            <MaterialCommunityIcons name={a.icon} size={20} color={t.c.text} />
+            <Icon name={a.icon} size={20} color={t.c.text} />
             <Text variant="body" style={{ flex: 1 }}>
               {a.label}
             </Text>
@@ -457,18 +510,20 @@ export function PartyDetail({ party }: { party: Party }) {
 
       <ConfirmDialog
         visible={confirmDelete}
-        title={`Delete ${party.name}?`}
+        title={tr('contacts:detail.deleteTitle', { name: party.name })}
         message={tr('contacts:detail.deleteMessage')}
         confirmLabel={tr('contacts:detail.delete')}
         destructive
         onCancel={() => setConfirmDelete(false)}
         onConfirm={() => {
-          removeParty(party.id);
           setConfirmDelete(false);
-          toast.show(tr('contacts:detail.deleted'), 'success');
-          goBack('/(app)/(tabs)/contacts');
+          void serverSave(() => removeParty(party.id), tr('contacts:detail.deleted'), { icon: 'account-remove-outline' }).then((res) => {
+            if (res) goBack('/(app)/(tabs)/contacts');
+          });
         }}
       />
+
+      <PaymentReminderSheet party={reminderOpen ? party : undefined} rows={outstanding} onClose={() => setReminderOpen(false)} />
     </View>
   );
 }

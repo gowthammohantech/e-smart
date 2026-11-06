@@ -10,7 +10,20 @@
     "out": "Out",
     "low": "Low",
     "service": "Service",
-    "actions": "Stock actions"
+    "actions": "Stock actions",
+    "all": "All",
+    "trackedItems_one": "{{count}} tracked item",
+    "trackedItems_other": "{{count}} tracked items",
+    "outOfStock_one": "{{count}} out of stock",
+    "outOfStock_other": "{{count}} out of stock",
+    "itemCount_one": "{{count}} item",
+    "itemCount_other": "{{count}} items",
+    "movements": "Movements",
+    "emptyFirst": "Add your first item to start tracking stock.",
+    "emptyFilter": "No items match this filter.",
+    "a11yStock": "{{name}}, {{qty}} in stock",
+    "a11yService": "{{name}}, service",
+    "setOpeningStock": "Set opening stock"
   },
   "form": {
     "name": "Name",
@@ -35,7 +48,67 @@
     "activeHint": "Inactive items are hidden when creating documents.",
     "namePlaceholderFull": "What you're selling",
     "trackStockHintFull": "Sales and purchases will move this item's stock automatically.",
-    "serviceUnitHint": "Services are always billed in Nos."
+    "serviceUnitHint": "Services are always billed in Nos.",
+    "openingStockDate": "Opening stock date",
+    "openingStockDateHint": "The day this stock was counted. No invoice or bill with this item can be dated before it.",
+    "openingStockDateFuture": "Can't be a future date",
+    "itemName": "Item name",
+    "skuTaken": "Another item already uses this SKU",
+    "added": "Item added",
+    "updated": "Item updated",
+    "select": "Select",
+    "hsnCode": "HSN code",
+    "sacCode": "SAC code",
+    "openingLocked": "Use a stock adjustment to change this.",
+    "saveChanges": "Save changes",
+    "type": "Type",
+    "status": "Status",
+    "section": {
+      "details": "Item details",
+      "detailsHint": "What you sell and how it is identified",
+      "pricing": "Pricing and tax",
+      "pricingHint": "What you charge and what it costs you",
+      "summary": "Summary",
+      "unitStock": "Unit and stock"
+    },
+    "category": "Category",
+    "brand": "Brand",
+    "none": "None"
+  },
+  "gst": {
+    "supplyType": "GST treatment",
+    "supply": {
+      "taxable": "Taxable",
+      "nil": "Nil-rated",
+      "exempt": "Exempt",
+      "nonGst": "Non-GST"
+    },
+    "supplyHint": {
+      "taxable": "GST at the rate above.",
+      "nil": "Taxed at 0% by the schedule, such as fresh vegetables or salt.",
+      "exempt": "Exempt by notification, such as healthcare or education services.",
+      "nonGst": "Outside GST altogether, such as petrol or alcohol for drinking."
+    },
+    "reimbursement": "Reimbursement at cost",
+    "reimbursementHint": "You pay this for the customer and recover exactly what you paid (pure agent, Rule 33). No GST, and it stays out of the taxable value.",
+    "reverseCharge": "Reverse charge",
+    "reverseChargeHint": "A notified supply where the buyer pays the GST, such as transport by a GTA or legal services.",
+    "cessRate": "Cess (%)",
+    "cessHint": "Compensation cess on top of GST, for goods like tobacco, aerated drinks and cars. Leave blank if none.",
+    "capitalGoods": "Capital goods",
+    "capitalGoodsHint": "Machinery or equipment you keep and use. Its input tax credit is reported separately.",
+    "itc": "Input tax credit",
+    "itcHint": "Whether the GST you pay when buying this can be claimed back.",
+    "itcOption": {
+      "eligible": "Can be claimed",
+      "blocked": "Blocked, section 17(5)",
+      "ineligible": "Not claimable"
+    },
+    "itcOptionHint": {
+      "eligible": "Used in the business: the GST paid is credit.",
+      "blocked": "Food, personal vehicles, club fees, works contracts for buildings and the like.",
+      "ineligible": "Used for exempt supplies or personal purposes."
+    }
   },
   "detail": {
     "inactive": "Inactive",
@@ -50,7 +123,20 @@
     "delete": "Delete",
     "deleted": "Item deleted",
     "pricing": "Pricing",
-    "stockMovements": "Stock movements"
+    "stockMovements": "Stock movements",
+    "perUnit": "per {{unit}}",
+    "cost": "cost {{amount}}",
+    "reorderAt": "reorder at {{qty}}",
+    "soldAllTime": "{{qty}} sold all-time",
+    "taxCategory": "Tax category",
+    "salePriceInclTax": "Sale price incl. tax",
+    "balance": "bal {{qty}}",
+    "adjustStock": "Adjust stock",
+    "transferBranches": "Transfer between branches",
+    "sellItem": "Sell this item",
+    "buyItem": "Buy this item",
+    "deleteItem": "Delete item",
+    "deleteTitle": "Delete {{name}}?"
   },
   "transfer": {
     "oneLocation": "You only have one location",
@@ -67,7 +153,20 @@
     "selectItem": "Select item",
     "fromBranch": "From branch",
     "toBranch": "To branch",
-    "done": "Stock transferred"
+    "done": "Stock transferred",
+    "onlyAvailable": "Only {{qty}} {{unit}} available at the source branch",
+    "available": "{{qty}} {{unit}} available",
+    "twoMovesNote": "Transfers post two movements — one out of the source branch and one into the destination — so total stock stays unchanged.",
+    "whatTitle": "What to move",
+    "whatHint": "The item and how much of it",
+    "whereTitle": "Where",
+    "whereHint": "From one branch to another",
+    "afterTitle": "After the transfer",
+    "pickItemHint": "Pick an item to see the effect",
+    "branchNow": "{{branch}} now",
+    "branchAfter": "{{branch}} after",
+    "exceedsSource": "This is more than the source branch holds.",
+    "afterEmpty": "The stock at both branches, before and after, appears here once you choose an item."
   },
   "adjust": {
     "item": "Item",
@@ -80,7 +179,26 @@
     "selectItem": "Select item",
     "done": "Stock adjusted",
     "newStock": "New stock",
-    "negativeWarning": "This would take stock negative. Check the quantity before saving."
+    "negativeWarning": "This would take stock negative. Check the quantity before saving.",
+    "decrease": "Decrease",
+    "increase": "Increase",
+    "currentStock": "Current stock",
+    "adjustment": "Adjustment",
+    "reasons": {
+      "damaged": "Damaged",
+      "lost": "Lost or stolen",
+      "expired": "Expired",
+      "sample": "Sample given",
+      "countCorrection": "Stock count correction",
+      "internalUse": "Internal use",
+      "found": "Found stock",
+      "customerReturn": "Returned from customer",
+      "production": "Production output"
+    },
+    "panelHint": "Correct the stock on hand for one item",
+    "result": "Result",
+    "pickItemHint": "Pick an item to see its stock",
+    "resultEmpty": "The stock before and after the change appears here once you choose an item."
   },
   "scan": {
     "barcode": "Barcode",
@@ -91,7 +209,12 @@
     "use": "Use",
     "pointCamera": "Point the camera at a barcode",
     "tryOne": "Try one of these",
-    "manualNote": "Camera scanning is not available yet. Type or paste the code from the label, or pick an item below."
+    "manualNote": "Camera scanning is not available yet. Type or paste the code from the label, or pick an item below.",
+    "inStock": "{{qty}} {{unit}} in stock",
+    "a11yUse": "Use barcode for {{name}}",
+    "lookUp": "Look up a code",
+    "lookUpHint": "Type or paste it, or use a scanner that types for you",
+    "samplesHint": "Sample barcodes from your items"
   },
   "lowStock": {
     "needAttention": "Need attention",
@@ -100,18 +223,36 @@
     "allStocked": "Everything is stocked",
     "allStockedBody": "No item is at or below its reorder level.",
     "out": "Out",
-    "raisePo": "Raise a purchase order"
+    "raisePo": "Raise a purchase order",
+    "reorderAt": "reorder at {{qty}} {{unit}}",
+    "buySuggestion": "buy {{qty}} ≈ {{amount}}"
   },
   "opening": {
     "asOn": "As on",
     "search": "Search items",
     "noTracked": "No stock-tracked items",
-    "submit": "Save opening stock"
+    "submit": "Save opening stock",
+    "intro": "Enter what you already had on hand when you started using the app. This posts an opening movement and does not affect your sales or purchase figures.",
+    "entryNote": "Opening stock entry",
+    "done_one": "Opening stock set for {{count}} item",
+    "done_other": "Opening stock set for {{count}} items",
+    "currently": "currently {{qty}} {{unit}}",
+    "entered_one": "{{count}} item entered",
+    "entered_other": "{{count}} items entered",
+    "current": "Current",
+    "openingQty": "Opening quantity",
+    "branchHint": "Applies to the branch you are in",
+    "itemsEntered": "Items entered"
   },
   "movements": {
     "search": "Search by item or reference",
     "none": "No movements",
-    "noneBody": "Stock movements appear as you buy, sell and adjust."
+    "noneBody": "Stock movements appear as you buy, sell and adjust.",
+    "all": "All",
+    "count_one": "{{count}} movement",
+    "count_other": "{{count}} movements",
+    "unknownItem": "Unknown item",
+    "a11yRow": "{{name}}, {{type}}, {{qty}}"
   },
   "ocr": {
     "nothingScanned": "Nothing scanned yet",
@@ -131,7 +272,9 @@
     "ocrUnavailable": "Bill scanning works in the installed Elixir Books app on Android or iPhone. It is not available in the browser or in Expo Go.",
     "noTextFound": "No text found. Retake the photo flat and in good light.",
     "cameraDenied": "Allow camera access in Settings to scan a bill.",
-    "galleryDenied": "Allow photo access in Settings to pick a bill."
+    "galleryDenied": "Allow photo access in Settings to pick a bill.",
+    "reading": "Reading the bill…",
+    "read": "Bill read. Check the details"
   },
   "catalog": {
     "search": "Search by name, SKU or HSN",
@@ -139,6 +282,67 @@
     "items": "Items",
     "services": "Services",
     "noServices": "No services yet",
-    "noServicesBody": "Add the work you charge for, like installation or maintenance, to put it on invoices in a tap."
+    "noServicesBody": "Add the work you charge for, like installation or maintenance, to put it on invoices in a tap.",
+    "noMatch": "No match",
+    "noMatchBody": "No item matches that search.",
+    "noItems": "No items yet",
+    "noItemsBody": "Add what you sell to put it on invoices in a tap.",
+    "allCategories": "All categories",
+    "allBrands": "All brands"
+  },
+  "type": {
+    "goods": "Product",
+    "service": "Service"
+  },
+  "movementType": {
+    "opening": "Opening stock",
+    "purchaseReceipt": "Purchase receipt",
+    "salesIssue": "Sales issue",
+    "salesReturn": "Sales return",
+    "purchaseReturn": "Purchase return",
+    "transferIn": "Transfer in",
+    "transferOut": "Transfer out",
+    "adjustment": "Adjustment"
+  },
+  "import": {
+    "title": "Import items",
+    "action": "Import",
+    "hint": "Paste or choose a CSV saved from Excel, Google Sheets, Tally or another app. Columns are found by their names (Name, SKU, Unit, Sale price, Purchase price, GST %, HSN, Barcode, Opening stock, Reorder level, Type). Check it first; nothing is saved until you import.",
+    "chooseFile": "Choose CSV file",
+    "paste": "Or paste the CSV here",
+    "noNameColumn": "No column called Name (or Item name, Product…) was found in the first row.",
+    "summary": "{{good}} of {{total}} rows can be imported",
+    "line": "Line {{line}}",
+    "more": "and {{count}} more rows",
+    "check": "Check",
+    "import": "Import {{count}}",
+    "done": "{{count}} items imported",
+    "skipped": "{{count}} left out",
+    "tooMany": "Up to 1,000 at a time; split the sheet.",
+    "status": {
+      "invalid": "Fix",
+      "duplicate": "Already there",
+      "ready": "Ready"
+    },
+    "field": {
+      "name": "Name",
+      "sku": "SKU",
+      "description": "Description",
+      "type": "Goods or service",
+      "unit": "Unit",
+      "salePrice": "Sale price",
+      "purchasePrice": "Purchase price",
+      "taxRate": "GST rate",
+      "hsnCode": "HSN/SAC",
+      "barcode": "Barcode",
+      "openingStock": "Opening stock",
+      "reorderLevel": "Reorder level"
+    },
+    "dryRun": "{{created}} new, {{skipped}} already there, {{invalid}} to fix",
+    "col": {
+      "price": "Price",
+      "tax": "GST",
+      "stock": "Opening stock"
+    }
   }
 }

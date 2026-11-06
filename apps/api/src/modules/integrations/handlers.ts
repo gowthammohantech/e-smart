@@ -1,9 +1,9 @@
 import { randomBytes } from 'node:crypto';
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, sql } from 'drizzle-orm';
 import { schema } from '@esmart/db';
 import type { Schema } from '@esmart/api-contract';
 import { defineHandlers, type Deps } from '../../context';
-import { notFound, planUpgradeRequired } from '../../http/errors';
+import { conflict, notFound, planUpgradeRequired } from '../../http/errors';
 import { recordChange } from '../../lib/audit';
 import { encrypt } from '../../lib/crypto';
 import { compact } from '../../lib/wire';
@@ -12,6 +12,45 @@ const INT = schema.integrations;
 const CI = schema.companyIntegrations;
 type IntegrationRow = typeof INT.$inferSelect;
 type Tier = Schema<'PlanTier'>;
+
+/**
+ * The two government portals are not a free switch. They are connected when a login is stored for them *and*
+ * the portal is switched on (`compliance_settings.einvoice_enabled` / `eway_bill_enabled`, the same flag the
+ * e-invoicing screen and the compliance rules read). A flag alone could say "connected" for a business that never
+ * entered a login, so without one the switch cannot turn on; the app sends the user to enter it instead.
+ * Switching off keeps the login, so switching back on needs no retyping.
+ */
+const PORTAL_OF: Record<string, 'einvoice' | 'ewaybill'> = { int_einvoice: 'einvoice', int_eway: 'ewaybill' };
+
+async function portalState(db: Deps['db'], company: { id: string }) {
+  const CR = schema.complianceCredentials;
+  const S = schema.complianceSettings;
+  const stored = new Set((await db.select({ portal: CR.portal }).from(CR).where(eq(CR.companyId, company.id))).map((r) => r.portal));
+  const [flags] = await db.select({ einvoice: S.einvoiceEnabled, ewaybill: S.ewayBillEnabled }).from(S).where(eq(S.companyId, company.id));
+  return {
+    stored,
+    connected: (portal: 'einvoice' | 'ewaybill') => stored.has(portal) && !!flags?.[portal],
+  };
+}
+
+async function setPortalEnabled(tx: Parameters<Parameters<Deps['db']['transaction']>[0]>[0], ctx: { user: Parameters<typeof recordChange>[1]; now: Date }, companyId: string, portal: 'einvoice' | 'ewaybill', enabled: boolean, label: string) {
+  const S = schema.complianceSettings;
+  const [updated] = await tx
+    .update(S)
+    .set({ ...(portal === 'einvoice' ? { einvoiceEnabled: enabled } : { ewayBillEnabled: enabled }), version: sql`${S.version} + 1`, updatedAt: ctx.now })
+    .where(eq(S.companyId, companyId))
+    .returning({ version: S.version });
+  if (!updated) return;
+  await recordChange(tx, ctx.user, {
+    companyId,
+    action: enabled ? 'connected' : 'disconnected',
+    entityType: 'compliance_settings',
+    entityId: companyId,
+    entityLabel: label,
+    version: updated.version,
+    after: { portal, enabled },
+  });
+}
 
 const TIER_RANK: Record<Tier, number> = { free: 0, basic: 1, pro: 2, business: 3 };
 
@@ -37,6 +76,12 @@ const OAUTH: Record<string, (deps: Deps, state: string) => string> = {
     })}`,
 };
 
+/**
+ * Connected through a consent screen whose callback isn't built yet: shown as coming soon, and a connect without
+ * credentials is refused rather than left half-done. Razorpay keys sent directly still connect.
+ */
+const COMING_SOON = new Set(['int_drive', 'int_razorpay']);
+
 function integrationToWire(row: IntegrationRow, connected: boolean): Schema<'Integration'> {
   return compact({
     id: row.id,
@@ -45,6 +90,7 @@ function integrationToWire(row: IntegrationRow, connected: boolean): Schema<'Int
     icon: row.icon,
     category: row.category,
     connected,
+    available: connected || !COMING_SOON.has(row.id),
     configRoute: row.configRoute,
   });
 }
@@ -70,7 +116,8 @@ export const integrationsHandlers = defineHandlers({
       .from(INT)
       .leftJoin(CI, and(eq(CI.integrationId, INT.id), eq(CI.companyId, ctx.company.id)))
       .orderBy(asc(INT.category), asc(INT.name));
-    return { data: rows.map((r) => integrationToWire(r.i, !!r.connected)) };
+    const portals = await portalState(ctx.db, ctx.company);
+    return { data: rows.map((r) => integrationToWire(r.i, PORTAL_OF[r.i.id] ? portals.connected(PORTAL_OF[r.i.id]) : !!r.connected)) };
   },
 
   /**
@@ -82,8 +129,17 @@ export const integrationsHandlers = defineHandlers({
   async connectIntegration(ctx) {
     const integration = await findIntegration(ctx.db, ctx.params.integrationId);
     if (TIER_RANK[ctx.company.plan] < TIER_RANK[integration.minPlan]) throw planUpgradeRequired(integration.minPlan, integration.name);
+    // A portal switches on only once it has a login. Without one it stays off, and the app opens the screen to
+    // enter it.
+    const portal = PORTAL_OF[integration.id];
+    if (portal) {
+      if (!(await portalState(ctx.db, ctx.company)).stored.has(portal)) return { integration: integrationToWire(integration, false) };
+      await ctx.db.transaction((tx) => setPortalEnabled(tx, ctx, ctx.company.id, portal, true, integration.name));
+      return { integration: integrationToWire(integration, true) };
+    }
     const { plain, secrets } = splitConfig(ctx.body?.config ?? {});
     const hasSecrets = Object.keys(secrets).length > 0;
+    if (COMING_SOON.has(integration.id) && !hasSecrets) throw conflict('INTEGRATION_COMING_SOON', `${integration.name} isn't available yet`);
     const oauth = OAUTH[integration.id];
     const pending = !!oauth && !hasSecrets;
     const state = pending ? randomBytes(16).toString('base64url') : null;
@@ -119,10 +175,13 @@ export const integrationsHandlers = defineHandlers({
     });
   },
 
-  /** Credentials are wiped; plain settings are kept for a later reconnect. */
+  /** Credentials are wiped; plain settings are kept for a later reconnect. (A government portal keeps its login.) */
   async disconnectIntegration(ctx) {
     const integration = await findIntegration(ctx.db, ctx.params.integrationId);
+    const portal = PORTAL_OF[integration.id];
     await ctx.db.transaction(async (tx) => {
+      // Switching a portal off keeps its login; only the flag the compliance rules read goes down.
+      if (portal) await setPortalEnabled(tx, ctx, ctx.company.id, portal, false, integration.name);
       const rows = await tx
         .update(CI)
         .set({ connected: false, credentialsEncrypted: null, disconnectedAt: ctx.now })

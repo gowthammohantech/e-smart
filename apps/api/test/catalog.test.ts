@@ -55,6 +55,23 @@ describe('catalog', () => {
     expect(got.body).toMatchObject({ stockOnHand: 10, low: false });
   });
 
+  it('dates the opening stock on the day it was counted, never after today', async () => {
+    const { token, c, item, company } = await setup();
+    t.setNow('2026-09-29T10:00:00Z');
+    const future = await t.post(`${c}/items`, item({ openingStockDate: '2026-09-30' }), { token });
+    expect(future.status).toBe(422);
+    expect(future.body.issues[0].field).toBe('openingStockDate');
+
+    const created = await t.post(`${c}/items`, item({ openingStockDate: '2026-09-01' }), { token });
+    expect(created.body).toMatchObject({ openingStockDate: '2026-09-01' });
+    const moves = await t.deps.db.select().from(schema.stockMovements).where(eq(schema.stockMovements.companyId, company.id!));
+    expect(moves.map((m) => [m.type, m.date])).toEqual([['opening', '2026-09-01']]);
+
+    // Left out, it is the day the item was added.
+    const today = await t.post(`${c}/items`, item({ sku: 'BRG-2' }), { token });
+    expect(today.body.openingStockDate).toBe('2026-09-29');
+  });
+
   it('derives stock from the movement ledger, per branch, and flags low stock', async () => {
     const { token, c, item, company, user } = await setup();
     const created = await t.post(`${c}/items`, item(), { token });
@@ -178,5 +195,44 @@ describe('catalog', () => {
     const res = await t.post(`${c}/items`, item(), { token });
     expect(res.status).toBe(403);
     expect(res.body.code).toBe('ROLE_FORBIDDEN');
+  });
+});
+
+describe('items import', () => {
+  it('checks without saving, then creates the good rows with stock, skipping duplicates', async () => {
+    const { token, c, company, item } = await setup();
+    await t.post(`${c}/items`, item(), { token });
+    const rows = [
+      item({ sku: 'BRG-6203', name: 'Another bearing' }), // SKU taken
+      item({ sku: '', name: 'Grease 500g', openingStock: 4, hsnCode: undefined }),
+      item({ sku: '', name: 'Measuring Tape 5m', openingStock: 0, hsnCode: undefined }),
+      item({ sku: 'X-1', name: 'grease 500G' }), // same name as an earlier row
+      item({ sku: 'X-2', name: 'Bad unit', unit: 'zz' }),
+    ];
+    const dry = await t.post(`${c}/items/import`, { rows, dryRun: true }, { token });
+    expect(dry.status).toBe(200);
+    expect(dry.body).toMatchObject({ created: 2, skipped: 2, invalid: 1 });
+    expect(dry.body.results.map((r: { status: string }) => r.status)).toEqual(['duplicate', 'created', 'created', 'duplicate', 'invalid']);
+    expect(dry.body.results[4].issues[0].field).toBe('unit');
+    const before = await t.deps.db.select().from(schema.items).where(eq(schema.items.companyId, company.id!));
+    expect(before).toHaveLength(1);
+
+    const done = await t.post(`${c}/items/import`, { rows }, { token });
+    expect(done.body.created).toBe(2);
+    const after = await t.deps.db.select().from(schema.items).where(eq(schema.items.companyId, company.id!));
+    const grease = after.find((i) => i.name === 'Grease 500g')!;
+    const tape = after.find((i) => i.name === 'Measuring Tape 5m')!;
+    // Blank SKUs take the next numbers in turn.
+    expect([grease.sku, tape.sku]).toEqual(['SKU-0001', 'SKU-0002']);
+    const moves = await t.deps.db.select().from(schema.stockMovements).where(eq(schema.stockMovements.itemId, grease.id));
+    expect(moves).toHaveLength(1);
+    expect(moves[0].type).toBe('opening');
+    expect(Number(moves[0].quantity)).toBe(4);
+  });
+
+  it('is for owners, admins and accountants', async () => {
+    const { c, item } = await setup();
+    const res = await t.post(`${c}/items/import`, { rows: [item()] }, {});
+    expect(res.status).toBe(401);
   });
 });

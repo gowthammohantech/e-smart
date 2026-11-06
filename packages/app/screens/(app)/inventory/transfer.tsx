@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
@@ -12,10 +12,10 @@ import { PickerField, TextField } from '@esmart/ui/components/Field';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
-import { useToast } from '@esmart/ui/components/Toast';
+import { useServerSave } from '../../../components/useServerSave';
 import { useAppStore } from '../../../store/appStore';
-import { useBranches, useDefaultBranchId, useItems, useStockMovements } from '../../../store/selectors';
-import { stockOnHand } from '@esmart/core/domain/stockLedger';
+import { useBranches, useDefaultBranchId } from '../../../store/selectors';
+import { useServerStockLevels, useTrackedItems } from '../../../remote/queries';
 import { formatQty } from '@esmart/core/lib/format';
 import { today } from '@esmart/core/lib/date';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
@@ -26,15 +26,15 @@ export default function StockTransfer() {
   const { t: tr } = useTranslation(['inventory', 'nav']);
   const router = useRouter();
   const goBack = useGoBack();
-  const toast = useToast();
+  const { run: serverSave, saving } = useServerSave();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ itemId?: string }>();
 
-  const items = useItems().filter((i) => i.trackInventory);
+  // Every tracked item, from the server.
+  const { items } = useTrackedItems();
   const branches = useBranches();
   // From the branch picked in the switcher, to the first other one.
   const defaultBranchId = useDefaultBranchId();
-  const movements = useStockMovements();
   const transferStock = useAppStore((s) => s.transferStock);
 
   const [itemId, setItemId] = useState<string | null>(params.itemId ?? null);
@@ -49,14 +49,17 @@ export default function StockTransfer() {
   const [toOpen, setToOpen] = useState(false);
 
   const item = items.find((i) => i.id === itemId);
-  const available = item ? stockOnHand(item.id, movements, fromBranchId) : 0;
+  // What the source branch holds on the transfer date, not today.
+  // On hand at each branch now, from the server, which checks the transfer again on saving.
+  const fromLevels = useServerStockLevels(fromBranchId, !!fromBranchId).data;
+  const available = item ? (fromLevels?.[item.id] ?? 0) : 0;
   const qty = Number(quantity) || 0;
   const exceeds = qty > available;
   const canSave = !!itemId && qty > 0 && fromBranchId !== toBranchId && !!toBranchId && !exceeds;
 
   if (branches.length < 2) {
     return (
-      <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+      <View style={{ flex: 1 }}>
         <Stack.Screen options={{ title: tr('nav:title.branchTransfer') }} />
         <EmptyState
           illustration="single-location"
@@ -71,7 +74,7 @@ export default function StockTransfer() {
   }
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: t.c.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Stack.Screen options={{ title: tr('nav:title.branchTransfer') }} />
 
       <ScrollView
@@ -96,7 +99,7 @@ export default function StockTransfer() {
             icon="warehouse"
           />
           <View style={{ height: 48, justifyContent: 'center' }}>
-            <MaterialCommunityIcons name="arrow-right" size={20} color={t.c.muted} />
+            <Icon name="arrow-right" size={20} color={t.c.muted} />
           </View>
           <PickerField
             label={tr('inventory:transfer.to')}
@@ -114,8 +117,8 @@ export default function StockTransfer() {
           placeholder="0"
           keyboardType="decimal-pad"
           icon="counter"
-          error={exceeds ? `Only ${formatQty(available)} ${item?.unit ?? ''} available at the source branch` : undefined}
-          hint={item ? `${formatQty(available)} ${item.unit} available` : undefined}
+          error={exceeds ? tr('inventory:transfer.onlyAvailable', { qty: formatQty(available), unit: item?.unit ?? '' }) : undefined}
+          hint={item ? tr('inventory:transfer.available', { qty: formatQty(available), unit: item.unit }) : undefined}
           required
         />
 
@@ -125,8 +128,7 @@ export default function StockTransfer() {
         {item ? (
           <Card variant="flat" style={{ gap: t.spacing.sm }}>
             <Text variant="caption" tone="muted">
-              Transfers post two movements — one out of the source branch and one into the destination — so total stock stays
-              unchanged.
+              {tr('inventory:transfer.twoMovesNote')}
             </Text>
           </Card>
         ) : null}
@@ -145,11 +147,15 @@ export default function StockTransfer() {
           title={tr('inventory:transfer.submit')}
           onPress={() => {
             if (!canSave || !itemId) return;
-            transferStock({ itemId, fromBranchId, toBranchId, quantity: qty, date, notes: notes || undefined });
-            toast.show(tr('inventory:transfer.done'), 'success');
-            goBack(`/(app)/catalog/items/${itemId}`);
+            // Held busy until it has gone back: a second tap would move the stock again.
+            void serverSave(() => {
+              transferStock({ itemId, fromBranchId, toBranchId, quantity: qty, date, notes: notes || undefined });
+            }, tr('inventory:transfer.done'), { icon: 'truck-delivery-outline', hold: true }).then((res) => {
+              if (res) goBack(`/(app)/catalog/items/${itemId}`);
+            });
           }}
           disabled={!canSave}
+          loading={saving}
           fullWidth
           size="lg"
         />

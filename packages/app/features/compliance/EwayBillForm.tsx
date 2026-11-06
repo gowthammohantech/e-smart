@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { FormContainer } from '@esmart/ui/components/Layout';
 import { Text } from '@esmart/ui/components/Text';
@@ -38,18 +38,14 @@ import { citiesForState } from '@esmart/core/data/cities';
 import { formatDate, nowISO } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { portalToast } from './portalToast';
+import { useSaveShortcut } from '../../components/useSaveShortcut';
 
 /**
- * Raising an e-way bill (FRD 16).
- *
- * Part-A comes off the document and is shown read-only; Part-B is what the
- * user actually has to supply. The validity preview recomputes on every
- * keystroke, which is the clearest way to show the one-day-per-200-km rule
- * doing its work.
+ * Everything the e-way bill form holds and does, apart from how it is laid
+ * out: the phone form below and the desktop one (apps/web) both use it.
  */
-export function EwayBillForm({ document: doc }: { document: BusinessDocument }) {
-  const t = useTheme();
-  const insets = useSafeAreaInsets();
+export function useEwayBillForm(doc: BusinessDocument) {
   const { t: tr } = useTranslation(['compliance']);
   const router = useRouter();
   const toast = useToast();
@@ -111,7 +107,7 @@ export function EwayBillForm({ document: doc }: { document: BusinessDocument }) 
 
   const submit = async () => {
     setBusy(true);
-    const outcome = await compliance.generateEwayBill({
+    const outcome = await portalToast(toast, compliance.generateEwayBill({
       documentId: doc.id,
       subSupplyType,
       subSupplyDescription: subSupplyDescription.trim() || undefined,
@@ -126,11 +122,15 @@ export function EwayBillForm({ document: doc }: { document: BusinessDocument }) 
       transportDocNumber: byRoad ? undefined : transportDocNumber.trim() || undefined,
       transportDocDate: byRoad ? undefined : transportDocDate,
       distanceKm: distance,
+    }), {
+      loading: tr('compliance:ewb.generating'),
+      success: { text: tr('compliance:ewb.generated'), detail: [doc.number, byRoad ? vehicleNumber.trim().toUpperCase() : ''].filter(Boolean).join(' · ') },
+      failed: tr('compliance:ewb.raiseFailed'),
+      icon: 'truck-check-outline',
     });
     setBusy(false);
 
     if (outcome.ok && outcome.ewayBillId) {
-      toast.show(tr('compliance:ewb.generated'), 'success');
       router.replace(`/(app)/compliance/eway/${outcome.ewayBillId}`);
       return;
     }
@@ -142,11 +142,103 @@ export function EwayBillForm({ document: doc }: { document: BusinessDocument }) 
         next[i.field] = i.message;
       });
     setErrors(next);
-    toast.show(outcome.issues[0]?.message ?? 'The bill could not be raised', 'error');
   };
 
+  // Ctrl+S (⌘+S) generates the bill, as the button does.
+  useSaveShortcut(() => void submit(), !busy);
+
+  return {
+    doc,
+    subSupplyType,
+    setSubSupplyType,
+    subSupplyDescription,
+    setSubSupplyDescription,
+    subSupplyOpen,
+    setSubSupplyOpen,
+    from,
+    setFrom,
+    to,
+    setTo,
+    stateSheet,
+    setStateSheet,
+    transporterId,
+    setTransporterId,
+    transporterName,
+    setTransporterName,
+    transporters,
+    transporterOpen,
+    setTransporterOpen,
+    transportMode,
+    setTransportMode,
+    vehicleType,
+    setVehicleType,
+    vehicleNumber,
+    setVehicleNumber,
+    transportDocNumber,
+    setTransportDocNumber,
+    transportDocDate,
+    setTransportDocDate,
+    distanceKm,
+    setDistanceKm,
+    preview,
+    byRoad,
+    busy,
+    errors,
+    submit,
+  };
+}
+
+export type EwayBillFormState = ReturnType<typeof useEwayBillForm>;
+
+/**
+ * Raising an e-way bill (FRD 16).
+ *
+ * Part-A comes off the document and is shown read-only; Part-B is what the
+ * user actually has to supply. The validity preview recomputes on every
+ * keystroke, which is the clearest way to show the one-day-per-200-km rule
+ * doing its work.
+ */
+export function EwayBillForm({ document: doc }: { document: BusinessDocument }) {
+  const t = useTheme();
+  const insets = useSafeAreaInsets();
+  const { t: tr } = useTranslation(['compliance']);
+  const form = useEwayBillForm(doc);
+  const {
+    subSupplyType,
+    subSupplyDescription,
+    setSubSupplyDescription,
+    setSubSupplyOpen,
+    from,
+    setFrom,
+    to,
+    setTo,
+    setStateSheet,
+    transporterId,
+    setTransporterId,
+    transporterName,
+    setTransporterName,
+    transporters,
+    setTransporterOpen,
+    transportMode,
+    setTransportMode,
+    vehicleType,
+    setVehicleType,
+    vehicleNumber,
+    setVehicleNumber,
+    transportDocNumber,
+    setTransportDocNumber,
+    transportDocDate,
+    setTransportDocDate,
+    distanceKm,
+    setDistanceKm,
+    byRoad,
+    busy,
+    errors,
+    submit,
+  } = form;
+
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <FormContainer wide>
         <ScrollView
           contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 140 + insets.bottom }}
@@ -167,7 +259,7 @@ export function EwayBillForm({ document: doc }: { document: BusinessDocument }) 
 
           <PickerField
             label={tr('compliance:ewb.subSupplyType')}
-            value={EWAY_SUB_SUPPLY_TYPES[subSupplyType].label}
+            value={tr(`compliance:subSupply.${subSupplyType}`)}
             onPress={() => setSubSupplyOpen(true)}
             icon="tag-outline"
           />
@@ -218,7 +310,7 @@ export function EwayBillForm({ document: doc }: { document: BusinessDocument }) 
             onChangeText={setTransporterId}
             autoCapitalize="characters"
             error={errors.transporterId}
-            placeholder="15-character GSTIN or TRANSIN"
+            placeholder={tr('compliance:ewb.transporterIdHint')}
           />
           <TextField label={tr('compliance:ewb.transporterName')} value={transporterName} onChangeText={setTransporterName} />
 
@@ -226,10 +318,10 @@ export function EwayBillForm({ document: doc }: { document: BusinessDocument }) 
             <Text variant="caption" tone="muted" weight="600">{tr('compliance:ewb.mode')}</Text>
             <Segmented
               options={[
-                { value: 'road', label: 'Road' },
-                { value: 'rail', label: 'Rail' },
-                { value: 'air', label: 'Air' },
-                { value: 'ship', label: 'Ship' },
+                { value: 'road', label: tr('compliance:mode.road') },
+                { value: 'rail', label: tr('compliance:mode.rail') },
+                { value: 'air', label: tr('compliance:mode.air') },
+                { value: 'ship', label: tr('compliance:mode.ship') },
               ]}
               value={transportMode}
               onChange={setTransportMode}
@@ -240,8 +332,8 @@ export function EwayBillForm({ document: doc }: { document: BusinessDocument }) 
             <Text variant="caption" tone="muted" weight="600">{tr('compliance:ewb.cargo')}</Text>
             <Segmented
               options={[
-                { value: 'regular', label: 'Regular' },
-                { value: 'overDimensional', label: 'Over-dimensional' },
+                { value: 'regular', label: tr('compliance:cargo.regular') },
+                { value: 'overDimensional', label: tr('compliance:cargo.overDimensional') },
               ]}
               value={vehicleType}
               onChange={setVehicleType}
@@ -285,26 +377,12 @@ export function EwayBillForm({ document: doc }: { document: BusinessDocument }) 
             value={distanceKm}
             onChangeText={setDistanceKm}
             keyboardType="number-pad"
-            suffix="km"
+            suffix={tr('compliance:ewb.km')}
             error={errors.distanceKm}
           />
 
           {/* The rule, made visible. */}
-          <Card variant="flat" style={{ flexDirection: 'row', gap: t.spacing.md, alignItems: 'center' }}>
-            <MaterialCommunityIcons name="clock-outline" size={20} color={t.c.primary} />
-            <View style={{ flex: 1, gap: 2 }}>
-              <Text variant="small" weight="600">
-                {preview.days} {preview.days === 1 ? 'day' : 'days'} · valid to{' '}
-                {formatDate(preview.validUpto.slice(0, 10))}
-              </Text>
-              <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
-                {vehicleType === 'overDimensional'
-                  ? 'Over-dimensional cargo gets one day per 20 km, or part thereof.'
-                  : 'One day per 200 km, or part thereof.'}{' '}
-                Validity always runs to midnight.
-              </Text>
-            </View>
-          </Card>
+          <ValidityNote form={form} />
         </ScrollView>
 
         <View
@@ -322,6 +400,7 @@ export function EwayBillForm({ document: doc }: { document: BusinessDocument }) 
         >
           <Button
             title={tr('compliance:ewb.generate')}
+            shortcut="S"
             icon="truck-fast-outline"
             loading={busy}
             onPress={submit}
@@ -329,57 +408,106 @@ export function EwayBillForm({ document: doc }: { document: BusinessDocument }) 
           />
         </View>
 
-        <SelectSheet
-          visible={subSupplyOpen}
-          onClose={() => setSubSupplyOpen(false)}
-          title={tr('compliance:ewb.subSupplyType')}
-          options={(Object.keys(EWAY_SUB_SUPPLY_TYPES) as EwaySubSupplyType[]).map((key) => ({
-            value: key,
-            label: EWAY_SUB_SUPPLY_TYPES[key].label,
-          }))}
-          value={subSupplyType}
-          onSelect={(v) => {
-            setSubSupplyType(v as EwaySubSupplyType);
-            setSubSupplyOpen(false);
-          }}
-          searchable={false}
-        />
-
-        <SelectSheet
-          visible={transporterOpen}
-          onClose={() => setTransporterOpen(false)}
-          title={tr('compliance:ewb.transporter')}
-          options={transporters.map((x) => ({ value: x.id, label: x.name, trailing: x.transporterId }))}
-          value={transporters.find((x) => x.transporterId === transporterId.trim().toUpperCase())?.id}
-          onSelect={(id) => {
-            const picked = transporters.find((x) => x.id === id);
-            if (picked) {
-              setTransporterId(picked.transporterId);
-              setTransporterName(picked.name);
-            }
-            setTransporterOpen(false);
-          }}
-        />
-        <SelectSheet
-          visible={stateSheet !== null}
-          onClose={() => setStateSheet(null)}
-          title={stateSheet === 'from' ? 'Despatch state' : 'Delivery state'}
-          options={INDIAN_STATES.map((s) => ({ value: s.code, label: s.name, trailing: s.code }))}
-          value={stateSheet === 'from' ? from.stateCode : to.stateCode}
-          onSelect={(code) => {
-            // A place picked for the previous state no longer belongs.
-            const moved = (p: EwayPlace): EwayPlace => ({
-              ...p,
-              stateCode: code,
-              place: p.place && !citiesForState(code).includes(p.place) ? '' : p.place,
-            });
-            if (stateSheet === 'from') setFrom(moved(from));
-            else setTo(moved(to));
-            setStateSheet(null);
-          }}
-        />
+        <EwayBillFormSheets form={form} />
       </FormContainer>
     </View>
+  );
+}
+
+/** How long the bill will last, and the rule behind it. */
+export function ValidityNote({ form }: { form: EwayBillFormState }) {
+  const t = useTheme();
+  const { t: tr } = useTranslation(['compliance']);
+  const { preview, vehicleType } = form;
+  return (
+    <Card variant="flat" style={{ flexDirection: 'row', gap: t.spacing.md, alignItems: 'center' }}>
+      <Icon name="clock-outline" size={20} color={t.c.primary} />
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text variant="small" weight="600">
+          {tr('compliance:ewb.validityPreview', { count: preview.days, date: formatDate(preview.validUpto.slice(0, 10)) })}
+        </Text>
+        <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
+          {vehicleType === 'overDimensional' ? tr('compliance:ewb.ruleOdc') : tr('compliance:ewb.ruleRegular')}{' '}
+          {tr('compliance:ewb.midnight')}
+        </Text>
+      </View>
+    </Card>
+  );
+}
+
+/** The sub-supply, transporter and state pickers, shared by the phone and desktop forms. */
+export function EwayBillFormSheets({ form }: { form: EwayBillFormState }) {
+  const { t: tr } = useTranslation(['compliance']);
+  const {
+    subSupplyOpen,
+    setSubSupplyOpen,
+    subSupplyType,
+    setSubSupplyType,
+    transporterOpen,
+    setTransporterOpen,
+    transporters,
+    transporterId,
+    setTransporterId,
+    setTransporterName,
+    stateSheet,
+    setStateSheet,
+    from,
+    setFrom,
+    to,
+    setTo,
+  } = form;
+  return (
+    <>
+      <SelectSheet
+        visible={subSupplyOpen}
+        onClose={() => setSubSupplyOpen(false)}
+        title={tr('compliance:ewb.subSupplyType')}
+        options={(Object.keys(EWAY_SUB_SUPPLY_TYPES) as EwaySubSupplyType[]).map((key) => ({
+          value: key,
+          label: tr(`compliance:subSupply.${key}`),
+        }))}
+        value={subSupplyType}
+        onSelect={(v) => {
+          setSubSupplyType(v as EwaySubSupplyType);
+          setSubSupplyOpen(false);
+        }}
+        searchable={false}
+      />
+
+      <SelectSheet
+        visible={transporterOpen}
+        onClose={() => setTransporterOpen(false)}
+        title={tr('compliance:ewb.transporter')}
+        options={transporters.map((x) => ({ value: x.id, label: x.name, trailing: x.transporterId }))}
+        value={transporters.find((x) => x.transporterId === transporterId.trim().toUpperCase())?.id}
+        onSelect={(id) => {
+          const picked = transporters.find((x) => x.id === id);
+          if (picked) {
+            setTransporterId(picked.transporterId);
+            setTransporterName(picked.name);
+          }
+          setTransporterOpen(false);
+        }}
+      />
+      <SelectSheet
+        visible={stateSheet !== null}
+        onClose={() => setStateSheet(null)}
+        title={stateSheet === 'from' ? tr('compliance:ewb.despatchState') : tr('compliance:ewb.deliveryState')}
+        options={INDIAN_STATES.map((s) => ({ value: s.code, label: s.name, trailing: s.code }))}
+        value={stateSheet === 'from' ? from.stateCode : to.stateCode}
+        onSelect={(code) => {
+          // A place picked for the previous state no longer belongs.
+          const moved = (p: EwayPlace): EwayPlace => ({
+            ...p,
+            stateCode: code,
+            place: p.place && !citiesForState(code).includes(p.place) ? '' : p.place,
+          });
+          if (stateSheet === 'from') setFrom(moved(from));
+          else setTo(moved(to));
+          setStateSheet(null);
+        }}
+      />
+    </>
   );
 }
 

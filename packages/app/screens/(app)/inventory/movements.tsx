@@ -1,17 +1,21 @@
 import React, { useMemo, useState, useCallback} from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, ScrollView, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
 import { Badge } from '@esmart/ui/components/Badge';
 import { SearchBar } from '@esmart/ui/components/SearchBar';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
-import { useBranches, useItems, useStockMovements } from '../../../store/selectors';
-import { MOVEMENT_LABELS, signedQuantity } from '@esmart/core/domain/stockLedger';
-import { StockMovementType } from '@esmart/core/types';
+import { useBranches } from '../../../store/selectors';
+import { useAppStore } from '../../../store/appStore';
+import { useMovementPages } from '../../../remote/queries';
+import { useDebounced } from '../../../components/useDebounced';
+import { useQueryParams } from '../../../navigation/queryParams';
+import { signedQuantity } from '@esmart/core/domain/stockLedger';
+import { StockMovement, StockMovementType } from '@esmart/core/types';
 import { formatQty } from '@esmart/core/lib/format';
 import { formatDate } from '@esmart/core/lib/date';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
@@ -23,29 +27,25 @@ export default function StockMovements() {
   const { t: tr } = useTranslation(['inventory', 'nav']);
   const router = useRouter();
 
-  const movements = useStockMovements();
-  const items = useItems();
   const branches = useBranches();
 
   const [query, setQuery] = useState('');
-  const [type, setType] = useState<StockMovementType | 'all'>('all');
+  // The type filter lives in the URL (`?type=sale`); search stays local.
+  const [params, setParams] = useQueryParams();
+  const type = (params.type ?? 'all') as StockMovementType | 'all';
+  const setType = (ty: StockMovementType | 'all') => setParams({ type: ty === 'all' ? undefined : ty });
 
-  const nameOf = useCallback((id: string) => items.find((i) => i.id === id), [items]);
+  // Read from the server 50 at a time, newest first; type and search are filtered there, and each row names its item.
+  const branchId = useAppStore((s) => s.activeBranchId) || undefined;
+  const search = useDebounced(query);
+  const pages = useMovementPages({ branchId, type: type === 'all' ? undefined : type, q: search });
+  const filtered = pages.rows as unknown as (StockMovement & { itemName?: string; itemSku?: string })[];
+  const names = useMemo(() => new Map(filtered.map((m) => [m.itemId, { name: m.itemName ?? '', sku: m.itemSku ?? '' }])), [filtered]);
+  const nameOf = useCallback((id: string) => (names.has(id) ? { id, ...names.get(id)! } : undefined), [names]);
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return movements
-      .filter((m) => {
-        if (type !== 'all' && m.type !== type) return false;
-        if (!q) return true;
-        const item = nameOf(m.itemId);
-        return `${item?.name ?? ''} ${item?.sku ?? ''} ${m.referenceNumber ?? ''} ${m.notes ?? ''}`.toLowerCase().includes(q);
-      })
-      .sort((a, b) => (b.date === a.date ? b.createdAt.localeCompare(a.createdAt) : b.date.localeCompare(a.date)));
-  }, [movements, query, type, nameOf]);
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('nav:title.stockMovements') }} />
 
       <View style={{ paddingHorizontal: t.spacing.lg, paddingTop: t.spacing.md, gap: t.spacing.md }}>
@@ -69,23 +69,33 @@ export default function StockMovements() {
                 }}
               >
                 <Text variant="caption" weight="600" style={{ color: active ? t.c.onPrimary : t.c.muted }}>
-                  {ty === 'all' ? 'All' : MOVEMENT_LABELS[ty]}
+                  {ty === 'all' ? tr('inventory:movements.all') : tr(`inventory:movementType.${ty}`)}
                 </Text>
               </Pressable>
             );
           })}
         </ScrollView>
         <Text variant="caption" tone="muted">
-          {filtered.length} movements
+          {tr('inventory:movements.count', { count: filtered.length })}
         </Text>
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40 }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
+      <ScrollView
+        contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40 }}
+        showsVerticalScrollIndicator={SHOW_SCROLLBAR}
+        // The next page loads before the end is reached, so scrolling rarely waits.
+        onScroll={({ nativeEvent: e }: NativeSyntheticEvent<NativeScrollEvent>) => {
+          if (e.layoutMeasurement.height + e.contentOffset.y >= e.contentSize.height - 600 && pages.hasNextPage && !pages.isFetchingNextPage) void pages.fetchNextPage();
+        }}
+        scrollEventThrottle={200}
+      >
         <Card padded={false}>
-          {filtered.length === 0 ? (
+          {pages.isLoading && !filtered.length ? (
+            <ActivityIndicator color={t.c.muted} style={{ padding: t.spacing.xl }} />
+          ) : filtered.length === 0 ? (
             <EmptyState illustration="no-movements" icon="swap-vertical" title={tr('inventory:movements.none')} message={tr('inventory:movements.noneBody')} compact />
           ) : (
-            filtered.slice(0, 200).map((m, i) => {
+            filtered.map((m, i) => {
               const item = nameOf(m.itemId);
               const delta = signedQuantity(m);
               const branch = branches.find((b) => b.id === m.branchId);
@@ -94,28 +104,32 @@ export default function StockMovements() {
                   key={m.id}
                   onPress={() => item && router.push(`/(app)/catalog/items/${item.id}`)}
                   accessibilityRole="button"
-                  accessibilityLabel={`${item?.name ?? 'Item'}, ${MOVEMENT_LABELS[m.type]}, ${delta}`}
+                  accessibilityLabel={tr('inventory:movements.a11yRow', {
+                    name: item?.name ?? tr('inventory:movements.unknownItem'),
+                    type: tr(`inventory:movementType.${m.type}`),
+                    qty: formatQty(delta),
+                  })}
                   style={({ pressed }) => ({
                     flexDirection: 'row',
                     alignItems: 'center',
                     gap: t.spacing.md,
                     padding: t.spacing.lg,
-                    borderBottomWidth: i < Math.min(filtered.length, 200) - 1 ? 0.5 : 0,
+                    borderBottomWidth: i < filtered.length - 1 ? 0.5 : 0,
                     borderBottomColor: t.c.line,
                     backgroundColor: pressed ? t.c.card2 : 'transparent',
                   })}
                 >
-                  <MaterialCommunityIcons
+                  <Icon
                     name={delta >= 0 ? 'arrow-down-bold-circle-outline' : 'arrow-up-bold-circle-outline'}
                     size={21}
                     color={delta >= 0 ? t.c.good : t.c.bad}
                   />
                   <View style={{ flex: 1, gap: 3 }}>
                     <Text variant="body" weight="600" numberOfLines={1}>
-                      {item?.name ?? 'Unknown item'}
+                      {item?.name ?? tr('inventory:movements.unknownItem')}
                     </Text>
                     <Text variant="caption" tone="muted" numberOfLines={1}>
-                      {MOVEMENT_LABELS[m.type]} · {formatDate(m.date, 'dd MMM')}
+                      {tr(`inventory:movementType.${m.type}`)} · {formatDate(m.date, 'dd MMM')}
                       {m.referenceNumber ? ` · ${m.referenceNumber}` : ''}
                     </Text>
                   </View>
@@ -131,6 +145,7 @@ export default function StockMovements() {
             })
           )}
         </Card>
+        {pages.isFetchingNextPage ? <ActivityIndicator color={t.c.muted} style={{ paddingVertical: t.spacing.md }} /> : null}
       </ScrollView>
     </View>
   );

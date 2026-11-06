@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '../Icon';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useIsDesktop } from '../../theme/breakpoints';
-import { FieldShell, webFocusHalo } from '../Field';
+import { FieldShell, useFieldA11y, webFocusHalo } from '../Field';
 import { toISODate } from '@esmart/core/lib/date';
 
 /**
@@ -31,11 +32,22 @@ export function DateField({
   maximumDate?: Date;
 }) {
   const t = useTheme();
+  const { t: tr } = useTranslation(['common']);
   const desktop = useIsDesktop();
   const [focused, setFocused] = useState(false);
+  // The calendar greys out days past min and max, but a typed date isn't held
+  // to them. One outside them shows while it is being typed (a year goes in a
+  // digit at a time) and is never passed on; leaving the field puts the last
+  // allowed date back.
+  const [stray, setStray] = useState<string | null>(null);
+  const min = minimumDate ? toISODate(minimumDate) : undefined;
+  const max = maximumDate ? toISODate(maximumDate) : undefined;
+  const allowed = (iso: string) => (!min || iso >= min) && (!max || iso <= max);
+
+  const a11y = useFieldA11y({ error, hint, required });
 
   return (
-    <FieldShell label={label} required={required} hint={hint} error={error}>
+    <FieldShell label={label} required={required} hint={hint} error={error} messageId={a11y.messageId}>
       <View
         style={{
           flexDirection: 'row',
@@ -45,25 +57,35 @@ export function DateField({
           backgroundColor: desktop ? t.c.paper : t.c.card2,
           borderRadius: t.radius.md,
           borderWidth: 1,
-          borderColor: error ? t.c.bad : focused ? t.c.primary : t.c.line,
+          borderColor: error || stray ? t.c.bad : focused ? t.c.primary : t.c.inputBorder,
           paddingHorizontal: t.spacing.md,
           height: desktop ? 42 : 48,
-          ...webFocusHalo(t, focused && !error),
+          ...webFocusHalo(t, focused && !error && !stray),
         }}
       >
-        <MaterialCommunityIcons name="calendar-outline" size={18} color={t.c.muted} />
+        <Icon name="calendar-outline" size={18} color={t.c.muted} />
         <input
           type="date"
-          aria-label={label ?? 'Date'}
+          aria-label={label ?? tr('common:component.date')}
           required={required}
-          value={value ? value.slice(0, 10) : ''}
-          min={minimumDate ? toISODate(minimumDate) : undefined}
-          max={maximumDate ? toISODate(maximumDate) : undefined}
+          aria-invalid={error || stray ? true : undefined}
+          aria-describedby={a11y.inputProps['aria-describedby']}
+          value={stray ?? (value ? value.slice(0, 10) : '')}
+          min={min}
+          max={max}
           onChange={(e) => {
-            if (e.target.value) onChange(e.target.value);
+            const next = e.target.value;
+            if (!next) return;
+            if (allowed(next)) {
+              setStray(null);
+              onChange(next);
+            } else setStray(next);
           }}
           onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
+          onBlur={() => {
+            setFocused(false);
+            setStray(null);
+          }}
           style={{
             flex: 1,
             border: 'none',
@@ -73,7 +95,7 @@ export function DateField({
             color: t.c.text,
             fontSize: t.fontSize.body,
             // RN Web sets the font on Text only, so a raw input needs it spelled out.
-            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+            fontFamily: t.fontFamily,
             colorScheme: t.scheme,
           }}
         />

@@ -13,7 +13,7 @@
       "name": "Elixir Books Smart",
       "shortName": "Elixir Books",
       "description": "Invoicing, purchases, inventory, GST and accounts for small businesses.",
-      "themeColor": "#0E121A"
+      "themeColor": "#F7F8FA"
     },
     "plugins": ["expo-router", "expo-localization"],
     "experiments": {

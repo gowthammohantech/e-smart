@@ -1,6 +1,6 @@
 import i18n from '@esmart/i18n';
 import { financialYearOf, formatRelative, monthLabel, monthLabelNarrow, today } from '../date';
-import { formatCompactMoney, formatMoney, listJoin } from '../format';
+import { formatCompactMoney, formatMoney, listJoin, truncate } from '../format';
 import { fromMajor } from '../money';
 import { defaultSeries, formatNumber as formatSeriesNumber } from '../../domain/numbering';
 
@@ -62,5 +62,12 @@ describe('locale-aware formatting', () => {
     await i18n.changeLanguage('ta');
     expect(listJoin(['a', 'b'])).toBe('a மற்றும் b');
     expect(listJoin(['a', 'b', 'c'])).toBe('a, b மற்றும் c');
+  });
+
+  it('truncates Tamil at a whole letter, never before its vowel sign or virama', () => {
+    // விற்பனை is வ ி ற ் ப ன ை: cutting before ் would strand ற.
+    expect(truncate('விற்பனை', 5)).toBe('விற்…');
+    expect(truncate('விற்பனை', 4)).toBe('வி…');
+    expect(truncate('Invoice', 5)).toBe('Invo…');
   });
 });

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { useSignOut } from '../../../features/session/useSignOut';
 import { AppHeader } from '../../../components/AppHeader';
@@ -16,6 +16,7 @@ import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { useActiveCompany, useCurrentUser } from '../../../store/selectors';
 import { useMoreGroups } from '../../../navigation/moreGroups';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { appVersion } from '../../../lib/appVersion';
 
 export default function MoreTab() {
   const t = useTheme();
@@ -33,7 +34,7 @@ export default function MoreTab() {
   const desktop = useIsDesktop();
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <AppHeader title={tr('nav:more.header.title')} subtitle={tr('nav:more.header.subtitle')} />
 
       <ScrollView
@@ -55,7 +56,7 @@ export default function MoreTab() {
               <Badge label={company?.name ?? ''} tone="neutral" size="sm" />
             </View>
           </View>
-          <MaterialCommunityIcons name="chevron-right" size={18} color={t.c.muted} />
+          <Icon name="chevron-right" size={18} color={t.c.muted} />
         </Card>
 
         <View style={desktop ? { flexDirection: 'row', flexWrap: 'wrap', columnGap: t.spacing.xl } : undefined}>
@@ -91,7 +92,7 @@ export default function MoreTab() {
         </Card>
 
         <Text variant="micro" tone="muted" center style={{ marginTop: t.spacing.xl }}>
-          {tr('nav:more.build', { version: '1.0.0' })}
+          {tr('nav:more.build', { version: appVersion().label })}
         </Text>
       </ScrollView>
 

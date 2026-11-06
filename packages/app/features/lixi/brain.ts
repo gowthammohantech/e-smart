@@ -105,11 +105,22 @@ export function tabQuestion(tab: string, deps: LixiDeps = liveDeps()): string | 
 }
 
 export function greet(ctx: LixiContext, deps: LixiDeps = liveDeps()): LixiReply {
+  return greetWith(
+    {
+      userName: ctx.userName,
+      overdue: ctx.receivables.outstanding.filter((o) => o.daysOverdue > 0).length,
+      gst: ctx.compliance.failed + ctx.compliance.ewbExpiringSoon,
+      lowStock: hasModule(ctx.plan ?? 'pro', 'inventory') ? ctx.lowStock.length : 0,
+    },
+    deps,
+  );
+}
+
+/** The greeting from counts alone: overdue invoices, GST items needing a look, items low on stock. */
+export function greetWith(facts: { userName?: string; overdue: number; gst: number; lowStock: number }, deps: LixiDeps = liveDeps()): LixiReply {
   const { t } = deps;
-  const first = ctx.userName?.split(' ')[0];
-  const gst = ctx.compliance.failed + ctx.compliance.ewbExpiringSoon;
-  const overdue = ctx.receivables.outstanding.filter((o) => o.daysOverdue > 0).length;
-  const low = hasModule(ctx.plan ?? 'pro', 'inventory') ? ctx.lowStock.length : 0;
+  const first = facts.userName?.split(' ')[0];
+  const { overdue, gst, lowStock: low } = facts;
   const flags = [
     overdue ? t('lixi:flag.overdueInvoice', { count: overdue }) : null,
     gst ? t('lixi:flag.gstItem', { count: gst }) : null,

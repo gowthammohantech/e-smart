@@ -49,7 +49,7 @@ them sits behind the backend; the mobile app never calls them directly.
 | **Email** | invites, password reset, sending documents | Azure Communication Services (`EMAIL_PROVIDER=acs`), Amazon SES (`ses`) |
 | **Payments** | `createPaymentLink`, `razorpayWebhook` | Razorpay (payment links, UPI) |
 | **Subscriptions** | `startCheckout`, plan changes | Razorpay Subscriptions, or App Store / Play Billing if sold in-app |
-| **LLM (Lixi)** | `lixiChat` | Anthropic Claude API (`ASSISTANT_PROVIDER=anthropic`, `ANTHROPIC_API_KEY`) |
+| **LLM (Lixi)** | `lixiChat` | Anthropic Claude API (`ASSISTANT_PROVIDER=anthropic`, `ANTHROPIC_API_KEY`), or any OpenAI-compatible Chat Completions server (`ASSISTANT_PROVIDER=openai`, `OPENAI_BASE_URL`, `OPENAI_API_KEY`, `LIXI_MODEL`, `LIXI_SECONDARY_MODEL`; on OpenRouter both default to free models) |
 | **OCR** | `createOcrExtraction` | Google Document AI, AWS Textract, Azure Document Intelligence, or an LLM vision model |
 | **Object storage** | attachments, logos, item images, PDFs, exports | Azure Blob Storage (`STORAGE_PROVIDER=azure`, SAS URLs), S3 or R2 (`s3`, pre-signed URLs) |
 | **PDF rendering** | `getDocumentPdf`, receipts, statements, reports | Headless Chromium (Puppeteer or Gotenberg) running the same template as `documentHtml.ts` |
@@ -93,6 +93,9 @@ when:
 - a chosen provider lacks its credentials (MSG91, ACS, SES, Meta WhatsApp,
   Azure Blob, GSP, Razorpay, Open Exchange Rates, Anthropic), or `EMAIL_FROM`
   is still the example sender;
+- the GSP is Whitebooks, or `TAXATION_SANDBOX_BUYER_GSTIN` or `TAXATION_GSP_AUTH_REQUIRED=false` is set, without
+  `TAXATION_GSTIN_ALLOW_SANDBOX=true` (the one switch for the sandbox; see
+  [the GSP gateway](../../apps/api/src/providers/gsp/README.md));
 - `RAZORPAY_WEBHOOK_SECRET` or `WHATSAPP_WEBHOOK_SECRET` is the development default;
 - `CORS_ORIGINS` contains `*`;
 - `JWT_SECRET` or `CREDENTIALS_KEY` is unset, or `DEMO_OTP` is on.

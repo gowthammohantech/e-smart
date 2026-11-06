@@ -97,7 +97,15 @@
     "cityPlaceholder": "Pune",
     "add": "Add branch",
     "namePlaceholder": "e.g. Pune warehouse",
-    "headOffice": "Head office"
+    "headOffice": "Head office",
+    "createdAutomatically": "{{place}} · created automatically",
+    "removeNamed": "Remove {{name}}",
+    "unsavedTitle": "This branch isn't added yet",
+    "unsavedAddMessage": "Add {{name}} to your locations before finishing?",
+    "unsavedDiscardMessage": "The branch details you typed are incomplete and will not be saved.",
+    "unsavedAdd": "Add and finish",
+    "unsavedDiscard": "Discard and finish",
+    "unsavedKeepEditing": "Keep editing"
   },
   "done": {
     "readyTitle": "{{business}} is ready",
@@ -114,7 +122,8 @@
       "invoiceLabel": "Raise your first invoice",
       "invoiceBody": "Share it on WhatsApp in seconds."
     },
-    "allSet": "Tax slabs, numbering and your first location are all set up."
+    "allSet": "Tax slabs, numbering and your first location are all set up.",
+    "created": "Your business is ready"
   },
   "stepProgress": "Step {{current}} of {{total}} · {{step}}",
   "stepHint": {

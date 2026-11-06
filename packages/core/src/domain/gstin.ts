@@ -14,6 +14,19 @@ const ALPHABET = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 /** 15 chars: 2 digits, 5 letters, 4 digits, 1 letter, 1 alphanumeric, 'Z', 1 alphanumeric. */
 const GSTIN_SHAPE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[0-9A-Z]{1}Z[0-9A-Z]{1}$/;
 
+/**
+ * NIC's e-invoice sandbox issues test registrations as a real PAN under a state
+ * code with `000` in the last three positions (`29AAGCB1286Q000`), with no
+ * check digit. They exist only on the sandbox, so they are admitted only when
+ * the server says so (`TAXATION_GSTIN_ALLOW_SANDBOX`, refused in production).
+ */
+const SANDBOX_GSTIN_SHAPE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]000$/;
+let sandboxGstinsAllowed = false;
+
+export function setSandboxGstinsAllowed(allowed: boolean): void {
+  sandboxGstinsAllowed = allowed;
+}
+
 export function normalizeGstin(raw: string): string {
   return (raw ?? '').replace(/\s/g, '').toUpperCase();
 }
@@ -44,6 +57,7 @@ export function gstinChecksum(first14: string): string {
 export function isValidGstin(raw: string | undefined): boolean {
   const gstin = normalizeGstin(raw ?? '');
   if (gstin.length !== 15) return false;
+  if (sandboxGstinsAllowed && SANDBOX_GSTIN_SHAPE.test(gstin)) return isValidStateCode(gstin.slice(0, 2));
   if (!GSTIN_SHAPE.test(gstin)) return false;
   if (!isValidStateCode(gstin.slice(0, 2))) return false;
   return gstinChecksum(gstin.slice(0, 14)) === gstin[14];

@@ -10,7 +10,7 @@ import { Text } from '@esmart/ui/components/Text';
 import { FieldRow } from '@esmart/ui/components/Layout';
 import { nextStepRoute, onboardingSteps, stepIndex, useOnboardingStore } from '../../store/onboardingStore';
 import { COUNTRIES } from '@esmart/core/data/masters';
-import { CURRENCIES } from '@esmart/core/lib/currencies';
+import { CURRENCIES, currencyLocked } from '@esmart/core/lib/currencies';
 import { monthNames } from '@esmart/core/lib/date';
 
 export default function CountryStep() {
@@ -75,7 +75,7 @@ export default function CountryStep() {
         visible={countryOpen}
         onClose={() => setCountryOpen(false)}
         title={tr('onboarding:country.country')}
-        options={COUNTRIES.map((c) => ({ value: c.code, label: c.name, description: `${c.regime} · ${c.currency}` }))}
+        options={COUNTRIES.map((c) => ({ value: c.code, label: c.name, description: `${c.regime} · ${c.currency}`, disabled: c.code !== 'IN' }))}
         value={draft.country}
         onSelect={(code) => {
           const c = COUNTRIES.find((x) => x.code === code);
@@ -93,7 +93,7 @@ export default function CountryStep() {
         visible={currencyOpen}
         onClose={() => setCurrencyOpen(false)}
         title={tr('onboarding:country.baseCurrency')}
-        options={CURRENCIES.map((c) => ({ value: c.code, label: `${c.name} (${c.code})`, trailing: c.symbol }))}
+        options={CURRENCIES.map((c) => ({ value: c.code, label: `${c.name} (${c.code})`, trailing: c.symbol, disabled: currencyLocked(c.code) }))}
         value={draft.baseCurrency}
         onSelect={(v) => set({ baseCurrency: v })}
       />

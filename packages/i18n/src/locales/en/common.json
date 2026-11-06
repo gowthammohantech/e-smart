@@ -14,7 +14,11 @@
     "clear": "Clear",
     "apply": "Apply",
     "reset": "Reset",
-    "confirm": "Confirm"
+    "confirm": "Confirm",
+    "recordPayment": "Record payment",
+    "seeAll": "See all",
+    "saveAndAddAnother": "Save & add another",
+    "saveAndAddAnotherShortcut": "Save, then start the next one ({{keys}})"
   },
   "placeholder": {
     "none": "—",
@@ -61,7 +65,7 @@
     "separator": "{{list}}, {{item}}"
   },
   "documentList": {
-    "search": "Search {{kind, lowercase}}",
+    "search": "Search {{kind, lowercase}} by number, reference or contact",
     "count_one": "{{count}} {{kind, lowercase}}",
     "count_other": "{{count}} {{kind, lowercase}}",
     "filterByStatus": "Filter by {{status}}",
@@ -70,7 +74,11 @@
     "emptyNoMatchTitle": "Nothing matches",
     "emptyNoMatchMessage": "Try clearing a filter or searching for something else.",
     "clearFilters": "Clear filters",
-    "statusSection": "Status"
+    "statusSection": "Status",
+    "loadMore": "Load more",
+    "waiting": "Waiting to sync",
+    "tileCount_one": "{{count}} document",
+    "tileCount_other": "{{count}} documents"
   },
   "documentEditor": {
     "finalised": "{{kind}} finalised",
@@ -91,7 +99,33 @@
     "shareTitle": "{{kind}} {{number}}",
     "shareMessage": "{{kind}} {{number}} — {{amount}}",
     "sent": "On its way to the customer",
-    "linkCopied": "Link copied"
+    "linkCopied": "Link copied",
+    "noPayment": "No payment is taken against a {{kind}}.",
+    "issueFirst": "Issue it first; payment is recorded against an issued document.",
+    "nothingDue": "Nothing is due on this document."
+  },
+  "documentEmail": {
+    "subject": "{{kind}} {{number}} from {{business}}",
+    "greeting": "Dear {{name}},",
+    "intro": "Please find {{kind, lowercase}} {{number}} from {{business}}.",
+    "date": "Date: {{date}}",
+    "dueDate": "Due date: {{date}}",
+    "validUntil": "Valid until: {{date}}",
+    "total": "Total: {{amount}}",
+    "amountDue": "Amount due: {{amount}}",
+    "view": "View {{kind, lowercase}}: {{url}}",
+    "pdf": "Download PDF: {{url}}",
+    "pay": "Pay now: {{url}}",
+    "thanks": "Thank you for your business.",
+    "regards": "Regards,"
+  },
+  "save": {
+    "queued": "Saved on this device. It will sync when you are back online.",
+    "refused": "The server refused this: {{reason}}",
+    "refusedLater": "{{label}} wasn't saved: {{reason}}. It's waiting in Settings → Sync.",
+    "unreachable": "Couldn't reach the server, so this wasn't saved. Try again when you're connected.",
+    "unconfirmed": "Couldn't confirm with the server. If it went through, it will appear here shortly; check before entering it again.",
+    "paymentHeld": "Sent for approval. An owner or admin records the payment when they approve it."
   },
   "component": {
     "confirm": "Confirm",
@@ -101,6 +135,11 @@
     "close": "Close",
     "create": "Create",
     "offline": "Offline",
+    "failedSync": "{{count}} failed",
+    "queuedSync": "{{count}} queued",
+    "openSyncStatus": "Open sync status",
+    "provisional": "Provisional number",
+    "pastCreditNoteDeadline": "Past the GST credit note deadline",
     "notifications": "Notifications",
     "business": "Business",
     "allBranches": "All branches",
@@ -113,13 +152,35 @@
     "skip": "Skip",
     "noChartData": "No data for this period",
     "quantity": "Quantity",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password",
     "countryCode": "Country code",
     "useTyped": "Use “{{value}}”",
     "city": "City",
     "selectCity": "Select city",
     "searchCity": "Search for a city",
     "noCityMatch": "This city isn’t in the list. Check the spelling, or pick the nearest city.",
-    "allStates": "All states"
+    "allStates": "All states",
+    "selectDate": "Select date",
+    "select": "Select",
+    "date": "Date",
+    "notSet": "not set",
+    "closeMenu": "Close menu",
+    "decreaseQuantity": "Decrease quantity",
+    "increaseQuantity": "Increase quantity",
+    "backTo": "Back to {{label}}",
+    "signedQr": "Signed QR code",
+    "other": "Other",
+    "chartSlice": "{{label}}: {{amount}}, {{percent}} percent",
+    "nothingToShow": "Nothing to show yet",
+    "noSearchMatch": "Nothing matches that search.",
+    "viewOnly": "No internet · view only",
+    "workOffline": "Work offline",
+    "offlineWaiting": "Offline · {{count}} waiting",
+    "draining": "Syncing {{count}}…",
+    "loadingBooks": "Loading your books…",
+    "required": "required",
+    "switchBusiness": "Switch business. Current: {{name}}"
   },
   "totals": {
     "subtotal": "Subtotal",
@@ -127,8 +188,17 @@
     "taxableValue": "Taxable value",
     "discountOnTotal": "Discount on total",
     "otherCharges": "Other charges",
+    "tdsLabel": "TDS {{section}} at {{rate}}",
+    "payableToSupplier": "Payable to supplier",
+    "reimbursements": "Reimbursements at cost",
+    "reverseChargeTax": "Tax payable by the recipient (reverse charge)",
     "roundOff": "Round off",
-    "total": "Total"
+    "fxNote": "≈ {{amount}} at 1 {{currency}} = {{rate}} {{baseCurrency}}",
+    "total": "Total",
+    "noTax": "No tax",
+    "exchangeRate": "Exchange rate",
+    "inputTax": "Input tax ({{rate}})",
+    "netAmount": "Net amount"
   },
   "quickAction": {
     "newInvoice": "New invoice",
@@ -150,7 +220,9 @@
     "contact": "This contact may have been deleted.",
     "expense": "This expense may have been deleted.",
     "item": "This item may have been deleted.",
-    "payment": "This payment may have been deleted."
+    "payment": "This payment may have been deleted.",
+    "route": "There's nothing at this address. It may have moved, or the link may be wrong.",
+    "goHome": "Go to home"
   },
   "notifications": {
     "markAllRead": "Mark all read",
@@ -160,7 +232,11 @@
     "clearTitle": "Clear all notifications?",
     "clearMessage": "They will be removed from this business",
     "clear": "Clear",
-    "clearMessageFull": "They will be removed from this business's list. The underlying records are untouched."
+    "clearMessageFull": "They will be removed from this business's list. The underlying records are untouched.",
+    "allRead": "All caught up",
+    "cleared": "Notifications cleared",
+    "filterAll": "All ({{n}})",
+    "filterUnread": "Unread ({{n}})"
   },
   "search": {
     "placeholder": "Invoices, contacts, items, payments…",
@@ -178,7 +254,8 @@
     "apply": "Apply",
     "clearParty": "Clear party filter",
     "dateRange": "Date range",
-    "status": "Status"
+    "status": "Status",
+    "noMatch": "Nothing matches this filter."
   },
   "business": {
     "switch": "Switch business",
@@ -213,6 +290,80 @@
     "reference": "Reference",
     "total": "Total",
     "allDates": "All dates",
-    "clear": "Clear filters"
+    "clear": "Clear filters",
+    "sortBy": "Sort by {{column}}",
+    "sortedAsc": "{{column}}, sorted ascending",
+    "sortedDesc": "{{column}}, sorted descending",
+    "range": "{{from}}–{{to}} of {{total}}",
+    "pageOf": "Page {{page}} of {{count}}",
+    "previousPage": "Previous page",
+    "nextPage": "Next page",
+    "perPage": "{{n}} per page",
+    "rowsPerPage": "Rows per page: {{n}}",
+    "selected_one": "{{count}} selected",
+    "selected_other": "{{count}} selected",
+    "clearSelection": "Clear selection",
+    "selectPage": "Select all on this page",
+    "selectRow": "Select {{label}}",
+    "rowActions": "Actions for {{label}}",
+    "actions": "Actions",
+    "loading": "Loading",
+    "loadFailed": "This list couldn’t load.",
+    "open": "Open",
+    "exportCsv": "Export CSV",
+    "exportCancelled": "Export cancelled",
+    "deactivate": "Deactivate",
+    "deactivated_one": "{{count}} deactivated",
+    "deactivated_other": "{{count}} deactivated",
+    "duplicate": "Duplicate",
+    "preview": "Preview",
+    "markSent": "Mark sent",
+    "markedSent_one": "{{count}} marked sent",
+    "markedSent_other": "{{count}} marked sent",
+    "deleteDrafts": "Delete drafts",
+    "deleteDraftsTitle_one": "Delete {{count}} draft?",
+    "deleteDraftsTitle_other": "Delete {{count}} drafts?",
+    "deleteDraftsBody": "Drafts have no number yet, so none is lost. This can’t be undone. Selected documents that aren’t drafts are left alone.",
+    "deletedDrafts_one": "{{count}} draft deleted",
+    "deletedDrafts_other": "{{count}} drafts deleted",
+    "someFailed": "{{count}} couldn’t be changed: {{reason}}"
+  },
+  "toast": {
+    "success": "Done",
+    "error": "Couldn't complete that",
+    "warning": "Action needed",
+    "info": "Good to know",
+    "recordPayment": "Record payment",
+    "paySupplier": "Pay supplier",
+    "switchedBusiness": "Switched to {{name}}",
+    "switchedBranch": "Now showing {{name}}",
+    "signedOut": "Signed out"
+  },
+  "gstinLookup": {
+    "fetching": "Fetching the registered details…",
+    "filled": "Verified on the GST portal, and its details filled in",
+    "inactive": "{{status}} on the GST portal",
+    "notFound": "The GST portal has no taxpayer with this GSTIN",
+    "failed": "Couldn't reach the GST portal; fill the details in yourself"
+  },
+  "leaveGuard": {
+    "title": "Leave without saving?",
+    "message": "You have changes that aren't saved. If you leave now, they'll be lost.",
+    "leave": "Leave",
+    "stay": "Stay"
+  },
+  "crash": {
+    "title": "Something went wrong",
+    "body": "This screen hit an error. Your data is safe: anything you saved is still here. Try again, or go back to the home screen.",
+    "retry": "Try again",
+    "home": "Go to home",
+    "misconfigured": "This build of the app doesn't know where its server is. Please update the app, or contact support.",
+    "cantOpen": "Couldn't open {{what}} on this device."
+  },
+  "offlineMode": {
+    "title": "No internet connection",
+    "message": "You can keep working on this device. Your changes will be saved here and sent to the server once the connection has been back for a few seconds.",
+    "accept": "Work offline",
+    "decline": "Not now"
   }
 }

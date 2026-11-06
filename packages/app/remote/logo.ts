@@ -7,6 +7,7 @@ import { API_BASE_URL } from './config';
 import { useLogoQueue } from './logoQueue';
 import { knownToServer } from './meta';
 import { getTokens } from './tokens';
+import { fileBlob, keepQueued } from './keptFiles';
 
 /** The server refused the logo, or it can't be read. `status` also keeps it from being taken for a lost connection. */
 export class LogoError extends Error {
@@ -28,7 +29,7 @@ async function formFor(uri: string): Promise<FormData> {
   if (Platform.OS === 'web') {
     let blob: Blob;
     try {
-      blob = await (await fetch(uri)).blob();
+      blob = await fileBlob(uri);
     } catch {
       throw new LogoError('The picked image is no longer available. Please choose it again.', 0, 'FILE_GONE');
     }
@@ -96,6 +97,8 @@ export async function removeLogo(companyId: string): Promise<void> {
 export function queueLogo(companyId: string, uri: string) {
   useLogoQueue.getState().set(companyId, uri);
   setLocalLogo(companyId, uri);
+  // A browser's picked file lasts only as long as the page; keep it for a reload.
+  keepQueued(uri, useLogoQueue.getState().swapUri);
 }
 
 let flushing = false;
@@ -130,23 +133,29 @@ let linksRefreshedAt = 0;
 const LINK_REFRESH_MS = 30 * 60_000;
 
 /**
- * Keeps each company's logo link fresh, and picks up a logo changed on another
- * device. A logo still waiting to upload is left alone.
+ * Keeps each company's logo and signature links fresh, and picks up either
+ * changed on another device. A logo still waiting to upload is left alone.
  */
 export async function refreshLogoLinks(): Promise<void> {
   const { data } = await api.GET('/companies');
   const server = new Map((data?.data ?? []).map((c) => [c.id, c.logoUri as string | undefined]));
+  const signatures = new Map((data?.data ?? []).map((c) => [c.id, c.signatureUri as string | undefined]));
   const pending = useLogoQueue.getState().pending;
   const stale = Date.now() - linksRefreshedAt > LINK_REFRESH_MS;
   const { companies } = useAppStore.getState();
   let changed = false;
   const next = companies.map((c) => {
-    if (!server.has(c.id) || pending[c.id]) return c;
-    const link = server.get(c.id);
-    // A new link every time would rewrite the whole stored book each sync, so only swap when it matters.
-    if (!!link === !!c.logoUri && !(link && stale)) return c;
-    changed = true;
-    return { ...c, logoUri: link };
+    if (!server.has(c.id)) return c;
+    let out = c;
+    const sig = signatures.get(c.id);
+    if (!(!!sig === !!c.signatureUri && !(sig && stale))) out = { ...out, signatureUri: sig };
+    if (!pending[c.id]) {
+      const link = server.get(c.id);
+      // A new link every time would rewrite the whole stored book each sync, so only swap when it matters.
+      if (!(!!link === !!c.logoUri && !(link && stale))) out = { ...out, logoUri: link };
+    }
+    if (out !== c) changed = true;
+    return out;
   });
   if (changed) useAppStore.setState({ companies: next });
   if (stale) linksRefreshedAt = Date.now();

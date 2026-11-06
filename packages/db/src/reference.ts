@@ -39,6 +39,17 @@ export const HSN_STARTER: { code: string; description: string; isService: boolea
   { code: '90178010', description: 'Measuring rods and tapes', isService: false, rate: 18 },
   { code: '90303100', description: 'Multimeters without recording device', isService: false, rate: 18 },
   { code: '94054090', description: 'Electric lamps and lighting fittings', isService: false, rate: 12 },
+  // Six-digit goods codes, each checked against the NIC e-invoice sandbox. A business with turnover of 5 crore or
+  // more must report 6-digit HSN (error 2311), and the portal refuses a code it does not hold (2176).
+  { code: '721420', description: 'Bars and rods of iron or non-alloy steel, hot-rolled', isService: false, rate: 18 },
+  { code: '730890', description: 'Structures and parts of structures of iron or steel', isService: false, rate: 18 },
+  { code: '392690', description: 'Other articles of plastics', isService: false, rate: 18 },
+  { code: '401699', description: 'Other articles of vulcanised rubber', isService: false, rate: 18 },
+  { code: '847130', description: 'Portable computers, laptops and notebooks', isService: false, rate: 18 },
+  { code: '851712', description: 'Mobile phones and telephones for cellular networks', isService: false, rate: 18 },
+  { code: '252329', description: 'Portland cement, other than white', isService: false, rate: 18 },
+  { code: '100630', description: 'Semi-milled or wholly milled rice', isService: false, rate: 5 },
+  { code: '170199', description: 'Refined cane or beet sugar, other', isService: false, rate: 5 },
   { code: '995461', description: 'Installation services', isService: true, rate: 18 },
   { code: '996511', description: 'Road transport services of goods', isService: true, rate: 5 },
   { code: '998346', description: 'Technical testing and analysis services', isService: true, rate: 18 },

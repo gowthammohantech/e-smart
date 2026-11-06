@@ -6,13 +6,14 @@ import type {
   DocStatus,
   DocumentKind,
   NumberingSeries,
+  Party,
   Payment,
   StockMovement,
   User,
 } from '@esmart/core/types';
 import type { AppState } from '../store/appStore';
 import { companyPath as c } from './collections';
-import { knownToServer } from './meta';
+import { knownToServer, useRemoteMeta } from './meta';
 import * as outbox from './outbox';
 
 /**
@@ -41,7 +42,8 @@ function documentBody(d: BusinessDocument) {
 }
 
 /** Saves of a company-scoped master: parties, items, categories… */
-function master(entityType: string, collection: keyof AppState, segment: string, label: (x: any) => string): Builder {
+/** `forCreate` reshapes the body while the server hasn't seen the record yet. */
+function master(entityType: string, collection: keyof AppState, segment: string, label: (x: any) => string, forCreate?: (x: any) => unknown): Builder {
   return ({ args, result, after }) => {
     const id = typeof result === 'string' && result ? result : (args[0] as { id: string }).id;
     const saved = byId(after[collection] as any[], id);
@@ -51,11 +53,18 @@ function master(entityType: string, collection: keyof AppState, segment: string,
       id,
       collectionPath: `${c(saved.companyId)}/${segment}`,
       itemPath: `${c(saved.companyId)}/${segment}/${id}`,
-      body: saved,
+      body: forCreate && !knownToServer(id) ? forCreate(saved) : saved,
       label: label(saved),
     });
   };
 }
+
+/**
+ * A new party's code is the server's to give: the next free one. The app's own
+ * guess (count + 1) collides once a party is deleted or another device adds one.
+ * The server's code replaces the placeholder when the create comes back.
+ */
+const withoutCode = ({ code: _placeholder, ...party }: Party) => party;
 
 function removal(entityType: string, collection: keyof AppState, segment: string, label: (x: any) => string): Builder {
   return ({ args, before }) => {
@@ -98,6 +107,10 @@ function documentAction(path: (d: BusinessDocument) => string, body?: (call: Cal
       entityId: created ?? doc.id,
       label: doc.number,
       clientEntityId: created,
+      // A finalise or status change acts on the version this device saw: the server refuses it (a
+      // conflict, as for an edit) if another device changed the document since. A convert or duplicate
+      // makes something new and reads its source as it is.
+      baseVersion: created ? undefined : useRemoteMeta.getState().versions[doc.id],
     });
   };
 }
@@ -113,17 +126,21 @@ export const MUTATIONS: Partial<Record<keyof AppState, Builder>> = {
     const company = byId(after.companies, result as string);
     if (!company) return;
     // The logo goes up on its own (remote/logo.ts); here logoUri is only a path on this device.
-    const { id, accountId, createdAt, plan, logoUri, ...body } = company as Company & Record<string, unknown>;
-    void accountId; void createdAt; void plan; void logoUri;
+    const { id, accountId, createdAt, plan, logoUri, signatureUri, ...body } = company as Company & Record<string, unknown>;
+    void accountId; void createdAt; void plan; void logoUri; void signatureUri;
     outbox.push({ method: 'POST', path: '/companies', body: { ...body, seedDefaults: true, numberingSeries: [] }, entityType: 'company', entityId: id, label: company.name, clientEntityId: id });
   },
   saveCompany: ({ args, after }) => {
     const company = byId(after.companies, (args[0] as Company).id);
     if (!company) return;
-    // logoUri is the server's read-only link (or a local path); the logo has its own upload.
-    const { logoUri, ...body } = company;
+    // logoUri and signatureUri are the server's read-only links (or a local path); each image has its own upload.
+    const { logoUri, signatureUri, ...body } = company;
     void logoUri;
-    outbox.upsert({ entityType: 'company', id: company.id, collectionPath: '/companies', itemPath: c(company.id), body, label: company.name });
+    void signatureUri;
+    // Still to be created: keep what the create carries besides the company itself.
+    const create = outbox.pendingCreate(company.id)?.body as { seedDefaults?: boolean; numberingSeries?: unknown[] } | undefined;
+    const saved = create ? { ...body, seedDefaults: create.seedDefaults, numberingSeries: create.numberingSeries } : body;
+    outbox.upsert({ entityType: 'company', id: company.id, collectionPath: '/companies', itemPath: c(company.id), body: saved, label: company.name });
   },
   saveBranch: ({ args, after }) => {
     const b = byId(after.branches, (args[0] as Branch).id);
@@ -143,7 +160,7 @@ export const MUTATIONS: Partial<Record<keyof AppState, Builder>> = {
   },
 
   /* masters */
-  saveParty: master('party', 'parties', 'parties', named),
+  saveParty: master('party', 'parties', 'parties', named, withoutCode),
   removeParty: removal('party', 'parties', 'parties', named),
   saveItem: master('item', 'items', 'items', named),
   removeItem: removal('item', 'items', 'items', named),
@@ -151,6 +168,16 @@ export const MUTATIONS: Partial<Record<keyof AppState, Builder>> = {
   removeTaxCategory: removal('tax_category', 'taxCategories', 'tax-categories', named),
   saveExpenseCategory: master('expense_category', 'expenseCategories', 'expense-categories', named),
   removeExpenseCategory: removal('expense_category', 'expenseCategories', 'expense-categories', named),
+  saveItemCategory: master('item_category', 'itemCategories', 'item-categories', named),
+  removeItemCategory: removal('item_category', 'itemCategories', 'item-categories', named),
+  saveBrand: master('brand', 'brands', 'brands', named),
+  removeBrand: removal('brand', 'brands', 'brands', named),
+  saveCustomField: master('custom_field', 'customFields', 'custom-fields', (f: { label: string }) => f.label),
+  removeCustomField: removal('custom_field', 'customFields', 'custom-fields', (f: { label: string }) => f.label),
+  saveVehicle: master('vehicle', 'vehicles', 'vehicles', (v: { registration: string }) => v.registration),
+  removeVehicle: removal('vehicle', 'vehicles', 'vehicles', (v: { registration: string }) => v.registration),
+  saveVoucherTemplate: master('voucher_template', 'voucherTemplates', 'voucher-templates', named),
+  removeVoucherTemplate: removal('voucher_template', 'voucherTemplates', 'voucher-templates', named),
   savePaymentAccount: master('payment_account', 'paymentAccounts', 'payment-accounts', named),
   removePaymentAccount: removal('payment_account', 'paymentAccounts', 'payment-accounts', named),
   saveExchangeRate: master('exchange_rate', 'exchangeRates', 'exchange-rates', (r) => `${r.currency} rate`),
@@ -165,7 +192,8 @@ export const MUTATIONS: Partial<Record<keyof AppState, Builder>> = {
       return;
     }
     // A series of a company the server hasn't created yet rides along with its create.
-    const create = outbox.pendingCreate(s.companyId);
+    // Can't follow the create as an update: the server's series has its own id.
+    const create = outbox.openCreate(s.companyId);
     if (create) {
       const body = create.body as { numberingSeries?: NumberingSeries[] };
       const series = [...(body.numberingSeries ?? []).filter((x) => x.kind !== s.kind), { kind: s.kind, prefix: s.prefix, nextNumber: s.nextNumber, padding: s.padding, includeFiscalYear: s.includeFiscalYear, includeBranchCode: s.includeBranchCode, resetPolicy: s.resetPolicy }];
@@ -194,7 +222,7 @@ export const MUTATIONS: Partial<Record<keyof AppState, Builder>> = {
     const override = (call.args[2] as { overrideCreditLimit?: boolean } | undefined)?.overrideCreditLimit ? { overrideCreditLimit: true } : {};
     // Not on the server yet: create it in its final state in one go.
     const create = outbox.pendingCreate(doc.id);
-    if (create && status !== 'cancelled') return outbox.update(create.id, { body: { ...documentBody(doc), ...override } });
+    if (create?.path === `${c(doc.companyId)}/documents` && status !== 'cancelled') return outbox.update(create.id, { body: { ...documentBody(doc), ...override } });
     outbox.action({ method: 'POST', path: `${c(doc.companyId)}/documents/${doc.id}/status`, body: { status, ...override }, entityType: 'document', entityId: doc.id, label: doc.number });
   },
   finalizeDocument: documentAction(() => '/finalize'),
@@ -216,6 +244,14 @@ export const MUTATIONS: Partial<Record<keyof AppState, Builder>> = {
   },
   saveExpense: master('expense', 'expenses', 'expenses', (e) => e.number || 'Expense'),
   removeExpense: removal('expense', 'expenses', 'expenses', (e) => e.number || 'Expense'),
+
+  /* books */
+  saveLedgerAccount: master('ledger_account', 'ledgerAccounts', 'ledger-accounts', named),
+  removeLedgerAccount: removal('ledger_account', 'ledgerAccounts', 'ledger-accounts', named),
+  saveVoucher: master('voucher', 'vouchers', 'vouchers', (v) => v.number || 'Voucher'),
+  removeVoucher: removal('voucher', 'vouchers', 'vouchers', (v) => v.number || 'Voucher'),
+  saveCostCentre: master('cost_centre', 'costCentres', 'cost-centres', named),
+  removeCostCentre: removal('cost_centre', 'costCentres', 'cost-centres', named),
 
   /* stock */
   addStockMovement: ({ args }) => {

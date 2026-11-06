@@ -132,7 +132,6 @@ function settings(over: Partial<ComplianceSettings> = {}): ComplianceSettings {
     eInvoiceTurnoverThreshold: fromMajor('50000000', 'INR'),
     reportingWindowDays: 30,
     autoGenerateEInvoiceOnFinalise: false,
-    irpEnvironment: 'sandbox',
     ewayBillEnabled: true,
     ewayBillThreshold: fromMajor('50000', 'INR'),
     autoGenerateEwayBillOnFinalise: false,
@@ -710,6 +709,29 @@ describe('the invoice registration portal (FRD 16)', () => {
     expect(res.reason).toBe('Order cancelled');
   });
 
+  it('sends TCS collected as other charges, so the values add up to the total', () => {
+    const base = invoice();
+    const tcs = fromMajor('118', 'INR');
+    const doc = { ...base, totals: { ...base.totals, tcs, grandTotal: { ...base.totals.grandTotal, minor: base.totals.grandTotal.minor + tcs.minor } } };
+    const v = buildIrpPayload(ctx({ document: doc })).ValDtls;
+    expect(v.OthChrg).toBe(118);
+    expect(Math.round((v.AssVal + v.IgstVal + v.CgstVal + v.SgstVal + v.CesVal - v.Discount + v.OthChrg + v.RndOffAmt) * 100)).toBe(Math.round(v.TotInvVal * 100));
+  });
+
+  it('sends a pure-agent reimbursement as other charges, so the values add up to the total', () => {
+    const reimbursed = fromMajor('500', 'INR');
+    const doc = invoice({
+      lines: [line(), line({ id: 'ln2', itemId: undefined, name: 'Courier at cost', hsnCode: undefined, quantity: 1, unitPrice: reimbursed, taxRate: 0, gst: { reimbursement: true } })],
+      totals: { reimbursements: reimbursed, grandTotal: fromMajor('12300', 'INR'), grandTotalBase: fromMajor('12300', 'INR') } as BusinessDocument['totals'],
+    });
+    const p = buildIrpPayload(ctx({ document: doc }));
+    expect(p.ItemList).toHaveLength(1);
+    expect(p.ValDtls.OthChrg).toBe(500);
+    const v = p.ValDtls;
+    expect(v.AssVal + v.IgstVal + v.CgstVal + v.SgstVal + v.CesVal - v.Discount + v.OthChrg + v.RndOffAmt).toBe(v.TotInvVal);
+    expect(validateEInvoice(ctx({ document: doc })).filter((i) => i.severity === 'blocking')).toEqual([]);
+  });
+
   it('never produces a leading zero in an acknowledgement number', () => {
     for (let i = 0; i < 200; i += 1) {
       expect(ackNoFrom(sha256Hex(`irn${i}`), NOW)[0]).not.toBe('0');
@@ -868,6 +890,18 @@ describe('e-way bill requirement (FRD 16)', () => {
       lines: [line({ itemId: 'itm_service' }), line({ id: 'b', itemId: 'itm_goods' })],
     });
     expect(required(mixed).required).toBe(true);
+  });
+
+  it('counts a line typed in by hand as goods, unless its code is a service (SAC) code', () => {
+    expect(required(consignment({ lines: [line({ itemId: undefined, hsnCode: '8482' })] })).required).toBe(true);
+    expect(required(consignment({ lines: [line({ itemId: undefined, hsnCode: undefined })] })).required).toBe(true);
+    expect(required(consignment({ lines: [line({ itemId: undefined, hsnCode: '998314' })] })).required).toBe(false);
+  });
+
+  it('compares a foreign-currency consignment in rupees', () => {
+    const doc = consignment({ currency: 'USD', exchangeRate: 83 });
+    doc.totals.grandTotal = { minor: 100000, currency: 'USD' }; // $1,000 is ₹83,000
+    expect(required(doc).required).toBe(true);
   });
 
   it('is not required at exactly fifty thousand rupees', () => {

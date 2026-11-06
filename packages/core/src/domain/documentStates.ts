@@ -27,12 +27,23 @@ export const STATUS_TONE: Record<DocStatus, StatusTone> = {
   billed: 'success',
 };
 
-/** Legal transitions per FRD 9. */
+/**
+ * Legal transitions per FRD 9. An overdue document can be cancelled like an
+ * issued one; the server still refuses one with payments or live returns.
+ */
 const TRANSITIONS: Record<DocumentKind, Partial<Record<DocStatus, DocStatus[]>>> = {
   quote: {
     draft: ['sent', 'cancelled'],
     sent: ['accepted', 'rejected', 'expired'],
     accepted: [],
+    rejected: [],
+    expired: ['sent'],
+  },
+  // A proforma is sent like a quote and settled by the invoice made from it; it is never on the books.
+  proforma: {
+    draft: ['sent', 'cancelled'],
+    sent: ['accepted', 'rejected', 'expired', 'cancelled'],
+    accepted: ['cancelled'],
     rejected: [],
     expired: ['sent'],
   },
@@ -49,12 +60,12 @@ const TRANSITIONS: Record<DocumentKind, Partial<Record<DocStatus, DocStatus[]>>>
     draft: ['issued', 'cancelled'],
     issued: ['partiallyPaid', 'paid', 'overdue', 'cancelled'],
     partiallyPaid: ['paid', 'overdue'],
-    overdue: ['partiallyPaid', 'paid'],
+    overdue: ['partiallyPaid', 'paid', 'cancelled'],
     paid: [],
   },
   salesReturn: {
     requested: ['approved', 'cancelled'],
-    approved: ['processed'],
+    approved: ['processed', 'cancelled'],
     processed: [],
   },
   purchaseOrder: {
@@ -70,13 +81,48 @@ const TRANSITIONS: Record<DocumentKind, Partial<Record<DocStatus, DocStatus[]>>>
     draft: ['issued', 'cancelled'],
     issued: ['partiallyPaid', 'paid', 'overdue', 'cancelled'],
     partiallyPaid: ['paid', 'overdue'],
-    overdue: ['partiallyPaid', 'paid'],
+    overdue: ['partiallyPaid', 'paid', 'cancelled'],
     paid: [],
   },
   purchaseReturn: {
     requested: ['approved', 'cancelled'],
-    approved: ['processed'],
+    approved: ['processed', 'cancelled'],
     processed: [],
+  },
+  creditNote: {
+    draft: ['issued', 'cancelled'],
+    issued: ['cancelled'],
+  },
+  supplierCreditNote: {
+    draft: ['issued', 'cancelled'],
+    issued: ['cancelled'],
+  },
+  debitNote: {
+    draft: ['issued', 'cancelled'],
+    issued: ['partiallyPaid', 'paid', 'overdue', 'cancelled'],
+    partiallyPaid: ['paid', 'overdue'],
+    overdue: ['partiallyPaid', 'paid', 'cancelled'],
+    paid: [],
+  },
+  supplierDebitNote: {
+    draft: ['issued', 'cancelled'],
+    issued: ['partiallyPaid', 'paid', 'overdue', 'cancelled'],
+    partiallyPaid: ['paid', 'overdue'],
+    overdue: ['partiallyPaid', 'paid', 'cancelled'],
+    paid: [],
+  },
+  // What was owed when the books started: imported issued, then paid off (or cancelled if entered wrongly).
+  openingInvoice: {
+    issued: ['partiallyPaid', 'paid', 'overdue', 'cancelled'],
+    partiallyPaid: ['paid', 'overdue'],
+    overdue: ['partiallyPaid', 'paid', 'cancelled'],
+    paid: [],
+  },
+  openingBill: {
+    issued: ['partiallyPaid', 'paid', 'overdue', 'cancelled'],
+    partiallyPaid: ['paid', 'overdue'],
+    overdue: ['partiallyPaid', 'paid', 'cancelled'],
+    paid: [],
   },
 };
 
@@ -102,10 +148,57 @@ export function isCancelled(status: DocStatus): boolean {
   return status === 'cancelled' || status === 'rejected';
 }
 
-/** Documents that create a receivable / payable. */
-export function isPayableDocument(kind: DocumentKind): boolean {
-  return kind === 'invoice' || kind === 'purchaseBill';
+const RETURN_KINDS: DocumentKind[] = ['salesReturn', 'purchaseReturn'];
+
+/** Notes against an invoice or bill: they change what it charged, and move no goods. */
+export const NOTE_KINDS: DocumentKind[] = ['creditNote', 'debitNote', 'supplierCreditNote', 'supplierDebitNote'];
+
+/** Documents that lower what their source still owes: returns and credit notes. */
+export const CREDIT_KINDS: DocumentKind[] = ['salesReturn', 'purchaseReturn', 'creditNote', 'supplierCreditNote'];
+
+/** Raised against an invoice or bill, any number of times: returns and notes. */
+const AGAINST_SOURCE: DocumentKind[] = [...RETURN_KINDS, ...NOTE_KINDS];
+
+/** The kind of document each note is raised against. */
+export const NOTE_SOURCE: Partial<Record<DocumentKind, DocumentKind>> = {
+  creditNote: 'invoice',
+  debitNote: 'invoice',
+  supplierCreditNote: 'purchaseBill',
+  supplierDebitNote: 'purchaseBill',
+  salesReturn: 'invoice',
+  purchaseReturn: 'purchaseBill',
+};
+
+/**
+ * Why nothing of `target` can be made from `source` now, or null when it can.
+ * A draft isn't final, so nothing is made from it. And a quote or order is
+ * carried forward once: after an order, delivery, invoice, receipt or bill has
+ * been made from it (and not cancelled), it can't be converted again, so the
+ * same goods aren't delivered or billed twice. Returns are the exception:
+ * several can be raised against one invoice or bill, up to what it carried.
+ */
+export function conversionBlock(
+  source: { id: string; status: DocStatus },
+  target: DocumentKind,
+  made: { kind: DocumentKind; status: DocStatus; sourceDocumentId?: string | null }[],
+): 'cancelled' | 'draft' | 'converted' | null {
+  if (isCancelled(source.status)) return 'cancelled';
+  if (!isFinalized(source.status)) return 'draft';
+  if (AGAINST_SOURCE.includes(target)) return null;
+  const onward = made.some((d) => d.sourceDocumentId === source.id && !AGAINST_SOURCE.includes(d.kind) && !isCancelled(d.status));
+  return onward ? 'converted' : null;
 }
 
-export const SALES_KINDS: DocumentKind[] = ['quote', 'salesOrder', 'delivery', 'invoice', 'salesReturn'];
-export const PURCHASE_KINDS: DocumentKind[] = ['purchaseOrder', 'goodsReceipt', 'purchaseBill', 'purchaseReturn'];
+/** Documents that create a receivable / payable. */
+export function isPayableDocument(kind: DocumentKind): boolean {
+  return PAYABLE_KINDS.includes(kind);
+}
+
+export const PAYABLE_KINDS: DocumentKind[] = ['invoice', 'purchaseBill', 'debitNote', 'supplierDebitNote', 'openingInvoice', 'openingBill'];
+/** Settled by money received; the rest by money paid. */
+export const RECEIVABLE_KINDS: DocumentKind[] = ['invoice', 'debitNote', 'openingInvoice'];
+/** Owed from before the books started here: on the party's account, never in sales, purchases or GST (RULES 6.12). */
+export const OPENING_KINDS: DocumentKind[] = ['openingInvoice', 'openingBill'];
+
+export const SALES_KINDS: DocumentKind[] = ['quote', 'proforma', 'salesOrder', 'delivery', 'invoice', 'salesReturn', 'creditNote', 'debitNote', 'openingInvoice'];
+export const PURCHASE_KINDS: DocumentKind[] = ['purchaseOrder', 'goodsReceipt', 'purchaseBill', 'purchaseReturn', 'supplierCreditNote', 'supplierDebitNote', 'openingBill'];

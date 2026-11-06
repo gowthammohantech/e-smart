@@ -41,17 +41,62 @@ describe('integrations', () => {
     expect((await t.post(`${c}/integrations/int_nope/disconnect`, {}, { token })).status).toBe(404);
   });
 
-  it('gates by the integration minimum plan, and OAuth providers return an authorize URL', async () => {
+  it('switches the government portals on and off, but only once they have a login', async () => {
+    const { token, c, company } = await ownerWithCompany(t);
+    const CR = schema.complianceCredentials;
+    const state = async () => {
+      const list = await t.get(`${c}/integrations`, { token });
+      return Object.fromEntries(['int_einvoice', 'int_eway'].map((id) => [id, list.body.data.find((i: { id: string }) => i.id === id).connected]));
+    };
+    expect(await state()).toEqual({ int_einvoice: false, int_eway: false });
+
+    // No login yet: the switch cannot turn on.
+    const refused = await t.post(`${c}/integrations/int_eway/connect`, {}, { token });
+    expect(refused.body.integration.connected).toBe(false);
+    expect(await state()).toEqual({ int_einvoice: false, int_eway: false });
+
+    // Saving a portal's first login connects that portal only.
+    await t.put(`${c}/compliance-settings/credentials`, { portal: 'ewaybill', username: 'ewb_user', password: 'ewb-pass-1' }, { token });
+    expect(await state()).toEqual({ int_einvoice: false, int_eway: true });
+    const settings = await t.get(`${c}/compliance-settings`, { token });
+    expect(settings.body).toMatchObject({ ewbUsername: 'ewb_user', ewayBillEnabled: true });
+    expect(settings.body.irpUsername).toBeUndefined();
+
+    // Switching off keeps the login, so switching back on needs no retyping.
+    const off = await t.post(`${c}/integrations/int_eway/disconnect`, {}, { token });
+    expect(off.body).toMatchObject({ id: 'int_eway', connected: false });
+    expect(await state()).toEqual({ int_einvoice: false, int_eway: false });
+    expect(await t.deps.db.select().from(CR).where(eq(CR.companyId, company.id!))).toHaveLength(1);
+    expect((await t.get(`${c}/compliance-settings`, { token })).body).toMatchObject({ ewbUsername: 'ewb_user', ewayBillEnabled: false });
+
+    const on = await t.post(`${c}/integrations/int_eway/connect`, {}, { token });
+    expect(on.body.integration.connected).toBe(true);
+    expect(await state()).toEqual({ int_einvoice: false, int_eway: true });
+
+    // Changing the password later does not undo a switch-off.
+    await t.post(`${c}/integrations/int_eway/disconnect`, {}, { token });
+    await t.put(`${c}/compliance-settings/credentials`, { portal: 'ewaybill', username: 'ewb_user', password: 'ewb-pass-2' }, { token });
+    expect(await state()).toEqual({ int_einvoice: false, int_eway: false });
+  });
+
+  it('gates by the integration minimum plan, and refuses the OAuth providers while they are coming soon', async () => {
     const free = await ownerWithCompany(t);
     const denied = await t.post(`${free.c}/integrations/int_drive/connect`, {}, { token: free.token });
     expect(denied.status).toBe(403);
     expect(denied.body).toMatchObject({ code: 'PLAN_UPGRADE_REQUIRED', requiredPlan: 'business' });
 
     const biz = await ownerWithCompany(t, { plan: 'business' });
-    const res = await t.post(`${biz.c}/integrations/int_drive/connect`, {}, { token: biz.token });
-    expect(res.status).toBe(200);
-    expect(res.body.integration.connected).toBe(false);
-    expect(res.body.authorizeUrl).toMatch(/^https:\/\/accounts\.google\.com\//);
+    for (const id of ['int_drive', 'int_razorpay']) {
+      const res = await t.post(`${biz.c}/integrations/${id}/connect`, {}, { token: biz.token });
+      expect(res.status).toBe(409);
+      expect(res.body.code).toBe('INTEGRATION_COMING_SOON');
+    }
+    const list = await t.get(`${biz.c}/integrations`, { token: biz.token });
+    const byId = Object.fromEntries(list.body.data.map((i: { id: string; available: boolean }) => [i.id, i.available]));
+    expect(byId).toMatchObject({ int_drive: false, int_razorpay: false, int_upi: true });
+    // Razorpay keys sent directly still connect.
+    const keys = await t.post(`${biz.c}/integrations/int_razorpay/connect`, { config: { key_id: 'rzp_test_x', key_secret: 's' } }, { token: biz.token });
+    expect(keys.body.integration).toMatchObject({ connected: true, available: true });
   });
 
   it('is for owners and admins', async () => {

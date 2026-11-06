@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '@esmart/ui/components/Icon';
 import { CompanyLogo } from '@esmart/ui/components/CompanyLogo';
 import { pickLogo } from '../../features/company/pickLogo';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
@@ -13,7 +13,6 @@ import { CityField } from '@esmart/ui/components/pickers/CityField';
 import { Text } from '@esmart/ui/components/Text';
 import { FieldRow } from '@esmart/ui/components/Layout';
 import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
-import { useSignOut } from '../../features/session/useSignOut';
 import { nextStepRoute, onboardingSteps, stepIndex, useOnboardingStore } from '../../store/onboardingStore';
 import { BUSINESS_TYPES, INDIAN_STATES } from '@esmart/core/data/masters';
 import { citiesForState } from '@esmart/core/data/cities';
@@ -24,11 +23,10 @@ import { validPhoneParts } from '@esmart/core/lib/phone';
 
 export default function BusinessStep() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['errors', 'onboarding']);
+  const { t: tr } = useTranslation(['errors', 'onboarding', 'common']);
   const router = useRouter();
   const { draft, set, setAddress } = useOnboardingStore();
   const desktop = useIsDesktop();
-  const signOut = useSignOut();
 
   const [typeOpen, setTypeOpen] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
@@ -51,8 +49,8 @@ export default function BusinessStep() {
   const next = () => {
     const nextErrors: Errors<'name' | 'city' | 'state' | 'email' | 'phone' | 'postalCode'> = {
       name: required(draft.name, tr('errors:field.businessName')),
-      city: required(draft.address.city, 'City'),
-      state: required(draft.address.state, 'State'),
+      city: required(draft.address.city, tr('onboarding:business.city')),
+      state: required(draft.address.state, tr('onboarding:business.state')),
       email: validEmail(draft.email),
       phone: validPhoneParts(draft.phoneDialCode, draft.phone),
       postalCode: validPostalCode(draft.address.postalCode, draft.address.country, draft.address.stateCode),
@@ -69,7 +67,6 @@ export default function BusinessStep() {
       steps={onboardingSteps(draft.plan)}
       currentStep={stepIndex('business', draft.plan)}
       onPrimary={next}
-      onSignOut={signOut}
     >
       <View style={desktop ? { flexDirection: 'row', alignItems: 'center', gap: t.spacing.lg } : { alignItems: 'center', gap: t.spacing.sm }}>
         <Pressable
@@ -90,9 +87,9 @@ export default function BusinessStep() {
           }}
         >
           {draft.logoUri ? (
-            <CompanyLogo uri={draft.logoUri} name={draft.name || 'Business'} size={84} />
+            <CompanyLogo uri={draft.logoUri} name={draft.name || tr('common:component.business')} size={84} />
           ) : (
-            <MaterialCommunityIcons name="image-plus" size={26} color={t.c.muted} />
+            <Icon name="image-plus" size={26} color={t.c.muted} />
           )}
         </Pressable>
         <View style={{ gap: 2, alignItems: desktop ? 'flex-start' : 'center' }}>
@@ -236,6 +233,8 @@ export default function BusinessStep() {
         options={PLANS.map((p) => ({
           value: p.key,
           label: p.name,
+          // Only the free plan can be chosen at sign-up; the rest are shown, greyed out.
+          disabled: p.key !== 'free',
           trailing: moduleSetFor(p.key) === 'full' ? tr('onboarding:business.planTrailingFull') : tr('onboarding:business.planTrailingSales'),
         }))}
         value={draft.plan}

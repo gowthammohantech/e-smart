@@ -2,7 +2,6 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Address, PlanTier } from '@esmart/core/types';
-import { moduleSetFor } from '@esmart/core/domain/plan';
 import { today } from '@esmart/core/lib/date';
 import { DEFAULT_DIAL_CODE } from '@esmart/core/lib/phone';
 
@@ -23,6 +22,8 @@ export type OnboardingDraft = {
   fiscalYearStartMonth: number;
   taxRegistered: boolean;
   taxIdentifier: string;
+  /** The GSTIN the business details were last filled from, so going back to Tax doesn't fill them over again. */
+  prefilledFromGstin: string;
   compositionScheme: boolean;
   invoicePrefix: string;
   invoiceNextNumber: string;
@@ -59,7 +60,8 @@ const initial: OnboardingDraft = {
   legalName: '',
   // A slug from BUSINESS_TYPES; labels live in `onboarding:businessType.*`.
   businessType: 'retail',
-  plan: 'basic',
+  // Sign-up is free only for now; the paid plans can't be bought yet.
+  plan: 'free',
   address: emptyAddress,
   email: '',
   phoneDialCode: DEFAULT_DIAL_CODE,
@@ -69,6 +71,7 @@ const initial: OnboardingDraft = {
   fiscalYearStartMonth: 4,
   taxRegistered: true,
   taxIdentifier: '',
+  prefilledFromGstin: '',
   compositionScheme: false,
   invoicePrefix: 'INV',
   invoiceNextNumber: '1',
@@ -104,19 +107,21 @@ export const useOnboardingStore = create<OnboardingState>()(
   ),
 );
 
-/** Step order. Names live in `onboarding:step.*`. */
-export const ONBOARDING_STEPS = ['business', 'country', 'tax', 'numbering', 'branches'] as const;
+/** Step order: Tax comes first so a GSTIN can fill in the business details after it. Names live in `onboarding:step.*`. */
+export const ONBOARDING_STEPS = ['tax', 'business', 'country', 'numbering', 'branches'] as const;
 
 export type OnboardingStepKey = (typeof ONBOARDING_STEPS)[number];
 
 /**
- * A sales-only plan sells in India and has one location, so it skips the
- * country and branch steps: the defaults (India, INR, head office) stand.
+ * The steps every plan walks. Country is skipped: the app sells in India
+ * only for now, so its defaults (India, INR, April year) stand, and the
+ * year can be changed in Settings. Branches are skipped: every business
+ * starts on Free, which has one location (the head office), so branches are
+ * added from Settings once it is upgraded.
  */
-export function onboardingSteps(plan: PlanTier) {
-  return moduleSetFor(plan) === 'full'
-    ? (ONBOARDING_STEPS as readonly OnboardingStepKey[])
-    : ONBOARDING_STEPS.filter((s) => s !== 'country' && s !== 'branches');
+export function onboardingSteps(plan: PlanTier): OnboardingStepKey[] {
+  void plan;
+  return ONBOARDING_STEPS.filter((s) => s !== 'country' && s !== 'branches');
 }
 
 export function stepIndex(key: OnboardingStepKey, plan: PlanTier = 'pro'): number {

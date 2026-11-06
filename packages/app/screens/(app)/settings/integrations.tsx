@@ -2,23 +2,27 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Platform, Pressable, ScrollView, Switch, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon, type IconName } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
 import { Badge } from '@esmart/ui/components/Badge';
 import { useToast } from '@esmart/ui/components/Toast';
 import { useAppStore } from '../../../store/appStore';
+import { useComplianceSettings } from '../../../store/selectors';
 import { Integration } from '@esmart/core/types';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 
-const GROUPS: { key: Integration['category']; title: string; blurb: string }[] = [
-  { key: 'payments', title: 'Payments', blurb: 'Let customers pay an invoice without leaving it.' },
-  { key: 'compliance', title: 'Compliance', blurb: 'Government filings and document generation.' },
-  { key: 'messaging', title: 'Messaging', blurb: 'How invoices and reminders reach your customers.' },
-  { key: 'accounting', title: 'Accounting', blurb: 'Hand data to your accountant in their format.' },
-  { key: 'storage', title: 'Storage & backup', blurb: 'Where copies of your documents are kept.' },
-];
+const GROUPS = [
+  { key: 'payments', title: 'settings:integrations.group.payments', blurb: 'settings:integrations.group.paymentsHint' },
+  { key: 'compliance', title: 'settings:integrations.group.compliance', blurb: 'settings:integrations.group.complianceHint' },
+  { key: 'messaging', title: 'settings:integrations.group.messaging', blurb: 'settings:integrations.group.messagingHint' },
+  { key: 'accounting', title: 'settings:integrations.group.accounting', blurb: 'settings:integrations.group.accountingHint' },
+  { key: 'storage', title: 'settings:integrations.group.storage', blurb: 'settings:integrations.group.storageHint' },
+] as const satisfies readonly { key: Integration['category']; title: string; blurb: string }[];
+
+/** The government portals open their own login screen on the tab for that portal. */
+const PORTAL_OF: Record<string, 'einvoice' | 'ewaybill'> = { int_einvoice: 'einvoice', int_eway: 'ewaybill' };
 
 export default function Integrations() {
   const t = useTheme();
@@ -28,16 +32,23 @@ export default function Integrations() {
 
   const integrations = useAppStore((s) => s.integrations);
   const toggleIntegration = useAppStore((s) => s.toggleIntegration);
+  const compliance = useComplianceSettings();
+  // A portal has a login once its username is saved (the password is never sent back).
+  const hasLogin = (id: string) => (id === 'int_einvoice' ? !!compliance.irpUsername : id === 'int_eway' ? !!compliance.ewbUsername : true);
+
+  const openConfig = (i: Integration) => {
+    const portal = PORTAL_OF[i.id];
+    router.push((portal ? { pathname: i.configRoute, params: { portal } } : i.configRoute) as never);
+  };
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('nav:title.integrations') }} />
 
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40 }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <Card variant="flat" style={{ marginBottom: t.spacing.lg }}>
           <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
-            Each provider sits behind an adapter, so swapping one out never changes how your documents work. Turning
-            one on saves the choice for this business; providers that need an account ask you to connect it.
+            {tr('settings:integrations.intro')}
           </Text>
         </Card>
 
@@ -47,10 +58,10 @@ export default function Integrations() {
           return (
             <View key={g.key} style={{ marginBottom: t.spacing.xl }}>
               <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 4 }}>
-                {g.title}
+                {tr(g.title)}
               </Text>
               <Text variant="caption" tone="muted" style={{ marginBottom: t.spacing.sm }}>
-                {g.blurb}
+                {tr(g.blurb)}
               </Text>
               <Card padded={false}>
                 {rows.map((i, idx) => (
@@ -75,8 +86,8 @@ export default function Integrations() {
                         justifyContent: 'center',
                       }}
                     >
-                      <MaterialCommunityIcons
-                        name={i.icon as keyof typeof MaterialCommunityIcons.glyphMap}
+                      <Icon
+                        name={i.icon as IconName}
                         size={19}
                         color={i.connected ? t.c.primary : t.c.muted}
                       />
@@ -87,34 +98,43 @@ export default function Integrations() {
                           {i.name}
                         </Text>
                         {i.connected ? <Badge label={tr('settings:integrations.connected')} tone="success" size="sm" /> : null}
+                        {!i.connected && i.available === false ? <Badge label={tr('settings:integrations.comingSoon')} tone="neutral" size="sm" /> : null}
                       </View>
                       <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
                         {i.description}
                       </Text>
                       {i.configRoute ? (
                         <Pressable
-                          onPress={() => router.push(i.configRoute as never)}
+                          onPress={() => openConfig(i)}
                           accessibilityRole="button"
-                          accessibilityLabel={`Configure ${i.name}`}
+                          accessibilityLabel={tr('settings:integrations.configureNamed', { name: i.name })}
                           hitSlop={6}
                           style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}
                         >
                           <Text variant="caption" tone="primary" weight="600">{tr('settings:integrations.configure')}</Text>
-                          <MaterialCommunityIcons name="chevron-right" size={14} color={t.c.primary} />
+                          <Icon name="chevron-right" size={14} color={t.c.primary} />
                         </Pressable>
                       ) : null}
                     </View>
                     <Switch
                       value={i.connected}
+                      // Coming soon: nothing to switch on yet (one already connected can still be switched off).
+                      disabled={!i.connected && i.available === false}
                       onValueChange={() => {
+                        // A portal with no login yet cannot be switched on: ask for the login instead. With one saved,
+                        // the switch simply turns it on or off.
+                        if (!i.connected && !hasLogin(i.id)) {
+                          openConfig(i);
+                          return;
+                        }
                         toggleIntegration(i.id);
-                        toast.show(i.connected ? `${i.name} disconnected` : `${i.name} connected`, 'success');
+                        toast.show(i.connected ? tr('settings:integrations.disconnectedNamed', { name: i.name }) : tr('settings:integrations.connectedNamed', { name: i.name }), 'success', { icon: i.connected ? 'link-variant-off' : 'link-variant' });
                       }}
                       trackColor={{ true: t.c.primary, false: t.c.line }}
                       thumbColor="#FFFFFF"
                       // On the web the "on" thumb defaults to green; keep it white like the rest.
                       {...(Platform.OS === 'web' ? ({ activeThumbColor: '#FFFFFF' } as object) : null)}
-                      accessibilityLabel={`${i.connected ? 'Disconnect' : 'Connect'} ${i.name}`}
+                      accessibilityLabel={i.connected ? tr('settings:integrations.disconnectNamed', { name: i.name }) : tr('settings:integrations.connectNamed', { name: i.name })}
                     />
                   </View>
                 ))}

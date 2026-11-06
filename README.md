@@ -12,7 +12,9 @@ aging, stock balances, FX settlement — are real implementations of the rules
 in the FRD, shared by the apps and the server from one package. A demo
 account lives in the database, seeded on demand; nothing demo ships in the
 apps. What is still to do before the production release is tracked in
-[docs/PRODUCTION_READINESS.md](docs/PRODUCTION_READINESS.md).
+[docs/PRODUCTION_READINESS.md](docs/PRODUCTION_READINESS.md). How to use every
+feature, and the QA scenarios that test it, are in the
+[application cookbook](docs/cookbook/README.md).
 
 ## Repository layout
 
@@ -33,7 +35,8 @@ packages/
   db/              Drizzle schema, migrations, reference data, and the demo
                    account's dataset and seeder (src/demo/, src/seed.ts)
   tsconfig/, eslint-config/   shared presets
-docs/              API notes, the database diagram and the production checklist
+docs/              API notes, the database diagram, the production checklist and
+                   the application cookbook (docs/cookbook/)
 story/             BRD, PRD, FRD and the module breakdown
 tools/             illustration generator, i18n report, import codemod
 ```

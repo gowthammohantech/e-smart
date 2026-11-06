@@ -1,4 +1,4 @@
-import { BusinessDocument, DocumentKind, Item, StockMovement, StockMovementType } from '../types';
+import { BusinessDocument, DocumentKind, DocumentLine, Item, StockMovement, StockMovementType } from '../types';
 import { Money, money, multiply, sum, zero } from '../lib/money';
 
 /** Direction each movement type applies to on-hand quantity (FRD 13). */
@@ -55,18 +55,32 @@ export function stockShortfalls(args: {
   const { doc, items, movements } = args;
   if (args.allowNegativeStock || !OUTBOUND_KINDS.includes(doc.kind)) return [];
   if (doc.sourceDocumentId && movements.some((m) => m.referenceId === doc.sourceDocumentId)) return [];
-  const needed = new Map<string, number>();
-  doc.lines.forEach((l) => {
-    if (l.itemId) needed.set(l.itemId, (needed.get(l.itemId) ?? 0) + Math.abs(l.quantity));
-  });
   // Dated, a document can only use stock that was there on its date.
-  const available = doc.date ? stockMapOn(movements, doc.date, doc.branchId) : undefined;
+  const available = doc.date ? stockMapOn(movements, doc.date, doc.branchId) : stockMap(movements, doc.branchId);
+  return shortfallsAgainst(available, doc.lines, items);
+}
+
+/**
+ * The lines' tracked goods that need more than `available` holds (item id to
+ * quantity, e.g. the server's stock on the document's date). Items not in
+ * `items` count as tracked goods when `available` names them, and take their
+ * name and unit from the line.
+ */
+export function shortfallsAgainst(
+  available: Record<string, number>,
+  lines: Pick<DocumentLine, 'itemId' | 'quantity' | 'name' | 'unit'>[],
+  items: Pick<Item, 'id' | 'name' | 'unit' | 'trackInventory' | 'type'>[],
+): StockShortfall[] {
+  const needed = new Map<string, { qty: number; line: (typeof lines)[number] }>();
+  lines.forEach((l) => {
+    if (l.itemId) needed.set(l.itemId, { qty: (needed.get(l.itemId)?.qty ?? 0) + Math.abs(l.quantity), line: l });
+  });
   const out: StockShortfall[] = [];
-  needed.forEach((qty, itemId) => {
+  needed.forEach(({ qty, line }, itemId) => {
     const item = items.find((i) => i.id === itemId);
-    if (!item || !item.trackInventory || item.type !== 'goods') return;
-    const onHand = available ? (available[itemId] ?? 0) : stockOnHand(itemId, movements, doc.branchId);
-    if (onHand < qty) out.push({ itemId, name: item.name, unit: item.unit, onHand, needed: qty });
+    if (item ? !item.trackInventory || item.type !== 'goods' : !(itemId in available)) return;
+    const onHand = available[itemId] ?? 0;
+    if (onHand < qty) out.push({ itemId, name: item?.name ?? line.name, unit: item?.unit ?? line.unit, onHand, needed: qty });
   });
   return out;
 }
@@ -154,4 +168,247 @@ export function isLowStock(item: Item, onHand: number): boolean {
 
 export function isOutOfStock(item: Item, onHand: number): boolean {
   return item.trackInventory && onHand <= 0;
+}
+
+/** A movement with what it moved in value: base-currency paise, positive in, negative out. */
+export type CostedMovement = StockMovement & { cost: number };
+
+/**
+ * Values every movement at a moving weighted average, item by item across the company (RULES 6.2).
+ *
+ * - Stock in at a price (opening, purchase receipt, a count found more with a cost) adds at that
+ *   price and moves the average.
+ * - Stock out (a sale, a count found less, a transfer) leaves at the average on its day.
+ * - A sales return comes back at what its invoice's goods left at, and a purchase return goes back
+ *   at what its bill's goods came in at, when `sourceOf` names the document returned against;
+ *   otherwise at the average.
+ * - A document cancelled since, whose movements net to nothing, moves no value.
+ * - Stock that has never come in at a price is valued at the item's purchase price.
+ * - Transfers between branches net to nothing for the company.
+ *
+ * Movements are taken in date order, then in the order they were recorded; they come back in the
+ * order given.
+ */
+export function costMovements(
+  items: Pick<Item, 'id' | 'purchasePrice'>[],
+  movements: StockMovement[],
+  opts: {
+    sourceOf?: (documentId: string) => string | undefined;
+    /** Stock already there before the first movement, by item: its quantity and value. */
+    seed?: Map<string, { qty: number; value: number }>;
+    /** Moving weighted average (the default), or first in, first out. */
+    method?: StockCosting;
+  } = {},
+): CostedMovement[] {
+  if (opts.method === 'fifo') return costFifo(items, movements, opts);
+  const price = new Map(items.map((i) => [i.id, i.purchasePrice.minor]));
+  // A document cancelled since: its movements and their reversal net to nothing, item by item.
+  const net = new Map<string, number>();
+  for (const m of movements) if (m.referenceId) net.set(`${m.referenceId}|${m.itemId}`, (net.get(`${m.referenceId}|${m.itemId}`) ?? 0) + signedQuantity(m));
+  const voided = (m: StockMovement) => !!m.referenceId && Math.abs(net.get(`${m.referenceId}|${m.itemId}`) ?? 0) < 1e-9;
+
+  const sorted = [...movements].sort((a, b) => (a.date === b.date ? (a.createdAt ?? '').localeCompare(b.createdAt ?? '') : a.date.localeCompare(b.date)));
+  const state = new Map<string, { qty: number; value: number }>();
+  // What each document's goods moved at, per unit, by item: for the returns against it.
+  const unitCostOf = new Map<string, number>();
+  const costOf = new Map<StockMovement, number>();
+
+  for (const m of sorted) {
+    const s = state.get(m.itemId) ?? { ...(opts.seed?.get(m.itemId) ?? { qty: 0, value: 0 }) };
+    state.set(m.itemId, s);
+    const q = signedQuantity(m);
+    if (!q || voided(m)) {
+      costOf.set(m, 0);
+      continue;
+    }
+    const average = s.qty > 0 ? s.value / s.qty : (price.get(m.itemId) ?? 0);
+    const source = m.referenceId && opts.sourceOf?.(m.referenceId);
+    const sourceUnit = source ? unitCostOf.get(`${source}|${m.itemId}`) : undefined;
+    let unit: number;
+    if (q > 0) {
+      const priced = m.type === 'opening' || m.type === 'purchaseReceipt' || (m.type === 'adjustment' && m.unitCost.minor > 0);
+      unit = m.type === 'salesReturn' && sourceUnit !== undefined ? sourceUnit : priced && m.unitCost.minor > 0 ? m.unitCost.minor : average;
+    } else {
+      unit = m.type === 'purchaseReturn' && sourceUnit !== undefined ? sourceUnit : average;
+    }
+    let cost = unit * q;
+    // Issued at the average, the last of the stock takes whatever value is left, so stock
+    // run down to nothing is worth nothing; anything beyond (negative stock) goes at the average.
+    if (q < 0 && unit === average && s.qty > 0 && s.qty + q <= 1e-9) cost = -s.value + average * (s.qty + q);
+    s.qty += q;
+    s.value += cost;
+    if (m.referenceId) unitCostOf.set(`${m.referenceId}|${m.itemId}`, unit);
+    costOf.set(m, cost);
+  }
+  // In the order given.
+  return movements.map((m) => ({ ...m, cost: costOf.get(m) ?? 0 }));
+}
+
+export type StockCosting = 'average' | 'fifo';
+
+/** A lot of stock still on hand: how many, at what each, and the document it came in on. */
+type Layer = { qty: number; unit: number; ref?: string };
+
+const EPS = 1e-9;
+
+/**
+ * First in, first out (RULES 6.2): each item's stock is a queue of what came in, at what it came in
+ * at. Stock out takes the oldest first; a purchase return takes from what its own bill brought in
+ * first; a sales return comes back as a new lot at what its invoice's goods went out at. Stock out
+ * beyond what is on hand goes at the last price paid (or the item's purchase price) and is made good
+ * by the next receipt. Each movement's cost is the change in what the queue is worth, so Stock in hand
+ * is always what the lots on hand add up to. Cancelled documents, transfers and ordering as costMovements.
+ */
+function costFifo(
+  items: Pick<Item, 'id' | 'purchasePrice'>[],
+  movements: StockMovement[],
+  opts: { sourceOf?: (documentId: string) => string | undefined; seed?: Map<string, { qty: number; value: number }> },
+): CostedMovement[] {
+  const price = new Map(items.map((i) => [i.id, i.purchasePrice.minor]));
+  const net = new Map<string, number>();
+  for (const m of movements) if (m.referenceId) net.set(`${m.referenceId}|${m.itemId}`, (net.get(`${m.referenceId}|${m.itemId}`) ?? 0) + signedQuantity(m));
+  const voided = (m: StockMovement) => !!m.referenceId && Math.abs(net.get(`${m.referenceId}|${m.itemId}`) ?? 0) < EPS;
+  const sorted = [...movements].sort((a, b) => (a.date === b.date ? (a.createdAt ?? '').localeCompare(b.createdAt ?? '') : a.date.localeCompare(b.date)));
+  const queues = new Map<string, Layer[]>();
+  const lastUnit = new Map<string, number>();
+  const unitCostOf = new Map<string, number>();
+  const costOf = new Map<StockMovement, number>();
+  const worth = (q: Layer[]) => q.reduce((a, l) => a + l.qty * l.unit, 0);
+
+  for (const m of sorted) {
+    let q = queues.get(m.itemId);
+    if (!q) {
+      const seed = opts.seed?.get(m.itemId);
+      q = seed && seed.qty > EPS ? [{ qty: seed.qty, unit: seed.value / seed.qty }] : [];
+      queues.set(m.itemId, q);
+    }
+    const qty = signedQuantity(m);
+    if (!qty || voided(m)) {
+      costOf.set(m, 0);
+      continue;
+    }
+    const before = worth(q);
+    const source = m.referenceId && opts.sourceOf?.(m.referenceId);
+    const sourceUnit = source ? unitCostOf.get(`${source}|${m.itemId}`) : undefined;
+    const fallback = lastUnit.get(m.itemId) ?? price.get(m.itemId) ?? 0;
+    if (qty > 0) {
+      const priced = m.type === 'opening' || m.type === 'purchaseReceipt' || (m.type === 'adjustment' && m.unitCost.minor > 0);
+      const unit = m.type === 'salesReturn' && sourceUnit !== undefined ? sourceUnit : priced && m.unitCost.minor > 0 ? m.unitCost.minor : (q.find((l) => l.qty > EPS)?.unit ?? fallback);
+      // Stock that went out short is made good first, at this lot's price.
+      let add = qty;
+      while (add > EPS && q.length && q[0].qty < -EPS) {
+        const fill = Math.min(add, -q[0].qty);
+        q[0].qty += fill;
+        add -= fill;
+        if (Math.abs(q[0].qty) < EPS) q.shift();
+      }
+      if (add > EPS) q.push({ qty: add, unit, ref: m.referenceId });
+      if (priced || m.type === 'salesReturn') lastUnit.set(m.itemId, unit);
+      if (m.referenceId) unitCostOf.set(`${m.referenceId}|${m.itemId}`, unit);
+    } else {
+      let take = -qty;
+      // A purchase return goes back out of what its own bill brought in, then the oldest.
+      const order = m.type === 'purchaseReturn' && source ? [...q.filter((l) => l.ref === source), ...q.filter((l) => l.ref !== source)] : [...q];
+      let taken = 0;
+      for (const l of order) {
+        if (take <= EPS) break;
+        if (l.qty <= EPS) continue;
+        const n = Math.min(take, l.qty);
+        l.qty -= n;
+        take -= n;
+        taken += n * l.unit;
+      }
+      const rest = q.filter((l) => Math.abs(l.qty) > EPS);
+      q.length = 0;
+      q.push(...rest);
+      // Beyond what is on hand: owed to the stock, at the last price.
+      if (take > EPS) q.unshift({ qty: -take, unit: fallback });
+      if (m.referenceId) unitCostOf.set(`${m.referenceId}|${m.itemId}`, -qty > EPS ? (taken + take * fallback) / -qty : fallback);
+    }
+    costOf.set(m, worth(q) - before);
+  }
+  return movements.map((m) => ({ ...m, cost: costOf.get(m) ?? 0 }));
+}
+
+/** An item's stock on hand valued first in, first out: what is left, at what the latest lots came in at. */
+export function stockValueFifo(item: Item, movements: StockMovement[], baseCurrency: string): Money {
+  const qty = stockOnHand(item.id, movements);
+  if (qty <= 0) return zero(baseCurrency);
+  const lots = movements.filter((m) => m.itemId === item.id && signedQuantity(m) > 0 && m.unitCost.minor > 0 && ['opening', 'purchaseReceipt', 'adjustment'].includes(m.type));
+  const newest = [...lots].sort((a, b) => (a.date === b.date ? (b.createdAt ?? '').localeCompare(a.createdAt ?? '') : b.date.localeCompare(a.date)));
+  let left = qty;
+  let value = 0;
+  for (const m of newest) {
+    const n = Math.min(left, signedQuantity(m));
+    value += n * m.unitCost.minor;
+    left -= n;
+    if (left <= EPS) break;
+  }
+  if (left > EPS) value += left * (newest.at(-1)?.unitCost.minor ?? item.purchasePrice.minor);
+  return money(Math.round(value), baseCurrency);
+}
+
+/** An item's stock on hand at the costing the company keeps. */
+export function valueStock(item: Item, movements: StockMovement[], baseCurrency: string, method: StockCosting = 'average'): Money {
+  return method === 'fifo' ? stockValueFifo(item, movements, baseCurrency) : stockValue(item, movements, baseCurrency);
+}
+
+/** The value of stock on hand at the end of `date` (or of everything), from costed movements. */
+export function costedStockValue(costed: CostedMovement[], date?: string): number {
+  return costed.reduce((a, m) => (date && m.date > date ? a : a + m.cost), 0);
+}
+
+/** Perpetual stock from a day: the movements from then on at cost, and what was there the day before. */
+export type PerpetualStock = {
+  from: string;
+  costed: CostedMovement[];
+  /** Stock in hand at the end of the day before `from`, valued as the periodic books valued it. */
+  broughtForward: number;
+};
+
+/**
+ * The stock side of perpetual books from `from` (RULES 6.2). Up to the day before, stock is valued as
+ * the periodic books did, so the years before keep their closing stock; from that value on, every
+ * movement is costed at the moving average (costMovements). Opening stock counts from the start.
+ */
+export function perpetualStock(
+  items: Item[],
+  movements: StockMovement[],
+  from: string,
+  baseCurrency: string,
+  sourceOf?: (documentId: string) => string | undefined,
+  method: StockCosting = 'average',
+): PerpetualStock {
+  const before = movements.filter((m) => m.type === 'opening' || m.date < from);
+  const seed = new Map<string, { qty: number; value: number }>();
+  let broughtForward = 0;
+  for (const item of items) {
+    if (!item.trackInventory) continue;
+    const qty = stockOnHand(item.id, before);
+    const value = valueStock(item, before, baseCurrency, method).minor;
+    if (qty || value) seed.set(item.id, { qty, value });
+    broughtForward += value;
+  }
+  const after = movements.filter((m) => m.type !== 'opening' && m.date >= from);
+  return { from, costed: costMovements(items, after, { sourceOf, seed, method }), broughtForward };
+}
+
+/**
+ * What each sale's goods cost under perpetual stock, by document: positive for what an invoice (or the
+ * delivery it was made from) took out, negative for what a return brought back. It is the same figure
+ * Cost of goods sold posts, so the profit report and the books agree.
+ */
+export function goodsCostByDocument(stock: PerpetualStock, documents: Pick<BusinessDocument, 'id' | 'sourceDocumentId'>[]): Map<string, number> {
+  const byRef = new Map<string, number>();
+  for (const m of stock.costed) {
+    if ((m.type !== 'salesIssue' && m.type !== 'salesReturn') || !m.referenceId) continue;
+    byRef.set(m.referenceId, (byRef.get(m.referenceId) ?? 0) - m.cost);
+  }
+  const out = new Map<string, number>();
+  for (const d of documents) {
+    // An invoice made from a delivery challan: the goods left with the challan.
+    const cost = byRef.get(d.id) ?? (d.sourceDocumentId ? byRef.get(d.sourceDocumentId) : undefined);
+    if (cost !== undefined) out.set(d.id, cost);
+  }
+  return out;
 }

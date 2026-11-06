@@ -1,75 +1,121 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { FormContainer } from '@esmart/ui/components/Layout';
 import { Button } from '@esmart/ui/components/Button';
 import { FormActions } from '@esmart/ui/components/ActionBar';
-import { AmountField, PickerField, Segmented, SwitchField, TextField } from '@esmart/ui/components/Field';
+import { AmountField, focusFirstInvalid, PickerField, Segmented, SwitchField, TextField } from '@esmart/ui/components/Field';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
-import { useToast } from '@esmart/ui/components/Toast';
+import { useServerSave } from '../../components/useServerSave';
+import { useSaveShortcut } from '../../components/useSaveShortcut';
 import { Item, ItemType } from '@esmart/core/types';
 import { UNITS, unitsFor } from '@esmart/core/data/masters';
 import { fromMajor, toMajor, zero } from '@esmart/core/lib/money';
 import { formatPercent } from '@esmart/core/lib/format';
 import { uid } from '@esmart/core/lib/id';
-import { nowISO } from '@esmart/core/lib/date';
+import { formatDate, nowISO, today } from '@esmart/core/lib/date';
+import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { Errors, hasErrors, hsnMandatory, required, validHsn } from '@esmart/core/lib/validators';
 import { useAppStore } from '../../store/appStore';
-import { useActiveCompany, useBaseCurrency, useHasModule, useItems, useTaxCategories } from '../../store/selectors';
+import { useActiveCompany, useBaseCurrency, useBrands, useHasModule, useItemCategories, useItems, useTaxCategories } from '../../store/selectors';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { useGoBack } from '../../navigation/useGoBack';
+import { GstTreatmentFields } from './GstTreatmentFields';
+import { CustomFieldsSection } from '../customFields/CustomFieldsSection';
+import type { CustomValues } from '@esmart/core/domain/customFields';
 
 export function ItemForm({ item }: { item?: Item }) {
   const t = useTheme();
-  const { t: tr } = useTranslation(['inventory']);
+  const { t: tr } = useTranslation(['inventory', 'common']);
   const router = useRouter();
   const goBack = useGoBack();
-  const toast = useToast();
+  const { run: serverSave, saving, blocked } = useServerSave();
 
   const baseCurrency = useBaseCurrency();
   const taxCategories = useTaxCategories();
+  const itemCategories = useItemCategories();
+  const brands = useBrands();
   const existing = useItems();
   // Read live, so a business that registers for GST gets the rule on its next edit.
-  const hsnRequired = hsnMandatory(useActiveCompany()?.taxRegistration);
+  const taxRegistration = useActiveCompany()?.taxRegistration;
+  const hsnRequired = hsnMandatory(taxRegistration);
+  const gstRegistered = taxRegistration?.regime === 'GST' && !!taxRegistration.registered;
   const saveItem = useAppStore((s) => s.saveItem);
   const activeCompanyId = useAppStore((s) => s.activeCompanyId);
   // Without the stock module a new item starts untracked; an existing item keeps its setting.
   const hasInventory = useHasModule('inventory');
 
-  const [type, setType] = useState<ItemType>(item?.type ?? 'goods');
+  // A new one starts as goods or a service from ?type= (Items & services passes its open tab).
+  const params = useLocalSearchParams<{ type?: string }>();
+  const startType: ItemType = item?.type ?? (params.type === 'service' ? 'service' : 'goods');
+  const [type, setType] = useState<ItemType>(startType);
   const [name, setName] = useState(item?.name ?? '');
   const [sku, setSku] = useState(item?.sku ?? '');
   const [description, setDescription] = useState(item?.description ?? '');
-  const [unit, setUnit] = useState(item?.unit ?? (item?.type === 'service' ? 'NOS' : 'PCS'));
-  const [salePrice, setSalePrice] = useState(item ? String(toMajor(item.salePrice)) : '');
-  const [purchasePrice, setPurchasePrice] = useState(item ? String(toMajor(item.purchasePrice)) : '');
+  const [unit, setUnit] = useState(item?.unit ?? (startType === 'service' ? 'NOS' : 'PCS'));
+  const [salePrice, setSalePrice] = useState(item && item.salePrice.minor !== 0 ? String(toMajor(item.salePrice)) : '');
+  const [purchasePrice, setPurchasePrice] = useState(item && item.purchasePrice.minor !== 0 ? String(toMajor(item.purchasePrice)) : '');
   const [taxCategoryId, setTaxCategoryId] = useState(item?.taxCategoryId ?? taxCategories.find((c) => c.rate === 18)?.id ?? taxCategories[0]?.id ?? '');
   const [hsnCode, setHsnCode] = useState(item?.hsnCode ?? '');
+  const [gst, setGst] = useState(item?.gst);
   const [barcode, setBarcode] = useState(item?.barcode ?? '');
-  const [trackInventory, setTrackInventory] = useState(item?.trackInventory ?? hasInventory);
+  const [trackInventory, setTrackInventory] = useState(item?.trackInventory ?? (startType === 'goods' && hasInventory));
   const [openingStock, setOpeningStock] = useState(item ? String(item.openingStock) : '');
+  const [openingStockDate, setOpeningStockDate] = useState(item?.openingStockDate ?? today());
   const [reorderLevel, setReorderLevel] = useState(item ? String(item.reorderLevel) : '');
   const [active, setActive] = useState((item?.status ?? 'active') === 'active');
+  const [categoryId, setCategoryId] = useState(item?.categoryId ?? '');
+  const [brandId, setBrandId] = useState(item?.brandId ?? '');
+  const [customFields, setCustomFields] = useState<CustomValues>(item?.customFields ?? {});
 
   const [unitOpen, setUnitOpen] = useState(false);
   const [taxOpen, setTaxOpen] = useState(false);
-  const [errors, setErrors] = useState<Errors<'name' | 'sku' | 'hsn'>>({});
+  const [categoryOpen, setCategoryOpen] = useState(false);
+  const [brandOpen, setBrandOpen] = useState(false);
+  const [errors, setErrors] = useState<Errors<'name' | 'sku' | 'hsn' | 'openingStockDate'>>({});
+  // Only a new tracked item takes an opening stock, and so its date.
+  const takesOpeningStock = !item && type === 'goods' && trackInventory && hasInventory;
 
   const category = taxCategories.find((c) => c.id === taxCategoryId);
 
-  const save = () => {
-    const next: Errors<'name' | 'sku' | 'hsn'> = {
-      name: required(name, 'Item name'),
+  /**
+   * After "Save & add another": a clean form for the next item, keeping what tends to
+   * repeat in a run of them (goods or service, unit, tax rate, category, brand).
+   */
+  const resetForAnother = () => {
+    setName('');
+    setSku('');
+    setDescription('');
+    setSalePrice('');
+    setPurchasePrice('');
+    setHsnCode('');
+    setBarcode('');
+    setOpeningStock('');
+    setReorderLevel('');
+    setErrors({});
+    setGst(undefined);
+    // Straight back into the name, for the next one.
+    requestAnimationFrame(() => (globalThis.document?.getElementById('item-form-name') as HTMLElement | null)?.focus());
+  };
+
+  const save = async (another = false) => {
+    const next: Errors<'name' | 'sku' | 'hsn' | 'openingStockDate'> = {
+      name: required(name, tr('inventory:form.itemName')),
       hsn: validHsn(hsnCode, { required: hsnRequired }),
+      openingStockDate: takesOpeningStock && openingStockDate > today() ? tr('inventory:form.openingStockDateFuture') : undefined,
     };
-    const skuValue = sku.trim().toUpperCase() || `SKU-${String(existing.length + 1).padStart(4, '0')}`;
-    if (existing.some((i) => i.sku === skuValue && i.id !== item?.id)) {
-      next.sku = 'Another item already uses this SKU';
+    // Left blank, a new item gets the next free SKU from the server when it is created.
+    const skuValue = sku.trim().toUpperCase() || (item?.sku ?? '');
+    if (skuValue && existing.some((i) => i.sku === skuValue && i.id !== item?.id)) {
+      next.sku = tr('inventory:form.skuTaken');
     }
     setErrors(next);
-    if (hasErrors(next)) return;
+    if (hasErrors(next)) {
+      focusFirstInvalid();
+      return;
+    }
 
     const record: Item = {
       id: item?.id ?? uid('itm'),
@@ -85,21 +131,29 @@ export function ItemForm({ item }: { item?: Item }) {
       hsnCode: hsnCode.trim() || undefined,
       barcode: barcode.trim() || undefined,
       trackInventory: type === 'goods' ? trackInventory : false,
+      // Capital goods are goods; a service never is one.
+      gst: gst && type === 'service' && gst.capitalGoods ? { ...gst, capitalGoods: undefined } : gst,
       openingStock: Number(openingStock) || 0,
+      openingStockDate: takesOpeningStock ? openingStockDate : item?.openingStockDate,
       reorderLevel: Number(reorderLevel) || 0,
       imageUri: item?.imageUri,
+      categoryId: categoryId || undefined,
+      brandId: brandId || undefined,
+      customFields,
       status: active ? 'active' : 'inactive',
       createdAt: item?.createdAt ?? nowISO(),
     };
 
-    saveItem(record);
-    toast.show(item ? 'Item updated' : 'Item added', 'success');
+    const res = await serverSave(() => saveItem(record), item ? tr('inventory:form.updated') : tr('inventory:form.added'), { icon: 'tag-check-outline', detail: record.name });
+    if (!res) return;
     if (item) goBack(`/(app)/catalog/items/${item.id}`);
-    else router.replace(`/(app)/catalog/items/${record.id}`);
+    else if (another) resetForAnother();
+    else router.replace(`/(app)/catalog/items/${res.id ?? record.id}`);
   };
+  useSaveShortcut(() => void save(), !saving, item ? undefined : () => void save(true));
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: t.c.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <FormContainer>
         <ScrollView
           contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: t.spacing.xxxl, gap: t.spacing.lg }}
@@ -108,8 +162,8 @@ export function ItemForm({ item }: { item?: Item }) {
         >
           <Segmented
             options={[
-              { value: 'goods', label: 'Product' },
-              { value: 'service', label: 'Service' },
+              { value: 'goods', label: tr('inventory:type.goods') },
+              { value: 'service', label: tr('inventory:type.service') },
             ]}
             value={type}
             onChange={(v) => {
@@ -121,7 +175,7 @@ export function ItemForm({ item }: { item?: Item }) {
             }}
           />
 
-          <TextField label={tr('inventory:form.name')} value={name} onChangeText={setName} placeholder={tr('inventory:form.namePlaceholderFull')} error={errors.name} required icon="tag-outline" />
+          <TextField id="item-form-name" label={tr('inventory:form.name')} value={name} onChangeText={setName} placeholder={tr('inventory:form.namePlaceholderFull')} error={errors.name} required icon="tag-outline" />
           <TextField
             label={tr('inventory:form.sku')}
             value={sku}
@@ -132,6 +186,9 @@ export function ItemForm({ item }: { item?: Item }) {
             error={errors.sku}
           />
           <TextField label={tr('inventory:form.description')} value={description} onChangeText={setDescription} placeholder={tr('inventory:form.descriptionHint')} multiline />
+          <PickerField label={tr('inventory:form.category')} value={itemCategories.find((c) => c.id === categoryId)?.name ?? tr('inventory:form.none')} onPress={() => setCategoryOpen(true)} icon="tag-outline" />
+          <PickerField label={tr('inventory:form.brand')} value={brands.find((b) => b.id === brandId)?.name ?? tr('inventory:form.none')} onPress={() => setBrandOpen(true)} icon="star-circle-outline" />
+          <CustomFieldsSection entity="item" values={customFields} onChange={setCustomFields} />
 
           <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
             <AmountField label={tr('inventory:form.salePrice')} value={salePrice} onChangeValue={setSalePrice} currency={baseCurrency} containerStyle={{ flex: 1 }} />
@@ -141,12 +198,12 @@ export function ItemForm({ item }: { item?: Item }) {
           <PickerField label={tr('inventory:form.unit')} value={UNITS.find((u) => u.code === unit)?.name ?? unit} onPress={() => setUnitOpen(true)} icon="ruler" disabled={type === 'service'} hint={type === 'service' ? tr('inventory:form.serviceUnitHint') : undefined} />
           <PickerField
             label={tr('inventory:form.taxRate')}
-            value={category ? `${category.name} (${formatPercent(category.rate)})` : 'Select'}
+            value={category ? `${category.name} (${formatPercent(category.rate)})` : tr('inventory:form.select')}
             onPress={() => setTaxOpen(true)}
             icon="percent-outline"
           />
           <TextField
-            label={type === 'goods' ? 'HSN code' : 'SAC code'}
+            label={type === 'goods' ? tr('inventory:form.hsnCode') : tr('inventory:form.sacCode')}
             value={hsnCode}
             onChangeText={(v) => setHsnCode(v.replace(/[^0-9]/g, '').slice(0, 8))}
             placeholder={type === 'goods' ? '84821011' : '998719'}
@@ -156,6 +213,7 @@ export function ItemForm({ item }: { item?: Item }) {
             error={errors.hsn}
             required={hsnRequired}
           />
+          {gstRegistered || gst ? <GstTreatmentFields value={gst} onChange={setGst} type={type} /> : null}
 
           {type === 'goods' ? (
             <>
@@ -178,7 +236,7 @@ export function ItemForm({ item }: { item?: Item }) {
                     keyboardType="decimal-pad"
                     containerStyle={{ flex: 1 }}
                     editable={!item}
-                    hint={item ? 'Use a stock adjustment to change this.' : undefined}
+                    hint={item ? tr('inventory:form.openingLocked') : undefined}
                   />
                   <TextField
                     label={tr('inventory:form.reorderLevel')}
@@ -191,6 +249,18 @@ export function ItemForm({ item }: { item?: Item }) {
                   />
                 </View>
               ) : null}
+              {takesOpeningStock ? (
+                <DateField
+                  label={tr('inventory:form.openingStockDate')}
+                  value={openingStockDate}
+                  onChange={setOpeningStockDate}
+                  maximumDate={new Date()}
+                  error={errors.openingStockDate}
+                  hint={tr('inventory:form.openingStockDateHint')}
+                />
+              ) : item?.openingStockDate && trackInventory ? (
+                <TextField label={tr('inventory:form.openingStockDate')} value={formatDate(item.openingStockDate)} editable={false} icon="calendar" />
+              ) : null}
             </>
           ) : null}
 
@@ -198,7 +268,10 @@ export function ItemForm({ item }: { item?: Item }) {
         </ScrollView>
 
         <FormActions>
-          <Button title={item ? 'Save changes' : 'Add item'} onPress={save} fullWidth size="lg" />
+          <Button shortcut="S" title={item ? tr('inventory:form.saveChanges') : tr('common:quickAction.addItem')} onPress={() => void save()} loading={saving} disabled={blocked} fullWidth size="lg" />
+          {item ? null : (
+            <Button title={tr('common:action.saveAndAddAnother')} variant="ghost" onPress={() => void save(true)} loading={saving} disabled={blocked} fullWidth />
+          )}
         </FormActions>
 
         <SelectSheet
@@ -217,6 +290,22 @@ export function ItemForm({ item }: { item?: Item }) {
           value={taxCategoryId}
           onSelect={setTaxCategoryId}
           searchable={false}
+        />
+        <SelectSheet
+          visible={categoryOpen}
+          onClose={() => setCategoryOpen(false)}
+          title={tr('inventory:form.category')}
+          options={[{ value: '', label: tr('inventory:form.none') }, ...itemCategories.map((c) => ({ value: c.id, label: c.name }))]}
+          value={categoryId}
+          onSelect={setCategoryId}
+        />
+        <SelectSheet
+          visible={brandOpen}
+          onClose={() => setBrandOpen(false)}
+          title={tr('inventory:form.brand')}
+          options={[{ value: '', label: tr('inventory:form.none') }, ...brands.map((b) => ({ value: b.id, label: b.name }))]}
+          value={brandId}
+          onSelect={setBrandId}
         />
       </FormContainer>
     </KeyboardAvoidingView>

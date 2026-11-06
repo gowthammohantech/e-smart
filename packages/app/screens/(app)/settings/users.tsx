@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -26,20 +26,29 @@ import { Errors, hasErrors, required, validEmail } from '@esmart/core/lib/valida
 import { formatRelative } from '@esmart/core/lib/date';
 import { uid } from '@esmart/core/lib/id';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { useSaveShortcut } from '../../../components/useSaveShortcut';
+import { useServerSave } from '../../../components/useServerSave';
+import { ApiError } from '@esmart/api-client';
 
-const ROLES: { value: UserRole; label: string; description: string }[] = [
-  { value: 'owner', label: 'Owner', description: 'Full access, including billing and deleting the business.' },
-  { value: 'admin', label: 'Admin', description: 'Everything except billing and deleting the business.' },
-  { value: 'accountant', label: 'Accountant', description: 'Invoices, bills, payments, expenses and reports.' },
-  { value: 'sales', label: 'Sales', description: 'Quotes, invoices, customers and payments received.' },
-  { value: 'viewer', label: 'Viewer', description: 'Read-only access to documents and reports.' },
-];
+/** The server lets an invitation go out again a minute after the last one. */
+const RESEND_AFTER_MS = 60_000;
+/** When each invitation was last sent from this device, so Resend waits out that minute. */
+const lastSent = new Map<string, number>();
+
+const ROLE_KEYS = [
+  { value: 'owner', label: 'auth:invite.roles.owner', description: 'settings:users.roleHint.owner' },
+  { value: 'admin', label: 'auth:invite.roles.admin', description: 'settings:users.roleHint.admin' },
+  { value: 'accountant', label: 'auth:invite.roles.accountant', description: 'settings:users.roleHint.accountant' },
+  { value: 'sales', label: 'auth:invite.roles.sales', description: 'settings:users.roleHint.sales' },
+  { value: 'viewer', label: 'auth:invite.roles.viewer', description: 'settings:users.roleHint.viewer' },
+] as const satisfies readonly { value: UserRole; label: string; description: string }[];
 
 export default function UserSettings() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
-  const { t: tr } = useTranslation(['nav', 'settings']);
+  const { t: tr } = useTranslation(['nav', 'settings', 'auth', 'common']);
   const toast = useToast();
+  const ROLES = ROLE_KEYS.map((r) => ({ value: r.value as UserRole, label: tr(r.label), description: tr(r.description) }));
   const router = useRouter();
 
   const company = useActiveCompany();
@@ -86,15 +95,23 @@ export default function UserSettings() {
   // Someone from another account: managed by removing and inviting again, not edited here.
   const isGuest = !!editing?.id && !!editing.accountId && editing.accountId !== currentUser.accountId;
 
-  const save = () => {
-    const next: Errors<'name' | 'email'> = { name: required(name, 'Name'), email: required(email, 'Email') ?? validEmail(email) };
+  const { run: serverSave } = useServerSave();
+  /** The clock the resend countdown reads, moved on each second while it runs. */
+  const [now, setNow] = useState(() => Date.now());
+
+  const save = async () => {
+    const next: Errors<'name' | 'email'> = { name: required(name, tr('settings:users.name')), email: required(email, tr('settings:users.email')) ?? validEmail(email) };
     setErrors(next);
     if (hasErrors(next) || !editing) return;
 
     if (editing.id) {
-      saveUser({ ...editing, name: name.trim(), role });
-      toast.show('User updated', 'success');
-      setEditing(null);
+      setBusy(true);
+      const res = await serverSave(() => saveUser({ ...editing, name: name.trim(), role }), tr('settings:users.updated'), {
+        icon: 'account-check-outline',
+        detail: name.trim(),
+      });
+      setBusy(false);
+      if (res) setEditing(null);
       return;
     }
 
@@ -104,8 +121,9 @@ export default function UserSettings() {
     setServerError(null);
     remoteUsers
       .inviteUser({ name, email, role, companyIds: [company.id] })
-      .then(() => {
-        toast.show('Invitation sent', 'success');
+      .then((created) => {
+        if (created.id) lastSent.set(created.id, Date.now());
+        toast.show(tr('settings:users.inviteSent'), 'success', { icon: 'email-fast-outline', detail: email.trim().toLowerCase() });
         setEditing(null);
       })
       .catch((err: unknown) => setServerError(describeError(err, tr)))
@@ -119,15 +137,32 @@ export default function UserSettings() {
     remoteUsers
       .resendInvite(editing.id)
       .then(() => {
-        toast.show('Invitation sent again', 'success');
+        lastSent.set(editing.id, Date.now());
+        toast.show(tr('settings:users.inviteResent'), 'success', { icon: 'email-sync-outline', detail: editing.email });
         setEditing(null);
       })
-      .catch((err: unknown) => setServerError(describeError(err, tr)))
+      // "Wait a minute" from the server says more than the sign-in screens' "too many attempts".
+      .catch((err: unknown) => setServerError(err instanceof ApiError && err.code === 'RATE_LIMITED' && err.message ? err.message : describeError(err, tr)))
       .finally(() => setBusy(false));
   };
+  const resendWait = editing?.id ? Math.max(0, (lastSent.get(editing.id) ?? 0) + RESEND_AFTER_MS - now) : 0;
+  // While a member's sheet is open the clock runs, so the button counts down the minute.
+  useEffect(() => {
+    if (!editing?.id) return;
+    const update = () => setNow(Date.now());
+    const first = setTimeout(update, 0);
+    const timer = setInterval(update, 1000);
+    return () => {
+      clearTimeout(first);
+      clearInterval(timer);
+    };
+  }, [editing?.id]);
+
+  // Ctrl+S (⌘+S) does what Save does, while the form is open.
+  useSaveShortcut(save, !!editing && !busy && !isGuest);
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('nav:title.usersAndRoles') }} />
 
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 + insets.bottom }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
@@ -137,7 +172,7 @@ export default function UserSettings() {
               key={u.id}
               title={u.name}
               subtitle={u.email}
-              meta={u.lastActiveAt ? `Last active ${formatRelative(u.lastActiveAt.slice(0, 10))}` : u.status === 'invited' ? 'Invitation pending' : undefined}
+              meta={u.lastActiveAt ? tr('settings:users.lastActive', { when: formatRelative(u.lastActiveAt.slice(0, 10)) }) : u.status === 'invited' ? tr('settings:users.invitePending') : undefined}
               left={<Avatar name={u.name} size={40} color={u.avatarColor} />}
               divider={i < users.length - 1}
               right={
@@ -172,7 +207,7 @@ export default function UserSettings() {
       <Sheet
         visible={!!editing}
         onClose={() => setEditing(null)}
-        title={editing?.id ? 'Edit user' : 'Invite someone'}
+        title={editing?.id ? tr('settings:users.editTitle') : tr('settings:users.invite')}
         footer={
           <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
             {editing?.id && editing.role !== 'owner' ? (
@@ -188,9 +223,16 @@ export default function UserSettings() {
               />
             ) : null}
             {editing?.id && editing.status === 'invited' ? (
-              <Button title="Resend invite" variant="secondary" loading={busy} onPress={resend} style={{ flex: 2 }} />
+              <Button
+                title={resendWait ? tr('settings:users.resendIn', { seconds: Math.ceil(resendWait / 1000) }) : tr('settings:users.resend')}
+                variant="secondary"
+                loading={busy}
+                disabled={resendWait > 0}
+                onPress={resend}
+                style={{ flex: 2 }}
+              />
             ) : null}
-            {isGuest ? null : <Button title={editing?.id ? 'Save' : 'Send invitation'} onPress={save} loading={busy} style={{ flex: 2 }} />}
+            {isGuest ? null : <Button shortcut="S" title={editing?.id ? tr('common:action.save') : tr('settings:users.sendInvite')} onPress={save} loading={busy} style={{ flex: 2 }} />}
           </View>
         }
       >
@@ -216,7 +258,7 @@ export default function UserSettings() {
           />
           {isGuest ? (
             <Text variant="small" tone="muted">
-              This person has their own Elixir Books account. To change their access, remove them and invite them again.
+              {tr('settings:users.guestNote')}
             </Text>
           ) : null}
           {serverError ? (
@@ -251,7 +293,7 @@ export default function UserSettings() {
 
       <ConfirmDialog
         visible={!!confirmRemove}
-        title={`Remove ${confirmRemove?.name}?`}
+        title={tr('settings:users.removeTitle', { name: confirmRemove?.name })}
         message={tr('settings:users.removeMessage')}
         confirmLabel={tr('settings:users.remove')}
         destructive
@@ -259,7 +301,7 @@ export default function UserSettings() {
         onConfirm={() => {
           if (confirmRemove) removeUser(confirmRemove.id);
           setConfirmRemove(null);
-          toast.show(tr('settings:users.removed'), 'success');
+          toast.show(tr('settings:users.removed'), 'success', { icon: 'account-remove-outline', detail: confirmRemove?.name });
         }}
       />
     </View>

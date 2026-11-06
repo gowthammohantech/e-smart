@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleProp, View, ViewStyle } from 'react-native';
+import { Platform, StyleProp, View, ViewStyle } from 'react-native';
 import { useTheme } from '../theme/ThemeProvider';
 import { FORM_MAX_WIDTH, WIDE_FORM_MAX_WIDTH, useIsDesktop } from '../theme/breakpoints';
 import { Card } from './Card';
@@ -110,12 +110,15 @@ export function SplitPane({
   side,
   sideWidth = 340,
   style,
+  stickySide,
 }: {
   main: React.ReactNode;
   /** Nothing here gives the main area the full width. */
   side?: React.ReactNode;
   sideWidth?: number;
   style?: StyleProp<ViewStyle>;
+  /** Web: the side column stays in view while the main one scrolls (a summary beside a long form). */
+  stickySide?: boolean;
 }) {
   const t = useTheme();
   const desktop = useIsDesktop();
@@ -130,7 +133,17 @@ export function SplitPane({
   return (
     <View style={[{ flex: 1, flexDirection: 'row', alignItems: 'flex-start', gap: t.spacing.xl }, style]}>
       <View style={{ flex: 1, minWidth: 0, alignSelf: 'stretch' }}>{main}</View>
-      {side ? <View style={{ width: sideWidth, gap: t.spacing.lg }}>{side}</View> : null}
+      {side ? (
+        <View
+          style={[
+            { width: sideWidth, gap: t.spacing.lg },
+            // RN's types don't list 'sticky'; react-native-web passes it through to CSS.
+            stickySide && Platform.OS === 'web' ? ({ position: 'sticky', top: t.spacing.lg } as unknown as ViewStyle) : null,
+          ]}
+        >
+          {side}
+        </View>
+      ) : null}
     </View>
   );
 }

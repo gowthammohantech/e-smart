@@ -2,7 +2,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, View } from 'react-native';
 import { usePathname, useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { focusRing, type WebPressState } from '@esmart/ui/theme/interaction';
 import { Text } from '@esmart/ui/components/Text';
@@ -82,7 +82,7 @@ export function OnboardingRail() {
                     }}
                   >
                     {done ? (
-                      <MaterialCommunityIcons name="check" size={16} color={t.c.onPrimary} />
+                      <Icon name="check" size={16} color={t.c.onPrimary} />
                     ) : (
                       <Text variant="caption" weight="700" tone={active ? 'primary' : 'muted'}>
                         {i + 1}

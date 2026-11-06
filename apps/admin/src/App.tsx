@@ -1,6 +1,7 @@
 import { createBrowserRouter, RouterProvider } from 'react-router';
 import { RequireOperator } from './auth/RequireOperator';
 import { AppShell } from './components/AppShell';
+import { RouteError } from './components/ErrorPage';
 import { AccountDetail } from './pages/AccountDetail';
 import { Accounts } from './pages/Accounts';
 import { AuditLog } from './pages/AuditLog';
@@ -10,8 +11,9 @@ import { SignIn } from './pages/SignIn';
 import { Users } from './pages/Users';
 
 const router = createBrowserRouter([
-  { path: '/sign-in', element: <SignIn /> },
+  { path: '/sign-in', element: <SignIn />, errorElement: <RouteError /> },
   {
+    errorElement: <RouteError />,
     element: (
       <RequireOperator>
         <AppShell />

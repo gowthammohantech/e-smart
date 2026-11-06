@@ -16,7 +16,6 @@ import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { Sparkline } from '@esmart/ui/components/charts/BarChart';
-import { useToast } from '@esmart/ui/components/Toast';
 import { ExchangeRate } from '@esmart/core/types';
 import { useAppStore } from '../../../store/appStore';
 import { useActiveCompany, useBaseCurrency, useExchangeRates } from '../../../store/selectors';
@@ -24,12 +23,15 @@ import { CURRENCIES, currencyMeta } from '@esmart/core/lib/currencies';
 import { formatDate, today } from '@esmart/core/lib/date';
 import { uid } from '@esmart/core/lib/id';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { useSaveShortcut } from '../../../components/useSaveShortcut';
+import { useServerSave } from '../../../components/useServerSave';
 
 export default function CurrencySettings() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const { t: tr } = useTranslation(['nav', 'settings']);
-  const toast = useToast();
+  const sourceLabel = (source: ExchangeRate['source']) => (source === 'provider' ? tr('settings:currencies.sourceProvider') : tr('settings:currencies.sourceManual'));
+  const { run: serverSave, saving } = useServerSave();
 
   const company = useActiveCompany();
   const baseCurrency = useBaseCurrency();
@@ -63,9 +65,9 @@ export default function CurrencySettings() {
     setEffectiveFrom(r?.effectiveFrom ?? today());
   };
 
-  const save = () => {
+  const save = async () => {
     if (!editing || !Number(rate)) return;
-    saveExchangeRate({
+    const exchangeRate: ExchangeRate = {
       ...editing,
       id: editing.id || uid('fx'),
       companyId: company.id,
@@ -74,13 +76,17 @@ export default function CurrencySettings() {
       rate: Number(rate),
       effectiveFrom,
       source: 'manual',
-    });
-    toast.show(tr('settings:currencies.saved'), 'success');
-    setEditing(null);
+    };
+    // The sheet stays open until the server has it, so a refusal can be fixed here.
+    const res = await serverSave(() => saveExchangeRate(exchangeRate), tr('settings:currencies.saved'), { icon: 'currency-inr' });
+    if (res) setEditing(null);
   };
 
+  // Ctrl+S (⌘+S) does what Save does, while the form is open.
+  useSaveShortcut(save, !!editing && !!Number(rate));
+
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('nav:title.currenciesAndRates') }} />
 
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 + insets.bottom }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
@@ -90,8 +96,7 @@ export default function CurrencySettings() {
             {currencyMeta(baseCurrency).name} ({baseCurrency})
           </Text>
           <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
-            Every report is presented in this currency. Documents raised in another currency store the rate that applied on
-            their date, so historical totals never shift.
+            {tr('settings:currencies.baseNote')}
           </Text>
         </Card>
 
@@ -106,13 +111,13 @@ export default function CurrencySettings() {
                 key={p.code}
                 title={`1 ${p.code} = ${p.latest.rate.toFixed(4)} ${baseCurrency}`}
                 subtitle={currencyMeta(p.code).name}
-                meta={`From ${formatDate(p.latest.effectiveFrom)} · ${p.history.length} rate${p.history.length === 1 ? '' : 's'} on record`}
+                meta={tr('settings:currencies.pairMeta', { date: formatDate(p.latest.effectiveFrom), count: p.history.length })}
                 icon="swap-horizontal"
                 divider={i < pairs.length - 1}
                 right={
                   <View style={{ alignItems: 'flex-end', gap: 4 }}>
                     <Sparkline values={p.history.map((h) => h.rate)} width={54} height={20} />
-                    <Badge label={p.latest.source} tone={p.latest.source === 'provider' ? 'success' : 'neutral'} size="sm" />
+                    <Badge label={sourceLabel(p.latest.source)} tone={p.latest.source === 'provider' ? 'success' : 'neutral'} size="sm" />
                   </View>
                 }
                 onPress={() => open(p.latest)}
@@ -128,10 +133,10 @@ export default function CurrencySettings() {
             <ListRow
               key={r.id}
               title={`${r.from} → ${r.to}`}
-              subtitle={`${r.rate.toFixed(4)} · from ${formatDate(r.effectiveFrom)}`}
+              subtitle={tr('settings:currencies.historyRow', { rate: r.rate.toFixed(4), date: formatDate(r.effectiveFrom) })}
               icon="history"
               divider={i < Math.min(rates.length, 12) - 1}
-              right={<Badge label={r.source} tone="neutral" size="sm" />}
+              right={<Badge label={sourceLabel(r.source)} tone="neutral" size="sm" />}
               onPress={() => open(r)}
             />
           ))}
@@ -143,7 +148,7 @@ export default function CurrencySettings() {
       <Sheet
         visible={!!editing}
         onClose={() => setEditing(null)}
-        title={editing?.id ? 'Edit rate' : 'Add exchange rate'}
+        title={editing?.id ? tr('settings:currencies.editTitle') : tr('settings:currencies.add')}
         footer={
           <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
             {editing?.id ? (
@@ -151,21 +156,23 @@ export default function CurrencySettings() {
                 title={tr('settings:currencies.delete')}
                 variant="danger"
                 style={{ flex: 1 }}
-                onPress={() => {
-                  if (editing.id) removeExchangeRate(editing.id);
-                  setEditing(null);
-                  toast.show(tr('settings:currencies.deleted'), 'success');
+                disabled={saving}
+                onPress={async () => {
+                  const id = editing.id;
+                  if (!id) return;
+                  const res = await serverSave(() => removeExchangeRate(id), tr('settings:currencies.deleted'), { icon: 'currency-usd-off' });
+                  if (res) setEditing(null);
                 }}
               />
             ) : null}
-            <Button title={tr('settings:currencies.save')} onPress={save} disabled={!Number(rate)} style={{ flex: 2 }} />
+            <Button shortcut="S" title={tr('settings:currencies.save')} onPress={save} loading={saving} disabled={!Number(rate) || saving} style={{ flex: 2 }} />
           </View>
         }
       >
         <View style={{ padding: t.spacing.lg, gap: t.spacing.lg }}>
           <PickerField label={tr('settings:currencies.currency')} value={`${currencyMeta(from).name} (${from})`} onPress={() => setFromOpen(true)} icon="cash-multiple" />
           <TextField
-            label={`Rate (1 ${from} → ${baseCurrency})`}
+            label={tr('settings:currencies.rateLabel', { from, to: baseCurrency })}
             value={rate}
             onChangeText={(v) => setRate(v.replace(/[^0-9.]/g, ''))}
             keyboardType="decimal-pad"

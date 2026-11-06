@@ -2,20 +2,19 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 import { Stack } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
 import { Badge } from '@esmart/ui/components/Badge';
 import { Button } from '@esmart/ui/components/Button';
 import { Segmented } from '@esmart/ui/components/Field';
-import { useToast } from '@esmart/ui/components/Toast';
 import { useAppStore } from '@esmart/app/store/appStore';
-import { useActiveCompany, useDocuments } from '@esmart/app/store/selectors';
-import { PLANS, moduleSetFor, planInfo, userLimit } from '@esmart/core/domain/plan';
+import { useActiveCompany } from '@esmart/app/store/selectors';
+import { useCompanyUsage } from '@esmart/app/remote/queries';
+import { PLANS, planInfo, userLimit } from '@esmart/core/domain/plan';
 import { planBlurb, planFeatures } from '@esmart/app/features/plan/planCopy';
 import { formatNumber } from '@esmart/core/lib/format';
-import type { PlanTier } from '@esmart/core/types';
 
 type Cycle = 'monthly' | 'yearly';
 
@@ -27,26 +26,14 @@ type Cycle = 'monthly' | 'yearly';
 export function PlanBillingDesktop() {
   const t = useTheme();
   const { t: tr } = useTranslation(['plan']);
-  const toast = useToast();
 
   const [cycle, setCycle] = useState<Cycle>('yearly');
   const companies = useAppStore((s) => s.companies);
-  const invoices = useDocuments('invoice');
+  const companyUsage = useCompanyUsage().data;
   const company = useActiveCompany();
-  const setPlan = useAppStore((s) => s.setPlan);
   const currentPlan = company.plan;
   const current = planInfo(currentPlan);
   const seatLimit = userLimit(currentPlan);
-
-  const choose = (tier: PlanTier) => {
-    setPlan(company.id, tier);
-    const name = planInfo(tier).name;
-    if (moduleSetFor(currentPlan) === 'full' && moduleSetFor(tier) === 'sales') {
-      toast.show(tr('plan:billing.downgraded', { plan: name }), 'info');
-    } else {
-      toast.show(tr('plan:billing.switched', { plan: name }), 'success');
-    }
-  };
 
   // Real counts. The plan's limits aren't served by the API yet (docs/PRODUCTION_READINESS.md), so no meters.
   // Only people who have accepted count; a pending invitation is not a user yet.
@@ -54,13 +41,13 @@ export function PlanBillingDesktop() {
   const pendingInvites = useAppStore((s) => s.users.filter((u) => u.status === 'invited' && u.companyIds.includes(s.activeCompanyId)).length);
   const usage: { label: string; value: string; ratio: number | null }[] = [
     { label: tr('plan:billing.usageBusinesses'), value: String(companies.length), ratio: null },
-    { label: tr('plan:billing.usageInvoices'), value: String(invoices.length), ratio: null },
+    { label: tr('plan:billing.usageInvoices'), value: companyUsage ? String(companyUsage.counts.invoices) : '…', ratio: null },
     { label: tr('plan:billing.usageUsers'), value: seatLimit === null ? String(teamSize) : tr('plan:billing.ofTotal', { used: teamSize, total: seatLimit }), ratio: seatLimit === null ? null : teamSize / seatLimit },
   ];
   if (pendingInvites > 0) usage.push({ label: tr('plan:billing.usagePending'), value: String(pendingInvites), ratio: null });
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('plan:billing.title') }} />
 
       <ScrollView contentContainerStyle={{ paddingBottom: 48, gap: t.spacing.xxl }}>
@@ -78,7 +65,7 @@ export function PlanBillingDesktop() {
                   justifyContent: 'center',
                 }}
               >
-                <MaterialCommunityIcons name="star-circle-outline" size={24} color={t.c.primary} />
+                <Icon name="star-circle-outline" size={24} color={t.c.primary} />
               </View>
               <View style={{ gap: 2, flexShrink: 1 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
@@ -179,7 +166,7 @@ export function PlanBillingDesktop() {
                 <View style={{ gap: t.spacing.sm, flex: 1 }}>
                   {planFeatures(tr, p).map((f) => (
                     <View key={f} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: t.spacing.sm }}>
-                      <MaterialCommunityIcons name="check-circle" size={16} color={t.c.good} style={{ marginTop: 1 }} />
+                      <Icon name="check-circle" size={16} color={t.c.good} style={{ marginTop: 1 }} />
                       <Text variant="small" style={{ flex: 1 }}>
                         {f}
                       </Text>
@@ -187,19 +174,7 @@ export function PlanBillingDesktop() {
                   ))}
                 </View>
 
-                <Button
-                  title={
-                    isCurrent
-                      ? tr('plan:billing.currentPlan')
-                      : price === 0
-                        ? tr('plan:billing.downgrade')
-                        : tr('plan:billing.choose')
-                  }
-                  variant={isCurrent ? 'ghost' : p.popular ? 'primary' : 'secondary'}
-                  disabled={isCurrent}
-                  onPress={() => choose(p.key)}
-                  fullWidth
-                />
+                {isCurrent ? <Button title={tr('plan:billing.currentPlan')} variant="ghost" disabled fullWidth /> : null}
               </Card>
             );
           })}

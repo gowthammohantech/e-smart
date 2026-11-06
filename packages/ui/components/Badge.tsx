@@ -1,6 +1,6 @@
 import React from 'react';
-import { StyleProp, View, ViewStyle } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Platform, StyleProp, View, ViewStyle } from 'react-native';
+import { Icon, type IconName } from './Icon';
 import { useTheme } from '../theme/ThemeProvider';
 import { Text } from './Text';
 import { DocStatus } from '@esmart/core/types';
@@ -11,7 +11,7 @@ import { statusLabel } from '@esmart/core/labels';
 type Props = {
   label: string;
   tone?: StatusTone;
-  icon?: keyof typeof MaterialCommunityIcons.glyphMap;
+  icon?: IconName;
   size?: 'sm' | 'md';
   /** A count bubble: round for one digit, centred in its row, never squeezed. */
   count?: boolean;
@@ -46,13 +46,13 @@ export function Badge({ label, tone = 'neutral', icon, size = 'md', count, style
         style,
       ]}
     >
-      {icon ? <MaterialCommunityIcons name={icon} size={size === 'sm' ? 10 : 12} color={p.fg} /> : null}
+      {icon ? <Icon name={icon} size={size === 'sm' ? 10 : 12} color={p.fg} /> : null}
       <Text
         numberOfLines={1}
         style={{
           color: p.fg,
           fontSize: size === 'sm' ? t.fontSize.micro : t.fontSize.caption,
-          fontWeight: '600',
+          fontWeight: Platform.OS === 'web' ? '500' : '600',
           flexShrink: 1,
           textAlign: count ? 'center' : undefined,
           fontVariant: count ? ['tabular-nums'] : undefined,

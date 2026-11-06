@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { errorMessage } from '../lib/api';
+import { Art, type ArtName } from './Art';
 
 export function PageHeader({ title, sub, crumbs, actions }: { title: ReactNode; sub?: ReactNode; crumbs?: { to: string; label: string }[]; actions?: ReactNode }) {
   return (
@@ -26,9 +27,37 @@ export function PageHeader({ title, sub, crumbs, actions }: { title: ReactNode; 
 
 /** Loading and error states for a query; renders children once data is in. */
 export function QueryState({ isPending, error, children }: { isPending: boolean; error: unknown; children: () => ReactNode }) {
-  if (error) return <div className="alert bad">{errorMessage(error)}</div>;
-  if (isPending) return <div className="empty">Loading…</div>;
+  if (error)
+    return (
+      <div className="state">
+        <Art name="error" height={120} />
+        <div className="alert bad">{errorMessage(error)}</div>
+      </div>
+    );
+  if (isPending) return <Skeleton />;
   return <>{children()}</>;
+}
+
+/** Shimmering placeholder rows while something loads. */
+export function Skeleton({ rows = 4 }: { rows?: number }) {
+  return (
+    <div className="skeleton" role="status" aria-label="Loading">
+      {Array.from({ length: rows }, (_, i) => (
+        <i key={i} />
+      ))}
+    </div>
+  );
+}
+
+/** An illustrated "nothing here" for a table or list. */
+export function EmptyState({ art = 'empty', title, children }: { art?: ArtName; title: ReactNode; children?: ReactNode }) {
+  return (
+    <div className="state">
+      <Art name={art} height={110} />
+      <h3>{title}</h3>
+      {children ? <p>{children}</p> : null}
+    </div>
+  );
 }
 
 /** A search box that reports its value after typing pauses. */

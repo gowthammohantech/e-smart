@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
@@ -20,16 +20,19 @@ import { SHOW_SCROLLBAR, useBreakpoint } from '@esmart/ui/theme/breakpoints';
 import { focusRing, type WebPressState } from '@esmart/ui/theme/interaction';
 import { FormSection, SplitPane } from '@esmart/ui/components/Layout';
 
+/** The photo had no readable text: worth a retake, not the server's fault. */
+class NoTextFound extends Error {}
+
 const STEPS = [
-  { icon: 'camera-outline' as const, label: 'Capture', body: 'Photograph the bill or pick one from your gallery.' },
-  { icon: 'cellphone-text' as const, label: 'Read', body: 'Text is read on your phone, and the bill is kept with your books.' },
-  { icon: 'text-recognition' as const, label: 'Extract', body: 'Read the vendor, date, totals, tax and line items.' },
-  { icon: 'clipboard-check-outline' as const, label: 'Review', body: 'You confirm every field before anything is saved.' },
-];
+  { icon: 'camera-outline', label: 'purchases:ocr.stepCapture', body: 'purchases:ocr.stepCaptureBody' },
+  { icon: 'cellphone-text', label: 'purchases:ocr.stepRead', body: 'purchases:ocr.stepReadBody' },
+  { icon: 'text-recognition', label: 'purchases:ocr.stepExtract', body: 'purchases:ocr.stepExtractBody' },
+  { icon: 'clipboard-check-outline', label: 'purchases:ocr.stepReview', body: 'purchases:ocr.stepReviewBody' },
+] as const;
 
 export default function OcrCapture() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['inventory', 'nav', 'auth']);
+  const { t: tr } = useTranslation(['inventory', 'nav', 'auth', 'purchases']);
   const router = useRouter();
   const toast = useToast();
   // Always 'phone' in the native apps, so the desktop layout only ever reaches a browser.
@@ -44,17 +47,29 @@ export default function OcrCapture() {
   const run = async (uri: string) => {
     setBusy(true);
     try {
-      // Read on the device with ML Kit where it can (null on web); the server parses that text,
-      // or reads the image itself when it has an OCR provider.
-      const text = await recognizeText(uri);
-      if (text !== null && !text.trim()) {
-        toast.show(tr('inventory:ocr.noTextFound'), 'error');
-        return;
-      }
-      setResult(await extractBill({ companyId, uri, kind, text }));
+      const read = (async () => {
+        // Read on the device with ML Kit where it can (null on web); the server parses that text,
+        // or reads the image itself when it has an OCR provider.
+        const text = await recognizeText(uri);
+        if (text !== null && !text.trim()) throw new NoTextFound();
+        return extractBill({ companyId, uri, kind, text });
+      })();
+      setResult(
+        await toast.promise(read, {
+          loading: tr('inventory:ocr.reading'),
+          success: tr('inventory:ocr.read'),
+          error: (err) =>
+            err instanceof NoTextFound
+              ? tr('inventory:ocr.noTextFound')
+              : err instanceof OcrUnavailableError
+                ? tr('inventory:ocr.ocrUnavailable')
+                : describeError(err, tr),
+          icon: 'text-recognition',
+        }),
+      );
       router.push('/(app)/ocr/review');
-    } catch (err) {
-      toast.show(err instanceof OcrUnavailableError ? tr('inventory:ocr.ocrUnavailable') : describeError(err, tr), 'error');
+    } catch {
+      // The toast has said what went wrong.
     } finally {
       setBusy(false);
     }
@@ -62,11 +77,9 @@ export default function OcrCapture() {
 
   const pick = async (fromCamera: boolean) => {
     try {
-      const permission = fromCamera
-        ? await ImagePicker.requestCameraPermissionsAsync()
-        : await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) {
-        toast.show(tr(fromCamera ? 'inventory:ocr.cameraDenied' : 'inventory:ocr.galleryDenied'), 'error');
+      // The gallery goes through the system photo picker, which needs no permission.
+      if (fromCamera && !(await ImagePicker.requestCameraPermissionsAsync()).granted) {
+        toast.show(tr('inventory:ocr.cameraDenied'), 'warning', { icon: 'camera-off-outline' });
         return;
       }
       const result = fromCamera
@@ -76,7 +89,7 @@ export default function OcrCapture() {
       await run(result.assets[0].uri);
     } catch {
       // No camera in the simulator or on web.
-      toast.show(tr('inventory:ocr.cameraUnavailable'), 'info');
+      toast.show(tr('inventory:ocr.cameraUnavailable'), 'warning', { icon: 'camera-off-outline' });
     }
   };
 
@@ -86,8 +99,8 @@ export default function OcrCapture() {
         <View style={{ width: 360 }}>
           <Segmented
             options={[
-              { value: 'expense', label: 'Expense receipt' },
-              { value: 'purchaseBill', label: 'Supplier bill' },
+              { value: 'expense', label: tr('purchases:ocr.kindExpense') },
+              { value: 'purchaseBill', label: tr('purchases:ocr.kindBill') },
             ]}
             value={kind}
             onChange={(v) => setKind(v as 'expense' | 'purchaseBill')}
@@ -120,10 +133,10 @@ export default function OcrCapture() {
         >
           <Illustration name="scanning" size="full" />
           <Text variant="title" weight="600">
-            {busy ? 'Reading the bill…' : 'Take a photo'}
+            {busy ? tr('purchases:ocr.reading') : tr('inventory:ocr.takePhoto')}
           </Text>
           <Text variant="small" tone="muted" center style={{ maxWidth: 360, lineHeight: 20 }}>
-            {busy ? 'Extracting vendor, date, totals and line items.' : 'Lay the bill flat with good light for the best result.'}
+            {busy ? tr('purchases:ocr.readingBody') : tr('purchases:ocr.photoHint')}
           </Text>
         </Pressable>
 
@@ -133,7 +146,7 @@ export default function OcrCapture() {
 
         {/* Reading a bill needs the phone app; say so before the person tries it here. */}
         <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: t.spacing.sm, padding: t.spacing.md, borderRadius: t.radius.md, backgroundColor: t.c.chip }}>
-          <MaterialCommunityIcons name="information-outline" size={18} color={t.c.primary} />
+          <Icon name="information-outline" size={18} color={t.c.primary} />
           <Text variant="small" tone="muted" style={{ flex: 1, lineHeight: 20 }}>
             {tr('inventory:ocr.ocrUnavailable')}
           </Text>
@@ -147,28 +160,28 @@ export default function OcrCapture() {
           {STEPS.map((s, i) => (
             <View key={s.label} style={{ flexDirection: 'row', gap: t.spacing.md }}>
               <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: t.c.chip, alignItems: 'center', justifyContent: 'center' }}>
-                <MaterialCommunityIcons name={s.icon} size={17} color={t.c.primary} />
+                <Icon name={s.icon} size={17} color={t.c.primary} />
               </View>
               <View style={{ flex: 1, gap: 2 }}>
                 <Text variant="body" weight="600">
-                  {i + 1}. {s.label}
+                  {i + 1}. {tr(s.label)}
                 </Text>
                 <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
-                  {s.body}
+                  {tr(s.body)}
                 </Text>
               </View>
             </View>
           ))}
         </View>
         <View style={{ flexDirection: 'row', gap: t.spacing.sm, paddingTop: t.spacing.md, borderTopWidth: 1, borderTopColor: t.c.line }}>
-          <MaterialCommunityIcons name="shield-check-outline" size={18} color={t.c.good} />
+          <Icon name="shield-check-outline" size={18} color={t.c.good} />
           <Text variant="caption" tone="muted" style={{ flex: 1, lineHeight: 18 }}>{tr('inventory:ocr.howItWorksBody')}</Text>
         </View>
       </FormSection>
     );
 
     return (
-      <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+      <View style={{ flex: 1 }}>
         <Stack.Screen options={{ title: tr('nav:title.scanABill') }} />
         <ScrollView contentContainerStyle={{ paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.xxxl }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
           {/* A narrow browser window (icon-only sidebar) has no room for the side column. */}
@@ -186,14 +199,14 @@ export default function OcrCapture() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('nav:title.scanABill') }} />
 
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, gap: t.spacing.lg }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <Segmented
           options={[
-            { value: 'expense', label: 'Expense receipt' },
-            { value: 'purchaseBill', label: 'Supplier bill' },
+            { value: 'expense', label: tr('purchases:ocr.kindExpense') },
+            { value: 'purchaseBill', label: tr('purchases:ocr.kindBill') },
           ]}
           value={kind}
           onChange={(v) => setKind(v as 'expense' | 'purchaseBill')}
@@ -213,10 +226,10 @@ export default function OcrCapture() {
           >
             <Illustration name="scanning" size="hero" />
             <Text variant="title" weight="600">
-              {busy ? 'Reading the bill…' : 'Take a photo'}
+              {busy ? tr('purchases:ocr.reading') : tr('inventory:ocr.takePhoto')}
             </Text>
             <Text variant="caption" tone="muted" center style={{ maxWidth: 260, lineHeight: 18 }}>
-              {busy ? 'Extracting vendor, date, totals and line items.' : 'Lay the bill flat with good light for the best result.'}
+              {busy ? tr('purchases:ocr.readingBody') : tr('purchases:ocr.photoHint')}
             </Text>
           </Card>
         </Pressable>
@@ -248,14 +261,14 @@ export default function OcrCapture() {
                   justifyContent: 'center',
                 }}
               >
-                <MaterialCommunityIcons name={s.icon} size={17} color={t.c.primary} />
+                <Icon name={s.icon} size={17} color={t.c.primary} />
               </View>
               <View style={{ flex: 1, gap: 2 }}>
                 <Text variant="body" weight="600">
-                  {i + 1}. {s.label}
+                  {i + 1}. {tr(s.label)}
                 </Text>
                 <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
-                  {s.body}
+                  {tr(s.body)}
                 </Text>
               </View>
             </View>
@@ -263,7 +276,7 @@ export default function OcrCapture() {
         </Card>
 
         <Card variant="flat" style={{ flexDirection: 'row', gap: t.spacing.md }}>
-          <MaterialCommunityIcons name="shield-check-outline" size={19} color={t.c.good} />
+          <Icon name="shield-check-outline" size={19} color={t.c.good} />
           <Text variant="caption" tone="muted" style={{ flex: 1, lineHeight: 18 }}>{tr('inventory:ocr.howItWorksBody')}</Text>
         </Card>
       </ScrollView>

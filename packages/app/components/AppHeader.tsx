@@ -3,16 +3,19 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, View } from 'react-native';
 import { usePathname, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon, type IconName } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { Text } from '@esmart/ui/components/Text';
 import { Badge } from '@esmart/ui/components/Badge';
+import { CompanyLogo } from '@esmart/ui/components/CompanyLogo';
+import { TOAST_ANCHOR_ID, useToast } from '@esmart/ui/components/Toast';
 import { PageHeader } from '@esmart/ui/components/PageHeader';
 import { tabForPath } from '../navigation/tabs';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { useAppStore } from '../store/appStore';
-import { useRemoteMeta } from '../remote';
+import { carriesQueue, ConnectionBadge } from './ConnectionBadge';
+import { useConnectivity } from '../remote';
 import { useActiveCompany, useBranches, useUnreadCount } from '../store/selectors';
 import { countLabel } from '@esmart/core/lib/format';
 
@@ -23,6 +26,7 @@ import { countLabel } from '@esmart/core/lib/format';
 export function AppHeader({ title, subtitle }: { title?: string; subtitle?: string }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['common', 'nav', 'onboarding']);
+  const toast = useToast();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   // The desktop sidebar already has search and notifications.
@@ -35,8 +39,10 @@ export function AppHeader({ title, subtitle }: { title?: string; subtitle?: stri
   const setActiveCompany = useAppStore((s) => s.setActiveCompany);
   const setActiveBranch = useAppStore((s) => s.setActiveBranch);
   const unread = useUnreadCount();
-  const offline = !useRemoteMeta((m) => m.online);
-  const pendingSync = useAppStore((s) => s.syncQueue.filter((q) => q.status !== 'synced').length);
+  const pendingSync = useAppStore((s) => s.syncQueue.filter((q) => q.status === 'pending').length);
+  const failedSync = useAppStore((s) => s.syncQueue.filter((q) => q.status === 'failed').length);
+  const mode = useConnectivity((s) => s.mode);
+  const showQueued = pendingSync > 0 && !carriesQueue(mode);
 
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [branchOpen, setBranchOpen] = useState(false);
@@ -55,8 +61,14 @@ export function AppHeader({ title, subtitle }: { title?: string; subtitle?: stri
     );
   }
 
+  // Customers and Reports have no slot in the phone's tab bar; they are opened
+  // from More, so (like every other page opened from More) they get a way back.
+  const tab = tabForPath(pathname);
+  const showBack = tab === 'contacts' || tab === 'reports';
+  const goBack = () => (router.canGoBack() ? router.back() : router.replace('/(app)/(tabs)/more' as never));
+
   const iconButton = (
-    icon: keyof typeof MaterialCommunityIcons.glyphMap,
+    icon: IconName,
     label: string,
     onPress: () => void,
     badge?: number,
@@ -78,7 +90,7 @@ export function AppHeader({ title, subtitle }: { title?: string; subtitle?: stri
         opacity: pressed ? 0.7 : 1,
       })}
     >
-      <MaterialCommunityIcons name={icon} size={19} color={t.c.text} />
+      <Icon name={icon} size={19} color={t.c.text} />
       {badge && badge > 0 ? (
         <View
           style={{
@@ -106,18 +118,31 @@ export function AppHeader({ title, subtitle }: { title?: string; subtitle?: stri
         paddingTop: desktop ? t.spacing.xl : insets.top + t.spacing.sm,
         paddingHorizontal: t.spacing.lg,
         paddingBottom: t.spacing.md,
-        backgroundColor: t.c.bg,
         gap: t.spacing.sm,
       }}
     >
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
+      {/* A phone browser's toast centres on this row (Toast.web.tsx). */}
+      <View nativeID={TOAST_ANCHOR_ID} style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
+        {showBack ? iconButton('arrow-left', tr('common:action.back'), goBack) : null}
+        {/* The business's logo beside its name; a page with its own title shows just that. */}
+        {!title && company ? (
+          <Pressable
+            onPress={() => router.push('/(app)/settings/company' as never)}
+            hitSlop={6}
+            accessibilityRole="button"
+            accessibilityLabel={tr('nav:title.businessProfile')}
+            style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+          >
+            <CompanyLogo uri={company.logoUri} name={company.name} size={36} />
+          </Pressable>
+        ) : null}
         {/* Siblings, not nested: on web each Pressable is a <button>, and a
             button inside a button is invalid HTML and steals the inner press. */}
         <View style={{ flex: 1, alignItems: 'flex-start' }}>
           <Pressable
             onPress={() => setSwitcherOpen(true)}
             accessibilityRole="button"
-            accessibilityLabel={`Switch business. Current: ${company?.name}`}
+            accessibilityLabel={tr('common:component.switchBusiness', { name: company?.name ?? '' })}
             style={({ pressed }) => ({
               flexDirection: 'row',
               alignItems: 'center',
@@ -129,7 +154,7 @@ export function AppHeader({ title, subtitle }: { title?: string; subtitle?: stri
             <Text variant="title" weight="700" numberOfLines={1} style={{ flexShrink: 1 }}>
               {title ?? company?.name ?? tr('common:component.business')}
             </Text>
-            {!title ? <MaterialCommunityIcons name="chevron-down" size={18} color={t.c.muted} /> : null}
+            {!title ? <Icon name="chevron-down" size={18} color={t.c.muted} /> : null}
           </Pressable>
           <Pressable
             onPress={() => setBranchOpen(true)}
@@ -146,11 +171,19 @@ export function AppHeader({ title, subtitle }: { title?: string; subtitle?: stri
         </View>
 
         {/* On a narrow phone the status badge gives way (shrinks) before the buttons do. */}
-        {offline ? (
-          <Badge label={tr('common:component.offline')} tone="warning" icon="cloud-off-outline" size="sm" style={{ flexShrink: 1, alignSelf: 'center' }} />
-        ) : null}
-        {!offline && pendingSync > 0 ? (
-          <Badge label={`${countLabel(pendingSync)} queued`} tone="info" icon="sync" size="sm" style={{ flexShrink: 1, alignSelf: 'center' }} />
+        <ConnectionBadge style={{ flexShrink: 1, alignSelf: 'center' }} />
+        {/* Failed or queued changes open the sync page, where each can be retried or discarded. */}
+        {failedSync > 0 || showQueued ? (
+          <Pressable
+            onPress={() => router.push('/(app)/settings/sync')}
+            hitSlop={6}
+            accessibilityRole="button"
+            accessibilityLabel={tr('common:component.openSyncStatus')}
+            style={{ flexDirection: 'row', gap: t.spacing.xs, flexShrink: 1, alignSelf: 'center' }}
+          >
+            {failedSync > 0 ? <Badge label={tr('common:component.failedSync', { count: failedSync })} tone="danger" icon="cloud-alert" size="sm" style={{ flexShrink: 1 }} /> : null}
+            {showQueued ? <Badge label={tr('common:component.queuedSync', { count: countLabel(pendingSync) })} tone="info" icon="sync" size="sm" style={{ flexShrink: 1 }} /> : null}
+          </Pressable>
         ) : null}
 
         {desktop ? null : (
@@ -170,10 +203,15 @@ export function AppHeader({ title, subtitle }: { title?: string; subtitle?: stri
           value: c.id,
           label: c.name,
           description: `${tr(`onboarding:businessType.${c.businessType}` as 'onboarding:businessType.other')} · ${c.baseCurrency}`,
-          icon: 'domain',
+          leading: <CompanyLogo uri={c.logoUri} name={c.name} size={32} />,
         }))}
         value={company?.id}
-        onSelect={setActiveCompany}
+        onSelect={(id) => {
+          const next = companies.find((c) => c.id === id);
+          if (!next || id === company?.id) return;
+          setActiveCompany(id);
+          toast.show(tr('common:toast.switchedBusiness', { name: next.name }), 'info', { icon: 'swap-horizontal', detail: next.baseCurrency, varies: true });
+        }}
         searchable={false}
       />
 
@@ -188,7 +226,12 @@ export function AppHeader({ title, subtitle }: { title?: string; subtitle?: stri
           icon: b.isPrimary ? 'office-building-outline' : 'warehouse',
         }))}
         value={activeBranchId}
-        onSelect={setActiveBranch}
+        onSelect={(id) => {
+          const next = branches.find((b) => b.id === id);
+          if (!next || id === activeBranchId) return;
+          setActiveBranch(id);
+          toast.show(tr('common:toast.switchedBranch', { name: next.name }), 'info', { icon: next.isPrimary ? 'office-building-outline' : 'warehouse', detail: next.code, varies: true });
+        }}
         searchable={false}
       />
     </View>

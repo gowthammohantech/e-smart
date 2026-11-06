@@ -2,7 +2,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon, type IconName } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import type { Translate } from '@esmart/core/labels';
 import { Text } from '@esmart/ui/components/Text';
@@ -11,7 +11,7 @@ import { useCanOpen } from '../store/selectors';
 type Action = {
   key: string;
   label: string;
-  icon: keyof typeof MaterialCommunityIcons.glyphMap;
+  icon: IconName;
   route: string;
   color?: string;
 };
@@ -67,7 +67,7 @@ export function QuickActions() {
               justifyContent: 'center',
             }}
           >
-            <MaterialCommunityIcons name={a.icon} size={23} color={a.color ? t.c.onPrimary : t.c.text} />
+            <Icon name={a.icon} size={23} color={a.color ? t.c.onPrimary : t.c.text} />
           </View>
           <Text variant="micro" tone="muted" center numberOfLines={2}>
             {a.label}

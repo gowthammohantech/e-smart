@@ -15,25 +15,27 @@ import { TextField } from '@esmart/ui/components/Field';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
-import { useToast } from '@esmart/ui/components/Toast';
 import { TaxCategory } from '@esmart/core/types';
 import { useAppStore } from '../../../store/appStore';
-import { useActiveCompany, useDocuments, useItems, useTaxCategories } from '../../../store/selectors';
+import { useActiveCompany, useTaxCategories } from '../../../store/selectors';
+import { useCompanyUsage } from '../../../remote/queries';
 import { formatPercent } from '@esmart/core/lib/format';
 import { formatDate, today } from '@esmart/core/lib/date';
 import { uid } from '@esmart/core/lib/id';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { useSaveShortcut } from '../../../components/useSaveShortcut';
+import { useServerSave } from '../../../components/useServerSave';
+import { validTaxRate } from '@esmart/core/lib/validators';
 
 export default function TaxSettings() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const { t: tr } = useTranslation(['nav', 'settings']);
-  const toast = useToast();
+  const { run: serverSave, saving } = useServerSave();
 
   const company = useActiveCompany();
   const categories = useTaxCategories();
-  const items = useItems();
-  const documents = useDocuments();
+  const usage = useCompanyUsage().data;
   const saveTaxCategory = useAppStore((s) => s.saveTaxCategory);
   const removeTaxCategory = useAppStore((s) => s.removeTaxCategory);
 
@@ -43,6 +45,7 @@ export default function TaxSettings() {
   const [rate, setRate] = useState('');
   const [effectiveFrom, setEffectiveFrom] = useState(today());
   const [description, setDescription] = useState('');
+  const [rateError, setRateError] = useState<string | undefined>();
 
   const regime = company?.taxRegistration?.regime ?? 'NONE';
 
@@ -52,29 +55,39 @@ export default function TaxSettings() {
     setRate(c ? String(c.rate) : '');
     setEffectiveFrom(c?.effectiveFrom ?? today());
     setDescription(c?.description ?? '');
+    setRateError(undefined);
   };
 
-  const usageOf = (id: string) =>
-    items.filter((i) => i.taxCategoryId === id).length +
-    documents.filter((d) => d.lines.some((l) => l.taxCategoryId === id)).length;
+  const usageOf = (id: string) => usage?.taxCategoryUse[id] ?? 0;
 
-  const save = () => {
+  const save = async () => {
     if (!editing || !name.trim()) return;
-    saveTaxCategory({
+    const error = validTaxRate(rate, editing.type);
+    setRateError(error);
+    if (error) return;
+    const category = {
       ...editing,
       id: editing.id || uid('tax'),
       companyId: company.id,
       name: name.trim(),
-      rate: Number(rate) || 0,
+      rate: Number(rate),
       effectiveFrom,
       description: description.trim() || undefined,
-    });
-    toast.show(editing.id ? 'Tax rate updated' : 'Tax rate added', 'success');
-    setEditing(null);
+    };
+    // The sheet stays open until the server has it, so a refusal can be fixed here.
+    const res = await serverSave(
+      () => saveTaxCategory(category),
+      editing.id ? tr('settings:taxes.updated') : tr('settings:taxes.added'),
+      { icon: 'percent-outline' },
+    );
+    if (res) setEditing(null);
   };
 
+  // Ctrl+S (⌘+S) does what Save does, while the form is open.
+  useSaveShortcut(save, !!editing && !!name.trim());
+
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('nav:title.taxes') }} />
 
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 + insets.bottom }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
@@ -82,13 +95,13 @@ export default function TaxSettings() {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
             <Badge label={regime} tone="info" />
             <Text variant="small" weight="600">
-              {company?.taxRegistration?.identifier ?? 'Not registered'}
+              {company?.taxRegistration?.identifier ?? tr('settings:taxes.notRegistered')}
             </Text>
           </View>
           <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
             {regime === 'GST'
-              ? 'Each rate splits into CGST + SGST within your state, or a single IGST line for inter-state supplies. Rates carry an effective date so past documents keep the treatment they were issued under.'
-              : 'Rates carry an effective date so past documents keep the treatment they were issued under.'}
+              ? tr('settings:taxes.introGst')
+              : tr('settings:taxes.intro')}
           </Text>
         </Card>
 
@@ -101,7 +114,7 @@ export default function TaxSettings() {
                 key={c.id}
                 title={c.name}
                 subtitle={c.description}
-                meta={`Effective from ${formatDate(c.effectiveFrom)} · used by ${usageOf(c.id)} records`}
+                meta={tr('settings:taxes.rowMeta', { date: formatDate(c.effectiveFrom), count: usageOf(c.id) })}
                 icon="percent-outline"
                 divider={i < categories.length - 1}
                 right={<Badge label={formatPercent(c.rate)} tone={c.rate === 0 ? 'neutral' : 'info'} />}
@@ -116,9 +129,9 @@ export default function TaxSettings() {
           <Card style={{ marginTop: t.spacing.lg, gap: t.spacing.md }}>
             <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('settings:taxes.howApplied')}</Text>
             {[
-              { label: 'Within your state', value: 'CGST + SGST, split evenly' },
-              { label: 'Other states', value: 'IGST at the full rate' },
-              { label: 'Rounding', value: 'Half-up to the paisa, then the document total to the rupee' },
+              { label: tr('settings:taxes.applied.intraState'), value: tr('settings:taxes.applied.intraStateValue') },
+              { label: tr('settings:taxes.applied.interState'), value: tr('settings:taxes.applied.interStateValue') },
+              { label: tr('settings:taxes.applied.rounding'), value: tr('settings:taxes.applied.roundingValue') },
             ].map((r) => (
               <View key={r.label} style={{ flexDirection: 'row', justifyContent: 'space-between', gap: t.spacing.md }}>
                 <Text variant="small" tone="muted">
@@ -138,7 +151,7 @@ export default function TaxSettings() {
       <Sheet
         visible={!!editing}
         onClose={() => setEditing(null)}
-        title={editing?.id ? 'Edit tax rate' : 'Add tax rate'}
+        title={editing?.id ? tr('settings:taxes.editTitle') : tr('settings:taxes.add')}
         footer={
           <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
             {editing?.id ? (
@@ -153,7 +166,7 @@ export default function TaxSettings() {
                 }}
               />
             ) : null}
-            <Button title={tr('settings:taxes.save')} onPress={save} disabled={!name.trim()} style={{ flex: 2 }} />
+            <Button shortcut="S" title={tr('settings:taxes.save')} onPress={save} loading={saving} disabled={!name.trim() || saving} style={{ flex: 2 }} />
           </View>
         }
       >
@@ -162,7 +175,11 @@ export default function TaxSettings() {
           <TextField
             label={tr('settings:taxes.rate')}
             value={rate}
-            onChangeText={(v) => setRate(v.replace(/[^0-9.]/g, ''))}
+            onChangeText={(v) => {
+              setRate(v.replace(/[^0-9.]/g, ''));
+              setRateError(undefined);
+            }}
+            error={rateError}
             keyboardType="decimal-pad"
             placeholder="18"
             icon="percent-outline"
@@ -175,15 +192,15 @@ export default function TaxSettings() {
 
       <ConfirmDialog
         visible={!!confirmDelete}
-        title={`Delete ${confirmDelete?.name}?`}
+        title={tr('settings:taxes.deleteTitle', { name: confirmDelete?.name })}
         message={tr('settings:taxes.deleteMessage')}
         confirmLabel={tr('settings:taxes.delete')}
         destructive
         onCancel={() => setConfirmDelete(null)}
         onConfirm={() => {
-          if (confirmDelete) removeTaxCategory(confirmDelete.id);
+          const c = confirmDelete;
           setConfirmDelete(null);
-          toast.show(tr('settings:taxes.deleted'), 'success');
+          if (c) void serverSave(() => removeTaxCategory(c.id), tr('settings:taxes.deleted'), { icon: 'percent-outline' });
         }}
       />
     </View>

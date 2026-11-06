@@ -1,35 +1,40 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useRefreshOnFocus } from '../../remote/useRefreshOnFocus';
 import { useResolvedLanguage } from '../../i18n/I18nProvider';
-import { Platform, Pressable, ScrollView, Share, View } from 'react-native';
+import { Linking, Platform, Pressable, ScrollView, Share, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Stack, useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { Icon, type IconName } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
 import { Badge, StatusBadge } from '@esmart/ui/components/Badge';
+import { knownToServer } from '../../remote/meta';
 import { Button } from '@esmart/ui/components/Button';
 import { Avatar } from '@esmart/ui/components/Avatar';
 import { TotalsPanel } from '@esmart/ui/components/TotalsPanel';
 import { Sheet } from '@esmart/ui/components/Sheet';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
-import { useToast } from '@esmart/ui/components/Toast';
+import { useToast, type ToastIcon } from '@esmart/ui/components/Toast';
+import { useServerSave } from '../../components/useServerSave';
 
 import { BusinessDocument, DocStatus, DocumentKind } from '@esmart/core/types';
-import { STATUS_TONE, isFinalized, nextStatuses } from '@esmart/core/domain/documentStates';
-import { documentKindLabel, statusLabel } from '@esmart/core/labels';
+import { tdsSection } from '@esmart/core/data/tdsSections';
+import { NOTE_SOURCE, STATUS_TONE, canTransition, conversionBlock, isFinalized, nextStatuses } from '@esmart/core/domain/documentStates';
+import { documentKindLabel, paymentMethodLabel, statusLabel } from '@esmart/core/labels';
 import { outstandingOf } from '@esmart/core/domain/receivables';
-import { stockShortfalls } from '@esmart/core/domain/stockLedger';
+import { OUTBOUND_KINDS, shortfallsAgainst } from '@esmart/core/domain/stockLedger';
 import { formatMoney, formatPercent, formatQty } from '@esmart/core/lib/format';
-import { daysBetween, formatDate, today } from '@esmart/core/lib/date';
-import { money } from '@esmart/core/lib/money';
+import { creditNoteDeadline, daysBetween, formatDate, today } from '@esmart/core/lib/date';
+import { money, type Money } from '@esmart/core/lib/money';
 import { INDIAN_STATES } from '@esmart/core/data/masters';
 import { buildDocumentHtml } from '@esmart/core/render/documentHtml';
 
 import { useAppStore } from '../../store/appStore';
+import { useCostCentres } from '../../store/books';
 import {
   useActiveCompany,
   useActiveEwayBill,
@@ -37,56 +42,77 @@ import {
   useBranches,
   useComplianceSettings,
   useDocument,
+  useHasModule,
   useParty,
   usePayments,
 } from '../../store/selectors';
+import { useDocumentRecord, useEwayBillRecord, useStockAvailable, useStockMovedBy } from '../../remote/queries';
 import { detailRouteFor, listRouteFor } from './DocumentEditor';
 import { ComplianceCard } from '../compliance/ComplianceCard';
+import { ApprovalBanner } from '../approvals/ApprovalBanner';
 import { EInvoiceSheet } from '../compliance/EInvoiceSheet';
 import { canCancelEInvoice, isEInvoiceApplicable } from '@esmart/core/domain/eInvoice';
-import { isEwayBillRequired } from '@esmart/core/domain/ewayBill';
+import { ewayBillStatusAt, isEwayBillRequired } from '@esmart/core/domain/ewayBill';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { Cell, DataTable, TABLE_PAGE_SIZE } from '@esmart/ui/components/DataTable';
 import { SplitPane } from '@esmart/ui/components/Layout';
 import { Segmented } from '@esmart/ui/components/Field';
 import { HtmlPreview } from './HtmlPreview';
 import { deliverFile } from '../reports/exportFiles';
-import { documentPdf, paymentLink, pdfFileName, sendDocument, shareLink, type SendChannel } from '../../remote/documents';
+import { documentPdf, paymentLink, pdfFileName, pdfLink, sendDocument, shareLink, shareLinks, type SendChannel } from '../../remote/documents';
 import { describeError } from '../../remote/errors';
+import { RecurrenceSheet } from './RecurrenceSheet';
+import { ensurePushRegistered } from '../../remote/push';
 import { useGoBack } from '../../navigation/useGoBack';
 
 export function DocumentDetail({ document: doc }: { document: BusinessDocument }) {
+  useRefreshOnFocus();
   const t = useTheme();
+  const costCentre = useCostCentres(true).find((c) => c.id === doc.costCentreId);
   const insets = useSafeAreaInsets();
-  const { t: tr } = useTranslation(['common', 'domain', 'sales']);
+  const { t: tr } = useTranslation(['common', 'domain', 'sales', 'compliance', 'purchases']);
   const language = useResolvedLanguage();
   const router = useRouter();
   const goBack = useGoBack();
   const toast = useToast();
+  const { run: serverSave } = useServerSave();
 
   const company = useActiveCompany();
   const baseCurrency = useBaseCurrency();
   const branches = useBranches();
   const party = useParty(doc.partyId);
   // The order, receipt or invoice this one was made from, e.g. the PO behind a goods receipt.
+  useDocumentRecord(doc.sourceDocumentId);
   const sourceDoc = useDocument(doc.sourceDocumentId);
+  // The server's own view of this one: what it still owes (credit notes and returns off) and what was made from it.
+  const record = useDocumentRecord(doc.id).data;
   const allPayments = usePayments();
+  // Its current e-way bill, fetched into the store: the device keeps only the bills it has seen.
+  useEwayBillRecord(doc.compliance?.ewayBillId);
   const ewayBill = useActiveEwayBill(doc.id);
   const complianceSettings = useComplianceSettings();
+  const hasInventory = useHasModule('inventory');
   const storeItems = useAppStore((s) => s.items);
-  const stockMovements = useAppStore((s) => s.stockMovements);
+  // Finalising from here checks stock as the editor does: what the server says is there on the date.
+  const sourceMoved = useStockMovedBy(doc.sourceDocumentId).data ?? false;
+  const available = useStockAvailable(doc.branchId, doc.date, !isFinalized(doc.status) && OUTBOUND_KINDS.includes(doc.kind) && !sourceMoved && hasInventory).data;
 
   const setDocumentStatus = useAppStore((s) => s.setDocumentStatus);
   const removeDocument = useAppStore((s) => s.removeDocument);
   const duplicateDocument = useAppStore((s) => s.duplicateDocument);
   const convertDocument = useAppStore((s) => s.convertDocument);
+  const allDocuments = useAppStore((s) => s.documents);
 
   const [actionsOpen, setActionsOpen] = useState(false);
+  const [recurrenceOpen, setRecurrenceOpen] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
+  const [confirmFinalize, setConfirmFinalize] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [complianceSheet, setComplianceSheet] = useState<'generate' | 'cancel' | null>(null);
   const [busy, setBusy] = useState(false);
+  // The same, read at once: a second tap on Send can land before `busy` re-renders.
+  const remoteBusy = useRef(false);
   const desktop = useIsDesktop();
   const [desktopTab, setDesktopTab] = useState<'details' | 'preview'>('details');
 
@@ -117,10 +143,14 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
     [allPayments, doc.id],
   );
 
-  const outstanding = useMemo(() => outstandingOf(doc, allPayments), [doc, allPayments]);
+  const outstanding = useMemo(
+    () => (record?.outstanding as Money | undefined) ?? outstandingOf(doc, allPayments, allDocuments),
+    [record?.outstanding, doc, allPayments, allDocuments],
+  );
   const paid = money(doc.totals.grandTotal.minor - outstanding.minor, doc.currency);
   const overdueDays = doc.dueDate ? daysBetween(doc.dueDate, today()) : 0;
 
+  const customFields = useAppStore((s) => s.customFields);
   const documentHtml = () =>
     buildDocumentHtml({
       t: tr,
@@ -130,18 +160,34 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
       party,
       branch,
       ewayBill,
+      // Returns and notes name the invoice or bill they're against.
+      source: NOTE_SOURCE[doc.kind] ? sourceDoc : undefined,
+      customFields,
     });
 
   /** The server's PDF: downloaded in a browser, handed to the share sheet on a phone. */
   const shareDocument = async () => {
+    if (remoteBusy.current) return;
+    remoteBusy.current = true;
     setBusy(true);
     try {
-      const bytes = await documentPdf(doc.companyId, doc.id, language === 'ta' ? 'ta' : 'en');
-      await deliverFile(pdfFileName(doc.kind, doc.number), bytes, 'application/pdf');
-      if (doc.kind === 'quote' && doc.status === 'draft') setDocumentStatus(doc.id, 'sent');
-    } catch (err) {
-      toast.show(`${tr('sales:detail.pdfFailed')} ${describeError(err, tr)}`, 'error');
+      await toast.promise(
+        (async () => {
+          const bytes = await documentPdf(doc.companyId, doc.id, language === 'ta' ? 'ta' : 'en');
+          await deliverFile(pdfFileName(doc.kind, doc.number), bytes, 'application/pdf');
+        })(),
+        {
+          loading: tr('sales:detail.pdfPreparing'),
+          success: { text: tr(Platform.OS === 'web' ? 'sales:detail.pdfDownloaded' : 'sales:detail.pdfReady'), detail: pdfFileName(doc.kind, doc.number) },
+          error: (err) => `${tr('sales:detail.pdfFailed')} ${describeError(err, tr)}`,
+          icon: 'file-pdf-box',
+        },
+      );
+      if ((doc.kind === 'quote' || doc.kind === 'proforma') && doc.status === 'draft') setDocumentStatus(doc.id, 'sent');
+    } catch {
+      // The toast has said what went wrong.
     } finally {
+      remoteBusy.current = false;
       setBusy(false);
       setActionsOpen(false);
     }
@@ -151,7 +197,6 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
   const handOverLink = async (url: string) => {
     if (Platform.OS === 'web') {
       await Clipboard.setStringAsync(url);
-      toast.show(tr('common:documentDetail.linkCopied'), 'success');
       return;
     }
     await Share.share({
@@ -159,61 +204,200 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
     });
   };
 
-  const runRemote = (job: () => Promise<void>) => {
+  // What a toast is about: the document and who it went to.
+  const about = [doc.number, party?.name].filter(Boolean).join(' · ');
+
+  /** A server round trip under a promise toast: working while it is out, then done or why not. */
+  /** One at a time: a send, a link or a payment link already on its way isn't started again. */
+  const runRemote = (job: () => Promise<void>, messages: { loading: string; success: string; icon: ToastIcon }) => {
+    if (remoteBusy.current) return;
+    remoteBusy.current = true;
     setBusy(true);
-    job()
-      .catch((err: unknown) => toast.show(describeError(err, tr), 'error'))
-      .finally(() => setBusy(false));
+    toast
+      .promise(job(), { ...messages, success: { text: messages.success, detail: about }, error: (err) => describeError(err, tr) })
+      .catch(() => {})
+      .finally(() => {
+        remoteBusy.current = false;
+        setBusy(false);
+      });
   };
 
   const send = (channel: SendChannel) =>
-    runRemote(async () => {
-      await sendDocument(doc.companyId, doc.id, channel, { includePaymentLink: isPayable && doc.kind === 'invoice' && outstanding.minor > 0 });
-      toast.show(tr('common:documentDetail.sent'), 'success');
-    });
+    runRemote(
+      async () => {
+        await sendDocument(doc.companyId, doc.id, channel, { includePaymentLink: isPayable && doc.kind === 'invoice' && outstanding.minor > 0 });
+        // The first invoice out is when "tell me when it's paid" makes sense: ask for notifications now.
+        if (doc.kind === 'invoice') void ensurePushRegistered({ ask: true });
+      },
+      { loading: tr('sales:detail.sending'), success: tr('common:documentDetail.sent'), icon: channel === 'whatsapp' ? 'whatsapp' : 'email-fast-outline' },
+    );
 
-  const convert = (target: DocumentKind) => {
-    const id = convertDocument(doc.id, target);
-    setActionsOpen(false);
-    if (id) {
-      toast.show(
-        tr('common:documentDetail.createdDraft', { kind: documentKindLabel(tr, target, 1) }),
-        'success',
-      );
-      router.push(detailRouteFor(target, id) as never);
-    }
+  /**
+   * The email a mail app opens with. A mailto link carries plain text only, so
+   * it is laid out as a letter: greeting, the document's dates and amount, its
+   * links (view, PDF, pay), and the business signing off.
+   */
+  const mailtoLink = async () => {
+    const owing = isPayable && doc.kind === 'invoice' && outstanding.minor > 0;
+    const [links, pay] = await Promise.all([
+      shareLinks(doc.companyId, doc.id),
+      // No gateway on this server: the email goes without a pay link.
+      owing ? paymentLink(doc.companyId, doc.id).catch(() => undefined) : undefined,
+    ]);
+    const business = company?.name ?? '';
+    const partPaid = owing && outstanding.minor < doc.totals.grandTotal.minor;
+    type Line = 'subject' | 'greeting' | 'intro' | 'date' | 'dueDate' | 'validUntil' | 'total' | 'amountDue' | 'view' | 'pdf' | 'pay' | 'thanks' | 'regards';
+    const e = (key: Line, values: Record<string, unknown> = {}) => tr(`common:documentEmail.${key}`, { kind: kindName, number: doc.number, business, ...values });
+    const body = [
+      e('greeting', { name: party?.name ?? '' }),
+      '',
+      e('intro'),
+      '',
+      e('date', { date: formatDate(doc.date) }),
+      doc.dueDate ? e('dueDate', { date: formatDate(doc.dueDate) }) : null,
+      doc.validUntil ? e('validUntil', { date: formatDate(doc.validUntil) }) : null,
+      e('total', { amount: formatMoney(doc.totals.grandTotal) }),
+      partPaid ? e('amountDue', { amount: formatMoney(outstanding) }) : null,
+      '',
+      e('view', { url: links.url }),
+      links.pdfUrl ? e('pdf', { url: links.pdfUrl }) : null,
+      pay ? e('pay', { url: pay.url }) : null,
+      '',
+      e('thanks'),
+      '',
+      e('regards'),
+      business,
+      [company?.phone, company?.email].filter(Boolean).join(' · ') || null,
+    ]
+      .filter((l) => l !== null)
+      .join('\n');
+    return `mailto:${party?.email ?? ''}?subject=${encodeURIComponent(e('subject'))}&body=${encodeURIComponent(body)}`;
   };
 
-  const conversions: { target: DocumentKind; label: string; icon: keyof typeof MaterialCommunityIcons.glyphMap }[] =
-    // A cancelled document no longer counts, so nothing can be made from it.
-    doc.status === 'cancelled'
-      ? []
-      : doc.kind === 'quote'
+  /**
+   * Email / WhatsApp for a party with no address on file (and WhatsApp in a
+   * browser): the person's own mail app or WhatsApp opens with the document's
+   * details and link filled in.
+   */
+  const compose = (channel: 'email' | 'whatsapp') =>
+    runRemote(async () => {
+      if (channel === 'email') {
+        await Linking.openURL(await mailtoLink());
+        return;
+      }
+      const url = await shareLink(doc.companyId, doc.id);
+      const text = `${tr('common:documentDetail.shareMessage', { kind: kindName, number: doc.number, amount: formatMoney(doc.totals.grandTotal) })}
+${url}`;
+      await Linking.openURL(`https://wa.me/${(party?.phone ?? '').replace(/[^0-9]/g, '')}?text=${encodeURIComponent(text)}`);
+    }, {
+      loading: tr('sales:detail.preparingMessage'),
+      success: tr(channel === 'whatsapp' ? 'sales:detail.openedWhatsapp' : 'sales:detail.openedEmail'),
+      icon: channel === 'whatsapp' ? 'whatsapp' : 'email-edit-outline',
+    });
+
+  const sendVia = (channel: 'email' | 'whatsapp') => {
+    const hasContact = channel === 'email' ? !!party?.email : !!party?.phone;
+    // Email goes from the server wherever it is sent from, so the customer gets the designed
+    // email with the PDF and payment links; a browser opening a mail app could only send text.
+    if (!hasContact || (Platform.OS === 'web' && channel === 'whatsapp')) compose(channel);
+    else send(channel);
+  };
+
+  // The editor's "Save & send" lands here with ?send=email: send it once, as soon as the
+  // document reads as finalised, and drop the flag so a reload or Back doesn't send again.
+  const { send: sendParam } = useLocalSearchParams<{ send?: string }>();
+  const sentFromEditor = useRef(false);
+  const sendNow = useRef(sendVia);
+  // Kept current after each render, as the editor does for its finalise shortcut.
+  useEffect(() => {
+    sendNow.current = sendVia;
+  });
+  useEffect(() => {
+    if (sendParam !== 'email' || sentFromEditor.current || !isFinalized(doc.status)) return;
+    sentFromEditor.current = true;
+    router.setParams({ send: undefined });
+    sendNow.current('email');
+  }, [sendParam, doc.status, router]);
+
+  const convert = async (target: DocumentKind) => {
+    setActionsOpen(false);
+    const res = await serverSave(() => convertDocument(doc.id, target), tr('common:documentDetail.createdDraft', { kind: documentKindLabel(tr, target, 1) }), {
+      icon: 'file-replace-outline',
+      detail: tr('sales:detail.fromDocument', { number: doc.number }),
+    });
+    if (res?.result) router.push(detailRouteFor(target, res.id ?? res.result) as never);
+  };
+
+  const offered: { target: DocumentKind; label: string; icon: IconName }[] =
+    doc.kind === 'quote' || doc.kind === 'proforma'
       ? [
-          { target: 'salesOrder', label: 'Convert to sales order', icon: 'clipboard-list-outline' },
-          { target: 'invoice', label: 'Convert to invoice', icon: 'file-document-outline' },
+          // A quote can become a proforma for the customer to pay an advance against.
+          ...(doc.kind === 'quote' ? [{ target: 'proforma' as DocumentKind, label: tr('sales:detail.convertToProforma'), icon: 'file-document-outline' as IconName }] : []),
+          { target: 'salesOrder', label: tr('sales:detail.convertToSalesOrder'), icon: 'clipboard-list-outline' },
+          { target: 'invoice', label: tr('sales:detail.convertToInvoice'), icon: 'file-document-outline' },
         ]
       : doc.kind === 'salesOrder'
         ? [
-            { target: 'delivery', label: 'Create delivery note', icon: 'truck-outline' },
-            { target: 'invoice', label: 'Convert to invoice', icon: 'file-document-outline' },
+            { target: 'delivery', label: tr('sales:detail.createDelivery'), icon: 'truck-outline' },
+            { target: 'invoice', label: tr('sales:detail.convertToInvoice'), icon: 'file-document-outline' },
           ]
         : doc.kind === 'delivery'
-          ? [{ target: 'invoice', label: 'Convert to invoice', icon: 'file-document-outline' }]
+          ? [{ target: 'invoice', label: tr('sales:detail.convertToInvoice'), icon: 'file-document-outline' }]
           : doc.kind === 'invoice'
-            ? [{ target: 'salesReturn', label: 'Create a return', icon: 'keyboard-return' }]
+            ? [
+                { target: 'salesReturn', label: tr('sales:detail.createReturn'), icon: 'keyboard-return' },
+                { target: 'creditNote', label: tr('sales:detail.createCreditNote'), icon: 'file-document-minus-outline' },
+                { target: 'debitNote', label: tr('sales:detail.createDebitNote'), icon: 'file-document-plus-outline' },
+              ]
             : doc.kind === 'purchaseOrder'
               ? [
-                  { target: 'goodsReceipt', label: 'Create goods receipt', icon: 'package-down' },
-                  { target: 'purchaseBill', label: 'Convert to bill', icon: 'file-document-outline' },
+                  { target: 'goodsReceipt', label: tr('sales:detail.createGoodsReceipt'), icon: 'package-down' },
+                  { target: 'purchaseBill', label: tr('sales:detail.convertToBill'), icon: 'file-document-outline' },
                 ]
               : doc.kind === 'goodsReceipt'
-                ? [{ target: 'purchaseBill', label: 'Convert to bill', icon: 'file-document-outline' }]
+                ? [{ target: 'purchaseBill', label: tr('sales:detail.convertToBill'), icon: 'file-document-outline' }]
                 : doc.kind === 'purchaseBill'
-                  ? [{ target: 'purchaseReturn', label: 'Create a return', icon: 'package-up' }]
+                  ? [
+                      { target: 'purchaseReturn', label: tr('sales:detail.createReturn'), icon: 'package-up' },
+                      { target: 'supplierCreditNote', label: tr('sales:detail.recordSupplierCreditNote'), icon: 'file-document-minus-outline' },
+                      { target: 'supplierDebitNote', label: tr('sales:detail.recordSupplierDebitNote'), icon: 'file-document-plus-outline' },
+                    ]
                   : [];
+  // Only what can be made now: nothing from a draft or a cancelled document,
+  // and an order or quote carried forward once (conversionBlock).
+  // What was made from it, as the server knows; the store's copy until that lands.
+  const made = record?.linkedDocuments
+    ? record.linkedDocuments.map((d) => ({ kind: d.kind!, status: d.status!, sourceDocumentId: doc.id }))
+    : allDocuments;
+  const conversions = offered.filter((c) => !conversionBlock(doc, c.target, made));
 
   const transitions = nextStatuses(doc.kind, doc.status).filter((s) => s !== 'cancelled');
+  // What Finalise moves a draft to (issued, received, sent…), as the editor's Finalise does.
+  const finaliseTo = isFinalized(doc.status) ? undefined : transitions.find(isFinalized);
+
+  const markAs = (s: DocStatus, message = tr('common:documentDetail.marked', { status: statusLabel(tr, s) })) => {
+    // Finalising from here must pass the same stock check as the editor.
+    const short = !isFinalized(doc.status) && isFinalized(s)
+      && available && !company?.allowNegativeStock
+      ? shortfallsAgainst(available, doc.lines, storeItems)
+      : [];
+    if (short.length) {
+      toast.show(
+        tr('sales:editor.insufficientStock', {
+          date: formatDate(doc.date),
+          names: short.map((x) => tr('sales:editor.stockShort', { name: x.name, onHand: x.onHand, needed: x.needed, unit: x.unit })).join(', '),
+        }),
+        'warning',
+        { icon: 'package-variant-closed-remove' },
+      );
+      return;
+    }
+    setStatusOpen(false);
+    void serverSave(() => setDocumentStatus(doc.id, s), message, { icon: 'flag-checkered', detail: doc.number, varies: true });
+  };
+
+  // Finalise asks once, then finalises; the status list is for anything else.
+  const finalise = () => (finaliseTo ? setConfirmFinalize(true) : setStatusOpen(true));
 
   const headerCard = (
     <>
@@ -237,7 +421,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
                 accessibilityRole="link"
                 style={{ flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', marginTop: 2 }}
               >
-                <MaterialCommunityIcons name="link-variant" size={14} color={t.c.primary} />
+                <Icon name="link-variant" size={14} color={t.c.primary} />
                 <Text variant="caption" tone="primary" weight="600">
                   {tr('sales:detail.against', { kind: documentKindLabel(tr, sourceDoc.kind, 1), number: sourceDoc.number })}
                 </Text>
@@ -246,9 +430,11 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
           </View>
           <View style={{ alignItems: 'flex-end', gap: 6 }}>
             <StatusBadge status={doc.status} />
+            {doc.kind === 'salesReturn' && sourceDoc && doc.date > creditNoteDeadline(sourceDoc.date) ? <Badge label={tr('common:component.pastCreditNoteDeadline')} tone="warning" size="sm" /> : null}
+            {doc.status !== 'draft' && !knownToServer(doc.id) ? <Badge label={tr('common:component.provisional')} tone="warning" size="sm" /> : null}
             {doc.status === 'overdue' && overdueDays > 0 ? (
               <Text variant="micro" tone="bad" weight="600">
-                {overdueDays} days late
+                {tr('sales:detail.daysLate', { count: overdueDays })}
               </Text>
             ) : null}
           </View>
@@ -260,36 +446,37 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
           onPress={() =>
             party &&
             router.push(
-              party.kind === 'customer'
+              party.kind !== 'supplier'
                 ? `/(app)/contacts/customers/${party.id}`
                 : `/(app)/contacts/suppliers/${party.id}`,
             )
           }
           accessibilityRole="button"
-          accessibilityLabel={`Open ${party?.name ?? 'contact'}`}
+          accessibilityLabel={party ? tr('sales:detail.openParty', { name: party.name }) : tr('sales:detail.openContact')}
           style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}
         >
           <Avatar name={party?.name ?? '?'} size={42} />
           <View style={{ flex: 1, gap: 2 }}>
             <Text variant="body" weight="600">
-              {party?.name ?? 'Unknown'}
+              {party?.name ?? tr('common:placeholder.unknown')}
             </Text>
             <Text variant="caption" tone="muted" numberOfLines={1}>
               {party?.taxId ?? party?.phone ?? party?.email ?? '—'}
             </Text>
           </View>
-          <MaterialCommunityIcons name="chevron-right" size={18} color={t.c.muted} />
+          <Icon name="chevron-right" size={18} color={t.c.muted} />
         </Pressable>
 
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm }}>
-          {doc.dueDate ? <Badge label={`Due ${formatDate(doc.dueDate, 'dd MMM')}`} tone={overdueDays > 0 ? 'danger' : 'neutral'} /> : null}
-          {doc.validUntil ? <Badge label={`Valid to ${formatDate(doc.validUntil, 'dd MMM')}`} tone="neutral" /> : null}
+          {doc.dueDate ? <Badge label={tr('sales:detail.dueOn', { date: formatDate(doc.dueDate, 'dd MMM') })} tone={overdueDays > 0 ? 'danger' : 'neutral'} /> : null}
+          {doc.validUntil ? <Badge label={tr('sales:detail.validTo', { date: formatDate(doc.validUntil, 'dd MMM') })} tone="neutral" /> : null}
           {doc.currency !== baseCurrency ? <Badge label={`${doc.currency} @ ${doc.exchangeRate.toFixed(2)}`} tone="info" /> : null}
           {doc.placeOfSupplyStateCode ? (
-            <Badge label={`PoS ${INDIAN_STATES.find((s) => s.code === doc.placeOfSupplyStateCode)?.name ?? doc.placeOfSupplyStateCode}`} tone="neutral" />
+            <Badge label={tr('sales:detail.placeOfSupplyBadge', { state: INDIAN_STATES.find((s) => s.code === doc.placeOfSupplyStateCode)?.name ?? doc.placeOfSupplyStateCode })} tone="neutral" />
           ) : null}
-          {doc.reference ? <Badge label={`Ref ${doc.reference}`} tone="neutral" /> : null}
-          {doc.supplierDocNumber ? <Badge label={`Their no. ${doc.supplierDocNumber}`} tone="neutral" /> : null}
+          {doc.reference ? <Badge label={tr('sales:detail.referenceBadge', { reference: doc.reference })} tone="neutral" /> : null}
+          {doc.supplierDocNumber ? <Badge label={tr('sales:detail.theirNumber', { number: doc.supplierDocNumber })} tone="neutral" /> : null}
+          {costCentre ? <Badge label={costCentre.name} tone="neutral" icon="sitemap-outline" /> : null}
         </View>
       </Card>
     </>
@@ -297,7 +484,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
   const paymentCard = (
     <>
       {/* Payment status */}
-      {isPayable && isFinalized(doc.status) ? (
+      {isPayable && isFinalized(doc.status) && doc.status !== 'cancelled' ? (
         <Card style={{ marginTop: t.spacing.md, gap: t.spacing.md }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
             <View style={{ gap: 3 }}>
@@ -308,7 +495,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
             </View>
             <View style={{ alignItems: 'flex-end', gap: 3 }}>
               <Text variant="caption" tone="muted">
-                Paid
+                {tr('sales:detail.paid')}
               </Text>
               <Text variant="title" weight="600" tone="good">
                 {formatMoney(paid)}
@@ -328,7 +515,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
 
           {outstanding.minor > 0 ? (
             <Button
-              title={doc.kind === 'invoice' ? 'Record payment' : 'Pay supplier'}
+              title={doc.kind === 'invoice' ? tr('common:action.recordPayment') : tr('sales:detail.paySupplier')}
               icon={doc.kind === 'invoice' ? 'cash-plus' : 'cash-minus'}
               onPress={() =>
                 router.push(
@@ -390,7 +577,18 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
           currency={doc.currency}
           baseCurrency={baseCurrency}
           exchangeRate={doc.exchangeRate}
+          tds={doc.tds ? { label: tr('common:totals.tdsLabel', { section: tdsSection(doc.tds.section)?.label ?? doc.tds.section, rate: formatPercent(doc.tds.rate) }), amount: doc.tds.amount } : undefined}
         />
+        {doc.selfInvoiceNumber ? (
+          <Text variant="caption" tone="muted" style={{ marginTop: t.spacing.sm }}>
+            {tr('purchases:tds.selfInvoice', { number: doc.selfInvoiceNumber })}
+          </Text>
+        ) : null}
+        {doc.itcReversedOn && !doc.itcReclaimedOn ? (
+          <Text variant="caption" tone="warn" style={{ marginTop: t.spacing.sm }}>
+            {tr('purchases:tds.itcReversed', { date: formatDate(doc.itcReversedOn) })}
+          </Text>
+        ) : null}
       </Card>
     </>
   );
@@ -408,7 +606,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
                   key={p.id}
                   onPress={() => router.push(`/(app)/payments/${p.id}`)}
                   accessibilityRole="button"
-                  accessibilityLabel={`Payment ${p.number}`}
+                  accessibilityLabel={tr('sales:detail.paymentNumber', { number: p.number })}
                   style={({ pressed }) => ({
                     flexDirection: 'row',
                     alignItems: 'center',
@@ -419,13 +617,13 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
                     backgroundColor: pressed ? t.c.card2 : 'transparent',
                   })}
                 >
-                  <MaterialCommunityIcons name="cash-check" size={20} color={t.c.good} />
+                  <Icon name="cash-check" size={20} color={t.c.good} />
                   <View style={{ flex: 1, gap: 2 }}>
                     <Text variant="body" weight="600">
                       {p.number}
                     </Text>
                     <Text variant="caption" tone="muted">
-                      {formatDate(p.date)} · {p.method}
+                      {formatDate(p.date)} · {paymentMethodLabel(tr, p.method)}
                       {p.reference ? ` · ${p.reference}` : ''}
                     </Text>
                   </View>
@@ -443,6 +641,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
   const complianceSection = (
     <>
       {/* Compliance */}
+      <ApprovalBanner doc={doc} />
       <ComplianceCard document={doc} />
     </>
   );
@@ -542,7 +741,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
       ) : null}
       <Button title={tr('sales:detail.actions')} variant="ghost" icon="dots-horizontal" onPress={() => setActionsOpen(true)} />
       {!isFinalized(doc.status) ? (
-        <Button title={tr('sales:detail.finalise')} icon="check-decagram-outline" onPress={() => setStatusOpen(true)} />
+        <Button title={tr('sales:detail.finalise')} icon="check-decagram-outline" onPress={finalise} />
       ) : (
         <Button title={tr('sales:print.savePdf')} icon="file-download-outline" onPress={shareDocument} loading={busy} />
       )}
@@ -550,7 +749,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       {desktop ? (
         <>
           <Stack.Screen options={{ headerRight: () => desktopActions }} />
@@ -633,7 +832,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
             <Button
               title={tr('sales:detail.finalise')}
               icon="check-decagram-outline"
-              onPress={() => setStatusOpen(true)}
+              onPress={finalise}
               style={{ flex: 1 }}
             />
           ) : (
@@ -644,44 +843,87 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
         </>
       )}
 
+      <RecurrenceSheet doc={doc} visible={recurrenceOpen} onClose={() => setRecurrenceOpen(false)} />
+
       {/* Action sheet */}
       <Sheet visible={actionsOpen} onClose={() => setActionsOpen(false)} title={doc.number}>
         {[
           ...(isFinalized(doc.status)
             ? [
-                { label: 'Share as PDF', icon: 'file-pdf-box' as const, onPress: shareDocument },
-                ...(party?.email ? [{ label: 'Send by email', icon: 'email-outline' as const, onPress: () => send('email') }] : []),
-                ...(party?.phone ? [{ label: 'Send on WhatsApp', icon: 'whatsapp' as const, onPress: () => send('whatsapp') }] : []),
-                { label: 'Share link', icon: 'link-variant' as const, onPress: () => runRemote(async () => handOverLink(await shareLink(doc.companyId, doc.id))) },
+                { label: tr('sales:print.sharePdf'), icon: 'file-pdf-box' as const, onPress: shareDocument },
+                { label: tr('sales:detail.sendEmail'), icon: 'email-outline' as const, onPress: () => sendVia('email') },
+                { label: tr('sales:detail.sendWhatsapp'), icon: 'whatsapp' as const, onPress: () => sendVia('whatsapp') },
+                // An issued invoice, not itself a copy, can repeat; the server says if it can't.
+                ...(doc.kind === 'invoice' && !doc.recurringParentId && doc.status !== 'cancelled'
+                  ? [{ label: doc.recurrence && doc.recurrence !== 'none' ? `${tr('sales:recurring.action')} · ${tr(`sales:recurring.frequency.${doc.recurrence}`)}` : tr('sales:recurring.action'), icon: 'repeat' as const, onPress: () => setRecurrenceOpen(true) }]
+                  : []),
+                { label: Platform.OS === 'web' ? tr('sales:detail.copyLink') : tr('sales:detail.shareLink'), icon: 'link-variant' as const, onPress: () =>
+                    runRemote(async () => handOverLink(await pdfLink(doc.companyId, doc.id)), {
+                      loading: tr('sales:detail.creatingLink'),
+                      success: tr(Platform.OS === 'web' ? 'common:documentDetail.linkCopied' : 'sales:detail.linkReady'),
+                      icon: 'link-variant',
+                    }) },
                 ...(doc.kind === 'invoice' && outstanding.minor > 0
-                  ? [{ label: 'Payment link', icon: 'credit-card-outline' as const, onPress: () => runRemote(async () => handOverLink((await paymentLink(doc.companyId, doc.id)).url)) }]
+                  ? [{ label: tr('sales:detail.paymentLink'), icon: 'credit-card-outline' as const, onPress: () =>
+                          runRemote(async () => handOverLink((await paymentLink(doc.companyId, doc.id)).url), {
+                            loading: tr('sales:detail.creatingLink'),
+                            success: tr(Platform.OS === 'web' ? 'common:documentDetail.linkCopied' : 'sales:detail.linkReady'),
+                            icon: 'credit-card-outline',
+                          }) }]
                   : []),
               ]
-            : [{ label: 'Edit', icon: 'pencil-outline' as const, onPress: () => router.push(`${detailRouteFor(doc.kind, doc.id)}/edit` as never) }]),
-          { label: 'Preview document', icon: 'eye-outline' as const, onPress: () => router.push(`/(app)/documents/${doc.id}`) },
+            : [{ label: tr('sales:detail.edit'), icon: 'pencil-outline' as const, onPress: () => router.push(`${detailRouteFor(doc.kind, doc.id)}/edit` as never) }]),
+          {
+            label: doc.kind === 'purchaseBill' ? tr('sales:detail.paySupplier') : tr('common:action.recordPayment'),
+            icon: 'cash-plus' as const,
+            onPress: () => {
+              if (!isPayable) return toast.show(tr('common:documentDetail.noPayment', { kind: kindName }), 'warning');
+              if (!isFinalized(doc.status)) return toast.show(tr('common:documentDetail.issueFirst'), 'warning');
+              if (outstanding.minor <= 0) return toast.show(tr('common:documentDetail.nothingDue'), 'info', { icon: 'check-decagram-outline', detail: doc.number });
+              router.push(
+                `/(app)/payments/new?direction=${doc.kind === 'invoice' ? 'received' : 'paid'}&partyId=${doc.partyId}&documentId=${doc.id}` as never,
+              );
+            },
+          },
+          { label: tr('sales:detail.previewDocument'), icon: 'eye-outline' as const, onPress: () => router.push(`/(app)/documents/${doc.id}`) },
           ...(eInvoiceApplicable && doc.compliance?.eInvoiceStatus !== 'generated' && doc.compliance?.eInvoiceStatus !== 'cancelled'
-            ? [{ label: 'Generate e-invoice', icon: 'shield-check-outline' as const, onPress: () => { setActionsOpen(false); setComplianceSheet('generate'); } }]
+            ? [{ label: tr('sales:detail.generateEInvoice'), icon: 'shield-check-outline' as const, onPress: () => { setActionsOpen(false); setComplianceSheet('generate'); } }]
             : []),
           ...(canCancelIrn
-            ? [{ label: 'Cancel IRN', icon: 'shield-off-outline' as const, onPress: () => { setActionsOpen(false); setComplianceSheet('cancel'); } }]
+            ? [{ label: tr('compliance:einv.cancelIrnShort'), icon: 'shield-off-outline' as const, onPress: () => { setActionsOpen(false); setComplianceSheet('cancel'); } }]
             : []),
           ...(ewayBill
-            ? [{ label: 'View e-way bill', icon: 'truck-fast-outline' as const, onPress: () => { setActionsOpen(false); router.push(`/(app)/compliance/eway/${ewayBill.id}`); } }]
+            ? [{ label: tr('sales:detail.viewEwayBill'), icon: 'truck-fast-outline' as const, onPress: () => { setActionsOpen(false); router.push(`/(app)/compliance/eway/${ewayBill.id}`); } }]
             : ewayRequired
-              ? [{ label: 'Generate e-way bill', icon: 'truck-fast-outline' as const, onPress: () => { setActionsOpen(false); router.push(`/(app)/compliance/eway/new?documentId=${doc.id}`); } }]
+              ? [{ label: tr('compliance:ewb.generate'), icon: 'truck-fast-outline' as const, onPress: () => { setActionsOpen(false); router.push(`/(app)/compliance/eway/new?documentId=${doc.id}`); } }]
               : []),
-          ...conversions.map((c) => ({ label: c.label, icon: c.icon, onPress: () => convert(c.target) })),
-          { label: 'Duplicate', icon: 'content-duplicate' as const, onPress: () => {
-            const id = duplicateDocument(doc.id);
+          ...conversions.map((c) => ({ label: c.label, icon: c.icon, onPress: () => void convert(c.target) })),
+          { label: tr('sales:detail.duplicate'), icon: 'content-duplicate' as const, onPress: () => {
             setActionsOpen(false);
-            if (id) router.push(detailRouteFor(doc.kind, id) as never);
+            void serverSave(() => duplicateDocument(doc.id)).then((res) => {
+              if (res?.result) router.push(detailRouteFor(doc.kind, res.id ?? res.result) as never);
+            });
           } },
-          ...(transitions.length ? [{ label: 'Change status', icon: 'swap-vertical' as const, onPress: () => { setActionsOpen(false); setStatusOpen(true); } }] : []),
-          ...(doc.status !== 'cancelled' && isFinalized(doc.status)
-            ? [{ label: tr('common:documentDetail.cancelKind', { kind: kindName }), icon: 'close-octagon-outline' as const, onPress: () => { setActionsOpen(false); setConfirmCancel(true); } }]
+          ...(transitions.length ? [{ label: tr('common:documentDetail.changeStatus'), icon: 'swap-vertical' as const, onPress: () => { setActionsOpen(false); setStatusOpen(true); } }] : []),
+          // A draft quote can be withdrawn too, where its kind allows that.
+          ...(doc.status !== 'cancelled' && (isFinalized(doc.status) || canTransition(doc.kind, doc.status, 'cancelled'))
+            ? [{ label: tr('common:documentDetail.cancelKind', { kind: kindName }), icon: 'close-octagon-outline' as const, onPress: () => {
+                setActionsOpen(false);
+                // The server refuses while the e-way bill or the IRN is live (in that
+                // order), so say so before the user confirms.
+                if (ewayBill && ewayBillStatusAt(ewayBill, new Date().toISOString()) === 'active') {
+                  toast.show(tr('sales:detail.cancelEwayFirst', { number: ewayBill.ewayBillNumber }), 'warning', { icon: 'truck-alert-outline' });
+                  return;
+                }
+                if (doc.compliance?.eInvoiceStatus === 'generated') {
+                  toast.show(tr('sales:detail.cancelIrnFirst'), 'warning', { icon: 'file-alert-outline' });
+                  return;
+                }
+                setConfirmCancel(true);
+              } }]
             : []),
           ...(!isFinalized(doc.status)
-            ? [{ label: 'Delete draft', icon: 'trash-can-outline' as const, onPress: () => { setActionsOpen(false); setConfirmDelete(true); } }]
+            ? [{ label: tr('sales:detail.deleteDraft'), icon: 'trash-can-outline' as const, onPress: () => { setActionsOpen(false); setConfirmDelete(true); } }]
             : []),
         ].map((a) => (
           <Pressable
@@ -703,7 +945,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
               backgroundColor: pressed ? t.c.card2 : 'transparent',
             })}
           >
-            <MaterialCommunityIcons name={a.icon} size={20} color={t.c.text} />
+            <Icon name={a.icon} size={20} color={t.c.text} />
             <Text variant="body" style={{ flex: 1 }}>
               {a.label}
             </Text>
@@ -724,25 +966,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
           transitions.map((s: DocStatus) => (
             <Pressable
               key={s}
-              onPress={() => {
-                // Finalising from here must pass the same stock check as the editor.
-                const short = !isFinalized(doc.status) && isFinalized(s)
-                  ? stockShortfalls({ doc, items: storeItems, movements: stockMovements, allowNegativeStock: company?.allowNegativeStock })
-                  : [];
-                if (short.length) {
-                  toast.show(
-                    tr('sales:editor.insufficientStock', {
-                      date: formatDate(doc.date),
-                      names: short.map((x) => tr('sales:editor.stockShort', { name: x.name, onHand: x.onHand, needed: x.needed, unit: x.unit })).join(', '),
-                    }),
-                    'error',
-                  );
-                  return;
-                }
-                setDocumentStatus(doc.id, s);
-                setStatusOpen(false);
-                toast.show(tr('common:documentDetail.marked', { status: statusLabel(tr, s) }), 'success');
-              }}
+              onPress={() => markAs(s)}
               accessibilityRole="button"
               accessibilityLabel={tr('common:documentDetail.markAs', { status: statusLabel(tr, s) })}
               style={({ pressed }) => ({
@@ -756,11 +980,24 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
             >
               <Badge label={statusLabel(tr, s)} tone={STATUS_TONE[s]} />
               <View style={{ flex: 1 }} />
-              <MaterialCommunityIcons name="chevron-right" size={18} color={t.c.muted} />
+              <Icon name="chevron-right" size={18} color={t.c.muted} />
             </Pressable>
           ))
         )}
       </Sheet>
+
+      <ConfirmDialog
+        visible={confirmFinalize}
+        title={tr('common:documentEditor.finaliseTitle', { kind: kindName })}
+        message={tr('common:documentEditor.finaliseMessage', { kind: kindName })}
+        confirmLabel={tr('sales:detail.finalise')}
+        icon="check-decagram-outline"
+        onCancel={() => setConfirmFinalize(false)}
+        onConfirm={() => {
+          setConfirmFinalize(false);
+          if (finaliseTo) markAs(finaliseTo, tr('common:documentEditor.finalised', { kind: kindName }));
+        }}
+      />
 
       <ConfirmDialog
         visible={confirmDelete}
@@ -770,24 +1007,23 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
         destructive
         onCancel={() => setConfirmDelete(false)}
         onConfirm={() => {
-          removeDocument(doc.id);
           setConfirmDelete(false);
-          toast.show(tr('sales:detail.draftDeleted'), 'success');
-          goBack(listRouteFor(doc.kind));
+          void serverSave(() => removeDocument(doc.id), tr('sales:detail.draftDeleted'), { icon: 'delete-outline', detail: doc.number }).then((res) => {
+            if (res) goBack(listRouteFor(doc.kind));
+          });
         }}
       />
 
       <ConfirmDialog
         visible={confirmCancel}
-        title={`Cancel ${doc.number}?`}
+        title={tr('sales:detail.cancelTitle', { number: doc.number })}
         message={tr('sales:detail.cancelMessage')}
         confirmLabel={tr('sales:detail.cancelDocument')}
         destructive
         onCancel={() => setConfirmCancel(false)}
         onConfirm={() => {
-          setDocumentStatus(doc.id, 'cancelled');
           setConfirmCancel(false);
-          toast.show(tr('sales:detail.documentCancelled'), 'success');
+          void serverSave(() => setDocumentStatus(doc.id, 'cancelled'), tr('sales:detail.documentCancelled'), { icon: 'close-octagon-outline', detail: doc.number });
         }}
       />
 

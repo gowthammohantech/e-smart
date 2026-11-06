@@ -1,12 +1,15 @@
 import React from 'react';
-import { Pressable, View } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Platform, Pressable, View } from 'react-native';
+import { Icon, type IconName } from './Icon';
 import { useTheme } from '../theme/ThemeProvider';
 import { focusRing, type WebPressState } from '../theme/interaction';
 import { Text, TextTone } from './Text';
 import { Money } from '@esmart/core/lib/money';
 import { formatCompactMoney } from '@esmart/core/lib/format';
 import { Sparkline } from './charts/BarChart';
+import { DeltaBadge } from './DeltaBadge';
+
+const WEB = Platform.OS === 'web';
 
 export function StatTile({
   label,
@@ -16,15 +19,18 @@ export function StatTile({
   icon,
   onPress,
   trend,
+  delta,
   flex = 1,
 }: {
   label: string;
   value: Money | string;
   caption?: string;
   tone?: TextTone;
-  icon?: keyof typeof MaterialCommunityIcons.glyphMap;
+  icon?: IconName;
   onPress?: () => void;
   trend?: number[];
+  /** Change against the period before, in percent (null: nothing to compare with). `inverse` for a cost. */
+  delta?: { pct: number | null; inverse?: boolean; label?: string };
   flex?: number;
 }) {
   const t = useTheme();
@@ -39,22 +45,34 @@ export function StatTile({
         flex,
         backgroundColor: t.c.card,
         borderRadius: t.radius.lg,
-        borderWidth: t.scheme === 'dark' ? 1 : 0,
+        borderWidth: WEB || t.scheme === 'dark' ? 1 : 0,
         borderColor: t.c.line,
         padding: t.spacing.lg,
-        gap: 6,
+        gap: WEB ? t.spacing.sm : 6,
         minHeight: 96,
         justifyContent: 'space-between',
+        ...(WEB ? t.shadow.card : null),
       }}
     >
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-        {icon ? <MaterialCommunityIcons name={icon} size={13} color={t.c.muted} /> : null}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: WEB ? t.spacing.sm : 6 }}>
+        {icon && !WEB ? <Icon name={icon} size={13} color={t.c.muted} /> : null}
         <Text variant="caption" tone="muted" numberOfLines={1} style={{ flex: 1 }}>
           {label}
         </Text>
+        {icon && WEB ? (
+          // On the web the icon sits in a small tinted square, top right.
+          <View style={{ width: 28, height: 28, borderRadius: t.radius.md, backgroundColor: t.c.chip, alignItems: 'center', justifyContent: 'center' }}>
+            <Icon name={icon} size={16} color={t.c.primary} />
+          </View>
+        ) : null}
       </View>
 
-      <Text variant="h3" weight="700" numberOfLines={1} style={{ color: toneColor }}>
+      <Text
+        variant={WEB ? 'h2' : 'h3'}
+        weight={WEB ? '600' : '700'}
+        numberOfLines={1}
+        style={WEB ? { color: toneColor, fontVariant: ['tabular-nums'] } : { color: toneColor }}
+      >
         {display}
       </Text>
 
@@ -66,6 +84,7 @@ export function StatTile({
         ) : (
           <View style={{ flex: 1 }} />
         )}
+        {delta ? <DeltaBadge pct={delta.pct} inverse={delta.inverse} accessibilityLabel={delta.label} /> : null}
         {trend && trend.length > 1 ? <Sparkline values={trend} width={54} height={20} color={toneColor} /> : null}
       </View>
     </View>

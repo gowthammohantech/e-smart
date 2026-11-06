@@ -1,15 +1,26 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Platform, Pressable, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon, type IconName } from './Icon';
 import { useTheme } from '../theme/ThemeProvider';
 import type { WebPressState } from '../theme/interaction';
 import { Text } from './Text';
 import { Button } from './Button';
 
-type IconName = keyof typeof MaterialCommunityIcons.glyphMap;
-
-export type PageAction = { label: string; icon?: IconName; onPress: () => void };
+export type PageAction = {
+  label: string;
+  icon?: IconName;
+  onPress: () => unknown;
+  /** Working: the button spins and can't be pressed again. */
+  loading?: boolean;
+  /** "N" runs it. Off for an action that commits something, like raising an e-way bill. */
+  shortcut?: boolean;
+  /** A Ctrl/⌘ letter the screen also runs it with (e.g. "S"), shown on the button. */
+  keyHint?: string;
+  /** Shown above the button on hover, e.g. why the action is locked on this plan. */
+  tooltip?: string;
+};
 
 type Slot = { action: PageAction | null; owner: object | null };
 type PageActionsValue = { slot: Slot; setSlot: (slot: Slot) => void };
@@ -27,12 +38,14 @@ export function PageActionsProvider({ children }: { children: React.ReactNode })
 
   // "N" anywhere outside a text field runs the page's primary action.
   useEffect(() => {
-    if (Platform.OS !== 'web' || typeof document === 'undefined' || !action) return undefined;
+    if (Platform.OS !== 'web' || typeof document === 'undefined' || !action || action.shortcut === false) return undefined;
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
       const typing = !!target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
       if (typing || e.metaKey || e.ctrlKey || e.altKey || e.key.toLowerCase() !== 'n') return;
       e.preventDefault();
+      // Held down, or while it is already running: once.
+      if (e.repeat || action.loading) return;
       action.onPress();
     };
     document.addEventListener('keydown', onKey);
@@ -55,14 +68,18 @@ export function usePageAction(action: PageAction | null): boolean {
   });
   const label = action?.label;
   const icon = action?.icon;
+  const loading = action?.loading;
+  const shortcut = action?.shortcut;
+  const keyHint = action?.keyHint;
+  const tooltip = action?.tooltip;
   const setSlot = ctx?.setSlot;
 
   useFocusEffect(
     useCallback(() => {
       if (!setSlot || !label) return undefined;
-      setSlot({ action: { label, icon, onPress: () => onPress.current?.() }, owner });
+      setSlot({ action: { label, icon, loading, shortcut, keyHint, tooltip, onPress: () => onPress.current?.() }, owner });
       return () => setSlot({ action: null, owner: null });
-    }, [setSlot, label, icon, owner]),
+    }, [setSlot, label, icon, loading, shortcut, keyHint, tooltip, owner]),
   );
 
   return !!ctx && !!action;
@@ -98,6 +115,7 @@ export function PageHeader({
   right?: React.ReactNode;
 }) {
   const t = useTheme();
+  const { t: tr } = useTranslation(['common']);
   const action = useHeaderAction();
   useDocumentTitle(title);
 
@@ -105,7 +123,7 @@ export function PageHeader({
     <View
       style={{
         paddingHorizontal: t.spacing.lg,
-        paddingTop: t.spacing.xl,
+        paddingTop: t.spacing.xxl,
         paddingBottom: t.spacing.lg,
         backgroundColor: t.c.bg,
         gap: t.spacing.xs,
@@ -115,7 +133,7 @@ export function PageHeader({
         <Pressable
           onPress={onBack}
           accessibilityRole="link"
-          accessibilityLabel={backLabel ? `Back to ${backLabel}` : 'Back'}
+          accessibilityLabel={backLabel ? tr('common:component.backTo', { label: backLabel }) : tr('common:action.back')}
           style={(state) => ({
             flexDirection: 'row',
             alignItems: 'center',
@@ -124,9 +142,9 @@ export function PageHeader({
             opacity: (state as WebPressState).hovered ? 0.7 : 1,
           })}
         >
-          <MaterialCommunityIcons name="chevron-left" size={18} color={t.c.muted} />
-          <Text variant="small" tone="muted" weight="600" numberOfLines={1}>
-            {backLabel || 'Back'}
+          <Icon name="chevron-left" size={16} color={t.c.muted} />
+          <Text variant="small" tone="muted" weight="500" numberOfLines={1}>
+            {backLabel || tr('common:action.back')}
           </Text>
         </Pressable>
       ) : null}
@@ -142,7 +160,7 @@ export function PageHeader({
           ) : null}
         </View>
         {right}
-        {action ? <Button title={action.label} icon={action.icon ?? 'plus'} onPress={action.onPress} /> : null}
+        {action ? <Button title={action.label} icon={action.icon ?? 'plus'} onPress={action.onPress} loading={action.loading} shortcut={action.keyHint} tooltip={action.tooltip} /> : null}
       </View>
     </View>
   );

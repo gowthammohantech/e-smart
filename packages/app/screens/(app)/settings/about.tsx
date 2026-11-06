@@ -8,49 +8,47 @@ import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
 import { Badge } from '@esmart/ui/components/Badge';
 import { ListRow } from '@esmart/ui/components/ListRow';
-import { ILLUSTRATION_CREDIT } from '@esmart/ui/illustrations/registry';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { appVersion } from '../../../lib/appVersion';
+import { LEGAL } from '../../../lib/legal';
+import { useToast } from '@esmart/ui/components/Toast';
 
 export default function About() {
   const t = useTheme();
   const { t: tr } = useTranslation(['nav', 'settings']);
+  const { label } = appVersion();
+  const toast = useToast();
+  // A phone with no browser or mail app set up can't open these: say so instead of doing nothing.
+  const open = (url: string) => () => Linking.openURL(url).catch(() => toast.show(url.replace(/^mailto:/, ''), 'info', { icon: 'link-variant' }));
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('nav:title.about') }} />
 
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40, gap: t.spacing.lg }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <Card style={{ alignItems: 'center', gap: t.spacing.md, paddingVertical: t.spacing.xxl }}>
           <BrandLogo height={64} />
           <Text variant="h3" weight="700">{tr('settings:about.appName')}</Text>
-          <Badge label={tr('settings:about.build', { version: '1.0.0' })} tone="info" />
+          <Badge label={tr('settings:about.build', { version: label })} tone="info" />
           <Text variant="caption" tone="muted" center style={{ maxWidth: 280, lineHeight: 18 }}>{tr('settings:about.pitch')}</Text>
         </Card>
 
         <Card padded={false}>
-          <ListRow title={tr('settings:about.version')} icon="information-outline" right={<Text variant="small" tone="muted">1.0.0 (1)</Text>} />
+          <ListRow title={tr('settings:about.version')} icon="information-outline" right={<Text variant="small" tone="muted">{label}</Text>} />
           <ListRow title={tr('settings:about.platform')} icon="cellphone" right={<Text variant="small" tone="muted">{tr('settings:about.sdk')}</Text>} />
           <ListRow title={tr('settings:about.data')} icon="database-outline" right={<Text variant="small" tone="muted">{tr('settings:about.syncedData')}</Text>} divider={false} />
         </Card>
 
         <Card padded={false}>
-          <ListRow
-            title={ILLUSTRATION_CREDIT.label}
-            subtitle={tr('settings:about.illustrations')}
-            icon="palette-outline"
-            chevron
-            onPress={() => Linking.openURL(ILLUSTRATION_CREDIT.url).catch(() => {})}
-          />
-          <ListRow title={tr('settings:about.privacy')} icon="shield-account-outline" chevron onPress={() => Linking.openURL('https://example.com/privacy').catch(() => {})} />
-          <ListRow title={tr('settings:about.terms')} icon="file-document-outline" chevron onPress={() => Linking.openURL('https://example.com/terms').catch(() => {})} />
-          <ListRow title={tr('settings:about.support')} icon="lifebuoy" chevron onPress={() => Linking.openURL('mailto:support@example.com').catch(() => {})} divider={false} />
+          <ListRow title={tr('settings:about.privacy')} icon="shield-account-outline" chevron onPress={open(LEGAL.privacy)} />
+          <ListRow title={tr('settings:about.terms')} icon="file-document-outline" chevron onPress={open(LEGAL.terms)} />
+          <ListRow title={tr('settings:about.support')} icon="lifebuoy" chevron onPress={open(LEGAL.support)} divider={false} />
         </Card>
 
         <Card variant="flat" style={{ gap: t.spacing.sm }}>
           <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('settings:about.noteHeading')}</Text>
           <Text variant="caption" tone="muted" style={{ lineHeight: 19 }}>
-            Your books live on the server. This device keeps a working copy, so you can carry on offline; changes are
-            queued and sent when you are back online, and the server validates every finalised record before it counts.
+            {tr('settings:about.note')}
           </Text>
         </Card>
       </ScrollView>

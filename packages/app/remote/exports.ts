@@ -1,5 +1,6 @@
 import type { Schema } from '@esmart/api-client';
 import { api } from './api';
+import { RemoteError } from './errors';
 
 export type ExportFormat = 'json-backup' | 'csv-zip' | 'tally-xml';
 export type BackupSettings = Schema<'BackupSettings'>;
@@ -18,11 +19,11 @@ export async function exportCompany(companyId: string, format: ExportFormat): Pr
   let current = job;
   const started = Date.now();
   while (current?.id && current.status !== 'completed' && current.status !== 'failed') {
-    if (Date.now() - started > GIVE_UP_MS) throw new Error('The export is taking longer than expected; try again shortly');
+    if (Date.now() - started > GIVE_UP_MS) throw new RemoteError('exportSlow', 'The export is taking longer than expected; try again shortly');
     await wait(POLL_MS);
     current = (await api.GET('/companies/{companyId}/exports/{id}', { params: { path: { companyId, id: current.id } } })).data;
   }
-  if (current?.status !== 'completed' || !current.downloadUrl) throw new Error('The export failed');
+  if (current?.status !== 'completed' || !current.downloadUrl) throw new RemoteError('exportFailed', 'The export failed');
   return current.downloadUrl;
 }
 
@@ -36,4 +37,14 @@ export async function saveBackupSettings(companyId: string, settings: BackupSett
   void lastBackupAt;
   const { data } = await api.PUT('/companies/{companyId}/backup-settings', { params: { path: { companyId } }, body });
   return data ?? settings;
+}
+
+/** GSTR-1 for a month (`MMYYYY`) in the JSON the GST portal's offline tool imports, as bytes. */
+export async function gstr1Json(companyId: string, period: string): Promise<Uint8Array> {
+  const { data } = await api.GET('/companies/{companyId}/gst/gstr1/export', {
+    params: { path: { companyId }, query: { period, format: 'gstn-json' } },
+    parseAs: 'arrayBuffer',
+  });
+  if (!data) throw new RemoteError('exportFailed', 'The server returned no file');
+  return new Uint8Array(data as unknown as ArrayBuffer);
 }

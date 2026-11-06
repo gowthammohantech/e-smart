@@ -4,7 +4,7 @@ import type { Config } from '../config';
 import { LOGO_CID, LOGO_PNG_BASE64 } from '../lib/emailLogo';
 import { sendPay4smsOtp } from './pay4sms';
 
-export type SentMessage = { channel: 'sms' | 'email' | 'whatsapp' | 'push'; to: string; subject?: string; text: string; at: Date };
+export type SentMessage = { channel: 'sms' | 'email' | 'whatsapp' | 'push'; to: string; subject?: string; text: string; html?: string; inline?: InlineImage[]; at: Date };
 
 /** In-process outbox. The log providers write here; tests read OTPs and links from it. */
 export class Outbox {
@@ -29,16 +29,37 @@ export interface SmsProvider {
 /** The logo goes along as an inline attachment when the email's HTML refers to it. */
 const inlineLogo = (html?: string) => (html?.includes(`cid:${LOGO_CID}`) ? { name: 'logo.png', contentType: 'image/png', base64: LOGO_PNG_BASE64, cid: LOGO_CID } : undefined);
 
+/** An image carried inside the email, referred to from its HTML as `cid:<cid>`. */
+export type InlineImage = { cid: string; name: string; contentType: string; base64: string };
+
 export interface EmailProvider {
-  send(msg: { to: string; subject: string; text: string; html?: string }): Promise<SendResult>;
+  send(msg: { to: string; subject: string; text: string; html?: string; inline?: InlineImage[] }): Promise<SendResult>;
 }
+
+/** Every image the email carries: the Elixir Books mark when its HTML uses it, and any the sender added. */
+const inlineImages = (msg: { html?: string; inline?: InlineImage[] }): InlineImage[] => {
+  const logo = inlineLogo(msg.html);
+  return [...(logo ? [logo] : []), ...(msg.inline ?? [])];
+};
 export interface WhatsAppProvider {
   /** Sends text, optionally with a document link (a PDF share link). */
   send(msg: { to: string; text: string; documentUrl?: string; filename?: string }): Promise<SendResult>;
 }
+export type PushMessage = { title: string; body: string; data?: Record<string, string>; /** Android channel. */ channelId?: string };
+/** What the push service said: a ticket per accepted message, and tokens it already knows are gone. */
+export type PushOutcome = { tickets: { token: string; ticketId: string }[]; deadTokens: string[] };
+
 export interface PushProvider {
-  send(tokens: string[], msg: { title: string; body: string; data?: Record<string, string> }): Promise<void>;
+  send(tokens: string[], msg: PushMessage): Promise<PushOutcome>;
+  /** Of these tickets, the ones whose device is gone (uninstalled, signed out of the store account). */
+  deadTickets(ticketIds: string[]): Promise<string[]>;
 }
+
+const EXPO_PUSH = 'https://exp.host/--/api/v2/push';
+/** Expo takes at most 100 messages, and 1000 receipt ids, per request. */
+const chunk = <T>(list: T[], size: number) => Array.from({ length: Math.ceil(list.length / size) }, (_, i) => list.slice(i * size, i * size + size));
+
+type ExpoTicket = { status: 'ok' | 'error'; id?: string; details?: { error?: string } };
 
 /**
  * The bare address from `Name <addr>`. ACS takes only the address; the display
@@ -95,11 +116,11 @@ export function createMessaging(config: Config, outbox: Outbox, log: (msg: strin
       ? {
           async send(msg) {
             // Plain fetch against Resend's REST API, so there is no SDK to carry.
-            const logo = inlineLogo(msg.html);
+            const images = inlineImages(msg);
             const res = await fetch('https://api.resend.com/emails', {
               method: 'POST',
               headers: { authorization: `Bearer ${config.RESEND_API_KEY ?? ''}`, 'content-type': 'application/json' },
-              body: JSON.stringify({ from: config.EMAIL_FROM, to: [msg.to], subject: msg.subject, text: msg.text, ...(msg.html ? { html: msg.html } : {}), ...(config.EMAIL_REPLY_TO ? { reply_to: config.EMAIL_REPLY_TO } : {}), ...(logo ? { attachments: [{ filename: logo.name, content: logo.base64, content_type: logo.contentType, content_id: logo.cid }] } : {}) }),
+              body: JSON.stringify({ from: config.EMAIL_FROM, to: [msg.to], subject: msg.subject, text: msg.text, ...(msg.html ? { html: msg.html } : {}), ...(config.EMAIL_REPLY_TO ? { reply_to: config.EMAIL_REPLY_TO } : {}), ...(images.length ? { attachments: images.map((i) => ({ filename: i.name, content: i.base64, content_type: i.contentType, content_id: i.cid })) } : {}) }),
             });
             const body = (await res.json().catch(() => ({}))) as { id?: string; message?: string };
             if (!res.ok) throw new Error(`Resend ${res.status}${body.message ? `: ${body.message}` : ''}`);
@@ -110,13 +131,13 @@ export function createMessaging(config: Config, outbox: Outbox, log: (msg: strin
       ? {
           async send(msg) {
             acs ??= new EmailClient(config.ACS_CONNECTION_STRING ?? '');
-            const logo = inlineLogo(msg.html);
+            const images = inlineImages(msg);
             const poller = await acs.beginSend({
               senderAddress: emailAddress(config.EMAIL_FROM),
               content: { subject: msg.subject, plainText: msg.text, ...(msg.html ? { html: msg.html } : {}) },
               recipients: { to: [{ address: msg.to }] },
               ...(config.EMAIL_REPLY_TO ? { replyTo: [{ address: config.EMAIL_REPLY_TO }] } : {}),
-              ...(logo ? { attachments: [{ name: logo.name, contentType: logo.contentType, contentInBase64: logo.base64, contentId: logo.cid }] } : {}),
+              ...(images.length ? { attachments: images.map((i) => ({ name: i.name, contentType: i.contentType, contentInBase64: i.base64, contentId: i.cid })) } : {}),
             });
             const out = await poller.pollUntilDone();
             if (out.status !== 'Succeeded') throw new Error(`ACS email ${out.status}${out.error?.message ? `: ${out.error.message}` : ''}`);
@@ -144,7 +165,7 @@ export function createMessaging(config: Config, outbox: Outbox, log: (msg: strin
         }
       : {
           async send(msg) {
-            outbox.push({ channel: 'email', to: msg.to, subject: msg.subject, text: msg.text });
+            outbox.push({ channel: 'email', to: msg.to, subject: msg.subject, text: msg.text, html: msg.html, inline: msg.inline });
             log(`[email → ${msg.to}] ${msg.subject}\n${msg.text}`);
             return { providerMessageId: localId('email') };
           },
@@ -180,17 +201,46 @@ export function createMessaging(config: Config, outbox: Outbox, log: (msg: strin
     config.PUSH_PROVIDER === 'expo'
       ? {
           async send(tokens, msg) {
-            if (!tokens.length) return;
-            await fetch('https://exp.host/--/api/v2/push/send', {
-              method: 'POST',
-              headers: { 'content-type': 'application/json' },
-              body: JSON.stringify(tokens.map((to) => ({ to, title: msg.title, body: msg.body, data: msg.data }))),
-            });
+            const outcome: PushOutcome = { tickets: [], deadTokens: [] };
+            for (const part of chunk(tokens, 100)) {
+              const res = await fetch(`${EXPO_PUSH}/send`, {
+                method: 'POST',
+                headers: { 'content-type': 'application/json', accept: 'application/json' },
+                body: JSON.stringify(part.map((to) => ({ to, title: msg.title, body: msg.body, data: msg.data, sound: 'default', channelId: msg.channelId }))),
+                signal: AbortSignal.timeout(15_000),
+              });
+              if (!res.ok) throw new Error(`Expo push ${res.status}`);
+              const { data } = (await res.json()) as { data?: ExpoTicket[] };
+              (data ?? []).forEach((ticket, i) => {
+                if (ticket.status === 'ok' && ticket.id) outcome.tickets.push({ token: part[i], ticketId: ticket.id });
+                else if (ticket.details?.error === 'DeviceNotRegistered') outcome.deadTokens.push(part[i]);
+              });
+            }
+            return outcome;
+          },
+          async deadTickets(ticketIds) {
+            const dead: string[] = [];
+            for (const part of chunk(ticketIds, 1000)) {
+              const res = await fetch(`${EXPO_PUSH}/getReceipts`, {
+                method: 'POST',
+                headers: { 'content-type': 'application/json', accept: 'application/json' },
+                body: JSON.stringify({ ids: part }),
+                signal: AbortSignal.timeout(15_000),
+              });
+              if (!res.ok) throw new Error(`Expo receipts ${res.status}`);
+              const { data } = (await res.json()) as { data?: Record<string, ExpoTicket> };
+              for (const [id, receipt] of Object.entries(data ?? {})) if (receipt.details?.error === 'DeviceNotRegistered') dead.push(id);
+            }
+            return dead;
           },
         }
       : {
           async send(tokens, msg) {
             for (const to of tokens) outbox.push({ channel: 'push', to, subject: msg.title, text: msg.body });
+            return { tickets: [], deadTokens: [] };
+          },
+          async deadTickets() {
+            return [];
           },
         };
 

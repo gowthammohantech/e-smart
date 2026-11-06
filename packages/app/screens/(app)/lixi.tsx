@@ -13,7 +13,8 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Feather } from '@expo/vector-icons';
+import { Icon, type IconName } from '@esmart/ui/components/Icon';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
@@ -22,27 +23,13 @@ import { Text } from '@esmart/ui/components/Text';
 import { WEB_INPUT_RESET, webFocusHalo } from '@esmart/ui/components/Field';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { LIXI, LixiMark, LixiOrb } from '@esmart/ui/components/LixiOrb';
-import { greet, lixiSuggestions, LixiAction, LixiContext, LixiReply } from '../../features/lixi/brain';
+import { greetWith, lixiSuggestions, LixiAction, LixiReply } from '../../features/lixi/brain';
 import { askRemote, confirmRemote, remoteLixiAvailable, type PendingLixiAction } from '../../features/lixi/remote';
 import { detailRouteFor } from '../../features/documents/DocumentEditor';
 import { describeError } from '../../remote/errors';
-import {
-  useBaseCurrency,
-  useComplianceSummary,
-  useCurrentUser,
-  useDocuments,
-  useExpenses,
-  useItems,
-  useParties,
-  usePayables,
-  usePayments,
-  usePlan,
-  useReceivables,
-  useStockLevels,
-} from '../../store/selectors';
-import { summarizeTax } from '@esmart/core/domain/reports';
-import { isLowStock } from '@esmart/core/domain/stockLedger';
-import { resolveRange } from '@esmart/core/lib/date';
+import { useComplianceSummary, useCurrentUser, useDashboardScope, usePlan } from '../../store/selectors';
+import { useHomeHub } from '../../remote/queries';
+import { hasModule } from '@esmart/core/domain/plan';
 import { useGoBack } from '../../navigation/useGoBack';
 
 type Message = { id: string; from: 'me' | 'lixi'; reply: LixiReply };
@@ -65,46 +52,11 @@ export default function LixiChat({ onClose, initialAsk }: LixiChatProps = {}) {
   const ask = initialAsk ?? routeAsk;
   const insets = useSafeAreaInsets();
 
-  const currency = useBaseCurrency();
-  const documents = useDocuments();
-  const payments = usePayments();
-  const expenses = useExpenses();
-  const parties = useParties();
-  const receivables = useReceivables();
-  const payables = usePayables();
-  const items = useItems({ activeOnly: true });
-  const stock = useStockLevels();
   const compliance = useComplianceSummary();
   const user = useCurrentUser();
   const plan = usePlan();
-
-  const ctx: LixiContext = useMemo(
-    () => ({
-      currency,
-      documents,
-      payments,
-      expenses,
-      parties,
-      receivables,
-      payables,
-      lowStock: items
-        .filter((i) => isLowStock(i, stock[i.id] ?? 0))
-        .map((i) => ({ name: i.name, onHand: stock[i.id] ?? 0, unit: i.unit })),
-      compliance: {
-        failed: compliance.eInvoice.failed,
-        generated: compliance.eInvoice.generated,
-        pending: compliance.eInvoice.pending,
-        ewbActive: compliance.eway.active,
-        ewbExpiringSoon: compliance.expiringSoon,
-        ewbExpired: compliance.eway.expired,
-        ewbMissing: compliance.ewayOutstanding,
-      },
-      monthTax: summarizeTax(documents, currency, { range: resolveRange('thisMonth') }).outwardTotal,
-      userName: user?.name,
-      plan,
-    }),
-    [currency, documents, payments, expenses, parties, receivables, payables, items, stock, compliance, user?.name, plan],
-  );
+  // The greeting's heads-up comes from the same server figures as the Home tab.
+  const hub = useHomeHub(useDashboardScope()).data;
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState('');
@@ -165,7 +117,16 @@ export default function LixiChat({ onClose, initialAsk }: LixiChatProps = {}) {
     router.push((a.type === 'document' ? detailRouteFor(a.kind, a.id) : a.route) as never);
   };
 
-  const intro = useMemo(() => greet(ctx), [ctx]);
+  const intro = useMemo(
+    () =>
+      greetWith({
+        userName: user?.name,
+        overdue: hub?.receivable.overdueCount ?? 0,
+        gst: compliance.eInvoice.failed + compliance.expiringSoon,
+        lowStock: hasModule(plan ?? 'pro', 'inventory') ? (hub?.lowStockCount ?? 0) : 0,
+      }),
+    [user?.name, hub, compliance, plan],
+  );
 
   const asked = useRef(false);
   useEffect(() => {
@@ -178,7 +139,7 @@ export default function LixiChat({ onClose, initialAsk }: LixiChatProps = {}) {
 
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: t.c.bg }}
+      style={{ flex: 1 }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       {onClose ? (
@@ -211,7 +172,7 @@ export default function LixiChat({ onClose, initialAsk }: LixiChatProps = {}) {
               accessibilityLabel={tr('lixi:ui.newChat')}
               style={{ padding: 6 }}
             >
-              <MaterialCommunityIcons name="broom" size={20} color={t.c.muted} />
+              <Icon name="broom" size={20} color={t.c.muted} />
             </Pressable>
           ) : null}
           {/* Only the switch for now; it doesn't change anything yet. */}
@@ -219,7 +180,7 @@ export default function LixiChat({ onClose, initialAsk }: LixiChatProps = {}) {
             onPress={() => setSoundOn((on) => !on)}
             hitSlop={8}
             accessibilityRole="button"
-            accessibilityLabel={soundOn ? 'Mute Lixi' : 'Unmute Lixi'}
+            accessibilityLabel={soundOn ? tr('lixi:ui.mute') : tr('lixi:ui.unmute')}
             accessibilityState={{ selected: soundOn }}
             style={{ padding: 6 }}
           >
@@ -257,7 +218,7 @@ export default function LixiChat({ onClose, initialAsk }: LixiChatProps = {}) {
           accessibilityLabel={tr('lixi:ui.closeLixi')}
           style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: t.c.card, alignItems: 'center', justifyContent: 'center' }}
         >
-          <MaterialCommunityIcons name="chevron-down" size={24} color={t.c.text} />
+          <Icon name="chevron-down" size={24} color={t.c.text} />
         </Pressable>
         <LixiOrb size={38} thinking={thinking} />
         <View style={{ flex: 1 }}>
@@ -275,7 +236,7 @@ export default function LixiChat({ onClose, initialAsk }: LixiChatProps = {}) {
             accessibilityRole="button"
             accessibilityLabel={tr('lixi:ui.newChat')}
           >
-            <MaterialCommunityIcons name="broom" size={22} color={t.c.muted} />
+            <Icon name="broom" size={22} color={t.c.muted} />
           </Pressable>
         ) : null}
       </View>
@@ -367,7 +328,7 @@ export default function LixiChat({ onClose, initialAsk }: LixiChatProps = {}) {
             transform: [{ scale: pressed ? 0.92 : 1 }],
           })}
         >
-          <MaterialCommunityIcons name="arrow-up" size={22} color={draft.trim() && !thinking ? '#fff' : t.c.muted} />
+          <Icon name="arrow-up" size={22} color={draft.trim() && !thinking ? '#fff' : t.c.muted} />
         </Pressable>
       </View>
 
@@ -415,7 +376,7 @@ function Chip({ label, icon, onPress }: { label: string; icon?: string; onPress:
       })}
     >
       {icon ? (
-        <MaterialCommunityIcons name={icon as keyof typeof MaterialCommunityIcons.glyphMap} size={16} color={t.c.primary} />
+        <Icon name={icon as IconName} size={16} color={t.c.primary} />
       ) : null}
       <Text variant="small" tone="primary" weight="600">
         {label}

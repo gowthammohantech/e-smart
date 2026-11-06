@@ -8,7 +8,9 @@ import { SIDEBAR_COMPACT_WIDTH, SIDEBAR_WIDTH, sidebarWidth } from '../../src/si
 import { TopBar } from '../../src/shell/TopBar';
 import { LixiPanel } from '../../src/shell/LixiPanel';
 import { SettingsNav } from '../../src/shell/SettingsNav';
-import { CONTENT_MAX_WIDTH, useIsDesktop } from '../../src/layout';
+import { MAIN_ID, SkipLink } from '../../src/shell/SkipLink';
+import { CONTENT_MAX_WIDTH, useBreakpoint, useIsDesktop } from '../../src/layout';
+import { PageSurface } from '@esmart/ui/components/Doodles';
 
 /**
  * The signed-in shell for the browser. On a desktop: the sidebar on the
@@ -19,6 +21,7 @@ import { CONTENT_MAX_WIDTH, useIsDesktop } from '../../src/layout';
 export default function WebAppLayout() {
   const t = useTheme();
   const desktop = useIsDesktop();
+  const wide = useBreakpoint() === 'wide';
   const pathname = usePathname();
   // Settings pages get their own list of pages beside them (and a narrower,
   // form-width column); everything else uses the full content width.
@@ -29,6 +32,10 @@ export default function WebAppLayout() {
 
   const stack = (
     <Stack
+      screenLayout={({ children, route }) =>
+        // The tabs draw a surface per tab themselves.
+        route.name === '(tabs)' ? children : <PageSurface>{children}</PageSurface>
+      }
       screenOptions={{
         headerShown: true,
         headerStyle: { backgroundColor: t.c.bg },
@@ -58,15 +65,21 @@ export default function WebAppLayout() {
     </Stack>
   );
 
-  if (!desktop) return <View style={{ flex: 1, backgroundColor: t.c.bg }}>{stack}</View>;
+  if (!desktop)
+    return (
+      <View style={{ flex: 1, backgroundColor: t.c.bg, outlineStyle: 'none' } as object} role="main" id={MAIN_ID} tabIndex={-1}>
+        {stack}
+      </View>
+    );
 
   return (
     <PageActionsProvider>
       <View style={{ flex: 1, flexDirection: 'row', backgroundColor: t.c.bg }}>
+        <SkipLink />
         <Sidebar />
         <View style={{ flex: 1 }}>
           <TopBar />
-          <View style={{ flex: 1, alignItems: 'center', paddingHorizontal: t.spacing.lg }}>
+          <View style={{ flex: 1, alignItems: 'center', paddingHorizontal: wide ? t.spacing.xxl : t.spacing.lg }}>
             {/* A folded sidebar hands its width to the page: the column's cap
                 grows by exactly what the sidebar gave up. */}
             <Animated.View
@@ -79,12 +92,20 @@ export default function WebAppLayout() {
                   extrapolate: 'clamp',
                 }),
                 flexDirection: 'row',
-                gap: t.spacing.lg,
+                gap: t.spacing.xxl,
               }}
             >
               {/* Kept in place (null when hidden) so the Stack never remounts. */}
               {inSettings ? <SettingsNav /> : null}
-              <View style={{ flex: 1, maxWidth: inSettings && !wideSettings ? 880 : undefined }}>{stack}</View>
+              {/* The landmark the skip link lands on: focusable by script, not by Tab. */}
+              <View
+                role="main"
+                id={MAIN_ID}
+                tabIndex={-1}
+                style={{ flex: 1, maxWidth: inSettings && !wideSettings ? 880 : undefined, outlineStyle: 'none' } as object}
+              >
+                {stack}
+              </View>
             </Animated.View>
           </View>
         </View>
@@ -93,3 +114,6 @@ export default function WebAppLayout() {
     </PageActionsProvider>
   );
 }
+
+/** A crash inside the signed-in app keeps the way home. */
+export { ErrorBoundary } from '@esmart/app/screens/(app)/_layout';

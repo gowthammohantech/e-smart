@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import Svg, { G, Path, Rect } from 'react-native-svg';
 import { QrEcc, qrMatrix, qrSvgPath } from '@esmart/core/lib/qr';
@@ -27,8 +28,9 @@ export function QrCode({
   size = 132,
   ecc = 'M',
   quietZone = 4,
-  accessibilityLabel = 'Signed QR code',
+  accessibilityLabel,
 }: Props) {
+  const { t: tr } = useTranslation(['common']);
   const matrix = useMemo(() => {
     try {
       return qrMatrix(value, ecc);
@@ -46,7 +48,7 @@ export function QrCode({
     <View
       accessible
       accessibilityRole="image"
-      accessibilityLabel={accessibilityLabel}
+      accessibilityLabel={accessibilityLabel ?? tr('common:component.signedQr')}
       /* flexShrink 0 matters: a squashed symbol still looks like a QR code and
          no longer scans, and a sheet or a row will happily compress it. */
       style={{ width: size, height: size, flexShrink: 0, borderRadius: 4, overflow: 'hidden' }}

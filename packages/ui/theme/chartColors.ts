@@ -31,7 +31,15 @@ export const SERIES_LIGHT = [
 
 export const MAX_SERIES = SERIES_DARK.length;
 
+/** The browser's brand blue is a step deeper (webTokens.ts); its first slot follows it. */
+const WEB_SERIES_DARK = ['#3B8BFF', ...SERIES_DARK.slice(1)] as const;
+const WEB_SERIES_LIGHT = ['#0A6CF0', ...SERIES_LIGHT.slice(1)] as const;
+
+// In a browser, told without react-native: the admin console (Vite, no React Native) uses this file too.
+const onWeb = typeof document !== 'undefined';
+
 export function seriesPalette(scheme: 'light' | 'dark'): readonly string[] {
+  if (onWeb) return scheme === 'dark' ? WEB_SERIES_DARK : WEB_SERIES_LIGHT;
   return scheme === 'dark' ? SERIES_DARK : SERIES_LIGHT;
 }
 

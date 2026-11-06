@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { loadConfig } from './config';
+import { describe, expect, it, vi } from 'vitest';
+import { LIXI_DEFAULT_MODELS, lixiModels, loadConfig } from './config';
 
 /** Every provider real and credentialed: the baseline each case breaks one thing in. */
 const ready = {
@@ -7,6 +7,8 @@ const ready = {
   JWT_SECRET: 'x'.repeat(32),
   CREDENTIALS_KEY: Buffer.alloc(32, 1).toString('base64'),
   CORS_ORIGINS: 'https://app.example.in,https://admin.example.in',
+  APP_URL: 'https://app.example.in',
+  PUBLIC_BASE_URL: 'https://api.example.in',
   SMS_PROVIDER: 'msg91',
   MSG91_AUTH_KEY: 'k',
   MSG91_TEMPLATE_ID: 't',
@@ -19,9 +21,13 @@ const ready = {
   WHATSAPP_WEBHOOK_SECRET: 'whatsapp-live-secret',
   PUSH_PROVIDER: 'expo',
   STORAGE_PROVIDER: 's3',
+  AWS_ACCESS_KEY_ID: 'AKIA',
+  AWS_SECRET_ACCESS_KEY: 'secret',
   PDF_PROVIDER: 'chromium',
   COMPLIANCE_PROVIDER: 'gsp',
-  GSP_BASE_URL: 'https://gsp.example.in',
+  TAXATION_ADAEQUARE_BASE_URL: 'https://gsp.example.in',
+  TAXATION_ADAEQUARE_APP_ID: 'app-id',
+  TAXATION_ADAEQUARE_APP_SECRET: 'app-secret',
   GSTIN_PROVIDER: 'disabled',
   OCR_PROVIDER: 'disabled',
   FX_PROVIDER: 'openexchangerates',
@@ -39,6 +45,10 @@ describe('production config guards', () => {
     const config = loadConfig(ready);
     expect(config.GSTIN_PROVIDER).toBe('disabled');
     expect(config.OCR_PROVIDER).toBe('disabled');
+    // Unset, returns are prepared but not filed, so a deployment from before them still starts.
+    expect(config.RETURNS_PROVIDER).toBe('disabled');
+    expect(config.GST_FILING_ENABLED).toBe(false);
+    expect(() => loadConfig({ ...ready, RETURNS_PROVIDER: 'simulator' })).toThrow(/RETURNS_PROVIDER=simulator/);
   });
 
   it('keeps every simulator available outside production', () => {
@@ -83,7 +93,9 @@ describe('production config guards', () => {
     ['ACS_CONNECTION_STRING', /ACS_CONNECTION_STRING/],
     ['WHATSAPP_TOKEN', /WHATSAPP_TOKEN/],
     ['WHATSAPP_PHONE_NUMBER_ID', /WHATSAPP_PHONE_NUMBER_ID/],
-    ['GSP_BASE_URL', /GSP_BASE_URL/],
+    ['TAXATION_ADAEQUARE_BASE_URL', /TAXATION_ADAEQUARE_BASE_URL/],
+    ['TAXATION_ADAEQUARE_APP_ID', /TAXATION_ADAEQUARE_APP_ID/],
+    ['TAXATION_ADAEQUARE_APP_SECRET', /TAXATION_ADAEQUARE_APP_SECRET/],
     ['RAZORPAY_KEY_ID', /RAZORPAY_KEY_ID/],
     ['RAZORPAY_KEY_SECRET', /RAZORPAY_KEY_SECRET/],
     ['OPENEXCHANGERATES_APP_ID', /OPENEXCHANGERATES_APP_ID/],
@@ -93,8 +105,26 @@ describe('production config guards', () => {
     expect(() => loadConfig({ ...ready, [key]: undefined })).toThrow(pattern);
   });
 
+  it('takes any OpenAI-compatible server for Lixi, naming the model', () => {
+    const openai = { ...ready, ASSISTANT_PROVIDER: 'openai', ANTHROPIC_API_KEY: undefined, OPENAI_API_KEY: 'sk-x', LIXI_MODEL: 'gpt-5-mini' };
+    expect(loadConfig(openai).OPENAI_BASE_URL).toBe('https://api.openai.com/v1');
+    expect(() => loadConfig({ ...openai, LIXI_MODEL: undefined })).toThrow(/LIXI_MODEL/);
+    // OpenRouter needs no model named: the built-in free primary and secondary are used.
+    const openRouter = loadConfig({ ...openai, LIXI_MODEL: undefined, OPENAI_BASE_URL: 'https://openrouter.ai/api/v1' });
+    expect(lixiModels(openRouter)).toEqual([LIXI_DEFAULT_MODELS.primary, LIXI_DEFAULT_MODELS.secondary]);
+    // What the environment sets wins, each one on its own.
+    expect(lixiModels({ ...openRouter, LIXI_MODEL: 'openai/gpt-5-mini' })).toEqual(['openai/gpt-5-mini', LIXI_DEFAULT_MODELS.secondary]);
+    expect(lixiModels({ ...openRouter, LIXI_MODEL: 'a/one', LIXI_SECONDARY_MODEL: 'b/two' })).toEqual(['a/one', 'b/two']);
+    // Off OpenRouter there are no defaults to fall back to.
+    expect(lixiModels(loadConfig(openai))).toEqual(['gpt-5-mini']);
+    expect(() => loadConfig({ ...openai, OPENAI_API_KEY: undefined })).toThrow(/OPENAI_API_KEY/);
+    // A local Ollama or vLLM server needs no key.
+    expect(loadConfig({ ...openai, OPENAI_API_KEY: undefined, OPENAI_BASE_URL: 'http://localhost:11434/v1' }).OPENAI_API_KEY).toBeUndefined();
+  });
+
   it('requires AWS credentials for SES', () => {
-    const ses = { ...ready, EMAIL_PROVIDER: 'ses' };
+    // Azure storage, so the AWS keys are only SES's to need.
+    const ses = { ...ready, EMAIL_PROVIDER: 'ses', STORAGE_PROVIDER: 'azure', AZURE_STORAGE_CONNECTION_STRING: 'x', AWS_ACCESS_KEY_ID: undefined, AWS_SECRET_ACCESS_KEY: undefined };
     expect(() => loadConfig(ses)).toThrow(/AWS credentials/);
     expect(loadConfig({ ...ses, AWS_ACCESS_KEY_ID: 'a', AWS_SECRET_ACCESS_KEY: 'b' }).EMAIL_PROVIDER).toBe('ses');
   });
@@ -109,9 +139,97 @@ describe('production config guards', () => {
     expect(() => loadConfig({ ...ready, CORS_ORIGINS: 'https://app.example.in, *' })).toThrow(/CORS_ORIGINS/);
   });
 
+  it.each([
+    ['APP_URL', 'http://localhost:8081'],
+    ['APP_URL', 'http://app.example.in'],
+    ['APP_URL', 'https://127.0.0.1:8081'],
+    ['APP_URL', 'not a url'],
+    ['PUBLIC_BASE_URL', 'http://localhost:4000'],
+  ])('refuses %s=%s', (key, value) => {
+    expect(() => loadConfig({ ...ready, [key]: value })).toThrow(new RegExp(`${key} must be the public https`));
+  });
+
+  it('requires the web app among the CORS origins', () => {
+    expect(() => loadConfig({ ...ready, CORS_ORIGINS: 'https://admin.example.in' })).toThrow(/CORS_ORIGINS must include the web app \(https:\/\/app.example.in\)/);
+  });
+
+  it('refuses a CREDENTIALS_KEY that is not 32 bytes', () => {
+    expect(() => loadConfig({ ...ready, CREDENTIALS_KEY: Buffer.alloc(16, 1).toString('base64') })).toThrow(/CREDENTIALS_KEY must be 32 bytes/);
+  });
+
+  it('refuses S3 without credentials', () => {
+    expect(() => loadConfig({ ...ready, AWS_ACCESS_KEY_ID: undefined })).toThrow(/STORAGE_PROVIDER=s3/);
+  });
+
   it('still refuses the demo OTP and dev secrets', () => {
     expect(() => loadConfig({ ...ready, DEMO_OTP: 'true' })).toThrow(/DEMO_OTP/);
     expect(() => loadConfig({ ...ready, JWT_SECRET: undefined })).toThrow(/JWT_SECRET/);
     expect(() => loadConfig({ ...ready, CREDENTIALS_KEY: undefined })).toThrow(/CREDENTIALS_KEY/);
+  });
+
+  describe('GSP gateway', () => {
+    it('falls back to the older GSP_BASE_URL', () => {
+      expect(() => loadConfig({ ...ready, TAXATION_ADAEQUARE_BASE_URL: undefined })).toThrow(/TAXATION_ADAEQUARE_BASE_URL/);
+      expect(loadConfig({ ...ready, TAXATION_ADAEQUARE_BASE_URL: undefined, GSP_BASE_URL: 'https://gsp.example.in' }).COMPLIANCE_PROVIDER).toBe('gsp');
+    });
+
+    it('refuses Whitebooks unless the sandbox is allowed, however it is selected', () => {
+      expect(() => loadConfig({ ...ready, TAXATION_GSP_PROVIDER_CODE: 'WHITE_BOOKS_GSP' })).toThrow(/sandbox only/);
+      expect(() => loadConfig({ ...ready, TAXATION_TAXPAYER_PROVIDER: 'whitebooks' })).toThrow(/sandbox only/);
+    });
+
+    it('allows the sandbox GSP by TAXATION_GSTIN_ALLOW_SANDBOX alone, whatever NODE_ENV says', () => {
+      const sandbox = {
+        ...ready,
+        TAXATION_GSP_PROVIDER_CODE: 'WHITE_BOOKS_GSP',
+        TAXATION_WHITEBOOKS_BASE_URL: 'https://apisandbox.example.in',
+        TAXATION_WHITEBOOKS_EINVOICE_APP_ID: 'EINS-id',
+        TAXATION_WHITEBOOKS_EINVOICE_APP_SECRET: 'EINS-secret',
+        TAXATION_SANDBOX_BUYER_GSTIN: '29AWGPV7107B1Z1',
+        TAXATION_GSP_AUTH_REQUIRED: 'false',
+      };
+      // Off: each sandbox-only setting is refused, in production and out of it.
+      expect(() => loadConfig(sandbox)).toThrow(/sandbox only/);
+      expect(() => loadConfig({ ...sandbox, NODE_ENV: 'development' })).toThrow(/TAXATION_GSTIN_ALLOW_SANDBOX/);
+      // On: allowed, in production too. The other production checks stay on.
+      expect(loadConfig({ ...sandbox, TAXATION_GSTIN_ALLOW_SANDBOX: 'true' }).TAXATION_GSP_PROVIDER_CODE).toBe('WHITE_BOOKS_GSP');
+      expect(() => loadConfig({ ...sandbox, TAXATION_GSTIN_ALLOW_SANDBOX: 'true', SMS_PROVIDER: 'log' })).toThrow(/SMS_PROVIDER=log/);
+      expect(() => loadConfig({ ...sandbox, TAXATION_GSTIN_ALLOW_SANDBOX: 'true', TAXATION_WHITEBOOKS_EINVOICE_APP_SECRET: '' })).toThrow(/EINVOICE_APP/);
+    });
+
+    it('refuses the test buyer and the unauthenticated gateway unless the sandbox is allowed', () => {
+      expect(() => loadConfig({ TAXATION_SANDBOX_BUYER_GSTIN: '29AWGPV7107B1Z1' })).toThrow(/TAXATION_SANDBOX_BUYER_GSTIN/);
+      expect(() => loadConfig({ TAXATION_GSP_AUTH_REQUIRED: 'false' })).toThrow(/TAXATION_GSP_AUTH_REQUIRED/);
+      expect(loadConfig({ TAXATION_GSTIN_ALLOW_SANDBOX: 'true', TAXATION_SANDBOX_BUYER_GSTIN: '29AWGPV7107B1Z1' }).TAXATION_SANDBOX_BUYER_GSTIN).toBe('29AWGPV7107B1Z1');
+    });
+
+    it('refuses a half-set application pair, outside production too', () => {
+      expect(() => loadConfig({ TAXATION_GSP_EINVOICE_APP_ID: 'EINS1' })).toThrow(/TAXATION_GSP_EINVOICE_APP_SECRET/);
+      expect(() => loadConfig({ TAXATION_GSP_APP_SECRET: 's' })).toThrow(/TAXATION_GSP_APP_ID/);
+    });
+
+    it('refuses an unknown TAXATION_TAXPAYER_PROVIDER', () => {
+      expect(() => loadConfig({ TAXATION_TAXPAYER_PROVIDER: 'cleartax' })).toThrow(/TAXATION_TAXPAYER_PROVIDER/);
+    });
+
+    it('is happy with nothing at all in development', () => {
+      const config = loadConfig({});
+      expect(config.TAXATION_GSP_PROVIDER_CODE).toBe('ADAEQUARE_GSP');
+      expect(config.TAXATION_GSP_AUTH_REQUIRED).toBe(true);
+    });
+  });
+
+  it('ALLOW_UNCONFIGURED_PROVIDERS starts with providers unset, but not with dev secrets', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const base = { NODE_ENV: 'production', ALLOW_UNCONFIGURED_PROVIDERS: 'true', JWT_SECRET: 'x'.repeat(32), CREDENTIALS_KEY: ready.CREDENTIALS_KEY, APP_URL: ready.APP_URL, PUBLIC_BASE_URL: ready.PUBLIC_BASE_URL };
+    expect(loadConfig(base).SMS_PROVIDER).toBe('log');
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('STORAGE_PROVIDER=memory'));
+    expect(() => loadConfig({ ...base, JWT_SECRET: undefined })).toThrow(/JWT_SECRET/);
+    expect(() => loadConfig({ ...base, CREDENTIALS_KEY: undefined })).toThrow(/CREDENTIALS_KEY/);
+    expect(() => loadConfig({ ...base, DEMO_OTP: 'true' })).toThrow(/DEMO_OTP/);
+    // Links in emails pointing at localhost are never waived either.
+    expect(() => loadConfig({ ...base, APP_URL: 'http://localhost:8081' })).toThrow(/APP_URL/);
+    expect(() => loadConfig({ ...base, PUBLIC_BASE_URL: undefined })).toThrow(/PUBLIC_BASE_URL/);
+    warn.mockRestore();
   });
 });

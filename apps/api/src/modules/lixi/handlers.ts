@@ -1,11 +1,13 @@
+import { businessDate } from '@esmart/core/lib/date';
 import Anthropic from '@anthropic-ai/sdk';
 import type { Schema } from '@esmart/api-contract';
 import { canOpen, hasModule, MODULES, planInfo } from '@esmart/core/domain/plan';
 import { defineHandlers, type Ctx } from '../../context';
 import { badRequest, tooManyRequests, upstream } from '../../http/errors';
+import { recordAiCost, takeAiAction } from '../../lib/aiUsage';
 import { confirm, propose, type PendingAction } from '../../lixi/confirm';
 import { jsonSchemaOf, runRead, TOOLS, ToolError, toolByName, type ToolCtx } from '../../lixi/tools';
-import type { AssistantReply, ToolOutcome, ToolSpec } from '../../providers/assistant';
+import { AssistantUnavailable, type AssistantReply, type ToolOutcome, type ToolSpec } from '../../providers/assistant';
 
 type LixiReply = Schema<'LixiReply'>;
 type DocumentKind = Schema<'DocumentKind'>;
@@ -32,7 +34,7 @@ export const LIXI_ROUTES = [
   '/(app)/settings/plan',
 ] as const;
 
-const DOC_KINDS = new Set<string>(['quote', 'salesOrder', 'delivery', 'invoice', 'salesReturn', 'purchaseOrder', 'goodsReceipt', 'purchaseBill', 'purchaseReturn']);
+const DOC_KINDS = new Set<string>(['quote', 'salesOrder', 'delivery', 'invoice', 'salesReturn', 'creditNote', 'debitNote', 'purchaseOrder', 'goodsReceipt', 'purchaseBill', 'purchaseReturn', 'supplierCreditNote', 'supplierDebitNote']);
 const LANGUAGES: Record<string, string> = { en: 'English', ta: 'Tamil' };
 
 const SPECS: ToolSpec[] = TOOLS.map((t) => ({
@@ -77,7 +79,7 @@ function contextFor(ctx: Ctx<'lixiChat'>, locale: string): string {
   const { company, user } = ctx;
   const modules = MODULES.filter((m) => hasModule(company.plan, m));
   return [
-    `Today is ${ctx.now.toISOString().slice(0, 10)}.`,
+    `Today is ${businessDate(ctx.now)}.`,
     `Company: ${company.name}. Currency: ${company.baseCurrency.trim()}. Country: ${company.country}.`,
     `Plan: ${planInfo(company.plan).name}; ${modules.length ? `includes ${modules.join(', ')}` : 'sales only (no purchases, inventory, expenses or payables)'}.`,
     `User: ${user.name}, role ${user.role}.`,
@@ -95,6 +97,8 @@ export const lixiHandlers = defineHandlers({
       throw upstream('LIXI_UNAVAILABLE', 'Lixi is not configured on this server');
     }
     limit(ctx.user.id, ctx.now.getTime(), ctx.deps.config.LIXI_RATE_LIMIT_PER_MINUTE);
+    // One message from the business's monthly AI allowance, given back if the model can't answer.
+    const giveBack = await takeAiAction(ctx, 'lixi');
 
     const tctx = toolCtx(ctx);
     const secret = ctx.deps.config.JWT_SECRET;
@@ -118,13 +122,27 @@ export const lixiHandlers = defineHandlers({
     const locale = ctx.body.locale ?? ctx.user.locale ?? 'en';
     let reply: AssistantReply;
     try {
-      reply = await ctx.deps.providers.assistant.reply({ history, context: contextFor(ctx, locale.slice(0, 2)), tools: SPECS, execute, routes: LIXI_ROUTES });
+      reply = await ctx.deps.providers.assistant.reply({
+        history,
+        context: contextFor(ctx, locale.slice(0, 2)),
+        tools: SPECS,
+        execute,
+        routes: LIXI_ROUTES,
+        onFallback: (failed, next, err) => ctx.req.log.warn({ err, failed, next }, 'lixi model failed, trying the secondary'),
+      });
     } catch (err) {
-      if (err instanceof Anthropic.APIError) {
+      if (err instanceof Anthropic.APIError || err instanceof AssistantUnavailable) {
         ctx.req.log.warn({ err }, 'lixi model call failed');
+        await giveBack();
         throw upstream('LIXI_UNAVAILABLE', 'Lixi is unavailable right now');
       }
       throw err;
+    }
+    if (reply.usage) {
+      const { model, inputTokens, outputTokens, costUsd } = reply.usage;
+      ctx.req.log.info({ companyId: ctx.company.id, model, inputTokens, outputTokens, costUsd }, 'lixi usage');
+      // Our own costing: a failure here is logged, never the person's problem.
+      await recordAiCost(ctx.db, ctx.company.id, ctx.now, 'lixi', reply.usage).catch((err: unknown) => ctx.req.log.warn({ err }, 'lixi usage not recorded'));
     }
     const done = pending as PendingAction | null;
     return { reply: toWire(reply, ctx.company.plan), ...(done ? { pendingAction: done } : {}) };

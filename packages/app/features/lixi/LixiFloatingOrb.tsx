@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Animated, PanResponder, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
@@ -23,6 +24,7 @@ const TAP_SLOP = 6;
  */
 export function LixiFloatingOrb({ nudge = 0 }: { nudge?: number }) {
   const t = useTheme();
+  const { t: tr } = useTranslation(['lixi', 'nav']);
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
   const spot = useUiStore((s) => s.lixiOrbSpot);
@@ -75,8 +77,8 @@ export function LixiFloatingOrb({ nudge = 0 }: { nudge?: number }) {
       {...responder.panHandlers}
       accessible
       accessibilityRole="button"
-      accessibilityLabel={nudge ? `Ask Lixi, ${nudge} things to look at` : 'Ask Lixi'}
-      accessibilityHint="Drag to move it"
+      accessibilityLabel={nudge ? tr('lixi:ui.askWithNudge', { count: nudge }) : tr('nav:more.entry.askLixi')}
+      accessibilityHint={tr('lixi:ui.dragHint')}
       onAccessibilityTap={() => openLixi()}
       style={{ position: 'absolute', left: 0, top: 0, width: SIZE, height: SIZE, transform: pos.getTranslateTransform() }}
     >

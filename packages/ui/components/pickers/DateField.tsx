@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Platform, Pressable, View } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '../Icon';
 import { useTheme } from '../../theme/ThemeProvider';
 import { FieldShell } from '../Field';
 import { Text } from '../Text';
@@ -63,7 +63,7 @@ export function DateField({
       <Pressable
         onPress={openPicker}
         accessibilityRole="button"
-        accessibilityLabel={`${label ?? 'Date'}: ${value ? formatDate(value) : 'not set'}`}
+        accessibilityLabel={`${label ?? tr('common:component.date')}: ${value ? formatDate(value) : tr('common:component.notSet')}`}
         style={({ pressed }) => ({
           flexDirection: 'row',
           alignItems: 'center',
@@ -71,17 +71,17 @@ export function DateField({
           backgroundColor: t.c.card2,
           borderRadius: t.radius.md,
           borderWidth: 1,
-          borderColor: error ? t.c.bad : t.c.line,
+          borderColor: error ? t.c.bad : t.c.inputBorder,
           paddingHorizontal: t.spacing.md,
           height: 48,
           opacity: pressed ? 0.7 : 1,
         })}
       >
-        <MaterialCommunityIcons name="calendar-outline" size={18} color={t.c.muted} />
+        <Icon name="calendar-outline" size={18} color={t.c.muted} />
         <Text style={{ flex: 1 }} tone={value ? 'default' : 'muted'}>
-          {value ? formatDate(value) : 'Select date'}
+          {value ? formatDate(value) : tr('common:component.selectDate')}
         </Text>
-        <MaterialCommunityIcons name="chevron-down" size={18} color={t.c.muted} />
+        <Icon name="chevron-down" size={18} color={t.c.muted} />
       </Pressable>
 
       {Platform.OS === 'android' && open ? picker : null}
@@ -90,7 +90,7 @@ export function DateField({
         <Sheet
           visible={open}
           onClose={() => setOpen(false)}
-          title={label ?? 'Select date'}
+          title={label ?? tr('common:component.selectDate')}
           scroll={false}
           footer={
             <Button

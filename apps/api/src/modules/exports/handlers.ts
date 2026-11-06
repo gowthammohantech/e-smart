@@ -1,7 +1,9 @@
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, isNotNull, isNull, lt } from 'drizzle-orm';
 import { schema } from '@esmart/db';
 import type { Schema } from '@esmart/api-contract';
-import { defineHandlers, type Deps } from '../../context';
+import { defineHandlers, type AuthUser, type Deps } from '../../context';
+import { enqueue } from '../../jobs/queue';
+import { notify } from '../../lib/notify';
 import { invalid, notFound } from '../../http/errors';
 import { recordChange, type DbOrTx } from '../../lib/audit';
 import { newId } from '../../lib/ids';
@@ -14,6 +16,9 @@ type JobRow = typeof J.$inferSelect;
 
 /** How long an export file is kept, and how long one download link works. */
 const RETENTION_MS = 7 * 86_400_000;
+/** Automatic backups stay longer, so a weekly one is still there when the next is made. */
+const BACKUP_RETENTION_MS = 35 * 86_400_000;
+const BACKUP_EVERY_MS = { daily: 86_400_000, weekly: 7 * 86_400_000 } as const;
 const LINK_TTL_SECONDS = 3600;
 
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'company';
@@ -54,51 +59,133 @@ function backupToWire(row: typeof BS.$inferSelect): Schema<'BackupSettings'> {
   return compact({ automatic: row.automatic, frequency: row.frequency, destination: row.destination, lastBackupAt: iso(row.lastBackupAt) });
 }
 
+/**
+ * Builds a queued export: the file goes to storage, the row to completed (or failed), and a
+ * json-backup counts as the company's last backup. Safe to run again: a finished row is left alone.
+ */
+export async function runExport(deps: Deps, input: { exportId: string; from?: string; to?: string; includeAttachments?: boolean }) {
+  const now = deps.now();
+  const [job] = await deps.db.select().from(J).where(eq(J.id, input.exportId));
+  if (!job || job.status === 'completed' || job.status === 'failed') return job ?? null;
+  const [company] = await deps.db.select().from(schema.companies).where(eq(schema.companies.id, job.companyId));
+  if (!company) return null;
+  await deps.db.update(J).set({ status: 'running' }).where(eq(J.id, job.id));
+  try {
+    const file = await buildExport(deps.db, deps, job.format, job.companyId, { from: input.from, to: input.to, includeAttachments: input.includeAttachments }, now);
+    // Short keys: the memory store serves them as one path segment (Fastify caps those at 100 characters).
+    const key = `exports/${job.companyId}/${job.id}.${file.extension}`;
+    await deps.providers.storage.put(key, file.body, file.contentType);
+    const actor = await exportActor(deps.db, job);
+    return await deps.db.transaction(async (tx) => {
+      const [row] = await tx
+        .update(J)
+        .set({ status: 'completed', storageKey: key, completedAt: now, expiresAt: new Date(now.getTime() + (job.trigger === 'scheduled' ? BACKUP_RETENTION_MS : RETENTION_MS)), error: null })
+        .where(eq(J.id, job.id))
+        .returning();
+      if (job.format === 'json-backup') {
+        await backupSettingsOf(tx, job.companyId);
+        await tx.update(BS).set({ lastBackupAt: now }).where(eq(BS.companyId, job.companyId));
+      }
+      if (actor) {
+        await recordChange(tx, actor, {
+          companyId: job.companyId,
+          action: job.trigger === 'scheduled' ? 'backed up automatically' : 'exported',
+          entityType: 'export_job',
+          entityId: row.id,
+          entityLabel: `${job.format} export`,
+          version: 1,
+          after: { format: job.format, from: input.from, to: input.to, includeAttachments: !!input.includeAttachments },
+        });
+      }
+      await notify(tx, deps, { companyId: job.companyId, userId: job.requestedBy ?? undefined, kind: 'system', title: job.trigger === 'scheduled' ? 'Backup ready' : 'Export ready', body: `${company.name} · ${job.format}`, entityType: 'export_job', entityId: job.id });
+      return row;
+    });
+  } catch (err) {
+    // A failed attempt goes back to the queue; the job runner marks the export failed after its last try.
+    await deps.db.update(J).set({ status: 'queued', error: String((err as Error).message ?? err).slice(0, 1000) }).where(eq(J.id, job.id));
+    throw err;
+  }
+}
+
+/**
+ * The hourly `backups.due` job: queues a json-backup for every company with automatic backups on whose
+ * last one is older than its interval. A company with a backup already waiting gets no second one.
+ */
+export async function queueDueBackups(deps: Pick<Deps, 'db' | 'now'>): Promise<string[]> {
+  const now = deps.now();
+  const rows = await deps.db
+    .select({ companyId: BS.companyId, frequency: BS.frequency, lastBackupAt: BS.lastBackupAt })
+    .from(BS)
+    .innerJoin(schema.companies, eq(schema.companies.id, BS.companyId))
+    .innerJoin(schema.accounts, eq(schema.accounts.id, schema.companies.accountId))
+    .where(and(eq(BS.automatic, true), isNull(schema.accounts.suspendedAt)));
+  const queued: string[] = [];
+  for (const r of rows) {
+    if (r.lastBackupAt && now.getTime() - r.lastBackupAt.getTime() < BACKUP_EVERY_MS[r.frequency] - 3_600_000) continue;
+    await deps.db.transaction(async (tx) => {
+      const exportId = newId('exp');
+      const jobId = await enqueue(tx, 'export.build', { exportId }, { uniqueKey: `backup:${r.companyId}`, maxAttempts: 3 });
+      if (!jobId) return;
+      await tx.insert(J).values({ id: exportId, companyId: r.companyId, format: 'json-backup', status: 'queued', trigger: 'scheduled', requestedBy: null, createdAt: now });
+      queued.push(r.companyId);
+    });
+  }
+  return queued;
+}
+
+/** The daily `exports.expire` job: deletes the files of exports past their keep-until date. */
+export async function deleteExpiredExports(deps: Pick<Deps, 'db' | 'now' | 'providers'>): Promise<number> {
+  const rows = await deps.db
+    .select({ id: J.id, storageKey: J.storageKey })
+    .from(J)
+    .where(and(eq(J.status, 'completed'), lt(J.expiresAt, deps.now()), isNotNull(J.storageKey)));
+  for (const r of rows) {
+    await deps.providers.storage.delete(r.storageKey!);
+    await deps.db.update(J).set({ storageKey: null }).where(eq(J.id, r.id));
+  }
+  return rows.length;
+}
+
+/** The export's last try failed: say so on the row, so the app stops waiting. */
+export async function failExport(deps: Pick<Deps, 'db' | 'now'>, exportId: string) {
+  await deps.db.update(J).set({ status: 'failed', completedAt: deps.now() }).where(and(eq(J.id, exportId), eq(J.status, 'queued')));
+}
+
+/** Who the audit trail names: the person who asked, or the account owner for a scheduled backup. */
+async function exportActor(db: DbOrTx, job: JobRow): Promise<AuthUser | null> {
+  let userId = job.requestedBy;
+  if (!userId) {
+    const [owner] = await db
+      .select({ id: schema.accounts.ownerUserId })
+      .from(schema.companies)
+      .innerJoin(schema.accounts, eq(schema.accounts.id, schema.companies.accountId))
+      .where(eq(schema.companies.id, job.companyId));
+    userId = owner?.id ?? null;
+  }
+  if (!userId) return null;
+  const [u] = await db.select({ name: schema.users.name, email: schema.users.email }).from(schema.users).where(eq(schema.users.id, userId));
+  const name = job.requestedBy ? (u?.name ?? 'Unknown') : `${u?.name ?? 'Owner'} (scheduled backup)`;
+  return { id: userId, accountId: '', name, email: u?.email ?? '', role: 'owner', platformRole: null, status: 'active', locale: null, companyIds: [], branchIds: [], sessionId: '', mfaEnrolled: false, mfaVerified: false };
+}
+
 /** Exports: createExport, listExports, getExport, getBackupSettings, saveBackupSettings. */
 export const exportsHandlers = defineHandlers({
   /**
-   * Builds the file in the request for now, so the 202's job is already
-   * completed (or failed). A json-backup counts as the company's last backup.
+   * Queues the export and answers 202 with the job; the `export.build` job makes the file and
+   * the app polls getExport. Queued in the same transaction as the job row, so neither exists alone.
    */
   async createExport(ctx) {
     const { format, from, to, includeAttachments } = ctx.body;
     if (from && to && from > to) throw invalid('to', 'The end date is before the start date');
-    const [job] = await ctx.db
-      .insert(J)
-      .values({ id: newId('exp'), companyId: ctx.company.id, format, status: 'running', trigger: 'manual', requestedBy: ctx.user.id, createdAt: ctx.now })
-      .returning();
-    let done: JobRow;
-    try {
-      const file = await buildExport(ctx.db, ctx.deps, format, ctx.company.id, { from, to, includeAttachments }, ctx.now);
-      // Short keys: the memory store serves them as one path segment (Fastify caps those at 100 characters).
-      const key = `exports/${ctx.company.id}/${job.id}.${file.extension}`;
-      await ctx.deps.providers.storage.put(key, file.body, file.contentType);
-      done = await ctx.db.transaction(async (tx) => {
-        const [row] = await tx
-          .update(J)
-          .set({ status: 'completed', storageKey: key, completedAt: ctx.now, expiresAt: new Date(ctx.now.getTime() + RETENTION_MS) })
-          .where(eq(J.id, job.id))
-          .returning();
-        if (format === 'json-backup') {
-          await backupSettingsOf(tx, ctx.company.id);
-          await tx.update(BS).set({ lastBackupAt: ctx.now }).where(eq(BS.companyId, ctx.company.id));
-        }
-        await recordChange(tx, ctx.user, {
-          companyId: ctx.company.id,
-          action: 'exported',
-          entityType: 'export_job',
-          entityId: row.id,
-          entityLabel: `${format} export`,
-          version: 1,
-          after: { format, from, to, includeAttachments: !!includeAttachments },
-        });
-        return row;
-      });
-    } catch (err) {
-      ctx.req.log.error({ err, jobId: job.id }, 'export failed');
-      [done] = await ctx.db.update(J).set({ status: 'failed', error: String((err as Error).message ?? err).slice(0, 1000), completedAt: ctx.now }).where(eq(J.id, job.id)).returning();
-    }
-    return jobToWire(ctx.deps, done, ctx.now, ctx.company.name);
+    const job = await ctx.db.transaction(async (tx) => {
+      const [row] = await tx
+        .insert(J)
+        .values({ id: newId('exp'), companyId: ctx.company.id, format, status: 'queued', trigger: 'manual', requestedBy: ctx.user.id, createdAt: ctx.now })
+        .returning();
+      await enqueue(tx, 'export.build', { exportId: row.id, from, to, includeAttachments: !!includeAttachments }, { maxAttempts: 3 });
+      return row;
+    });
+    return jobToWire(ctx.deps, job, ctx.now, ctx.company.name);
   },
 
   async listExports(ctx) {

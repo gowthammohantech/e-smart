@@ -81,6 +81,26 @@ Enum item_type {
   goods
   service
 }
+Enum supply_type {
+  taxable
+  nil
+  exempt
+  nonGst
+}
+Enum itc_eligibility {
+  eligible
+  blocked [note: 's.17(5)']
+  ineligible
+}
+Enum msme_type {
+  micro
+  small
+  medium
+}
+Enum return_frequency {
+  monthly
+  qrmp
+}
 Enum tax_type {
   GST
   CGST
@@ -444,8 +464,10 @@ Table companies {
   tax_identifier_label varchar(20) [not null, default: 'GSTIN']
   tax_registered boolean [not null, default: false]
   composition_scheme boolean [not null, default: false]
+  return_frequency return_frequency [not null, default: 'monthly', note: 'GSTR-1 and GSTR-3B monthly, or quarterly under QRMP']
   place_of_supply_state_code varchar(2)
   fiscal_year_start_month smallint [not null, default: 4, note: '1-12']
+  locked_through_date date [note: 'books closed through this date; owner only']
   plan plan_tier [not null, default: 'free', note: 'changed only through billing']
   onboarding_completed_at timestamptz
   version int [not null, default: 1]
@@ -645,6 +667,16 @@ Table subscription_events {
 // Settings masters
 // ---------------------------------------------------------------------
 
+Table tax_category_rates {
+  tax_category_id varchar(40) [not null, ref: > tax_categories.id]
+  effective_from date [not null]
+  rate numeric(6,3) [not null, note: 'what the category charged before its current rate']
+
+  indexes {
+    (tax_category_id, effective_from) [pk]
+  }
+}
+
 Table tax_categories {
   id varchar(40) [pk]
   company_id varchar(40) [not null, ref: > companies.id]
@@ -812,6 +844,10 @@ Table parties {
   display_name varchar(200)
   tax_id varchar(20) [note: 'GSTIN / TRN']
   gst_registration_type gst_registration_type [note: 'null reads as regular with a GSTIN, else unregistered']
+  pan varchar(10) [note: 'read from the GSTIN when not given']
+  msme_type msme_type [note: 'Udyam category; bills fall due within 45 days']
+  udyam_number varchar(19)
+  reverse_charge boolean [not null, default: false, note: 'bills from this supplier are under reverse charge']
   email varchar(254)
   phone varchar(20)
   currency char(3) [not null, ref: > currencies.code]
@@ -860,6 +896,12 @@ Table items {
   hsn_code varchar(8) [ref: > hsn_codes.code]
   barcode varchar(40)
   track_inventory boolean [not null, default: false]
+  supply_type supply_type [not null, default: 'taxable']
+  reimbursement boolean [not null, default: false, note: 'pure agent (Rule 33): outside the taxable value']
+  capital_goods boolean [not null, default: false]
+  itc_eligibility itc_eligibility [not null, default: 'eligible']
+  reverse_charge boolean [not null, default: false]
+  cess_rate decimal(6,3) [not null, default: 0]
   opening_stock numeric(18,3) [not null, default: 0]
   reorder_level numeric(18,3) [not null, default: 0]
   image_attachment_id varchar(40) [ref: > attachments.id]
@@ -899,6 +941,9 @@ Table documents {
   charges_minor bigint [not null, default: 0]
   apply_round_off boolean [not null, default: true]
   place_of_supply_state_code varchar(2)
+  reverse_charge boolean [not null, default: false, note: 'whole document under reverse charge']
+  party_gstin varchar(15) [note: "the party's GSTIN when finalised"]
+  party_state_code varchar(2)
   notes text
   terms text
   source_document_id varchar(40) [ref: > documents.id, note: 'e.g. invoice converted from a quote']
@@ -909,6 +954,8 @@ Table documents {
   document_discount_minor bigint [not null, default: 0]
   taxable_amount_minor bigint [not null, default: 0]
   total_tax_minor bigint [not null, default: 0]
+  reverse_charge_tax_minor bigint [not null, default: 0, note: 'tax the buyer pays; not in the grand total']
+  reimbursements_minor bigint [not null, default: 0]
   round_off_minor bigint [not null, default: 0]
   grand_total_minor bigint [not null, default: 0]
   grand_total_base_minor bigint [not null, default: 0, note: 'in company base currency']
@@ -926,7 +973,7 @@ Table documents {
   updated_at timestamptz [not null, default: `now()`]
 
   indexes {
-    (company_id, kind, number) [note: 'unique where status <> draft (partial index)']
+    (company_id, kind, number) [note: "unique where number NOT LIKE '%-DRAFT' (partial index); cancelled drafts keep the placeholder"]
     (company_id, kind, status, date)
     (company_id, party_id, date)
     (company_id, branch_id, date)
@@ -951,6 +998,12 @@ Table document_lines {
   tax_category_id varchar(40) [not null, ref: > tax_categories.id]
   tax_rate numeric(6,3) [not null, note: 'snapshot, so historical documents stay reproducible']
   tax_inclusive boolean [not null, default: false]
+  supply_type supply_type [not null, default: 'taxable', note: "the item's, when the line was written"]
+  reimbursement boolean [not null, default: false, note: 'pure agent (Rule 33): outside the taxable value']
+  capital_goods boolean [not null, default: false]
+  itc_eligibility itc_eligibility [not null, default: 'eligible']
+  reverse_charge boolean [not null, default: false]
+  cess_rate decimal(6,3) [not null, default: 0]
   line_total_minor bigint [not null, default: 0, note: 'computed']
 
   indexes {
@@ -967,11 +1020,12 @@ Table document_tax_lines {
   rate numeric(6,3) [not null]
   taxable_amount_minor bigint [not null]
   total_tax_minor bigint [not null]
+  reverse_charge boolean [not null, default: false]
 
   indexes {
-    (document_id, tax_category_id) [unique]
+    document_id
   }
-  Note: 'DocumentTotals.taxLines, one per tax category on the document'
+  Note: 'DocumentTotals.taxLines: one per tax category and rate, reverse charge in rows of its own'
 }
 
 Table document_tax_components {
@@ -1228,6 +1282,10 @@ Table expenses {
   tax_category_id varchar(40) [ref: > tax_categories.id]
   tax_amount_minor bigint [not null, default: 0]
   tax_inclusive boolean [not null, default: true]
+  place_of_supply_state_code varchar(2)
+  supplier_gstin varchar(15)
+  itc_eligibility itc_eligibility [not null, default: 'eligible']
+  reverse_charge boolean [not null, default: false, note: 'tax paid to the government, not in amount']
   account_id varchar(40) [not null, ref: > payment_accounts.id]
   method payment_method [not null]
   reference varchar(100)
@@ -1552,7 +1610,8 @@ Table client_id_mappings {
 }
 
 Table change_log {
-  seq bigserial [pk, note: 'monotonic cursor for /sync/pull']
+  seq bigserial [pk, note: 'order within a transaction']
+  tx_id xid8 [not null, default: `pg_current_xact_id()`, note: '/sync/pull cursor is (tx_id, seq), serving only transactions older than every running one']
   company_id varchar(40) [not null, ref: > companies.id]
   entity_type varchar(30) [not null]
   entity_id varchar(40) [not null]

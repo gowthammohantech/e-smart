@@ -1,6 +1,6 @@
 import React from 'react';
 import { View } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import type { IconName } from './Icon';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeProvider';
 import { useIsDesktop } from '../theme/breakpoints';
@@ -32,6 +32,8 @@ export function FormActions({ children }: { children: React.ReactNode }) {
           : {
               padding: t.spacing.lg,
               paddingBottom: insets.bottom + t.spacing.md,
+              // Stacked buttons (a save and a "save & add another") keep apart.
+              gap: t.spacing.sm,
               borderTopWidth: 1,
               borderTopColor: t.c.line,
               backgroundColor: t.c.paper,
@@ -52,16 +54,19 @@ export function PrimaryActionBar({
   icon,
   onPress,
   loading,
+  tooltip,
 }: {
   title: string;
-  icon?: keyof typeof MaterialCommunityIcons.glyphMap;
-  onPress: () => void;
+  icon?: IconName;
+  onPress: () => unknown;
   loading?: boolean;
+  /** Shown above the button on hover in a desktop browser, e.g. why it is locked. */
+  tooltip?: string;
 }) {
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const desktop = useIsDesktop();
-  const hosted = usePageAction(desktop ? { label: title, icon, onPress } : null);
+  const hosted = usePageAction(desktop ? { label: title, icon, onPress, tooltip, loading } : null);
   if (hosted) return null;
   return (
     <View
@@ -77,7 +82,7 @@ export function PrimaryActionBar({
         backgroundColor: t.c.paper,
       }}
     >
-      <Button title={title} icon={icon} onPress={onPress} loading={loading} fullWidth size="lg" />
+      <Button title={title} icon={icon} onPress={onPress} loading={loading} tooltip={tooltip} fullWidth size="lg" />
     </View>
   );
 }

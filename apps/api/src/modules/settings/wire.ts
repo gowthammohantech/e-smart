@@ -1,6 +1,6 @@
 import type { Schema } from '@esmart/api-contract';
 import type { schema } from '@esmart/db';
-import { compact, money } from '../../lib/wire';
+import { compact, money, versioned } from '../../lib/wire';
 
 type TaxRow = typeof schema.taxCategories.$inferSelect;
 type ExpenseCategoryRow = typeof schema.expenseCategories.$inferSelect;
@@ -19,15 +19,17 @@ export function taxCategoryToWire(row: TaxRow): Schema<'TaxCategory'> {
     hsnCode: row.hsnCode,
     effectiveFrom: row.effectiveFrom,
     description: row.description,
+    ...versioned(row),
   });
 }
 
 export function expenseCategoryToWire(row: ExpenseCategoryRow): Schema<'ExpenseCategory'> {
-  return { id: row.id, companyId: row.companyId, name: row.name, icon: row.icon, color: row.color };
+  return { id: row.id, companyId: row.companyId, name: row.name, icon: row.icon, color: row.color, ...versioned(row) };
 }
 
 /** `balance` is the running balance in minor units; see `accountBalances` in core. */
-export function paymentAccountToWire(row: AccountRow, balance: number): Schema<'PaymentAccount'> {
+/** `baseCurrency` labels the balance, which is in base; it defaults to the account's own. */
+export function paymentAccountToWire(row: AccountRow, balance: number, baseCurrency?: string): Schema<'PaymentAccount'> {
   const currency = row.currency.trim();
   return compact({
     id: row.id,
@@ -37,8 +39,12 @@ export function paymentAccountToWire(row: AccountRow, balance: number): Schema<'
     currency,
     accountNumber: row.accountNumber,
     openingBalance: money(row.openingBalanceMinor, currency),
-    currentBalance: money(balance, currency),
+    openingBalanceDate: row.openingBalanceDate,
+    openingRate: Number(row.openingRate) === 1 ? undefined : Number(row.openingRate),
+    currentBalance: money(balance, baseCurrency ?? currency),
     isDefault: row.isDefault,
+    // Without it the app takes the account for one the server hasn't seen, and an edit creates a new one.
+    ...versioned(row),
   });
 }
 
@@ -51,11 +57,12 @@ export function exchangeRateToWire(row: RateRow): Schema<'ExchangeRate'> {
     rate: Number(row.rate),
     effectiveFrom: row.effectiveFrom,
     source: row.source,
+    ...versioned(row),
   };
 }
 
 export function transporterToWire(row: TransporterRow): Schema<'Transporter'> {
-  return compact({ id: row.id, companyId: row.companyId, name: row.name, transporterId: row.transporterId, phone: row.phone, status: row.status });
+  return compact({ id: row.id, companyId: row.companyId, name: row.name, transporterId: row.transporterId, phone: row.phone, status: row.status, ...versioned(row) });
 }
 
 export function seriesToWire(row: SeriesRow): Schema<'NumberingSeries'> {
@@ -69,5 +76,7 @@ export function seriesToWire(row: SeriesRow): Schema<'NumberingSeries'> {
     includeFiscalYear: row.includeFiscalYear,
     includeBranchCode: row.includeBranchCode,
     resetPolicy: row.resetPolicy,
+    // The app only sends edits for a series it has a version for.
+    ...versioned(row),
   };
 }

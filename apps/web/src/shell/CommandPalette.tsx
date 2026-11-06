@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon, type IconName } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import type { WebPressState } from '@esmart/ui/theme/interaction';
 import { Text } from '@esmart/ui/components/Text';
@@ -10,11 +10,10 @@ import { canOpen } from '@esmart/core/domain/plan';
 import { quickActions } from '@esmart/app/components/QuickActions';
 import { TABS, tabPath } from '@esmart/app/navigation/tabs';
 import { useGlobalSearch } from '@esmart/app/features/search/useGlobalSearch';
-import { matchPages, SETTINGS_GROUPS, useAppPages } from '@esmart/app/navigation/pages';
+import { matchPages, useAppPages } from '@esmart/app/navigation/pages';
+import { appHref } from '@esmart/app/navigation/menu';
 import { useCanOpen, usePlan } from '@esmart/app/store/selectors';
 import { useUiStore } from '@esmart/app/store/uiStore';
-
-type IconName = keyof typeof MaterialCommunityIcons.glyphMap;
 
 type Entry = { key: string; group: string; title: string; subtitle?: string; trailing?: string; icon: IconName; route: string };
 
@@ -35,27 +34,31 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
   const [index, setIndex] = useState(0);
   const { results } = useGlobalSearch(query);
   const searching = query.trim().length >= 2;
-  // Every page the sidebar reaches: its sections, the pages under them, and settings.
-  const pages = useAppPages(SETTINGS_GROUPS);
+  // Every page in the menu: the sections, the pages under them, the tools and settings.
+  const pages = useAppPages();
 
   const entries = useMemo<Entry[]>(() => {
+    const actions: Entry[] = quickActions(tr, t.c.primary)
+      .filter((a) => allowed(a.route))
+      .map((a) => ({ key: `action-${a.key}`, group: tr('nav:shell.quickActions'), title: a.label, icon: a.icon, route: a.route }));
     if (searching) {
+      // "new invoice" starts one: an action whose name has every word typed comes first.
+      const words = query.trim().toLowerCase().split(/\s+/);
+      const matchedActions = actions.filter((a) => words.every((w) => a.title.toLowerCase().includes(w)));
       const group = tr('nav:shell.pages');
       const matchedPages: Entry[] = matchPages(pages, query).map((p) => ({ ...p, key: `page-${p.key}`, group }));
       // Results arrive in date order across kinds; list each kind together.
       const byGroup = new Map<string, Entry[]>();
       results.slice(0, 40).forEach((r) => byGroup.set(r.group, [...(byGroup.get(r.group) ?? []), { ...r, key: `${r.group}-${r.id}` }]));
-      return [...matchedPages, ...Array.from(byGroup.values()).flat()];
+      return [...matchedActions, ...matchedPages, ...Array.from(byGroup.values()).flat()];
     }
-    const actions: Entry[] = quickActions(tr, t.c.primary)
-      .filter((a) => allowed(a.route))
-      .map((a) => ({ key: `action-${a.key}`, group: tr('nav:shell.quickActions'), title: a.label, icon: a.icon, route: a.route }));
-    const sections: Entry[] = TABS.filter((tab) => canOpen(plan, tabPath(tab.name))).map((tab) => ({
+    // More is the phone's catch-all; the sidebar and settings cover it here.
+    const sections: Entry[] = TABS.filter((tab) => tab.name !== 'more' && canOpen(plan, tabPath(tab.name))).map((tab) => ({
       key: `tab-${tab.name}`,
       group: tr('nav:shell.goTo'),
       title: tr(`nav:tab.${tab.name}` as 'nav:tab.index'),
       icon: tab.icon,
-      route: tab.name === 'index' ? '/(app)/(tabs)' : `/(app)/(tabs)/${tab.name}`,
+      route: appHref(tabPath(tab.name)),
     }));
     return [...actions, ...sections];
   }, [searching, query, pages, results, tr, t.c.primary, allowed, plan]);
@@ -101,7 +104,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
               borderBottomColor: t.c.line,
             }}
           >
-            <MaterialCommunityIcons name="magnify" size={20} color={t.c.muted} />
+            <Icon name="magnify" size={20} color={t.c.muted} />
             <TextInput
               autoFocus
               value={query}
@@ -126,7 +129,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
               style={{ flex: 1, height: 56, fontSize: t.fontSize.title, color: t.c.text, outlineStyle: 'none' } as object}
             />
             <Text variant="micro" tone="muted" weight="700">
-              ESC
+              {tr('nav:shell.escKey')}
             </Text>
           </View>
 
@@ -166,7 +169,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
                       backgroundColor: active || (state as WebPressState).pressed ? t.c.card2 : 'transparent',
                     })}
                   >
-                    <MaterialCommunityIcons name={entry.icon} size={18} color={active ? t.c.primary : t.c.muted} />
+                    <Icon name={entry.icon} size={18} color={active ? t.c.primary : t.c.muted} />
                     <View style={{ flex: 1, gap: 1 }}>
                       <Text variant="small" weight="600" numberOfLines={1}>
                         {entry.title}
@@ -182,7 +185,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
                         {entry.trailing}
                       </Text>
                     ) : null}
-                    {active ? <MaterialCommunityIcons name="keyboard-return" size={16} color={t.c.muted} /> : null}
+                    {active ? <Icon name="keyboard-return" size={16} color={t.c.muted} /> : null}
                   </Pressable>
                 </React.Fragment>
               );

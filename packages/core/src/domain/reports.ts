@@ -1,15 +1,19 @@
 import {
   BusinessDocument,
+  Company,
   Expense,
   ExpenseCategory,
   Item,
   Party,
   Payment,
   StockMovement,
+  TaxLine,
   } from '../types';
 import { Money, add, money, subtract, sum, zero } from '../lib/money';
 import { DateRange, inRange, monthKey } from '../lib/date';
-import { stockOnHand, stockValue } from './stockLedger';
+import { claimableTax, expenseCost, expenseTaxComponents } from './expenseTax';
+import { GSTR1_KINDS, noteTypeOf } from './gstr1';
+import { stockOnHand, valueStock, type StockCosting } from './stockLedger';
 
 export type ReportFilters = {
   range: DateRange;
@@ -207,43 +211,83 @@ export type TaxSummary = {
   netPayable: Money;
 };
 
-function taxRows(docs: BusinessDocument[], baseCurrency: string, filters: ReportFilters): TaxSummaryRow[] {
+/** Tax lines to add up, each with the rate it converts at and +1 or −1 (a credit note takes tax back). */
+type TaxEntry = { tl: TaxLine; rate: number; sign: 1 | -1 };
+
+function taxRows(entries: TaxEntry[], baseCurrency: string): TaxSummaryRow[] {
   const map = new Map<number, TaxSummaryRow>();
-  docs
-    .filter((d) => isLive(d) && matches(d, filters))
-    .forEach((d) => {
-      d.totals.taxLines.forEach((tl) => {
-        const row =
-          map.get(tl.rate) ??
-          {
-            rate: tl.rate,
-            taxable: zero(baseCurrency),
-            cgst: zero(baseCurrency),
-            sgst: zero(baseCurrency),
-            igst: zero(baseCurrency),
-            total: zero(baseCurrency),
-          };
-        row.taxable = add(row.taxable, inBase(tl.taxableAmount, d.exchangeRate, baseCurrency));
-        tl.components.forEach((c) => {
-          const v = inBase(c.amount, d.exchangeRate, baseCurrency);
-          if (c.type === 'CGST') row.cgst = add(row.cgst, v);
-          else if (c.type === 'SGST') row.sgst = add(row.sgst, v);
-          else if (c.type === 'IGST') row.igst = add(row.igst, v);
-          row.total = add(row.total, v);
-        });
-        map.set(tl.rate, row);
-      });
+  entries.forEach(({ tl, rate: fx, sign }) => {
+    const row =
+      map.get(tl.rate) ??
+      {
+        rate: tl.rate,
+        taxable: zero(baseCurrency),
+        cgst: zero(baseCurrency),
+        sgst: zero(baseCurrency),
+        igst: zero(baseCurrency),
+        total: zero(baseCurrency),
+      };
+    row.taxable = add(row.taxable, money(sign * inBase(tl.taxableAmount, fx, baseCurrency).minor, baseCurrency));
+    tl.components.forEach((c) => {
+      const v = money(sign * inBase(c.amount, fx, baseCurrency).minor, baseCurrency);
+      if (c.type === 'CGST') row.cgst = add(row.cgst, v);
+      else if (c.type === 'SGST') row.sgst = add(row.sgst, v);
+      else if (c.type === 'IGST') row.igst = add(row.igst, v);
+      row.total = add(row.total, v);
     });
+    map.set(tl.rate, row);
+  });
   return Array.from(map.values()).sort((a, b) => a.rate - b.rate);
 }
 
+/** Purchase documents that carry input tax; returns and supplier credit notes reverse it. */
+const INWARD_KINDS: BusinessDocument['kind'][] = ['purchaseBill', 'supplierDebitNote', 'purchaseReturn', 'supplierCreditNote'];
+const INWARD_CREDITS: BusinessDocument['kind'][] = ['purchaseReturn', 'supplierCreditNote'];
+
+function docEntries(docs: BusinessDocument[], filters: ReportFilters, isCredit: (d: BusinessDocument) => boolean): TaxEntry[] {
+  return docs
+    .filter((d) => isLive(d) && matches(d, filters))
+    .flatMap((d) => d.totals.taxLines.map((tl) => ({ tl, rate: d.exchangeRate, sign: isCredit(d) ? (-1 as const) : (1 as const) })));
+}
+
+/**
+ * Output tax as GSTR-1 reports it (invoices and debit notes, less returns and
+ * credit notes) against input tax on purchases and on expenses the business
+ * can claim. `company` places an expense's tax in CGST + SGST or IGST.
+ */
 export function summarizeTax(
   documents: BusinessDocument[],
   baseCurrency: string,
   filters: ReportFilters,
+  expenses: Expense[] = [],
+  company?: Company,
 ): TaxSummary {
-  const outward = taxRows(documents.filter((d) => d.kind === 'invoice'), baseCurrency, filters);
-  const inward = taxRows(documents.filter((d) => d.kind === 'purchaseBill'), baseCurrency, filters);
+  const outward = taxRows(
+    docEntries(documents.filter((d) => GSTR1_KINDS.includes(d.kind)), filters, (d) => noteTypeOf(d.kind) === 'C'),
+    baseCurrency,
+  );
+  const expenseEntries: TaxEntry[] = expenses
+    .filter((e) => inRange(e.date, filters.range) && (!filters.branchId || e.branchId === filters.branchId))
+    .filter((e) => claimableTax(e).minor > 0)
+    .map((e) => {
+      // `amount` is what was paid, tax included, except under reverse charge where the tax was paid apart.
+      const taxable = e.reverseCharge ? e.amount : subtract(e.amount, e.taxAmount);
+      // The rate isn't stored on the expense; what it charged on its taxable value gives it back.
+      const rate = taxable.minor > 0 ? Math.round((e.taxAmount.minor / taxable.minor) * 10000) / 100 : 0;
+      const tl: TaxLine = {
+        categoryId: e.taxCategoryId ?? '',
+        categoryName: '',
+        rate,
+        taxableAmount: taxable,
+        components: expenseTaxComponents(e, rate, company),
+        totalTax: e.taxAmount,
+      };
+      return { tl, rate: e.exchangeRate, sign: 1 as const };
+    });
+  const inward = taxRows(
+    [...docEntries(documents.filter((d) => INWARD_KINDS.includes(d.kind)), filters, (d) => INWARD_CREDITS.includes(d.kind)), ...expenseEntries],
+    baseCurrency,
+  );
   const outwardTotal = sum(outward.map((r) => r.total), baseCurrency);
   const inwardTotal = sum(inward.map((r) => r.total), baseCurrency);
   return {
@@ -327,6 +371,55 @@ export function summarizePayments(
 }
 
 /* ------------------------------------------------------------------ */
+/* Advances                                                            */
+/* ------------------------------------------------------------------ */
+
+/** A payment with money not yet set against any document: an advance. */
+export type AdvanceRow = {
+  id: string;
+  number: string;
+  date: string;
+  partyId: string;
+  direction: Payment['direction'];
+  amount: Money;
+  /** What is still to adjust, in the base currency. */
+  unallocated: Money;
+};
+
+export type AdvanceSummary = {
+  /** Advances received from customers, still to adjust against their invoices. */
+  received: Money;
+  /** Advances paid to suppliers, still to adjust against their bills. */
+  paid: Money;
+  rows: AdvanceRow[];
+};
+
+/** Open advances, received and paid, from payments dated in the range. */
+export function summarizeAdvances(payments: Payment[], baseCurrency: string, filters: ReportFilters): AdvanceSummary {
+  const rows: AdvanceRow[] = payments
+    .filter(
+      (p) =>
+        p.unallocated.minor > 0 &&
+        inRange(p.date, filters.range) &&
+        (!filters.branchId || p.branchId === filters.branchId) &&
+        (!filters.partyId || p.partyId === filters.partyId),
+    )
+    .map((p) => ({
+      id: p.id,
+      number: p.number,
+      date: p.date,
+      partyId: p.partyId,
+      direction: p.direction,
+      amount: inBase(p.amount, p.exchangeRate, baseCurrency),
+      unallocated: inBase(p.unallocated, p.exchangeRate, baseCurrency),
+    }))
+    .sort((a, b) => b.date.localeCompare(a.date));
+  const total = (direction: Payment['direction']) =>
+    sum(rows.filter((r) => r.direction === direction).map((r) => r.unallocated), baseCurrency);
+  return { received: total('received'), paid: total('paid'), rows };
+}
+
+/* ------------------------------------------------------------------ */
 /* Stock                                                               */
 /* ------------------------------------------------------------------ */
 
@@ -350,6 +443,7 @@ export function summarizeStock(
   movements: StockMovement[],
   baseCurrency: string,
   branchId?: string | null,
+  method: StockCosting = 'average',
 ): StockReport {
   const tracked = items.filter((i) => i.trackInventory);
   const rows: StockReportRow[] = tracked.map((item) => {
@@ -357,7 +451,7 @@ export function summarizeStock(
     return {
       item,
       onHand,
-      value: stockValue(item, movements, baseCurrency),
+      value: valueStock(item, movements, baseCurrency, method),
       low: item.reorderLevel > 0 && onHand <= item.reorderLevel,
     };
   });
@@ -390,28 +484,57 @@ export function profitSnapshot(
   items: Item[],
   baseCurrency: string,
   filters: ReportFilters,
+  /**
+   * Perpetual stock (RULES 6.2): from `from`, what each sale's goods cost is what the books posted
+   * (goodsCostByDocument), not the average bill price.
+   */
+  perpetual?: { from: string; goodsCost: Map<string, number> },
 ): ProfitSnapshot {
-  const invoices = documents.filter((d) => d.kind === 'invoice' && isLive(d) && matches(d, filters));
+  // Sales and debit notes add to revenue; returns and credit notes take it back.
+  const invoices = documents.filter(
+    (d) => (d.kind === 'invoice' || d.kind === 'debitNote' || d.kind === 'salesReturn' || d.kind === 'creditNote') && isLive(d) && matches(d, filters),
+  );
+  const signOf = (d: BusinessDocument) => (d.kind === 'salesReturn' || d.kind === 'creditNote' ? -1 : 1);
+  // A billable expense is the customer's cost, recovered at cost on an invoice: it isn't the business's (Rule 33).
   const selectedExpenses = expenses.filter(
-    (e) => inRange(e.date, filters.range) && (!filters.branchId || e.branchId === filters.branchId),
+    (e) => !e.billable && inRange(e.date, filters.range) && (!filters.branchId || e.branchId === filters.branchId),
   );
 
-  const revenue = sum(invoices.map((d) => inBase(d.totals.taxableAmount, d.exchangeRate, baseCurrency)), baseCurrency);
+  const revenueOf = (d: BusinessDocument): Money =>
+    money(signOf(d) * inBase(d.totals.taxableAmount, d.exchangeRate, baseCurrency).minor, baseCurrency);
+  const revenue = sum(invoices.map(revenueOf), baseCurrency);
 
-  const costOf = (d: BusinessDocument): Money =>
-    sum(
-      d.lines.map((l) => {
-        const item = items.find((i) => i.id === l.itemId);
-        const cost = item?.purchasePrice.minor ?? 0;
-        return inBase(money(cost * l.quantity, d.currency), d.exchangeRate, baseCurrency);
+  // What a unit cost: the average the business paid on its bills, else the item's purchase price (in base).
+  const bought = new Map<string, { cost: number; qty: number }>();
+  documents
+    .filter((d) => d.kind === 'purchaseBill' && isLive(d))
+    .forEach((d) =>
+      d.lines.forEach((l) => {
+        if (!l.itemId || !(l.quantity > 0)) return;
+        const b = bought.get(l.itemId) ?? { cost: 0, qty: 0 };
+        b.cost += l.unitPrice.minor * l.quantity * (d.exchangeRate || 1);
+        b.qty += l.quantity;
+        bought.set(l.itemId, b);
       }),
-      baseCurrency,
     );
+  const unitCost = (itemId: string | undefined): number => {
+    if (!itemId) return 0;
+    const b = bought.get(itemId);
+    if (b && b.qty > 0) return b.cost / b.qty;
+    return items.find((i) => i.id === itemId)?.purchasePrice.minor ?? 0;
+  };
+  // Only goods move cost: an invoice sells them, a return brings them back; notes move none.
+  const costOf = (d: BusinessDocument): Money =>
+    perpetual && d.date >= perpetual.from
+      ? money(Math.round(d.kind === 'invoice' || d.kind === 'salesReturn' ? (perpetual.goodsCost.get(d.id) ?? 0) : 0), baseCurrency)
+      : d.kind === 'invoice' || d.kind === 'salesReturn'
+      ? money(signOf(d) * Math.round(d.lines.reduce((acc, l) => acc + unitCost(l.itemId) * l.quantity, 0)), baseCurrency)
+      : zero(baseCurrency);
 
   const costOfGoods = sum(invoices.map(costOf), baseCurrency);
   const grossProfit = subtract(revenue, costOfGoods);
   const expenseTotal = sum(
-    selectedExpenses.map((e) => inBase(subtract(e.amount, e.taxAmount), e.exchangeRate, baseCurrency)),
+    selectedExpenses.map((e) => inBase(expenseCost(e), e.exchangeRate, baseCurrency)),
     baseCurrency,
   );
   const netProfit = subtract(grossProfit, expenseTotal);
@@ -420,14 +543,14 @@ export function profitSnapshot(
   invoices.forEach((d) => {
     const k = monthKey(d.date);
     const cur = monthMap.get(k) ?? { revenue: zero(baseCurrency), cost: zero(baseCurrency), expenses: zero(baseCurrency) };
-    cur.revenue = add(cur.revenue, inBase(d.totals.taxableAmount, d.exchangeRate, baseCurrency));
+    cur.revenue = add(cur.revenue, revenueOf(d));
     cur.cost = add(cur.cost, costOf(d));
     monthMap.set(k, cur);
   });
   selectedExpenses.forEach((e) => {
     const k = monthKey(e.date);
     const cur = monthMap.get(k) ?? { revenue: zero(baseCurrency), cost: zero(baseCurrency), expenses: zero(baseCurrency) };
-    cur.expenses = add(cur.expenses, inBase(subtract(e.amount, e.taxAmount), e.exchangeRate, baseCurrency));
+    cur.expenses = add(cur.expenses, inBase(expenseCost(e), e.exchangeRate, baseCurrency));
     monthMap.set(k, cur);
   });
 

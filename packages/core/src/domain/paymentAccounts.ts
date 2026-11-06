@@ -1,4 +1,4 @@
-import { Expense, Payment, PaymentAccount, PaymentMethod } from '../types';
+import { Expense, Payment, PaymentAccount, PaymentMethod, Voucher } from '../types';
 
 /**
  * Which kinds of account a payment method can settle through. Money paid by
@@ -50,16 +50,18 @@ export function accountFitsMethod(method: PaymentMethod, account: PaymentAccount
 
 /**
  * Running balance of every account, in base-currency minor units:
- * opening + money received − money paid − expenses paid from it.
+ * opening + money received − money paid − expenses paid from it, and what
+ * vouchers moved in or out (a contra from cash to bank, bank charges).
  */
 export function accountBalances(
   accounts: PaymentAccount[],
   payments: Payment[],
   expenses: Expense[],
+  vouchers: Pick<Voucher, 'lines' | 'status'>[] = [],
 ): Record<string, number> {
   const map: Record<string, number> = {};
   accounts.forEach((a) => {
-    map[a.id] = a.openingBalance.minor;
+    map[a.id] = Math.round(a.openingBalance.minor * (a.openingRate ?? 1));
   });
   payments.forEach((p) => {
     if (map[p.accountId] === undefined) return;
@@ -70,5 +72,12 @@ export function accountBalances(
     if (map[e.accountId] === undefined) return;
     map[e.accountId] -= Math.round(e.amount.minor * (e.exchangeRate || 1));
   });
+  // A draft voucher hasn't moved any money yet.
+  vouchers.filter((v) => v.status !== 'draft').forEach((v) =>
+    v.lines.forEach((l) => {
+      const id = l.account.startsWith('pay:') ? l.account.slice(4) : undefined;
+      if (id && map[id] !== undefined) map[id] += l.debit.minor - l.credit.minor;
+    }),
+  );
   return map;
 }

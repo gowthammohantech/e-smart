@@ -1,0 +1,1 @@
+ALTER TABLE "accounts" ADD COLUMN "purge_after" timestamp with time zone;

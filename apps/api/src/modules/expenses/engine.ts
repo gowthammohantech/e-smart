@@ -1,8 +1,8 @@
+import { businessDate } from '@esmart/core/lib/date';
 import { and, eq, inArray, isNull, lte, ne } from 'drizzle-orm';
-import { addDaysISO } from '@esmart/core/lib/date';
 import { inclusiveTax, money, percent, zero, type Money } from '@esmart/core/lib/money';
-import type { RecurrenceFrequency } from '@esmart/core/types';
 import { schema } from '@esmart/db';
+import { nextRecurrence } from '@esmart/core/domain/recurrence';
 import type { AuthUser, Deps } from '../../context';
 import { recordChange, type DbOrTx } from '../../lib/audit';
 import { newId } from '../../lib/ids';
@@ -20,8 +20,10 @@ const E = schema.expenses;
  * tax-exclusive expense the net is recovered as the one `n` with
  * `n + percent(n) = amount`. That keeps a re-save from adding tax twice.
  */
-export function expenseTax(amount: Money, rate: number, taxInclusive: boolean): Money {
+export function expenseTax(amount: Money, rate: number, taxInclusive: boolean, reverseCharge = false): Money {
   if (!(rate > 0)) return zero(amount.currency);
+  // Under reverse charge the supplier's price has no GST in it: the business pays the tax on top, to the government.
+  if (reverseCharge) return percent(amount, rate);
   if (taxInclusive) return inclusiveTax(amount, rate);
   const guess = Math.floor((amount.minor * 100) / (100 + rate));
   for (const n of [guess - 1, guess, guess + 1, guess + 2]) {
@@ -32,47 +34,11 @@ export function expenseTax(amount: Money, rate: number, taxInclusive: boolean): 
   return inclusiveTax(amount, rate);
 }
 
-/** `iso` moved on by whole months, clamped to the end of a shorter month (31 Jan + 1 → 28/29 Feb). */
-function addMonthsISO(iso: string, months: number): string {
-  const [y, m, d] = iso.split('-').map(Number);
-  const total = m - 1 + months;
-  const year = y + Math.floor(total / 12);
-  const month = ((total % 12) + 12) % 12;
-  const last = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
-  return `${year}-${String(month + 1).padStart(2, '0')}-${String(Math.min(d, last)).padStart(2, '0')}`;
-}
-
-/** The `k`th occurrence of a series that started on `anchor`. */
-function occurrence(anchor: string, frequency: Exclude<RecurrenceFrequency, 'none'>, k: number): string {
-  switch (frequency) {
-    case 'weekly':
-      return addDaysISO(anchor, 7 * k);
-    case 'monthly':
-      return addMonthsISO(anchor, k);
-    case 'quarterly':
-      return addMonthsISO(anchor, 3 * k);
-    case 'yearly':
-      return addMonthsISO(anchor, 12 * k);
-  }
-}
-
-/**
- * The first occurrence strictly after `after` of a series anchored on the
- * template's date, or null when it does not recur. Counting from the anchor
- * (rather than from the last occurrence) keeps a series that started on the
- * 31st on month ends instead of drifting to the 28th.
- */
-export function nextRecurrence(anchor: string, frequency: RecurrenceFrequency, after: string = anchor): string | null {
-  if (frequency === 'none') return null;
-  for (let k = 1; k < 100_000; k++) {
-    const d = occurrence(anchor, frequency, k);
-    if (d > after) return d;
-  }
-  return null;
-}
+/** Moved to core so the cash-flow forecast counts a series the same way. */
+export { nextRecurrence };
 
 /** Whoever set a series up is the one its occurrences are recorded against. */
-async function schedulerActor(db: DbOrTx, userId: string): Promise<AuthUser> {
+export async function schedulerActor(db: DbOrTx, userId: string): Promise<AuthUser> {
   const [u] = await db.select({ name: schema.users.name }).from(schema.users).where(eq(schema.users.id, userId));
   return {
     id: userId,
@@ -86,6 +52,8 @@ async function schedulerActor(db: DbOrTx, userId: string): Promise<AuthUser> {
     companyIds: [],
     branchIds: [],
     sessionId: '',
+    mfaEnrolled: false,
+    mfaVerified: false,
   };
 }
 
@@ -97,12 +65,18 @@ async function schedulerActor(db: DbOrTx, userId: string): Promise<AuthUser> {
  * so two runners (or a rerun) never create the same occurrence twice. A
  * template that was missed for several periods catches up on all of them.
  */
-export async function materializeRecurringExpenses(deps: Pick<Deps, 'db'>, today: string | Date): Promise<{ created: string[] }> {
-  const asOf = typeof today === 'string' ? today : today.toISOString().slice(0, 10);
+export async function materializeRecurringExpenses(deps: Pick<Deps, 'db'> & Partial<Pick<Deps, 'now'>>, today: string | Date): Promise<{ created: string[] }> {
+  const asOf = typeof today === 'string' ? today : businessDate(today);
+  // A suspended or closed account's books stay as they were.
+  const activeCompanies = deps.db
+    .select({ id: schema.companies.id })
+    .from(schema.companies)
+    .innerJoin(schema.accounts, eq(schema.accounts.id, schema.companies.accountId))
+    .where(isNull(schema.accounts.suspendedAt));
   const due = await deps.db
     .select({ id: E.id })
     .from(E)
-    .where(and(ne(E.recurrence, 'none'), lte(E.nextRecurrenceDate, asOf), isNull(E.recurringParentId)))
+    .where(and(ne(E.recurrence, 'none'), lte(E.nextRecurrenceDate, asOf), isNull(E.recurringParentId), inArray(E.companyId, activeCompanies)))
     .orderBy(E.nextRecurrenceDate, E.id);
   const created: string[] = [];
 
@@ -115,7 +89,7 @@ export async function materializeRecurringExpenses(deps: Pick<Deps, 'db'>, today
         .for('update', { skipLocked: true });
       if (!template?.nextRecurrenceDate) return;
       const actor = await schedulerActor(tx, template.createdBy);
-      const now = new Date();
+      const now = deps.now?.() ?? new Date();
       let next: string | null = template.nextRecurrenceDate;
 
       while (next && next <= asOf) {
@@ -172,6 +146,10 @@ function copyable(t: ExpenseRow) {
     taxCategoryId: t.taxCategoryId,
     taxAmountMinor: t.taxAmountMinor,
     taxInclusive: t.taxInclusive,
+    placeOfSupplyStateCode: t.placeOfSupplyStateCode,
+    supplierGstin: t.supplierGstin,
+    itcEligibility: t.itcEligibility,
+    reverseCharge: t.reverseCharge,
     accountId: t.accountId,
     method: t.method,
     reference: t.reference,

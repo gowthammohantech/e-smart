@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, View } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { ActivityIndicator, Pressable, View } from 'react-native';
+import { Icon, type IconName } from '../Icon';
 import { useTheme } from '../../theme/ThemeProvider';
 import { Sheet } from '../Sheet';
 import { SearchBar } from '../SearchBar';
@@ -15,7 +15,9 @@ export type SelectOption = {
   value: string;
   label: string;
   description?: string;
-  icon?: keyof typeof MaterialCommunityIcons.glyphMap;
+  icon?: IconName;
+  /** Drawn where the icon goes, in its place: e.g. a business's logo. */
+  leading?: React.ReactNode;
   trailing?: string;
   disabled?: boolean;
   /** A coloured line under the description, e.g. an item's stock. */
@@ -46,11 +48,13 @@ export function SelectSheet({
   value,
   onSelect,
   searchable = true,
-  searchPlaceholder = 'Search',
-  emptyMessage = 'Nothing matches that search.',
+  searchPlaceholder,
+  emptyMessage,
   footer,
   onCreate,
   createLabel,
+  onQueryChange,
+  loading,
   multiple = false,
   onConfirm,
   confirmLabel,
@@ -69,6 +73,13 @@ export function SelectSheet({
   /** Offer the typed search text as a value of its own, for lists that aren't exhaustive. */
   onCreate?: (query: string) => void;
   createLabel?: (query: string) => string;
+  /**
+   * The search is done elsewhere (on the server): the sheet reports what's typed and shows the
+   * options it is given as they are, rather than filtering them itself.
+   */
+  onQueryChange?: (query: string) => void;
+  /** While the options for what's typed are on their way. */
+  loading?: boolean;
   /** Tick several rows, then confirm them together; `onSelect` is not called in this mode. */
   multiple?: boolean;
   onConfirm?: (values: string[]) => void;
@@ -87,20 +98,21 @@ export function SelectSheet({
 
   const close = () => {
     setQuery('');
+    onQueryChange?.('');
     setPicked([]);
     onClose();
   };
 
   // A creatable list always needs the search box — it is where the new value is typed.
-  const showSearch = searchable && (options.length > 6 || !!onCreate);
+  const showSearch = searchable && (options.length > 6 || !!onCreate || !!onQueryChange);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return options;
+    if (!q || onQueryChange) return options;
     return options.filter(
       (o) => o.label.toLowerCase().includes(q) || (o.description ?? '').toLowerCase().includes(q),
     );
-  }, [options, query]);
+  }, [options, query, onQueryChange]);
 
   const typed = query.trim();
   const canCreate = !!onCreate && !!typed && !filtered.some((o) => o.label.toLowerCase() === typed.toLowerCase());
@@ -124,7 +136,7 @@ export function SelectSheet({
         backgroundColor: pressed ? t.c.card2 : 'transparent',
       })}
     >
-      <MaterialCommunityIcons name="plus" size={20} color={t.c.primary} />
+      <Icon name="plus" size={20} color={t.c.primary} />
       <Text variant="body" weight="600" tone="primary" numberOfLines={1} style={{ flex: 1 }}>
         {createText}
       </Text>
@@ -161,15 +173,24 @@ export function SelectSheet({
       header={
         showSearch ? (
           <View style={{ paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.sm }}>
-            <SearchBar value={query} onChangeText={setQuery} placeholder={searchPlaceholder} />
+            <SearchBar
+              value={query}
+              onChangeText={(q) => {
+                setQuery(q);
+                onQueryChange?.(q);
+              }}
+              placeholder={searchPlaceholder ?? tr('common:component.search')}
+            />
           </View>
         ) : null
       }
     >
       {hasBlocked ? <ToastCapture intoRef={sheetToastRef} /> : null}
 
-      {filtered.length === 0 ? (
-        (createRow ?? <EmptyState icon="magnify" title={tr('common:component.noMatches')} message={emptyMessage} compact />)
+      {loading && filtered.length === 0 ? (
+        <ActivityIndicator color={t.c.muted} style={{ padding: t.spacing.xl }} />
+      ) : filtered.length === 0 ? (
+        (createRow ?? <EmptyState icon="magnify" title={tr('common:component.noMatches')} message={emptyMessage ?? tr('common:component.noSearchMatch')} compact />)
       ) : (
         filtered.map((o) => {
           const checked = multiple && picked.includes(o.value);
@@ -206,13 +227,13 @@ export function SelectSheet({
               })}
             >
               {multiple ? (
-                <MaterialCommunityIcons
+                <Icon
                   name={checked ? 'checkbox-marked' : 'checkbox-blank-outline'}
                   size={22}
                   color={checked ? t.c.primary : t.c.muted}
                 />
               ) : null}
-              {o.icon ? <MaterialCommunityIcons name={o.icon} size={20} color={t.c.muted} /> : null}
+              {o.leading ?? (o.icon ? <Icon name={o.icon} size={20} color={t.c.muted} /> : null)}
               <View style={{ flex: 1, gap: 2 }}>
                 <Text variant="body" weight={selected ? '600' : '400'} numberOfLines={1}>
                   {o.label}
@@ -233,7 +254,7 @@ export function SelectSheet({
                   {o.trailing}
                 </Text>
               ) : null}
-              {selected && !multiple ? <MaterialCommunityIcons name="check" size={19} color={t.c.primary} /> : null}
+              {selected && !multiple ? <Icon name="check" size={19} color={t.c.primary} /> : null}
             </Pressable>
           );
         })

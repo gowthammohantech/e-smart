@@ -8,9 +8,11 @@ import { Button } from '@esmart/ui/components/Button';
 import { PickerField, Segmented, TextField } from '@esmart/ui/components/Field';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
-import { useToast } from '@esmart/ui/components/Toast';
+import { useServerSave } from '@esmart/app/components/useServerSave';
+import { useSaveShortcut } from '@esmart/app/components/useSaveShortcut';
 import { useAppStore } from '@esmart/app/store/appStore';
-import { useBranches, useDefaultBranchId, useItems, useStockLevels } from '@esmart/app/store/selectors';
+import { useBranches, useDefaultBranchId } from '@esmart/app/store/selectors';
+import { useTrackedItems } from '@esmart/app/remote/queries';
 import { formatQty } from '@esmart/core/lib/format';
 import { today } from '@esmart/core/lib/date';
 import { Divider, FormFooter, Note, Panel, Row, SummaryRow, TwoColumns } from './parts';
@@ -23,14 +25,14 @@ import { useGoBack } from '@esmart/app/navigation/useGoBack';
  */
 export function StockAdjustDesktop() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['inventory', 'nav']);
+  const { t: tr } = useTranslation(['inventory', 'nav', 'common']);
   const goBack = useGoBack();
-  const toast = useToast();
+  const { run: serverSave, saving } = useServerSave();
   const params = useLocalSearchParams<{ itemId?: string }>();
 
-  const items = useItems().filter((i) => i.trackInventory);
+  // Every tracked item and what's on hand at the active branch, from the server.
+  const { items, stock } = useTrackedItems();
   const branches = useBranches();
-  const stock = useStockLevels();
   const addStockMovement = useAppStore((s) => s.addStockMovement);
   const activeCompanyId = useAppStore((s) => s.activeCompanyId);
   const defaultBranchId = useDefaultBranchId();
@@ -51,28 +53,33 @@ export function StockAdjustDesktop() {
   const delta = direction === 'increase' ? qty : -qty;
   const resulting = current + delta;
 
-  const REASONS =
+  // The chosen reason is saved as the movement's note, in the words the user picked it in.
+  const REASON_KEYS =
     direction === 'decrease'
-      ? ['Damaged', 'Lost or stolen', 'Expired', 'Sample given', 'Stock count correction', 'Internal use']
-      : ['Found stock', 'Stock count correction', 'Returned from customer', 'Production output'];
+      ? (['damaged', 'lost', 'expired', 'sample', 'countCorrection', 'internalUse'] as const)
+      : (['found', 'countCorrection', 'customerReturn', 'production'] as const);
+  const REASONS = REASON_KEYS.map((k) => tr(`inventory:adjust.reasons.${k}`));
 
   const canSave = !!itemId && qty > 0 && !!branchId;
 
   const save = () => {
     if (!canSave || !item) return;
-    addStockMovement({
-      companyId: activeCompanyId,
-      branchId,
-      itemId: item.id,
-      type: 'adjustment',
-      quantity: delta,
-      unitCost: item.purchasePrice,
-      date,
-      notes: reason || undefined,
+    void serverSave(() => {
+      addStockMovement({
+        companyId: activeCompanyId,
+        branchId,
+        itemId: item.id,
+        type: 'adjustment',
+        quantity: delta,
+        unitCost: item.purchasePrice,
+        date,
+        notes: reason || undefined,
+      });
+    }, tr('inventory:adjust.done'), { icon: 'package-variant', detail: item.name }).then((res) => {
+      if (res) goBack(`/(app)/catalog/items/${item.id}`);
     });
-    toast.show(tr('inventory:adjust.done'), 'success');
-    goBack(`/(app)/catalog/items/${item.id}`);
   };
+  useSaveShortcut(() => void save(), !saving && canSave);
 
   return (
     <View style={{ flex: 1 }}>
@@ -80,7 +87,7 @@ export function StockAdjustDesktop() {
       <ScrollView contentContainerStyle={{ paddingBottom: 48, gap: t.spacing.lg }} keyboardShouldPersistTaps="handled">
         <TwoColumns
           main={
-            <Panel title="Adjustment" subtitle="Correct the stock on hand for one item" icon="tune-variant">
+            <Panel title={tr('inventory:adjust.adjustment')} subtitle={tr('inventory:adjust.panelHint')} icon="tune-variant">
               <Row>
                 <PickerField
                   label={tr('inventory:adjust.item')}
@@ -102,8 +109,8 @@ export function StockAdjustDesktop() {
               <Segmented
                 style={{ alignSelf: 'flex-start', width: 280 }}
                 options={[
-                  { value: 'decrease', label: 'Decrease' },
-                  { value: 'increase', label: 'Increase' },
+                  { value: 'decrease', label: tr('inventory:adjust.decrease') },
+                  { value: 'increase', label: tr('inventory:adjust.increase') },
                 ]}
                 value={direction}
                 onChange={(v) => {
@@ -142,12 +149,12 @@ export function StockAdjustDesktop() {
             </Panel>
           }
           side={
-            <Panel title="Result" subtitle={item ? item.name : 'Pick an item to see its stock'} icon="clipboard-text-outline">
+            <Panel title={tr('inventory:adjust.result')} subtitle={item ? item.name : tr('inventory:adjust.pickItemHint')} icon="clipboard-text-outline">
               {item ? (
                 <>
-                  <SummaryRow label="Current stock" value={`${formatQty(current)} ${item.unit}`} />
+                  <SummaryRow label={tr('inventory:adjust.currentStock')} value={`${formatQty(current)} ${item.unit}`} />
                   <SummaryRow
-                    label="Adjustment"
+                    label={tr('inventory:adjust.adjustment')}
                     value={`${delta >= 0 ? '+' : ''}${formatQty(delta)} ${item.unit}`}
                     tone={delta === 0 ? undefined : delta > 0 ? 'good' : 'bad'}
                   />
@@ -165,15 +172,15 @@ export function StockAdjustDesktop() {
                   ) : null}
                 </>
               ) : (
-                <Note>The stock before and after the change appears here once you choose an item.</Note>
+                <Note>{tr('inventory:adjust.resultEmpty')}</Note>
               )}
             </Panel>
           }
         />
 
         <FormFooter>
-          <Button title="Cancel" variant="ghost" onPress={() => goBack(item ? `/(app)/catalog/items/${item.id}` : '/(app)/(tabs)/inventory')} />
-          <Button title={tr('inventory:adjust.submit')} onPress={save} disabled={!canSave} />
+          <Button title={tr('common:action.cancel')} variant="ghost" onPress={() => goBack(item ? `/(app)/catalog/items/${item.id}` : '/(app)/(tabs)/inventory')} />
+          <Button shortcut="S" title={tr('inventory:adjust.submit')} onPress={() => void save()} loading={saving} disabled={!canSave} />
         </FormFooter>
       </ScrollView>
 

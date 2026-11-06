@@ -3,7 +3,8 @@ import { SALES_KINDS } from '@esmart/core/domain/documentStates';
 import { hasModule } from '@esmart/core/domain/plan';
 import { schema } from '@esmart/db';
 import { defineHandlers } from '../../context';
-import { itemToWire } from '../catalog/wire';
+import { stockOnHand } from '../catalog/stock';
+import { itemWithStock } from '../catalog/wire';
 import { summariesToWire, type SummaryRow } from '../documents/wire';
 import { partyToWire } from '../parties/wire';
 import { paymentsToWire } from '../payments/wire';
@@ -45,6 +46,8 @@ export const searchHandlers = defineHandlers({
       .orderBy(I.name, I.id)
       .limit(limit);
 
+    const onHand = await stockOnHand(ctx.db, companyId, items.filter((i) => i.trackInventory).map((i) => i.id));
+
     const D = schema.documents;
     const docFilters: (SQL | undefined)[] = [eq(D.companyId, companyId), or(ilike(D.number, like), ilike(D.reference, like), ilike(D.supplierDocNumber, like), ilike(P.name, like))];
     if (!purchases) docFilters.push(inArray(D.kind, SALES_KINDS));
@@ -70,7 +73,7 @@ export const searchHandlers = defineHandlers({
 
     return {
       parties: parties.map(partyToWire),
-      items: items.map((r) => itemToWire(r)),
+      items: items.map((r) => itemWithStock(r, onHand.get(r.id) ?? 0)),
       documents: await summariesToWire(ctx.db, docs, ctx.now),
       payments: await paymentsToWire(ctx.db, payments, ctx.company.baseCurrency.trim()),
     };

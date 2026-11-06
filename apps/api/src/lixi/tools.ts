@@ -1,3 +1,4 @@
+import { businessDate } from '@esmart/core/lib/date';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { fromMajor, precisionOf, toMajor, type Money } from '@esmart/core/lib/money';
@@ -110,7 +111,7 @@ export function trim(value: unknown, depth = 0): unknown {
   return value;
 }
 
-const today = (ctx: ToolCtx) => ctx.now.toISOString().slice(0, 10);
+const today = (ctx: ToolCtx) => businessDate(ctx.now);
 const money = (ctx: ToolCtx, major: number) => fromMajor(major, ctx.company.baseCurrency.trim());
 const fmt = (m: Money) => {
   const p = precisionOf(m.currency);
@@ -123,7 +124,7 @@ const limit = z.number().int().min(1).max(50).optional().describe('How many rows
 
 // ------------------------------------------------------------------ reads
 
-const DOC_KINDS = ['quote', 'salesOrder', 'delivery', 'invoice', 'salesReturn', 'purchaseOrder', 'goodsReceipt', 'purchaseBill', 'purchaseReturn'] as const;
+const DOC_KINDS = ['quote', 'salesOrder', 'delivery', 'invoice', 'salesReturn', 'creditNote', 'debitNote', 'purchaseOrder', 'goodsReceipt', 'purchaseBill', 'purchaseReturn', 'supplierCreditNote', 'supplierDebitNote'] as const;
 const DOC_STATUSES = ['draft', 'sent', 'accepted', 'issued', 'partiallyPaid', 'paid', 'overdue', 'cancelled'] as const;
 const REPORTS = ['sales-summary', 'purchase-summary', 'expense-summary', 'receivables', 'payables', 'stock', 'tax-summary', 'payments', 'profit'] as const;
 
@@ -219,7 +220,7 @@ const READS: ReadTool[] = [
   }),
   read({
     name: 'get_receivables',
-    title: 'Receivables',
+    title: 'Receivable report',
     description: 'Who owes the business, with aging buckets (current, 1-30, 31-60, 61-90, 90+ days).',
     input: z.object({ partyId: id.optional(), asOf: date.optional() }),
     request: (i, ctx) => ({ method: 'GET', url: `${c(ctx)}/receivables${qs(i)}` }),

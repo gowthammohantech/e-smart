@@ -1,4 +1,4 @@
-import { DocumentKind, NumberingSeries } from '../types';
+import { DocumentKind, NumberingSeries, SeriesDocumentKind } from '../types';
 import { financialYearOf } from '../lib/date';
 
 export type SeriesKind = NumberingSeries['kind'];
@@ -6,6 +6,7 @@ export type SeriesKind = NumberingSeries['kind'];
 /** Every series a company can number, in the order the settings screen lists them. */
 export const SERIES_KINDS: SeriesKind[] = [
   'quote',
+  'proforma',
   'salesOrder',
   'delivery',
   'invoice',
@@ -14,8 +15,18 @@ export const SERIES_KINDS: SeriesKind[] = [
   'goodsReceipt',
   'purchaseBill',
   'purchaseReturn',
+  'creditNote',
+  'debitNote',
+  'supplierCreditNote',
+  'supplierDebitNote',
+  'selfInvoice',
   'payment',
   'expense',
+  'journal',
+  'contra',
+  'gstJournal',
+  'tdsChallan',
+  'receipt',
 ];
 
 /**
@@ -24,14 +35,14 @@ export const SERIES_KINDS: SeriesKind[] = [
  */
 export function formatNumber(
   series: NumberingSeries,
-  opts: { date: string; branchCode?: string; sequence?: number } = { date: new Date().toISOString().slice(0, 10) },
+  opts: { date: string; branchCode?: string; sequence?: number; fiscalYearStartMonth?: number } = { date: new Date().toISOString().slice(0, 10) },
 ): string {
   const seq = opts.sequence ?? series.nextNumber;
   // A trailing "/" in the prefix would double up with the separator below.
   const parts: string[] = [series.prefix.replace(/\/+$/, '')];
   if (series.includeBranchCode && opts.branchCode) parts.push(opts.branchCode);
   if (series.includeFiscalYear) {
-    const fy = financialYearOf(opts.date);
+    const fy = financialYearOf(opts.date, opts.fiscalYearStartMonth);
     parts.push(fy.label.replace('FY ', ''));
   }
   parts.push(String(seq).padStart(series.padding, '0'));
@@ -59,6 +70,7 @@ export function defaultSeries(companyId: string, kind: SeriesKind, prefix: strin
 export const DEFAULT_PREFIXES: Record<SeriesKind, string> = {
   invoice: 'INV',
   quote: 'QT',
+  proforma: 'PI',
   salesOrder: 'SO',
   delivery: 'DN',
   salesReturn: 'CRN',
@@ -66,10 +78,21 @@ export const DEFAULT_PREFIXES: Record<SeriesKind, string> = {
   goodsReceipt: 'GRN',
   purchaseBill: 'BILL',
   purchaseReturn: 'DRN',
+  creditNote: 'CN',
+  debitNote: 'DBN',
+  supplierCreditNote: 'SCN',
+  supplierDebitNote: 'SDN',
+  selfInvoice: 'SI',
   payment: 'PAY',
   expense: 'EXP',
+  journal: 'JV',
+  contra: 'CV',
+  gstJournal: 'GJV',
+  tdsChallan: 'TDS',
+  receipt: 'RV',
 };
 
-export function seriesKindForDocument(kind: DocumentKind): SeriesKind {
+/** The series a document numbers from. An opening invoice or bill keeps its own number and has none. */
+export function seriesKindForDocument(kind: SeriesDocumentKind): SeriesKind {
   return kind;
 }

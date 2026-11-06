@@ -1,5 +1,6 @@
 import type { FastifyError, FastifyInstance } from 'fastify';
 import type { Schema } from '@esmart/api-contract';
+import { reportError } from '../lib/reporter';
 
 export type Issue = Schema<'ComplianceIssue'>;
 type PlanTier = Schema<'PlanTier'>;
@@ -54,6 +55,10 @@ export const featureUnavailable = (detail?: string) => new ApiError(503, 'FEATUR
 export const planUpgradeRequired = (requiredPlan: PlanTier, module: string) =>
   new ApiError(403, 'PLAN_UPGRADE_REQUIRED', `The ${module} module needs the ${requiredPlan} plan`, { requiredPlan });
 
+/** The plan's monthly invoices are used up. */
+export const invoiceLimitReached = (plan: PlanTier, limit: number, requiredPlan: PlanTier | null) =>
+  new ApiError(403, 'PLAN_LIMIT_REACHED', `Your ${plan} plan includes ${limit} invoices a month. Upgrade your plan to issue more.`, { plan, limit, ...(requiredPlan ? { requiredPlan } : {}) });
+
 /** The plan's user limit is used up; `requiredPlan` is the next tier that allows more people (absent when none does). */
 export const planLimitReached = (plan: PlanTier, limit: number, requiredPlan: PlanTier | null) =>
   new ApiError(
@@ -66,6 +71,12 @@ export const planLimitReached = (plan: PlanTier, limit: number, requiredPlan: Pl
 /** One blocking issue, for the common single-field case. */
 export const invalid = (field: string, message: string, code = 'VALIDATION_FAILED') =>
   unprocessable([{ field, message, severity: 'blocking' }], code);
+
+/** Postgres refused a duplicate (23505), raw or wrapped by the query builder. */
+export function uniqueViolation(err: unknown): boolean {
+  const e = err as { code?: string; cause?: { code?: string } } | null;
+  return e?.code === '23505' || e?.cause?.code === '23505';
+}
 
 export function problemHandler(app: FastifyInstance) {
   app.setErrorHandler((err: FastifyError | ApiError, req, reply) => {
@@ -84,12 +95,22 @@ export function problemHandler(app: FastifyInstance) {
         severity: 'blocking',
       }));
       body = { code: 'VALIDATION_FAILED', detail: err.message, issues };
+    } else if (uniqueViolation(err)) {
+      // Two requests raced for the same unique record (a double submit, two devices): the
+      // second is a conflict, not a fault. 4xx also keeps its Idempotency-Key's answer.
+      status = 409;
+      body = { code: 'ALREADY_EXISTS', detail: 'This was already saved; refresh to see it' };
     } else if (err.statusCode && err.statusCode < 500) {
       status = err.statusCode;
       body = { code: err.code ?? 'BAD_REQUEST', detail: err.message };
     } else {
       status = 500;
-      req.log.error({ err }, 'unhandled error');
+      reportError(req.log, err, {
+        requestId: req.id,
+        userId: req.authUser?.id,
+        companyId: req.company?.id,
+        route: req.routeOptions?.url,
+      });
       body = { code: 'INTERNAL', detail: 'Something went wrong on our side' };
     }
     void reply

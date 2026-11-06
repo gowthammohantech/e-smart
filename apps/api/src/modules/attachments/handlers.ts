@@ -156,6 +156,15 @@ export const attachmentsHandlers = defineHandlers({
       for (const co of companies) {
         await recordChange(tx, ctx.user, { companyId: co.id, action: 'updated', entityType: 'company', entityId: co.id, entityLabel: co.name, version: co.version });
       }
+      // Or the signature: the company stops pointing at a file that's going.
+      const signed = await tx
+        .update(schema.companies)
+        .set({ signatureAttachmentId: null, version: sql`${schema.companies.version} + 1`, updatedAt: ctx.now })
+        .where(and(eq(schema.companies.id, ctx.company.id), eq(schema.companies.signatureAttachmentId, current.id)))
+        .returning();
+      for (const co of signed) {
+        await recordChange(tx, ctx.user, { companyId: co.id, action: 'updated', entityType: 'company', entityId: co.id, entityLabel: co.name, version: co.version });
+      }
       await tx.delete(ATT).where(eq(ATT.id, current.id));
       await audit(tx, ctx.user, current, 'deleted', current.status === 'ready' ? 3 : 2);
     });

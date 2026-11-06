@@ -45,7 +45,7 @@ export function TabBar({
   lixiNudge = 0,
 }: TabBarProps & { visible: readonly string[]; lixiNudge?: number }) {
   const t = useTheme();
-  const { t: tr } = useTranslation(['nav']);
+  const { t: tr } = useTranslation(['nav', 'lixi']);
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [width, setWidth] = useState(0);
@@ -128,7 +128,7 @@ export function TabBar({
                 justifyContent: 'center',
               }}
             >
-              <Text style={{ color: '#fff', fontSize: 9, fontWeight: '800' }} numberOfLines={1}>
+              <Text style={{ color: '#fff', fontSize: 9, lineHeight: 12, fontWeight: '800' }} numberOfLines={1}>
                 {typeof badge === 'number' ? countLabel(badge) : badge}
               </Text>
             </View>
@@ -136,12 +136,13 @@ export function TabBar({
         </View>
         {/* Tamil labels run 30-40% longer than English and there are up to
             seven of them. `adjustsFontSizeToFit` is iOS-only, so Android
-            relies on the nine-grapheme budget the catalogue test enforces;
-            `includeFontPadding` reclaims the few pixels Tamil ascender
-            metrics would otherwise eat. */}
+            relies on the nine-grapheme budget the catalogue test enforces,
+            and ends an overlong label with an ellipsis rather than slicing a
+            letter in half; `includeFontPadding` reclaims the few pixels Tamil
+            ascender metrics would otherwise eat. */}
         <Text
           numberOfLines={1}
-          ellipsizeMode="clip"
+          ellipsizeMode="tail"
           adjustsFontSizeToFit
           minimumFontScale={0.8}
           style={{
@@ -217,7 +218,7 @@ export function TabBar({
             router.push('/(app)/lixi');
           }}
           accessibilityRole="button"
-          accessibilityLabel={lixiNudge ? `Ask Lixi, ${lixiNudge} things to look at` : 'Ask Lixi, your assistant'}
+          accessibilityLabel={lixiNudge ? tr('lixi:ui.askWithNudge', { count: lixiNudge }) : tr('nav:more.entry.askLixi')}
           style={({ pressed }) => ({
             position: 'absolute',
             // Hung off the outer view, not the pill: Android drops touches
@@ -248,7 +249,7 @@ export function TabBar({
                 justifyContent: 'center',
               }}
             >
-              <Text style={{ color: '#fff', fontSize: 10, fontWeight: '800' }}>{lixiNudge}</Text>
+              <Text style={{ color: '#fff', fontSize: 10, lineHeight: 16, fontWeight: '800' }}>{lixiNudge}</Text>
             </View>
           ) : null}
         </Pressable>

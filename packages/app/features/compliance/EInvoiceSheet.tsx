@@ -1,9 +1,9 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { keyLabel } from '@esmart/core/labels';
 import { Pressable, ScrollView, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
@@ -20,7 +20,6 @@ import { compliance } from '../../remote';
 import { useActiveCompany, useComplianceSettings } from '../../store/selectors';
 import {
   E_INVOICE_CANCEL_REASONS,
-  E_INVOICE_SUPPLY_TYPES,
   blockingIssues,
   buildIrpPayload,
   canCancelEInvoice,
@@ -32,6 +31,7 @@ import {
 import { nowISO } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
 import { E_INVOICE_STATUS_META } from './complianceMeta';
+import { portalToast } from './portalToast';
 
 /**
  * Reporting an invoice to the portal, and cancelling one (FRD 16).
@@ -93,30 +93,42 @@ export function EInvoiceSheet({
   const cancellation = canCancelEInvoice(doc.compliance, nowISO());
   const meta = E_INVOICE_STATUS_META[doc.compliance?.eInvoiceStatus ?? 'pending'];
 
-  const generate = async () => {
+  // One portal call at a time: a second tap would ask the portal again.
+  const inFlight = useRef(false);
+  const once = async (job: () => Promise<void>) => {
+    if (inFlight.current) return;
+    inFlight.current = true;
     setBusy(true);
-    const outcome = await compliance.generateEInvoice(doc.id);
-    setBusy(false);
-    setResult(outcome.issues);
-    if (outcome.ok) {
-      toast.show(tr('compliance:einv.generated'), 'success');
-      onClose();
-    } else {
-      toast.show(outcome.issues[0]?.message ?? 'The portal refused the invoice', 'error');
+    try {
+      await job();
+    } finally {
+      inFlight.current = false;
+      setBusy(false);
     }
   };
 
-  const cancel = async () => {
-    setBusy(true);
-    const outcome = await compliance.cancelEInvoice(doc.id, reasonCode, remark.trim() || undefined);
-    setBusy(false);
-    if (outcome.ok) {
-      toast.show(tr('compliance:einv.cancelled'), 'success');
-      onClose();
-    } else {
-      toast.show(outcome.issues[0]?.message ?? 'The IRN could not be cancelled', 'error');
-    }
-  };
+  const generate = () =>
+    once(async () => {
+      const outcome = await portalToast(toast, compliance.generateEInvoice(doc.id), {
+        loading: tr('compliance:einv.generating'),
+        success: { text: tr('compliance:einv.generated'), detail: doc.number },
+        failed: tr('compliance:einv.refused'),
+        icon: 'file-certificate-outline',
+      });
+      setResult(outcome.issues);
+      if (outcome.ok) onClose();
+    });
+
+  const cancel = () =>
+    once(async () => {
+      const outcome = await portalToast(toast, compliance.cancelEInvoice(doc.id, reasonCode, remark.trim() || undefined), {
+        loading: tr('compliance:einv.cancelling'),
+        success: { text: tr('compliance:einv.cancelled'), detail: doc.number },
+        failed: tr('compliance:einv.cancelFailed'),
+        icon: 'file-cancel-outline',
+      });
+      if (outcome.ok) onClose();
+    });
 
   /* ---------------- cancel ---------------- */
 
@@ -140,12 +152,11 @@ export function EInvoiceSheet({
           />
         }
       >
-        <View style={{ gap: t.spacing.lg }}>
+        <View style={{ paddingHorizontal: t.spacing.lg, gap: t.spacing.lg }}>
           {cancellation.allowed ? (
             <Card variant="flat">
               <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
-                Cancelling withdraws the reported invoice from the portal. It cannot be undone, and the
-                document number cannot be used again this financial year — raise a fresh invoice instead.
+                {tr('compliance:einv.cancelWarning')}
               </Text>
             </Card>
           ) : (
@@ -174,12 +185,12 @@ export function EInvoiceSheet({
                   backgroundColor: reasonCode === code ? t.c.chip : t.c.card2,
                 }}
               >
-                <MaterialCommunityIcons
+                <Icon
                   name={reasonCode === code ? 'radiobox-marked' : 'radiobox-blank'}
                   size={20}
                   color={reasonCode === code ? t.c.primary : t.c.muted}
                 />
-                <Text variant="small">{E_INVOICE_CANCEL_REASONS[code]}</Text>
+                <Text variant="small" style={{ flex: 1 }}>{tr(`compliance:cancelReason.einv.${code}`)}</Text>
               </Pressable>
             ))}
           </View>
@@ -189,7 +200,7 @@ export function EInvoiceSheet({
             required={needsRemark}
             value={remark}
             onChangeText={setRemark}
-            placeholder={needsRemark ? 'Say what happened' : 'Optional'}
+            placeholder={needsRemark ? tr('compliance:einv.remarkRequired') : tr('compliance:einv.optional')}
             multiline
           />
         </View>
@@ -207,14 +218,14 @@ export function EInvoiceSheet({
     <Sheet
       visible={visible}
       onClose={onClose}
-      title={reported ? 'E-invoice' : 'Generate the e-invoice'}
+      title={reported ? tr('compliance:einv.eInvoice') : tr('compliance:einv.generateTitle')}
       subtitle={doc.number}
       footer={
         reported || !applicability.applicable ? undefined : (
           <View style={{ gap: t.spacing.sm }}>
             {blocking.length > 0 ? (
               <Text variant="caption" tone="bad" center>
-                Fix {blocking.length} {blocking.length === 1 ? 'problem' : 'problems'} before reporting.
+                {tr('compliance:einv.fixProblems', { count: blocking.length })}
               </Text>
             ) : null}
             <Button
@@ -229,10 +240,10 @@ export function EInvoiceSheet({
         )
       }
     >
-      <View style={{ gap: t.spacing.lg }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Text variant="small" weight="600">
-            {applicability.applicable ? E_INVOICE_SUPPLY_TYPES[applicability.supplyType!] : 'Not reportable'}
+      <View style={{ paddingHorizontal: t.spacing.lg, gap: t.spacing.lg }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: t.spacing.md }}>
+          <Text variant="small" weight="600" style={{ flex: 1 }}>
+            {applicability.applicable ? tr(`compliance:supplyType.${applicability.supplyType!}`) : tr('compliance:einv.notReportable')}
           </Text>
           <Badge label={keyLabel(tr, meta.labelKey)} tone={meta.tone} icon={meta.icon} />
         </View>
@@ -275,7 +286,7 @@ export function EInvoiceSheet({
               icon="content-copy"
               onPress={async () => {
                 await Clipboard.setStringAsync(doc.compliance?.irn ?? '');
-                toast.show(tr('compliance:einv.copied'), 'success');
+                toast.show(tr('compliance:einv.copied'), 'success', { icon: 'content-copy', detail: doc.compliance?.irn });
               }}
               fullWidth
             />
@@ -285,10 +296,10 @@ export function EInvoiceSheet({
         {!reported && applicability.applicable ? (
           <>
             <IssueList
-              title={blocking.length ? `${blocking.length} blocking` : 'Portal checks'}
+              title={blocking.length ? tr('compliance:einv.blocking', { count: blocking.length }) : tr('compliance:einv.portalChecks')}
               issues={blocking}
               tone="bad"
-              emptyMessage="Every portal check passes."
+              emptyMessage={tr('compliance:einv.allChecksPass')}
             />
             {warnings.length ? (
               <IssueList title={tr('compliance:einv.worthKnowing')} issues={warnings} tone="warn" />
@@ -312,7 +323,7 @@ export function EInvoiceSheet({
 
             <Pressable onPress={() => setShowPayload((v) => !v)} accessibilityRole="button">
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
-                <MaterialCommunityIcons
+                <Icon
                   name={showPayload ? 'chevron-down' : 'chevron-right'}
                   size={18}
                   color={t.c.muted}
@@ -342,12 +353,13 @@ export function EInvoiceSheet({
 }
 
 function Row({ label, value }: { label: string; value: string }) {
+  const t = useTheme();
   return (
-    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: t.spacing.md }}>
       <Text variant="caption" tone="muted">
         {label}
       </Text>
-      <Text variant="small">{value}</Text>
+      <Text variant="small" style={{ flexShrink: 1, textAlign: 'right' }}>{value}</Text>
     </View>
   );
 }
@@ -373,7 +385,7 @@ export function IssueList({
       </Text>
       {issues.length === 0 ? (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
-          <MaterialCommunityIcons name="check-circle-outline" size={16} color={t.c.good} />
+          <Icon name="check-circle-outline" size={16} color={t.c.good} />
           <Text variant="small" tone="good">
             {emptyMessage}
           </Text>
@@ -384,7 +396,7 @@ export function IssueList({
             key={`${issue.code}-${issue.field}-${i}`}
             style={{ flexDirection: 'row', gap: t.spacing.sm, alignItems: 'flex-start' }}
           >
-            <MaterialCommunityIcons
+            <Icon
               name={tone === 'bad' ? 'alert-circle-outline' : 'information-outline'}
               size={16}
               color={tone === 'bad' ? t.c.bad : t.c.warn}

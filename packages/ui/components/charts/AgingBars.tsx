@@ -1,10 +1,26 @@
 import React from 'react';
 import { Pressable, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../theme/ThemeProvider';
 import { Text } from '../Text';
 import { Money } from '@esmart/core/lib/money';
 import { formatCompactMoney, formatMoney } from '@esmart/core/lib/format';
 import { sequentialRamp } from '../../theme/chartColors';
+import { Badge } from '../Badge';
+import type { IconName } from '../Icon';
+import type { StatusTone } from '@esmart/core/domain/documentStates';
+
+/**
+ * What each bucket asks of the person, with an icon so it doesn't rest on colour alone.
+ * Keys not listed (a custom bucket) show no label.
+ */
+const URGENCY: Record<string, { key: 'notDue' | 'followUp' | 'overdue' | 'escalate' | 'critical'; tone: StatusTone; icon: IconName }> = {
+  current: { key: 'notDue', tone: 'neutral', icon: 'check-circle-outline' },
+  d1_30: { key: 'followUp', tone: 'warning', icon: 'bell-outline' },
+  d31_60: { key: 'overdue', tone: 'warning', icon: 'alert-outline' },
+  d61_90: { key: 'escalate', tone: 'danger', icon: 'alert-outline' },
+  d90plus: { key: 'critical', tone: 'danger', icon: 'alert-circle-outline' },
+};
 
 export type AgingDatum = { key: string; label: string; amount: Money; count: number };
 
@@ -23,6 +39,7 @@ export function AgingBars({
   selectedKey?: string | null;
 }) {
   const t = useTheme();
+  const { t: tr } = useTranslation(['reports']);
   const ramp = sequentialRamp(t.scheme);
   const max = Math.max(...buckets.map((b) => b.amount.minor), 1);
   const total = buckets.reduce((a, b) => a + b.amount.minor, 0);
@@ -49,20 +66,27 @@ export function AgingBars({
       <View style={{ gap: t.spacing.sm }}>
         {buckets.map((b, i) => {
           const pct = Math.max(1.5, (b.amount.minor / max) * 100);
+          // The day ranges read the same in every language; "Current" does not.
+          const label = b.key === 'current' ? tr('reports:cell.current') : b.label;
           const dim = !!selectedKey && selectedKey !== b.key;
+          const urgency = URGENCY[b.key];
+          const urgencyLabel = urgency ? tr(`reports:cell.urgency.${urgency.key}` as const) : '';
           return (
             <Pressable
               key={b.key}
               onPress={onSelect ? () => onSelect(b.key) : undefined}
               accessibilityRole={onSelect ? 'button' : undefined}
-              accessibilityLabel={`${b.label} days: ${formatMoney(b.amount)} across ${b.count} invoices`}
+              accessibilityLabel={[tr('reports:cell.agingA11y', { label, amount: formatMoney(b.amount), count: b.count }), urgencyLabel].filter(Boolean).join('. ')}
               style={{ gap: 5, opacity: dim ? 0.5 : 1 }}
             >
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                <Text variant="caption" tone="muted">
-                  {b.label}
-                  {b.count > 0 ? `  ·  ${b.count}` : ''}
-                </Text>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text variant="caption" tone="muted">
+                    {label}
+                    {b.count > 0 ? `  ·  ${b.count}` : ''}
+                  </Text>
+                  {urgency && b.count > 0 ? <Badge label={urgencyLabel} tone={urgency.tone} icon={urgency.icon} size="sm" /> : null}
+                </View>
                 <Text variant="caption" weight="600">
                   {formatCompactMoney(b.amount)}
                 </Text>

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Sheet } from '@esmart/ui/components/Sheet';
+import { useSaveShortcut } from '../../components/useSaveShortcut';
 import { Text } from '@esmart/ui/components/Text';
 import { Button } from '@esmart/ui/components/Button';
 import { AmountField, PickerField, Segmented, SwitchField, TextField , QuantityStepper } from '@esmart/ui/components/Field';
@@ -39,7 +40,7 @@ type EditorProps = {
  */
 export function LineEditorSheet(props: EditorProps) {
   if (!props.line) return null;
-  return <LineEditorForm key={props.line.id} {...props} />;
+  return <LineEditorForm key={props.line.id} {...props} line={props.line} />;
 }
 
 function LineEditorForm({
@@ -53,9 +54,9 @@ function LineEditorForm({
   onRemove,
   hsnRequired = false,
   maxQuantity,
-}: EditorProps) {
+}: EditorProps & { line: DocumentLine }) {
   const t = useTheme();
-  const { t: tr } = useTranslation(['sales']);
+  const { t: tr } = useTranslation(['sales', 'common', 'inventory']);
 
   const [name, setName] = useState(line?.name ?? '');
   // The line's own description, filled from the item's when it was added.
@@ -69,6 +70,9 @@ function LineEditorForm({
   const [discountValue, setDiscountValue] = useState(line?.discountValue ? String(line.discountValue) : '');
   const [taxCategoryId, setTaxCategoryId] = useState(line?.taxCategoryId ?? '');
   const [taxInclusive, setTaxInclusive] = useState(line?.taxInclusive ?? false);
+  // A pure-agent reimbursement (Rule 33): recovered at cost, with no tax and outside the taxable value.
+  const [reimbursement, setReimbursement] = useState(!!line?.gst?.reimbursement);
+  const gst = line?.gst || reimbursement ? { ...line?.gst, reimbursement: reimbursement || undefined } : undefined;
   const [hsnCode, setHsnCode] = useState(line?.hsnCode ?? '');
   const [unitOpen, setUnitOpen] = useState(false);
   const [taxOpen, setTaxOpen] = useState(false);
@@ -79,8 +83,6 @@ function LineEditorForm({
   // A catalogue line keeps the unit and HSN from the item master; only one-off lines choose their own.
   const fromCatalogue = !!line?.itemId;
   const decimals = unitDecimals(unit);
-
-  if (!line) return null;
 
   const category = taxCategories.find((c) => c.id === taxCategoryId);
   const preview = calculateLine(
@@ -95,6 +97,7 @@ function LineEditorForm({
       taxCategoryId,
       taxRate: category?.rate ?? 0,
       taxInclusive,
+      gst,
     },
     currency,
     taxContext,
@@ -127,18 +130,22 @@ function LineEditorForm({
       discountMode,
       discountValue: Number(discountValue) || 0,
       taxCategoryId,
-      taxRate: category?.rate ?? 0,
-      taxInclusive,
+      taxRate: reimbursement ? 0 : (category?.rate ?? 0),
+      taxInclusive: reimbursement ? false : taxInclusive,
+      gst,
     });
     onClose();
   };
+
+  // Ctrl+S (⌘+S) saves the line while this sheet is up, not over its pickers.
+  useSaveShortcut(save, visible && !unitOpen && !taxOpen);
 
   return (
     <Sheet
       visible={visible}
       onClose={onClose}
       title={tr('sales:line.editLine')}
-      subtitle={line.name || 'New line'}
+      subtitle={line.name || tr('sales:line.newLine')}
       footer={
         <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
           {onRemove ? (
@@ -153,7 +160,7 @@ function LineEditorForm({
               style={{ flex: 1 }}
             />
           ) : null}
-          <Button title={tr('sales:line.saveLine')} onPress={save} style={{ flex: 2 }} />
+          <Button shortcut="S" title={tr('sales:line.saveLine')} onPress={save} style={{ flex: 2 }} />
         </View>
       }
     >
@@ -201,7 +208,7 @@ function LineEditorForm({
         ) : null}
 
         <TextField
-          label={itemType === 'service' ? 'SAC code' : 'HSN code'}
+          label={itemType === 'service' ? tr('sales:line.sacCode') : tr('sales:line.hsnCode')}
           value={hsnCode}
           onChangeText={(v) => setHsnCode(v.replace(/[^0-9]/g, '').slice(0, 8))}
           placeholder={itemType === 'service' ? '998719' : '84821011'}
@@ -245,16 +252,25 @@ function LineEditorForm({
 
         <PickerField
           label={tr('sales:line.tax')}
-          value={category ? `${category.name} (${formatPercent(category.rate)})` : 'No tax'}
+          value={category ? `${category.name} (${formatPercent(category.rate)})` : tr('common:totals.noTax')}
           onPress={() => setTaxOpen(true)}
           icon="percent-outline"
         />
 
+        {reimbursement ? null : (
+          <SwitchField
+            label={tr('sales:line.rateIncludesTax')}
+            description={tr('sales:line.inclusiveHint')}
+            value={taxInclusive}
+            onValueChange={setTaxInclusive}
+          />
+        )}
+
         <SwitchField
-          label={tr('sales:line.rateIncludesTax')}
-          description={tr('sales:line.inclusiveHint')}
-          value={taxInclusive}
-          onValueChange={setTaxInclusive}
+          label={tr('inventory:gst.reimbursement')}
+          description={tr('inventory:gst.reimbursementHint')}
+          value={reimbursement}
+          onValueChange={setReimbursement}
         />
 
         <View
@@ -266,10 +282,10 @@ function LineEditorForm({
           }}
         >
           {[
-            { label: 'Amount', value: formatMoney(preview.gross) },
+            { label: tr('common:table.amount'), value: formatMoney(preview.gross) },
             { label: tr('sales:line.discount'), value: `− ${formatMoney(preview.discount)}` },
-            { label: 'Taxable', value: formatMoney(preview.taxable) },
-            { label: `Tax (${formatPercent(category?.rate ?? 0)})`, value: formatMoney(preview.taxAmount) },
+            { label: tr('common:totals.taxableValue'), value: formatMoney(preview.taxable) },
+            { label: tr('sales:line.taxWithRate', { rate: formatPercent(category?.rate ?? 0) }), value: formatMoney(preview.taxAmount) },
           ].map((r) => (
             <View key={r.label} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
               <Text variant="caption" tone="muted">

@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon, type IconName } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
+import { useToast } from '@esmart/ui/components/Toast';
 import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { Text } from '@esmart/ui/components/Text';
 import { Button } from '@esmart/ui/components/Button';
@@ -13,11 +14,10 @@ import { Illustration } from '@esmart/ui/components/Illustration';
 import { useAppStore } from '../../store/appStore';
 import { queueLogo } from '../../remote/logo';
 import { useOnboardingStore } from '../../store/onboardingStore';
-import { COUNTRIES, stateName } from '@esmart/core/data/masters';
-import { uid } from '@esmart/core/lib/id';
+import { COUNTRIES } from '@esmart/core/data/masters';
 import { joinPhone } from '@esmart/core/lib/phone';
 
-const NEXT_STEPS: { icon: keyof typeof MaterialCommunityIcons.glyphMap; labelKey: string; bodyKey: string }[] = [
+const NEXT_STEPS: { icon: IconName; labelKey: string; bodyKey: string }[] = [
   { icon: 'account-plus-outline', labelKey: 'customersLabel', bodyKey: 'customersBody' },
   { icon: 'tag-outline', labelKey: 'itemsLabel', bodyKey: 'itemsBody' },
   { icon: 'file-document-outline', labelKey: 'invoiceLabel', bodyKey: 'invoiceBody' },
@@ -26,6 +26,7 @@ const NEXT_STEPS: { icon: keyof typeof MaterialCommunityIcons.glyphMap; labelKey
 export default function Done() {
   const t = useTheme();
   const { t: tr } = useTranslation(['onboarding']);
+  const toast = useToast();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const desktop = useIsDesktop();
@@ -33,12 +34,15 @@ export default function Done() {
   const [busy, setBusy] = useState(false);
 
   const createCompany = useAppStore((s) => s.createCompany);
-  const saveBranch = useAppStore((s) => s.saveBranch);
   const completeOnboarding = useAppStore((s) => s.completeOnboarding);
   const numberingSeries = useAppStore((s) => s.numberingSeries);
   const saveNumberingSeries = useAppStore((s) => s.saveNumberingSeries);
 
+  // Read at once, not after a re-render: a double tap would create the business twice.
+  const finished = useRef(false);
   const finish = (goToInvoice: boolean) => {
+    if (finished.current) return;
+    finished.current = true;
     setBusy(true);
     const country = COUNTRIES.find((c) => c.code === draft.country);
 
@@ -47,7 +51,8 @@ export default function Done() {
       legalName: draft.legalName || undefined,
       logoUri: draft.logoUri,
       businessType: draft.businessType,
-      plan: draft.plan,
+      // Free only for now, whatever an older saved draft says.
+      plan: 'free',
       country: draft.country,
       baseCurrency: draft.baseCurrency,
       address: draft.address,
@@ -67,27 +72,6 @@ export default function Done() {
     // Uploads by itself once the business has reached the server; until then the picked image is what shows.
     if (draft.logoUri) queueLogo(companyId, draft.logoUri);
 
-    draft.branches.forEach((b) => {
-      saveBranch({
-        id: uid('brn'),
-        companyId,
-        name: b.name,
-        code: b.code,
-        // A branch has its own address (it goes on e-way bills); fall back to the
-        // head office only for what was left blank.
-        address: {
-          line1: b.line1 || '',
-          city: b.city || draft.address.city,
-          stateCode: b.stateCode || draft.address.stateCode,
-          state: b.stateCode ? stateName(b.stateCode) : draft.address.state,
-          postalCode: b.postalCode || '',
-          country: draft.address.country,
-        },
-        gstin: b.gstin || undefined,
-        isPrimary: false,
-      });
-    });
-
     // Apply the numbering choices to the newly created invoice series.
     const series = useAppStore
       .getState()
@@ -104,6 +88,7 @@ export default function Done() {
 
     completeOnboarding();
     reset();
+    toast.show(tr('onboarding:done.created'), 'success', { icon: 'store-check-outline', detail: draft.name || tr('onboarding:done.defaultName') });
     router.replace(goToInvoice ? '/(app)/sales/invoices/new' : '/(app)/(tabs)');
   };
 
@@ -144,7 +129,7 @@ export default function Done() {
                   justifyContent: 'center',
                 }}
               >
-                <MaterialCommunityIcons name={s.icon} size={19} color={t.c.primary} />
+                <Icon name={s.icon} size={19} color={t.c.primary} />
               </View>
               <View style={{ flex: 1, gap: 2 }}>
                 <Text variant="body" weight="600">
@@ -168,13 +153,13 @@ export default function Done() {
       >
         {desktop ? (
           <>
-            <Button title={tr('onboarding:done.goToDashboard')} variant="ghost" onPress={() => finish(false)} />
+            <Button title={tr('onboarding:done.goToDashboard')} variant="ghost" onPress={() => finish(false)} disabled={busy} />
             <Button title={tr('onboarding:done.createInvoice')} onPress={() => finish(true)} loading={busy} iconRight="arrow-right" />
           </>
         ) : (
           <>
             <Button title={tr('onboarding:done.createInvoice')} onPress={() => finish(true)} loading={busy} fullWidth size="lg" />
-            <Button title={tr('onboarding:done.goToDashboard')} variant="ghost" onPress={() => finish(false)} fullWidth />
+            <Button title={tr('onboarding:done.goToDashboard')} variant="ghost" onPress={() => finish(false)} disabled={busy} fullWidth />
           </>
         )}
       </View>

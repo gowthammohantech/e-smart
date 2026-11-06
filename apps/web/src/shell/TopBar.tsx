@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Platform, Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon, type IconName } from '@esmart/ui/components/Icon';
+import { readableOn } from '@esmart/ui/theme/contrast';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { focusRing, type WebPressState } from '@esmart/ui/theme/interaction';
 import { Text } from '@esmart/ui/components/Text';
@@ -13,17 +14,20 @@ import { Menu, MenuDivider, MenuItem, useMenuAnchor } from '@esmart/ui/component
 import { countLabel } from '@esmart/core/lib/format';
 import { formatRelative } from '@esmart/core/lib/date';
 import { useAppStore } from '@esmart/app/store/appStore';
-import { useRemoteMeta } from '@esmart/app/remote';
+import { carriesQueue, ConnectionBadge } from '@esmart/app/components/ConnectionBadge';
+import { useConnectivity } from '@esmart/app/remote';
 import { useCurrentUser, useNotifications, useUnreadCount } from '@esmart/app/store/selectors';
 import { LIXI, LixiMark } from '@esmart/ui/components/LixiOrb';
 import { toggleLixiPanel, useLixiPanel } from '../lixiPanel';
 import { useSignOut } from '@esmart/app/features/session/useSignOut';
 import { NOTIFICATION_META, notificationRoute } from '@esmart/app/features/notifications/notificationMeta';
 import { CommandPalette } from './CommandPalette';
+import { BranchPicker, CompanyPicker } from './CompanySwitcher';
+import { useBreakpoint } from '@esmart/ui/theme/breakpoints';
+import { SETTINGS_HREF } from '@esmart/app/navigation/pages';
+import { appHref } from '@esmart/app/navigation/menu';
 
-export const TOP_BAR_HEIGHT = 60;
-
-type IconName = keyof typeof MaterialCommunityIcons.glyphMap;
+export const TOP_BAR_HEIGHT = 56;
 
 const IconButton = React.forwardRef<
   View,
@@ -40,8 +44,8 @@ const IconButton = React.forwardRef<
         const { pressed, hovered, focused } = state as WebPressState;
         return [
           {
-            width: 38,
-            height: 38,
+            width: 36,
+            height: 36,
             borderRadius: t.radius.md,
             alignItems: 'center',
             justifyContent: 'center',
@@ -51,13 +55,15 @@ const IconButton = React.forwardRef<
         ];
       }}
     >
-      <MaterialCommunityIcons name={icon} size={20} color={t.c.text} />
+      <Icon name={icon} size={18} color={t.c.muted} />
       {badge ? (
         <View
           style={{
             position: 'absolute',
-            top: 3,
-            right: 3,
+            top: 2,
+            right: 2,
+            borderWidth: 2,
+            borderColor: t.c.paper,
             minWidth: 16,
             height: 16,
             borderRadius: 8,
@@ -67,7 +73,7 @@ const IconButton = React.forwardRef<
             justifyContent: 'center',
           }}
         >
-          <Text variant="micro" tone="onPrimary" weight="700" style={{ fontSize: 9 }}>
+          <Text variant="micro" tone="onPrimary" weight="600" style={{ fontSize: 9 }}>
             {countLabel(badge)}
           </Text>
         </View>
@@ -92,10 +98,10 @@ function LixiButton({ label }: { label: string }) {
           {
             flexDirection: 'row',
             alignItems: 'center',
-            gap: 8,
-            height: 38,
-            paddingLeft: 8,
-            paddingRight: 14,
+            gap: 6,
+            height: 36,
+            paddingLeft: 6,
+            paddingRight: 12,
             borderRadius: t.radius.md,
             backgroundColor: open || pressed || hovered ? t.c.chip : 'transparent',
           },
@@ -103,8 +109,9 @@ function LixiButton({ label }: { label: string }) {
         ];
       }}
     >
-      <LixiMark size={26} />
-      <Text weight="600" style={{ color: LIXI.blue }}>
+      <LixiMark size={22} />
+      {/* Lixi's own blue, lightened in dark mode until it reads on the bar (3.1:1 as is). */}
+      <Text variant="small" weight="600" style={{ color: readableOn(LIXI.blue, t.c.paper, t.c.text) }}>
         Lixi
       </Text>
     </Pressable>
@@ -112,8 +119,10 @@ function LixiButton({ label }: { label: string }) {
 }
 
 /**
- * The desktop app's top bar: search (⌘K), sync state, Lixi, notifications
- * and your account. The business switcher lives at the top of the sidebar.
+ * The desktop app's top bar, in three parts: the business and branch you're
+ * in on the left (each its own picker), search (⌘K) in the middle, and sync
+ * state, Lixi, notifications and your account on the right. The two sides
+ * share the leftover width equally, so search stays centred on the bar.
  */
 export function TopBar() {
   const t = useTheme();
@@ -127,8 +136,10 @@ export function TopBar() {
   const markAllRead = useAppStore((s) => s.markAllNotificationsRead);
   const signOut = useSignOut();
 
-  const offline = !useRemoteMeta((m) => m.online);
-  const pendingSync = useAppStore((s) => s.syncQueue.filter((q) => q.status !== 'synced').length);
+  const pendingSync = useAppStore((s) => s.syncQueue.filter((q) => q.status === 'pending').length);
+  const failedSync = useAppStore((s) => s.syncQueue.filter((q) => q.status === 'failed').length);
+  const mode = useConnectivity((s) => s.mode);
+  const showQueued = pendingSync > 0 && !carriesQueue(mode);
 
   const { setAnchor: bellAnchor, rect: bellRect, open: openBellMenu, close: closeBellMenu } = useMenuAnchor();
   const { setAnchor: accountAnchor, rect: accountRect, open: openAccountMenu, close: closeAccountMenu } = useMenuAnchor();
@@ -154,20 +165,28 @@ export function TopBar() {
   }, []);
 
   const go = (route: string) => router.push(route as never);
+  // A tablet-width window keeps just the logo and branch mark, so search keeps its room.
+  const narrow = useBreakpoint() === 'tablet';
 
   return (
     <View
+      role="banner"
       style={{
         height: TOP_BAR_HEIGHT,
         flexDirection: 'row',
         alignItems: 'center',
         gap: t.spacing.md,
-        paddingHorizontal: t.spacing.lg,
+        paddingHorizontal: narrow ? t.spacing.lg : t.spacing.xxl,
         backgroundColor: t.c.paper,
         borderBottomWidth: 1,
         borderBottomColor: t.c.line,
       }}
     >
+      <View style={{ flex: 1, flexBasis: 0, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
+        <CompanyPicker compact={narrow} />
+        <BranchPicker compact={narrow} />
+      </View>
+
       <Pressable
         onPress={() => setPaletteOpen(true)}
         accessibilityRole="search"
@@ -176,37 +195,48 @@ export function TopBar() {
           const { hovered, focused } = state as WebPressState;
           return [
             {
-              flex: 1,
-              maxWidth: 520,
-              height: 38,
+              width: 480,
+              flexShrink: 1,
+              minWidth: 200,
+              height: 36,
               flexDirection: 'row',
               alignItems: 'center',
               gap: t.spacing.sm,
               paddingHorizontal: t.spacing.md,
               borderRadius: t.radius.md,
               borderWidth: 1,
-              borderColor: hovered ? t.c.muted : t.c.line,
-              backgroundColor: t.c.bg,
+              borderColor: hovered ? t.c.lineStrong : t.c.line,
+              backgroundColor: t.c.card2,
             },
             focusRing(t, focused),
           ];
         }}
       >
-        <MaterialCommunityIcons name="magnify" size={18} color={t.c.muted} />
+        <Icon name="magnify" size={16} color={t.c.muted} />
         <Text variant="small" tone="muted" numberOfLines={1} style={{ flex: 1 }}>
           {tr('nav:shell.searchPlaceholder')}
         </Text>
-        <View style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: t.c.line }}>
-          <Text variant="micro" tone="muted" weight="700">
+        <View style={{ paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4, borderWidth: 1, borderColor: t.c.line, backgroundColor: t.c.card }}>
+          <Text variant="micro" tone="muted" weight="500">
             {tr('nav:shell.searchShortcut')}
           </Text>
         </View>
       </Pressable>
 
-      <View style={{ flex: 1 }} />
-
-      {offline ? <Badge label={tr('common:component.offline')} tone="warning" icon="cloud-off-outline" size="sm" style={{ alignSelf: 'center' }} /> : null}
-      {!offline && pendingSync > 0 ? <Badge label={`${countLabel(pendingSync)} queued`} tone="info" icon="sync" size="sm" style={{ alignSelf: 'center' }} /> : null}
+      <View style={{ flex: 1, flexBasis: 0, minWidth: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: t.spacing.sm }}>
+      <ConnectionBadge style={{ alignSelf: 'center' }} />
+      {/* Failed or queued changes open the sync page, where each can be retried or discarded. */}
+      {failedSync > 0 || showQueued ? (
+        <Pressable
+          onPress={() => router.push('/(app)/settings/sync')}
+          accessibilityRole="button"
+          accessibilityLabel={tr('common:component.openSyncStatus')}
+          style={(state) => [{ flexDirection: 'row', gap: t.spacing.xs, alignSelf: 'center', borderRadius: 999, opacity: (state as WebPressState).hovered ? 0.85 : 1 }, focusRing(t, (state as WebPressState).focused)]}
+        >
+          {failedSync > 0 ? <Badge label={tr('common:component.failedSync', { count: failedSync })} tone="danger" icon="cloud-alert" size="sm" /> : null}
+          {showQueued ? <Badge label={tr('common:component.queuedSync', { count: countLabel(pendingSync) })} tone="info" icon="sync" size="sm" /> : null}
+        </Pressable>
+      ) : null}
 
       <LixiButton label={tr('nav:more.entry.askLixi')} />
       <IconButton ref={bellAnchor} icon="bell-outline" label={tr('nav:shell.notifications')} onPress={openBellMenu} badge={unread} />
@@ -218,12 +248,13 @@ export function TopBar() {
         accessibilityLabel={tr('nav:shell.account')}
         style={(state) => [{ borderRadius: 18, opacity: (state as WebPressState).hovered ? 0.85 : 1 }, focusRing(t, (state as WebPressState).focused)]}
       >
-        <Avatar name={user?.name ?? '?'} size={34} color={user?.avatarColor} />
+        <Avatar name={user?.name ?? '?'} size={30} color={user?.avatarColor} />
       </Pressable>
+      </View>
 
       <Menu anchor={bellRect} onClose={closeBellMenu} align="right" width={380}>
         <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: t.spacing.lg, paddingVertical: t.spacing.sm }}>
-          <Text variant="body" weight="700" style={{ flex: 1 }}>
+          <Text variant="body" weight="600" style={{ flex: 1 }}>
             {tr('nav:shell.notifications')}
           </Text>
           {unread > 0 ? (
@@ -267,7 +298,7 @@ export function TopBar() {
 
       <Menu anchor={accountRect} onClose={closeAccountMenu} align="right" width={260}>
         <View style={{ paddingHorizontal: t.spacing.lg, paddingVertical: t.spacing.sm, gap: 2 }}>
-          <Text variant="small" weight="700" numberOfLines={1}>
+          <Text variant="small" weight="600" numberOfLines={1}>
             {user?.name}
           </Text>
           <Text variant="caption" tone="muted" numberOfLines={1}>
@@ -280,7 +311,7 @@ export function TopBar() {
             ['account-circle-outline', 'nav:title.yourProfile', '/(app)/settings/profile'],
             ['star-circle-outline', 'nav:more.entry.planAndBilling', '/(app)/settings/plan'],
             ['palette-outline', 'nav:more.entry.appearanceAndLanguage', '/(app)/settings/appearance'],
-            ['cog-outline', 'nav:shell.allSettings', '/(app)/(tabs)/more'],
+            ['cog-outline', 'nav:shell.allSettings', appHref(SETTINGS_HREF)],
           ] as const
         ).map(([icon, key, route]) => (
           <MenuItem

@@ -2,7 +2,7 @@ import { eq, inArray } from 'drizzle-orm';
 import { schema } from '@esmart/db';
 import type { Schema } from '@esmart/api-contract';
 import type { DbOrTx } from '../../lib/audit';
-import { compact, iso } from '../../lib/wire';
+import { compact, iso, versioned } from '../../lib/wire';
 
 type UserRow = typeof schema.users.$inferSelect;
 
@@ -33,6 +33,8 @@ export async function userToWire(db: DbOrTx, row: UserRow): Promise<Schema<'User
     avatarColor: row.avatarColor,
     status: row.status,
     lastActiveAt: iso(row.lastActiveAt),
+    // Without it the app takes the person for one the server hasn't seen, and an edit goes up as a new invite.
+    ...versioned(row),
   });
 }
 

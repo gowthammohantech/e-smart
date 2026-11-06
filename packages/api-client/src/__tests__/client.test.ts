@@ -51,6 +51,12 @@ describe('createApiClient', () => {
     expect(seen[0].headers.get('Authorization')).toBeNull();
   });
 
+  it('signs a GSTIN lookup, which the server only answers for a user', async () => {
+    const { api, seen } = setup(() => json(200, {}));
+    await api.GET('/reference/gstin/{gstin}', { params: { path: { gstin: '29AABCG4321K1ZM' } } });
+    expect(seen[0].headers.get('Authorization')).toBe('Bearer old');
+  });
+
   it('refreshes once on 401 and replays the request with its body', async () => {
     let calls = 0;
     const { api, seen, getTokens } = setup(async (req) => {
@@ -72,6 +78,35 @@ describe('createApiClient', () => {
     const { api, getTokens } = setup(() => json(401, { code: 'SESSION_REVOKED' }, 'application/problem+json'));
     await expect(api.GET('/me')).rejects.toBeInstanceOf(ApiError);
     expect(getTokens()).toBeNull();
+  });
+
+  it.each([500, 503, 429, 403, 511])('keeps the session when the refresh answers %i', async (status) => {
+    const { api, getTokens } = setup((req) =>
+      req.url.endsWith('/auth/refresh') ? json(status, { status }) : json(401, { code: 'TOKEN_EXPIRED' }, 'application/problem+json'),
+    );
+    await expect(api.GET('/me')).rejects.toBeDefined();
+    expect(getTokens()).toEqual({ accessToken: 'old', refreshToken: 'r1' });
+  });
+
+  it('keeps the session when something other than the API answers the refresh with 401', async () => {
+    const { api, getTokens } = setup((req) =>
+      req.url.endsWith('/auth/refresh')
+        ? new Response('<html>Sign in to Wi-Fi</html>', { status: 401, headers: { 'content-type': 'text/html' } })
+        : json(401, { code: 'TOKEN_EXPIRED' }, 'application/problem+json'),
+    );
+    await expect(api.GET('/me')).rejects.toBeDefined();
+    expect(getTokens()).toEqual({ accessToken: 'old', refreshToken: 'r1' });
+  });
+
+  it('gives up on a request that never settles, as on a lost connection', async () => {
+    const api = createApiClient({
+      baseUrl: BASE,
+      getTokens: () => null,
+      setTokens: () => {},
+      timeoutMs: 10,
+      fetch: (() => new Promise(() => {})) as unknown as typeof fetch,
+    });
+    await expect(api.GET('/me')).rejects.toBeInstanceOf(TypeError);
   });
 
   it('throws ApiError carrying the problem code and issues', async () => {
@@ -124,5 +159,35 @@ describe('createApiClient', () => {
       const err = await api.POST('/auth/sign-in', { body: { email: 'a@b.co', password: 'x' } as never }).catch((e: unknown) => e);
       expect((err as ApiError).code).toBe('INVALID_CREDENTIALS');
     });
+  });
+});
+
+describe('two tabs sharing one session', () => {
+  it('rotates the tokens once: the second tab takes the pair the first one stored', async () => {
+    // One browser's storage and lock, two clients (two tabs).
+    let tokens: Tokens | null = { accessToken: 'old', refreshToken: 'r1' };
+    let held: Promise<unknown> = Promise.resolve();
+    const locks = { request: <T>(_name: string, fn: () => Promise<T>) => (held = held.then(fn, fn)) as Promise<T> };
+    vi.stubGlobal('navigator', { locks });
+    let refreshes = 0;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const req = input instanceof Request ? input : new Request(input, init);
+      if (req.url.endsWith('/auth/refresh')) {
+        refreshes++;
+        const body = (await req.json()) as { refreshToken: string };
+        // The server refuses a refresh token used twice.
+        return body.refreshToken === 'r1' ? json(200, { accessToken: 'new', refreshToken: 'r2' }) : json(401, { code: 'REFRESH_TOKEN_INVALID' }, 'application/problem+json');
+      }
+      return req.headers.get('Authorization') === 'Bearer new' ? json(200, { data: [] }) : json(401, { code: 'TOKEN_EXPIRED' }, 'application/problem+json');
+    });
+    const tab = () =>
+      createApiClient({ baseUrl: BASE, getTokens: () => tokens, setTokens: (t) => void (tokens = t), fetch: fetchMock as typeof fetch });
+    const [a, b] = [tab(), tab()];
+    const [ra, rb] = await Promise.all([a.GET('/me'), b.GET('/me')]);
+    expect(ra.response.status).toBe(200);
+    expect(rb.response.status).toBe(200);
+    expect(refreshes).toBe(1);
+    expect(tokens).toEqual({ accessToken: 'new', refreshToken: 'r2' });
+    vi.unstubAllGlobals();
   });
 });

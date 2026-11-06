@@ -2,11 +2,13 @@ import { and, eq, exists, gte, ilike, inArray, lte, or, sql, type SQL } from 'dr
 import { schema } from '@esmart/db';
 import type { Schema } from '@esmart/api-contract';
 import { RawBody, defineHandlers, type Ctx } from '../../context';
+import { money } from '../../lib/wire';
 import { checkIfMatch, setEtag } from '../../http/etag';
-import { notFound } from '../../http/errors';
+import { ApiError, notFound } from '../../http/errors';
 import { keyset } from '../../http/pagination';
 import type { DbOrTx } from '../../lib/audit';
-import { deletePayment, assertDirectionAllowed, linkPaymentAttachments, writePayment, type PaymentInput } from './engine';
+import { deletePayment, assertDirectionAllowed, linkPaymentAttachments, writePayment } from './engine';
+import { amountInBase, holdPayment, paymentLimit, requestInput } from './requests';
 import { receiptHtml } from './receipt';
 import { paymentsToWire, type PaymentRow } from './wire';
 
@@ -18,7 +20,7 @@ async function findPayment(ctx: AnyCtx, db: DbOrTx, id: string, opts: { lock?: b
   const q = db.select().from(PAY).where(and(eq(PAY.companyId, ctx.company.id), eq(PAY.id, id)));
   const [row] = opts.lock ? await q.for('update') : await q;
   if (!row || (ctx.user.branchIds.length && !ctx.user.branchIds.includes(row.branchId))) throw notFound('Payment');
-  assertDirectionAllowed(ctx.company, row.direction);
+  assertDirectionAllowed(ctx.company, row.direction, !!row.refundOfPaymentId);
   return row;
 }
 
@@ -27,50 +29,42 @@ async function toWire(ctx: AnyCtx, row: PaymentRow) {
   return p;
 }
 
-function inputOf(body: Schema<'Payment'>): PaymentInput {
-  return {
-    direction: body.direction,
-    partyId: body.partyId,
-    branchId: body.branchId,
-    date: body.date,
-    amountMinor: body.amount.minor,
-    amountCurrency: body.amount.currency,
-    currency: body.currency,
-    exchangeRate: body.exchangeRate,
-    method: body.method,
-    reference: body.reference,
-    accountId: body.accountId,
-    notes: body.notes,
-    allocations: (body.allocations ?? []).map((a) => ({ documentId: a.documentId, amountMinor: a.amount.minor, currency: a.amount.currency })),
-  };
-}
+const inputOf = requestInput;
 
 /**
  * Payments: listPayments, createPayment, getPayment, savePayment,
  * removePayment, getPaymentReceiptPdf.
  */
+type PaymentQuery = Pick<Ctx<'listPayments'>['query'], 'direction' | 'partyId' | 'method' | 'accountId' | 'branchId' | 'from' | 'to' | 'q'> & Partial<Pick<Ctx<'listPayments'>['query'], 'documentId'>>;
+
+/** The WHERE of a payment list, shared by the list and its summary so the two never disagree. */
+function paymentFilters(ctx: Pick<Ctx<'listPayments'>, 'company' | 'user' | 'db'>, q: PaymentQuery): (SQL | undefined)[] {
+  if (q.direction) assertDirectionAllowed(ctx.company, q.direction);
+  const filters: (SQL | undefined)[] = [eq(PAY.companyId, ctx.company.id)];
+  if (q.direction) filters.push(eq(PAY.direction, q.direction));
+  if (q.partyId) filters.push(eq(PAY.partyId, q.partyId));
+  if (q.method) filters.push(eq(PAY.method, q.method));
+  if (q.accountId) filters.push(eq(PAY.accountId, q.accountId));
+  if (q.branchId) filters.push(eq(PAY.branchId, q.branchId));
+  if (ctx.user.branchIds.length) filters.push(inArray(PAY.branchId, ctx.user.branchIds));
+  if (q.from) filters.push(gte(PAY.date, q.from));
+  if (q.to) filters.push(lte(PAY.date, q.to));
+  if (q.documentId) {
+    const A = schema.paymentAllocations;
+    filters.push(exists(ctx.db.select({ one: sql`1` }).from(A).where(and(eq(A.paymentId, PAY.id), eq(A.documentId, q.documentId)))));
+  }
+  if (q.q) {
+    const like = `%${q.q.trim()}%`;
+    const P = schema.parties;
+    filters.push(or(ilike(PAY.number, like), ilike(PAY.reference, like), exists(ctx.db.select({ one: sql`1` }).from(P).where(and(eq(P.id, PAY.partyId), ilike(P.name, like))))));
+  }
+  return filters;
+}
+
 export const paymentsHandlers = defineHandlers({
   async listPayments(ctx) {
     const q = ctx.query;
-    if (q.direction) assertDirectionAllowed(ctx.company, q.direction);
-    const filters: (SQL | undefined)[] = [eq(PAY.companyId, ctx.company.id)];
-    if (q.direction) filters.push(eq(PAY.direction, q.direction));
-    if (q.partyId) filters.push(eq(PAY.partyId, q.partyId));
-    if (q.method) filters.push(eq(PAY.method, q.method));
-    if (q.accountId) filters.push(eq(PAY.accountId, q.accountId));
-    if (q.branchId) filters.push(eq(PAY.branchId, q.branchId));
-    if (ctx.user.branchIds.length) filters.push(inArray(PAY.branchId, ctx.user.branchIds));
-    if (q.from) filters.push(gte(PAY.date, q.from));
-    if (q.to) filters.push(lte(PAY.date, q.to));
-    if (q.documentId) {
-      const A = schema.paymentAllocations;
-      filters.push(exists(ctx.db.select({ one: sql`1` }).from(A).where(and(eq(A.paymentId, PAY.id), eq(A.documentId, q.documentId)))));
-    }
-    if (q.q) {
-      const like = `%${q.q.trim()}%`;
-      const P = schema.parties;
-      filters.push(or(ilike(PAY.number, like), ilike(PAY.reference, like), exists(ctx.db.select({ one: sql`1` }).from(P).where(and(eq(P.id, PAY.partyId), ilike(P.name, like))))));
-    }
+    const filters = paymentFilters(ctx, q);
     const k = keyset({ cursor: q.cursor, limit: q.limit, sort: PAY.date, id: PAY.id, order: 'desc' });
     const rows = await ctx.db
       .select()
@@ -81,8 +75,22 @@ export const paymentsHandlers = defineHandlers({
     return k.page(await paymentsToWire(ctx.db, rows.slice(0, k.take - 1), ctx.company.baseCurrency.trim()), rows);
   },
 
+  async summarizePaymentList(ctx) {
+    const [row] = await ctx.db
+      .select({ count: sql<number>`count(*)::int`, total: sql<number>`coalesce(sum(round(${PAY.amountMinor} * ${PAY.exchangeRate})), 0)::bigint` })
+      .from(PAY)
+      .where(and(...paymentFilters(ctx, ctx.query)));
+    return { count: row.count, total: money(Number(row.total), ctx.company.baseCurrency.trim()) };
+  },
+
   async createPayment(ctx) {
-    assertDirectionAllowed(ctx.company, ctx.body.direction);
+    assertDirectionAllowed(ctx.company, ctx.body.direction, !!ctx.body.refundOf);
+    // Over the company's payment rule, from someone who isn't an approver: kept for an owner or admin (RULES 6.14).
+    const limit = paymentLimit(ctx.company, ctx.user, ctx.body);
+    if (limit !== null && amountInBase(ctx.body) > limit) {
+      const held = await ctx.db.transaction((tx) => holdPayment(tx, ctx.deps, ctx.company, ctx.user, ctx.body, ctx.now));
+      throw new ApiError(409, 'PAYMENT_HELD', `Payments over ${(limit / 100).toFixed(2)} need an owner or admin. This one is waiting for their approval.`, { requestId: held.id });
+    }
     const row = await ctx.db.transaction(async (tx) => {
       const created = await writePayment(tx, ctx.deps, ctx.company, ctx.user, inputOf(ctx.body), { now: ctx.now });
       await linkPaymentAttachments(tx, ctx.company.id, created.id, ctx.body.attachmentIds);
@@ -99,7 +107,7 @@ export const paymentsHandlers = defineHandlers({
   },
 
   async savePayment(ctx) {
-    assertDirectionAllowed(ctx.company, ctx.body.direction);
+    assertDirectionAllowed(ctx.company, ctx.body.direction, !!ctx.body.refundOf);
     const row = await ctx.db.transaction(async (tx) => {
       const current = await findPayment(ctx, tx, ctx.params.id, { lock: true });
       checkIfMatch(ctx.req, current.version);

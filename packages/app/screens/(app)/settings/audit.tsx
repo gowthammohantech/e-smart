@@ -1,8 +1,8 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, ScrollView, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { Stack } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon, type IconName } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
@@ -10,12 +10,13 @@ import { Badge } from '@esmart/ui/components/Badge';
 import { SearchBar } from '@esmart/ui/components/SearchBar';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { Avatar } from '@esmart/ui/components/Avatar';
-import { useAuditEvents } from '../../../store/selectors';
+import { useAuditPages } from '../../../remote/queries';
+import { useDebounced } from '../../../components/useDebounced';
 import { formatDateTime } from '@esmart/core/lib/date';
 import { auditChanges } from '@esmart/core/domain/auditDiff';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 
-const ICONS: Record<string, keyof typeof MaterialCommunityIcons.glyphMap> = {
+const ICONS: Record<string, IconName> = {
   created: 'plus-circle-outline',
   updated: 'pencil-outline',
   deleted: 'trash-can-outline',
@@ -34,37 +35,48 @@ function fieldLabel(path: string): string {
 
 export default function AuditTrail() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['nav', 'settings']);
-  const events = useAuditEvents();
+  const { t: tr } = useTranslation(['nav', 'settings', 'domain']);
+  // Statuses are stored as their codes ("partiallyPaid"); show them as the rest of the app names them.
+  const status = (code: string) => tr(`domain:status.${code}`, { defaultValue: code });
+  const actionText = (action: string) => {
+    const marked = /^marked (\w+)$/.exec(action);
+    return marked ? `marked ${status(marked[1]).toLowerCase()}` : action;
+  };
   const [query, setQuery] = useState('');
   const [openId, setOpenId] = useState<string | null>(null);
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return events;
-    return events.filter((e) => `${e.action} ${e.entityType} ${e.entityLabel} ${e.actorName}`.toLowerCase().includes(q));
-  }, [events, query]);
+  // Read from the server 50 at a time, newest first, and searched there.
+  const pages = useAuditPages(useDebounced(query));
+  const filtered = pages.rows;
 
   const iconFor = (action: string) =>
     ICONS[action] ?? (action.startsWith('marked') ? 'flag-outline' : action.includes('payment') ? 'cash' : 'circle-small');
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('nav:title.auditTrail') }} />
 
       <View style={{ paddingHorizontal: t.spacing.lg, paddingTop: t.spacing.md, gap: t.spacing.sm }}>
         <SearchBar value={query} onChangeText={setQuery} placeholder={tr('settings:audit.search')} />
         <Text variant="caption" tone="muted">
-          {filtered.length} events · append-only, newest first
+          {tr('settings:audit.count', { count: filtered.length })}
         </Text>
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40 }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
+      <ScrollView
+        contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40 }}
+        showsVerticalScrollIndicator={SHOW_SCROLLBAR}
+        onScroll={({ nativeEvent: e }: NativeSyntheticEvent<NativeScrollEvent>) => {
+          if (e.layoutMeasurement.height + e.contentOffset.y >= e.contentSize.height - 600 && pages.hasNextPage && !pages.isFetchingNextPage) void pages.fetchNextPage();
+        }}
+        scrollEventThrottle={200}
+      >
         <Card padded={false}>
-          {filtered.length === 0 ? (
+          {pages.isLoading && !filtered.length ? (
+            <ActivityIndicator color={t.c.muted} style={{ padding: t.spacing.xl }} />
+          ) : filtered.length === 0 ? (
             <EmptyState icon="history" title={tr('settings:audit.none')} message={tr('settings:audit.noneBody')} compact />
           ) : (
-            filtered.slice(0, 150).map((e, i) => {
+            filtered.map((e, i) => {
               const changes = auditChanges(e.before, e.after);
               const open = openId === e.id && changes.length > 0;
               return (
@@ -85,9 +97,9 @@ export default function AuditTrail() {
                     <Avatar name={e.actorName} size={34} />
                     <View style={{ flex: 1, gap: 3 }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <MaterialCommunityIcons name={iconFor(e.action)} size={14} color={t.c.muted} />
+                        <Icon name={iconFor(e.action)} size={14} color={t.c.muted} />
                         <Text variant="small" weight="600" style={{ flex: 1 }} numberOfLines={1}>
-                          {e.actorName} {e.action} {e.entityLabel}
+                          {e.actorName} {actionText(e.action)} {e.entityLabel}
                         </Text>
                       </View>
                       <Text variant="caption" tone="muted">
@@ -96,7 +108,7 @@ export default function AuditTrail() {
                       </Text>
                     </View>
                     {e.device ? <Badge label={e.device} tone="neutral" size="sm" /> : null}
-                    {changes.length ? <MaterialCommunityIcons name={open ? 'chevron-up' : 'chevron-down'} size={18} color={t.c.muted} /> : null}
+                    {changes.length ? <Icon name={open ? 'chevron-up' : 'chevron-down'} size={18} color={t.c.muted} /> : null}
                   </View>
                   {open ? (
                     <View style={{ marginLeft: 34 + t.spacing.md, gap: t.spacing.sm }}>
@@ -104,9 +116,9 @@ export default function AuditTrail() {
                         <View key={c.field} style={{ gap: 2 }}>
                           <Text variant="caption" weight="600">{c.field === 'value' ? tr('settings:audit.value') : fieldLabel(c.field)}</Text>
                           <Text variant="caption" tone="bad" style={{ textDecorationLine: c.from ? 'line-through' : 'none' }}>
-                            {c.from ?? tr('settings:audit.empty')}
+                            {c.from == null ? tr('settings:audit.empty') : c.field === 'status' ? status(c.from) : c.from}
                           </Text>
-                          <Text variant="caption" tone="good">{c.to ?? tr('settings:audit.empty')}</Text>
+                          <Text variant="caption" tone="good">{c.to == null ? tr('settings:audit.empty') : c.field === 'status' ? status(c.to) : c.to}</Text>
                         </View>
                       ))}
                     </View>
@@ -116,9 +128,10 @@ export default function AuditTrail() {
             })
           )}
         </Card>
+        {pages.isFetchingNextPage ? <ActivityIndicator color={t.c.muted} style={{ paddingVertical: t.spacing.md }} /> : null}
 
         <Card variant="flat" style={{ marginTop: t.spacing.lg, flexDirection: 'row', gap: t.spacing.md }}>
-          <MaterialCommunityIcons name="lock-outline" size={19} color={t.c.muted} />
+          <Icon name="lock-outline" size={19} color={t.c.muted} />
           <Text variant="caption" tone="muted" style={{ flex: 1, lineHeight: 18 }}>{tr('settings:audit.note')}</Text>
         </Card>
       </ScrollView>

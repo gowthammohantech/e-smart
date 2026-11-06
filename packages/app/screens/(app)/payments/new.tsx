@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { FieldRow, FormContainer, FormSection, SplitPane } from '@esmart/ui/components/Layout';
 import { FormActions } from '@esmart/ui/components/ActionBar';
@@ -13,44 +13,55 @@ import { Badge } from '@esmart/ui/components/Badge';
 import { Button } from '@esmart/ui/components/Button';
 import { Avatar } from '@esmart/ui/components/Avatar';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
-import { AmountField, PickerField, TextField } from '@esmart/ui/components/Field';
+import { AmountField, PickerField, SwitchField, TextField } from '@esmart/ui/components/Field';
+import { useDecimalText } from '../../../components/useDecimalText';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { useToast } from '@esmart/ui/components/Toast';
+import { useServerSave } from '../../../components/useServerSave';
+import { useSaveShortcut } from '../../../components/useSaveShortcut';
+import { useLeaveGuard } from '../../../components/useLeaveGuard';
 
 import { Payment, PaymentAllocation, PaymentDirection, PaymentMethod } from '@esmart/core/types';
-import { availableAdvance, buildOutstanding } from '@esmart/core/domain/receivables';
-import { accountBalances, accountIdAfterMethodChange, accountsForMethod, defaultAccountFor } from '@esmart/core/domain/paymentAccounts';
+import { accountIdAfterMethodChange, accountsForMethod, defaultAccountFor } from '@esmart/core/domain/paymentAccounts';
 import { resolveRate, settlementGainLoss } from '@esmart/core/domain/fx';
-import { PAYMENT_METHODS } from '@esmart/core/data/masters';
+import { INDIAN_STATES, PAYMENT_METHODS } from '@esmart/core/data/masters';
 import { CURRENCIES } from '@esmart/core/lib/currencies';
+import { TDS_SECTIONS, tdsSection } from '@esmart/core/data/tdsSections';
 import { paymentMethodLabel } from '@esmart/core/labels';
 import { formatMoney, toAmountInput } from '@esmart/core/lib/format';
-import { formatDate, today } from '@esmart/core/lib/date';
-import { Money, fromMajor, money, subtract, zero } from '@esmart/core/lib/money';
+import { daysBetween, formatDate, today } from '@esmart/core/lib/date';
+import { Money, fromMajor, inclusiveTax, money, subtract, zero } from '@esmart/core/lib/money';
 import { uid } from '@esmart/core/lib/id';
 
 import { useAppStore } from '../../../store/appStore';
 import {
   useBaseCurrency,
-  useDocuments,
+  useCurrentUser,
   useExchangeRates,
-  useExpenses,
   useHasModule,
   useParties,
   usePaymentAccounts,
-  usePayments,
   useDefaultBranchId,
+  useActiveCompany,
+  useTaxCategories,
 } from '../../../store/selectors';
+import { loadForAdvances, useOpenDocuments, usePartyRecord, usePartySearch, useServerAccountBalances } from '../../../remote/queries';
+import { useDebounced } from '../../../components/useDebounced';
 import { SHOW_SCROLLBAR, useBreakpoint } from '@esmart/ui/theme/breakpoints';
 import { useGoBack } from '../../../navigation/useGoBack';
 
+
+/** What settles a document besides cash. */
+type Adjustment = 'tdsDeducted' | 'discount' | 'writeOff';
+const ADJUSTMENTS: Adjustment[] = ['tdsDeducted', 'discount', 'writeOff'];
 export default function NewPayment() {
   const t = useTheme();
   const { t: tr } = useTranslation(['domain', 'sales', 'common']);
   const router = useRouter();
   const goBack = useGoBack();
   const toast = useToast();
+  const { run: serverSave, saving, blocked, release: releaseSave } = useServerSave();
   const insets = useSafeAreaInsets();
   // Always 'phone' in the native apps, so the desktop layout only ever reaches a browser.
   const breakpoint = useBreakpoint();
@@ -62,13 +73,14 @@ export default function NewPayment() {
   const direction: PaymentDirection = params.direction === 'paid' && canPay ? 'paid' : 'received';
 
   const baseCurrency = useBaseCurrency();
+  const company = useActiveCompany();
+  const taxCategories = useTaxCategories();
   const parties = useParties(direction === 'received' ? 'customer' : 'supplier');
   const accounts = usePaymentAccounts();
   const exchangeRates = useExchangeRates();
-  const openDocs = useDocuments(direction === 'received' ? 'invoice' : 'purchaseBill');
-  const existingPayments = usePayments(direction);
-  const allPayments = usePayments();
-  const expenses = useExpenses();
+  const user = useCurrentUser();
+  // The server lets only these roles write off what a party owes.
+  const canWriteOff = ['owner', 'admin', 'accountant'].includes(user?.role ?? '');
   const savePayment = useAppStore((s) => s.savePayment);
   const applyAdvances = useAppStore((s) => s.applyAdvances);
   const defaultBranchId = useDefaultBranchId();
@@ -90,8 +102,18 @@ export default function NewPayment() {
   const [amountFollows, setAmountFollows] = useState(true);
   const [reference, setReference] = useState('');
   const [notes, setNotes] = useState('');
+  // An advance for services carries GST from the day it is received (s.13(2)).
+  const [serviceAdvance, setServiceAdvance] = useState(false);
+  const [advanceTaxId, setAdvanceTaxId] = useState<string | undefined>();
+  const [advancePos, setAdvancePos] = useState<string | undefined>();
+  const [advanceSheet, setAdvanceSheet] = useState<'tax' | 'pos' | 'tds' | null>(null);
+  /** The section of TDS kept back on money paid; the supplier's own until changed. */
+  const [tdsSectionChoice, setTdsSectionChoice] = useState<string | null>(null);
   const [seeded, setSeeded] = useState(false);
   const [allocations, setAllocations] = useState<Record<string, string>>({});
+  /** Per document: what settles it without cash (TDS deducted, discount, write-off), as typed. */
+  const [adjustments, setAdjustments] = useState<Record<string, Partial<Record<Adjustment, string>>>>({});
+  const [adjusting, setAdjusting] = useState<string | null>(null);
   /** Set only when the user overrides the resolved settlement rate. */
   const [rateOverride, setRateOverride] = useState<number | null>(null);
 
@@ -101,25 +123,42 @@ export default function NewPayment() {
   const [currencyOpen, setCurrencyOpen] = useState(false);
   const [methodOpen, setMethodOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
+  // What the person has picked or typed; an amount that only follows the allocations is not theirs.
+  const entered = JSON.stringify([partyId, date, amountFollows ? null : amountText, reference, notes]);
+  const [untouched] = useState(entered);
+  const leaveGuard = useLeaveGuard(entered !== untouched);
 
-  const party = parties.find((p) => p.id === partyId);
+  // The party from the server, with the advance it holds; the store copy until it lands.
+  const partyRecord = usePartyRecord(partyId ?? undefined).data;
+  const party = (partyRecord as unknown as (typeof parties)[number] | undefined) ?? parties.find((p) => p.id === partyId);
+  const [partyQuery, setPartyQuery] = useState('');
+  const partySearch = usePartySearch(direction === 'received' ? 'customer' : 'supplier', useDebounced(partyQuery), partyOpen);
 
   // A payment settles in the party's currency unless the user picks another, at
   // the rate effective on the payment date unless the user says otherwise.
   const currency = currencyChoice ?? party?.currency ?? baseCurrency;
 
-  // Outstanding documents for the selected party in the payment currency, oldest first.
+  // Money in settles invoices and debit notes; money out, bills and supplier debit notes. What each
+  // still owes is the server's figure (returns and credit notes already off), in the payment currency, oldest first.
+  const open = useOpenDocuments(partyId, direction === 'received' ? ['invoice', 'debitNote'] : ['purchaseBill', 'supplierDebitNote']);
   const outstanding = useMemo(() => {
-    if (!partyId) return [];
-    const docs = openDocs.filter((d) => d.partyId === partyId && d.currency === currency);
-    return buildOutstanding(docs, existingPayments).sort((a, b) => a.document.date.localeCompare(b.document.date));
-  }, [openDocs, existingPayments, partyId, currency]);
+    const asOf = today();
+    return (open.data ?? [])
+      .filter((d) => d.grandTotal.currency === currency && (d.outstanding?.minor ?? 0) > 0)
+      .map((d) => ({
+        document: { id: d.id, number: d.number, date: d.date, dueDate: d.dueDate, exchangeRate: d.exchangeRate ?? 1 },
+        outstanding: d.outstanding as Money,
+        daysOverdue: d.dueDate ? daysBetween(d.dueDate, asOf) : 0,
+      }))
+      .sort((a, b) => a.document.date.localeCompare(b.document.date));
+  }, [open.data, currency]);
 
   const resolvedRate = useMemo(
     () => (currency === baseCurrency ? 1 : resolveRate(exchangeRates, currency, baseCurrency, date)),
     [currency, baseCurrency, exchangeRates, date],
   );
   const exchangeRate = rateOverride ?? resolvedRate;
+  const rateText = useDecimalText(exchangeRate, setRateOverride);
 
   // Seed the allocation from the invoice we were opened from, on the first
   // render where that invoice is actually in the outstanding list.
@@ -131,13 +170,13 @@ export default function NewPayment() {
   }
 
   // Advances already held against this party (unallocated parts of earlier payments).
-  const advance = useMemo(
-    () => availableAdvance(existingPayments.filter((p) => p.partyId === partyId), currency),
-    [existingPayments, partyId, currency],
-  );
+  const held = (partyRecord as { advance?: Money } | undefined)?.advance;
+  const advance = held && held.currency === currency ? held : zero(currency);
   /** Adjust held advances against every open document, or just `docId`. */
-  const adjustAdvance = (docId?: string) => {
+  const adjustAdvance = async (docId?: string) => {
     if (!partyId) return;
+    // The rule runs on the device, so it needs the party's payments and these documents in full.
+    await loadForAdvances(activeCompanyId, partyId, direction, docId ? [docId] : outstanding.map((o) => o.document.id));
     const applied = applyAdvances(partyId, direction, docId ? [docId] : undefined);
     const next = { ...allocations };
     if (docId) delete next[docId];
@@ -149,6 +188,7 @@ export default function NewPayment() {
         ? tr('sales:payment.advanceAdjusted', { amount: applied.map((m) => formatMoney(m)).join(', ') })
         : tr('sales:payment.advanceNothingToAdjust'),
       applied.length ? 'success' : 'info',
+      { icon: 'cash-refund', detail: `${party?.name ?? ''}` },
     );
   };
 
@@ -162,6 +202,11 @@ export default function NewPayment() {
     [allocations, currency],
   );
   const unallocated = subtract(amount, allocatedTotal);
+  const taxed = taxCategories.filter((c) => c.rate > 0);
+  const advanceTaxCategory = taxed.find((c) => c.id === advanceTaxId) ?? taxed.find((c) => c.rate === 18) ?? taxed[0];
+  const pos = advancePos ?? party?.billingAddress?.stateCode ?? company.taxRegistration?.placeOfSupplyStateCode;
+  const canAdvance = direction === 'received' && unallocated.minor > 0 && !!company.taxRegistration?.registered && !!taxed.length;
+  const advanceTax = canAdvance && serviceAdvance && advanceTaxCategory && pos ? { taxCategoryId: advanceTaxCategory.id, rate: advanceTaxCategory.rate, placeOfSupplyStateCode: pos } : null;
   const overAllocated = unallocated.minor < 0;
 
   /**
@@ -214,7 +259,7 @@ export default function NewPayment() {
       // Apply only what is left of the typed amount.
       const take = Math.min(full.minor, amount.minor - sumOf(allocations));
       if (take <= 0) {
-        toast.show(tr('sales:payment.nothingLeftToApply'), 'info');
+        toast.show(tr('sales:payment.nothingLeftToApply'), 'warning', { icon: 'cash-remove' });
         return;
       }
       next[docId] = toAmountInput(money(take, currency));
@@ -230,6 +275,29 @@ export default function NewPayment() {
     setAllocations(next);
     if (amountFollows) setAmountText(toAmountInput(money(sumOf(next), currency)));
   };
+
+  const adjustedOf = (docId: string, a = adjustments) =>
+    ADJUSTMENTS.reduce((acc, k) => acc + fromMajor(a[docId]?.[k] || '0', currency).minor, 0);
+
+  /** An adjustment never takes a document past what it owes; the cash on it shrinks to fit. */
+  const setAdjustment = (docId: string, key: Adjustment, v: string, owed: Money) => {
+    const typed = { ...adjustments[docId], [key]: v };
+    const others = ADJUSTMENTS.filter((k) => k !== key).reduce((acc, k) => acc + fromMajor(typed[k] || '0', currency).minor, 0);
+    if (fromMajor(v || '0', currency).minor > owed.minor - others) typed[key] = toAmountInput(money(Math.max(owed.minor - others, 0), currency));
+    const nextAdj = { ...adjustments, [docId]: typed };
+    setAdjustments(nextAdj);
+    const room = owed.minor - adjustedOf(docId, nextAdj);
+    if (fromMajor(allocations[docId] || '0', currency).minor > room) {
+      const next = { ...allocations, [docId]: toAmountInput(money(Math.max(room, 0), currency)) };
+      setAllocations(next);
+      if (amountFollows) setAmountText(toAmountInput(money(sumOf(next), currency)));
+    }
+  };
+  const adjustedTotal = Object.keys(allocations).reduce((acc, id) => acc + adjustedOf(id), 0);
+  // TDS kept back on money paid goes under a section (26Q): the supplier's own unless changed.
+  const keepsTds = direction === 'paid' && Object.keys(allocations).some((id) => fromMajor(adjustments[id]?.tdsDeducted || '0', currency).minor > 0);
+  const partySection = (party as { tdsSection?: string } | undefined)?.tdsSection;
+  const tdsSectionPicked = tdsSectionChoice ?? (partySection && partySection !== 'none' ? partySection : undefined);
 
   const fxGainLoss = useMemo(() => {
     if (currency === baseCurrency) return undefined;
@@ -249,27 +317,33 @@ export default function NewPayment() {
     return money(total, baseCurrency);
   }, [outstanding, allocations, currency, baseCurrency, exchangeRate]);
 
-  // Money going out cannot exceed what the account holds; cash in hand can never go negative.
+  // Money going out cannot exceed what the account holds, whether cash, bank or wallet.
   const account = accounts.find((a) => a.id === accountId);
-  const balance = useMemo(
-    () => (accountId ? accountBalances(accounts, allPayments, expenses)[accountId] : undefined),
-    [accounts, allPayments, expenses, accountId],
-  );
+  const balances = useServerAccountBalances();
+  const balance = accountId ? balances?.[accountId] : undefined;
   const amountInBase = Math.round(amount.minor * (exchangeRate || 1));
   const shortfall = direction === 'paid' && balance !== undefined && amountInBase > balance;
-  const balanceBlocks = shortfall && account?.type === 'cash';
+  const balanceBlocks = shortfall && !!account;
 
-  const canSave = !!partyId && amount.minor > 0 && !overAllocated && !!accountId && !balanceBlocks;
+  // A receipt may move no money when it only records TDS deducted, a discount or a write-off.
+  const canSave = !!partyId && (amount.minor > 0 || (amount.minor === 0 && adjustedTotal > 0)) && !overAllocated && !!accountId && !balanceBlocks && (!keepsTds || !!tdsSectionPicked);
 
-  const save = () => {
+  const save = async () => {
     if (!canSave || !partyId) return;
 
+    const adj = (docId: string, key: Adjustment) => {
+      const m = fromMajor(adjustments[docId]?.[key] || '0', currency);
+      return m.minor > 0 ? m : undefined;
+    };
     const allocationRows: PaymentAllocation[] = outstanding
-      .filter((o) => allocations[o.document.id] && fromMajor(allocations[o.document.id], currency).minor > 0)
+      .filter((o) => o.document.id in allocations && fromMajor(allocations[o.document.id] || '0', currency).minor + adjustedOf(o.document.id) > 0)
       .map((o) => ({
         documentId: o.document.id,
         documentNumber: o.document.number,
-        amount: fromMajor(allocations[o.document.id], currency),
+        amount: fromMajor(allocations[o.document.id] || '0', currency),
+        tdsDeducted: adj(o.document.id, 'tdsDeducted'),
+        discount: adj(o.document.id, 'discount'),
+        writeOff: canWriteOff ? adj(o.document.id, 'writeOff') : undefined,
       }));
 
     const payment: Payment = {
@@ -289,20 +363,31 @@ export default function NewPayment() {
       allocations: allocationRows,
       unallocated: unallocated.minor > 0 ? unallocated : zero(currency),
       fxGainLoss,
+      advanceTax: advanceTax ?? undefined,
+      tdsSection: keepsTds ? tdsSectionPicked : undefined,
       notes: notes || undefined,
       attachmentIds: [],
       createdBy: '',
       createdAt: new Date().toISOString(),
     };
 
-    const id = savePayment(payment);
-    if (!id) {
-      toast.show(tr('sales:payment.noAccountForMethod'), 'error');
+    const res = await serverSave(() => savePayment(payment), direction === 'received' ? tr('sales:payment.recorded') : tr('sales:payment.made'), {
+      icon: direction === 'received' ? 'cash-check' : 'cash-fast',
+      // A template literal, so the compiler knows it is a plain string and not a handle on the party.
+      detail: `${formatMoney(amount)}${party ? ` · ${party.name}` : ''}`,
+      // Busy until it has left for the payment: a second tap would record it again.
+      hold: true,
+    });
+    if (!res) return;
+    if (!res.result) {
+      releaseSave();
+      toast.show(tr('sales:payment.noAccountForMethod'), 'error', { icon: 'bank-off-outline' });
       return;
     }
-    toast.show(direction === 'received' ? 'Payment recorded' : 'Payment made', 'success');
-    router.replace(`/(app)/payments/${id}`);
+    await leaveGuard.release();
+    router.replace(`/(app)/payments/${res.id ?? res.result}`);
   };
+  useSaveShortcut(() => void save(), !saving && canSave);
 
   // Every block is built once and placed twice: stacked in one column on a
   // phone, grouped into cards across two columns on a desktop browser.
@@ -317,7 +402,7 @@ export default function NewPayment() {
                 {party.name}
               </Text>
               <Text variant="caption" tone="muted">
-                {outstanding.length} open {outstanding.length === 1 ? 'document' : 'documents'}
+                {tr('sales:payment.openDocuments', { count: outstanding.length })}
               </Text>
             </View>
           </>
@@ -333,14 +418,14 @@ export default function NewPayment() {
                 justifyContent: 'center',
               }}
             >
-              <MaterialCommunityIcons name="account-search-outline" size={21} color={t.c.primary} />
+              <Icon name="account-search-outline" size={21} color={t.c.primary} />
             </View>
             <Text variant="body" weight="600" style={{ flex: 1 }}>
-              Select {direction === 'received' ? 'customer' : 'supplier'}
+              {tr(direction === 'received' ? 'sales:editor.selectCustomer' : 'sales:editor.selectSupplier')}
             </Text>
           </>
         )}
-        <MaterialCommunityIcons name="chevron-right" size={20} color={t.c.muted} />
+        <Icon name="chevron-right" size={20} color={t.c.muted} />
       </Card>
     </Pressable>
   );
@@ -351,7 +436,7 @@ export default function NewPayment() {
       value={party?.name}
       onPress={() => setPartyOpen(true)}
       icon="account-search-outline"
-      hint={party ? `${outstanding.length} open ${outstanding.length === 1 ? 'document' : 'documents'}` : undefined}
+      hint={party ? tr('sales:payment.openDocuments', { count: outstanding.length }) : undefined}
       required
     />
   );
@@ -399,7 +484,7 @@ export default function NewPayment() {
         methodAccounts.length === 0
           ? tr('sales:payment.noAccountForMethod')
           : balanceBlocks
-            ? tr('sales:payment.insufficientCash', { balance: formatMoney(money(balance ?? 0, baseCurrency)) })
+            ? tr('sales:payment.insufficientInAccount', { account: account?.name ?? '', balance: formatMoney(money(balance ?? 0, baseCurrency)) })
             : undefined
       }
       hint={
@@ -431,9 +516,8 @@ export default function NewPayment() {
   const rateField =
     currency !== baseCurrency ? (
       <TextField
-        label={`Settlement rate (1 ${currency} → ${baseCurrency})`}
-        value={String(exchangeRate)}
-        onChangeText={(v) => setRateOverride(Number(v.replace(/[^0-9.]/g, '')) || 0)}
+        label={`${tr('sales:payment.settlementRate')} (1 ${currency} → ${baseCurrency})`}
+        {...rateText}
         keyboardType="decimal-pad"
         icon="swap-horizontal"
         hint={tr('sales:payment.fxHint')}
@@ -443,7 +527,7 @@ export default function NewPayment() {
   const advanceCard =
     partyId && advance.minor > 0 && outstanding.length > 0 ? (
       <Card style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
-        <MaterialCommunityIcons name="wallet-outline" size={22} color={t.c.primary} />
+        <Icon name="wallet-outline" size={22} color={t.c.primary} />
         <View style={{ flex: 1, gap: 2 }}>
           <Text variant="small" weight="600">{tr('sales:payment.advanceAvailable', { amount: formatMoney(advance) })}</Text>
           <Text variant="caption" tone="muted">{tr('sales:payment.advanceAvailableHint')}</Text>
@@ -490,10 +574,10 @@ export default function NewPayment() {
             onPress={() => toggleAllocation(o.document.id, o.outstanding)}
             accessibilityRole="checkbox"
             accessibilityState={{ checked: selected }}
-            accessibilityLabel={`Allocate to ${o.document.number}`}
+            accessibilityLabel={tr('sales:payment.allocateTo', { number: o.document.number })}
             style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}
           >
-            <MaterialCommunityIcons
+            <Icon
               name={selected ? 'checkbox-marked' : 'checkbox-blank-outline'}
               size={21}
               color={selected ? t.c.primary : t.c.muted}
@@ -503,14 +587,14 @@ export default function NewPayment() {
                 {o.document.number}
               </Text>
               <Text variant="caption" tone="muted">
-                {formatDate(o.document.date, 'dd MMM')} · due {formatDate(o.document.dueDate ?? o.document.date, 'dd MMM')}
+                {formatDate(o.document.date, 'dd MMM')} · {tr('sales:detail.dueOn', { date: formatDate(o.document.dueDate ?? o.document.date, 'dd MMM') })}
               </Text>
             </View>
             <View style={{ alignItems: 'flex-end', gap: 3 }}>
               <Text variant="small" weight="700">
                 {formatMoney(o.outstanding)}
               </Text>
-              {o.daysOverdue > 0 ? <Badge label={`${o.daysOverdue}d late`} tone="danger" size="sm" /> : null}
+              {o.daysOverdue > 0 ? <Badge label={tr('sales:payment.daysLate', { days: o.daysOverdue })} tone="danger" size="sm" /> : null}
             </View>
           </Pressable>
 
@@ -521,7 +605,7 @@ export default function NewPayment() {
               accessibilityRole="button"
               style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginLeft: 33 }}
             >
-              <MaterialCommunityIcons name="wallet-outline" size={15} color={t.c.primary} />
+              <Icon name="wallet-outline" size={15} color={t.c.primary} />
               <Text variant="caption" tone="primary" weight="600">
                 {tr('sales:payment.useAdvanceHere', {
                   amount: formatMoney(money(Math.min(advance.minor, o.outstanding.minor), currency)),
@@ -533,11 +617,33 @@ export default function NewPayment() {
           {selected ? (
             <AmountField
               value={allocations[o.document.id]}
-              onChangeValue={(v) => setRowAllocation(o.document.id, v, o.outstanding)}
+              onChangeValue={(v) => setRowAllocation(o.document.id, v, money(o.outstanding.minor - adjustedOf(o.document.id), currency))}
               currency={currency}
               label={tr('sales:payment.applying')}
             />
           ) : null}
+
+          {selected && adjusting !== o.document.id && adjustedOf(o.document.id) === 0 ? (
+            <Pressable onPress={() => setAdjusting(o.document.id)} hitSlop={6} accessibilityRole="button" style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginLeft: 33 }}>
+              <Icon name="tune-variant" size={15} color={t.c.primary} />
+              <Text variant="caption" tone="primary" weight="600">
+                {tr(direction === 'received' ? 'sales:payment.adjustReceived' : 'sales:payment.adjustPaid')}
+              </Text>
+            </Pressable>
+          ) : null}
+
+          {selected && (adjusting === o.document.id || adjustedOf(o.document.id) > 0)
+            ? ADJUSTMENTS.filter((k) => k !== 'writeOff' || (canWriteOff && direction === 'received')).map((k) => (
+                <AmountField
+                  key={k}
+                  value={adjustments[o.document.id]?.[k] ?? ''}
+                  onChangeValue={(v) => setAdjustment(o.document.id, k, v, o.outstanding)}
+                  currency={currency}
+                  label={tr(`sales:payment.adjustment.${k}`)}
+                  hint={tr(`sales:payment.adjustmentHint.${k}`)}
+                />
+              ))
+            : null}
         </View>
       );
     })
@@ -546,8 +652,9 @@ export default function NewPayment() {
   const summaryRows = (
     <>
       {[
-        { label: 'Payment amount', value: formatMoney(amount) },
-        { label: 'Allocated', value: formatMoney(allocatedTotal) },
+        { label: tr('sales:payment.paymentAmount'), value: formatMoney(amount) },
+        { label: tr('sales:payment.allocated'), value: formatMoney(allocatedTotal) },
+        ...(adjustedTotal > 0 ? [{ label: tr('sales:payment.settledWithoutCash'), value: formatMoney(money(adjustedTotal, currency)) }] : []),
       ].map((r) => (
         <View key={r.label} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
           <Text variant="small" tone="muted">
@@ -561,7 +668,7 @@ export default function NewPayment() {
       <View style={{ height: 1, backgroundColor: t.c.line, marginVertical: 2 }} />
       <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
         <Text variant="body" weight="700" tone={overAllocated ? 'bad' : 'default'}>
-          {overAllocated ? 'Over-allocated by' : 'Unallocated (advance)'}
+          {overAllocated ? tr('sales:payment.overAllocatedBy') : tr('sales:payment.unallocatedAdvance')}
         </Text>
         <Text variant="body" weight="700" tone={overAllocated ? 'bad' : unallocated.minor > 0 ? 'warn' : 'good'}>
           {formatMoney(overAllocated ? money(-unallocated.minor, currency) : unallocated)}
@@ -570,7 +677,7 @@ export default function NewPayment() {
       {fxGainLoss && fxGainLoss.minor !== 0 ? (
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
           <Text variant="caption" tone="muted">
-            FX {fxGainLoss.minor >= 0 ? 'gain' : 'loss'}
+            {fxGainLoss.minor >= 0 ? tr('sales:payment.fxGain') : tr('sales:payment.fxLoss')}
           </Text>
           <Text variant="caption" weight="600" tone={fxGainLoss.minor >= 0 ? 'good' : 'bad'}>
             {formatMoney(fxGainLoss, { signed: true })}
@@ -580,9 +687,51 @@ export default function NewPayment() {
     </>
   );
 
-  const notesField = <TextField label={tr('sales:payment.notes')} value={notes} onChangeText={setNotes} placeholder={tr('sales:payment.notesPlaceholder')} multiline />;
+  const notesField = (
+    <>
+      {keepsTds ? (
+        <>
+          <PickerField
+            label={tr('sales:payment.tdsSection')}
+            value={tdsSectionPicked ? `${tdsSection(tdsSectionPicked)?.label ?? tdsSectionPicked} · ${tdsSection(tdsSectionPicked)?.nature ?? ''}` : undefined}
+            placeholder={tr('sales:payment.tdsSectionPick')}
+            onPress={() => setAdvanceSheet('tds')}
+            icon="percent-outline"
+            hint={tr('sales:payment.tdsSectionHint')}
+          />
+          <SelectSheet
+            visible={advanceSheet === 'tds'}
+            onClose={() => setAdvanceSheet(null)}
+            title={tr('sales:payment.tdsSection')}
+            options={TDS_SECTIONS.map((s) => ({ value: s.code, label: s.label, description: s.nature }))}
+            value={tdsSectionPicked}
+            onSelect={setTdsSectionChoice}
+          />
+        </>
+      ) : null}
+      {canAdvance ? (
+        <>
+          <SwitchField label={tr('sales:payment.serviceAdvance')} description={tr('sales:payment.serviceAdvanceHint')} value={serviceAdvance} onValueChange={setServiceAdvance} />
+          {serviceAdvance ? (
+            <FieldRow>
+              <PickerField label={tr('sales:payment.advanceRate')} value={advanceTaxCategory?.name} onPress={() => setAdvanceSheet('tax')} icon="percent-outline" />
+              <PickerField label={tr('sales:editor.placeOfSupply')} value={INDIAN_STATES.find((st) => st.code === pos)?.name} onPress={() => setAdvanceSheet('pos')} icon="map-marker-outline" />
+            </FieldRow>
+          ) : null}
+          {advanceTax ? (
+            <Text variant="caption" tone="muted">
+              {tr('sales:payment.advanceTaxIs', { tax: formatMoney(inclusiveTax(money(Math.round(unallocated.minor * exchangeRate), baseCurrency), advanceTax.rate)) })}
+            </Text>
+          ) : null}
+          <SelectSheet visible={advanceSheet === 'tax'} onClose={() => setAdvanceSheet(null)} title={tr('sales:payment.advanceRate')} options={taxed.map((c) => ({ value: c.id, label: c.name }))} value={advanceTaxCategory?.id} onSelect={setAdvanceTaxId} searchable={false} />
+          <SelectSheet visible={advanceSheet === 'pos'} onClose={() => setAdvanceSheet(null)} title={tr('sales:editor.placeOfSupply')} options={INDIAN_STATES.map((st) => ({ value: st.code, label: st.name }))} value={pos} onSelect={setAdvancePos} />
+        </>
+      ) : null}
+      <TextField label={tr('sales:payment.notes')} value={notes} onChangeText={setNotes} placeholder={tr('sales:payment.notesPlaceholder')} multiline />
+    </>
+  );
 
-  const submitTitle = direction === 'received' ? 'Record payment' : 'Record payment made';
+  const submitTitle = direction === 'received' ? tr('common:action.recordPayment') : tr('sales:payment.recordPaymentMade');
 
   const phoneForm = (
     <ScrollView
@@ -691,18 +840,18 @@ export default function NewPayment() {
 
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: t.c.bg }}
+      style={{ flex: 1 }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <FormContainer wide style={desktop ? { maxWidth: '100%' } : undefined}>
-        <Stack.Screen options={{ title: direction === 'received' ? 'Receive payment' : 'Make payment' }} />
+        <Stack.Screen options={{ title: direction === 'received' ? tr('common:quickAction.receivePayment') : tr('sales:payment.makePayment') }} />
 
         {desktop ? desktopForm : phoneForm}
 
         {desktop ? (
           <FormActions>
             <Button title={tr('common:action.cancel')} variant="ghost" onPress={() => goBack(direction === 'received' ? '/(app)/payments/received' : '/(app)/payments/made')} />
-            <Button title={submitTitle} onPress={save} disabled={!canSave} />
+            <Button shortcut="S" title={submitTitle} onPress={() => void save()} loading={saving} disabled={blocked || !canSave} />
           </FormActions>
         ) : (
           <View
@@ -716,8 +865,8 @@ export default function NewPayment() {
           >
             <Button
               title={submitTitle}
-              onPress={save}
-              disabled={!canSave}
+              onPress={() => void save()} loading={saving}
+              disabled={blocked || !canSave}
               fullWidth
               size="lg"
             />
@@ -727,8 +876,10 @@ export default function NewPayment() {
         <SelectSheet
           visible={partyOpen}
           onClose={() => setPartyOpen(false)}
-          title={direction === 'received' ? 'Select customer' : 'Select supplier'}
-          options={parties.map((p) => ({ value: p.id, label: p.name, description: p.phone ?? p.email ?? p.code }))}
+          title={tr(direction === 'received' ? 'sales:editor.selectCustomer' : 'sales:editor.selectSupplier')}
+          options={(partySearch.data ?? []).map((p) => ({ value: p.id!, label: p.name!, description: p.phone ?? p.email ?? p.code }))}
+          onQueryChange={setPartyQuery}
+          loading={partySearch.isFetching}
           value={partyId}
           onSelect={(id) => {
             setPartyId(id);
@@ -771,6 +922,7 @@ export default function NewPayment() {
           onSelect={setAccountId}
           searchable={false}
         />
+        {leaveGuard.dialog}
       </FormContainer>
     </KeyboardAvoidingView>
   );

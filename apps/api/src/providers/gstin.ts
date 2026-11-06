@@ -5,7 +5,10 @@ import { stateNameOf } from '@esmart/core/domain/stateCodes';
 import { sql } from 'drizzle-orm';
 import type { Db } from '@esmart/db';
 import type { Config } from '../config';
-import { featureUnavailable } from '../http/errors';
+import { featureUnavailable, upstream } from '../http/errors';
+import { createGspGateway, GspConfigError, type GspGateway } from './gsp';
+import { toGstinRecord } from './gsp/taxpayer';
+import { GspAuthError, GspRequestError } from './gsp/transport';
 
 /** What the GST public search returns for a GSTIN. */
 export type GstinRecord = {
@@ -311,13 +314,52 @@ class DisabledGstinProvider implements GstinProvider {
 }
 
 /**
- * GSP adapters differ per vendor in URL shape and auth, so none is wired in
- * yet: `GSTIN_PROVIDER=gsp` fails at boot rather than at the first lookup.
+ * GSTIN search through the GSP (Adaequare or Whitebooks), the same gateway and
+ * credentials the e-invoice and e-way bill calls use.
+ *
+ * The GSP serves the register only. The PIN code directory the app already
+ * ships covers PIN codes, and the EWB portal's road distance has no route on
+ * either gateway here, so both answer 503 FEATURE_UNAVAILABLE and the apps fall
+ * back to manual entry: a made-up distance on an e-way bill is worse than none.
  */
+class GspGstinProvider implements GstinProvider {
+  readonly name = 'gsp';
+  private readonly unsupported = new DisabledGstinProvider();
+
+  constructor(private readonly gateway: GspGateway) {}
+
+  async lookup(raw: string): Promise<GstinRecord | null> {
+    const gstin = normalizeGstin(raw);
+    if (!isValidGstin(gstin)) return null;
+    let record: Record<string, unknown> | null;
+    try {
+      record = await this.gateway.lookupTaxpayer(gstin);
+    } catch (err) {
+      if (err instanceof GspRequestError) {
+        // A register that could not be asked is an upstream problem (502), not "no such GSTIN" (404).
+        throw upstream('GST_LOOKUP_FAILED', err.isUnavailable ? `The GST gateway is unavailable: ${err.message}` : err.message);
+      }
+      if (err instanceof GspAuthError) throw featureUnavailable('GSTIN lookup is not available right now. Enter the details by hand.');
+      if (err instanceof GspConfigError) throw featureUnavailable(err.message);
+      throw err;
+    }
+    // A register record the app cannot read as a taxpayer (no legal name) is no answer at all.
+    return record ? toGstinRecord(record, gstin) : null;
+  }
+
+  pincode(): Promise<PincodeRecord | null> {
+    return this.unsupported.pincode();
+  }
+
+  distance(): Promise<RoadDistance> {
+    return this.unsupported.distance();
+  }
+}
+
 export function createGstinProvider(config: Config, db: Db): GstinProvider {
   switch (config.GSTIN_PROVIDER) {
     case 'gsp':
-      throw new Error('GSTIN_PROVIDER=gsp has no adapter yet; use disabled (or simulator outside production).');
+      return new GspGstinProvider(createGspGateway(config));
     case 'disabled':
       return new DisabledGstinProvider();
     case 'simulator':

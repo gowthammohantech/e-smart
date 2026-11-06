@@ -11,9 +11,11 @@ import { TextField } from '@esmart/ui/components/Field';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { SearchBar } from '@esmart/ui/components/SearchBar';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
-import { useToast } from '@esmart/ui/components/Toast';
+import { useServerSave } from '../../../components/useServerSave';
+import { useSaveShortcut } from '../../../components/useSaveShortcut';
 import { useAppStore } from '../../../store/appStore';
-import { useBaseCurrency, useDefaultBranchId, useItems, useStockLevels } from '../../../store/selectors';
+import { useBaseCurrency, useDefaultBranchId } from '../../../store/selectors';
+import { useTrackedItems } from '../../../remote/queries';
 import { formatMoney, formatQty } from '@esmart/core/lib/format';
 import { money } from '@esmart/core/lib/money';
 import { today } from '@esmart/core/lib/date';
@@ -24,11 +26,11 @@ export default function OpeningStock() {
   const t = useTheme();
   const { t: tr } = useTranslation(['inventory', 'nav']);
   const goBack = useGoBack();
-  const toast = useToast();
+  const { run: serverSave, saving, blocked } = useServerSave();
   const insets = useSafeAreaInsets();
 
-  const items = useItems().filter((i) => i.trackInventory);
-  const stock = useStockLevels();
+  // Every tracked item and what's on hand at the active branch, from the server.
+  const { items, stock } = useTrackedItems();
   const baseCurrency = useBaseCurrency();
   const addStockMovement = useAppStore((s) => s.addStockMovement);
   const activeCompanyId = useAppStore((s) => s.activeCompanyId);
@@ -51,33 +53,35 @@ export default function OpeningStock() {
   }, 0);
 
   const save = () => {
-    entered.forEach(([itemId, v]) => {
-      const item = items.find((i) => i.id === itemId);
-      if (!item) return;
-      addStockMovement({
-        companyId: activeCompanyId,
-        branchId: defaultBranchId ?? '',
-        itemId,
-        type: 'opening',
-        quantity: Number(v),
-        unitCost: item.purchasePrice,
-        date,
-        notes: 'Opening stock entry',
+    void serverSave(() => {
+      entered.forEach(([itemId, v]) => {
+        const item = items.find((i) => i.id === itemId);
+        if (!item) return;
+        addStockMovement({
+          companyId: activeCompanyId,
+          branchId: defaultBranchId ?? '',
+          itemId,
+          type: 'opening',
+          quantity: Number(v),
+          unitCost: item.purchasePrice,
+          date,
+          notes: tr('inventory:opening.entryNote'),
+        });
       });
+    }, tr('inventory:opening.done', { count: entered.length }), { icon: 'package-variant-closed-check' }).then((res) => {
+      if (res) goBack('/(app)/(tabs)/inventory');
     });
-    toast.show(`Opening stock set for ${entered.length} item${entered.length === 1 ? '' : 's'}`, 'success');
-    goBack('/(app)/(tabs)/inventory');
   };
+  useSaveShortcut(() => void save(), !saving && entered.length > 0);
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('nav:title.openingStock') }} />
 
       <View style={{ paddingHorizontal: t.spacing.lg, paddingTop: t.spacing.md, gap: t.spacing.md }}>
         <Card variant="flat">
           <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
-            Enter what you already had on hand when you started using the app. This posts an opening movement and does not
-            affect your sales or purchase figures.
+            {tr('inventory:opening.intro')}
           </Text>
         </Card>
         <DateField label={tr('inventory:opening.asOn')} value={date} onChange={setDate} />
@@ -106,7 +110,7 @@ export default function OpeningStock() {
                     {item.name}
                   </Text>
                   <Text variant="caption" tone="muted">
-                    {item.sku} · currently {formatQty(stock[item.id] ?? 0)} {item.unit}
+                    {item.sku} · {tr('inventory:opening.currently', { qty: formatQty(stock[item.id] ?? 0), unit: item.unit })}
                   </Text>
                 </View>
                 <TextField
@@ -138,13 +142,13 @@ export default function OpeningStock() {
       >
         <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
           <Text variant="caption" tone="muted">
-            {entered.length} items entered
+            {tr('inventory:opening.entered', { count: entered.length })}
           </Text>
           <Text variant="small" weight="700">
             {formatMoney(money(totalValue, baseCurrency))}
           </Text>
         </View>
-        <Button title={tr('inventory:opening.submit')} onPress={save} disabled={entered.length === 0} fullWidth size="lg" />
+        <Button shortcut="S" title={tr('inventory:opening.submit')} onPress={() => void save()} loading={saving} disabled={blocked || entered.length === 0} fullWidth size="lg" />
       </View>
     </View>
   );

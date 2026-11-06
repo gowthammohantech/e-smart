@@ -4,7 +4,7 @@ import { Animated } from 'react-native';
 export const SIDEBAR_WIDTH = 248;
 
 /** Between the desktop and full-sidebar breakpoints only the icons show. */
-export const SIDEBAR_COMPACT_WIDTH = 68;
+export const SIDEBAR_COMPACT_WIDTH = 64;
 
 const COLLAPSED_KEY = 'esmart.sidebar.collapsed';
 
@@ -47,58 +47,4 @@ export function useSidebarCollapsed(): [boolean, () => void] {
     listeners.forEach((l) => l());
   };
   return [value, toggle];
-}
-
-const EXPANDED_KEY = 'esmart.sidebar.expanded';
-const NONE_EXPANDED: readonly string[] = [];
-
-function readExpanded(): readonly string[] {
-  try {
-    const parsed: unknown = JSON.parse(globalThis.localStorage?.getItem(EXPANDED_KEY) ?? '[]');
-    return Array.isArray(parsed) ? parsed.filter((s): s is string => typeof s === 'string') : NONE_EXPANDED;
-  } catch {
-    // Blocked or garbled storage: every section starts closed.
-    return NONE_EXPANDED;
-  }
-}
-
-let expanded = readExpanded();
-const expandedListeners = new Set<() => void>();
-
-function saveExpanded(next: readonly string[]) {
-  expanded = next;
-  try {
-    globalThis.localStorage?.setItem(EXPANDED_KEY, JSON.stringify(next));
-  } catch {
-    // Not remembering is fine.
-  }
-  expandedListeners.forEach((l) => l());
-}
-
-/**
- * Which sidebar sections have their pages listed, remembered per browser.
- * `open` only ever adds, so landing in a section shows its pages without
- * undoing a section the person closed elsewhere.
- */
-export function useExpandedSections(): {
-  isOpen: (section: string) => boolean;
-  toggle: (section: string) => void;
-  open: (section: string) => void;
-} {
-  const value = useSyncExternalStore(
-    (cb) => {
-      expandedListeners.add(cb);
-      return () => expandedListeners.delete(cb);
-    },
-    () => expanded,
-    () => NONE_EXPANDED,
-  );
-  return {
-    isOpen: (section) => value.includes(section),
-    toggle: (section) =>
-      saveExpanded(expanded.includes(section) ? expanded.filter((s) => s !== section) : [...expanded, section]),
-    open: (section) => {
-      if (!expanded.includes(section)) saveExpanded([...expanded, section]);
-    },
-  };
 }

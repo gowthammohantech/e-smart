@@ -1,11 +1,13 @@
 import { and, eq } from 'drizzle-orm';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { schema } from '@esmart/db';
 import { sha256 } from '../src/lib/crypto';
 import { ownerWithCompany, setupApi } from './helpers';
 import { documentRow, invoiceBody, issueInvoice, line, moneySetup, onHand, pdfText } from './money-fixtures';
 
 const t = setupApi();
+// Fixtures are dated around this day; on a later clock their invoices read as overdue.
+beforeEach(() => t.setNow('2026-09-29T10:00:00Z'));
 
 describe('documents: totals', () => {
   it('charges IGST to a customer in another state and CGST+SGST in the same state', async () => {
@@ -108,6 +110,20 @@ describe('documents: numbering and lifecycle', () => {
     expect(done.map((r) => r.body.document.number).sort()).toEqual(['INV/26-27/0001', 'INV/26-27/0002', 'INV/26-27/0003', 'INV/26-27/0004', 'INV/26-27/0005']);
   });
 
+  it('deletes a draft with a pending e-invoice record, but not one with an IRN', async () => {
+    const m = await moneySetup(t);
+    const draft = await t.post(`${m.c}/documents`, invoiceBody(m), { token: m.token });
+    await t.deps.db.insert(schema.eInvoices).values({ documentId: draft.body.id, companyId: m.companyId, status: 'pending' } as never);
+    expect((await t.del(`${m.c}/documents/${draft.body.id}`, { token: m.token })).status).toBe(204);
+    expect(await t.deps.db.select().from(schema.eInvoices).where(eq(schema.eInvoices.documentId, draft.body.id))).toHaveLength(0);
+
+    const other = await t.post(`${m.c}/documents`, invoiceBody(m), { token: m.token });
+    await t.deps.db.insert(schema.eInvoices).values({ documentId: other.body.id, companyId: m.companyId, status: 'pending', irn: 'a'.repeat(64) } as never);
+    const refused = await t.del(`${m.c}/documents/${other.body.id}`, { token: m.token });
+    expect(refused.status).toBe(409);
+    expect(refused.body.code).toBe('DOCUMENT_IN_USE');
+  });
+
   it('deletes drafts only; a finalised document is cancelled and keeps its number', async () => {
     const m = await moneySetup(t);
     const draft = await t.post(`${m.c}/documents`, invoiceBody(m), { token: m.token });
@@ -173,7 +189,7 @@ describe('documents: numbering and lifecycle', () => {
 
     const detail = await t.get(url, { token: m.token });
     expect(detail.body.allowedTransitions).toEqual([]);
-    expect(detail.body.allowedConversions).toEqual(['salesOrder', 'invoice']);
+    expect(detail.body.allowedConversions).toEqual(['proforma', 'salesOrder', 'invoice']);
   });
 
   it('converts quote → order → delivery → invoice with source links, and duplicates into a new draft', async () => {
@@ -190,6 +206,14 @@ describe('documents: numbering and lifecycle', () => {
     expect(wrong.body.code).toBe('INVALID_CONVERSION');
     const returnFromDraft = await t.post(`${m.c}/documents/${order.body.id}/convert`, { targetKind: 'salesReturn' }, { token: m.token });
     expect(returnFromDraft.status).toBe(409);
+    // The order is still a draft, so nothing is made from it yet.
+    const fromDraft = await t.post(`${m.c}/documents/${order.body.id}/convert`, { targetKind: 'delivery' }, { token: m.token });
+    expect(fromDraft.status).toBe(409);
+    expect(fromDraft.body.code).toBe('INVALID_CONVERSION');
+    // The quote has been carried forward once already.
+    const again = await t.post(`${m.c}/documents/${quote.body.id}/convert`, { targetKind: 'invoice' }, { token: m.token });
+    expect(again.status).toBe(409);
+    expect(again.body.code).toBe('ALREADY_CONVERTED');
 
     const detail = await t.get(`${m.c}/documents/${quote.body.id}`, { token: m.token });
     expect(detail.body.linkedDocuments.map((d: { id: string }) => d.id)).toEqual([order.body.id]);
@@ -222,6 +246,27 @@ describe('documents: numbering and lifecycle', () => {
     const p2 = await t.get(`${m.c}/documents`, { token: m.token, query: { limit: 2, cursor: p1.body.nextCursor } });
     expect([...p1.body.data, ...p2.body.data].map((d: { id: string }) => d.id)).toEqual(all.body.data.map((d: { id: string }) => d.id));
     expect(p2.body.nextCursor).toBeNull();
+  });
+
+  it('sums up a list without paging through it: count, total and every status there is', async () => {
+    const m = await moneySetup(t);
+    await issueInvoice(t, m, { date: '2026-08-01', dueDate: '2026-08-31' });
+    await issueInvoice(t, m, { partyId: m.bengaluru.id, supplierDocNumber: undefined, reference: 'PO-7781' });
+    const cancelled = await issueInvoice(t, m);
+    await t.post(`${m.c}/documents/${cancelled.id}/status`, { status: 'cancelled' }, { token: m.token });
+    await t.post(`${m.c}/documents`, invoiceBody(m, { kind: 'quote' }), { token: m.token });
+
+    const all = await t.get(`${m.c}/documents/summary`, { token: m.token, query: { kind: 'invoice' } });
+    expect(all.status).toBe(200);
+    // A cancelled invoice is counted but adds nothing to the total.
+    expect(all.body).toMatchObject({ count: 3, total: { minor: 236000 * 2, currency: 'INR' } });
+    expect(all.body.byStatus).toEqual(expect.arrayContaining([expect.objectContaining({ status: 'overdue', count: 1, total: { minor: 236000, currency: 'INR' } }), expect.objectContaining({ status: 'cancelled', count: 1 })]));
+    // A status filter narrows the count and total, never the chips.
+    const overdue = await t.get(`${m.c}/documents/summary`, { token: m.token, query: { kind: 'invoice', status: 'overdue' } });
+    expect(overdue.body).toMatchObject({ count: 1, total: { minor: 236000 } });
+    expect(overdue.body.byStatus).toEqual(all.body.byStatus);
+    const found = await t.get(`${m.c}/documents/summary`, { token: m.token, query: { kind: 'invoice', q: '7781' } });
+    expect(found.body.count).toBe(1);
   });
 });
 
@@ -289,7 +334,7 @@ describe('documents: stock and plans', () => {
     const draft = await t.post(`${m.c}/documents`, invoiceBody(m, { lines: [line(m.gst(18)), line(m.gst(18), { itemId: rod, quantity: 3 })] }), { token: m.token });
     const short = await t.post(`${m.c}/documents/${draft.body.id}/finalize`, {}, { token: m.token });
     expect(short.status).toBe(422);
-    expect(short.body).toMatchObject({ code: 'INSUFFICIENT_STOCK', issues: [{ field: 'lines[1].quantity', message: 'Steel rod: 0 NOS in stock at this branch, 3 needed' }] });
+    expect(short.body).toMatchObject({ code: 'INSUFFICIENT_STOCK', issues: [{ field: 'lines[1].quantity', message: 'Steel rod: 0 NOS in stock at this branch on 2026-09-29, 3 needed' }] });
     expect(await onHand(t, rod)).toBe(0);
     const [still] = await t.deps.db.select().from(schema.documents).where(eq(schema.documents.id, draft.body.id));
     expect(still.status).toBe('draft');
@@ -302,6 +347,18 @@ describe('documents: stock and plans', () => {
     await m.allowNegativeStock();
     await issueInvoice(t, m, { lines: [line(m.gst(18), { itemId: rod, quantity: 2 })] });
     expect(await onHand(t, rod)).toBe(-2);
+  });
+
+  it("refuses a document dated before an item's opening stock date", async () => {
+    const m = await moneySetup(t);
+    await m.allowNegativeStock();
+    t.setNow('2026-10-01T10:00:00Z');
+    const rod = await m.item({ openingStockDate: '2026-09-30' });
+    const early = await t.post(`${m.c}/documents`, invoiceBody(m, { lines: [line(m.gst(18), { itemId: rod })] }), { token: m.token });
+    expect(early.status).toBe(422);
+    expect(early.body.issues).toEqual([expect.objectContaining({ field: 'date', message: "Steel rod's opening stock is dated 2026-09-30; the document cannot be dated before it" })]);
+    const onTheDay = await t.post(`${m.c}/documents`, invoiceBody(m, { date: '2026-09-30', lines: [line(m.gst(18), { itemId: rod })] }), { token: m.token });
+    expect(onTheDay.status).toBe(201);
   });
 
   it('needs the purchases module for purchase-side kinds, and receives stock on a bill', async () => {
@@ -355,6 +412,7 @@ describe('documents: output', () => {
 
     const share = await t.post(`${m.c}/documents/${inv.id}/share-link`, {}, { token: m.token });
     expect(share.body.url).toMatch(/^http:\/\/localhost:4000\/share\/[A-Za-z0-9_-]+$/);
+    expect(share.body.pdfUrl).toContain('INV-26-27-0001.pdf');
     const token = share.body.url.split('/').pop();
     const [stored] = await t.deps.db.select().from(schema.shareLinks).where(eq(schema.shareLinks.documentId, inv.id));
     expect(stored.tokenHash).toBe(sha256(token));
@@ -387,5 +445,25 @@ describe('documents: output', () => {
     expect(t.providers.outbox.last('email', 'accounts@sunrise.example')?.subject).toBe('QT/26-27/0001 from Vertex Traders');
     const sentQuote = await t.get(`${m.c}/documents/${quote.body.id}`, { token: m.token });
     expect(sentQuote.body).toMatchObject({ status: 'sent', number: 'QT/26-27/0001' });
+  });
+
+  it('carries the business logo inside the email only when there is one, and signs off with Elixir Books', async () => {
+    const m = await moneySetup(t);
+    const inv = await issueInvoice(t, m);
+    await t.post(`${m.c}/documents/${inv.id}/send`, { channel: 'email' }, { token: m.token });
+    const plain = t.providers.outbox.last('email');
+    expect(plain?.html).not.toContain('cid:business-logo');
+    expect(plain?.inline ?? []).toHaveLength(0);
+    expect(plain?.html).toContain('cid:elixir-logo');
+  });
+
+  it('says so when the provider refuses the email, rather than reporting it sent', async () => {
+    const m = await moneySetup(t);
+    const inv = await issueInvoice(t, m);
+    vi.spyOn(t.providers.email, 'send').mockRejectedValueOnce(new Error('Resend 403: You can only send testing emails to your own email address'));
+    const res = await t.post(`${m.c}/documents/${inv.id}/send`, { channel: 'email' }, { token: m.token });
+    expect(res.status).toBe(502);
+    expect(res.body).toMatchObject({ code: 'SEND_FAILED' });
+    expect(res.body.detail).toContain('only send testing emails');
   });
 });

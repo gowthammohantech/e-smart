@@ -1,0 +1,87 @@
+import React from 'react';
+import { useTranslation } from 'react-i18next';
+import { Linking, View } from 'react-native';
+import { useTheme } from '@esmart/ui/theme/ThemeProvider';
+import { Text } from '@esmart/ui/components/Text';
+import { Card } from '@esmart/ui/components/Card';
+import { Button } from '@esmart/ui/components/Button';
+import { Sheet } from '@esmart/ui/components/Sheet';
+import { useToast } from '@esmart/ui/components/Toast';
+import type { OutstandingDoc } from '@esmart/core/domain/receivables';
+import type { Party } from '@esmart/core/types';
+import { formatMoney } from '@esmart/core/lib/format';
+import { money } from '@esmart/core/lib/money';
+import { useBaseCurrency } from '../../store/selectors';
+
+/**
+ * A payment reminder for one customer's open invoices, sent from the
+ * person's own WhatsApp or mail app. Open while `party` is set.
+ */
+export function PaymentReminderSheet({ party, rows, onClose }: { party: Party | undefined; rows: OutstandingDoc[]; onClose: () => void }) {
+  const t = useTheme();
+  const { t: tr } = useTranslation(['sales', 'common']);
+  const toast = useToast();
+  const baseCurrency = useBaseCurrency();
+
+  const text = party
+    ? tr('sales:aging.reminderMessage', {
+        count: rows.length,
+        name: party.displayName ?? party.name,
+        numbers: rows.map((o) => o.document.number).join(', '),
+        amount: formatMoney(
+          money(
+            rows.reduce((a, o) => a + Math.round(o.outstanding.minor * (o.document.exchangeRate || 1)), 0),
+            baseCurrency,
+          ),
+        ),
+      })
+    : '';
+
+  return (
+    <Sheet
+      visible={!!party}
+      onClose={onClose}
+      title={tr('sales:aging.sendReminder')}
+      subtitle={party?.name}
+      footer={
+        <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
+          <Button
+            title={tr('sales:aging.whatsapp')}
+            icon="whatsapp"
+            style={{ flex: 1 }}
+            onPress={() => {
+              const phone = (party?.phone ?? '').replace(/[^0-9]/g, '');
+              onClose();
+              Linking.openURL(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`).then(
+                () => toast.show(tr('sales:aging.openedWhatsapp'), 'success', { icon: 'whatsapp', detail: party?.name }),
+                () => toast.show(tr('common:crash.cantOpen', { what: 'WhatsApp' }), 'error', { icon: 'whatsapp' }),
+              );
+            }}
+          />
+          <Button
+            title={tr('sales:aging.email')}
+            variant="secondary"
+            icon="email-outline"
+            style={{ flex: 1 }}
+            onPress={() => {
+              onClose();
+              Linking.openURL(`mailto:${party?.email ?? ''}?subject=${encodeURIComponent(tr('sales:aging.reminderSubject'))}&body=${encodeURIComponent(text)}`).then(
+                () => toast.show(tr('sales:aging.openedEmail'), 'success', { icon: 'email-edit-outline', detail: party?.name }),
+                () => toast.show(tr('common:crash.cantOpen', { what: tr('sales:aging.email') }), 'error', { icon: 'email-outline' }),
+              );
+            }}
+          />
+        </View>
+      }
+    >
+      <View style={{ padding: t.spacing.lg, gap: t.spacing.md }}>
+        <Card variant="flat">
+          <Text variant="small" style={{ lineHeight: 21 }}>
+            {text}
+          </Text>
+        </Card>
+        <Text variant="caption" tone="muted">{tr('sales:aging.reminderNote')}</Text>
+      </View>
+    </Sheet>
+  );
+}

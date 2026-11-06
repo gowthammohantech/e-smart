@@ -1,9 +1,11 @@
 import React, { useMemo, useState } from 'react';
+import { CostCentreField } from '../books/CostCentreField';
+import { VehicleField } from '../vehicles/VehicleField';
 import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { FieldRow, FormContainer, FormSection, SplitPane } from '@esmart/ui/components/Layout';
 import { Text } from '@esmart/ui/components/Text';
@@ -15,37 +17,38 @@ import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { Sheet } from '@esmart/ui/components/Sheet';
 import { useToast } from '@esmart/ui/components/Toast';
-import { Expense, PaymentMethod, RecurrenceFrequency } from '@esmart/core/types';
+import { useServerSave } from '../../components/useServerSave';
+import { useSaveShortcut } from '../../components/useSaveShortcut';
+import { useLeaveGuard } from '../../components/useLeaveGuard';
+import { Expense, ItcEligibility, PaymentMethod, RecurrenceFrequency } from '@esmart/core/types';
 import { PAYMENT_METHODS } from '@esmart/core/data/masters';
-import { accountBalances, accountIdAfterMethodChange, accountsForMethod, defaultAccountFor } from '@esmart/core/domain/paymentAccounts';
+import { accountIdAfterMethodChange, accountsForMethod, defaultAccountFor } from '@esmart/core/domain/paymentAccounts';
 import { paymentMethodLabel } from '@esmart/core/labels';
 import { formatMoney, formatPercent } from '@esmart/core/lib/format';
 import { addDaysISO, today } from '@esmart/core/lib/date';
 import { fromMajor, money, subtract, toMajor, zero , inclusiveTax, percent } from '@esmart/core/lib/money';
 import { uid } from '@esmart/core/lib/id';
+import { isNetworkError } from '../../remote/api';
 import { uploadAttachment } from '../../remote/attachments';
+import { knownToServer } from '../../remote/meta';
+import { useReceiptQueue } from '../../remote/receiptQueue';
+import { keepQueued } from '../../remote/keptFiles';
 import { describeError } from '../../remote/errors';
 import { useAppStore } from '../../store/appStore';
+import { usePartyRecord, usePartySearch, useServerAccountBalances } from '../../remote/queries';
+import { useDebounced } from '../../components/useDebounced';
 import {
   useBaseCurrency,
   useExpenseCategories,
-  useExpenses,
   useParties,
   usePaymentAccounts,
-  usePayments,
   useDefaultBranchId,
   useTaxCategories,
 } from '../../store/selectors';
 import { SHOW_SCROLLBAR, useBreakpoint } from '@esmart/ui/theme/breakpoints';
 import { useGoBack } from '../../navigation/useGoBack';
 
-const RECURRENCES: { value: RecurrenceFrequency; label: string }[] = [
-  { value: 'none', label: 'Does not repeat' },
-  { value: 'weekly', label: 'Every week' },
-  { value: 'monthly', label: 'Every month' },
-  { value: 'quarterly', label: 'Every quarter' },
-  { value: 'yearly', label: 'Every year' },
-];
+const RECURRENCES: RecurrenceFrequency[] = ['none', 'weekly', 'monthly', 'quarterly', 'yearly'];
 
 /** Values to start a new expense from, e.g. a scanned receipt. */
 export type ExpenseInitial = {
@@ -62,10 +65,11 @@ export type ExpenseInitial = {
 
 export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?: ExpenseInitial }) {
   const t = useTheme();
-  const { t: tr } = useTranslation(['domain', 'purchases', 'common']);
+  const { t: tr } = useTranslation(['domain', 'purchases', 'common', 'settings', 'inventory']);
   const router = useRouter();
   const goBack = useGoBack();
   const toast = useToast();
+  const { run: serverSave, saving, blocked, release: releaseSave } = useServerSave();
   // Always 'phone' in the native apps, so the desktop layout only ever reaches a browser.
   const breakpoint = useBreakpoint();
   const desktop = breakpoint !== 'phone';
@@ -75,17 +79,21 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
   const accounts = usePaymentAccounts();
   const taxCategories = useTaxCategories();
   const suppliers = useParties('supplier');
+  const customers = useParties('customer');
 
   const saveExpense = useAppStore((s) => s.saveExpense);
   const saveExpenseCategory = useAppStore((s) => s.saveExpenseCategory);
   const activeCompanyId = useAppStore((s) => s.activeCompanyId);
   const defaultBranchId = useDefaultBranchId();
-  const payments = usePayments();
-  const expenses = useExpenses();
 
   // No silent default: the person recording the expense chooses its category.
   const [categoryId, setCategoryId] = useState(expense?.categoryId ?? initial?.categoryId ?? '');
-  const [amountText, setAmountText] = useState(expense ? String(toMajor(expense.amount)) : (initial?.amount ?? ''));
+  // A saved expense holds what was paid; a tax-exclusive one is typed without its tax, which is added again below.
+  const [amountText, setAmountText] = useState(() => {
+    if (!expense) return initial?.amount ?? '';
+    const typed = !expense.taxInclusive && !expense.reverseCharge ? subtract(expense.amount, expense.taxAmount) : expense.amount;
+    return String(toMajor(typed));
+  });
   const [date, setDate] = useState(expense?.date ?? initial?.date ?? today());
   const [method, setMethod] = useState<PaymentMethod>(
     () => expense?.method ?? (defaultAccountFor('upi', accounts) ? 'upi' : 'cash'),
@@ -101,10 +109,18 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
   const [supplierId, setSupplierId] = useState<string | null>(expense?.supplierId ?? initial?.supplierId ?? null);
   const [taxCategoryId, setTaxCategoryId] = useState<string | null>(expense?.taxCategoryId ?? null);
   const [taxInclusive, setTaxInclusive] = useState(expense?.taxInclusive ?? true);
+  const [reverseCharge, setReverseCharge] = useState(!!expense?.reverseCharge);
+  const [itcEligibility, setItcEligibility] = useState<ItcEligibility>(expense?.itcEligibility ?? 'eligible');
+  const [supplierGstin, setSupplierGstin] = useState(expense?.supplierGstin ?? '');
+  const [itcOpen, setItcOpen] = useState(false);
   const [reference, setReference] = useState(expense?.reference ?? initial?.reference ?? '');
   const [notes, setNotes] = useState(expense?.notes ?? initial?.notes ?? '');
   const [recurrence, setRecurrence] = useState<RecurrenceFrequency>(expense?.recurrence ?? 'none');
   const [billable, setBillable] = useState(expense?.billable ?? false);
+  const [customerId, setCustomerId] = useState<string | undefined>(expense?.customerId);
+  const [customerOpen, setCustomerOpen] = useState(false);
+  const [costCentreId, setCostCentreId] = useState<string | undefined>(expense?.costCentreId);
+  const [vehicleId, setVehicleId] = useState<string | undefined>(expense?.vehicleId);
   const [receiptUri, setReceiptUri] = useState<string | undefined>(initial?.receiptUri);
   const [uploading, setUploading] = useState(false);
 
@@ -112,11 +128,22 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
   const [methodOpen, setMethodOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [supplierOpen, setSupplierOpen] = useState(false);
+  // Pickers search the server; what they find (and the parties already on the expense) lands in the store.
+  const [supplierQuery, setSupplierQuery] = useState('');
+  const [customerQuery, setCustomerQuery] = useState('');
+  const supplierSearch = usePartySearch('supplier', useDebounced(supplierQuery), supplierOpen);
+  const customerSearch = usePartySearch('customer', useDebounced(customerQuery), customerOpen);
+  usePartyRecord(supplierId ?? undefined);
+  usePartyRecord(customerId);
   const [taxOpen, setTaxOpen] = useState(false);
   const [recurrenceOpen, setRecurrenceOpen] = useState(false);
   const [newCategoryOpen, setNewCategoryOpen] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [categoryError, setCategoryError] = useState<string | undefined>();
+  // What the person has picked or typed, to tell an untouched form from one with changes to lose.
+  const entered = JSON.stringify([categoryId, amountText, date, method, pickedAccountId, supplierId, taxCategoryId, taxInclusive, reference, notes, recurrence, billable, receiptUri]);
+  const [untouched] = useState(entered);
+  const leaveGuard = useLeaveGuard(entered !== untouched);
 
   const addCategory = () => {
     const name = newCategoryName.trim();
@@ -131,17 +158,20 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
 
   const amount = fromMajor(amountText || '0', baseCurrency);
   const taxRate = taxCategories.find((c) => c.id === taxCategoryId)?.rate ?? 0;
-  const taxAmount = taxRate > 0 ? (taxInclusive ? inclusiveTax(amount, taxRate) : percent(amount, taxRate)) : zero(baseCurrency);
-  const netAmount = taxInclusive ? subtract(amount, taxAmount) : amount;
-  const totalPaid = taxInclusive ? amount : money(amount.minor + taxAmount.minor, baseCurrency);
+  // Under reverse charge the supplier's price has no GST in it: the business pays that tax to the government.
+  const inclusive = taxInclusive && !reverseCharge;
+  const taxAmount = taxRate > 0 ? (inclusive ? inclusiveTax(amount, taxRate) : percent(amount, taxRate)) : zero(baseCurrency);
+  const netAmount = inclusive ? subtract(amount, taxAmount) : amount;
+  const totalPaid = inclusive || reverseCharge ? amount : money(amount.minor + taxAmount.minor, baseCurrency);
 
   // Cash in hand cannot pay out more than it holds (an edit gives back its own amount first).
   const account = accounts.find((a) => a.id === accountId);
+  const balances = useServerAccountBalances();
   const cashBalance = useMemo(() => {
-    if (!account || account.type !== 'cash') return undefined;
-    const others = expenses.filter((e) => e.id !== expense?.id);
-    return accountBalances(accounts, payments, others)[account.id];
-  }, [account, accounts, payments, expenses, expense?.id]);
+    if (!account || account.type !== 'cash' || !balances) return undefined;
+    const own = expense && expense.accountId === account.id ? Math.round(expense.amount.minor * (expense.exchangeRate || 1)) : 0;
+    return (balances[account.id] ?? 0) + own;
+  }, [account, balances, expense]);
   const cashShort = cashBalance !== undefined && totalPaid.minor > cashBalance;
 
   const attachReceipt = async () => {
@@ -165,6 +195,7 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
     }
 
     const attachmentIds = [...(expense?.attachmentIds ?? [])];
+    let receiptLater: string | undefined;
     if (receiptUri) {
       // The scan already uploaded its image; a photo picked here goes up now. Uploads need a connection.
       if (receiptUri === initial?.receiptUri && initial.receiptAttachmentId) {
@@ -172,11 +203,27 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
       } else {
         setUploading(true);
         try {
-          const uploaded = await uploadAttachment({ companyId: activeCompanyId, uri: receiptUri, name: 'Receipt', entityType: 'expense', entityId: expense?.id });
+          const uploaded = await toast.promise(
+            uploadAttachment({
+              companyId: activeCompanyId,
+              uri: receiptUri,
+              name: 'Receipt',
+              // A new expense isn't on the server yet: the receipt is linked through its attachmentIds when it's saved.
+              ...(expense && knownToServer(expense.id) && { entityType: 'expense', entityId: expense.id }),
+            }),
+            {
+              loading: tr('purchases:form.receiptUploading'),
+              success: tr('purchases:form.receiptAttached'),
+              error: (err) => tr('purchases:form.receiptUploadFailed', { reason: describeError(err, tr) }),
+              icon: 'paperclip-check',
+            },
+          );
           attachmentIds.push(uploaded.id);
         } catch (err) {
-          toast.show(tr('purchases:form.receiptUploadFailed', { reason: describeError(err, tr) }), 'error');
-          return;
+          // No connection: the expense is saved now and its receipt follows when one returns.
+          // Any other failure was already reported by the upload's toast.
+          if (isNetworkError(err)) receiptLater = receiptUri;
+          else return;
         } finally {
           setUploading(false);
         }
@@ -197,11 +244,17 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
       taxCategoryId: taxCategoryId ?? undefined,
       taxAmount,
       taxInclusive,
+      reverseCharge: taxRate > 0 && reverseCharge ? true : undefined,
+      itcEligibility: taxRate > 0 && itcEligibility !== 'eligible' ? itcEligibility : undefined,
+      supplierGstin: !supplierId && taxRate > 0 ? supplierGstin.trim().toUpperCase() || undefined : undefined,
       accountId,
       method,
       reference: reference.trim() || undefined,
       notes: notes.trim() || undefined,
       billable,
+      customerId: billable ? customerId : undefined,
+      costCentreId,
+      vehicleId,
       recurrence,
       nextRecurrenceDate: recurrence === 'none' ? undefined : addDaysISO(date, recurrence === 'weekly' ? 7 : recurrence === 'monthly' ? 30 : recurrence === 'quarterly' ? 91 : 365),
       attachmentIds,
@@ -209,15 +262,30 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
       createdAt: expense?.createdAt ?? new Date().toISOString(),
     };
 
-    const id = saveExpense(record);
-    if (!id) {
+    const res = await serverSave(() => saveExpense(record), receiptLater ? undefined : expense ? tr('purchases:form.expenseUpdated') : tr('purchases:form.expenseRecorded'), {
+      icon: 'receipt-text-check-outline',
+      detail: [formatMoney(totalPaid), attachmentIds.length ? tr('purchases:form.withReceipt') : ''].filter(Boolean).join(' · '),
+      // A new expense keeps the button busy until it has left: a second tap would record it again.
+      hold: !expense,
+    });
+    if (!res) return;
+    if (!res.result) {
+      releaseSave();
       setAccountError(tr('purchases:form.accountRequired'));
       return;
     }
-    toast.show(expense ? 'Expense updated' : 'Expense recorded', 'success');
+    const id = res.id ?? res.result;
+    if (receiptLater) {
+      useReceiptQueue.getState().add(id, record.companyId, receiptLater);
+      // A browser's picked file lasts only as long as the page; keep it for a reload.
+      keepQueued(receiptLater, useReceiptQueue.getState().swapUri);
+      toast.show(tr('purchases:form.receiptQueued'), 'success');
+    }
+    await leaveGuard.release();
     if (expense) goBack(`/(app)/expenses/${expense.id}`);
     else router.replace(`/(app)/expenses/${id}`);
   };
+  useSaveShortcut(() => void save(), !saving && !uploading && amount.minor > 0);
 
   // Every field is built once and placed twice: stacked in one column on a
   // phone, grouped into cards across two columns on a desktop browser.
@@ -272,14 +340,24 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
   const taxField = (
     <PickerField
       label={tr('purchases:form.tax')}
-      value={taxCategoryId ? `${taxCategories.find((c) => c.id === taxCategoryId)?.name}` : 'No tax'}
+      value={taxCategoryId ? `${taxCategories.find((c) => c.id === taxCategoryId)?.name}` : tr('purchases:form.noTax')}
       onPress={() => setTaxOpen(true)}
       icon="percent-outline"
       clearable
       onClear={() => setTaxCategoryId(null)}
     />
   );
-  const inclusiveField = <SwitchField label={tr('purchases:form.inclusive')} value={taxInclusive} onValueChange={setTaxInclusive} />;
+  const inclusiveField = reverseCharge ? null : <SwitchField label={tr('purchases:form.inclusive')} value={taxInclusive} onValueChange={setTaxInclusive} />;
+  const reverseChargeField = (
+    <SwitchField label={tr('purchases:form.reverseCharge')} description={tr('purchases:form.reverseChargeHint')} value={reverseCharge} onValueChange={setReverseCharge} />
+  );
+  const itcField = (
+    <PickerField label={tr('inventory:gst.itc')} value={tr(`inventory:gst.itcOption.${itcEligibility}`)} onPress={() => setItcOpen(true)} icon="cash-refund" />
+  );
+  // Without a saved supplier, the GSTIN on the bill is what the GST returns match it by.
+  const gstinField = supplierId ? null : (
+    <TextField label={tr('purchases:form.supplierGstin')} value={supplierGstin} onChangeText={(v) => setSupplierGstin(v.toUpperCase().slice(0, 15))} placeholder="33AABCS1234K1ZP" autoCapitalize="characters" icon="card-account-details-outline" />
+  );
   const referenceField = (
     <TextField label={tr('purchases:form.reference')} value={reference} onChangeText={setReference} placeholder={tr('purchases:form.referencePlaceholder')} icon="pound" />
   );
@@ -287,24 +365,31 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
     <TextField label={tr('purchases:form.notes')} value={notes} onChangeText={setNotes} placeholder={tr('purchases:form.notesPlaceholder')} multiline />
   );
   const repeatsField = (
-    <PickerField label={tr('purchases:form.repeats')} value={RECURRENCES.find((r) => r.value === recurrence)?.label} onPress={() => setRecurrenceOpen(true)} icon="repeat" />
+    <PickerField label={tr('purchases:form.repeats')} value={tr(`purchases:recurrence.${recurrence}`)} onPress={() => setRecurrenceOpen(true)} icon="repeat" />
   );
   const billableField = (
-    <SwitchField label={tr('purchases:form.billable')} description={tr('purchases:form.billableHint')} value={billable} onValueChange={setBillable} />
+    <>
+      <SwitchField label={tr('purchases:form.billable')} description={tr('purchases:form.billableHint')} value={billable} onValueChange={setBillable} />
+      {billable ? (
+        <PickerField label={tr('purchases:form.billTo')} value={customers.find((c) => c.id === customerId)?.name ?? tr('purchases:form.billToAny')} onPress={() => setCustomerOpen(true)} icon="account-arrow-right-outline" hint={tr('purchases:form.billToHint')} />
+      ) : null}
+      <CostCentreField value={costCentreId} onChange={setCostCentreId} />
+      <VehicleField value={vehicleId} onChange={setVehicleId} />
+    </>
   );
   const receiptCard = (
     <Pressable onPress={attachReceipt} accessibilityRole="button" accessibilityLabel={tr('purchases:form.attachReceipt')}>
       <Card variant="flat" style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
-        <MaterialCommunityIcons name={receiptUri ? 'check-circle' : 'paperclip'} size={20} color={receiptUri ? t.c.good : t.c.primary} />
+        <Icon name={receiptUri ? 'check-circle' : 'paperclip'} size={20} color={receiptUri ? t.c.good : t.c.primary} />
         <View style={{ flex: 1 }}>
           <Text variant="body" weight="600">
-            {receiptUri ? 'Receipt attached' : 'Attach a receipt'}
+            {receiptUri ? tr('purchases:form.receiptAttached') : tr('purchases:form.attachAReceipt')}
           </Text>
           <Text variant="caption" tone="muted">
-            {receiptUri ? 'Tap to replace' : 'Photo or scan of the bill'}
+            {receiptUri ? tr('purchases:form.tapToReplace') : tr('purchases:form.receiptHint')}
           </Text>
         </View>
-        <MaterialCommunityIcons name="chevron-right" size={18} color={t.c.muted} />
+        <Icon name="chevron-right" size={18} color={t.c.muted} />
       </Card>
     </Pressable>
   );
@@ -317,7 +402,7 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
       fullWidth
     />
   );
-  const submitTitle = expense ? 'Save changes' : 'Record expense';
+  const submitTitle = expense ? tr('settings:profile.save') : tr('purchases:form.recordExpense');
 
   const phoneForm = (
     <ScrollView
@@ -340,11 +425,14 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
       {taxRate > 0 ? (
         <>
           {inclusiveField}
+          {reverseChargeField}
+          {itcField}
+          {gstinField}
           <Card variant="flat" style={{ gap: t.spacing.sm }}>
             {[
-              { label: 'Net amount', value: formatMoney(netAmount) },
-              { label: `Input tax (${formatPercent(taxRate)})`, value: formatMoney(taxAmount) },
-              { label: 'Total paid', value: formatMoney(totalPaid) },
+              { label: tr('common:totals.netAmount'), value: formatMoney(netAmount) },
+              { label: tr('purchases:form.inputTaxRate', { rate: formatPercent(taxRate) }), value: formatMoney(taxAmount) },
+              { label: tr('purchases:form.totalPaid'), value: formatMoney(totalPaid) },
             ].map((r) => (
               <View key={r.label} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                 <Text variant="caption" tone="muted">
@@ -410,15 +498,24 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
         {/* The switch sits level with the picker's box rather than its label. */}
         {taxRate > 0 ? <View style={{ paddingTop: 22 }}>{inclusiveField}</View> : <View />}
       </FieldRow>
+      {taxRate > 0 ? (
+        <>
+          {reverseChargeField}
+          <FieldRow>
+            {itcField}
+            {gstinField ?? <View />}
+          </FieldRow>
+        </>
+      ) : null}
     </FormSection>
   );
   const summary = (
     <FormSection title={tr('purchases:form.summary')}>
       <View style={{ gap: t.spacing.md }}>
-        {taxRate > 0 ? summaryRow('Net amount', formatMoney(netAmount)) : null}
-        {taxRate > 0 ? summaryRow(`Input tax (${formatPercent(taxRate)})`, formatMoney(taxAmount)) : null}
+        {taxRate > 0 ? summaryRow(tr('common:totals.netAmount'), formatMoney(netAmount)) : null}
+        {taxRate > 0 ? summaryRow(tr('purchases:form.inputTaxRate', { rate: formatPercent(taxRate) }), formatMoney(taxAmount)) : null}
         {taxRate > 0 ? <View style={{ height: 1, backgroundColor: t.c.line }} /> : null}
-        {summaryRow('Total paid', formatMoney(totalPaid), true)}
+        {summaryRow(tr('purchases:form.totalPaid'), formatMoney(totalPaid), true)}
       </View>
     </FormSection>
   );
@@ -469,21 +566,40 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
   );
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: t.c.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <FormContainer wide={desktop} style={desktop ? { maxWidth: '100%' } : undefined}>
         {desktop ? desktopForm : phoneForm}
 
         {desktop ? (
           <FormActions>
             <Button title={tr('common:action.cancel')} variant="ghost" onPress={() => goBack(expense ? `/(app)/expenses/${expense.id}` : '/(app)/expenses')} />
-            <Button title={submitTitle} onPress={() => void save()} loading={uploading} disabled={amount.minor <= 0} />
+            <Button shortcut="S" title={submitTitle} onPress={() => void save()} loading={saving || uploading} disabled={blocked || amount.minor <= 0} />
           </FormActions>
         ) : (
           <FormActions>
-            <Button title={submitTitle} onPress={() => void save()} loading={uploading} disabled={amount.minor <= 0} fullWidth size="lg" />
+            <Button shortcut="S" title={submitTitle} onPress={() => void save()} loading={saving || uploading} disabled={blocked || amount.minor <= 0} fullWidth size="lg" />
           </FormActions>
         )}
 
+        <SelectSheet
+          visible={customerOpen}
+          onClose={() => setCustomerOpen(false)}
+          title={tr('purchases:form.billTo')}
+          options={[{ value: '', label: tr('purchases:form.billToAny') }, ...(customerSearch.data ?? []).map((c) => ({ value: c.id!, label: c.name! }))]}
+          onQueryChange={setCustomerQuery}
+          loading={customerSearch.isFetching}
+          value={customerId ?? ''}
+          onSelect={(v) => setCustomerId(v || undefined)}
+        />
+        <SelectSheet
+          visible={itcOpen}
+          onClose={() => setItcOpen(false)}
+          title={tr('inventory:gst.itc')}
+          options={(['eligible', 'blocked', 'ineligible'] as const).map((k) => ({ value: k, label: tr(`inventory:gst.itcOption.${k}`), description: tr(`inventory:gst.itcOptionHint.${k}`) }))}
+          value={itcEligibility}
+          onSelect={(v) => setItcEligibility(v as ItcEligibility)}
+          searchable={false}
+        />
         <SelectSheet
           visible={categoryOpen}
           onClose={() => setCategoryOpen(false)}
@@ -550,9 +666,15 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
           visible={supplierOpen}
           onClose={() => setSupplierOpen(false)}
           title={tr('purchases:form.supplier')}
-          options={suppliers.map((s) => ({ value: s.id, label: s.name, description: s.phone ?? s.code }))}
+          options={(supplierSearch.data ?? []).map((s) => ({ value: s.id!, label: s.name!, description: s.phone ?? s.code }))}
+          onQueryChange={setSupplierQuery}
+          loading={supplierSearch.isFetching}
           value={supplierId}
-          onSelect={setSupplierId}
+          onSelect={(id) => {
+            setSupplierId(id);
+            // A supplier under reverse charge puts their bills under it.
+            setReverseCharge(!!supplierSearch.data?.find((x) => x.id === id)?.reverseCharge);
+          }}
         />
         <SelectSheet
           visible={taxOpen}
@@ -567,11 +689,12 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
           visible={recurrenceOpen}
           onClose={() => setRecurrenceOpen(false)}
           title={tr('purchases:form.repeats')}
-          options={RECURRENCES.map((r) => ({ value: r.value, label: r.label }))}
+          options={RECURRENCES.map((r) => ({ value: r, label: tr(`purchases:recurrence.${r}`) }))}
           value={recurrence}
           onSelect={(v) => setRecurrence(v as RecurrenceFrequency)}
           searchable={false}
         />
+        {leaveGuard.dialog}
       </FormContainer>
     </KeyboardAvoidingView>
   );

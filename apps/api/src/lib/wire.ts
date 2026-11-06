@@ -96,3 +96,37 @@ export function addressTo<P extends string>(prefix: P, a: Address | undefined | 
 export function versioned(row: { version: number; createdAt?: Date | null; updatedAt?: Date | null }) {
   return { version: row.version, createdAt: iso(row.createdAt), updatedAt: iso(row.updatedAt) };
 }
+
+type GstFlags = Schema<'GstFlags'>;
+type GstColumns = {
+  supplyType: NonNullable<GstFlags['supplyType']>;
+  reimbursement: boolean;
+  capitalGoods: boolean;
+  itcEligibility: NonNullable<GstFlags['itcEligibility']>;
+  reverseCharge: boolean;
+  cessRate: string;
+};
+
+/** An item's or line's GST treatment, with only what differs from a plain taxable supply. */
+export function gstFlagsFrom(row: GstColumns): GstFlags | undefined {
+  const flags: GstFlags = {
+    ...(row.supplyType !== 'taxable' && { supplyType: row.supplyType }),
+    ...(row.reimbursement && { reimbursement: true }),
+    ...(row.capitalGoods && { capitalGoods: true }),
+    ...(row.itcEligibility !== 'eligible' && { itcEligibility: row.itcEligibility }),
+    ...(row.reverseCharge && { reverseCharge: true }),
+    ...(Number(row.cessRate) > 0 && { cessRate: Number(row.cessRate) }),
+  };
+  return Object.keys(flags).length ? flags : undefined;
+}
+
+export function gstColumns(flags: GstFlags | undefined): GstColumns {
+  return {
+    supplyType: flags?.supplyType ?? 'taxable',
+    reimbursement: !!flags?.reimbursement,
+    capitalGoods: !!flags?.capitalGoods,
+    itcEligibility: flags?.itcEligibility ?? 'eligible',
+    reverseCharge: !!flags?.reverseCharge,
+    cessRate: String(flags?.cessRate ?? 0),
+  };
+}

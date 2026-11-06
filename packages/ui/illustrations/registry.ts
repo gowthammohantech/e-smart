@@ -1,46 +1,81 @@
-import { ImageSourcePropType } from 'react-native';
+import type { ComponentType } from 'react';
+import type { SceneProps } from './scenes/kit';
+import { EmptyDashboard, Loading, Scanning, SetupComplete, Welcome } from './scenes/heroes';
+import {
+  AllSettled,
+  NoContacts,
+  NoDocuments,
+  NoExpenses,
+  NoItems,
+  NoMovements,
+  NoNotifications,
+  NoPayments,
+  NoScanResult,
+  NotFound,
+  SearchEmpty,
+  SearchIdle,
+  SingleLocation,
+  UnknownReport,
+} from './scenes/states';
+import { ErrorScene, Invite, Locked, MailSent, Offline, Secure } from './scenes/system';
+import {
+  OnboardingBranches,
+  OnboardingBusiness,
+  OnboardingCountry,
+  OnboardingNumbering,
+  OnboardingTax,
+} from './scenes/onboarding';
 
 /**
- * Every illustration the app can show, by semantic name.
- *
- * The files in `assets/illustrations/` are placeholders in the Storyset
- * "Rafiki" spirit. To use the real artwork, drop the download over the file of
- * the same name — nothing here needs to change. See
- * `assets/illustrations/README.md` for which Rafiki illustration belongs to
- * each slot.
- *
- * `require` must stay a literal path: Metro resolves these at build time, so a
- * name can only be added here alongside a file that exists.
+ * Every illustration the app can show, by semantic name. Each is an animated
+ * SVG scene drawn in `scenes/`: it follows the theme, stays crisp at any size,
+ * ships no image files, and holds still under Reduce Motion.
  */
 export const ILLUSTRATIONS = {
-  /* Heroes — animated */
-  welcome: require('../assets/illustrations/welcome.gif'),
-  'setup-complete': require('../assets/illustrations/setup-complete.gif'),
-  scanning: require('../assets/illustrations/scanning.gif'),
-  'empty-dashboard': require('../assets/illustrations/empty-dashboard.gif'),
+  /* Heroes */
+  welcome: Welcome,
+  'setup-complete': SetupComplete,
+  scanning: Scanning,
+  'empty-dashboard': EmptyDashboard,
+  loading: Loading,
 
-  /* Full-size empty states */
-  'not-found': require('../assets/illustrations/not-found.png'),
-  'mail-sent': require('../assets/illustrations/mail-sent.png'),
-  'search-idle': require('../assets/illustrations/search-idle.png'),
-  'search-empty': require('../assets/illustrations/search-empty.png'),
-  'single-location': require('../assets/illustrations/single-location.png'),
-  'no-scan-result': require('../assets/illustrations/no-scan-result.png'),
-  'unknown-report': require('../assets/illustrations/unknown-report.png'),
-  offline: require('../assets/illustrations/offline.png'),
+  /* Full-size states */
+  'not-found': NotFound,
+  'mail-sent': MailSent,
+  'search-idle': SearchIdle,
+  'search-empty': SearchEmpty,
+  'single-location': SingleLocation,
+  'no-scan-result': NoScanResult,
+  'unknown-report': UnknownReport,
+  offline: Offline,
+  error: ErrorScene,
+  locked: Locked,
+  secure: Secure,
+  invite: Invite,
 
   /* Compact empty states */
-  'no-documents': require('../assets/illustrations/no-documents.png'),
-  'no-contacts': require('../assets/illustrations/no-contacts.png'),
-  'no-items': require('../assets/illustrations/no-items.png'),
-  'no-expenses': require('../assets/illustrations/no-expenses.png'),
-  'no-payments': require('../assets/illustrations/no-payments.png'),
-  'all-settled': require('../assets/illustrations/all-settled.png'),
-  'no-notifications': require('../assets/illustrations/no-notifications.png'),
-  'no-movements': require('../assets/illustrations/no-movements.png'),
-} satisfies Record<string, ImageSourcePropType>;
+  'no-documents': NoDocuments,
+  'no-contacts': NoContacts,
+  'no-items': NoItems,
+  'no-expenses': NoExpenses,
+  'no-payments': NoPayments,
+  'all-settled': AllSettled,
+  'no-notifications': NoNotifications,
+  'no-movements': NoMovements,
+
+  /* Onboarding steps, keyed `onboarding-<step>` */
+  'onboarding-business': OnboardingBusiness,
+  'onboarding-country': OnboardingCountry,
+  'onboarding-tax': OnboardingTax,
+  'onboarding-numbering': OnboardingNumbering,
+  'onboarding-branches': OnboardingBranches,
+} satisfies Record<string, ComponentType<SceneProps>>;
 
 export type IllustrationName = keyof typeof ILLUSTRATIONS;
+
+export function isIllustrationName(name: string): name is IllustrationName {
+  return name in ILLUSTRATIONS;
+}
 
 /** Display heights, in points. The art is 4:3, so width follows. */
 export const ILLUSTRATION_SIZES = {
@@ -50,9 +85,3 @@ export const ILLUSTRATION_SIZES = {
 } as const;
 
 export type IllustrationSize = keyof typeof ILLUSTRATION_SIZES;
-
-/** Credit required by the Storyset free licence. */
-export const ILLUSTRATION_CREDIT = {
-  label: 'Illustrations by Storyset',
-  url: 'https://storyset.com',
-};

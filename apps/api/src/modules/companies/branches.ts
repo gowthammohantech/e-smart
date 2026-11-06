@@ -7,7 +7,8 @@ import { checkIfMatch, setEtag } from '../../http/etag';
 import { conflict, invalid, notFound, preconditionFailed } from '../../http/errors';
 import { recordChange, type DbOrTx } from '../../lib/audit';
 import { newId } from '../../lib/ids';
-import { addressTo } from '../../lib/wire';
+import { addressTo, requiredAddressFrom } from '../../lib/wire';
+import { hasModule } from '@esmart/core/domain/plan';
 import { branchToWire } from './wire';
 
 const B = schema.branches;
@@ -39,6 +40,19 @@ async function assertCodeFree(db: DbOrTx, companyId: string, code: string, excep
   if (exceptId) filters.push(ne(B.id, exceptId));
   const [dupe] = await db.select({ id: B.id }).from(B).where(and(...filters));
   if (dupe) throw conflict('BRANCH_CODE_TAKEN', `Another branch already uses the code ${code}`);
+}
+
+/** The same place twice: another branch with this name, or at this street and PIN. */
+async function assertNotDuplicate(db: DbOrTx, companyId: string, cols: { name: string; addressLine1: string; addressPostalCode: string }, exceptId?: string) {
+  const others = [eq(B.companyId, companyId), ...(exceptId ? [ne(B.id, exceptId)] : [])];
+  const [named] = await db.select({ id: B.id }).from(B).where(and(...others, sql`lower(${B.name}) = lower(${cols.name})`));
+  if (named) throw conflict('BRANCH_NAME_TAKEN', `Another branch is already called ${cols.name}`);
+  if (!cols.addressLine1.trim()) return;
+  const [placed] = await db
+    .select({ name: B.name })
+    .from(B)
+    .where(and(...others, sql`lower(trim(${B.addressLine1})) = lower(trim(${cols.addressLine1}))`, eq(B.addressPostalCode, cols.addressPostalCode)));
+  if (placed) throw conflict('BRANCH_ADDRESS_TAKEN', `${placed.name} is already at this address`);
 }
 
 /** Exactly one primary per company: promoting one demotes the rest. */
@@ -79,6 +93,7 @@ export const branchHandlers = defineHandlers({
     const cols = branchColumns(ctx.body);
     const row = await ctx.db.transaction(async (tx) => {
       await assertCodeFree(tx, ctx.company.id, cols.code);
+      await assertNotDuplicate(tx, ctx.company.id, cols);
       const [{ n }] = await tx.select({ n: sql<number>`count(*)::int` }).from(B).where(eq(B.companyId, ctx.company.id));
       const isPrimary = n === 0 || !!ctx.body.isPrimary;
       const [created] = await tx
@@ -97,13 +112,20 @@ export const branchHandlers = defineHandlers({
   async saveBranch(ctx) {
     const current = await findBranch(ctx.db, ctx.company.id, ctx.params.branchId);
     checkIfMatch(ctx.req, current.version);
-    const cols = branchColumns(ctx.body);
-    const isPrimary = ctx.body.isPrimary ?? current.isPrimary;
+    // Below Pro a business has its one branch: only its name is the person's to change; the
+    // rest follows the business profile. Anything else sent is kept as it is.
+    const full = hasModule(ctx.company.plan, 'branches');
+    const sent = branchColumns(ctx.body);
+    const cols = full
+      ? sent
+      : { name: sent.name, code: current.code, ...addressTo('address', requiredAddressFrom(current, 'address')), phone: current.phone, gstin: current.gstin };
+    const isPrimary = full ? (ctx.body.isPrimary ?? current.isPrimary) : current.isPrimary;
     if (current.isPrimary && !isPrimary) {
       throw conflict('PRIMARY_BRANCH_REQUIRED', 'Mark another branch as primary instead; a company always has one');
     }
     const row = await ctx.db.transaction(async (tx) => {
       if (cols.code !== current.code) await assertCodeFree(tx, ctx.company.id, cols.code, current.id);
+      await assertNotDuplicate(tx, ctx.company.id, cols, current.id);
       const [updated] = await tx
         .update(B)
         .set({ ...cols, isPrimary, version: current.version + 1, updatedAt: ctx.now })

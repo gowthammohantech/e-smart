@@ -1,16 +1,19 @@
 import ExcelJS from 'exceljs';
 import { and, eq, gte, inArray, lte, ne } from 'drizzle-orm';
-import { gstr1Summary, GSTR1_TABLES, GSTR1_TABLE_LABELS, NIL_SUPPLY_LABELS, type Gstr1Summary } from '@esmart/core/domain/gstr1';
+import { gstr1Summary, GSTR1_KINDS, GSTR1_TABLES, GSTR1_TABLE_LABELS, NIL_SUPPLY_LABELS, type Gstr1Row, type Gstr1Summary } from '@esmart/core/domain/gstr1';
+import { gstr1Amendments, type Gstr1Amendments, type ReportedRow } from '@esmart/core/domain/gstr1Amend';
 import type { Item } from '@esmart/core/types';
 import { schema } from '@esmart/db';
 import type { Schema } from '@esmart/api-contract';
 import { RawBody, defineHandlers, type CompanyRow } from '../../context';
 import { invalid } from '../../http/errors';
 import type { DbOrTx } from '../../lib/audit';
-import { compact } from '../../lib/wire';
+import { compact, money } from '../../lib/wire';
 import { companyCore, partyCore } from '../documents/engine';
 import { documentsToWire, toCoreDocument } from '../documents/wire';
 import { toCsv } from '../exports/build';
+import { loadAdvanceEvents } from './advances';
+import { branchesOf } from './gstr3bBuild';
 import { gstnJson } from './gstn';
 
 const D = schema.documents;
@@ -29,26 +32,76 @@ export function periodRange(period: string): { from: string; to: string } {
  * company's issued invoices and credit notes, in the base currency. Drafts
  * never count; cancelled documents are fetched only for the table 13
  * document summary.
+ *
+ * With `gstin`, only that registration's return: the branches filing under it, supplying from its
+ * state. Without it, the whole company, as the GSTR-1 screen shows it.
  */
-export async function buildGstr1(db: DbOrTx, company: CompanyRow, period: string, now: Date): Promise<Gstr1Summary> {
-  const range = periodRange(period);
-  const rows = await db
-    .select()
-    .from(D)
-    .where(and(eq(D.companyId, company.id), inArray(D.kind, ['invoice', 'salesReturn']), ne(D.status, 'draft'), gte(D.date, range.from), lte(D.date, range.to)))
-    .orderBy(D.date, D.number);
+export async function buildGstr1(db: DbOrTx, company: CompanyRow, period: string, now: Date, gstin?: string): Promise<Gstr1Summary> {
+  const summary = await gstr1ForRange(db, company, periodRange(period), now, { gstin });
+  if (!gstin) return summary;
+  const amendments = await amendmentsFor(db, company, gstin, period, now);
+  return amendments ? { ...summary, amendments } : summary;
+}
+
+/**
+ * The amendment tables for a GSTIN's return: what its earlier filed GSTR-1s reported (kept with each
+ * return as `reported`), against those documents worked out again today. Undefined when nothing changed.
+ */
+export async function amendmentsFor(db: DbOrTx, company: CompanyRow, gstin: string, period: string, now: Date): Promise<Gstr1Amendments | undefined> {
+  const R = schema.gstReturns;
+  const filed = await db
+    .select({ period: R.period, payload: R.payload })
+    .from(R)
+    .where(and(eq(R.companyId, company.id), eq(R.gstin, gstin), eq(R.returnType, 'gstr1'), eq(R.status, 'filed')));
+  const reported: ReportedRow[] = filed.flatMap((f) => ((f.payload as { reported?: Gstr1Row[] } | null)?.reported ?? []).map((r) => ({ ...r, period: f.period })));
+  if (!reported.length) return undefined;
+  const documentIds = [...new Set(reported.map((r) => r.documentId))];
+  const current = await gstr1ForRange(db, company, { from: '1900-01-01', to: '2999-12-31' }, now, { gstin, documentIds });
+  const rows = GSTR1_TABLES.flatMap((t) => current[t]);
+  const out = gstr1Amendments(reported, rows, period);
+  return out.rows.length || out.b2csa.length ? out : undefined;
+}
+
+/** Every row a return reports, ordinary and amended, to keep with it once filed. */
+export function reportedRows(summary: Gstr1Summary): Gstr1Row[] {
+  return [...GSTR1_TABLES.flatMap((t) => summary[t]), ...(summary.amendments?.rows ?? [])];
+}
+
+/**
+ * GSTR-1 over any date range, for one GSTIN's branches or a list of branches (the app's GSTR-1
+ * screen picks a range and a branch), as `@esmart/core` gstr1Summary works it out.
+ */
+export async function gstr1ForRange(db: DbOrTx, company: CompanyRow, range: { from: string; to: string }, now: Date, opts: { gstin?: string; branchIds?: string[]; documentIds?: string[] } = {}): Promise<Gstr1Summary> {
+  const { gstin } = opts;
+  const branchIds = gstin ? await branchesOf(db, company, gstin) : opts.branchIds?.length ? opts.branchIds : undefined;
+  const rows =
+    branchIds && !branchIds.length
+      ? []
+      : await db
+          .select()
+          .from(D)
+          .where(and(eq(D.companyId, company.id), inArray(D.kind, GSTR1_KINDS), ne(D.status, 'draft'), gte(D.date, range.from), lte(D.date, range.to), branchIds ? inArray(D.branchId, branchIds) : undefined, opts.documentIds ? inArray(D.id, opts.documentIds) : undefined))
+          .orderBy(D.date, D.number);
+  // A note's invoice may be from an earlier period; its value decides the note's table.
+  const sourceIds = [...new Set(rows.map((r) => r.sourceDocumentId).filter((id): id is string => !!id && !rows.some((x) => x.id === id)))];
+  const sources = sourceIds.length ? await db.select().from(D).where(and(eq(D.companyId, company.id), inArray(D.id, sourceIds))) : [];
   const baseCurrency = company.baseCurrency.trim();
-  const documents = (await documentsToWire(db, rows, now, baseCurrency)).map(toCoreDocument);
+  const documents = (await documentsToWire(db, [...rows, ...sources], now, baseCurrency)).map(toCoreDocument);
   const partyIds = [...new Set(rows.map((r) => r.partyId))];
   const parties = partyIds.length ? await db.select().from(schema.parties).where(inArray(schema.parties.id, partyIds)) : [];
   const items = await db.select().from(schema.items).where(eq(schema.items.companyId, company.id));
+  const core = companyCore(company);
+  // A branch registered in another state supplies from there.
+  const home = gstin ? { ...core, taxRegistration: core.taxRegistration && { ...core.taxRegistration, placeOfSupplyStateCode: gstin.slice(0, 2) } } : core;
   return gstr1Summary({
-    company: companyCore(company),
+    company: home,
     documents,
     parties: parties.map(partyCore),
     items: items.map((i) => ({ id: i.id, name: i.name, type: i.type, unit: i.unit, hsnCode: i.hsnCode ?? undefined }) as Item),
     baseCurrency,
     period: range,
+    // Reworking given documents (for amendments) needs no advances.
+    advances: opts.documentIds ? [] : await loadAdvanceEvents(db, company, range.to, branchIds),
   });
 }
 
@@ -121,14 +174,17 @@ const XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 export const gstHandlers = defineHandlers({
   async getGstr1(ctx) {
     const summary = await buildGstr1(ctx.db, ctx.company, ctx.query.period, ctx.now);
-    return compact({ period: ctx.query.period, ...summary }) as Schema<'Gstr1Summary'>;
+    const base = ctx.company.baseCurrency.trim();
+    const rows = (list: Gstr1Summary['advances']['received']) => list.map((r) => ({ ...r, taxable: money(r.taxable, base), igst: money(r.igst, base), cgst: money(r.cgst, base), sgst: money(r.sgst, base), cess: money(r.cess, base) }));
+    return compact({ period: ctx.query.period, ...summary, advances: { received: rows(summary.advances.received), adjusted: rows(summary.advances.adjusted) } }) as Schema<'Gstr1Summary'>;
   },
 
   /** `format` picks the file: the GSTN offline-tool JSON (default), a flat CSV of invoice rows, or an Excel workbook. */
   async exportGstr1(ctx) {
     const { period } = ctx.query;
     const format = ctx.query.format ?? 'gstn-json';
-    const summary = await buildGstr1(ctx.db, ctx.company, period, ctx.now);
+    // The GSTN file is one registration's return: the company's own GSTIN, not its branches' others.
+    const summary = await buildGstr1(ctx.db, ctx.company, period, ctx.now, format === 'gstn-json' && ctx.company.taxIdentifier ? ctx.company.taxIdentifier : undefined);
     const name = `GSTR1_${ctx.company.taxIdentifier ?? ctx.company.id}_${period}`;
     if (format === 'csv') return new RawBody(toCsv(ROW_COLUMNS, flatRows(summary)), 'text/csv; charset=utf-8', `${name}.csv`);
     if (format === 'xlsx') return new RawBody(await workbook(summary, ctx.company, period), XLSX, `${name}.xlsx`);

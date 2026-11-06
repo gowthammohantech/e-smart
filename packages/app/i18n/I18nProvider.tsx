@@ -26,6 +26,8 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (i18n.language !== resolved) void i18n.changeLanguage(resolved);
+    // On web the browser picks fonts and line breaking from <html lang>.
+    if (typeof document !== 'undefined') document.documentElement.lang = resolved;
   }, [resolved]);
 
   return <>{children}</>;

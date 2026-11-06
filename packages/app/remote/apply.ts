@@ -3,6 +3,7 @@ import { useAppStore } from '../store/appStore';
 import { COLLECTIONS, COMPANY_DEFAULTS, type CollectionKey } from './collections';
 import { useLogoQueue } from './logoQueue';
 import { knownToServer, useRemoteMeta } from './meta';
+import { useReceiptQueue } from './receiptQueue';
 
 type Row = Record<string, unknown>;
 
@@ -51,6 +52,7 @@ export function remapIds(map: Record<string, string>) {
     session: { ...s.session, userId: s.session.userId ? (ids.get(s.session.userId) ?? s.session.userId) : null },
   } as never);
   useLogoQueue.getState().remap(ids);
+  useReceiptQueue.getState().remap(ids);
   const meta = useRemoteMeta.getState();
   // A screen may still hold the old id (its route param), so remember where it went.
   meta.addAliases(Object.fromEntries(ids));
@@ -88,6 +90,8 @@ export function applyChanges(changes: Change[]) {
   const s = useAppStore.getState();
   const lists: Record<string, Row[]> = {};
   const versions = { ...useRemoteMeta.getState().versions };
+  // A row with a change still to send keeps it on screen; the send settles any conflict.
+  const unsent = new Set(s.syncQueue.filter((e) => e.status !== 'synced').map((e) => e.entityId));
   for (const ch of changes) {
     const map = ch.entityType ? COLLECTIONS[ch.entityType] : undefined;
     if (!map || !ch.entityId) continue;
@@ -103,6 +107,7 @@ export function applyChanges(changes: Change[]) {
     const key = row[map.key];
     if (typeof key !== 'string') continue;
     const at = list.findIndex((r) => r[map.key] === key);
+    if (at >= 0 && unsent.has(key)) continue;
     if (at >= 0) list[at] = { ...list[at], ...row };
     else list.push(row);
     if (typeof row.version === 'number' && typeof row.id === 'string') versions[row.id] = row.version;

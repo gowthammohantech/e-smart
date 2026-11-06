@@ -2,6 +2,7 @@ import { sql, type SQL } from 'drizzle-orm';
 import { strToU8, zipSync } from 'fflate';
 import type { Deps } from '../../context';
 import type { DbOrTx } from '../../lib/audit';
+import { tallyXml } from './tally';
 
 type Row = Record<string, unknown>;
 export type ExportFormat = 'json-backup' | 'csv-zip' | 'tally-xml';
@@ -26,6 +27,8 @@ const EXCLUDED = new Set([
   'change_log',
   'export_jobs',
   'compliance_credentials',
+  // The taxpayer's GST portal session: a live credential, never in a backup.
+  'gst_portal_sessions',
   'webhook_events',
 ]);
 
@@ -45,7 +48,7 @@ const MAIN_TABLES = [
   'stock_movements',
 ];
 
-type Scoped = { table: string; columns: string[]; hasDate: boolean; where: (companyId: string) => SQL };
+export type Scoped = { table: string; columns: string[]; hasDate: boolean; where: (companyId: string) => SQL };
 
 /**
  * Every table that belongs to one company, found from the catalogue: tables
@@ -53,7 +56,7 @@ type Scoped = { table: string; columns: string[]; hasDate: boolean; where: (comp
  * (document lines through documents, tax components through tax lines…).
  * Binary columns (encrypted secrets) are left out.
  */
-async function companyTables(db: DbOrTx): Promise<Map<string, Scoped>> {
+export async function companyTables(db: DbOrTx, excluded: Set<string> = EXCLUDED): Promise<Map<string, Scoped>> {
   const cols = await db.execute<{ table_name: string; column_name: string; data_type: string }>(sql`
     select table_name, column_name, data_type from information_schema.columns
     where table_schema = 'public' order by table_name, ordinal_position`);
@@ -78,13 +81,13 @@ async function companyTables(db: DbOrTx): Promise<Map<string, Scoped>> {
     scoped.set(table, { table, columns: list.filter((c) => c.type !== 'bytea').map((c) => c.name), hasDate: list.some((c) => c.name === 'date'), where });
   };
   for (const [table, list] of columns) {
-    if (EXCLUDED.has(table) || !list.some((c) => c.name === 'company_id')) continue;
+    if (excluded.has(table) || !list.some((c) => c.name === 'company_id')) continue;
     add(table, (id) => sql`${sql.identifier('company_id')} = ${id}`);
   }
   // Children of scoped tables, a few levels deep.
   for (let depth = 0; depth < 3; depth++) {
     for (const fk of fks.rows) {
-      if (scoped.has(fk.child) || EXCLUDED.has(fk.child) || fk.parent === 'companies') continue;
+      if (scoped.has(fk.child) || excluded.has(fk.child) || fk.parent === 'companies') continue;
       const parent = scoped.get(fk.parent);
       if (!parent || columns.get(fk.child)?.some((c) => c.name === 'company_id')) continue;
       add(fk.child, (id) => sql`${sql.identifier(fk.child_col)} in (select ${sql.identifier(fk.parent_col)} from ${sql.identifier(fk.parent)} where ${parent.where(id)})`);
@@ -165,96 +168,8 @@ async function csvZip(db: DbOrTx, deps: Deps, companyId: string, opts: ExportOpt
   return { body: Buffer.from(zipSync(files)), contentType: 'application/zip', extension: 'zip' };
 }
 
-const xml = (s: unknown) =>
-  String(s ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
-
-/** Tally amounts are in major units with two decimals. */
-const amount = (minor: number) => (minor / 100).toFixed(2);
-
-type Voucher = {
-  id: string;
-  kind: 'invoice' | 'purchaseBill';
-  number: string;
-  supplier_doc_number: string | null;
-  date: string;
-  party_name: string;
-  taxable_minor: string;
-  round_off_minor: string;
-  grand_total_minor: string;
-  charges_minor: string;
-  discount_minor: string;
-};
-
-/**
- * Sales and purchase vouchers for finalised invoices and bills, in Tally's
- * import envelope. Tally's sign convention: debits are negative with
- * ISDEEMEDPOSITIVE Yes, credits positive with No. Each voucher balances:
- * party = taxable + taxes - document discount + charges + round-off.
- */
-async function tallyXml(db: DbOrTx, companyId: string, opts: ExportOptions): Promise<BuiltFile> {
-  const range = [opts.from ? sql`and d.date >= ${opts.from}` : sql``, opts.to ? sql`and d.date <= ${opts.to}` : sql``];
-  const docs = await db.execute<Voucher>(sql`
-    select d.id, d.kind, d.number, d.supplier_doc_number, to_char(d.date, 'YYYYMMDD') as date, p.name as party_name,
-           d.taxable_amount_minor as taxable_minor, d.round_off_minor, d.grand_total_minor, d.charges_minor,
-           d.document_discount_minor as discount_minor
-    from documents d join parties p on p.id = d.party_id
-    where d.company_id = ${companyId} and d.kind in ('invoice', 'purchaseBill')
-      and d.status not in ('draft', 'cancelled', 'rejected') ${range[0]} ${range[1]}
-    order by d.date, d.number`);
-  const taxes = await db.execute<{ document_id: string; type: string; amount_minor: string }>(sql`
-    select tl.document_id, tc.type, sum(tc.amount_minor)::bigint as amount_minor
-    from document_tax_components tc join document_tax_lines tl on tl.id = tc.tax_line_id
-    join documents d on d.id = tl.document_id
-    where d.company_id = ${companyId}
-    group by tl.document_id, tc.type`);
-  const [company] = (await db.execute<{ name: string }>(sql`select name from companies where id = ${companyId}`)).rows;
-
-  const taxBy = new Map<string, { type: string; minor: number }[]>();
-  for (const t of taxes.rows) {
-    if (!taxBy.has(t.document_id)) taxBy.set(t.document_id, []);
-    taxBy.get(t.document_id)!.push({ type: t.type, minor: Number(t.amount_minor) });
-  }
-
-  const entry = (ledger: string, debit: boolean, minor: number, isParty = false) =>
-    `<ALLLEDGERENTRIES.LIST><LEDGERNAME>${xml(ledger)}</LEDGERNAME><ISDEEMEDPOSITIVE>${debit ? 'Yes' : 'No'}</ISDEEMEDPOSITIVE>` +
-    `${isParty ? '<ISPARTYLEDGER>Yes</ISPARTYLEDGER>' : ''}<AMOUNT>${amount(debit ? -minor : minor)}</AMOUNT></ALLLEDGERENTRIES.LIST>`;
-
-  const vouchers = docs.rows.map((d) => {
-    const sale = d.kind === 'invoice';
-    const type = sale ? 'Sales' : 'Purchase';
-    // A sale debits the customer and credits income and output tax; a purchase the reverse.
-    const partyDebit = sale;
-    const lines = [entry(d.party_name, partyDebit, Number(d.grand_total_minor), true), entry(sale ? 'Sales' : 'Purchase', !partyDebit, Number(d.taxable_minor))];
-    if (Number(d.charges_minor)) lines.push(entry(sale ? 'Other Charges' : 'Freight Inward', !partyDebit, Number(d.charges_minor)));
-    for (const t of taxBy.get(d.id) ?? []) if (t.minor) lines.push(entry(`${sale ? 'Output' : 'Input'} ${t.type}`, !partyDebit, t.minor));
-    // Discount allowed on a sale is a debit; discount received on a purchase a credit.
-    if (Number(d.discount_minor)) lines.push(entry(sale ? 'Discount Allowed' : 'Discount Received', partyDebit, Number(d.discount_minor)));
-    const round = Number(d.round_off_minor);
-    // Round-off moves the same way as income when it is positive.
-    if (round) lines.push(entry('Round Off', round > 0 ? !partyDebit : partyDebit, Math.abs(round)));
-    return (
-      `<TALLYMESSAGE xmlns:UDF="TallyUDF"><VOUCHER VCHTYPE="${type}" ACTION="Create" REMOTEID="${xml(d.id)}">` +
-      `<DATE>${d.date}</DATE><VOUCHERTYPENAME>${type}</VOUCHERTYPENAME><VOUCHERNUMBER>${xml(d.number)}</VOUCHERNUMBER>` +
-      `${!sale && d.supplier_doc_number ? `<REFERENCE>${xml(d.supplier_doc_number)}</REFERENCE>` : ''}` +
-      `<PARTYLEDGERNAME>${xml(d.party_name)}</PARTYLEDGERNAME><PERSISTEDVIEW>Accounting Voucher View</PERSISTEDVIEW>` +
-      `${lines.join('')}</VOUCHER></TALLYMESSAGE>`
-    );
-  });
-
-  const body =
-    '<?xml version="1.0" encoding="UTF-8"?>\n<ENVELOPE><HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER><BODY><IMPORTDATA>' +
-    `<REQUESTDESC><REPORTNAME>Vouchers</REPORTNAME><STATICVARIABLES><SVCURRENTCOMPANY>${xml(company?.name)}</SVCURRENTCOMPANY></STATICVARIABLES></REQUESTDESC>` +
-    `<REQUESTDATA>${vouchers.join('\n')}</REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>\n`;
-  return { body: Buffer.from(body), contentType: 'application/xml', extension: 'xml' };
-}
-
 export function buildExport(db: DbOrTx, deps: Deps, format: ExportFormat, companyId: string, opts: ExportOptions, now: Date): Promise<BuiltFile> {
   if (format === 'json-backup') return jsonBackup(db, deps, companyId, opts, now);
   if (format === 'csv-zip') return csvZip(db, deps, companyId, opts);
-  return tallyXml(db, companyId, opts);
+  return tallyXml(db, companyId, opts, now);
 }

@@ -30,9 +30,25 @@ export type ApiClientOptions = {
   /** Mints the Idempotency-Key sent with every POST. Defaults to crypto.randomUUID. */
   idempotencyKey?: () => string;
   fetch?: typeof fetch;
+  /** Gives up on a request after this long, as if the connection had dropped. Defaults to two minutes. */
+  timeoutMs?: number;
+  /** Told of every refused request before it is thrown, e.g. to ask for an authenticator code on MFA_REQUIRED. */
+  onProblem?: (error: ApiError) => void;
 };
 
-const PUBLIC_PREFIXES = ['/auth/', '/plans', '/reference/', '/invites/'];
+// The contract's routes with `security: []`. Reference data is public, but a
+// GSTIN lookup, HSN search or road distance reaches a provider and needs a
+// signed-in user.
+const PUBLIC_PREFIXES = [
+  '/auth/',
+  '/plans',
+  '/reference/countries',
+  '/reference/states',
+  '/reference/cities',
+  '/reference/pincodes/',
+  '/reference/currencies',
+  '/invites/',
+];
 
 function isPublic(url: string, baseUrl: string): boolean {
   const path = url.startsWith(baseUrl) ? url.slice(baseUrl.length) : new URL(url).pathname;
@@ -55,14 +71,44 @@ async function asStandardResponse(res: Pick<Response, 'status' | 'statusText' | 
  * token once on a 401 and retries, and turns problem+json into ApiError.
  */
 export function createApiClient(options: ApiClientOptions) {
-  const fetchImpl = options.fetch ?? globalThis.fetch.bind(globalThis);
+  const rawFetch = options.fetch ?? globalThis.fetch.bind(globalThis);
+  const timeoutMs = options.timeoutMs ?? 120_000;
+  /** A request that never settles would otherwise hold up every sync after it. */
+  const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const signal = (input instanceof Request ? input.signal : init?.signal) ?? undefined;
+    signal?.addEventListener('abort', () => controller.abort());
+    try {
+      return await Promise.race([
+        rawFetch(input, { ...init, signal: controller.signal }),
+        new Promise<never>((_, reject) => controller.signal.addEventListener('abort', () => reject(new TypeError('The request timed out')))),
+      ]);
+    } finally {
+      clearTimeout(timer);
+    }
+  }) as typeof fetch;
   const newKey = options.idempotencyKey ?? (() => crypto.randomUUID());
   let refreshing: Promise<Tokens | null> | null = null;
   // A sent request's body is spent, so keep an unsent copy for the one retry.
   const unsent = new WeakMap<Request, Request>();
 
-  async function refresh(): Promise<Tokens | null> {
-    const current = await options.getTokens();
+  /**
+   * One rotation for every tab of a browser: under a shared lock, and only if the token the failed
+   * request carried is still the current one. Another tab that already rotated it has left the new
+   * pair in storage, and spending the old refresh token again would be refused as reuse.
+   */
+  function refresh(stale: string | undefined): Promise<Tokens | null> {
+    const locks = (globalThis as { navigator?: { locks?: { request: <T>(name: string, fn: () => Promise<T>) => Promise<T> } } }).navigator?.locks;
+    const run = async () => {
+      const current = await options.getTokens();
+      if (current && stale && current.accessToken !== stale) return current;
+      return rotate(current);
+    };
+    return locks ? locks.request('ebs.refresh', run) : run();
+  }
+
+  async function rotate(current: Tokens | null): Promise<Tokens | null> {
     if (!current) return null;
     const res = await fetchImpl(`${options.baseUrl}/auth/refresh`, {
       method: 'POST',
@@ -70,10 +116,16 @@ export function createApiClient(options: ApiClientOptions) {
       body: JSON.stringify({ refreshToken: current.refreshToken }),
     });
     if (!res.ok) {
+      // Only the API refusing the session ends it. A 5xx, a 429 or a captive
+      // portal says nothing about the session, and signing out clears the book.
+      const refused = [400, 401, 403].includes(res.status) && (res.headers.get('content-type') ?? '').includes('problem+json');
+      if (!refused) throw new TypeError(`Could not refresh the session (HTTP ${res.status})`);
       await options.setTokens(null);
       return null;
     }
-    const body = (await res.json()) as Tokens;
+    const body = (await res.json().catch(() => {
+      throw new TypeError('Could not refresh the session');
+    })) as Tokens;
     const next = { accessToken: body.accessToken, refreshToken: body.refreshToken };
     await options.setTokens(next);
     return next;
@@ -94,7 +146,7 @@ export function createApiClient(options: ApiClientOptions) {
     async onResponse({ request, response }) {
       let retried: Response | undefined;
       if (response.status === 401 && !isPublic(request.url, options.baseUrl)) {
-        refreshing ??= refresh().finally(() => {
+        refreshing ??= refresh(request.headers.get('Authorization')?.replace(/^Bearer /, '')).finally(() => {
           refreshing = null;
         });
         const tokens = await refreshing;
@@ -110,7 +162,9 @@ export function createApiClient(options: ApiClientOptions) {
         const problem: Problem = type.includes('json')
           ? ((await final.clone().json()) as Problem)
           : { status: final.status, title: final.statusText };
-        throw new ApiError(final.status, problem);
+        const error = new ApiError(final.status, problem);
+        options.onProblem?.(error);
+        throw error;
       }
       // openapi-fetch only takes a returned value that is `instanceof Response`.
       // In Expo, fetch comes from expo/fetch and its responses aren't the global

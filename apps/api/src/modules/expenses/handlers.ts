@@ -1,4 +1,6 @@
-import { and, eq, exists, gte, ilike, inArray, lte, ne, or, sql, type SQL } from 'drizzle-orm';
+import { and, eq, exists, gte, ilike, inArray, isNull, lte, ne, notExists, notInArray, or, sql, type SQL } from 'drizzle-orm';
+import { vehicleIssues } from '../settings/vehicles';
+import { buysFrom, sellsTo } from '@esmart/core/domain/partyKinds';
 import type { Schema } from '@esmart/api-contract';
 import { accountFitsMethod } from '@esmart/core/domain/paymentAccounts';
 import { FULL_PLAN, hasModule } from '@esmart/core/domain/plan';
@@ -12,8 +14,10 @@ import { recordChange, type DbOrTx } from '../../lib/audit';
 import { newId } from '../../lib/ids';
 import { assignNumber } from '../../lib/numbering';
 import { rateToBase } from '../documents/engine';
+import { assertPeriodOpen } from '../documents/lifecycle';
 import { expenseTax, linkExpenseAttachments, nextRecurrence } from './engine';
 import { expensesToWire, type ExpenseRow } from './wire';
+import { costCentreIssues } from '../books/costCentres';
 
 export { materializeRecurringExpenses } from './engine';
 
@@ -37,7 +41,7 @@ async function toWire(db: DbOrTx, row: ExpenseRow) {
  * the server owns: the branch, the exchange rate, the input tax and the
  * next recurrence. Returns the columns to write.
  */
-async function prepare(ctx: AnyCtx, db: DbOrTx, body: Schema<'Expense'>, current?: ExpenseRow) {
+export async function prepare(ctx: AnyCtx, db: DbOrTx, body: Schema<'Expense'>, current?: ExpenseRow) {
   const issues: Issue[] = [];
   const blocking = (field: string, message: string) => issues.push({ field, message, severity: 'blocking' });
   const companyId = ctx.company.id;
@@ -49,12 +53,12 @@ async function prepare(ctx: AnyCtx, db: DbOrTx, body: Schema<'Expense'>, current
   if (body.supplierId) {
     const [supplier] = await db.select({ kind: schema.parties.kind }).from(schema.parties).where(and(eq(schema.parties.companyId, companyId), eq(schema.parties.id, body.supplierId)));
     if (!supplier) blocking('supplierId', 'No such party in this company');
-    else if (supplier.kind !== 'supplier') blocking('supplierId', 'An expense can only name a supplier');
+    else if (!buysFrom(supplier.kind)) blocking('supplierId', 'An expense can only name a supplier');
   }
 
   const [account] = await db.select().from(schema.paymentAccounts).where(and(eq(schema.paymentAccounts.companyId, companyId), eq(schema.paymentAccounts.id, body.accountId)));
   if (!account) blocking('accountId', 'No such payment account in this company');
-  else if (!accountFitsMethod(body.method, { ...account, currency: account.currency.trim(), accountNumber: account.accountNumber ?? undefined, openingBalance: money(account.openingBalanceMinor, account.currency.trim()) })) {
+  else if (!accountFitsMethod(body.method, { ...account, currency: account.currency.trim(), accountNumber: account.accountNumber ?? undefined, openingBalance: money(account.openingBalanceMinor, account.currency.trim()), openingBalanceDate: account.openingBalanceDate ?? undefined, openingRate: Number(account.openingRate) })) {
     blocking('accountId', `A ${body.method} expense cannot be paid from a ${account.type} account`);
   }
 
@@ -94,9 +98,18 @@ async function prepare(ctx: AnyCtx, db: DbOrTx, body: Schema<'Expense'>, current
     const missing = body.attachmentIds.filter((id) => !found.some((f) => f.id === id));
     if (missing.length) blocking('attachmentIds', `No such attachment in this company: ${missing.join(', ')}`);
   }
+  if (body.customerId) {
+    const P = schema.parties;
+    const [customer] = await db.select({ kind: P.kind }).from(P).where(and(eq(P.companyId, companyId), eq(P.id, body.customerId)));
+    if (!customer || !sellsTo(customer.kind)) blocking('customerId', 'No such customer in this company');
+    else if (!body.billable) blocking('customerId', 'Only a billable expense is recovered from a customer');
+  }
+  issues.push(...(await costCentreIssues(db, companyId, [{ field: 'costCentreId', id: body.costCentreId }])));
+  issues.push(...(await vehicleIssues(db, companyId, body.vehicleId)));
   if (issues.length) throw unprocessable(issues);
 
   const taxInclusive = body.taxInclusive ?? current?.taxInclusive ?? true;
+  const reverseCharge = body.reverseCharge ?? current?.reverseCharge ?? false;
   const recurrence = body.recurrence ?? current?.recurrence ?? 'none';
   // A template keeps its place in the series unless its date or frequency changed.
   const keepSchedule = current && current.recurrence === recurrence && current.date === body.date && current.nextRecurrenceDate;
@@ -109,45 +122,94 @@ async function prepare(ctx: AnyCtx, db: DbOrTx, body: Schema<'Expense'>, current
     currency: body.currency,
     exchangeRate: String(exchangeRate),
     taxCategoryId: body.taxCategoryId ?? null,
-    taxAmountMinor: expenseTax(money(body.amount.minor, body.currency), rate, taxInclusive).minor,
+    taxAmountMinor: expenseTax(money(body.amount.minor, body.currency), rate, taxInclusive, reverseCharge).minor,
     taxInclusive,
+    placeOfSupplyStateCode: body.placeOfSupplyStateCode ?? null,
+    supplierGstin: body.supplierGstin?.trim().toUpperCase() || null,
+    itcEligibility: body.itcEligibility ?? 'eligible',
+    reverseCharge,
     accountId: body.accountId,
     method: body.method,
     reference: body.reference ?? null,
     notes: body.notes ?? null,
     billable: body.billable ?? false,
+    customerId: body.billable ? (body.customerId ?? null) : null,
+    costCentreId: body.costCentreId ?? null,
+    vehicleId: body.vehicleId ?? null,
     recurrence,
     nextRecurrenceDate: keepSchedule ? current.nextRecurrenceDate : nextRecurrence(body.date, recurrence),
   };
 }
 
 /** Expenses: listExpenses, createExpense, getExpense, saveExpense, removeExpense. */
+type ExpenseQuery = Pick<Ctx<'listExpenses'>['query'], 'categoryId' | 'supplierId' | 'billable' | 'recurring' | 'branchId' | 'from' | 'to' | 'q'> &
+  Partial<Pick<Ctx<'listExpenses'>['query'], 'unrecovered' | 'forCustomer' | 'exceptDocumentId'>>;
+
+/** The WHERE of an expense list, shared by the list and its summary so the two never disagree. */
+function expenseFilters(ctx: Pick<Ctx<'listExpenses'>, 'company' | 'user' | 'db'>, q: ExpenseQuery): (SQL | undefined)[] {
+  const filters: (SQL | undefined)[] = [eq(E.companyId, ctx.company.id)];
+  if (q.categoryId) filters.push(eq(E.categoryId, q.categoryId));
+  if (q.supplierId) filters.push(eq(E.supplierId, q.supplierId));
+  if (q.billable !== undefined) filters.push(eq(E.billable, q.billable));
+  if (q.recurring !== undefined) filters.push(q.recurring ? ne(E.recurrence, 'none') : eq(E.recurrence, 'none'));
+  if (q.forCustomer) filters.push(or(isNull(E.customerId), eq(E.customerId, q.forCustomer)));
+  if (q.unrecovered) {
+    // Billable, and on no live invoice yet (this one's own lines aside, while it is being edited).
+    const L = schema.documentLines;
+    const D = schema.documents;
+    filters.push(eq(E.billable, true));
+    filters.push(
+      notExists(
+        ctx.db
+          .select({ one: sql`1` })
+          .from(L)
+          .innerJoin(D, eq(D.id, L.documentId))
+          .where(and(eq(L.expenseId, E.id), notInArray(D.status, ['draft', 'cancelled', 'rejected']), q.exceptDocumentId ? ne(D.id, q.exceptDocumentId) : undefined)),
+      ),
+    );
+  }
+  if (q.branchId) filters.push(eq(E.branchId, q.branchId));
+  if (ctx.user.branchIds.length) filters.push(inArray(E.branchId, ctx.user.branchIds));
+  if (q.from) filters.push(gte(E.date, q.from));
+  if (q.to) filters.push(lte(E.date, q.to));
+  if (q.q) {
+    const like = `%${q.q.trim()}%`;
+    const P = schema.parties;
+    const C = schema.expenseCategories;
+    filters.push(
+      or(
+        ilike(E.number, like),
+        ilike(E.reference, like),
+        ilike(E.notes, like),
+        exists(ctx.db.select({ one: sql`1` }).from(P).where(and(eq(P.id, E.supplierId), ilike(P.name, like)))),
+        exists(ctx.db.select({ one: sql`1` }).from(C).where(and(eq(C.id, E.categoryId), ilike(C.name, like)))),
+      ),
+    );
+  }
+  return filters;
+}
+
 export const expensesHandlers = defineHandlers({
+  async summarizeExpenseList(ctx) {
+    const base = ctx.company.baseCurrency.trim();
+    const inBase = (col: typeof E.amountMinor | typeof E.taxAmountMinor) => sql<number>`coalesce(sum(round(${col} * ${E.exchangeRate})), 0)::bigint`;
+    const rows = await ctx.db
+      .select({ categoryId: E.categoryId, count: sql<number>`count(*)::int`, total: inBase(E.amountMinor), tax: inBase(E.taxAmountMinor) })
+      .from(E)
+      .where(and(...expenseFilters(ctx, ctx.query)))
+      .groupBy(E.categoryId);
+    const add = (k: 'total' | 'tax') => money(rows.reduce((a, r) => a + Number(r[k]), 0), base);
+    return {
+      count: rows.reduce((a, r) => a + r.count, 0),
+      total: add('total'),
+      tax: add('tax'),
+      byCategory: rows.map((r) => ({ categoryId: r.categoryId, total: money(Number(r.total), base) })).sort((a, b) => b.total.minor - a.total.minor),
+    };
+  },
+
   async listExpenses(ctx) {
     const q = ctx.query;
-    const filters: (SQL | undefined)[] = [eq(E.companyId, ctx.company.id)];
-    if (q.categoryId) filters.push(eq(E.categoryId, q.categoryId));
-    if (q.supplierId) filters.push(eq(E.supplierId, q.supplierId));
-    if (q.billable !== undefined) filters.push(eq(E.billable, q.billable));
-    if (q.recurring !== undefined) filters.push(q.recurring ? ne(E.recurrence, 'none') : eq(E.recurrence, 'none'));
-    if (q.branchId) filters.push(eq(E.branchId, q.branchId));
-    if (ctx.user.branchIds.length) filters.push(inArray(E.branchId, ctx.user.branchIds));
-    if (q.from) filters.push(gte(E.date, q.from));
-    if (q.to) filters.push(lte(E.date, q.to));
-    if (q.q) {
-      const like = `%${q.q.trim()}%`;
-      const P = schema.parties;
-      const C = schema.expenseCategories;
-      filters.push(
-        or(
-          ilike(E.number, like),
-          ilike(E.reference, like),
-          ilike(E.notes, like),
-          exists(ctx.db.select({ one: sql`1` }).from(P).where(and(eq(P.id, E.supplierId), ilike(P.name, like)))),
-          exists(ctx.db.select({ one: sql`1` }).from(C).where(and(eq(C.id, E.categoryId), ilike(C.name, like)))),
-        ),
-      );
-    }
+    const filters = expenseFilters(ctx, q);
     const k = keyset({ cursor: q.cursor, limit: q.limit, sort: E.date, id: E.id, order: 'desc' });
     const rows = await ctx.db
       .select()
@@ -159,6 +221,7 @@ export const expensesHandlers = defineHandlers({
   },
 
   async createExpense(ctx) {
+    assertPeriodOpen(ctx.company, ctx.body.date);
     const cols = await prepare(ctx, ctx.db, ctx.body);
     const row = await ctx.db.transaction(async (tx) => {
       const number = await assignNumber(tx, { companyId: ctx.company.id, kind: 'expense', branchId: cols.branchId, date: cols.date });
@@ -186,6 +249,8 @@ export const expensesHandlers = defineHandlers({
     if (!hasModule(ctx.company.plan, 'expenses')) throw planUpgradeRequired(FULL_PLAN, 'expenses');
     const current = await findExpense(ctx, ctx.db, ctx.params.id);
     checkIfMatch(ctx.req, current.version);
+    assertPeriodOpen(ctx.company, current.date);
+    assertPeriodOpen(ctx.company, ctx.body.date);
     const cols = await prepare(ctx, ctx.db, ctx.body, current);
     const row = await ctx.db.transaction(async (tx) => {
       const before = await toWire(tx, current);
@@ -219,6 +284,7 @@ export const expensesHandlers = defineHandlers({
   async removeExpense(ctx) {
     const current = await findExpense(ctx, ctx.db, ctx.params.id);
     checkIfMatch(ctx.req, current.version);
+    assertPeriodOpen(ctx.company, current.date);
     await ctx.db.transaction(async (tx) => {
       const before = await toWire(tx, current);
       await linkExpenseAttachments(tx, ctx.company.id, current.id, []);

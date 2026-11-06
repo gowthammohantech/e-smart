@@ -5,9 +5,12 @@ import { AuditList } from '../components/AuditList';
 import { PlanBadge, SubscriptionBadge } from '../components/Badges';
 import { Can } from '../components/Can';
 import { ReasonDialog } from '../components/ReasonDialog';
-import { PageHeader, QueryState } from '../components/ui';
+import { PageHeader, QueryState, EmptyState } from '../components/ui';
 import { api, need, type Schema } from '../lib/api';
 import { fmtDate, fmtDateTime, fmtInt, PLAN_LABELS, PLANS } from '../lib/format';
+
+/** Provider cost in US dollars; small sums keep four places so a few calls don't read as $0.00. */
+const fmtUsd = (usd: number) => `$${usd.toFixed(usd > 0 && usd < 1 ? 4 : 2)}`;
 
 const DOC_LABELS: Record<string, string> = {
   quote: 'Quotes',
@@ -27,7 +30,7 @@ const EVENT_LABELS: Record<string, string> = {
   'cancel.requested': 'Cancellation requested',
 };
 
-function PlanOverride({ company }: { company: Schema<'PlatformCompany'> }) {
+function PlanOverride({ company, billedBy }: { company: Schema<'PlatformCompany'>; billedBy: string | null }) {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [plan, setPlan] = useState<Schema<'PlanTier'>>(company.plan);
@@ -69,6 +72,11 @@ function PlanOverride({ company }: { company: Schema<'PlatformCompany'> }) {
           await queryClient.invalidateQueries();
         }}
       >
+        {billedBy ? (
+          <div className="alert warn">
+            This company is billed through {billedBy}. Its next billing event (a renewal, a failed payment) may change the plan back.
+          </div>
+        ) : null}
         <label className="field">
           <span>Plan</span>
           <select className="select" value={plan} onChange={(e) => setPlan(e.target.value as Schema<'PlanTier'>)}>
@@ -107,7 +115,8 @@ export function CompanyDetail() {
   return (
     <QueryState isPending={query.isPending} error={query.error}>
       {() => {
-        const { company, accountName, accountSuspended, subscription, planHistory, documentCounts, userCount } = query.data!;
+        const { company, accountName, accountSuspended, subscription, planHistory, documentCounts, userCount, aiCost = [] } = query.data!;
+        const aiTotal = aiCost.reduce((s, r) => s + r.costUsd, 0);
         const totalDocs = documentCounts.reduce((s, d) => s + d.count, 0);
         return (
           <div className="stack">
@@ -118,7 +127,7 @@ export function CompanyDetail() {
               ]}
               title={company.name}
               sub={<span className="mono">{company.id}</span>}
-              actions={<PlanOverride company={company} />}
+              actions={<PlanOverride company={company} billedBy={subscription?.provider ?? null} />}
             />
             {accountSuspended ? <div className="alert bad">This company’s account is suspended. Nobody on it can sign in.</div> : null}
 
@@ -189,7 +198,7 @@ export function CompanyDetail() {
                   <span className="muted num">{fmtInt(totalDocs)} total</span>
                 </div>
                 {documentCounts.length === 0 ? (
-                  <div className="empty">No documents yet.</div>
+                  <EmptyState title="No documents yet" />
                 ) : (
                   <table className="data">
                     <tbody>
@@ -207,10 +216,45 @@ export function CompanyDetail() {
 
             <section className="card">
               <div className="card-head">
+                <h2>AI cost</h2>
+                <span className="muted num">{fmtUsd(aiTotal)} over {aiCost.length} {aiCost.length === 1 ? 'month' : 'months'}</span>
+              </div>
+              {aiCost.length === 0 ? (
+                <EmptyState title="No AI use yet" />
+              ) : (
+                <div className="table-wrap">
+                  <table className="data">
+                    <thead>
+                      <tr>
+                        <th>Month</th>
+                        <th className="right">Actions</th>
+                        <th className="right">Tokens in</th>
+                        <th className="right">Tokens out</th>
+                        <th className="right">Cost</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {aiCost.map((r) => (
+                        <tr key={r.month}>
+                          <td className="num">{r.month}</td>
+                          <td className="right num">{fmtInt(r.actions)}</td>
+                          <td className="right num">{fmtInt(r.inputTokens)}</td>
+                          <td className="right num">{fmtInt(r.outputTokens)}</td>
+                          <td className="right num">{fmtUsd(r.costUsd)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+
+            <section className="card">
+              <div className="card-head">
                 <h2>Plan history</h2>
               </div>
               {planHistory.length === 0 ? (
-                <div className="empty">No plan changes yet.</div>
+                <EmptyState title="No plan changes yet" />
               ) : (
                 <div className="table-wrap">
                   <table className="data">

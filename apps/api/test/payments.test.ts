@@ -1,10 +1,12 @@
 import { eq } from 'drizzle-orm';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { schema } from '@esmart/db';
 import { ownerWithCompany, setupApi } from './helpers';
 import { documentRow, expectMoneyInvariants, pdfText, invoiceBody, issueInvoice, moneySetup, type Money } from './money-fixtures';
 
 const t = setupApi();
+// Fixtures are dated around this day; on a later clock their invoices read as overdue.
+beforeEach(() => t.setNow('2026-09-29T10:00:00Z'));
 
 /** Paid and part-paid documents fall outside the contract's create-status enum (see documents.test.ts). */
 
@@ -176,6 +178,19 @@ describe('payments', () => {
     expect(edited.status).toBe(200);
   });
 
+  it('will not overdraw a bank account either', async () => {
+    const m = await moneySetup(t);
+    const [bank] = await t.deps.db
+      .insert(schema.paymentAccounts)
+      .values({ id: 'acc_test_bank', companyId: m.companyId, name: 'HDFC Current', type: 'bank', currency: 'INR', openingBalanceMinor: 30000 })
+      .returning();
+    const fromBank = (minor: number) => payment(m, { direction: 'paid', partyId: m.supplier!.id, method: 'bank', accountId: bank.id, amount: { minor, currency: 'INR' } });
+    const over = await t.post(`${m.c}/payments`, fromBank(50000), { token: m.token });
+    expect(over.status).toBe(422);
+    expect(over.body.code).toBe('INSUFFICIENT_BALANCE');
+    expect((await t.post(`${m.c}/payments`, fromBank(30000), { token: m.token })).status).toBe(201);
+  });
+
   it('prints a receipt, filters the list, and gates payments made on the plan', async () => {
     const m = await moneySetup(t);
     const inv = await issueInvoice(t, m);
@@ -190,6 +205,12 @@ describe('payments', () => {
     expect((await t.get(`${m.c}/payments`, { token: m.token, query: { documentId: inv.id } })).body.data.map((x: { id: string }) => x.id)).toEqual([p.body.id]);
     expect((await t.get(`${m.c}/payments`, { token: m.token, query: { q: 'UTR-77' } })).body.data).toHaveLength(1);
     expect((await t.get(`${m.c}/payments`, { token: m.token, query: { q: 'Anand' } })).body.data).toHaveLength(1);
+    // Each row names its party, and the summary adds up what the filters match without paging.
+    const list = await t.get(`${m.c}/payments`, { token: m.token });
+    expect(list.body.data.every((x: { partyName?: string }) => !!x.partyName)).toBe(true);
+    const summary = await t.get(`${m.c}/payments/summary`, { token: m.token, query: { direction: 'received' } });
+    expect(summary.body).toEqual({ count: 2, total: { minor: list.body.data.reduce((a: number, x: { amount: { minor: number } }) => a + x.amount.minor, 0), currency: 'INR' } });
+    expect((await t.get(`${m.c}/payments/summary`, { token: m.token, query: { q: 'UTR-77' } })).body.count).toBe(1);
 
     const basic = await moneySetup(t, 'basic');
     const made = await t.post(`${basic.c}/payments`, payment(basic, { direction: 'paid' }), { token: basic.token });

@@ -1,0 +1,1 @@
+ALTER TABLE "items" ADD COLUMN IF NOT EXISTS "opening_stock_date" date;

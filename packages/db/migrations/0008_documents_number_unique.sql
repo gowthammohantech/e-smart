@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "documents_company_id_kind_number_issued_key" ON "documents" USING btree ("company_id","kind","number") WHERE "documents"."number" NOT LIKE '%-DRAFT';

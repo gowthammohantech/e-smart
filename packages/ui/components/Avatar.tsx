@@ -1,6 +1,7 @@
 import React from 'react';
 import { View } from 'react-native';
 import { useTheme } from '../theme/ThemeProvider';
+import { blend, readableOn } from '../theme/contrast';
 import { Text } from './Text';
 import { initialsOf } from '@esmart/core/lib/format';
 
@@ -31,8 +32,10 @@ export function Avatar({
         justifyContent: 'center',
       }}
     >
-      <Text style={{ color: bg, fontSize: size * 0.36, fontWeight: '700' }}>{initialsOf(name)}</Text>
-      {t ? null : null}
+      {/* The palette colour, deepened (or lightened, in dark mode) until the initials read on their tint. */}
+      <Text style={{ color: readableOn(bg, blend(bg, t.c.paper, 0x22 / 255), t.c.text), fontSize: size * 0.36, fontWeight: '700' }}>
+        {initialsOf(name)}
+      </Text>
     </View>
   );
 }

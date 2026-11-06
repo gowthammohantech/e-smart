@@ -1,5 +1,6 @@
 import { SERIES_DARK, SERIES_LIGHT } from '@esmart/ui/theme/chartColors';
 import { palettes, radius, type ColorTokens } from '@esmart/ui/theme/tokens';
+import { wallpaperSvg } from '@esmart/ui/illustrations/doodles';
 
 const kebab = (s: string) => s.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
 
@@ -22,7 +23,7 @@ export function tokensCss(): string {
     .map(([k, v]) => `--radius-${k}: ${v}px;`)
     .join(' ');
   return [
-    `:root { ${radii} ${light} color-scheme: light; }`,
+    `:root { ${radii} ${light} color-scheme: light; --doodle-tile: url("data:image/svg+xml,${encodeURIComponent(wallpaperSvg())}"); }`,
     `@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { ${dark} color-scheme: dark; } }`,
     `:root[data-theme="dark"] { ${dark} color-scheme: dark; }`,
   ].join('\n');

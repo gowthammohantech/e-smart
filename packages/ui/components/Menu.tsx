@@ -1,11 +1,14 @@
-import React, { useCallback, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Modal, Platform, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Icon, type IconName } from './Icon';
 import { useTheme } from '../theme/ThemeProvider';
 import { focusRing, type WebPressState } from '../theme/interaction';
 import { Text } from './Text';
 
 type Rect = { x: number; y: number; width: number; height: number };
+
+const WEB = Platform.OS === 'web';
 
 /**
  * Holds the button a menu opens from. Pass `setAnchor` as the button's ref and call
@@ -18,13 +21,24 @@ export function useMenuAnchor() {
   const open = useCallback(() => {
     node?.measureInWindow((x, y, width, height) => setRect({ x, y, width, height }));
   }, [node]);
-  const close = useCallback(() => setRect(null), []);
+  // Focus goes back to the button the menu opened from, so a keyboard user carries on from there.
+  const close = useCallback(() => {
+    setRect(null);
+    if (WEB) (node as unknown as HTMLElement | null)?.focus?.();
+  }, [node]);
   return { setAnchor, rect, open, close, visible: rect !== null };
+}
+
+/** The menu items inside a panel, in order, skipping any that are disabled. */
+function itemsIn(panel: HTMLElement | null): HTMLElement[] {
+  return panel ? Array.from(panel.querySelectorAll<HTMLElement>('[role="menuitem"]:not([aria-disabled="true"])')) : [];
 }
 
 /**
  * A dropdown panel under an anchor, for desktop menus (account, company,
- * notifications). Escape or a click outside closes it.
+ * notifications, a table row's actions). Escape or a click outside closes
+ * it. On the web it is an ARIA menu: focus starts on the first item, and the
+ * arrow keys, Home and End move between items.
  */
 export function Menu({
   anchor,
@@ -42,8 +56,38 @@ export function Menu({
   children: React.ReactNode;
 }) {
   const t = useTheme();
+  const { t: tr } = useTranslation(['common']);
   const window = useWindowDimensions();
+  const panel = useRef<View>(null);
+  const opened = anchor !== null;
+
+  useEffect(() => {
+    if (!WEB || !opened) return;
+    // A frame after mount, once the items are in the DOM.
+    const id = requestAnimationFrame(() => itemsIn(panel.current as unknown as HTMLElement)[0]?.focus());
+    return () => cancelAnimationFrame(id);
+  }, [opened]);
+
   if (!anchor) return null;
+
+  const onKeyDown = (e: { key: string; preventDefault: () => void }) => {
+    const items = itemsIn(panel.current as unknown as HTMLElement);
+    if (!items.length) return;
+    const at = items.indexOf(document.activeElement as HTMLElement);
+    const go = (i: number) => {
+      e.preventDefault();
+      items[(i + items.length) % items.length].focus();
+    };
+    if (e.key === 'ArrowDown') go(at + 1);
+    else if (e.key === 'ArrowUp') go(at < 0 ? items.length - 1 : at - 1);
+    else if (e.key === 'Home') go(0);
+    else if (e.key === 'End') go(items.length - 1);
+    else if (e.key === 'Tab') {
+      // Tab leaves a menu rather than walking it.
+      e.preventDefault();
+      onClose();
+    }
+  };
 
   const top = anchor.y + anchor.height + 6;
   const position =
@@ -53,8 +97,11 @@ export function Menu({
 
   return (
     <Modal visible transparent animationType="none" onRequestClose={onClose}>
-      <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close menu" />
+      <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityRole="button" accessibilityLabel={tr('common:component.closeMenu')} />
       <View
+        ref={panel}
+        role="menu"
+        {...(WEB ? ({ onKeyDown } as object) : null)}
         style={[
           {
             position: 'absolute',
@@ -79,6 +126,7 @@ export function Menu({
 
 export function MenuItem({
   icon,
+  leading,
   label,
   description,
   selected,
@@ -86,7 +134,9 @@ export function MenuItem({
   trailing,
   onPress,
 }: {
-  icon?: keyof typeof MaterialCommunityIcons.glyphMap;
+  icon?: IconName;
+  /** Drawn where the icon goes, in its place: e.g. a business's logo. */
+  leading?: React.ReactNode;
   label: string;
   description?: string;
   selected?: boolean;
@@ -118,7 +168,7 @@ export function MenuItem({
         ];
       }}
     >
-      {icon ? <MaterialCommunityIcons name={icon} size={18} color={destructive ? t.c.bad : t.c.muted} /> : null}
+      {leading ?? (icon ? <Icon name={icon} size={18} color={destructive ? t.c.bad : t.c.muted} /> : null)}
       <View style={{ flex: 1, gap: 1 }}>
         <Text variant="small" weight={selected ? '700' : '500'} numberOfLines={1} style={{ color }}>
           {label}
@@ -130,7 +180,7 @@ export function MenuItem({
         ) : null}
       </View>
       {trailing}
-      {selected ? <MaterialCommunityIcons name="check" size={16} color={t.c.primary} /> : null}
+      {selected ? <Icon name="check" size={16} color={t.c.primary} /> : null}
     </Pressable>
   );
 }

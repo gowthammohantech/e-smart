@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, Linking, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import type { Schema } from '@esmart/api-client';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
+import { useToast } from '@esmart/ui/components/Toast';
 import { AuthShell } from '@esmart/ui/components/AuthShell';
 import { Card } from '@esmart/ui/components/Card';
 import { Text } from '@esmart/ui/components/Text';
@@ -14,6 +15,7 @@ import { ApiError } from '@esmart/api-client';
 import { remoteSession } from '../../remote';
 import { describeError } from '../../remote/errors';
 import { onMobileBrowser, openInApp as openAppAt } from '../../navigation/openInApp';
+import { LEGAL } from '../../lib/legal';
 
 type Invite = Schema<'InviteDetails'>;
 
@@ -34,6 +36,7 @@ type Invite = Schema<'InviteDetails'>;
 export default function AcceptInvite() {
   const t = useTheme();
   const { t: tr } = useTranslation(['auth', 'errors']);
+  const toast = useToast();
   const { token } = useLocalSearchParams<{ token?: string }>();
   const inviteToken = token ? String(token) : undefined;
 
@@ -72,7 +75,10 @@ export default function AcceptInvite() {
   const joinExisting = () => {
     if (!inviteToken || !invite) return;
     setBusy(true);
-    remoteSession.acceptInvite(inviteToken, undefined, invite.companyIds[0]).catch((err: unknown) => {
+    remoteSession
+      .acceptInvite(inviteToken, undefined, invite.companyIds[0])
+      .then(() => toast.show(tr('auth:invite.joined', { business: invite.businesses.join(', ') }), 'success', { icon: 'account-group-outline', varies: true }))
+      .catch((err: unknown) => {
       setBusy(false);
       setErrors({ password: err instanceof ApiError && err.status === 400 ? tr('auth:invite.invalid') : describeError(err, tr) });
     });
@@ -86,7 +92,12 @@ export default function AcceptInvite() {
     setErrors(next);
     if (hasErrors(next) || !inviteToken) return;
     setBusy(true);
-    remoteSession.acceptInvite(inviteToken, password).catch((err: unknown) => {
+    remoteSession
+      .acceptInvite(inviteToken, password)
+      .then(() => {
+        if (invite) toast.show(tr('auth:invite.joined', { business: invite.businesses.join(', ') }), 'success', { icon: 'account-group-outline', varies: true });
+      })
+      .catch((err: unknown) => {
       setBusy(false);
       setErrors({ password: err instanceof ApiError && (err.status === 404 || err.status === 410 || err.status === 400) ? tr('auth:invite.invalid') : describeError(err, tr) });
     });
@@ -94,7 +105,7 @@ export default function AcceptInvite() {
 
   if (loading) {
     return (
-      <AuthShell title={tr('auth:invite.title')} hideBack>
+      <AuthShell illustration="loading" title={tr('auth:invite.title')} hideBack>
         <ActivityIndicator color={t.c.primary} />
       </AuthShell>
     );
@@ -102,7 +113,7 @@ export default function AcceptInvite() {
 
   if (failed || !invite) {
     return (
-      <AuthShell title={tr('auth:invite.invalidTitle')} subtitle={tr('auth:invite.invalid')} hideBack>
+      <AuthShell illustration="error" title={tr('auth:invite.invalidTitle')} subtitle={tr('auth:invite.invalid')} hideBack>
         <View />
       </AuthShell>
     );
@@ -112,7 +123,7 @@ export default function AcceptInvite() {
 
   if (step === 'confirm') {
     return (
-      <AuthShell title={tr('auth:invite.joinTitle', { business })} subtitle={tr('auth:invite.joinSubtitle', { inviter: invite.inviterName })} hideBack>
+      <AuthShell illustration="invite" title={tr('auth:invite.joinTitle', { business })} subtitle={tr('auth:invite.joinSubtitle', { inviter: invite.inviterName })} hideBack>
         <Card style={{ gap: t.spacing.sm }}>
           <Row label={tr('auth:invite.business')} value={business} />
           <Row label={tr('auth:invite.role')} value={tr(`auth:invite.roles.${invite.role}`)} />
@@ -125,6 +136,12 @@ export default function AcceptInvite() {
           fullWidth
           size="lg"
         />
+        <Text variant="caption" tone="muted" center>
+          {tr('auth:invite.agree')}{' '}
+          <Text variant="caption" tone="primary" onPress={() => void Linking.openURL(LEGAL.terms)}>{tr('auth:signUp.readTerms')}</Text>
+          {' · '}
+          <Text variant="caption" tone="primary" onPress={() => void Linking.openURL(LEGAL.privacy)}>{tr('auth:signUp.readPrivacy')}</Text>
+        </Text>
         {errors.password ? <Text variant="small" tone="bad">{errors.password}</Text> : null}
         {onMobileBrowser() ? <Button title={tr('auth:invite.openApp')} variant="secondary" onPress={openInApp} fullWidth size="lg" /> : null}
       </AuthShell>
@@ -132,7 +149,7 @@ export default function AcceptInvite() {
   }
 
   return (
-    <AuthShell title={tr('auth:invite.title')} subtitle={tr('auth:invite.subtitle')} hideBack>
+    <AuthShell illustration="invite" title={tr('auth:invite.title')} subtitle={tr('auth:invite.subtitle')} hideBack>
       <TextField
         label={tr('auth:invite.password')}
         value={password}

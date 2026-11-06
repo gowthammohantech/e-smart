@@ -1,14 +1,20 @@
-import { Branch, BusinessDocument, Company, EwayBill, Party } from '../types';
+import { BankDetails, Branch, BusinessDocument, Company, DocumentKind, EwayBill, Party } from '../types';
 import { documentKindLabel, type Translate } from '../labels';
 import { flattenTaxComponents } from '../domain/lineCalc';
 import { formatMoney, formatPercent, formatQty } from '../lib/format';
 import { formatDate } from '../lib/date';
 import { money } from '../lib/money';
+import { amountInWords } from '../lib/amountInWords';
 import { INDIAN_STATES } from '../data/masters';
 import { MIN_READABLE_QR_SIZE, qrMatrix, qrSvgString } from '../lib/qr';
 import { E_INVOICE_CANCEL_REASONS } from '../domain/eInvoice';
 import type { LanguageCode } from '@esmart/i18n/config';
 import i18n from '@esmart/i18n';
+import { printableFields, type CustomField } from '../domain/customFields';
+import { resolveTemplate, tint, type InvoiceTemplate } from './invoiceTemplate';
+import { TCS_SECTIONS } from '../data/tcsSections';
+
+const TCS_LABEL: Record<string, string> = Object.fromEntries(TCS_SECTIONS.map((s) => [s.code, s.label.split(' ')[0]]));
 
 /**
  * A field label on the printed document. Under Tamil it reads in Tamil with
@@ -32,6 +38,11 @@ function bilingual(t: Translate, language: LanguageCode): (key: string) => strin
   };
 }
 
+/** Statutory wording on the note, so English like the field names. */
+const NOTE_REASON = { discount: 'Discount after sale', priceChange: 'Price change', taxCorrection: 'Tax correction', deficiency: 'Short or faulty supply', other: 'Other' } as const;
+
+const SUPPLY_NOTE = { nil: 'Nil-rated supply', exempt: 'Exempt supply', nonGst: 'Non-GST supply' } as const;
+
 function esc(s: string | undefined | null): string {
   return String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 }
@@ -49,6 +60,62 @@ function addressBlock(a?: { line1?: string; line2?: string; city?: string; state
  * for sharing and shown in the in-app preview by the app, and rendered to PDF
  * by the API (`getDocumentPdf`), so both print the same page.
  */
+/** The signatory's signature above the line, from the same kinds of source as the logo. */
+function signatureTag(src: string | undefined): string {
+  if (!src || !/^(https?:|data:image\/|file:|blob:)/i.test(src)) return '';
+  return `<img class="signature" src="${esc(src)}" alt="">`;
+}
+
+/** The business logo above its name, from a link, a data URI or a file just picked on the device. */
+function logoTag(src: string | undefined, name: string | undefined): string {
+  if (!src || !/^(https?:|data:image\/|file:|blob:)/i.test(src)) return '';
+  return `<img class="logo" src="${esc(src)}" alt="${esc(name)}">`;
+}
+
+/** Documents a customer pays against, which print the bank account (and a UPI QR) to pay into. */
+const PAYABLE_KINDS: DocumentKind[] = ['invoice', 'quote', 'proforma', 'salesOrder'];
+
+/**
+ * `upi://pay` for the amount, read by every UPI app: the payee address and name,
+ * the amount in rupees, and the document number as the note, so the payment is
+ * easy to match. INR only; UPI carries nothing else.
+ */
+export function upiPayLink(upiId: string, payee: string, amountMinor: number, note: string): string {
+  // Spaces as '+', and the payee's '@' left as is: some UPI apps don't decode %40.
+  const q = (s: string) => encodeURIComponent(s).replace(/%20/g, '+').replace(/%40/g, '@');
+  return `upi://pay?pa=${q(upiId)}&pn=${q(payee)}&am=${(amountMinor / 100).toFixed(2)}&cu=INR&tn=${q(note)}`;
+}
+
+/** The bank account block beside the notes, with a UPI QR for the total when the document is in rupees. */
+function bankBlock(doc: BusinessDocument, company: Company | undefined, bi: (key: string) => string): string {
+  const b: BankDetails | undefined = company?.bankDetails;
+  if (!b || !PAYABLE_KINDS.includes(doc.kind) || !(b.accountNumber || b.upiId)) return '';
+  const row = (key: string, value?: string) => (value ? `<tr><td class="muted">${bi(key)}</td><td>${esc(value)}</td></tr>` : '');
+  let qr = '';
+  if (b.upiId && doc.currency === 'INR' && doc.totals.grandTotal.minor > 0) {
+    try {
+      const link = upiPayLink(b.upiId, b.accountName || company?.name || '', doc.totals.grandTotal.minor, doc.number);
+      qr = `<div class="upi-qr">${qrSvgString(qrMatrix(link, 'M'), { size: 112, quietZone: 2 })}<div class="muted">${bi('sales:pdf.scanToPay')}</div></div>`;
+    } catch {
+      qr = '';
+    }
+  }
+  return `<div class="bank">
+      <div class="cap">${bi('sales:pdf.bankDetails')}</div>
+      <div class="bank-body">
+        <table class="bank-rows"><tbody>
+          ${row('sales:pdf.accountName', b.accountName)}
+          ${row('sales:pdf.bank', b.bankName)}
+          ${row('sales:pdf.accountNumber', b.accountNumber)}
+          ${row('sales:pdf.ifsc', b.ifsc)}
+          ${row('sales:pdf.branch', b.branch)}
+          ${row('sales:pdf.upi', b.upiId)}
+        </tbody></table>
+        ${qr}
+      </div>
+    </div>`;
+}
+
 export function buildDocumentHtml({
   document: doc,
   company,
@@ -56,6 +123,11 @@ export function buildDocumentHtml({
   branchName,
   branch,
   ewayBill,
+  logoSrc,
+  signatureSrc,
+  source,
+  customFields = [],
+  template,
   t,
   language,
 }: {
@@ -66,6 +138,16 @@ export function buildDocumentHtml({
   /** The issuing branch: its own address and GSTIN win over the company's. */
   branch?: Branch;
   ewayBill?: EwayBill;
+  /** The invoice or bill a note or return is raised against: Rule 53 has the note name it. */
+  source?: Pick<BusinessDocument, 'number' | 'date'>;
+  /** The business logo, when not `company.logoUri`: the server passes it inline, as a data URI, so a PDF never waits on a link. */
+  logoSrc?: string;
+  /** The signature, when not `company.signatureUri`: inline from the server, as the logo is. */
+  signatureSrc?: string;
+  /** The company's custom fields: those marked to print show under the notes (the document's, then the party's). */
+  customFields?: CustomField[];
+  /** How the business wants it to look; defaults to `company.invoiceTemplate`, then to the standard page. */
+  template?: InvoiceTemplate;
   /** Translator for the descriptive labels. Statutory field names stay English. */
   t: Translate;
   language: LanguageCode;
@@ -73,8 +155,10 @@ export function buildDocumentHtml({
   // A heading, so it takes the singular. Upper-casing is an English typographic
   // convention and a no-op on Tamil, so it is applied only where it means
   // something.
-  const kindName = documentKindLabel(t, doc.kind, 1);
-  const label = language === 'en' ? kindName.toUpperCase() : kindName;
+  // A composition dealer may not issue a tax invoice, only a bill of supply (Rule 49). Statutory, so English.
+  const billOfSupply = doc.kind === 'invoice' && !!company?.taxRegistration?.compositionScheme;
+  const kindName = billOfSupply ? 'Bill of Supply' : documentKindLabel(t, doc.kind, 1);
+  const label = language === 'en' || billOfSupply ? kindName.toUpperCase() : kindName;
 
   const bi = bilingual(t, language);
   const sellerTaxId = branch?.gstin ?? company?.taxRegistration?.identifier;
@@ -82,7 +166,12 @@ export function buildDocumentHtml({
   const components = flattenTaxComponents(doc.totals.taxLines, doc.currency);
   const pos = INDIAN_STATES.find((s) => s.code === doc.placeOfSupplyStateCode)?.name;
 
+  // Pure-agent reimbursements sit outside the taxable value (Rule 33), so they get their own
+  // table and the items table adds up to the subtotal.
+  const tpl = resolveTemplate(template ?? company?.invoiceTemplate);
+  const reimbursed = doc.lines.filter((l) => l.gst?.reimbursement);
   const rows = doc.lines
+    .filter((l) => !l.gst?.reimbursement)
     .map((line, i) => {
       const gross = money(Math.round(line.unitPrice.minor * line.quantity), doc.currency);
       const discount =
@@ -95,35 +184,63 @@ export function buildDocumentHtml({
         <td class="num">${i + 1}</td>
         <td>
           <div class="item">${esc(line.name)}</div>
-          ${line.hsnCode ? `<div class="sub">HSN/SAC ${esc(line.hsnCode)}</div>` : ''}
+          ${line.hsnCode && tpl.showHsn ? `<div class="sub">HSN/SAC ${esc(line.hsnCode)}</div>` : ''}
+          ${line.gst?.supplyType && line.gst.supplyType !== 'taxable' ? `<div class="sub">${SUPPLY_NOTE[line.gst.supplyType]}</div>` : ''}
         </td>
         <td class="num">${formatQty(line.quantity)} ${esc(line.unit)}</td>
         <td class="num">${formatMoney(line.unitPrice)}</td>
-        <td class="num">${discount}</td>
-        <td class="num">${formatPercent(line.taxRate)}</td>
+        ${tpl.showDiscountColumn ? `<td class="num">${discount}</td>` : ''}
+        ${tpl.showTaxColumn ? `<td class="num">${formatPercent(line.taxRate)}</td>` : ''}
         <td class="num strong">${formatMoney(gross)}</td>
       </tr>`;
     })
     .join('');
 
+  const reimbursementTable = reimbursed.length
+    ? `<table class="reimbursements">
+    <thead>
+      <tr>
+        <th style="width:26px">#</th>
+        <th>Reimbursement of expenses (pure agent, at cost, not part of taxable value)</th>
+        <th class="num">${bi('sales:pdf.amount')}</th>
+      </tr>
+    </thead>
+    <tbody>${reimbursed
+      .map(
+        (line, i) => `<tr>
+        <td class="num">${i + 1}</td>
+        <td><div class="item">${esc(line.name)}</div>${line.description ? `<div class="sub">${esc(line.description)}</div>` : ''}</td>
+        <td class="num strong">${formatMoney(money(Math.round(line.unitPrice.minor * line.quantity), doc.currency))}</td>
+      </tr>`,
+      )
+      .join('')}</tbody>
+  </table>`
+    : '';
+
+  // `name` is markup: `bi()` labels come escaped already, plain ones go through `esc` here.
   const totalRow = (name: string, value: string, strong = false) =>
-    `<tr class="${strong ? 'grand' : ''}"><td>${esc(name)}</td><td class="num">${value}</td></tr>`;
+    `<tr class="${strong ? 'grand' : ''}"><td>${name}</td><td class="num">${value}</td></tr>`;
 
   const totalRows = [
     totalRow(bi('sales:pdf.subtotal'), formatMoney(doc.totals.subtotal)),
-    doc.totals.lineDiscount.minor > 0 ? totalRow('Line discounts', `− ${formatMoney(doc.totals.lineDiscount)}`) : '',
+    doc.totals.lineDiscount.minor > 0 ? totalRow(esc('Line discounts'), `− ${formatMoney(doc.totals.lineDiscount)}`) : '',
     totalRow(bi('sales:pdf.taxableValue'), formatMoney(doc.totals.taxableAmount)),
-    ...components.map((c) => totalRow(c.label, formatMoney(c.amount))),
-    doc.totals.documentDiscount.minor > 0 ? totalRow('Discount on total', `− ${formatMoney(doc.totals.documentDiscount)}`) : '',
-    doc.totals.charges.minor > 0 ? totalRow('Other charges', formatMoney(doc.totals.charges)) : '',
+    ...components.map((c) => totalRow(esc(c.label), formatMoney(c.amount))),
+    doc.totals.documentDiscount.minor > 0 ? totalRow(esc('Discount on total'), `− ${formatMoney(doc.totals.documentDiscount)}`) : '',
+    doc.totals.reimbursements?.minor ? totalRow(esc('Reimbursement of expenses'), formatMoney(doc.totals.reimbursements)) : '',
+    doc.totals.charges.minor > 0 ? totalRow(esc('Other charges'), formatMoney(doc.totals.charges)) : '',
+    // Income-tax TCS (s.206C), collected with the price: statutory, so English.
+    doc.totals.tcs?.minor ? totalRow(esc(`TCS collected u/s ${doc.tcs?.section ? (TCS_LABEL[doc.tcs.section] ?? '206C') : '206C'} @ ${doc.tcs?.rate ?? ''}%`), formatMoney(doc.totals.tcs)) : '',
     doc.totals.roundOff.minor !== 0 ? totalRow(bi('sales:pdf.roundOff'), formatMoney(doc.totals.roundOff, { signed: true })) : '',
     totalRow(bi('sales:pdf.total'), formatMoney(doc.totals.grandTotal), true),
+    // Rule 46(p): the invoice says whether tax is payable on reverse charge, and how much.
+    doc.totals.reverseChargeTax?.minor ? totalRow(esc('Tax payable on reverse charge by the recipient'), formatMoney(doc.totals.reverseChargeTax)) : '',
   ]
     .filter(Boolean)
     .join('');
 
   return `<!DOCTYPE html>
-<html>
+<html lang="${language}">
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
@@ -140,17 +257,18 @@ export function buildDocumentHtml({
     color: #0E121A;
     margin: 0;
     padding: 28px;
-    font-size: 12px;
-    line-height: 1.45;
+    font-size: ${tpl.compact ? 10.5 : 12}px;
+    line-height: ${tpl.compact ? 1.3 : 1.45};
     background: #FFFFFF;
   }
   .head { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; }
   .brand { font-size: 19px; font-weight: 700; letter-spacing: -0.3px; }
+  .logo { display: block; max-width: 160px; max-height: 56px; object-fit: contain; margin-bottom: 8px; }
   .muted { color: #5A6478; }
-  .doc-title { font-size: 22px; font-weight: 700; letter-spacing: 1px; color: #007AFF; text-align: right; }
+  .doc-title { font-size: 22px; font-weight: 700; letter-spacing: 1px; color: ${tpl.accentColor}; text-align: right; }
   .meta { text-align: right; margin-top: 6px; }
   .meta div { margin-bottom: 2px; }
-  .rule { height: 2px; background: #007AFF; margin: 18px 0; border-radius: 1px; }
+  .rule { height: 2px; background: ${tpl.accentColor}; margin: 18px 0; border-radius: 1px; }
   .parties { display: flex; gap: 28px; margin-bottom: 18px; }
   .parties > div { flex: 1; }
   .cap { font-size: 10px; letter-spacing: 0.8px; text-transform: uppercase; color: #5A6478; margin-bottom: 5px; font-weight: 700; }
@@ -167,15 +285,23 @@ export function buildDocumentHtml({
   .item { font-weight: 600; }
   .sub { color: #5A6478; font-size: 10px; margin-top: 2px; }
   .strong { font-weight: 700; }
+  .reimbursements { margin-top: 14px; }
   .totals { width: 280px; margin-left: auto; margin-top: 14px; }
   .totals td { padding: 5px 0; border: 0; }
   .totals tr.grand td { border-top: 1px solid #E2E8F1; padding-top: 9px; font-weight: 700; font-size: 15px; }
+  .words { margin-top: 10px; text-align: right; font-size: 12px; }
   .notes { margin-top: 26px; display: flex; gap: 28px; }
   .notes > div { flex: 1; }
+  .bank { flex: 1; page-break-inside: avoid; }
+  .bank-body { display: flex; gap: 14px; align-items: flex-start; }
+  .bank-rows td { padding: 2px 10px 2px 0; border: 0; font-size: 11px; }
+  .upi-qr { text-align: center; font-size: 9px; max-width: 120px; }
+  .upi-qr svg { display: block; margin: 0 auto 4px; }
   .sign { margin-top: 34px; text-align: right; }
+  .sign .signature { display: block; margin: 8px 0 -34px auto; max-width: 180px; max-height: 60px; object-fit: contain; }
   .sign .line { margin-top: 42px; border-top: 1px solid #E2E8F1; display: inline-block; padding-top: 5px; min-width: 190px; }
   .foot { margin-top: 26px; text-align: center; color: #5A6478; font-size: 10px; }
-  .badge { display: inline-block; padding: 3px 9px; border-radius: 99px; background: rgba(0,122,255,0.10); color: #007AFF; font-size: 10px; font-weight: 700; }
+  .badge { display: inline-block; padding: 3px 9px; border-radius: 99px; background: ${tint(tpl.accentColor, 0.1)}; color: ${tpl.accentColor}; font-size: 10px; font-weight: 700; }
   .einv { display: flex; gap: 18px; margin-top: 16px; padding: 12px 14px; border: 1px solid #E2E8F1; border-radius: 6px; page-break-inside: avoid; }
   .einv-qr svg { display: block; }
   .einv-body { flex: 1; }
@@ -184,6 +310,9 @@ export function buildDocumentHtml({
   .alt { display: block; font-size: 8px; font-weight: 400; letter-spacing: 0.3px; opacity: 0.66; text-transform: none; }
   /* Tamil marks sit above and below the line and clip at the Latin leading. */
   body.ta { line-height: 1.62; }
+  /* Tracking pulls Tamil vowel signs away from their letters; the Latin
+     .alt line under each label keeps its own. */
+  body.ta .brand, body.ta .doc-title, body.ta .cap, body.ta thead th, body.ta .cancelled-strip { letter-spacing: 0; }
   .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 10px; line-height: 1.5; word-break: break-all; letter-spacing: 0.2px; }
   .cancelled-strip { margin-bottom: 14px; padding: 8px 12px; border-radius: 5px; background: rgba(255,59,48,0.10); color: #C62F26; font-size: 11px; font-weight: 700; letter-spacing: 0.4px; }
 </style>
@@ -192,6 +321,7 @@ export function buildDocumentHtml({
   ${cancelledStrip(doc)}
   <div class="head">
     <div>
+      ${tpl.showLogo ? logoTag(logoSrc ?? company?.logoUri, company?.name) : ''}
       <div class="brand">${esc(company?.name)}</div>
       <div class="muted">${addressBlock(branch?.address?.line1 ? branch.address : company?.address)}</div>
       ${company?.phone ? `<div class="muted">${esc(company.phone)}</div>` : ''}
@@ -200,11 +330,15 @@ export function buildDocumentHtml({
     </div>
     <div>
       <div class="doc-title">${label}</div>
+      ${doc.kind === 'proforma' ? '<div class="muted">Not a tax invoice. A tax invoice follows on supply or on receipt of payment.</div>' : ''}
+      ${billOfSupply ? '<div class="sub">Composition taxable person, not eligible to collect tax on supplies</div>' : ''}
       <div class="meta">
         <div><strong>${esc(doc.number)}</strong></div>
         <div class="muted">Date: ${formatDate(doc.date)}</div>
         ${doc.dueDate ? `<div class="muted">Due: ${formatDate(doc.dueDate)}</div>` : ''}
         ${doc.validUntil ? `<div class="muted">Valid until: ${formatDate(doc.validUntil)}</div>` : ''}
+        ${source ? `<div class="muted">Against ${esc(source.number)} of ${formatDate(source.date)}</div>` : ''}
+        ${doc.noteReason ? `<div class="muted">Reason: ${esc(NOTE_REASON[doc.noteReason])}</div>` : ''}
         ${branchLabel ? `<div class="muted">${esc(branchLabel)}</div>` : ''}
       </div>
     </div>
@@ -236,31 +370,41 @@ export function buildDocumentHtml({
         <th>${bi('sales:pdf.description')}</th>
         <th class="num">${bi('sales:pdf.qty')}</th>
         <th class="num">${bi('sales:pdf.rate')}</th>
-        <th class="num">${bi('sales:pdf.disc')}</th>
-        <th class="num">${bi('sales:pdf.tax')}</th>
+        ${tpl.showDiscountColumn ? `<th class="num">${bi('sales:pdf.disc')}</th>` : ''}
+        ${tpl.showTaxColumn ? `<th class="num">${bi('sales:pdf.tax')}</th>` : ''}
         <th class="num">${bi('sales:pdf.amount')}</th>
       </tr>
     </thead>
     <tbody>${rows}</tbody>
   </table>
 
+  ${reimbursementTable}
+
   <table class="totals"><tbody>${totalRows}</tbody></table>
+  <div class="words"><span class="cap">${bi('sales:pdf.amountInWords')}</span> ${esc(amountInWords(doc.totals.grandTotal))}</div>
 
   ${eInvoiceBlock(doc, bi, ewayBill)}
 
   <div class="notes">
     <div>
+      ${(() => {
+        // The company's own fields marked to print: this document's, then the party's.
+        const printed = [...printableFields(customFields, 'document', doc.customFields), ...printableFields(customFields, 'party', party?.customFields)];
+        return printed.length ? `<table class="custom-fields" style="margin-bottom:12px"><tbody>${printed.map((f) => `<tr><td class="muted" style="padding:2px 12px 2px 0">${esc(f.label)}</td><td style="padding:2px 0">${esc(f.text)}</td></tr>`).join('')}</tbody></table>` : '';
+      })()}
       ${doc.notes ? `<div class="cap">${bi('sales:pdf.notes')}</div><div>${esc(doc.notes)}</div>` : ''}
       ${doc.terms ? `<div class="cap" style="margin-top:12px">Terms &amp; conditions</div><div class="muted">${esc(doc.terms)}</div>` : ''}
     </div>
+    ${bankBlock(doc, company, bi)}
   </div>
 
   <div class="sign">
     <div class="muted">For ${esc(company?.name)}</div>
+    ${signatureTag(signatureSrc ?? company?.signatureUri)}
     <div class="line muted">${bi('sales:pdf.authorisedSignatory')}</div>
   </div>
 
-  <div class="foot">${esc(t('sales:pdf.generatedWith'))}</div>
+  <div class="foot">${esc(tpl.footerText ?? t('sales:pdf.generatedWith'))}</div>
 </body>
 </html>`;
 }

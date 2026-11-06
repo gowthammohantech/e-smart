@@ -1,16 +1,18 @@
-import { and, eq, inArray, sql, type SQL } from 'drizzle-orm';
-import { isFinalized, isPayableDocument } from '@esmart/core/domain/documentStates';
+import { and, eq, gte, inArray, ne, notInArray, sql, type SQL } from 'drizzle-orm';
+import { businessDate, creditNoteDeadline } from '@esmart/core/lib/date';
+import { INVOICE_LIMITS, nextInvoicePlan } from '@esmart/core/domain/plan';
+import { CREDIT_KINDS, NOTE_KINDS, NOTE_SOURCE, PAYABLE_KINDS, isFinalized, isPayableDocument } from '@esmart/core/domain/documentStates';
 import { statusForOutstanding } from '@esmart/core/domain/receivables';
-import { MOVEMENT_SIGN, signedQuantity } from '@esmart/core/domain/stockLedger';
-import type { BusinessDocument, DocStatus, DocumentKind, StockMovementType } from '@esmart/core/types';
+import { MOVEMENT_SIGN, signedQuantity, stockMapOn } from '@esmart/core/domain/stockLedger';
+import type { BusinessDocument, DocStatus, DocumentKind, StockMovement, StockMovementType } from '@esmart/core/types';
 import { schema } from '@esmart/db';
 import type { AuthUser, CompanyRow } from '../../context';
-import { preconditionFailed, unprocessable } from '../../http/errors';
+import { conflict, invoiceLimitReached, preconditionFailed, unprocessable } from '../../http/errors';
 import { recordChange, type DbOrTx } from '../../lib/audit';
 import { partyBalances } from '../../lib/balances';
 import { newId } from '../../lib/ids';
 import { assignNumber } from '../../lib/numbering';
-import { stockOnHand } from '../catalog/stock';
+import { replayQueuedAt } from '../../lib/replay';
 import type { DocRow } from './engine';
 
 const D = schema.documents;
@@ -23,6 +25,7 @@ const SETTLEMENT: DocStatus[] = ['issued', 'partiallyPaid', 'paid', 'overdue'];
 /** Where `finalizeDocument` takes each kind (FRD 9). */
 export const FINAL_STATUS: Record<DocumentKind, DocStatus> = {
   quote: 'sent',
+  proforma: 'sent',
   salesOrder: 'confirmed',
   purchaseOrder: 'confirmed',
   delivery: 'delivered',
@@ -31,22 +34,36 @@ export const FINAL_STATUS: Record<DocumentKind, DocStatus> = {
   purchaseReturn: 'approved',
   invoice: 'issued',
   purchaseBill: 'issued',
+  creditNote: 'issued',
+  debitNote: 'issued',
+  supplierCreditNote: 'issued',
+  supplierDebitNote: 'issued',
+  // Imported already issued; never finalised from a draft.
+  openingInvoice: 'issued',
+  openingBill: 'issued',
 };
 
-/** Which kinds each kind converts into (quote → order → delivery → invoice, PO → receipt → bill, invoice/bill → return). */
+/** Which kinds each kind converts into (quote → proforma → order → delivery → invoice, PO → receipt → bill, invoice/bill → return). */
 export const CONVERSIONS: Record<DocumentKind, DocumentKind[]> = {
-  quote: ['salesOrder', 'invoice'],
+  quote: ['proforma', 'salesOrder', 'invoice'],
+  proforma: ['salesOrder', 'invoice'],
   salesOrder: ['delivery', 'invoice'],
   delivery: ['invoice'],
-  invoice: ['salesReturn'],
+  invoice: ['salesReturn', 'creditNote', 'debitNote'],
   salesReturn: [],
   purchaseOrder: ['goodsReceipt', 'purchaseBill'],
   goodsReceipt: ['purchaseBill'],
-  purchaseBill: ['purchaseReturn'],
+  purchaseBill: ['purchaseReturn', 'supplierCreditNote', 'supplierDebitNote'],
   purchaseReturn: [],
+  creditNote: [],
+  debitNote: [],
+  supplierCreditNote: [],
+  supplierDebitNote: [],
+  openingInvoice: [],
+  openingBill: [],
 };
 
-export const today = (d: Date) => d.toISOString().slice(0, 10);
+export const today = (d: Date) => businessDate(d);
 
 /**
  * The status a document is in right now. Invoices and bills past issue take
@@ -62,7 +79,7 @@ export function effectiveStatus(row: Pick<DocRow, 'kind' | 'status' | 'grandTota
 
 /** `effectiveStatus` in SQL, for filtering lists by status. Keep the two in step. */
 export function effectiveStatusSql(asOf: string): SQL<string> {
-  return sql<string>`(case when ${D.kind} in ('invoice', 'purchaseBill') and ${D.status} in ('issued', 'partiallyPaid', 'paid', 'overdue') then
+  return sql<string>`(case when ${D.kind} in (${sql.join(PAYABLE_KINDS.map((k) => sql`${k}`), sql`, `)}) and ${D.status} in ('issued', 'partiallyPaid', 'paid', 'overdue') then
     case when ${D.grandTotalMinor} - ${D.amountPaidMinor} <= 0 then 'paid'
          when ${D.dueDate} is not null and ${D.dueDate} < ${asOf} then 'overdue'
          when ${D.amountPaidMinor} > 0 then 'partiallyPaid'
@@ -185,7 +202,14 @@ export async function postStock(tx: DbOrTx, company: CompanyRow, row: DocRow, ac
   if (values.length && MOVEMENT_SIGN[type] < 0 && !company.allowNegativeStock) {
     const need = new Map<string, number>();
     for (const v of values) need.set(v.itemId, (need.get(v.itemId) ?? 0) + Math.abs(Number(v.quantity)));
-    const onHand = await stockOnHand(tx, row.companyId, [...need.keys()], row.branchId);
+    // Only stock there on the document date counts, and never more than the lowest it
+    // gets on a later day: the same rule the app checks before finalising.
+    const ledger = await tx
+      .select({ itemId: M.itemId, branchId: M.branchId, type: M.type, quantity: M.quantity, date: M.date })
+      .from(M)
+      .where(and(eq(M.companyId, row.companyId), eq(M.branchId, row.branchId), inArray(M.itemId, [...need.keys()])));
+    const available = stockMapOn(ledger.map((m) => ({ ...m, quantity: Number(m.quantity) }) as StockMovement), row.date, row.branchId);
+    const onHand = new Map([...need.keys()].map((id) => [id, available[id] ?? 0]));
     const short = [...need].filter(([id, qty]) => (onHand.get(id) ?? 0) < qty);
     if (short.length) {
       throw unprocessable(
@@ -194,7 +218,7 @@ export async function postStock(tx: DbOrTx, company: CompanyRow, row: DocRow, ac
           const line = lines.find((l) => l.itemId === id)!;
           return {
             field: `lines[${line.position - 1}].quantity`,
-            message: `${item.name}: ${onHand.get(id) ?? 0} ${item.unit} in stock at this branch, ${qty} needed`,
+            message: `${item.name}: ${onHand.get(id) ?? 0} ${item.unit} in stock at this branch on ${row.date}, ${qty} needed`,
             severity: 'blocking' as const,
           };
         }),
@@ -214,6 +238,20 @@ export async function postStock(tx: DbOrTx, company: CompanyRow, row: DocRow, ac
 export async function reverseStock(tx: DbOrTx, company: CompanyRow, row: DocRow, actorId: string, why: string): Promise<number> {
   const open = (await netPosted(tx, [row.id])).filter((r) => Number(r.net) !== 0);
   if (!open.length) return 0;
+  // Taking back stock this document brought in: it may have been sold since.
+  const incoming = open.filter((r) => Number(r.net) > 0);
+  if (incoming.length && !company.allowNegativeStock) {
+    const ids = [...new Set(incoming.map((r) => r.itemId))].sort();
+    const items = await tx.select().from(schema.items).where(and(eq(schema.items.companyId, row.companyId), inArray(schema.items.id, ids))).orderBy(schema.items.id).for('update');
+    const ledger = await tx.select({ itemId: M.itemId, branchId: M.branchId, type: M.type, quantity: M.quantity, date: M.date }).from(M).where(and(eq(M.companyId, row.companyId), inArray(M.itemId, ids)));
+    const issues = incoming.flatMap((r) => {
+      const available = stockMapOn(ledger.map((m) => ({ ...m, quantity: Number(m.quantity) }) as StockMovement), row.date, r.branchId)[r.itemId] ?? 0;
+      if (available >= Number(r.net)) return [];
+      const item = items.find((i) => i.id === r.itemId);
+      return [{ field: 'status', message: `${item?.name ?? r.itemId}: ${available} in stock, and reversing ${row.number} takes back ${Number(r.net)}`, severity: 'blocking' as const }];
+    });
+    if (issues.length) throw unprocessable(issues, 'INSUFFICIENT_STOCK');
+  }
   await tx.insert(M).values(
     open.map((r) => ({
       id: newId('stk'),
@@ -273,21 +311,159 @@ export async function finalizeInTx(
   now: Date,
   opts: { overrideCreditLimit?: boolean } = {},
 ): Promise<DocRow> {
+  assertPeriodOpen(company, row.date);
+  if (TAX_DOCUMENTS.includes(row.kind) && row.date > addDays(today(now), 1)) {
+    throw unprocessable([{ field: 'date', message: `A ${row.kind} cannot be dated ${row.date}, in the future`, severity: 'blocking' }], 'DOCUMENT_DATED_IN_FUTURE');
+  }
+  if (row.kind === 'invoice') await checkInvoiceLimit(tx, company, now);
+  if (isReturn(row) && row.sourceDocumentId) await checkReturnWithinSource(tx, row);
+  if (againstSource(row)) await checkAgainstSource(tx, row);
   if (!opts.overrideCreditLimit) await checkCreditLimit(tx, row, now);
+  // Opening invoices and bills keep their own numbers and are never drafts to finalise.
+  if (row.kind === 'openingInvoice' || row.kind === 'openingBill') throw conflict('INVALID_TRANSITION', 'An opening invoice or bill is already issued');
   const number = await assignNumber(tx, { companyId: row.companyId, kind: row.kind, branchId: row.branchId, date: row.date });
   const status = effectiveStatus({ ...row, status: target }, today(now));
+  // The returns report the party as registered when the document was issued, whatever changes later.
+  const [party] = await tx
+    .select({ taxId: schema.parties.taxId, stateCode: schema.parties.billingStateCode })
+    .from(schema.parties)
+    .where(eq(schema.parties.id, row.partyId));
+  // Rule 46(f): reverse-charge tax on a purchase from an unregistered supplier is self-invoiced.
+  const selfInvoiceNumber =
+    row.kind === 'purchaseBill' && row.reverseChargeTaxMinor > 0 && !party?.taxId
+      ? await assignNumber(tx, { companyId: row.companyId, kind: 'selfInvoice', branchId: row.branchId, date: row.date })
+      : null;
   const [updated] = await tx
     .update(D)
-    .set({ number, status, finalizedAt: now, version: row.version + 1, updatedAt: now })
+    .set({ number, status, finalizedAt: now, partyGstin: party?.taxId ?? null, partyStateCode: party?.stateCode ?? null, selfInvoiceNumber, version: row.version + 1, updatedAt: now })
     .where(and(eq(D.id, row.id), eq(D.version, row.version)))
     .returning();
   if (!updated) throw preconditionFailed();
   await postStock(tx, company, updated, actor.id);
+  // A bill with TDS kept back starts part-settled.
+  if (isCredit(updated) && updated.sourceDocumentId) await syncPaymentState(tx, actor, updated.companyId, [updated.sourceDocumentId], now);
+  if (updated.tdsAmountMinor > 0) {
+    await syncPaymentState(tx, actor, updated.companyId, [updated.id], now);
+    const [settled] = await tx.select().from(D).where(eq(D.id, updated.id));
+    return settled;
+  }
   return updated;
 }
 
+const addDays = (iso: string, days: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
+
+/** Dated by the business itself, and what the tax return is built from. */
+const TAX_DOCUMENTS: DocumentKind[] = ['invoice', 'salesReturn', 'purchaseBill', 'purchaseReturn'];
+const RETURN_KINDS: DocumentKind[] = ['salesReturn', 'purchaseReturn'];
+export const isReturn = (row: Pick<DocRow, 'kind'>) => RETURN_KINDS.includes(row.kind);
+/** Returns and credit notes: they lower what their source still owes. */
+export const isCredit = (row: Pick<DocRow, 'kind'>) => CREDIT_KINDS.includes(row.kind);
+/** Raised against an invoice or bill: returns and notes. */
+const AGAINST_SOURCE: DocumentKind[] = [...RETURN_KINDS, ...NOTE_KINDS];
+const againstSource = (row: Pick<DocRow, 'kind'>) => AGAINST_SOURCE.includes(row.kind);
+/** A return that counts: approved or issued, and not since withdrawn. */
+const LIVE_RETURN = notInArray(D.status, ['draft', 'requested', 'cancelled', 'rejected']);
+
+/** Books closed up to a date stay as they were filed. */
+export function assertPeriodOpen(company: CompanyRow, date: string) {
+  if (company.lockedThroughDate && date <= company.lockedThroughDate) {
+    throw conflict('PERIOD_LOCKED', `The books are closed through ${company.lockedThroughDate}; an owner must reopen them to change a document dated ${date}`);
+  }
+}
+
+/** How long a queued invoice may have waited for it to count as already issued on the device. */
+const OFFLINE_GRACE_MS = 10 * 60_000;
+
 /**
- * Re-derives `amount_paid_minor` (the sum of the document's allocations, the
+ * The free plan's monthly invoices. An invoice issued offline was given to a
+ * customer before the server could say no, so one that has been waiting in a
+ * queue goes through; it's only the next one made online that is refused.
+ */
+async function checkInvoiceLimit(tx: DbOrTx, company: CompanyRow, now: Date) {
+  const limit = INVOICE_LIMITS[company.plan];
+  if (limit === null) return;
+  const queuedAt = replayQueuedAt.getStore();
+  if (queuedAt && now.getTime() - queuedAt.getTime() > OFFLINE_GRACE_MS) return;
+  const monthStart = new Date(`${today(now).slice(0, 7)}-01T00:00:00+05:30`);
+  const [{ used }] = await tx
+    .select({ used: sql<number>`count(*)::int` })
+    .from(D)
+    .where(and(eq(D.companyId, company.id), eq(D.kind, 'invoice'), gte(D.finalizedAt, monthStart)));
+  if (used >= limit) throw invoiceLimitReached(company.plan, limit, nextInvoicePlan(company.plan));
+}
+
+/** What's returned against a document can't add up to more than it had, per item, across all its returns. */
+async function checkReturnWithinSource(tx: DbOrTx, row: DocRow) {
+  const L = schema.documentLines;
+  const [source] = await tx.select({ id: D.id, number: D.number }).from(D).where(eq(D.id, row.sourceDocumentId!)).for('update');
+  if (!source) return;
+  const keyOf = (l: { itemId: string | null; name: string }) => l.itemId ?? l.name;
+  const total = (lines: { itemId: string | null; name: string; quantity: string }[]) => {
+    const out = new Map<string, number>();
+    for (const l of lines) out.set(keyOf(l), (out.get(keyOf(l)) ?? 0) + Number(l.quantity));
+    return out;
+  };
+  const sold = total(await tx.select().from(L).where(eq(L.documentId, source.id)));
+  const earlier = total(
+    await tx
+      .select({ itemId: L.itemId, name: L.name, quantity: L.quantity })
+      .from(L)
+      .innerJoin(D, eq(D.id, L.documentId))
+      .where(and(eq(D.sourceDocumentId, source.id), inArray(D.kind, RETURN_KINDS), LIVE_RETURN, ne(D.id, row.id))),
+  );
+  const lines = await tx.select().from(L).where(eq(L.documentId, row.id));
+  const issues = [...total(lines)]
+    .filter(([key, qty]) => qty + (earlier.get(key) ?? 0) > (sold.get(key) ?? 0))
+    .map(([key, qty]) => {
+      const line = lines.find((l) => keyOf(l) === key)!;
+      const left = (sold.get(key) ?? 0) - (earlier.get(key) ?? 0);
+      return { field: `lines[${line.position - 1}].quantity`, message: `${line.name}: ${Math.max(left, 0)} left to return on ${source.number}, ${qty} on this return`, severity: 'blocking' as const };
+    });
+  if (issues.length) throw unprocessable(issues, 'RETURN_EXCEEDS_SOURCE');
+}
+
+/**
+ * A note or return must stand against a finalised invoice or bill of the same party and currency.
+ * Credit (returns and credit notes) can't add up to more than the source charged plus its debit
+ * notes, and the business's own credit notes have a deadline (s.34(2)). A direct note, raised
+ * against no one invoice or bill, has nothing to check here; the draft required its reason.
+ */
+async function checkAgainstSource(tx: DbOrTx, row: DocRow) {
+  const blocking = (field: string, message: string, code = 'VALIDATION_FAILED') => {
+    throw unprocessable([{ field, message, severity: 'blocking' }], code);
+  };
+  if (!row.sourceDocumentId && NOTE_KINDS.includes(row.kind)) return;
+  if (!row.sourceDocumentId) return blocking('sourceDocumentId', `A ${row.kind} is raised against an ${NOTE_SOURCE[row.kind] === 'invoice' ? 'invoice' : 'purchase bill'}`, 'NOTE_NEEDS_SOURCE');
+  const [source] = await tx.select().from(D).where(and(eq(D.companyId, row.companyId), eq(D.id, row.sourceDocumentId))).for('update');
+  if (!source || source.kind !== NOTE_SOURCE[row.kind]) return blocking('sourceDocumentId', `A ${row.kind} is raised against an ${NOTE_SOURCE[row.kind] === 'invoice' ? 'invoice' : 'purchase bill'}`, 'NOTE_NEEDS_SOURCE');
+  if (!isFinalized(source.status) || source.status === 'cancelled') return blocking('sourceDocumentId', `${source.number} is ${source.status}`);
+  if (source.partyId !== row.partyId) return blocking('partyId', `${source.number} belongs to another party`);
+  if (source.currency.trim() !== row.currency.trim()) return blocking('currency', `${source.number} is in ${source.currency.trim()}`);
+  if ((row.kind === 'creditNote' || row.kind === 'salesReturn') && row.date > creditNoteDeadline(source.date)) {
+    return blocking('date', `A credit note for ${source.number} had to be issued by ${creditNoteDeadline(source.date)} (CGST s.34(2))`, 'NOTE_TIME_BARRED');
+  }
+  if (!isCredit(row)) return;
+  const others = await tx
+    .select({ kind: D.kind, total: D.grandTotalMinor })
+    .from(D)
+    .where(and(eq(D.sourceDocumentId, source.id), inArray(D.kind, AGAINST_SOURCE), LIVE_RETURN, ne(D.id, row.id)));
+  const credited = others.filter((o) => isCredit(o)).reduce((a, o) => a + o.total, 0);
+  const debited = others.filter((o) => !isCredit(o)).reduce((a, o) => a + o.total, 0);
+  const room = source.grandTotalMinor + debited - credited;
+  if (row.grandTotalMinor > room) {
+    blocking('lines', `${source.number} has ${(Math.max(room, 0) / 100).toFixed(2)} left to credit; this note is ${(row.grandTotalMinor / 100).toFixed(2)}`, 'NOTE_EXCEEDS_SOURCE');
+  }
+}
+
+/** A document can't be cancelled while a return or note stands against it. */
+export async function assertNoLiveReturns(tx: DbOrTx, row: DocRow) {
+  const [live] = await tx.select({ number: D.number, kind: D.kind }).from(D).where(and(eq(D.sourceDocumentId, row.id), inArray(D.kind, AGAINST_SOURCE), LIVE_RETURN)).limit(1);
+  if (live) throw conflict('DOCUMENT_HAS_RETURNS', `Cancel ${isReturn(live) ? 'return' : 'note'} ${live.number} before cancelling ${row.number}`);
+}
+
+/**
+ * Re-derives `amount_paid_minor` (the sum of the document's allocations and
+ * of what its returns credit, the
  * invariant the ledger and balances rely on) and the settlement status of
  * each document, and records a change for each one that moved. Callers lock
  * the documents first.
@@ -296,15 +472,26 @@ export async function syncPaymentState(tx: DbOrTx, actor: AuthUser, companyId: s
   const ids = [...new Set(documentIds)];
   if (!ids.length) return;
   const A = schema.paymentAllocations;
+  // Cash and what settled it without cash: TDS deducted, discount, write-off.
   const sums = await tx
-    .select({ documentId: A.documentId, paid: sql<number>`coalesce(sum(${A.amountMinor}), 0)::bigint` })
+    .select({ documentId: A.documentId, paid: sql<number>`coalesce(sum(${A.amountMinor} + ${A.tdsMinor} + ${A.discountMinor} + ${A.writeOffMinor}), 0)::bigint` })
     .from(A)
     .where(inArray(A.documentId, ids))
     .groupBy(A.documentId);
   const paidOf = new Map(sums.map((s) => [s.documentId, Number(s.paid)]));
+  // A return settles what it credits, as far as there's anything left to settle.
+  const credits = await tx
+    // Net of the TDS a supplier credit note gives back, which was never owed to the supplier.
+    .select({ documentId: D.sourceDocumentId, credited: sql<number>`coalesce(sum(${D.grandTotalMinor} - ${D.tdsAmountMinor}), 0)::bigint` })
+    .from(D)
+    .where(and(inArray(D.sourceDocumentId, ids), inArray(D.kind, CREDIT_KINDS), LIVE_RETURN))
+    .groupBy(D.sourceDocumentId);
+  const creditOf = new Map(credits.map((c) => [c.documentId, Number(c.credited)]));
   const rows = await tx.select().from(D).where(and(eq(D.companyId, companyId), inArray(D.id, ids)));
   for (const row of rows) {
-    const amountPaidMinor = paidOf.get(row.id) ?? 0;
+    // TDS kept back is paid to the government, so it settles the bill as far as the supplier goes.
+    const allocated = (paidOf.get(row.id) ?? 0) + row.tdsAmountMinor;
+    const amountPaidMinor = Math.max(allocated, Math.min(allocated + (creditOf.get(row.id) ?? 0), row.grandTotalMinor));
     const status = isFinalized(row.status) ? effectiveStatus({ ...row, amountPaidMinor }, today(now)) : row.status;
     if (amountPaidMinor === row.amountPaidMinor && status === row.status) continue;
     const [updated] = await tx

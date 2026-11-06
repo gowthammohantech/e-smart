@@ -1,8 +1,8 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, ScrollView, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { AppHeader } from '../../../components/AppHeader';
 import { SectionHeader } from '@esmart/ui/components/Screen';
@@ -15,58 +15,76 @@ import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { Fab } from '@esmart/ui/components/Fab';
 import { Segmented } from '@esmart/ui/components/Field';
 import { Sheet } from '@esmart/ui/components/Sheet';
-import { useBaseCurrency, useItems, useStockLevels, useStockMovements } from '../../../store/selectors';
-import { summarizeStock } from '@esmart/core/domain/reports';
+import { useBaseCurrency } from '../../../store/selectors';
+import { useAppStore } from '../../../store/appStore';
+import { useItemPages, useServerReport } from '../../../remote/queries';
+import { useDebounced } from '../../../components/useDebounced';
 import { formatMoney, formatQty } from '@esmart/core/lib/format';
 import { isLowStock } from '@esmart/core/domain/stockLedger';
+import { today } from '@esmart/core/lib/date';
+import { zero, type Money } from '@esmart/core/lib/money';
+import type { Item } from '@esmart/core/types';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { useQueryParams } from '../../../navigation/queryParams';
 
 type Filter = 'all' | 'low' | 'out' | 'services';
+const FILTERS: Filter[] = ['all', 'low', 'out', 'services'];
 
 export default function InventoryTab() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['inventory']);
+  const { t: tr } = useTranslation(['inventory', 'common', 'nav']);
   const router = useRouter();
 
   const baseCurrency = useBaseCurrency();
-  const items = useItems();
-  const movements = useStockMovements();
-  const stock = useStockLevels();
+  // The branch picked in the header, as the device's figures were.
+  const branchId = useAppStore((s) => s.activeBranchId) || undefined;
 
   const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState<Filter>('all');
+  // The stock filter lives in the URL (`?filter=low`); search stays local.
+  const [params, setParams] = useQueryParams();
+  const filter: Filter = FILTERS.includes(params.filter as Filter) ? (params.filter as Filter) : 'all';
+  const setFilter = (f: Filter) => setParams({ filter: f === 'all' ? undefined : f });
   const [actionsOpen, setActionsOpen] = useState(false);
 
-  const report = useMemo(() => summarizeStock(items, movements, baseCurrency), [items, movements, baseCurrency]);
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return items.filter((i) => {
-      const onHand = stock[i.id] ?? 0;
-      if (filter === 'low' && !(i.trackInventory && isLowStock(i, onHand) && onHand > 0)) return false;
-      if (filter === 'out' && !(i.trackInventory && onHand <= 0)) return false;
-      if (filter === 'services' && i.trackInventory) return false;
-      if (q && !`${i.name} ${i.sku} ${i.barcode ?? ''}`.toLowerCase().includes(q)) return false;
-      return true;
-    });
-  }, [items, stock, filter, query]);
+  // Worked out by the server: the figures from its stock report, the list a page at a time.
+  const day = today();
+  const stockReport = useServerReport<{ totalValue?: Money; lowCount?: number; outCount?: number; trackedCount?: number }>('stock', { from: day, to: day, branchId }).data;
+  const report = {
+    totalValue: stockReport?.totalValue ?? zero(baseCurrency),
+    lowCount: stockReport?.lowCount ?? 0,
+    outCount: stockReport?.outCount ?? 0,
+    trackedCount: stockReport?.trackedCount ?? 0,
+  };
+  const search = useDebounced(query);
+  const pages = useItemPages({ q: search, branchId, stock: filter === 'low' ? 'low' : filter === 'out' ? 'out' : filter === 'services' ? 'untracked' : undefined });
+  const filtered = pages.rows as unknown as (Item & { stockOnHand?: number })[];
+  const stock: Record<string, number> = Object.fromEntries(filtered.map((i) => [i.id, i.stockOnHand ?? 0]));
+  const noneAtAll = filter === 'all' && !search && !pages.isLoading && !filtered.length;
+  const loadMore = () => {
+    if (pages.hasNextPage && !pages.isFetchingNextPage) void pages.fetchNextPage();
+  };
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <AppHeader title={tr('inventory:hub.title')} subtitle={tr('inventory:hub.subtitle')} />
 
       <ScrollView
         contentContainerStyle={{ paddingHorizontal: t.spacing.lg, paddingBottom: 120 }}
         showsVerticalScrollIndicator={SHOW_SCROLLBAR}
+        // The next page loads before the end is reached, so scrolling rarely waits.
+        onScroll={({ nativeEvent: e }: NativeSyntheticEvent<NativeScrollEvent>) => {
+          if (e.layoutMeasurement.height + e.contentOffset.y >= e.contentSize.height - 600) loadMore();
+        }}
+        scrollEventThrottle={200}
       >
         <StatRow>
-          <StatTile label={tr('inventory:hub.stockValue')} value={report.totalValue} icon="warehouse" caption={`${report.trackedCount} tracked items`} />
+          <StatTile label={tr('inventory:hub.stockValue')} value={report.totalValue} icon="warehouse" caption={tr('inventory:hub.trackedItems', { count: report.trackedCount })} />
           <StatTile
             label={tr('inventory:hub.lowStock')}
             value={String(report.lowCount)}
             tone="warn"
             icon="alert-outline"
-            caption={`${report.outCount} out of stock`}
+            caption={tr('inventory:hub.outOfStock', { count: report.outCount })}
             onPress={() => router.push('/(app)/inventory/low-stock')}
           />
         </StatRow>
@@ -83,16 +101,16 @@ export default function InventoryTab() {
                 accessibilityRole="button"
                 accessibilityLabel={tr('inventory:hub.scanBarcode')}
               >
-                <MaterialCommunityIcons name="barcode-scan" size={19} color={t.c.primary} />
+                <Icon name="barcode-scan" size={19} color={t.c.primary} />
               </Pressable>
             }
           />
           <Segmented
             options={[
-              { value: 'all', label: 'All' },
+              { value: 'all', label: tr('inventory:hub.all') },
               { value: 'low', label: tr('inventory:hub.low') },
               { value: 'out', label: tr('inventory:hub.out') },
-              { value: 'services', label: 'Services' },
+              { value: 'services', label: tr('inventory:catalog.services') },
             ]}
             value={filter}
             onChange={(v) => setFilter(v as Filter)}
@@ -100,17 +118,19 @@ export default function InventoryTab() {
           />
         </View>
 
-        <SectionHeader title={`${filtered.length} items`} action="Movements" onAction={() => router.push('/(app)/inventory/movements')} />
+        <SectionHeader title={tr('inventory:hub.itemCount', { count: filtered.length })} action={tr('inventory:hub.movements')} onAction={() => router.push('/(app)/inventory/movements')} />
 
         <Card padded={false}>
-          {filtered.length === 0 ? (
+          {pages.isLoading && !filtered.length ? (
+            <ActivityIndicator color={t.c.muted} style={{ padding: t.spacing.xl }} />
+          ) : filtered.length === 0 ? (
             <EmptyState
               illustration="no-items"
               icon="package-variant"
               title={tr('inventory:hub.nothingHere')}
-              message={items.length === 0 ? 'Add your first item to start tracking stock.' : 'No items match this filter.'}
-              actionLabel={items.length === 0 ? 'Add item' : undefined}
-              onAction={items.length === 0 ? () => router.push('/(app)/catalog/items/new') : undefined}
+              message={noneAtAll ? tr('inventory:hub.emptyFirst') : tr('inventory:hub.emptyFilter')}
+              actionLabel={noneAtAll ? tr('common:quickAction.addItem') : undefined}
+              onAction={noneAtAll ? () => router.push('/(app)/catalog/items/new') : undefined}
               compact
             />
           ) : (
@@ -122,7 +142,11 @@ export default function InventoryTab() {
                   key={item.id}
                   onPress={() => router.push(`/(app)/catalog/items/${item.id}`)}
                   accessibilityRole="button"
-                  accessibilityLabel={`${item.name}, ${item.trackInventory ? `${onHand} in stock` : 'service'}`}
+                  accessibilityLabel={
+                    item.trackInventory
+                      ? tr('inventory:hub.a11yStock', { name: item.name, qty: formatQty(onHand) })
+                      : tr('inventory:hub.a11yService', { name: item.name })
+                  }
                   style={({ pressed }) => ({
                     flexDirection: 'row',
                     alignItems: 'center',
@@ -143,7 +167,7 @@ export default function InventoryTab() {
                       justifyContent: 'center',
                     }}
                   >
-                    <MaterialCommunityIcons
+                    <Icon
                       name={item.trackInventory ? 'package-variant-closed' : 'hammer-wrench'}
                       size={19}
                       color={item.trackInventory ? t.c.primary : t.c.muted}
@@ -189,18 +213,19 @@ export default function InventoryTab() {
             })
           )}
         </Card>
+        {pages.isFetchingNextPage ? <ActivityIndicator color={t.c.muted} style={{ paddingVertical: t.spacing.md }} /> : null}
       </ScrollView>
 
       <Fab icon="plus" onPress={() => setActionsOpen(true)} />
 
       <Sheet visible={actionsOpen} onClose={() => setActionsOpen(false)} title={tr('inventory:hub.actions')}>
         {[
-          { label: 'Add item', icon: 'tag-plus-outline' as const, route: '/(app)/catalog/items/new' },
-          { label: 'Stock adjustment', icon: 'tune' as const, route: '/(app)/inventory/adjust' },
-          { label: 'Branch transfer', icon: 'swap-horizontal' as const, route: '/(app)/inventory/transfer' },
-          { label: 'Set opening stock', icon: 'database-import-outline' as const, route: '/(app)/inventory/opening-stock' },
+          { label: tr('common:quickAction.addItem'), icon: 'tag-plus-outline' as const, route: '/(app)/catalog/items/new' },
+          { label: tr('nav:title.stockAdjustment'), icon: 'tune' as const, route: '/(app)/inventory/adjust' },
+          { label: tr('nav:title.branchTransfer'), icon: 'swap-horizontal' as const, route: '/(app)/inventory/transfer' },
+          { label: tr('inventory:hub.setOpeningStock'), icon: 'database-import-outline' as const, route: '/(app)/inventory/opening-stock' },
           { label: tr('inventory:hub.scanBarcode'), icon: 'barcode-scan' as const, route: '/(app)/inventory/scan' },
-          { label: 'Stock movements', icon: 'format-list-bulleted' as const, route: '/(app)/inventory/movements' },
+          { label: tr('nav:title.stockMovements'), icon: 'format-list-bulleted' as const, route: '/(app)/inventory/movements' },
         ].map((a) => (
           <Pressable
             key={a.label}
@@ -219,11 +244,11 @@ export default function InventoryTab() {
               backgroundColor: pressed ? t.c.card2 : 'transparent',
             })}
           >
-            <MaterialCommunityIcons name={a.icon} size={20} color={t.c.primary} />
+            <Icon name={a.icon} size={20} color={t.c.primary} />
             <Text variant="body" style={{ flex: 1 }}>
               {a.label}
             </Text>
-            <MaterialCommunityIcons name="chevron-right" size={18} color={t.c.muted} />
+            <Icon name="chevron-right" size={18} color={t.c.muted} />
           </Pressable>
         ))}
       </Sheet>

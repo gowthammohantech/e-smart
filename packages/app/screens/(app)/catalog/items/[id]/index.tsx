@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
@@ -13,7 +13,7 @@ import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { StatRow, StatTile } from '@esmart/ui/components/StatTile';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { Sheet } from '@esmart/ui/components/Sheet';
-import { useToast } from '@esmart/ui/components/Toast';
+import { useServerSave } from '../../../../../components/useServerSave';
 import { useAppStore } from '../../../../../store/appStore';
 import {
   useBaseCurrency,
@@ -23,7 +23,10 @@ import {
   useStockMovements,
   useTaxCategories,
 } from '../../../../../store/selectors';
-import { MOVEMENT_LABELS, isLowStock, ledgerFor, signedQuantity, stockOnHand, stockValue } from '@esmart/core/domain/stockLedger';
+import { useItemLedger, useItemRecord } from '../../../../../remote/queries';
+import { LoadingView } from '../../../../../components/LoadingView';
+import { isLowStock, ledgerFor, signedQuantity, stockOnHand, stockValue } from '@esmart/core/domain/stockLedger';
+import type { Money } from '@esmart/core/lib/money';
 import { formatMoney, formatPercent, formatQty } from '@esmart/core/lib/format';
 import { formatDate } from '@esmart/core/lib/date';
 import { multiply } from '@esmart/core/lib/money';
@@ -38,13 +41,15 @@ export default function ItemDetail() {
   const { t: tr } = useTranslation(['common', 'inventory', 'nav']);
   const router = useRouter();
   const goBack = useGoBack();
-  const toast = useToast();
+  const { run: serverSave } = useServerSave();
 
   const { id } = useLocalSearchParams<{ id: string }>();
   const item = useItem(id);
+  // Fetched on opening, so it shows even when the book on the device doesn't hold it.
+  const remote = useItemRecord(id);
   const baseCurrency = useBaseCurrency();
   // The item's own id: the route's may be the one it had before the server saved it.
-  const movements = useStockMovements(item?.id ?? id);
+  const movements = useStockMovements(item?.id ?? id, { branchScoped: true });
   const hasInventory = useHasModule('inventory');
   const hasPurchases = useHasModule('purchases');
   const taxCategories = useTaxCategories();
@@ -54,7 +59,11 @@ export default function ItemDetail() {
   const [actionsOpen, setActionsOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  const ledger = useMemo(() => (item ? ledgerFor(item.id, movements).reverse() : []), [item, movements]);
+  // Stock, value, quantity sold and the movements come from the server; the device's figures until it answers.
+  const activeBranchId = useAppStore((s) => s.activeBranchId) || undefined;
+  const server = useItemLedger(item?.id, activeBranchId, hasInventory && !!item?.trackInventory).data;
+  const deviceLedger = useMemo(() => (item ? ledgerFor(item.id, movements).reverse() : []), [item, movements]);
+  const ledger = (server?.rows as typeof deviceLedger | undefined) ?? deviceLedger;
 
   const soldQty = useMemo(() => {
     if (!item) return 0;
@@ -65,18 +74,19 @@ export default function ItemDetail() {
       .reduce((a, l) => a + l.quantity, 0);
   }, [invoices, item]);
 
+  if (!item && remote.isLoading) return <LoadingView />;
   if (!item) {
     return (
-      <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+      <View style={{ flex: 1 }}>
         <Stack.Screen options={{ title: tr('nav:title.item') }} />
         <EmptyState illustration="not-found" icon="package-variant-closed-remove" title={tr('common:notFound.title')} message={tr('common:notFound.item')} />
       </View>
     );
   }
 
-  const onHand = stockOnHand(item.id, movements);
-  const value = stockValue(item, movements, baseCurrency);
-  const low = isLowStock(item, onHand);
+  const onHand = server?.onHand ?? stockOnHand(item.id, movements);
+  const value = (server?.value as Money | undefined) ?? stockValue(item, movements, baseCurrency);
+  const low = server?.low ?? isLowStock(item, onHand);
   const category = taxCategories.find((c) => c.id === item.taxCategoryId);
   // The share of the sale price that's profit, as the item form shows it.
   const hasMargin = item.salePrice.minor > 0 && item.purchasePrice.minor > 0;
@@ -96,7 +106,7 @@ export default function ItemDetail() {
             justifyContent: 'center',
           }}
         >
-          <MaterialCommunityIcons
+          <Icon
             name={item.trackInventory ? 'package-variant-closed' : 'hammer-wrench'}
             size={25}
             color={item.trackInventory ? t.c.primary : t.c.muted}
@@ -111,7 +121,7 @@ export default function ItemDetail() {
             {item.barcode ? ` · ${item.barcode}` : ''}
           </Text>
           <View style={{ flexDirection: 'row', gap: 5, marginTop: 3, flexWrap: 'wrap' }}>
-            <Badge label={item.type === 'goods' ? 'Product' : 'Service'} tone="neutral" size="sm" />
+            <Badge label={tr(`inventory:type.${item.type}`)} tone="neutral" size="sm" />
             <Badge label={formatPercent(category?.rate ?? 0)} tone="info" size="sm" />
             {item.hsnCode ? <Badge label={`HSN ${item.hsnCode}`} tone="neutral" size="sm" /> : null}
             {item.status === 'inactive' ? <Badge label={tr('inventory:detail.inactive')} tone="warning" size="sm" /> : null}
@@ -131,14 +141,14 @@ export default function ItemDetail() {
     <View style={{ height: t.spacing.md }} />
 
     <StatRow>
-      <StatTile label={tr('inventory:detail.salePrice')} value={item.salePrice} icon="tag-outline" caption={`per ${item.unit}`} />
+      <StatTile label={tr('inventory:detail.salePrice')} value={item.salePrice} icon="tag-outline" caption={tr('inventory:detail.perUnit', { unit: item.unit })} />
       <StatTile
         label={tr('inventory:detail.margin')}
         // One decimal, like the item form.
         value={hasMargin ? formatPercent(Math.round(margin * 10) / 10) : '—'}
         tone={margin > 0 ? 'good' : 'default'}
         icon="trending-up"
-        caption={`cost ${formatMoney(item.purchasePrice)}`}
+        caption={tr('inventory:detail.cost', { amount: formatMoney(item.purchasePrice) })}
       />
     </StatRow>
 
@@ -151,9 +161,9 @@ export default function ItemDetail() {
             value={`${formatQty(onHand)} ${item.unit}`}
             tone={onHand <= 0 ? 'bad' : low ? 'warn' : 'good'}
             icon="warehouse"
-            caption={item.reorderLevel > 0 ? `reorder at ${formatQty(item.reorderLevel)}` : undefined}
+            caption={item.reorderLevel > 0 ? tr('inventory:detail.reorderAt', { qty: formatQty(item.reorderLevel) }) : undefined}
           />
-          <StatTile label={tr('inventory:detail.stockValue')} value={value} icon="cash" caption={`${formatQty(soldQty)} sold all-time`} />
+          <StatTile label={tr('inventory:detail.stockValue')} value={value} icon="cash" caption={tr('inventory:detail.soldAllTime', { qty: formatQty(server?.soldQuantity ?? soldQty) })} />
         </StatRow>
       </>
     ) : null}
@@ -165,10 +175,10 @@ export default function ItemDetail() {
     <Card style={{ gap: t.spacing.md }}>
       {[
         { label: tr('inventory:detail.salePrice'), value: `${formatMoney(item.salePrice)} / ${item.unit}` },
-        { label: 'Purchase price', value: `${formatMoney(item.purchasePrice)} / ${item.unit}` },
-        { label: 'Tax category', value: category?.name ?? '—' },
+        { label: tr('inventory:form.purchasePrice'), value: `${formatMoney(item.purchasePrice)} / ${item.unit}` },
+        { label: tr('inventory:detail.taxCategory'), value: category?.name ?? '—' },
         {
-          label: 'Sale price incl. tax',
+          label: tr('inventory:detail.salePriceInclTax'),
           value: formatMoney(multiply(item.salePrice, 1 + (category?.rate ?? 0) / 100)),
         },
       ].map((r) => (
@@ -207,14 +217,14 @@ export default function ItemDetail() {
                     borderBottomColor: t.c.line,
                   }}
                 >
-                  <MaterialCommunityIcons
+                  <Icon
                     name={delta >= 0 ? 'arrow-down-bold-circle-outline' : 'arrow-up-bold-circle-outline'}
                     size={21}
                     color={delta >= 0 ? t.c.good : t.c.bad}
                   />
                   <View style={{ flex: 1, gap: 2 }}>
                     <Text variant="body" weight="600">
-                      {MOVEMENT_LABELS[row.movement.type]}
+                      {tr(`inventory:movementType.${row.movement.type}`)}
                     </Text>
                     <Text variant="caption" tone="muted" numberOfLines={1}>
                       {formatDate(row.movement.date)}
@@ -228,7 +238,7 @@ export default function ItemDetail() {
                       {formatQty(delta)}
                     </Text>
                     <Text variant="micro" tone="muted">
-                      bal {formatQty(row.balance)}
+                      {tr('inventory:detail.balance', { qty: formatQty(row.balance) })}
                     </Text>
                   </View>
                 </View>
@@ -242,7 +252,7 @@ export default function ItemDetail() {
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <Stack.Screen
         options={{
           title: item.name,
@@ -310,15 +320,15 @@ export default function ItemDetail() {
         {[
           ...(item.trackInventory && hasInventory
             ? [
-                { label: 'Adjust stock', icon: 'tune' as const, onPress: () => router.push(`/(app)/inventory/adjust?itemId=${item.id}`) },
-                { label: 'Transfer between branches', icon: 'swap-horizontal' as const, onPress: () => router.push(`/(app)/inventory/transfer?itemId=${item.id}`) },
+                { label: tr('inventory:detail.adjustStock'), icon: 'tune' as const, onPress: () => router.push(`/(app)/inventory/adjust?itemId=${item.id}`) },
+                { label: tr('inventory:detail.transferBranches'), icon: 'swap-horizontal' as const, onPress: () => router.push(`/(app)/inventory/transfer?itemId=${item.id}`) },
               ]
             : []),
-          { label: 'Sell this item', icon: 'file-document-edit-outline' as const, onPress: () => router.push(`/(app)/sales/invoices/new?itemId=${item.id}`) },
+          { label: tr('inventory:detail.sellItem'), icon: 'file-document-edit-outline' as const, onPress: () => router.push(`/(app)/sales/invoices/new?itemId=${item.id}`) },
           ...(hasPurchases
-            ? [{ label: 'Buy this item', icon: 'cart-outline' as const, onPress: () => router.push(`/(app)/purchases/bills/new?itemId=${item.id}`) }]
+            ? [{ label: tr('inventory:detail.buyItem'), icon: 'cart-outline' as const, onPress: () => router.push(`/(app)/purchases/bills/new?itemId=${item.id}`) }]
             : []),
-          { label: 'Delete item', icon: 'trash-can-outline' as const, onPress: () => { setActionsOpen(false); setConfirmDelete(true); } },
+          { label: tr('inventory:detail.deleteItem'), icon: 'trash-can-outline' as const, onPress: () => { setActionsOpen(false); setConfirmDelete(true); } },
         ].map((a) => (
           <Pressable
             key={a.label}
@@ -339,7 +349,7 @@ export default function ItemDetail() {
               backgroundColor: pressed ? t.c.card2 : 'transparent',
             })}
           >
-            <MaterialCommunityIcons name={a.icon} size={20} color={t.c.text} />
+            <Icon name={a.icon} size={20} color={t.c.text} />
             <Text variant="body" style={{ flex: 1 }}>
               {a.label}
             </Text>
@@ -349,16 +359,16 @@ export default function ItemDetail() {
 
       <ConfirmDialog
         visible={confirmDelete}
-        title={`Delete ${item.name}?`}
+        title={tr('inventory:detail.deleteTitle', { name: item.name })}
         message={tr('inventory:detail.deleteMessage')}
         confirmLabel={tr('inventory:detail.delete')}
         destructive
         onCancel={() => setConfirmDelete(false)}
         onConfirm={() => {
-          removeItem(item.id);
           setConfirmDelete(false);
-          toast.show(tr('inventory:detail.deleted'), 'success');
-          goBack('/(app)/catalog/items');
+          void serverSave(() => removeItem(item.id), tr('inventory:detail.deleted'), { icon: 'tag-remove-outline' }).then((res) => {
+            if (res) goBack('/(app)/catalog/items');
+          });
         }}
       />
     </View>

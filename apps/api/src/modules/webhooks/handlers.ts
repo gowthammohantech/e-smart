@@ -1,5 +1,5 @@
 import { createHmac } from 'node:crypto';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 import { accountTypesFor } from '@esmart/core/domain/paymentAccounts';
 import type { PaymentMethod, PlanTier } from '@esmart/core/types';
 import { schema } from '@esmart/db';
@@ -9,7 +9,8 @@ import { recordChange, type DbOrTx } from '../../lib/audit';
 import { safeEqual, sha256 } from '../../lib/crypto';
 import { newId } from '../../lib/ids';
 import { today } from '../documents/lifecycle';
-import { writePayment } from '../payments/engine';
+import { notify } from '../../lib/notify';
+import { deletePayment, writePayment } from '../payments/engine';
 
 type Json = Record<string, unknown>;
 const obj = (v: unknown): Json => (v && typeof v === 'object' ? (v as Json) : {});
@@ -24,11 +25,11 @@ const PLANS: PlanTier[] = ['free', 'basic', 'pro', 'business'];
  * and `created_by` reference users): the person who created the link, or the
  * account owner, named after the source so the audit trail reads true.
  */
-async function actorFor(db: DbOrTx, userId: string | null | undefined, source: string): Promise<AuthUser | null> {
+export async function actorFor(db: DbOrTx, userId: string | null | undefined, source: string): Promise<AuthUser | null> {
   if (!userId) return null;
   const [u] = await db.select().from(schema.users).where(eq(schema.users.id, userId));
   if (!u) return null;
-  return { id: u.id, accountId: u.accountId, name: source, email: u.email, role: u.role, platformRole: null, status: u.status, locale: u.locale, companyIds: [], branchIds: [], sessionId: '' };
+  return { id: u.id, accountId: u.accountId, name: source, email: u.email, role: u.role, platformRole: null, status: u.status, locale: u.locale, companyIds: [], branchIds: [], sessionId: '', mfaEnrolled: false, mfaVerified: false };
 }
 
 async function ownerOf(db: DbOrTx, companyId: string, source: string): Promise<AuthUser | null> {
@@ -165,6 +166,8 @@ async function subscriptionCharged(ctx: WebhookCtx, tx: DbOrTx, eventId: string,
   const [company] = await tx.select().from(schema.companies).where(eq(schema.companies.id, companyId)).for('update');
   if (!company) return `unknown company ${companyId}`;
   const [current] = known?.companyId === companyId ? [known] : await tx.select().from(S).where(eq(S.companyId, companyId));
+  // Events can arrive out of order. Cancelling ends a subscription for good (signing up again is a new id).
+  if (known?.status === 'cancelled') return `subscription ${subId} is already cancelled`;
   const plan = PLANS.find((p) => p === notes.plan) ?? current?.plan;
   if (!plan) return 'the subscription does not say which plan it is for';
   const cycle = notes.cycle === 'yearly' || notes.cycle === 'monthly' ? notes.cycle : (current?.cycle ?? 'monthly');
@@ -193,6 +196,70 @@ async function subscriptionCharged(ctx: WebhookCtx, tx: DbOrTx, eventId: string,
     if (actor) await recordChange(tx, actor, { companyId, action: `plan changed to ${plan}`, entityType: 'company', entityId: companyId, entityLabel: company.name, version: updated.version, before: { plan: company.plan }, after: { plan } });
   }
   if (actor) await recordChange(tx, actor, { companyId, action: eventType, entityType: 'subscription', entityId: companyId, entityLabel: plan, version: row.version });
+}
+
+/**
+ * `refund.processed`: a full refund undoes the payment it refunds, reopening
+ * what it settled. A partial one makes the payment smaller by that much.
+ */
+async function refundProcessed(ctx: WebhookCtx, tx: DbOrTx, payload: Json): Promise<string | void> {
+  const refund = obj(obj(payload.refund).entity);
+  const paymentId = str(refund.payment_id);
+  if (!paymentId) return 'payload has no refund.entity.payment_id';
+  const P = schema.payments;
+  const [payment] = await tx.select().from(P).where(and(eq(P.reference, paymentId), eq(P.direction, 'received'))).for('update');
+  if (!payment) return `no payment for ${paymentId}`;
+  const [company] = await tx.select().from(schema.companies).where(eq(schema.companies.id, payment.companyId));
+  const actor = await ownerOf(tx, payment.companyId, 'Razorpay');
+  if (!company || !actor) return 'the payment no longer resolves to a company';
+  const amount = num(refund.amount) ?? 0;
+  if (!(amount > 0)) return 'refund has no amount';
+  if (amount >= payment.amountMinor) {
+    await deletePayment(tx, company, actor, payment, ctx.now);
+    return;
+  }
+  // Part of it went back: the payment shrinks by that much. Its unallocated part (an advance) goes
+  // first, then what it paid on the newest invoices, so the oldest stay settled.
+  const A = schema.paymentAllocations;
+  const allocations = await tx
+    .select({ documentId: A.documentId, amountMinor: A.amountMinor, tdsMinor: A.tdsMinor, discountMinor: A.discountMinor, writeOffMinor: A.writeOffMinor, date: schema.documents.date })
+    .from(A)
+    .innerJoin(schema.documents, eq(schema.documents.id, A.documentId))
+    .where(eq(A.paymentId, payment.id))
+    .orderBy(desc(schema.documents.date), desc(schema.documents.id));
+  const remaining = payment.amountMinor - amount;
+  let release = Math.max(0, allocations.reduce((sum, a) => sum + a.amountMinor, 0) - remaining);
+  const kept = allocations
+    .map((a) => {
+      const cut = Math.min(a.amountMinor, release);
+      release -= cut;
+      // Only the cash is refunded; TDS, discount and write-off stay as they were.
+      return { documentId: a.documentId, amountMinor: a.amountMinor - cut, tdsMinor: a.tdsMinor, discountMinor: a.discountMinor, writeOffMinor: a.writeOffMinor };
+    })
+    .filter((a) => a.amountMinor + a.tdsMinor + a.discountMinor + a.writeOffMinor > 0);
+  const refunded = `${payment.currency.trim()} ${(amount / 100).toFixed(2)}`;
+  await writePayment(
+    tx,
+    ctx.deps,
+    company,
+    actor,
+    {
+      direction: 'received',
+      partyId: payment.partyId,
+      branchId: payment.branchId,
+      date: payment.date,
+      amountMinor: remaining,
+      currency: payment.currency.trim(),
+      exchangeRate: Number(payment.exchangeRate),
+      method: payment.method,
+      reference: payment.reference,
+      accountId: payment.accountId,
+      notes: [payment.notes, `${refunded} refunded online`].filter(Boolean).join(' · ').slice(0, 500),
+      allocations: kept,
+    },
+    { now: ctx.now, existing: payment },
+  );
+  await notify(tx, ctx.deps, { companyId: payment.companyId, kind: 'paymentReceived', title: 'Partial refund recorded', body: `${payment.number}: ${refunded} was refunded online, so the payment is now ${payment.currency.trim()} ${(remaining / 100).toFixed(2)}.`, entityType: 'payment', entityId: payment.id });
 }
 
 /** `subscription.cancelled` (and `.completed`, `.halted`): back to Free; no records are lost. */
@@ -280,6 +347,8 @@ export const webhookHandlers: WebhookHandlers = {
       switch (eventType) {
         case 'payment_link.paid':
           return paymentLinkPaid(ctx, tx, payload);
+        case 'refund.processed':
+          return refundProcessed(ctx, tx, payload);
         case 'subscription.activated':
         case 'subscription.charged':
           return subscriptionCharged(ctx, tx, eventId, eventType, payload);

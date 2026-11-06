@@ -1,15 +1,19 @@
 import React, { useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { KeyboardAvoidingView, NativeScrollEvent, NativeSyntheticEvent, Platform, Pressable, ScrollView, View } from 'react-native';
+import { Animated, KeyboardAvoidingView, NativeScrollEvent, NativeSyntheticEvent, Platform, Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from './Icon';
 import { useTheme } from '../theme/ThemeProvider';
 import { Text } from './Text';
 import { Button } from './Button';
 import { Stepper } from './Stepper';
 import { SHOW_SCROLLBAR, useIsDesktop } from '../theme/breakpoints';
 import { ScrollKeepContext, type ScrollKeep } from './ScrollKeep';
+import { Illustration } from './Illustration';
+import { PageBackdrop } from './PageBackdrop';
+import { isIllustrationName } from '../illustrations/registry';
+import { useEntrance } from '../illustrations/motion';
 
 /** The step content column on a desktop browser. */
 export const WIZARD_CONTENT_WIDTH = 760;
@@ -48,6 +52,10 @@ export function WizardShell({
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const desktop = useIsDesktop();
+  const stepKey = steps && currentStep !== undefined ? steps[currentStep] : undefined;
+  const scene = stepKey ? `onboarding-${stepKey}` : undefined;
+  const art = scene && isIllustrationName(scene) ? scene : undefined;
+  const enter = useEntrance({ key: stepKey, rise: 10, duration: 300 });
 
   // Pickers on the form restore this position when their sheet closes.
   const scrollRef = useRef<ScrollView>(null);
@@ -67,6 +75,7 @@ export function WizardShell({
     return (
       <ScrollKeepContext.Provider value={keep}>
       <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+        <PageBackdrop />
         <ScrollView
           ref={scrollRef}
           onScroll={track}
@@ -76,8 +85,9 @@ export function WizardShell({
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={SHOW_SCROLLBAR}
         >
-          <View style={{ width: '100%', maxWidth: WIZARD_CONTENT_WIDTH, gap: t.spacing.xl }}>
-            <View style={{ gap: t.spacing.sm }}>
+          <Animated.View style={[{ width: '100%', maxWidth: WIZARD_CONTENT_WIDTH, gap: t.spacing.xl }, enter]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.xl }}>
+            <View style={{ gap: t.spacing.sm, flex: 1 }}>
               {steps && currentStep !== undefined ? (
                 <Text variant="caption" tone="primary" weight="700" style={{ textTransform: 'uppercase', letterSpacing: 0.8 }}>
                   {tr('onboarding:stepProgress', {
@@ -94,8 +104,10 @@ export function WizardShell({
                 </Text>
               ) : null}
             </View>
+            {art ? <Illustration name={art} height={132} /> : null}
+            </View>
             <View style={{ gap: t.spacing.lg }}>{children}</View>
-          </View>
+          </Animated.View>
         </ScrollView>
 
         <View
@@ -129,6 +141,7 @@ export function WizardShell({
       style={{ flex: 1, backgroundColor: t.c.bg }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
+      <PageBackdrop />
       <View
         style={{
           paddingTop: insets.top + t.spacing.md,
@@ -153,7 +166,7 @@ export function WizardShell({
                 justifyContent: 'center',
               }}
             >
-              <MaterialCommunityIcons name="arrow-left" size={19} color={t.c.text} />
+              <Icon name="arrow-left" size={19} color={t.c.text} />
             </Pressable>
           ) : onSignOut ? (
             <Pressable onPress={onSignOut} hitSlop={8} accessibilityRole="button" accessibilityLabel={tr('common:component.signOut')}>
@@ -171,14 +184,17 @@ export function WizardShell({
 
         {steps && currentStep !== undefined ? <Stepper steps={steps.map((k) => tr(`onboarding:step.${k}` as 'onboarding:step.tax'))} current={currentStep} /> : null}
 
-        <View style={{ gap: 6 }}>
-          <Text variant="h2">{title}</Text>
-          {subtitle ? (
-            <Text variant="small" tone="muted" style={{ lineHeight: 20 }}>
-              {subtitle}
-            </Text>
-          ) : null}
-        </View>
+        <Animated.View style={[{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }, enter]}>
+          <View style={{ gap: 6, flex: 1 }}>
+            <Text variant="h2">{title}</Text>
+            {subtitle ? (
+              <Text variant="small" tone="muted" style={{ lineHeight: 20 }}>
+                {subtitle}
+              </Text>
+            ) : null}
+          </View>
+          {art ? <Illustration name={art} height={76} /> : null}
+        </Animated.View>
       </View>
 
       <ScrollView

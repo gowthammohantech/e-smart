@@ -1,5 +1,6 @@
 # Local services for the API. `docker compose up -d`, then
 # `npm run db:migrate -w @esmart/db` and `npm run dev -w @esmart/api`.
+# Or run the apps here too: `docker compose --profile apps up -d --build`.
 services:
   postgres:
     image: postgres:16
@@ -16,7 +17,10 @@ services:
 
   # S3-compatible storage. Set STORAGE_PROVIDER=s3 S3_ENDPOINT=http://localhost:9000
   # S3_FORCE_PATH_STYLE=true AWS_ACCESS_KEY_ID=esmart AWS_SECRET_ACCESS_KEY=esmart-secret.
+  # Behind a profile: the minio/minio image is no longer published, so pulling it
+  # fails and would stop `docker compose up`. Point `image` at a mirror to use it.
   minio:
+    profiles: [s3]
     image: minio/minio:latest
     command: server /data --console-address :9001
     environment:
@@ -30,7 +34,8 @@ services:
   # container: az storage container create -n esmart --connection-string UseDevelopmentStorage=true
   azurite:
     image: mcr.microsoft.com/azure-storage/azurite:latest
-    command: azurite-blob --blobHost 0.0.0.0 --loose
+    # The Azure SDK the API uses can be newer than the emulator; --skipApiVersionCheck lets it through.
+    command: azurite-blob --blobHost 0.0.0.0 --loose --skipApiVersionCheck
     ports: ['10000:10000']
     volumes: ['azuritedata:/data']
 
@@ -38,6 +43,56 @@ services:
   mailpit:
     image: axllent/mailpit:latest
     ports: ['1025:1025', '8025:8025']
+
+  # The apps themselves (docker/Dockerfile). `docker compose --profile apps up -d --build`
+  # runs everything; without the profile only the services above start, for running
+  # the apps on the host as before. They read apps/api/.env, with the database
+  # reached over the Docker network.
+  migrate:
+    profiles: [apps]
+    build: { context: ., dockerfile: docker/Dockerfile, target: api }
+    env_file: apps/api/.env
+    environment:
+      DATABASE_URL: postgres://esmart:esmart@postgres:5432/${API_DB_NAME:-esmart_site}
+    command: ['npm', 'run', 'db:migrate', '-w', '@esmart/db']
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  api:
+    profiles: [apps]
+    build: { context: ., dockerfile: docker/Dockerfile, target: api }
+    env_file: apps/api/.env
+    environment:
+      DATABASE_URL: postgres://esmart:esmart@postgres:5432/${API_DB_NAME:-esmart_site}
+      HOST: 0.0.0.0
+      PORT: 4000
+    ports: ['4000:4000']
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    healthcheck:
+      test: ['CMD', 'node', '-e', "fetch('http://localhost:4000/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
+      interval: 10s
+      retries: 6
+
+  web:
+    profiles: [apps]
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: web
+      args: { EXPO_PUBLIC_API_URL: 'http://localhost:4000' }
+    ports: ['8081:8081']
+    depends_on: [api]
+
+  admin:
+    profiles: [apps]
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: admin
+      args: { VITE_API_URL: 'http://localhost:4000' }
+    ports: ['5174:5174']
+    depends_on: [api]
 
 volumes:
   pgdata:

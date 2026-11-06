@@ -1,6 +1,7 @@
 import type { DocumentKind } from '@esmart/core/types';
 import type { Money } from '@esmart/core/lib/money';
 import { api } from './api';
+import { RemoteError } from './errors';
 
 const path = (companyId: string, id: string) => ({ path: { companyId, id } });
 
@@ -10,15 +11,29 @@ export async function documentPdf(companyId: string, id: string, locale?: 'en' |
     params: { ...path(companyId, id), query: locale ? { locale } : {} },
     parseAs: 'arrayBuffer',
   });
-  if (!data) throw new Error('The server returned no PDF');
+  if (!data) throw new RemoteError('noPdf', 'The server returned no PDF');
   return new Uint8Array(data as unknown as ArrayBuffer);
 }
 
 /** A public, expiring link where the customer can view, download and pay. */
 export async function shareLink(companyId: string, id: string): Promise<string> {
   const { data } = await api.POST('/companies/{companyId}/documents/{id}/share-link', { params: path(companyId, id) });
-  if (!data?.url) throw new Error('The server returned no link');
+  if (!data?.url) throw new RemoteError('noLink', 'The server returned no link');
   return data.url;
+}
+
+/** The view link and, where the server could render it, the PDF link, from one request. */
+export async function shareLinks(companyId: string, id: string): Promise<{ url: string; pdfUrl?: string }> {
+  const { data } = await api.POST('/companies/{companyId}/documents/{id}/share-link', { params: path(companyId, id) });
+  if (!data?.url) throw new RemoteError('noLink', 'The server returned no link');
+  return { url: data.url, pdfUrl: data.pdfUrl };
+}
+
+/** A signed, expiring link straight to the invoice PDF in blob storage. */
+export async function pdfLink(companyId: string, id: string): Promise<string> {
+  const { data } = await api.POST('/companies/{companyId}/documents/{id}/share-link', { params: path(companyId, id) });
+  if (!data?.pdfUrl) throw new RemoteError('noLink', 'The server returned no link');
+  return data.pdfUrl;
 }
 
 export type SendChannel = 'email' | 'whatsapp' | 'sms';
@@ -34,7 +49,7 @@ export async function sendDocument(companyId: string, id: string, channel: SendC
 /** A gateway payment link for what is still owed (or `amount`); a payment the gateway records is allocated here. */
 export async function paymentLink(companyId: string, id: string, amount?: Money): Promise<{ url: string; upiUri?: string }> {
   const { data } = await api.POST('/companies/{companyId}/documents/{id}/payment-link', { params: path(companyId, id), body: amount ? { amount } : {} });
-  if (!data?.url) throw new Error('The server returned no link');
+  if (!data?.url) throw new RemoteError('noLink', 'The server returned no link');
   return { url: data.url, upiUri: data.upiUri };
 }
 

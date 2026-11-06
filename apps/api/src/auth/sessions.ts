@@ -8,6 +8,8 @@ import { randomToken, sha256 } from '../lib/crypto';
 import { newId } from '../lib/ids';
 import type { DbOrTx } from '../lib/audit';
 
+const OPERATOR_SESSION_MS = 12 * 3_600_000;
+
 export type AccessClaims = { sub: string; sid: string; acc: string };
 type DeviceInfo = Schema<'DeviceInfo'>;
 
@@ -20,11 +22,13 @@ export async function openSession(
   app: FastifyInstance,
   db: DbOrTx,
   deps: Deps,
-  user: { id: string; accountId: string },
+  user: { id: string; accountId: string; platformRole?: string | null },
   device: DeviceInfo | undefined,
   ip: string | undefined,
+  /** The caller already checked the account is not suspended, so this skips that round trip. */
+  accountChecked = false,
 ) {
-  await assertAccountActive(db, user.accountId);
+  if (!accountChecked) await assertAccountActive(db, user.accountId);
   const refreshToken = randomToken();
   const sessionId = newId('ses');
   await db.insert(schema.deviceSessions).values({
@@ -35,7 +39,8 @@ export async function openSession(
     appVersion: device?.appVersion?.slice(0, 20) ?? null,
     ipAddress: ip ?? null,
     refreshTokenHash: sha256(refreshToken),
-    refreshExpiresAt: new Date(deps.now().getTime() + deps.config.REFRESH_TOKEN_TTL_DAYS * 86_400_000),
+    // Operators can reach every tenant, so their sessions end the same day whatever they do.
+    refreshExpiresAt: new Date(deps.now().getTime() + (user.platformRole ? OPERATOR_SESSION_MS : deps.config.REFRESH_TOKEN_TTL_DAYS * 86_400_000)),
   });
   return { sessionId, refreshToken, accessToken: signAccess(app, deps, { sub: user.id, sid: sessionId, acc: user.accountId }) };
 }
@@ -43,7 +48,7 @@ export async function openSession(
 const accountSuspended = () => unauthorized('ACCOUNT_SUSPENDED', 'This account has been suspended. Contact support.');
 
 /** No new tokens for a suspended account, whichever way the user signs in. */
-async function assertAccountActive(db: DbOrTx, accountId: string) {
+export async function assertAccountActive(db: DbOrTx, accountId: string) {
   const [account] = await db.select({ suspendedAt: schema.accounts.suspendedAt }).from(schema.accounts).where(eq(schema.accounts.id, accountId));
   if (account?.suspendedAt) throw accountSuspended();
 }
@@ -52,7 +57,7 @@ export function signAccess(app: FastifyInstance, deps: Deps, claims: AccessClaim
   return app.jwt.sign(claims, { expiresIn: deps.config.ACCESS_TOKEN_TTL_SECONDS });
 }
 
-/** Rotates a refresh token. Reusing an old one revokes the whole session. */
+/** Rotates a refresh token. An old one, used again, is refused: the caller must sign in again. */
 export async function rotateSession(app: FastifyInstance, deps: Deps, refreshToken: string) {
   const hash = sha256(refreshToken);
   const [session] = await deps.db

@@ -52,3 +52,24 @@ export function onTokensChange(listener: (t: Tokens | null) => void): () => void
   listeners.add(listener);
   return () => listeners.delete(listener);
 }
+
+/**
+ * Another tab rotated the tokens or signed out: take its copy, or this tab refreshes with a used token
+ * (which the server treats as theft and ends the session) or stays signed in after signing out there.
+ * `key` null means that tab cleared all of storage.
+ */
+export function takeTokensFromOtherTab(key: string | null, newValue: string | null) {
+  if (key !== KEY && key !== null) return;
+  let next: Tokens | null = null;
+  try {
+    next = key === null || !newValue ? null : (JSON.parse(newValue) as Tokens);
+  } catch {
+    return;
+  }
+  cached = next;
+  listeners.forEach((l) => l(next));
+}
+
+if (Platform.OS === 'web' && typeof window !== 'undefined') {
+  window.addEventListener('storage', (e) => takeTokensFromOtherTab(e.key, e.newValue));
+}

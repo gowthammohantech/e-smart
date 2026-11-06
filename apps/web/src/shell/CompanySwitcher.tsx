@@ -2,118 +2,124 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon, type IconName } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
+import { useToast } from '@esmart/ui/components/Toast';
 import { focusRing, type WebPressState } from '@esmart/ui/theme/interaction';
 import { Text } from '@esmart/ui/components/Text';
-import { Avatar } from '@esmart/ui/components/Avatar';
+import { CompanyLogo } from '@esmart/ui/components/CompanyLogo';
 import { Menu, MenuDivider, MenuItem, MenuSection, useMenuAnchor } from '@esmart/ui/components/Menu';
 import { useAppStore } from '@esmart/app/store/appStore';
 import { useActiveCompany, useBranches } from '@esmart/app/store/selectors';
 
-/**
- * The business you're working in, as a card at the top of the sidebar: name,
- * branch and currency, and the GSTIN when registered. It opens the menu that
- * switches business or branch. Folded, only the avatar shows.
- */
-export function CompanySwitcher({ compact }: { compact: boolean }) {
+/** The top bar's picker button: what's chosen, a hint above it, and a chevron. */
+const PickerButton = React.forwardRef<
+  View,
+  {
+    label: string;
+    caption: string;
+    a11yLabel: string;
+    leading: React.ReactNode;
+    /** Only the leading mark shows, for a narrow window. */
+    compact: boolean;
+    maxWidth: number;
+    onPress: () => void;
+  }
+>(function PickerButton({ label, caption, a11yLabel, leading, compact, maxWidth, onPress }, ref) {
   const t = useTheme();
+  return (
+    <Pressable
+      ref={ref}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={a11yLabel}
+      // The menu it opens is a list to pick from.
+      {...({ 'aria-haspopup': 'menu' } as object)}
+      style={(state) => {
+        const { pressed, hovered, focused } = state as WebPressState;
+        return [
+          {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: t.spacing.sm,
+            height: 40,
+            maxWidth: compact ? undefined : maxWidth,
+            minWidth: 0,
+            paddingLeft: t.spacing.xs + 2,
+            paddingRight: t.spacing.sm,
+            borderRadius: t.radius.md,
+            borderWidth: 1,
+            borderColor: hovered ? t.c.lineStrong : t.c.line,
+            backgroundColor: pressed || hovered ? t.c.card2 : 'transparent',
+          },
+          focusRing(t, focused),
+        ];
+      }}
+    >
+      {leading}
+      {compact ? null : (
+        <View style={{ flexShrink: 1, minWidth: 0 }}>
+          <Text variant="micro" tone="muted" numberOfLines={1}>
+            {caption}
+          </Text>
+          <Text variant="small" weight="600" numberOfLines={1}>
+            {label}
+          </Text>
+        </View>
+      )}
+      <Icon name="chevron-down" size={16} color={t.c.muted} />
+    </Pressable>
+  );
+});
+
+/**
+ * The business you're working in, in the top bar: its logo and name, and a
+ * menu that switches to another. The branch has its own picker beside it.
+ */
+export function CompanyPicker({ compact }: { compact: boolean }) {
   const { t: tr } = useTranslation(['nav', 'common', 'onboarding']);
+  const toast = useToast();
   const router = useRouter();
 
   const company = useActiveCompany();
   const companies = useAppStore((s) => s.companies);
-  const branches = useBranches();
-  const activeBranchId = useAppStore((s) => s.activeBranchId);
   const setActiveCompany = useAppStore((s) => s.setActiveCompany);
-  const setActiveBranch = useAppStore((s) => s.setActiveBranch);
   const { setAnchor, rect, open, close } = useMenuAnchor();
 
-  const branch = branches.find((b) => b.id === activeBranchId);
   const tax = company?.taxRegistration;
   const gstin = tax?.identifier ? `${tax.identifierLabel} ${tax.identifier}` : null;
+  const name = company?.name ?? tr('common:component.business');
 
   return (
     <>
-      <Pressable
+      <PickerButton
         ref={setAnchor}
         onPress={open}
-        accessibilityRole="button"
-        accessibilityLabel={`${tr('common:business.switch')}: ${company?.name ?? ''}`}
-        style={(state) => {
-          const { pressed, hovered, focused } = state as WebPressState;
-          return [
-            compact
-              ? { alignSelf: 'center', padding: t.spacing.xs, borderRadius: t.radius.md }
-              : {
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: t.spacing.sm,
-                  padding: t.spacing.sm,
-                  borderRadius: t.radius.md,
-                  borderWidth: 1,
-                  borderColor: t.c.line,
-                },
-            { backgroundColor: pressed || hovered ? t.c.paper : compact ? 'transparent' : t.c.card },
-            focusRing(t, focused),
-          ];
-        }}
-      >
-        <Avatar name={company?.name ?? '?'} size={compact ? 36 : 34} />
-        {compact ? null : (
-          <>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text variant="small" weight="700" numberOfLines={1}>
-                {company?.name ?? tr('common:component.business')}
-              </Text>
-              <Text variant="micro" tone="muted" numberOfLines={1}>
-                {branch?.name ?? tr('common:component.allBranches')} · {company?.baseCurrency}
-              </Text>
-              {gstin ? (
-                <Text variant="micro" tone="muted" numberOfLines={1}>
-                  {gstin}
-                </Text>
-              ) : null}
-            </View>
-            <MaterialCommunityIcons name="unfold-more-horizontal" size={16} color={t.c.muted} />
-          </>
-        )}
-      </Pressable>
-
+        compact={compact}
+        maxWidth={240}
+        a11yLabel={`${tr('common:business.switch')}: ${company?.name ?? ''}`}
+        caption={gstin ?? `${tr('nav:shell.business')} · ${company?.baseCurrency ?? ''}`}
+        label={name}
+        leading={<CompanyLogo uri={company?.logoUri} name={company?.name ?? '?'} size={28} />}
+      />
       <Menu anchor={rect} onClose={close} width={300}>
         <MenuSection title={tr('nav:shell.businesses')} />
         {companies.map((c) => (
           <MenuItem
             key={c.id}
-            icon="domain"
+            leading={<CompanyLogo uri={c.logoUri} name={c.name} size={28} />}
             label={c.name}
             description={`${tr(`onboarding:businessType.${c.businessType}` as 'onboarding:businessType.other')} · ${c.baseCurrency}`}
             selected={c.id === company?.id}
             onPress={() => {
-              setActiveCompany(c.id);
               close();
+              // Already the active business: nothing switched, so no message.
+              if (c.id === company?.id) return;
+              setActiveCompany(c.id);
+              toast.show(tr('common:toast.switchedBusiness', { name: c.name }), 'info', { icon: 'swap-horizontal', detail: c.baseCurrency, varies: true });
             }}
           />
         ))}
-        {branches.length > 0 ? (
-          <>
-            <MenuDivider />
-            <MenuSection title={tr('nav:shell.branches')} />
-            {branches.map((b) => (
-              <MenuItem
-                key={b.id}
-                icon={b.isPrimary ? 'office-building-outline' : 'warehouse'}
-                label={b.name}
-                description={b.code}
-                selected={b.id === activeBranchId}
-                onPress={() => {
-                  setActiveBranch(b.id);
-                  close();
-                }}
-              />
-            ))}
-          </>
-        ) : null}
         <MenuDivider />
         <MenuItem
           icon="cog-outline"
@@ -121,6 +127,72 @@ export function CompanySwitcher({ compact }: { compact: boolean }) {
           onPress={() => {
             close();
             router.push('/(app)/settings/company' as never);
+          }}
+        />
+      </Menu>
+    </>
+  );
+}
+
+/**
+ * The branch you're working in, beside the business: its name and a menu of
+ * the business's branches. Not shown for a business without branches.
+ */
+export function BranchPicker({ compact }: { compact: boolean }) {
+  const t = useTheme();
+  const { t: tr } = useTranslation(['nav', 'common']);
+  const toast = useToast();
+  const router = useRouter();
+
+  const branches = useBranches();
+  const activeBranchId = useAppStore((s) => s.activeBranchId);
+  const setActiveBranch = useAppStore((s) => s.setActiveBranch);
+  const { setAnchor, rect, open, close } = useMenuAnchor();
+
+  if (branches.length === 0) return null;
+  const branch = branches.find((b) => b.id === activeBranchId);
+  const iconFor = (primary: boolean): IconName => (primary ? 'office-building-outline' : 'warehouse');
+
+  return (
+    <>
+      <PickerButton
+        ref={setAnchor}
+        onPress={open}
+        compact={compact}
+        maxWidth={200}
+        a11yLabel={`${tr('nav:shell.branch')}: ${branch?.name ?? tr('common:component.allBranches')}`}
+        caption={branch?.code ?? tr('nav:shell.branch')}
+        label={branch?.name ?? tr('common:component.allBranches')}
+        leading={
+          <View style={{ width: 28, height: 28, borderRadius: t.radius.sm, backgroundColor: t.c.chip, alignItems: 'center', justifyContent: 'center' }}>
+            <Icon name={iconFor(!!branch?.isPrimary)} size={16} color={t.c.primary} />
+          </View>
+        }
+      />
+      <Menu anchor={rect} onClose={close} width={280}>
+        <MenuSection title={tr('nav:shell.branches')} />
+        {branches.map((b) => (
+          <MenuItem
+            key={b.id}
+            icon={iconFor(b.isPrimary)}
+            label={b.name}
+            description={b.code}
+            selected={b.id === activeBranchId}
+            onPress={() => {
+              close();
+              if (b.id === activeBranchId) return;
+              setActiveBranch(b.id);
+              toast.show(tr('common:toast.switchedBranch', { name: b.name }), 'info', { icon: iconFor(b.isPrimary), detail: b.code, varies: true });
+            }}
+          />
+        ))}
+        <MenuDivider />
+        <MenuItem
+          icon="cog-outline"
+          label={tr('nav:more.entry.branches')}
+          onPress={() => {
+            close();
+            router.push('/(app)/settings/branches' as never);
           }}
         />
       </Menu>

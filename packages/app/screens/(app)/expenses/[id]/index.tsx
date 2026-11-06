@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon, type IconName } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
@@ -11,9 +11,12 @@ import { Badge } from '@esmart/ui/components/Badge';
 import { Button } from '@esmart/ui/components/Button';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
-import { useToast } from '@esmart/ui/components/Toast';
+import { useServerSave } from '../../../../components/useServerSave';
 import { useAppStore } from '../../../../store/appStore';
 import { useExpense, useExpenseCategories, useParty, usePaymentAccounts, useTaxCategories } from '../../../../store/selectors';
+import { useExpenseRecord } from '../../../../remote/queries';
+import { LoadingView } from '../../../../components/LoadingView';
+import { useCostCentres } from '../../../../store/books';
 import { paymentMethodLabel } from '@esmart/core/labels';
 import { formatMoney, formatPercent } from '@esmart/core/lib/format';
 import { formatDate, formatDateTime } from '@esmart/core/lib/date';
@@ -30,13 +33,26 @@ export default function ExpenseDetail() {
   const { t: tr } = useTranslation(['common', 'domain', 'nav', 'purchases']);
   const router = useRouter();
   const goBack = useGoBack();
-  const toast = useToast();
+  const { run: serverSave } = useServerSave();
   // Always 'phone' in the native apps, so the desktop layout only ever reaches a browser.
   const bp = useBreakpoint();
   const desktop = bp !== 'phone';
 
   const { id } = useLocalSearchParams<{ id: string }>();
   const expense = useExpense(id);
+  // Fetched on opening, so it shows even when the book on the device doesn't hold it.
+  const remote = useExpenseRecord(id);
+  const costCentre = useCostCentres(true).find((c) => c.id === expense?.costCentreId);
+  const billTo = useParty(expense?.customerId);
+  // The invoice that recovered it, when one has.
+  const recoveredOn = remote.data?.recoveredBy;
+  const extraBadges = (
+    <>
+      {costCentre ? <Badge label={costCentre.name} tone="neutral" icon="sitemap-outline" /> : null}
+      {expense?.billable && billTo ? <Badge label={tr('purchases:expense.billTo', { name: billTo.name })} tone="neutral" /> : null}
+      {recoveredOn ? <Badge label={tr('purchases:expense.recoveredOn', { number: recoveredOn.number })} tone="success" /> : null}
+    </>
+  );
   const categories = useExpenseCategories();
   const accounts = usePaymentAccounts();
   const taxCategories = useTaxCategories();
@@ -45,9 +61,10 @@ export default function ExpenseDetail() {
 
   const [confirmDelete, setConfirmDelete] = useState(false);
 
+  if (!expense && remote.isLoading) return <LoadingView />;
   if (!expense) {
     return (
-      <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+      <View style={{ flex: 1 }}>
         <Stack.Screen options={{ title: tr('nav:title.expense') }} />
         <EmptyState illustration="not-found" icon="receipt-text-outline" title={tr('common:notFound.title')} message={tr('common:notFound.expense')} />
       </View>
@@ -67,10 +84,10 @@ export default function ExpenseDetail() {
       destructive
       onCancel={() => setConfirmDelete(false)}
       onConfirm={() => {
-        removeExpense(expense.id);
         setConfirmDelete(false);
-        toast.show(tr('purchases:expense.deleted'), 'success');
-        goBack('/(app)/expenses');
+        void serverSave(() => removeExpense(expense.id), tr('purchases:expense.deleted'), { icon: 'receipt-text-remove-outline' }).then((res) => {
+          if (res) goBack('/(app)/expenses');
+        });
       }}
     />
   );
@@ -78,31 +95,32 @@ export default function ExpenseDetail() {
   if (desktop) {
     const tint = category?.color ?? t.c.muted;
     const details = [
-      { label: 'Date', value: formatDate(expense.date) },
-      { label: 'Paid by', value: paymentMethodLabel(tr, expense.method) },
-      { label: 'Paid from', value: account?.name ?? '—' },
-      ...(expense.reference ? [{ label: 'Reference', value: expense.reference }] : []),
-      ...(expense.nextRecurrenceDate ? [{ label: 'Next due', value: formatDate(expense.nextRecurrenceDate) }] : []),
-      { label: 'Recorded', value: formatDateTime(expense.createdAt) },
+      { label: tr('purchases:form.date'), value: formatDate(expense.date) },
+      { label: tr('purchases:form.paidBy'), value: paymentMethodLabel(tr, expense.method) },
+      { label: tr('purchases:form.paidFrom'), value: account?.name ?? '—' },
+      ...(expense.reference ? [{ label: tr('purchases:form.reference'), value: expense.reference }] : []),
+      ...(expense.nextRecurrenceDate ? [{ label: tr('purchases:expense.nextDue'), value: formatDate(expense.nextRecurrenceDate) }] : []),
+      { label: tr('purchases:expense.recorded'), value: formatDateTime(expense.createdAt) },
     ];
 
     const main = (
       <View style={{ gap: t.spacing.lg }}>
         <Card style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.lg }}>
           <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: `${tint}22`, alignItems: 'center', justifyContent: 'center' }}>
-            <MaterialCommunityIcons name={(category?.icon ?? 'cash') as keyof typeof MaterialCommunityIcons.glyphMap} size={26} color={tint} />
+            <Icon name={(category?.icon ?? 'cash') as IconName} size={26} color={tint} />
           </View>
           <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
             <Text variant="small" tone="muted" numberOfLines={1}>
-              {category?.name ?? 'Uncategorised'}
+              {category?.name ?? tr('purchases:expense.uncategorised')}
             </Text>
             <Text variant="h1" weight="700" style={{ fontVariant: ['tabular-nums'] }}>
               {formatMoney(expense.amount)}
             </Text>
           </View>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 6 }}>
-            {expense.recurrence !== 'none' ? <Badge label={expense.recurrence} tone="info" icon="repeat" /> : null}
+            {expense.recurrence !== 'none' ? <Badge label={tr(`purchases:recurrence.${expense.recurrence}`)} tone="info" icon="repeat" /> : null}
             {expense.billable ? <Badge label={tr('purchases:expense.billable')} tone="warning" /> : null}
+            {extraBadges}
           </View>
         </Card>
 
@@ -147,8 +165,8 @@ export default function ExpenseDetail() {
       <>
         <FormSection title={tr('purchases:expense.amount')}>
           <View style={{ gap: t.spacing.md }}>
-            {taxCategory ? amountRow('Net amount', formatMoney(subtract(expense.amount, expense.taxAmount))) : null}
-            {taxCategory ? amountRow(`Input tax (${formatPercent(taxCategory.rate)})`, formatMoney(expense.taxAmount)) : null}
+            {taxCategory ? amountRow(tr('common:totals.netAmount'), formatMoney(subtract(expense.amount, expense.taxAmount))) : null}
+            {taxCategory ? amountRow(tr('purchases:form.inputTaxRate', { rate: formatPercent(taxCategory.rate) }), formatMoney(expense.taxAmount)) : null}
             {taxCategory ? <View style={{ height: 1, backgroundColor: t.c.line }} /> : null}
             {amountRow(tr('purchases:expense.total'), formatMoney(expense.amount), true)}
           </View>
@@ -177,7 +195,7 @@ export default function ExpenseDetail() {
                   {supplier.phone ?? supplier.email ?? supplier.code}
                 </Text>
               </View>
-              <MaterialCommunityIcons name="chevron-right" size={18} color={t.c.muted} />
+              <Icon name="chevron-right" size={18} color={t.c.muted} />
             </Pressable>
           </FormSection>
         ) : null}
@@ -185,9 +203,9 @@ export default function ExpenseDetail() {
         {expense.attachmentIds.length > 0 ? (
           <FormSection title={tr('purchases:expense.attachments')}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
-              <MaterialCommunityIcons name="paperclip" size={19} color={t.c.primary} />
+              <Icon name="paperclip" size={19} color={t.c.primary} />
               <Text variant="small">
-                {expense.attachmentIds.length} attachment{expense.attachmentIds.length === 1 ? '' : 's'}
+                {tr('purchases:expense.attachmentCount', { count: expense.attachmentIds.length })}
               </Text>
             </View>
           </FormSection>
@@ -199,10 +217,10 @@ export default function ExpenseDetail() {
     const stacked = bp === 'tablet';
 
     return (
-      <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+      <View style={{ flex: 1 }}>
         <Stack.Screen
           options={{
-            title: expense.number || 'Expense',
+            title: expense.number || tr('nav:title.expense'),
             // A desktop keeps the page actions together, top right, instead of a bar at the bottom.
             headerRight: () => (
               <View style={{ flexDirection: 'row', gap: t.spacing.sm }}>
@@ -228,8 +246,8 @@ export default function ExpenseDetail() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
-      <Stack.Screen options={{ title: expense.number || 'Expense' }} />
+    <View style={{ flex: 1 }}>
+      <Stack.Screen options={{ title: expense.number || tr('nav:title.expense') }} />
 
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 140 + insets.bottom }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <Card style={{ alignItems: 'center', gap: t.spacing.sm, paddingVertical: t.spacing.xxl }}>
@@ -243,8 +261,8 @@ export default function ExpenseDetail() {
               justifyContent: 'center',
             }}
           >
-            <MaterialCommunityIcons
-              name={(category?.icon ?? 'cash') as keyof typeof MaterialCommunityIcons.glyphMap}
+            <Icon
+              name={(category?.icon ?? 'cash') as IconName}
               size={27}
               color={category?.color ?? t.c.muted}
             />
@@ -253,30 +271,31 @@ export default function ExpenseDetail() {
             {formatMoney(expense.amount)}
           </Text>
           <Text variant="small" tone="muted">
-            {category?.name ?? 'Uncategorised'}
+            {category?.name ?? tr('purchases:expense.uncategorised')}
           </Text>
           <View style={{ flexDirection: 'row', gap: 6 }}>
             <Badge label={expense.number} tone="neutral" />
-            {expense.recurrence !== 'none' ? <Badge label={expense.recurrence} tone="info" /> : null}
+            {expense.recurrence !== 'none' ? <Badge label={tr(`purchases:recurrence.${expense.recurrence}`)} tone="info" /> : null}
             {expense.billable ? <Badge label={tr('purchases:expense.billable')} tone="warning" /> : null}
+            {extraBadges}
           </View>
         </Card>
 
         <Card style={{ marginTop: t.spacing.md, gap: t.spacing.md }}>
           {[
-            { label: 'Date', value: formatDate(expense.date) },
-            { label: 'Paid by', value: paymentMethodLabel(tr, expense.method) },
-            { label: 'Paid from', value: account?.name ?? '—' },
-            ...(supplier ? [{ label: 'Supplier', value: supplier.name }] : []),
-            ...(expense.reference ? [{ label: 'Reference', value: expense.reference }] : []),
+            { label: tr('purchases:form.date'), value: formatDate(expense.date) },
+            { label: tr('purchases:form.paidBy'), value: paymentMethodLabel(tr, expense.method) },
+            { label: tr('purchases:form.paidFrom'), value: account?.name ?? '—' },
+            ...(supplier ? [{ label: tr('purchases:form.supplier'), value: supplier.name }] : []),
+            ...(expense.reference ? [{ label: tr('purchases:form.reference'), value: expense.reference }] : []),
             ...(taxCategory
               ? [
-                  { label: 'Net amount', value: formatMoney(subtract(expense.amount, expense.taxAmount)) },
-                  { label: `Input tax (${formatPercent(taxCategory.rate)})`, value: formatMoney(expense.taxAmount) },
+                  { label: tr('common:totals.netAmount'), value: formatMoney(subtract(expense.amount, expense.taxAmount)) },
+                  { label: tr('purchases:form.inputTaxRate', { rate: formatPercent(taxCategory.rate) }), value: formatMoney(expense.taxAmount) },
                 ]
               : []),
-            ...(expense.nextRecurrenceDate ? [{ label: 'Next due', value: formatDate(expense.nextRecurrenceDate) }] : []),
-            { label: 'Recorded', value: formatDateTime(expense.createdAt) },
+            ...(expense.nextRecurrenceDate ? [{ label: tr('purchases:expense.nextDue'), value: formatDate(expense.nextRecurrenceDate) }] : []),
+            { label: tr('purchases:expense.recorded'), value: formatDateTime(expense.createdAt) },
           ].map((r) => (
             <View key={r.label} style={{ flexDirection: 'row', justifyContent: 'space-between', gap: t.spacing.md }}>
               <Text variant="small" tone="muted">
@@ -300,9 +319,9 @@ export default function ExpenseDetail() {
 
         {expense.attachmentIds.length > 0 ? (
           <Card variant="flat" style={{ marginTop: t.spacing.md, flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
-            <MaterialCommunityIcons name="paperclip" size={19} color={t.c.primary} />
+            <Icon name="paperclip" size={19} color={t.c.primary} />
             <Text variant="small" style={{ flex: 1 }}>
-              {expense.attachmentIds.length} attachment{expense.attachmentIds.length === 1 ? '' : 's'}
+              {tr('purchases:expense.attachmentCount', { count: expense.attachmentIds.length })}
             </Text>
           </Card>
         ) : null}

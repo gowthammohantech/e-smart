@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 import { Stack } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon, type IconName } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
@@ -13,11 +13,13 @@ import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { Illustration } from '@esmart/ui/components/Illustration';
 import { useToast } from '@esmart/ui/components/Toast';
 import { Sheet } from '@esmart/ui/components/Sheet';
+import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import type { SyncQueueEntry } from '@esmart/core/types';
 import { formatRelative } from '@esmart/core/lib/date';
 import { useAppStore } from '@esmart/app/store/appStore';
-import { remoteSession, retryFailed, retrySync, syncNow, useRemoteMeta } from '@esmart/app/remote';
-import { drop } from '@esmart/app/remote/outbox';
+import { remoteSession, useRemoteMeta } from '@esmart/app/remote';
+import { useSyncToasts } from '@esmart/app/features/session/useSyncToasts';
+import { drop, dropAll } from '@esmart/app/remote/outbox';
 
 function SectionTitle({ children }: { children: string }) {
   return (
@@ -34,7 +36,7 @@ function Tile({
   caption,
   color,
 }: {
-  icon: keyof typeof MaterialCommunityIcons.glyphMap;
+  icon: IconName;
   label: string;
   value: string;
   caption?: string;
@@ -53,7 +55,7 @@ function Tile({
           justifyContent: 'center',
         }}
       >
-        <MaterialCommunityIcons name={icon} size={22} color={color} />
+        <Icon name={icon} size={22} color={color} />
       </View>
       <View style={{ flex: 1, gap: 2 }}>
         <Text variant="caption" tone="muted" numberOfLines={1}>
@@ -80,8 +82,9 @@ function Tile({
  */
 export function SyncStatusDesktop() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['nav', 'settings']);
+  const { t: tr } = useTranslation(['nav', 'settings', 'common']);
   const toast = useToast();
+  const sync = useSyncToasts();
 
   const allEntries = useAppStore((s) => s.syncQueue);
   // What is still to send.
@@ -89,11 +92,13 @@ export function SyncStatusDesktop() {
   const online = useRemoteMeta((m) => m.online);
   const syncing = useRemoteMeta((m) => m.syncing);
   const lastSyncAt = useRemoteMeta((m) => m.lastSyncAt);
+  const lastError = useRemoteMeta((m) => m.lastError);
   const [open, setOpen] = useState<SyncQueueEntry | null>(null);
   const offline = !online;
 
   const failed = queue.filter((q) => q.status === 'failed').length;
   const canRetryAll = failed > 0;
+  const [discardAllOpen, setDiscardAllOpen] = useState(false);
   const lastSynced = offline
     ? tr('settings:sync.offlineNow')
     : lastSyncAt
@@ -103,7 +108,7 @@ export function SyncStatusDesktop() {
   const openEntry = (q: SyncQueueEntry) => setOpen(q);
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('nav:title.syncStatus') }} />
 
       <ScrollView contentContainerStyle={{ paddingBottom: 48, gap: t.spacing.lg }}>
@@ -114,7 +119,7 @@ export function SyncStatusDesktop() {
             <View style={{ flexGrow: 1, flexBasis: 320, gap: t.spacing.sm }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
                 <Badge
-                  label={offline ? 'Offline' : 'Online'}
+                  label={offline ? tr('settings:sync.status.offline') : tr('settings:sync.online')}
                   tone={offline ? 'warning' : 'success'}
                   icon={offline ? 'cloud-off-outline' : 'cloud-check-outline'}
                   size="sm"
@@ -124,20 +129,23 @@ export function SyncStatusDesktop() {
                 </Text>
               </View>
               <Text variant="h2" weight="700">
-                {offline ? 'Working offline' : queue.length ? `${queue.length} waiting to sync` : 'Everything is synced'}
+                {offline ? tr('settings:sync.workingOffline') : queue.length ? tr('settings:sync.waiting', { count: queue.length }) : tr('settings:sync.allSynced')}
               </Text>
               <Text tone="muted" style={{ maxWidth: 520, lineHeight: 22 }}>
-                {offline
-                  ? 'You can keep drafting. Anything you create is queued and sent as soon as you are back online.'
-                  : 'Finalised financial records are validated on the server before they count, so your books stay authoritative.'}
+                {offline ? tr('settings:sync.offlineBody') : tr('settings:sync.onlineBody')}
               </Text>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm, marginTop: t.spacing.sm }}>
-                <Button title={tr('settings:sync.syncNow')} icon="sync" loading={syncing} onPress={() => void syncNow()} />
+                {lastError ? (
+                  <Text variant="caption" tone="bad">
+                    {tr('settings:sync.lastError', { message: lastError })}
+                  </Text>
+                ) : null}
+                <Button title={tr('settings:sync.syncNow')} icon="sync" loading={syncing} onPress={() => void sync.syncEverything()} />
                 <Button
                   title={tr('settings:sync.reload')}
                   variant="ghost"
                   icon="cloud-download-outline"
-                  onPress={() => void syncNow().then(remoteSession.resync)}
+                  disabled={offline} onPress={() => void sync.reload()}
                 />
               </View>
             </View>
@@ -148,22 +156,22 @@ export function SyncStatusDesktop() {
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.lg }}>
           <Tile
             icon="cloud-upload-outline"
-            label="Waiting to send"
+            label={tr('settings:sync.tile.waitingToSend')}
             value={String(queue.length)}
-            caption={queue.length ? 'Sent when online' : 'Nothing queued'}
+            caption={queue.length ? tr('settings:sync.tile.sentWhenOnline') : tr('settings:sync.none')}
             color={t.c.primary}
           />
           <Tile
             icon="cloud-alert"
-            label="Needs attention"
+            label={tr('settings:sync.tile.needsAttention')}
             value={String(failed)}
-            caption={failed ? 'Refused or conflicted' : 'No problems'}
+            caption={failed ? tr('settings:sync.tile.refusedOrConflicted') : tr('settings:sync.tile.noProblems')}
             color={failed ? t.c.bad : t.c.good}
           />
           <Tile
             icon={offline ? 'cloud-off-outline' : 'cloud-check-outline'}
-            label="Connection"
-            value={offline ? 'Offline' : 'Online'}
+            label={tr('settings:sync.tile.connection')}
+            value={offline ? tr('settings:sync.status.offline') : tr('settings:sync.online')}
             caption={lastSynced}
             color={offline ? t.c.warn : t.c.good}
           />
@@ -174,18 +182,27 @@ export function SyncStatusDesktop() {
           <View style={{ flexGrow: 3, flexBasis: 440, gap: t.spacing.md, minWidth: 0 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 32 }}>
               <SectionTitle>{tr('settings:sync.queue')}</SectionTitle>
-              {canRetryAll ? (
-                <Button
-                  title={tr('settings:sync.retryAll')}
-                  variant="secondary"
-                  size="sm"
-                  icon="sync"
-                  onPress={() => {
-                    retryFailed();
-                    toast.show(tr('settings:sync.retrying'), 'success');
-                  }}
-                />
-              ) : null}
+              <View style={{ flexDirection: 'row', gap: t.spacing.sm }}>
+                {queue.length > 0 ? (
+                  <Button
+                    title={tr('settings:sync.discardAll')}
+                    variant="ghost"
+                    size="sm"
+                    icon="delete-sweep-outline"
+                    disabled={offline}
+                    onPress={() => setDiscardAllOpen(true)}
+                  />
+                ) : null}
+                {canRetryAll ? (
+                  <Button
+                    title={tr('settings:sync.retryAll')}
+                    variant="secondary"
+                    size="sm"
+                    icon="sync"
+                    onPress={() => void sync.syncEverything()}
+                  />
+                ) : null}
+              </View>
             </View>
             {queue.length === 0 ? (
               <Card padded={false}>
@@ -204,11 +221,11 @@ export function SyncStatusDesktop() {
                 columns={[
                   {
                     key: 'change',
-                    header: 'Change',
+                    header: tr('settings:sync.col.change'),
                     flex: 3,
                     render: (q) => (
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
-                        <MaterialCommunityIcons
+                        <Icon
                           name={q.status === 'failed' ? 'cloud-alert' : 'cloud-upload-outline'}
                           size={18}
                           color={q.status === 'failed' ? t.c.bad : t.c.primary}
@@ -222,14 +239,14 @@ export function SyncStatusDesktop() {
                   },
                   {
                     key: 'queued',
-                    header: 'Queued',
+                    header: tr('settings:sync.col.queued'),
                     flex: 1.2,
                     secondary: true,
                     render: (q) => <Cell tone="muted">{formatRelative(q.queuedAt.slice(0, 10))}</Cell>,
                   },
                   {
                     key: 'attempts',
-                    header: 'Attempts',
+                    header: tr('settings:sync.col.attempts'),
                     width: 90,
                     align: 'right',
                     secondary: true,
@@ -241,10 +258,10 @@ export function SyncStatusDesktop() {
                   },
                   {
                     key: 'status',
-                    header: 'Status',
+                    header: tr('common:table.status'),
                     width: 110,
                     align: 'right',
-                    render: (q) => <Badge label={q.status} tone={q.status === 'failed' ? 'danger' : 'warning'} size="sm" />,
+                    render: (q) => <Badge label={tr(`settings:sync.status.${q.status}`)} tone={q.status === 'failed' ? 'danger' : 'warning'} size="sm" />,
                   },
                 ]}
                 rows={queue}
@@ -258,7 +275,7 @@ export function SyncStatusDesktop() {
           {/* Controls and the note */}
           <View style={{ flexGrow: 2, flexBasis: 300, gap: t.spacing.lg, minWidth: 0 }}>
             <Card variant="flat" style={{ flexDirection: 'row', gap: t.spacing.md }}>
-              <MaterialCommunityIcons name="information-outline" size={19} color={t.c.muted} />
+              <Icon name="information-outline" size={19} color={t.c.muted} />
               <Text variant="caption" tone="muted" style={{ flex: 1, lineHeight: 18 }}>
                 {tr('settings:sync.conflictNote')}
               </Text>
@@ -275,6 +292,7 @@ export function SyncStatusDesktop() {
           <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: t.spacing.sm, padding: t.spacing.lg }}>
             <Button
               title={tr('settings:sync.discard')}
+              disabled={offline}
               variant="ghost"
               icon="delete-outline"
               onPress={() => {
@@ -283,7 +301,7 @@ export function SyncStatusDesktop() {
                 setOpen(null);
                 // Put back the server's version of whatever the change touched.
                 void remoteSession.resync();
-                toast.show(tr('settings:sync.discarded'), 'success');
+                toast.show(tr('settings:sync.discarded'), 'success', { icon: 'delete-sweep-outline', detail: open.label });
               }}
             />
             <Button
@@ -291,9 +309,8 @@ export function SyncStatusDesktop() {
               icon="send"
               onPress={() => {
                 if (!open) return;
-                retrySync(open.id);
                 setOpen(null);
-                toast.show(tr('settings:sync.retrying'), 'success');
+                void sync.retryOne(open.id);
               }}
             />
           </View>
@@ -306,6 +323,22 @@ export function SyncStatusDesktop() {
           </Text>
         </View>
       </Sheet>
+      <ConfirmDialog
+        visible={discardAllOpen}
+        title={tr('settings:sync.discardAllTitle', { count: queue.length })}
+        message={tr('settings:sync.discardAllMessage')}
+        confirmLabel={tr('settings:sync.discardAll')}
+        destructive
+        onCancel={() => setDiscardAllOpen(false)}
+        onConfirm={() => {
+          const count = queue.length;
+          dropAll(queue.map((q) => q.id));
+          setDiscardAllOpen(false);
+          // Put back the server's version of everything the changes touched.
+          void remoteSession.resync();
+          toast.show(tr('settings:sync.discardedAll', { count }), 'success', { icon: 'delete-sweep-outline' });
+        }}
+      />
     </View>
   );
 }

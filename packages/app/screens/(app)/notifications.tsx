@@ -3,8 +3,9 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
+import { useToast } from '@esmart/ui/components/Toast';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
 import { Badge } from '@esmart/ui/components/Badge';
@@ -18,13 +19,14 @@ import { NOTIFICATION_META, notificationRoute } from '../../features/notificatio
 import { formatRelative } from '@esmart/core/lib/date';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { focusRing, type WebPressState } from '@esmart/ui/theme/interaction';
+import { useQueryParams } from '../../navigation/queryParams';
 import type { AppNotification } from '@esmart/core/types';
-
 
 export default function Notifications() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const { t: tr } = useTranslation(['common']);
+  const toast = useToast();
   const router = useRouter();
   // Always false in the native apps, so the desktop layout only ever reaches a browser.
   const desktop = useIsDesktop();
@@ -33,8 +35,14 @@ export default function Notifications() {
   const markRead = useAppStore((s) => s.markNotificationRead);
   const markAllRead = useAppStore((s) => s.markAllNotificationsRead);
   const clearAll = useAppStore((s) => s.clearNotifications);
+  const readAll = () => {
+    markAllRead();
+    toast.show(tr('common:notifications.allRead'), 'success', { icon: 'check-all' });
+  };
 
-  const [filter, setFilter] = useState<'all' | 'unread'>('all');
+  const [params, setParams] = useQueryParams();
+  const filter: 'all' | 'unread' = params.filter === 'unread' ? 'unread' : 'all';
+  const setFilter = (f: 'all' | 'unread') => setParams({ filter: f === 'all' ? undefined : f });
   const [confirmClear, setConfirmClear] = useState(false);
 
   const rows = useMemo(
@@ -43,18 +51,17 @@ export default function Notifications() {
   );
   const unread = notifications.filter((n) => !n.read).length;
 
-
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <Stack.Screen
         options={{
-          title: 'Notifications',
+          title: tr('common:component.notifications'),
           headerRight: desktop
             ? () => (
                 // A desktop keeps the page actions together, top right, instead of a bar at the bottom.
                 <View style={{ flexDirection: 'row', gap: t.spacing.sm }}>
                   {unread > 0 ? (
-                    <Button title={tr('common:notifications.markAllRead')} variant="ghost" icon="check-all" onPress={markAllRead} />
+                    <Button title={tr('common:notifications.markAllRead')} variant="ghost" icon="check-all" onPress={readAll} />
                   ) : null}
                   {notifications.length > 0 ? (
                     <Button title={tr('common:notifications.clearAll')} variant="ghost" icon="notification-clear-all" onPress={() => setConfirmClear(true)} />
@@ -63,7 +70,7 @@ export default function Notifications() {
               )
             : () =>
                 unread > 0 ? (
-                  <Pressable onPress={markAllRead} hitSlop={8} accessibilityRole="button" accessibilityLabel={tr('common:notifications.markAllRead')}>
+                  <Pressable onPress={readAll} hitSlop={8} accessibilityRole="button" accessibilityLabel={tr('common:notifications.markAllRead')}>
                     <Text variant="small" tone="primary" weight="600">{tr('common:notifications.markAllRead')}</Text>
                   </Pressable>
                 ) : null,
@@ -80,8 +87,8 @@ export default function Notifications() {
       >
         <Segmented
           options={[
-            { value: 'all', label: `All (${notifications.length})` },
-            { value: 'unread', label: `Unread (${unread})` },
+            { value: 'all', label: tr('common:notifications.filterAll', { n: notifications.length }) },
+            { value: 'unread', label: tr('common:notifications.filterUnread', { n: unread }) },
           ]}
           value={filter}
           onChange={(v) => setFilter(v as 'all' | 'unread')}
@@ -148,7 +155,7 @@ export default function Notifications() {
                       justifyContent: 'center',
                     }}
                   >
-                    <MaterialCommunityIcons
+                    <Icon
                       name={meta.icon}
                       size={18}
                       color={
@@ -219,6 +226,7 @@ export default function Notifications() {
         onConfirm={() => {
           clearAll();
           setConfirmClear(false);
+          toast.show(tr('common:notifications.cleared'), 'success', { icon: 'notification-clear-all' });
         }}
       />
     </View>

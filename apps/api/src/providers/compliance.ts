@@ -12,17 +12,15 @@ import {
   type IrpSimulation,
 } from '@esmart/core/domain/irpAdapter';
 import type { Config } from '../config';
+import { createGspGateway } from './gsp';
 
 /** What `saveComplianceCredentials` stored, decrypted for the length of one call. */
 export type PortalCredentials = {
-  environment: 'sandbox' | 'production';
   gspProvider?: string;
   /** The seller's GSTIN; the IRP and EWB APIs scope every call to it. */
   gstin: string;
   username: string;
   password: string;
-  clientId?: string;
-  clientSecret?: string;
 };
 
 type Failure = { ok: false; errors: ComplianceIssue[] };
@@ -33,6 +31,17 @@ export type SubmitEwayBillResult = { ok: true; ewayBillNumber: string; generated
 export type UpdatePartBResult = { ok: true; updatedAt: string } | Failure;
 export type ExtendResult = { ok: true; newValidUpto: string } | Failure;
 export type CancelEwayBillResult = { ok: true; cancelledAt: string; reason: string } | Failure;
+/** A bill the portal has for a document, or null when it has none. */
+export type FindEwayBillResult = { ok: true; found: Extract<SubmitEwayBillResult, { ok: true }> | null } | Failure;
+export type IrnStatusResult = { ok: true; status: 'active' | 'cancelled'; cancelDate?: string } | Failure;
+/** What a lost answer looks like: no answer at all. The call may or may not have reached the portal. */
+export const isUnanswered = (r: { ok: boolean; errors?: { code: string }[] }) => !r.ok && !!r.errors?.some((e) => e.code === 'GSP_UNAVAILABLE');
+/**
+ * The e-invoice (IRP) and e-way bill portals take separate logins, which need not match. Each call that
+ * reaches a portal gets the login for that portal; a connection test gets both.
+ */
+export type PortalLogins = { einvoice: PortalCredentials | null; ewaybill: PortalCredentials | null };
+
 export type ConnectionResult = { irp: { ok: boolean; message: string }; ewb: { ok: boolean; message: string } };
 
 export type PartBUpdateRequest = {
@@ -61,16 +70,28 @@ export type PartBUpdateRequest = {
  */
 export interface ComplianceProvider {
   readonly name: 'simulator' | 'gsp';
-  testConnection(creds: PortalCredentials | null): Promise<ConnectionResult>;
-  submitInvoice(creds: PortalCredentials | null, req: { payload: IrpInvoicePayload; existingIrns: string[]; now: string }): Promise<SubmitInvoiceResult>;
+  /** `irp` is checked with the e-invoice login, `ewb` with the e-way bill login. */
+  testConnection(logins: PortalLogins): Promise<ConnectionResult>;
+  submitInvoice(creds: PortalCredentials | null, req: { companyId?: string; payload: IrpInvoicePayload; existingIrns: string[]; now: string }): Promise<SubmitInvoiceResult>;
   cancelIrn(creds: PortalCredentials | null, req: { irn: string; irnGeneratedAt: string; reasonCode: CancelReasonCode; remark?: string; now: string }): Promise<CancelIrnResult>;
-  submitEwayBill(creds: PortalCredentials | null, req: { payload: EwbPayload; vehicleType: VehicleType; now: string }): Promise<SubmitEwayBillResult>;
+  /**
+   * `irn` is the document's live IRN, when it has one: a GSP then raises the bill
+   * against it with Part B alone, since NIC already holds the document.
+   */
+  submitEwayBill(creds: PortalCredentials | null, req: { companyId?: string; payload: EwbPayload; vehicleType: VehicleType; now: string; irn?: string }): Promise<SubmitEwayBillResult>;
   updatePartB(creds: PortalCredentials | null, req: PartBUpdateRequest): Promise<UpdatePartBResult>;
   extend(
     creds: PortalCredentials | null,
     req: { bill: EwayBill; remainingDistanceKm: number; reasonCode: EwayExtendReasonCode; remark?: string; currentPlace: string; currentPincode: string; currentStateCode: string; transitType: 'inTransit' | 'inMovement'; now: string },
   ): Promise<ExtendResult>;
   cancelEwayBill(creds: PortalCredentials | null, req: { ewayBillNumber: string; reasonCode: CancelReasonCode; remark?: string; now: string }): Promise<CancelEwayBillResult>;
+  /**
+   * Recovery after a lost answer: the bill the portal raised for this document, if it raised one.
+   * Optional: a gateway without the lookup leaves the attempt for a person to check on the portal.
+   */
+  findEwayBillByDocument?(creds: PortalCredentials | null, req: { docType: string; docNo: string; docDate: string; fromGstin: string; now: string }): Promise<FindEwayBillResult>;
+  /** Recovery after a cancel whose answer was lost: whether the IRN is still active. */
+  getIrnStatus?(creds: PortalCredentials | null, req: { irn: string; now: string }): Promise<IrnStatusResult>;
 }
 
 export type PortalOperation = Exclude<keyof ComplianceProvider, 'name'>;
@@ -86,6 +107,21 @@ export type PortalOperation = Exclude<keyof ComplianceProvider, 'name'>;
 export class SimulatedComplianceProvider implements ComplianceProvider {
   readonly name = 'simulator' as const;
   private readonly faults = new Map<PortalOperation, IrpSimulation[]>();
+  /** Operations whose next call goes through at the "portal" but whose answer never arrives. */
+  private readonly lost = new Set<PortalOperation>();
+  /** What the "portal" holds, for the recovery lookups. */
+  private readonly bills = new Map<string, Extract<SubmitEwayBillResult, { ok: true }>>();
+  private readonly cancelledIrns = new Map<string, string>();
+
+  /** The next call of `operation` takes effect, but the caller sees GSP_UNAVAILABLE, as on a timeout. */
+  loseNext(operation: PortalOperation) {
+    this.lost.add(operation);
+  }
+
+  private unanswered<T extends { ok: boolean }>(operation: PortalOperation, result: T): T | Failure {
+    if (!this.lost.delete(operation)) return result;
+    return { ok: false, errors: [{ code: 'GSP_UNAVAILABLE', field: 'document', message: 'No answer from the portal (simulated)', severity: 'blocking' }] } as Failure;
+  }
 
   failNext(operation: PortalOperation, code: IrpErrorCode, message?: string) {
     const queue = this.faults.get(operation) ?? [];
@@ -97,6 +133,14 @@ export class SimulatedComplianceProvider implements ComplianceProvider {
     this.faults.clear();
   }
 
+  /** Forget everything, as a fresh portal: faults, lost answers and what it holds. */
+  reset() {
+    this.faults.clear();
+    this.lost.clear();
+    this.bills.clear();
+    this.cancelledIrns.clear();
+  }
+
   private fault(operation: PortalOperation): IrpSimulation | undefined {
     return this.faults.get(operation)?.shift();
   }
@@ -106,18 +150,17 @@ export class SimulatedComplianceProvider implements ComplianceProvider {
     return { ok: false, errors: [{ code, field: 'document', message: sim.message ?? IRP_ERRORS[code], severity: 'blocking' }] };
   }
 
-  async testConnection(creds: PortalCredentials | null): Promise<ConnectionResult> {
+  async testConnection(logins: PortalLogins): Promise<ConnectionResult> {
     const sim = this.fault('testConnection');
     if (sim) {
       const message = sim.message ?? IRP_ERRORS[sim.fail!];
       return { irp: { ok: false, message }, ewb: { ok: false, message } };
     }
-    if (!creds) {
-      const message = 'No portal credentials are stored yet';
-      return { irp: { ok: false, message }, ewb: { ok: false, message } };
-    }
-    const message = `Authenticated as ${creds.username} on the simulated ${creds.environment} portal`;
-    return { irp: { ok: true, message }, ewb: { ok: true, message } };
+    const check = (creds: PortalCredentials | null, portal: string) =>
+      creds
+        ? { ok: true, message: `Authenticated as ${creds.username} on the simulated ${portal} portal` }
+        : { ok: false, message: `No ${portal} credentials are stored yet` };
+    return { irp: check(logins.einvoice, 'e-invoice'), ewb: check(logins.ewaybill, 'e-way bill') };
   }
 
   async submitInvoice(_creds: PortalCredentials | null, req: { payload: IrpInvoicePayload; existingIrns: string[]; now: string }) {
@@ -125,11 +168,24 @@ export class SimulatedComplianceProvider implements ComplianceProvider {
   }
 
   async cancelIrn(_creds: PortalCredentials | null, req: Parameters<ComplianceProvider['cancelIrn']>[1]) {
-    return simulateCancelIrn({ ...req, simulation: this.fault('cancelIrn') });
+    const result = simulateCancelIrn({ ...req, simulation: this.fault('cancelIrn') });
+    if (result.ok) this.cancelledIrns.set(req.irn, result.cancelDate);
+    return this.unanswered('cancelIrn', result);
   }
 
   async submitEwayBill(_creds: PortalCredentials | null, req: { payload: EwbPayload; vehicleType: VehicleType; now: string }) {
-    return simulateSubmitEwayBill({ ...req, simulation: this.fault('submitEwayBill') });
+    const result = simulateSubmitEwayBill({ ...req, simulation: this.fault('submitEwayBill') });
+    if (result.ok) this.bills.set(billKey(req.payload), result);
+    return this.unanswered('submitEwayBill', result);
+  }
+
+  async findEwayBillByDocument(_creds: PortalCredentials | null, req: { docType: string; docNo: string; docDate: string; fromGstin: string }): Promise<FindEwayBillResult> {
+    return { ok: true, found: this.bills.get(billKey(req)) ?? null };
+  }
+
+  async getIrnStatus(_creds: PortalCredentials | null, req: { irn: string }): Promise<IrnStatusResult> {
+    const cancelDate = this.cancelledIrns.get(req.irn);
+    return cancelDate ? { ok: true, status: 'cancelled', cancelDate } : { ok: true, status: 'active' };
   }
 
   async updatePartB(_creds: PortalCredentials | null, req: PartBUpdateRequest): Promise<UpdatePartBResult> {
@@ -147,159 +203,17 @@ export class SimulatedComplianceProvider implements ComplianceProvider {
   }
 }
 
+/** A document's identity at the e-way bill portal: who raised it, and its type, number and date. */
+const billKey = (d: { docType: string; docNo: string; docDate: string; fromGstin: string }) => `${d.fromGstin}|${d.docType}|${d.docNo}|${d.docDate}`;
+
 // ------------------------------------------------------------------ GSP
 
-type GspError = { ErrorCode?: string; ErrorMessage?: string };
-type GspEnvelope<T> = { Status?: number | string; Data?: T; ErrorDetails?: GspError[]; InfoDtls?: { InfCd?: string; Desc?: T }[] };
-
 /**
- * NIC answers in IST as `dd/MM/yyyy hh:mm:ss AM` (EWB) or `yyyy-MM-dd HH:mm:ss`
- * (IRP); the rest of the server wants ISO instants.
+ * The real portals, through a GST Suvidha Provider: Adaequare (production-ready)
+ * or Whitebooks (sandbox only). Which one is `TAXATION_GSP_PROVIDER_CODE`; see
+ * `providers/gsp/` for the gateways and the README there for the environment.
  */
-export function isoFromPortal(value: string): string {
-  const ewb = /^(\d{2})\/(\d{2})\/(\d{4}) (\d{1,2}):(\d{2}):(\d{2})(?: ?([AP]M))?$/i.exec(value.trim());
-  const irp = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})$/.exec(value.trim());
-  let parts: number[];
-  if (ewb) {
-    let h = Number(ewb[4]);
-    const half = ewb[7]?.toUpperCase();
-    if (half === 'PM' && h < 12) h += 12;
-    if (half === 'AM' && h === 12) h = 0;
-    parts = [Number(ewb[3]), Number(ewb[2]), Number(ewb[1]), h, Number(ewb[5]), Number(ewb[6])];
-  } else if (irp) {
-    parts = irp.slice(1).map(Number);
-  } else {
-    return new Date(value).toISOString();
-  }
-  const [y, mo, d, h, mi, s] = parts;
-  return new Date(Date.UTC(y, mo - 1, d, h, mi, s) - 330 * 60_000).toISOString();
-}
-
-const unreachable = (message: string): Failure => ({ ok: false, errors: [{ code: 'SIM001', field: 'document', message, severity: 'blocking' }] });
-const toIssues = (errors: GspError[] | undefined): ComplianceIssue[] =>
-  (errors?.length ? errors : [{ ErrorMessage: 'The portal rejected the request' }]).map((e) => ({ code: e.ErrorCode ?? 'GSP', field: 'document', message: e.ErrorMessage ?? 'Rejected', severity: 'blocking' as const }));
-
-/**
- * The same interface against a GST Suvidha Provider (ClearTax, Masters India,
- * IRIS, …) at `GSP_BASE_URL`. A skeleton: GSPs agree on NIC's JSON bodies
- * (schema 1.1 for the IRP, the EWB API's field names) and on the
- * `{ Status, Data, ErrorDetails }` envelope, but not on URLs or auth, so the
- * paths below follow NIC's own and need mapping per vendor.
- *
- * What a real adapter needs:
- * - The ASP's own client id and secret from the GSP (per deployment, not per
- *   company), sent as headers on every call, plus an IP allow-listing.
- * - Per company: the GSTIN and the API username and password created on the
- *   IRP/EWB portal for that GSP (these are what `saveComplianceCredentials`
- *   stores), used to obtain an auth token that lasts about six hours; cache
- *   it in `compliance_credentials.auth_token_encrypted`.
- * - With NIC direct access (no GSP): RSA-encrypt the password and a random
- *   AppKey with NIC's public key, then AES-encrypt every payload with the
- *   session key (SEK) the auth call returns. Most GSPs hide this.
- * - Handling 2150 (duplicate IRN): the IRP returns the existing IRN, ack number
- *   and date in `InfoDtls`; treat that as success.
- * - Timeouts and retries: IRP calls are not idempotent on the portal side, so
- *   after a timeout fetch by document (GetIRNByDocDetails) before resubmitting.
- */
-export class GspComplianceProvider implements ComplianceProvider {
-  readonly name = 'gsp' as const;
-  constructor(private readonly baseUrl: string) {}
-
-  private async call<T>(creds: PortalCredentials | null, path: string, body: unknown): Promise<{ ok: true; data: T } | Failure> {
-    if (!creds) return { ok: false, errors: [{ code: 'AUTH', field: 'credentials', message: 'Store the portal credentials first', severity: 'blocking' }] };
-    let res: Response;
-    try {
-      res = await fetch(`${this.baseUrl.replace(/\/+$/, '')}${path}`, {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          gstin: creds.gstin,
-          user_name: creds.username,
-          password: creds.password,
-          ...(creds.clientId ? { client_id: creds.clientId } : {}),
-          ...(creds.clientSecret ? { client_secret: creds.clientSecret } : {}),
-        },
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(30_000),
-      });
-    } catch (err) {
-      return unreachable(`The portal is not reachable: ${(err as Error).message}`);
-    }
-    let json: GspEnvelope<T>;
-    try {
-      json = (await res.json()) as GspEnvelope<T>;
-    } catch {
-      return unreachable(`The portal answered ${res.status} without JSON`);
-    }
-    if (!res.ok || String(json.Status) !== '1' || json.Data === undefined) return { ok: false, errors: toIssues(json.ErrorDetails) };
-    return { ok: true, data: json.Data };
-  }
-
-  async testConnection(creds: PortalCredentials | null): Promise<ConnectionResult> {
-    const irp = await this.call<unknown>(creds, '/eivital/v1.04/auth', {});
-    const ewb = await this.call<unknown>(creds, '/ewaybillapi/v1.03/auth', {});
-    const said = (r: typeof irp) => (r.ok ? { ok: true, message: 'Authenticated' } : { ok: false, message: r.errors[0]?.message ?? 'Failed' });
-    return { irp: said(irp), ewb: said(ewb) };
-  }
-
-  async submitInvoice(creds: PortalCredentials | null, req: { payload: IrpInvoicePayload }): Promise<SubmitInvoiceResult> {
-    const r = await this.call<{ Irn: string; AckNo: number | string; AckDt: string; SignedQRCode: string }>(creds, '/eicore/v1.03/Invoice', req.payload);
-    if (!r.ok) return r;
-    return { ok: true, irn: r.data.Irn, ackNo: String(r.data.AckNo), ackDate: r.data.AckDt, signedQrPayload: r.data.SignedQRCode };
-  }
-
-  async cancelIrn(creds: PortalCredentials | null, req: { irn: string; reasonCode: CancelReasonCode; remark?: string }): Promise<CancelIrnResult> {
-    const r = await this.call<{ CancelDate: string }>(creds, '/eicore/v1.03/Invoice/Cancel', { Irn: req.irn, CnlRsn: req.reasonCode, CnlRem: req.remark ?? '' });
-    return r.ok ? { ok: true, cancelDate: r.data.CancelDate, reason: req.reasonCode } : r;
-  }
-
-  async submitEwayBill(creds: PortalCredentials | null, req: { payload: EwbPayload }): Promise<SubmitEwayBillResult> {
-    const r = await this.call<{ ewayBillNo: number | string; ewayBillDate: string; validUpto: string }>(creds, '/ewaybillapi/v1.03/ewayapi/GENEWAYBILL', req.payload);
-    if (!r.ok) return r;
-    return { ok: true, ewayBillNumber: String(r.data.ewayBillNo), generatedAt: isoFromPortal(r.data.ewayBillDate), validFrom: isoFromPortal(r.data.ewayBillDate), validUpto: isoFromPortal(r.data.validUpto) };
-  }
-
-  async updatePartB(creds: PortalCredentials | null, req: PartBUpdateRequest): Promise<UpdatePartBResult> {
-    const r = await this.call<{ vehUpdDate: string }>(creds, '/ewaybillapi/v1.03/ewayapi/VEHEWB', {
-      ewbNo: Number(req.ewayBillNumber),
-      vehicleNo: req.vehicleNumber,
-      fromPlace: req.fromPlace,
-      fromState: Number(req.fromStateCode),
-      reasonCode: req.reasonCode,
-      reasonRem: req.remark ?? '',
-      transDocNo: req.transportDocNumber,
-      transDocDate: req.transportDocDate,
-      transMode: req.mode,
-      vehicleType: req.vehicleType === 'overDimensional' ? 'O' : 'R',
-    });
-    return r.ok ? { ok: true, updatedAt: isoFromPortal(r.data.vehUpdDate) } : r;
-  }
-
-  async extend(creds: PortalCredentials | null, req: Parameters<ComplianceProvider['extend']>[1]): Promise<ExtendResult> {
-    const r = await this.call<{ validUpto: string }>(creds, '/ewaybillapi/v1.03/ewayapi/EXTENDVALIDITY', {
-      ewbNo: Number(req.bill.ewayBillNumber),
-      vehicleNo: req.bill.vehicleNumber,
-      fromPlace: req.currentPlace,
-      fromPincode: Number(req.currentPincode),
-      fromState: Number(req.currentStateCode),
-      remainingDistance: req.remainingDistanceKm,
-      extnRsnCode: Number(req.reasonCode),
-      extnRemarks: req.remark ?? '',
-      consignmentStatus: req.transitType === 'inTransit' ? 'T' : 'M',
-    });
-    return r.ok ? { ok: true, newValidUpto: isoFromPortal(r.data.validUpto) } : r;
-  }
-
-  async cancelEwayBill(creds: PortalCredentials | null, req: { ewayBillNumber: string; reasonCode: CancelReasonCode; remark?: string }): Promise<CancelEwayBillResult> {
-    const r = await this.call<{ cancelDate: string }>(creds, '/ewaybillapi/v1.03/ewayapi/CANEWB', { ewbNo: Number(req.ewayBillNumber), cancelRsnCode: Number(req.reasonCode), cancelRmrk: req.remark ?? '' });
-    return r.ok ? { ok: true, cancelledAt: isoFromPortal(r.data.cancelDate), reason: req.reasonCode } : r;
-  }
-}
-
 export function createComplianceProvider(config: Config): ComplianceProvider {
-  if (config.COMPLIANCE_PROVIDER === 'gsp') {
-    if (!config.GSP_BASE_URL) throw new Error('COMPLIANCE_PROVIDER=gsp needs GSP_BASE_URL.');
-    return new GspComplianceProvider(config.GSP_BASE_URL);
-  }
+  if (config.COMPLIANCE_PROVIDER === 'gsp') return createGspGateway(config);
   return new SimulatedComplianceProvider();
 }

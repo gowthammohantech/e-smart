@@ -6,20 +6,14 @@ import { defineHandlers } from '../../context';
 import { checkIfMatch, setEtag } from '../../http/etag';
 import { preconditionFailed, unprocessable } from '../../http/errors';
 import { recordChange } from '../../lib/audit';
-import { encrypt, mask } from '../../lib/crypto';
-import { loadSettings, portalCredentials, resolveTransporter, settingsToWire, transporterById } from './shared';
+import { encrypt } from '../../lib/crypto';
+import { loadSettings, portalCredentials, resolveTransporter, settingsToWire, transporterById, type Portal } from './shared';
 
 const S = schema.complianceSettings;
 const CR = schema.complianceCredentials;
 
 /** Where the key that sealed a credential lives; a KMS key ARN once envelope encryption moves there. */
 const KEY_ID = 'local:CREDENTIALS_KEY:aes-256-gcm';
-
-/** `mask` keeps the length; the column holds 40. */
-function maskedClientId(clientId: string): string {
-  const m = mask(clientId);
-  return m.length <= 40 ? m : `${clientId.slice(0, 4)}${'•'.repeat(8)}${clientId.slice(-4)}`;
-}
 
 /**
  * Compliance settings: getComplianceSettings, saveComplianceSettings,
@@ -71,7 +65,7 @@ export const settingsHandlers = defineHandlers({
           reportingWindowDays: b.reportingWindowDays ?? current.reportingWindowDays,
           autoGenerateEinvoiceOnFinalise: b.autoGenerateEInvoiceOnFinalise ?? current.autoGenerateEinvoiceOnFinalise,
           irpUsername: b.irpUsername !== undefined ? b.irpUsername.trim() || null : current.irpUsername,
-          irpEnvironment: b.irpEnvironment ?? current.irpEnvironment,
+          ewbUsername: b.ewbUsername !== undefined ? b.ewbUsername.trim() || null : current.ewbUsername,
           ewayBillEnabled: b.ewayBillEnabled ?? current.ewayBillEnabled,
           ewayBillThresholdMinor: b.ewayBillThreshold?.minor ?? current.ewayBillThresholdMinor,
           autoGenerateEwayBillOnFinalise: b.autoGenerateEwayBillOnFinalise ?? current.autoGenerateEwayBillOnFinalise,
@@ -103,40 +97,51 @@ export const settingsHandlers = defineHandlers({
   },
 
   /**
-   * Write-only. Each secret is sealed with AES-256-GCM under
-   * `CREDENTIALS_KEY`; only the username and a masked client id reach the
-   * settings, and nothing secret is ever returned. A secret left out keeps
-   * the one already stored.
+   * Write-only. The business gives only a portal username and password, for the e-invoice portal, the e-way
+   * bill portal, or both: the two logins need not match, so each is stored on its own row and its own
+   * username. The GSP's own client id and secret are ours and come from the environment (`TAXATION_*`), as
+   * does the choice of GSP. The password is sealed with AES-256-GCM under `CREDENTIALS_KEY` and never
+   * returned. Sandbox or production is the server's too (the gateway it is pointed at), so the business is not
+   * asked. Any `environment`, `gspProvider`, `clientId` or `clientSecret` an older client still sends is ignored.
    */
   async saveComplianceCredentials(ctx) {
     const b = ctx.body;
     const key = ctx.deps.config.CREDENTIALS_KEY;
-    const current = await loadSettings(ctx.db, ctx.company);
+    const gspProvider = ctx.deps.config.TAXATION_GSP_PROVIDER_CODE.slice(0, 40);
+    const portals: Portal[] = b.portal === 'einvoice' ? ['einvoice'] : b.portal === 'ewaybill' ? ['ewaybill'] : ['einvoice', 'ewaybill'];
+    const username = b.username.trim().slice(0, 100);
     await ctx.db.transaction(async (tx) => {
-      const [existing] = await tx.select().from(CR).where(eq(CR.companyId, ctx.company.id)).for('update');
-      const sealed = {
-        environment: b.environment,
-        gspProvider: b.gspProvider?.trim().slice(0, 40) || null,
-        passwordEncrypted: encrypt(b.password, key),
-        clientIdEncrypted: b.clientId !== undefined || !existing ? encrypt(b.clientId ?? '', key) : existing.clientIdEncrypted,
-        clientSecretEncrypted: b.clientSecret !== undefined || !existing ? encrypt(b.clientSecret ?? '', key) : existing.clientSecretEncrypted,
-        kmsKeyId: KEY_ID,
-        // New credentials invalidate the cached session and the last test.
-        authTokenEncrypted: null,
-        authTokenExpiresAt: null,
-        lastTestedAt: null,
-        lastTestOk: null,
-        updatedAt: ctx.now,
-      };
-      if (existing) await tx.update(CR).set(sealed).where(eq(CR.companyId, ctx.company.id));
-      else await tx.insert(CR).values({ companyId: ctx.company.id, ...sealed });
+      // A portal getting its first login is switched on with it: that is what "connected" means. One that already
+      // had a login keeps whatever on/off choice was made, so updating a password does not undo a switch-off.
+      const had = new Set((await tx.select({ portal: CR.portal }).from(CR).where(eq(CR.companyId, ctx.company.id))).map((r) => r.portal));
+      for (const portal of portals) {
+        const sealed = {
+          gspProvider,
+          passwordEncrypted: encrypt(b.password, key),
+          clientIdEncrypted: encrypt('', key),
+          clientSecretEncrypted: encrypt('', key),
+          kmsKeyId: KEY_ID,
+          // New credentials invalidate the cached session and the last test.
+          authTokenEncrypted: null,
+          authTokenExpiresAt: null,
+          lastTestedAt: null,
+          lastTestOk: null,
+          updatedAt: ctx.now,
+        };
+        await tx
+          .insert(CR)
+          .values({ companyId: ctx.company.id, portal, ...sealed })
+          .onConflictDoUpdate({ target: [CR.companyId, CR.portal], set: sealed });
+      }
 
       const [updated] = await tx
         .update(S)
         .set({
-          irpUsername: b.username.trim().slice(0, 100),
-          irpEnvironment: b.environment,
-          irpClientIdMasked: b.clientId ? maskedClientId(b.clientId) : b.clientId === '' ? null : current.irpClientIdMasked,
+          ...(portals.includes('einvoice') ? { irpUsername: username } : {}),
+          ...(portals.includes('ewaybill') ? { ewbUsername: username } : {}),
+          ...(portals.includes('einvoice') && !had.has('einvoice') ? { einvoiceEnabled: true } : {}),
+          ...(portals.includes('ewaybill') && !had.has('ewaybill') ? { ewayBillEnabled: true } : {}),
+          irpClientIdMasked: null,
           version: sql`${S.version} + 1`,
           updatedAt: ctx.now,
         })
@@ -149,17 +154,32 @@ export const settingsHandlers = defineHandlers({
         entityId: ctx.company.id,
         entityLabel: 'E-invoicing & e-way bill',
         version: updated.version,
-        after: { environment: b.environment, gspProvider: b.gspProvider, username: updated.irpUsername, irpClientIdMasked: updated.irpClientIdMasked },
+        after: { gspProvider, portals, username },
       });
+      // Saving a login is what connects the portal's integration; record it so the integrations list is re-read.
+      for (const portal of portals) {
+        await recordChange(tx, ctx.user, {
+          companyId: ctx.company.id,
+          action: 'connected',
+          entityType: 'integration',
+          entityId: portal === 'einvoice' ? 'int_einvoice' : 'int_eway',
+          entityLabel: portal === 'einvoice' ? 'GST e-Invoice (IRP)' : 'E-way bill',
+          version: 1,
+          after: { connected: true },
+        });
+      }
     });
     return undefined;
   },
 
   async testComplianceConnection(ctx) {
-    const creds = await portalCredentials(ctx.db, ctx.deps.config, ctx.company);
-    const result = await ctx.deps.providers.compliance.testConnection(creds);
-    if (creds) {
-      await ctx.db.update(CR).set({ lastTestedAt: ctx.now, lastTestOk: result.irp.ok && result.ewb.ok }).where(eq(CR.companyId, ctx.company.id));
+    const logins = {
+      einvoice: await portalCredentials(ctx.db, ctx.deps.config, ctx.company, 'einvoice'),
+      ewaybill: await portalCredentials(ctx.db, ctx.deps.config, ctx.company, 'ewaybill'),
+    };
+    const result = await ctx.deps.providers.compliance.testConnection(logins);
+    for (const [portal, ok] of [['einvoice', result.irp.ok], ['ewaybill', result.ewb.ok]] as const) {
+      if (logins[portal]) await ctx.db.update(CR).set({ lastTestedAt: ctx.now, lastTestOk: ok }).where(and(eq(CR.companyId, ctx.company.id), eq(CR.portal, portal)));
     }
     return result;
   },

@@ -1,14 +1,14 @@
 import { and, eq } from 'drizzle-orm';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { schema } from '@esmart/db';
-import { FULL_PLAN, hasModule } from '@esmart/core/domain/plan';
+import { FULL_PLAN, hasModule, moduleEnabled, type Module } from '@esmart/core/domain/plan';
 import type { AuthUser, CompanyRow, Deps } from '../context';
 import { ApiError, forbidden, planUpgradeRequired, unauthorized } from '../http/errors';
 import type { AccessClaims } from './sessions';
 
 async function loadUser(deps: Deps, claims: AccessClaims): Promise<AuthUser | null> {
   const [row] = await deps.db
-    .select({ u: schema.users, revokedAt: schema.deviceSessions.revokedAt, suspendedAt: schema.accounts.suspendedAt })
+    .select({ u: schema.users, revokedAt: schema.deviceSessions.revokedAt, mfaVerifiedAt: schema.deviceSessions.mfaVerifiedAt, suspendedAt: schema.accounts.suspendedAt })
     .from(schema.users)
     .innerJoin(schema.deviceSessions, eq(schema.deviceSessions.userId, schema.users.id))
     .innerJoin(schema.accounts, eq(schema.accounts.id, schema.users.accountId))
@@ -34,6 +34,8 @@ async function loadUser(deps: Deps, claims: AccessClaims): Promise<AuthUser | nu
     companyRoles: Object.fromEntries(companies.filter((c) => c.role).map((c) => [c.id, c.role!])),
     branchIds: branches.map((b) => b.id),
     sessionId: claims.sid,
+    mfaEnrolled: !!row.u.totpEnabledAt,
+    mfaVerified: !!row.mfaVerifiedAt,
   };
 }
 
@@ -97,8 +99,14 @@ export function registerGuards(app: FastifyInstance, deps: Deps) {
       if (!user.platformRole || !op.platformRoles.includes(user.platformRole)) {
         throw forbidden('PLATFORM_FORBIDDEN', `This needs platform role: ${op.platformRoles.join(', ')}`);
       }
+      // A password (or an SMS code) alone never opens another tenant's data.
+      if (!op.mfaExempt && !user.mfaEnrolled) throw forbidden('MFA_ENROLLMENT_REQUIRED', 'Set up an authenticator app to continue');
+      if (!op.mfaExempt && !user.mfaVerified) throw forbidden('MFA_REQUIRED', 'Enter the code from your authenticator app');
       return;
     }
+
+    // A business user who turned on an authenticator passes it once per session before anything else.
+    if (user.mfaEnrolled && !user.mfaVerified && !op.mfaExempt) throw forbidden('MFA_REQUIRED', 'Enter the code from your authenticator app');
 
     const companyId = (req.params as { companyId?: string }).companyId;
     if (companyId) {
@@ -114,6 +122,10 @@ export function registerGuards(app: FastifyInstance, deps: Deps) {
 
     if (op.planModule && req.company && !hasModule(req.company.plan, op.planModule)) {
       throw planUpgradeRequired(FULL_PLAN, op.planModule);
+    }
+    // In the plan but switched off by the owner (or something it needs is).
+    if (op.planModule && req.company && !moduleEnabled(req.company.plan, req.company.disabledModules as Module[], op.planModule)) {
+      throw forbidden('MODULE_OFF', `${op.planModule} is switched off for this business; an owner can switch it on in Settings`);
     }
   });
 }

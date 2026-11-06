@@ -1,8 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Linking, Pressable, ScrollView, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
@@ -13,41 +13,40 @@ import { Segmented } from '@esmart/ui/components/Field';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { StatRow, StatTile } from '@esmart/ui/components/StatTile';
 import { AgingBars } from '@esmart/ui/components/charts/AgingBars';
-import { Sheet } from '@esmart/ui/components/Sheet';
-import { useToast } from '@esmart/ui/components/Toast';
 
-import { AgingBucketKey } from '@esmart/core/domain/receivables';
+import { AgingBucketKey, summarizeAging, type OutstandingDoc } from '@esmart/core/domain/receivables';
+import type { Party } from '@esmart/core/types';
 import { formatMoney } from '@esmart/core/lib/format';
-import { formatDate } from '@esmart/core/lib/date';
+import { formatDate, today } from '@esmart/core/lib/date';
 import { Money, money, sum, zero } from '@esmart/core/lib/money';
 import { StatGrid, SplitPane } from '@esmart/ui/components/Layout';
-import { useBaseCurrency, useParties, usePayables, useReceivables } from '../../store/selectors';
+import { useBaseCurrency } from '../../store/selectors';
+import { usePartyRecord, useReportData } from '../../remote/queries';
+import { LoadingView } from '../../components/LoadingView';
 import { SHOW_SCROLLBAR, useBreakpoint } from '@esmart/ui/theme/breakpoints';
 import { focusRing, type WebPressState } from '@esmart/ui/theme/interaction';
+import { PaymentReminderSheet } from './PaymentReminderSheet';
 
 type Mode = 'all' | 'overdue' | 'dueSoon';
 
 export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
   const t = useTheme();
-  const { t: tr } = useTranslation(['sales', 'common']);
+  const { t: tr } = useTranslation(['sales', 'common', 'reports', 'contacts']);
   const router = useRouter();
-  const toast = useToast();
   // Always 'phone' in the native apps, so the desktop layout only ever reaches a browser.
   const bp = useBreakpoint();
   const desktop = bp !== 'phone';
 
   const baseCurrency = useBaseCurrency();
-  const parties = useParties();
-  const receivables = useReceivables();
-  const payables = usePayables();
-  const data = kind === 'receivable' ? receivables : payables;
+  // Worked out on the server from every open document; names travel with it.
+  const remote = useReportData<Aging>(kind === 'receivable' ? 'receivables' : 'payables', { from: '2000-01-01', to: today() });
+  const data = remote.data ?? { outstanding: [], summary: summarizeAging([], baseCurrency), partyNames: {} };
 
   const [mode, setMode] = useState<Mode>('all');
   const [bucket, setBucket] = useState<AgingBucketKey | null>(null);
   const [reminderFor, setReminderFor] = useState<string | null>(null);
 
-  const nameOf = (id: string) => parties.find((p) => p.id === id)?.name ?? 'Unknown';
-  const partyOf = (id: string) => parties.find((p) => p.id === id);
+  const nameOf = (id: string) => data.partyNames[id] ?? tr('common:placeholder.unknown');
 
   const rows = useMemo(() => {
     let list = data.outstanding;
@@ -85,19 +84,8 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
   }, [rows]);
 
   const isReceivable = kind === 'receivable';
-  const reminderParty = reminderFor ? partyOf(reminderFor) : undefined;
+  const reminderParty = usePartyRecord(reminderFor ?? undefined).data as unknown as Party | undefined;
   const reminderRows = reminderFor ? rows.filter((o) => o.document.partyId === reminderFor) : [];
-
-  const reminderText = reminderParty
-    ? `Hi ${reminderParty.displayName ?? reminderParty.name}, a gentle reminder that ${reminderRows.length === 1 ? 'invoice' : 'invoices'} ${reminderRows
-        .map((o) => o.document.number)
-        .join(', ')} totalling ${formatMoney(
-        money(
-          reminderRows.reduce((a, o) => a + Math.round(o.outstanding.minor * (o.document.exchangeRate || 1)), 0),
-          baseCurrency,
-        ),
-      )} ${reminderRows.length === 1 ? 'is' : 'are'} still open. Could you let us know when payment is planned? Thank you.`
-    : '';
 
   const agingCard = (
     <Card style={desktop ? { gap: t.spacing.md } : { marginTop: t.spacing.lg, gap: t.spacing.md }}>
@@ -120,9 +108,9 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
   const modeFilter = (
     <Segmented
       options={[
-        { value: 'all', label: 'All' },
+        { value: 'all', label: tr('sales:aging.all') },
         { value: 'overdue', label: tr('sales:aging.overdue') },
-        { value: 'dueSoon', label: 'Due soon' },
+        { value: 'dueSoon', label: tr('sales:aging.dueSoon') },
       ]}
       value={mode}
       onChange={(v) => setMode(v as Mode)}
@@ -132,7 +120,7 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
 
   const emptyCard = (
     <Card padded={false}>
-      <EmptyState illustration="all-settled" icon="check-all" title={tr('sales:aging.nothingOutstanding')} message={isReceivable ? 'Every invoice has been settled.' : 'You are all paid up.'} compact />
+      <EmptyState illustration="all-settled" icon="check-all" title={tr('sales:aging.nothingOutstanding')} message={isReceivable ? tr('sales:aging.allSettled') : tr('sales:aging.allPaidUp')} compact />
     </Card>
   );
 
@@ -141,51 +129,9 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
   const recordPayment = (partyId: string) =>
     router.push(`/(app)/payments/new?direction=${isReceivable ? 'received' : 'paid'}&partyId=${partyId}`);
 
-  const reminderSheet = (
-    <Sheet
-      visible={!!reminderFor}
-      onClose={() => setReminderFor(null)}
-      title={tr('sales:aging.sendReminder')}
-      subtitle={reminderParty?.name}
-      footer={
-        <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
-          <Button
-            title={tr('sales:aging.whatsapp')}
-            icon="whatsapp"
-            style={{ flex: 1 }}
-            onPress={() => {
-              const phone = (reminderParty?.phone ?? '').replace(/[^0-9]/g, '');
-              Linking.openURL(`https://wa.me/${phone}?text=${encodeURIComponent(reminderText)}`).catch(() => {});
-              setReminderFor(null);
-              toast.show(tr('sales:aging.openedWhatsapp'), 'success');
-            }}
-          />
-          <Button
-            title={tr('sales:aging.email')}
-            variant="secondary"
-            icon="email-outline"
-            style={{ flex: 1 }}
-            onPress={() => {
-              Linking.openURL(
-                `mailto:${reminderParty?.email ?? ''}?subject=${encodeURIComponent('Payment reminder')}&body=${encodeURIComponent(reminderText)}`,
-              ).catch(() => {});
-              setReminderFor(null);
-              toast.show(tr('sales:aging.openedEmail'), 'success');
-            }}
-          />
-        </View>
-      }
-    >
-      <View style={{ padding: t.spacing.lg, gap: t.spacing.md }}>
-        <Card variant="flat">
-          <Text variant="small" style={{ lineHeight: 21 }}>
-            {reminderText}
-          </Text>
-        </Card>
-        <Text variant="caption" tone="muted">{tr('sales:aging.reminderNote')}</Text>
-      </View>
-    </Sheet>
-  );
+  const reminderSheet = <PaymentReminderSheet party={reminderParty} rows={reminderRows} onClose={() => setReminderFor(null)} />;
+
+  if (!remote.data && remote.isLoading) return <LoadingView />;
 
   if (desktop) {
     const overdueCount = data.outstanding.filter((o) => o.daysOverdue > 0).length;
@@ -193,11 +139,12 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
     const sideAging = bp === 'wide';
     const list = (
       <View style={{ gap: t.spacing.md }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: t.spacing.md }}>
-          <View style={{ width: 340 }}>{modeFilter}</View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
+        {/* The counts drop under the filter when the list is narrow (Lixi open) rather than running off the edge. */}
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: t.spacing.md }}>
+          <View style={{ width: 340, maxWidth: '100%' }}>{modeFilter}</View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md, marginLeft: 'auto' }}>
             <Text variant="small" tone="muted">
-              {rows.length} documents · {byParty.length} contacts
+              {tr('sales:aging.documentCount', { count: rows.length })} · {tr('sales:aging.contactCount', { count: byParty.length })}
             </Text>
             <Text variant="body" weight="700" style={{ fontVariant: ['tabular-nums'] }}>
               {formatMoney(shownTotal)}
@@ -224,21 +171,21 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
     );
 
     return (
-      <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+      <View style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: t.spacing.xxxl, gap: t.spacing.lg }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
           <StatGrid>
             <StatTile
-              label={isReceivable ? 'Total receivable' : 'Total payable'}
+              label={isReceivable ? tr('reports:home.totalReceivable') : tr('reports:home.totalPayable')}
               value={data.summary.total}
               icon="scale-balance"
-              caption={`${data.outstanding.length} open documents`}
+              caption={tr('sales:payment.openDocuments', { count: data.outstanding.length })}
             />
             <StatTile
               label={tr('sales:aging.overdue')}
               value={data.summary.overdue}
               tone="bad"
               icon="alert-circle-outline"
-              caption={`${overdueCount} of ${data.outstanding.length} documents`}
+              caption={tr('sales:aging.overdueOfTotal', { overdue: overdueCount, total: data.outstanding.length })}
             />
             <StatTile
               label={tr('sales:aging.dueSoon')}
@@ -259,16 +206,16 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40 }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <StatRow>
           <StatTile
-            label={isReceivable ? 'Total receivable' : 'Total payable'}
+            label={isReceivable ? tr('reports:home.totalReceivable') : tr('reports:home.totalPayable')}
             value={data.summary.total}
             icon="scale-balance"
-            caption={`${data.outstanding.length} open documents`}
+            caption={tr('sales:payment.openDocuments', { count: data.outstanding.length })}
           />
-          <StatTile label={tr('sales:aging.overdue')} value={data.summary.overdue} tone="bad" icon="alert-circle-outline" caption={`Due soon ${formatMoney(data.summary.dueSoon)}`} />
+          <StatTile label={tr('sales:aging.overdue')} value={data.summary.overdue} tone="bad" icon="alert-circle-outline" caption={tr('sales:aging.dueSoonAmount', { amount: formatMoney(data.summary.dueSoon) })} />
         </StatRow>
 
         {agingCard}
@@ -279,7 +226,7 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
 
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: t.spacing.md }}>
           <Text variant="caption" tone="muted">
-            {rows.length} documents · {byParty.length} contacts
+            {tr('sales:aging.documentCount', { count: rows.length })} · {tr('sales:aging.contactCount', { count: byParty.length })}
           </Text>
           <Text variant="caption" weight="700">
             {formatMoney(shownTotal)}
@@ -302,8 +249,8 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
                       {nameOf(group.id)}
                     </Text>
                     <Text variant="caption" tone="muted">
-                      {group.count} document{group.count === 1 ? '' : 's'}
-                      {group.oldest > 0 ? ` · oldest ${group.oldest}d late` : ''}
+                      {tr('sales:aging.documentCount', { count: group.count })}
+                      {group.oldest > 0 ? ` · ${tr('sales:aging.oldestLate', { days: group.oldest })}` : ''}
                     </Text>
                   </View>
                   <Text variant="title" weight="700" tone={group.oldest > 0 ? 'bad' : 'warn'}>
@@ -321,7 +268,7 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
                         )
                       }
                       accessibilityRole="button"
-                      accessibilityLabel={`${o.document.number}, ${formatMoney(o.outstanding)} outstanding`}
+                      accessibilityLabel={tr('sales:aging.rowLabel', { number: o.document.number, amount: formatMoney(o.outstanding) })}
                       style={({ pressed }) => ({
                         flexDirection: 'row',
                         alignItems: 'center',
@@ -336,14 +283,14 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
                           {o.document.number}
                         </Text>
                         <Text variant="micro" tone="muted">
-                          due {formatDate(o.document.dueDate ?? o.document.date, 'dd MMM')}
+                          {tr('sales:detail.dueOn', { date: formatDate(o.document.dueDate ?? o.document.date, 'dd MMM') })}
                         </Text>
                       </View>
-                      {o.daysOverdue > 0 ? <Badge label={`${o.daysOverdue}d`} tone="danger" size="sm" /> : null}
+                      {o.daysOverdue > 0 ? <Badge label={tr('sales:aging.daysShort', { days: o.daysOverdue })} tone="danger" size="sm" /> : null}
                       <Text variant="small" weight="600">
                         {formatMoney(o.outstanding)}
                       </Text>
-                      <MaterialCommunityIcons name="chevron-right" size={16} color={t.c.muted} />
+                      <Icon name="chevron-right" size={16} color={t.c.muted} />
                     </Pressable>
                   ))}
                 </View>
@@ -353,7 +300,7 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
                     <Button title={tr('sales:aging.remind')} variant="ghost" icon="bell-ring-outline" size="sm" onPress={() => setReminderFor(group.id)} style={{ flex: 1 }} />
                   ) : null}
                   <Button
-                    title={isReceivable ? 'Record payment' : 'Pay'}
+                    title={isReceivable ? tr('common:action.recordPayment') : tr('contacts:detail.pay')}
                     size="sm"
                     icon={isReceivable ? 'cash-plus' : 'cash-minus'}
                     onPress={() => router.push(`/(app)/payments/new?direction=${isReceivable ? 'received' : 'paid'}&partyId=${group.id}`)}
@@ -371,7 +318,8 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
   );
 }
 
-type Outstanding = ReturnType<typeof useReceivables>['outstanding'][number];
+type Outstanding = OutstandingDoc;
+type Aging = { outstanding: OutstandingDoc[]; summary: ReturnType<typeof summarizeAging>; partyNames: Record<string, string> };
 
 /**
  * One contact's open documents on a desktop: who, how much and the actions in
@@ -397,7 +345,7 @@ function DesktopPartyGroup({
   onRecord: () => void;
 }) {
   const t = useTheme();
-  const { t: tr } = useTranslation(['sales', 'common']);
+  const { t: tr } = useTranslation(['sales', 'common', 'reports', 'contacts']);
   const header = (label: string, style: object) => (
     <Text variant="micro" tone="muted" weight="700" numberOfLines={1} style={{ textTransform: 'uppercase', letterSpacing: 0.6, ...style }}>
       {label}
@@ -406,25 +354,29 @@ function DesktopPartyGroup({
 
   return (
     <Card padded={false} style={{ overflow: 'hidden' }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md, padding: t.spacing.lg }}>
-        <Avatar name={name} size={40} />
-        <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-          <Text variant="body" weight="700" numberOfLines={1}>
-            {name}
-          </Text>
-          <Text variant="caption" tone="muted">
-            {group.count} document{group.count === 1 ? '' : 's'}
-            {group.oldest > 0 ? ` · oldest ${group.oldest}d late` : ''}
+      {/* When the card is narrow (Lixi open beside it), the actions wrap under the
+          name and amount instead of squeezing the name into a sliver. */}
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: t.spacing.md, padding: t.spacing.lg }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md, flexGrow: 1, flexShrink: 1, flexBasis: 360, minWidth: 0 }}>
+          <Avatar name={name} size={40} />
+          <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+            <Text variant="body" weight="700" numberOfLines={1}>
+              {name}
+            </Text>
+            <Text variant="caption" tone="muted">
+              {tr('sales:aging.documentCount', { count: group.count })}
+              {group.oldest > 0 ? ` · ${tr('sales:aging.oldestLate', { days: group.oldest })}` : ''}
+            </Text>
+          </View>
+          <Text variant="title" weight="700" tone={group.oldest > 0 ? 'bad' : 'warn'} style={{ fontVariant: ['tabular-nums'] }}>
+            {formatMoney(total)}
           </Text>
         </View>
-        <Text variant="title" weight="700" tone={group.oldest > 0 ? 'bad' : 'warn'} style={{ fontVariant: ['tabular-nums'] }}>
-          {formatMoney(total)}
-        </Text>
-        <View style={{ flexDirection: 'row', gap: t.spacing.sm, marginLeft: t.spacing.sm }}>
+        <View style={{ flexDirection: 'row', gap: t.spacing.sm, marginLeft: 'auto' }}>
           {isReceivable ? (
             <Button title={tr('sales:aging.remind')} variant="secondary" icon="bell-ring-outline" size="sm" onPress={onRemind} />
           ) : null}
-          <Button title={isReceivable ? 'Record payment' : 'Pay'} size="sm" icon={isReceivable ? 'cash-plus' : 'cash-minus'} onPress={onRecord} />
+          <Button title={isReceivable ? tr('common:action.recordPayment') : tr('contacts:detail.pay')} size="sm" icon={isReceivable ? 'cash-plus' : 'cash-minus'} onPress={onRecord} />
         </View>
       </View>
 
@@ -452,7 +404,7 @@ function DesktopPartyGroup({
           key={o.document.id}
           onPress={() => onOpen(o.document.id)}
           accessibilityRole="link"
-          accessibilityLabel={`${o.document.number}, ${formatMoney(o.outstanding)} outstanding`}
+          accessibilityLabel={tr('sales:aging.rowLabel', { number: o.document.number, amount: formatMoney(o.outstanding) })}
           style={(state) => {
             const { pressed, hovered, focused } = state as WebPressState;
             return [
@@ -477,12 +429,12 @@ function DesktopPartyGroup({
             {formatDate(o.document.dueDate ?? o.document.date, 'dd MMM yyyy')}
           </Text>
           <View style={{ width: 100, alignItems: 'flex-start' }}>
-            {o.daysOverdue > 0 ? <Badge label={`${o.daysOverdue}d`} tone="danger" size="sm" /> : <Text variant="small" tone="muted">—</Text>}
+            {o.daysOverdue > 0 ? <Badge label={tr('sales:aging.daysShort', { days: o.daysOverdue })} tone="danger" size="sm" /> : <Text variant="small" tone="muted">—</Text>}
           </View>
           <Text variant="small" weight="600" numberOfLines={1} style={{ width: 160, textAlign: 'right', fontVariant: ['tabular-nums'] }}>
             {formatMoney(o.outstanding)}
           </Text>
-          <MaterialCommunityIcons name="chevron-right" size={16} color={t.c.muted} />
+          <Icon name="chevron-right" size={16} color={t.c.muted} />
         </Pressable>
       ))}
     </Card>

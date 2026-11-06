@@ -1,13 +1,14 @@
 import { randomInt } from 'node:crypto';
 import { and, desc, eq, gt, isNotNull, isNull, sql } from 'drizzle-orm';
 import { schema } from '@esmart/db';
-import { hashPassword, verifyPassword } from '../../auth/passwords';
-import { openSession, rotateSession } from '../../auth/sessions';
+import { hashPassword, verifyPasswordTimed } from '../../auth/passwords';
+import { assertAccountActive, openSession, rotateSession } from '../../auth/sessions';
 import { defineHandlers, type Ctx } from '../../context';
-import { badRequest, conflict, tooManyRequests, unauthorized } from '../../http/errors';
+import { ApiError, badRequest, conflict, tooManyRequests, unauthorized } from '../../http/errors';
 import { randomToken, sha256 } from '../../lib/crypto';
 import { newId } from '../../lib/ids';
 import { buildResetEmail } from '../../lib/resetEmail';
+import { recordPlatformAction } from '../platform/audit';
 import { avatarColorFor, onboardingComplete, userToWire } from './users';
 
 const OTP_TTL_SECONDS = 300;
@@ -15,20 +16,37 @@ const OTP_RESEND_AFTER_SECONDS = 30;
 const OTP_MAX_PER_HOUR = 5;
 const OTP_MAX_ATTEMPTS = 5;
 const RESET_TTL_MS = 3_600_000;
+// Every fifth wrong password locks password sign-in: 15 minutes, doubling each time, at most a day.
+const LOCK_AFTER_FAILURES = 5;
+const LOCK_FIRST_MINUTES = 15;
+const LOCK_MAX_MINUTES = 1440;
 // How long a verified phone may be used to finish signing up.
 const PHONE_VERIFICATION_TTL_MS = 900_000;
 
 type AnyCtx = Ctx<'signIn'>;
 
-async function sessionResponse(ctx: AnyCtx, user: typeof schema.users.$inferSelect, device?: { label?: string; platform?: string; appVersion?: string }) {
-  const tokens = await openSession(ctx.req.server, ctx.db, ctx.deps, user, device, ctx.req.ip);
-  await ctx.db.update(schema.users).set({ lastActiveAt: ctx.now }).where(eq(schema.users.id, user.id));
+async function sessionResponse(
+  ctx: AnyCtx,
+  user: typeof schema.users.$inferSelect,
+  device?: { label?: string; platform?: string; appVersion?: string },
+  accountChecked = false,
+) {
+  // Each query is a round trip to the database, so they run together rather than one after another.
+  const [tokens, wire, onboarded] = await Promise.all([
+    openSession(ctx.req.server, ctx.db, ctx.deps, user, device, ctx.req.ip, accountChecked),
+    userToWire(ctx.db, { ...user, lastActiveAt: ctx.now }),
+    onboardingComplete(ctx.db, user.id),
+    ctx.db.update(schema.users).set({ lastActiveAt: ctx.now }).where(eq(schema.users.id, user.id)),
+  ]);
+  if (user.platformRole) {
+    await recordPlatformAction(ctx.db, user, ctx.req, { action: 'operator.signed_in', target: { type: 'user', id: user.id, label: user.email }, reason: `Signed in (${device?.platform ?? 'unknown device'})` });
+  }
   return {
     accessToken: tokens.accessToken,
     refreshToken: tokens.refreshToken,
     expiresIn: ctx.deps.config.ACCESS_TOKEN_TTL_SECONDS,
-    user: await userToWire(ctx.db, { ...user, lastActiveAt: ctx.now }),
-    onboardingComplete: await onboardingComplete(ctx.db, user.id),
+    user: wire,
+    onboardingComplete: onboarded,
   };
 }
 
@@ -36,6 +54,13 @@ const normalizeEmail = (e: string) => e.trim().toLowerCase();
 
 /** The one account that has proven it owns this number; a number merely typed into a profile doesn't match. */
 const verifiedPhone = (phone: string) => and(eq(schema.users.phone, phone), isNotNull(schema.users.phoneVerifiedAt));
+
+/** 429 with Retry-After: the account is locked, whatever password was sent. */
+function accountLocked(ctx: AnyCtx, until: Date) {
+  const seconds = Math.max(1, Math.ceil((until.getTime() - ctx.now.getTime()) / 1000));
+  void ctx.reply.header('retry-after', String(seconds));
+  return new ApiError(429, 'ACCOUNT_LOCKED', `Too many wrong passwords. Try again in ${Math.ceil(seconds / 60)} minutes, or reset your password.`, { retryAfterSeconds: seconds });
+}
 
 export const authHandlers = defineHandlers({
   async signUp(ctx) {
@@ -79,6 +104,8 @@ export const authHandlers = defineHandlers({
           avatarColor: avatarColorFor(email),
           status: 'active',
           locale: ctx.body.locale ?? 'en',
+          // What they agreed to on the sign-up screen, when the app sends it.
+          ...(ctx.body.termsVersion ? { termsAcceptedAt: ctx.now, termsVersion: ctx.body.termsVersion } : {}),
         })
         .returning();
       await tx.update(schema.accounts).set({ ownerUserId: userId }).where(eq(schema.accounts.id, accountId));
@@ -89,46 +116,77 @@ export const authHandlers = defineHandlers({
 
   async signIn(ctx) {
     const [user] = await ctx.db.select().from(schema.users).where(eq(schema.users.email, normalizeEmail(ctx.body.email)));
-    // Same answer for an unknown email and a wrong password.
-    if (!user || !(await verifyPassword(user.passwordHash, ctx.body.password))) {
+    if (!user) {
+      // Same answer, and the same time taken, for an unknown email and a wrong password.
+      await verifyPasswordTimed(null, ctx.body.password);
+      throw unauthorized('INVALID_CREDENTIALS', 'Email or password is incorrect');
+    }
+    // Locked even for the right password: otherwise a guesser learns which guess was right.
+    if (user.lockedUntil && user.lockedUntil > ctx.now) throw accountLocked(ctx, user.lockedUntil);
+    // The suspension lookup overlaps the password check instead of waiting for it.
+    const accountCheck = assertAccountActive(ctx.db, user.accountId);
+    accountCheck.catch(() => {});
+    if (!(await verifyPasswordTimed(user.passwordHash, ctx.body.password))) {
+      const [after] = await ctx.db
+        .update(schema.users)
+        .set({
+          failedSignInCount: sql`${schema.users.failedSignInCount} + 1`,
+          lockedUntil: sql`case when (${schema.users.failedSignInCount} + 1) % ${LOCK_AFTER_FAILURES} = 0
+            then ${ctx.now.toISOString()}::timestamptz + least(${LOCK_FIRST_MINUTES} * power(2, (${schema.users.failedSignInCount} + 1) / ${LOCK_AFTER_FAILURES} - 1), ${LOCK_MAX_MINUTES}) * interval '1 minute'
+            else ${schema.users.lockedUntil} end`,
+        })
+        .where(eq(schema.users.id, user.id))
+        .returning({ lockedUntil: schema.users.lockedUntil });
+      if (after?.lockedUntil && after.lockedUntil > ctx.now) throw accountLocked(ctx, after.lockedUntil);
       throw unauthorized('INVALID_CREDENTIALS', 'Email or password is incorrect');
     }
     if (user.status === 'disabled') throw unauthorized('USER_DISABLED', 'This user has been disabled');
     if (user.status === 'invited') throw unauthorized('INVITE_PENDING', 'Accept your invitation first');
-    return sessionResponse(ctx, user, ctx.body.device);
+    await accountCheck;
+    if (user.failedSignInCount > 0 || user.lockedUntil) {
+      await ctx.db.update(schema.users).set({ failedSignInCount: 0, lockedUntil: null }).where(eq(schema.users.id, user.id));
+    }
+    return sessionResponse(ctx, user, ctx.body.device, true);
   },
 
   async requestOtp(ctx) {
     const phone = ctx.body.phone.trim();
-    // Local development is never throttled; every other environment is.
-    if (ctx.deps.config.NODE_ENV !== 'development') {
-      const hourAgo = new Date(ctx.now.getTime() - 3_600_000);
-      const [{ count }] = await ctx.db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(schema.otpRequests)
-        .where(and(eq(schema.otpRequests.phone, phone), gt(schema.otpRequests.createdAt, hourAgo)));
-      if (count >= OTP_MAX_PER_HOUR) throw tooManyRequests('Too many codes requested for this number; try again later');
-      const [latest] = await ctx.db
-        .select({ createdAt: schema.otpRequests.createdAt })
-        .from(schema.otpRequests)
-        .where(eq(schema.otpRequests.phone, phone))
-        .orderBy(desc(schema.otpRequests.createdAt))
-        .limit(1);
-      if (latest && ctx.now.getTime() - latest.createdAt.getTime() < OTP_RESEND_AFTER_SECONDS * 1000) {
-        throw tooManyRequests(`Wait ${OTP_RESEND_AFTER_SECONDS} seconds before asking for another code`);
-      }
-    }
-
-    const code = ctx.deps.config.DEMO_OTP ? '123456' : String(randomInt(0, 1_000_000)).padStart(6, '0');
+    const isTestPhone = ctx.deps.config.TEST_OTP_PHONES.includes(phone.replace(/\D/g, '').slice(-10));
+    const code = ctx.deps.config.DEMO_OTP || isTestPhone ? '123456' : String(randomInt(0, 1_000_000)).padStart(6, '0');
     const requestId = newId('otp');
     const channel = ctx.body.channel ?? 'sms';
-    await ctx.db.insert(schema.otpRequests).values({
-      id: requestId,
-      phone,
-      channel,
-      codeHash: sha256(`${requestId}:${code}`),
-      expiresAt: new Date(ctx.now.getTime() + OTP_TTL_SECONDS * 1000),
+    // Checked and recorded under a lock on the number: two requests at once (a double tap, two
+    // tabs) would otherwise both pass the resend gap and both send a code.
+    await ctx.db.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`otp:${phone}`}))`);
+      // Local development is never throttled; every other environment is.
+      if (ctx.deps.config.NODE_ENV !== 'development') {
+        const hourAgo = new Date(ctx.now.getTime() - 3_600_000);
+        const [{ count }] = await tx
+          .select({ count: sql<number>`count(*)::int` })
+          .from(schema.otpRequests)
+          .where(and(eq(schema.otpRequests.phone, phone), gt(schema.otpRequests.createdAt, hourAgo)));
+        if (count >= OTP_MAX_PER_HOUR) throw tooManyRequests('Too many codes requested for this number; try again later');
+        const [latest] = await tx
+          .select({ createdAt: schema.otpRequests.createdAt })
+          .from(schema.otpRequests)
+          .where(eq(schema.otpRequests.phone, phone))
+          .orderBy(desc(schema.otpRequests.createdAt))
+          .limit(1);
+        if (latest && ctx.now.getTime() - latest.createdAt.getTime() < OTP_RESEND_AFTER_SECONDS * 1000) {
+          throw tooManyRequests(`Wait ${OTP_RESEND_AFTER_SECONDS} seconds before asking for another code`);
+        }
+      }
+      await tx.insert(schema.otpRequests).values({
+        id: requestId,
+        phone,
+        channel,
+        codeHash: sha256(`${requestId}:${code}`),
+        expiresAt: new Date(ctx.now.getTime() + OTP_TTL_SECONDS * 1000),
+      });
     });
+    // Test numbers use the fixed code and are never messaged.
+    if (isTestPhone) return { requestId, expiresInSeconds: OTP_TTL_SECONDS, resendAfterSeconds: OTP_RESEND_AFTER_SECONDS };
     const text = `${code} is your Elixir Books sign-in code. It expires in 5 minutes.`;
     if (channel === 'whatsapp') await ctx.deps.providers.whatsapp.send({ to: phone, text });
     else {
@@ -143,17 +201,28 @@ export const authHandlers = defineHandlers({
     const [otp] = await ctx.db.select().from(schema.otpRequests).where(eq(schema.otpRequests.id, ctx.body.requestId));
     if (!otp || otp.verifiedAt) throw unauthorized('OTP_INVALID', 'That code is not valid');
     if (otp.expiresAt < ctx.now) throw unauthorized('OTP_EXPIRED', 'That code has expired; request a new one');
-    if (otp.attempts >= OTP_MAX_ATTEMPTS) throw unauthorized('OTP_LOCKED', 'Too many wrong attempts; request a new code');
-    if (sha256(`${otp.id}:${ctx.body.code}`) !== otp.codeHash) {
-      await ctx.db.update(schema.otpRequests).set({ attempts: otp.attempts + 1 }).where(eq(schema.otpRequests.id, otp.id));
-      throw unauthorized('OTP_INVALID', 'That code is not valid');
-    }
-    await ctx.db.update(schema.otpRequests).set({ verifiedAt: ctx.now }).where(eq(schema.otpRequests.id, otp.id));
+    // Every guess, right or wrong, takes an attempt first, in one statement: parallel guesses can't
+    // all read the same count and slip past the limit together.
+    const [counted] = await ctx.db
+      .update(schema.otpRequests)
+      .set({ attempts: sql`${schema.otpRequests.attempts} + 1` })
+      .where(and(eq(schema.otpRequests.id, otp.id), sql`${schema.otpRequests.attempts} < ${OTP_MAX_ATTEMPTS}`))
+      .returning({ id: schema.otpRequests.id });
+    if (!counted) throw unauthorized('OTP_LOCKED', 'Too many wrong attempts; request a new code');
+    if (sha256(`${otp.id}:${ctx.body.code}`) !== otp.codeHash) throw unauthorized('OTP_INVALID', 'That code is not valid');
+    // Only one of two simultaneous right answers gets the session.
+    const [verified] = await ctx.db
+      .update(schema.otpRequests)
+      .set({ verifiedAt: ctx.now })
+      .where(and(eq(schema.otpRequests.id, otp.id), isNull(schema.otpRequests.verifiedAt)))
+      .returning({ id: schema.otpRequests.id });
+    if (!verified) throw unauthorized('OTP_INVALID', 'That code is not valid');
     // Only the account that verified this number signs in with it. A number someone typed in without
     // verifying it is no account's phone, so the code proves it and the person finishes signing up.
     const [user] = await ctx.db.select().from(schema.users).where(verifiedPhone(otp.phone));
     if (!user) throw unauthorized('PHONE_NOT_REGISTERED', 'No account uses this phone number yet; finish signing up');
     if (user.status === 'disabled') throw unauthorized('USER_DISABLED', 'This user has been disabled');
+    if (user.status === 'invited') throw unauthorized('INVITE_PENDING', 'Accept your invitation first');
     return sessionResponse(ctx as unknown as AnyCtx, user, ctx.body.device);
   },
 
@@ -179,15 +248,26 @@ export const authHandlers = defineHandlers({
   },
 
   async resetPassword(ctx) {
-    const [reset] = await ctx.db
-      .select()
-      .from(schema.passwordResetTokens)
-      .where(and(eq(schema.passwordResetTokens.tokenHash, sha256(ctx.body.token)), isNull(schema.passwordResetTokens.usedAt)));
-    if (!reset || reset.expiresAt < ctx.now) throw badRequest('RESET_TOKEN_INVALID', 'This reset link is invalid or has expired');
     const passwordHash = await hashPassword(ctx.body.password);
     await ctx.db.transaction(async (tx) => {
-      await tx.update(schema.users).set({ passwordHash, updatedAt: ctx.now }).where(eq(schema.users.id, reset.userId));
-      await tx.update(schema.passwordResetTokens).set({ usedAt: ctx.now }).where(eq(schema.passwordResetTokens.id, reset.id));
+      // Claimed in one statement, so a link opened twice at once resets the password once.
+      const [reset] = await tx
+        .update(schema.passwordResetTokens)
+        .set({ usedAt: ctx.now })
+        .where(
+          and(
+            eq(schema.passwordResetTokens.tokenHash, sha256(ctx.body.token)),
+            isNull(schema.passwordResetTokens.usedAt),
+            gt(schema.passwordResetTokens.expiresAt, ctx.now),
+          ),
+        )
+        .returning({ userId: schema.passwordResetTokens.userId });
+      if (!reset) throw badRequest('RESET_TOKEN_INVALID', 'This reset link is invalid or has expired');
+      // Proving the email is how a locked-out user gets back in.
+      await tx
+        .update(schema.users)
+        .set({ passwordHash, failedSignInCount: 0, lockedUntil: null, updatedAt: ctx.now })
+        .where(eq(schema.users.id, reset.userId));
       // Every signed-in device has to sign in again with the new password.
       await tx
         .update(schema.deviceSessions)

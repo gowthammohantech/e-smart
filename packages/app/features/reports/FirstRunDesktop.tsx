@@ -2,7 +2,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { focusRing, type WebPressState } from '@esmart/ui/theme/interaction';
 import { Card } from '@esmart/ui/components/Card';
@@ -13,18 +13,12 @@ import { Illustration } from '@esmart/ui/components/Illustration';
 import { SectionHeader } from '@esmart/ui/components/Screen';
 import { quickActions } from '../../components/QuickActions';
 import type { Company } from '@esmart/core/types';
-import { useActiveCompany, useCanOpen, useCurrentUser, useDocuments, useItems, useParties } from '../../store/selectors';
-
-type Step = {
-  key: string;
-  icon: keyof typeof MaterialCommunityIcons.glyphMap;
-  route: string;
-  done: boolean;
-};
+import { useActiveCompany, useCanOpen, useCurrentUser } from '../../store/selectors';
+import { SetupChecklist } from './SetupChecklist';
 
 /**
  * Home for a business with nothing in it yet, on a desktop browser: a welcome
- * with the next move, the setup steps side by side with what's done ticked,
+ * with the next move, the setup checklist with what's done ticked,
  * and the quick actions as a grid. The phone keeps its own single column.
  */
 export function FirstRunDesktop() {
@@ -35,16 +29,7 @@ export function FirstRunDesktop() {
   const user = useCurrentUser();
   // Briefly undefined while signing out, before the router leaves this screen.
   const company = useActiveCompany() as Company | undefined;
-  const customers = useParties('customer');
-  const items = useItems({ activeOnly: true });
-  const invoices = useDocuments('invoice');
 
-  const steps = ([
-    { key: 'customer', icon: 'account-plus-outline', route: '/(app)/contacts/customers/new', done: customers.length > 0 },
-    { key: 'item', icon: 'tag-plus-outline', route: '/(app)/catalog/items/new', done: items.length > 0 },
-    { key: 'invoice', icon: 'file-document-edit-outline', route: '/(app)/sales/invoices/new', done: invoices.length > 0 },
-  ] as Step[]).filter((s) => canOpen(s.route));
-  const doneCount = steps.filter((s) => s.done).length;
 
   const actions = quickActions(tr, t.c.primary).filter((a) => canOpen(a.route));
   // Three to a row, the last row padded so every card keeps the same width.
@@ -81,50 +66,8 @@ export function FirstRunDesktop() {
         </View>
       </Card>
 
-      <View>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <SectionHeader title={tr('reports:home.setUpSteps')} />
-          <Text variant="caption" tone="muted" weight="600">
-            {tr('reports:home.stepsDone', { done: doneCount, total: steps.length })}
-          </Text>
-        </View>
-        <View style={{ flexDirection: 'row', gap: t.spacing.lg }}>
-          {steps.map((s, i) => (
-            <Pressable
-              key={s.key}
-              onPress={() => router.push(s.route as never)}
-              accessibilityRole="button"
-              accessibilityLabel={tr(`reports:home.step.${s.key}.title` as 'reports:home.step.invoice.title')}
-              style={(state) => ({
-                flex: 1,
-                gap: t.spacing.md,
-                padding: t.spacing.lg,
-                borderRadius: t.radius.lg,
-                borderWidth: 1,
-                borderColor: s.done ? t.c.good : t.c.line,
-                ...pressStyle(state as WebPressState),
-              })}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <View style={{ width: 40, height: 40, borderRadius: t.radius.md, backgroundColor: s.done ? t.c.goodSoft : t.c.chip, alignItems: 'center', justifyContent: 'center' }}>
-                  <MaterialCommunityIcons name={s.done ? 'check' : s.icon} size={20} color={s.done ? t.c.good : t.c.primary} />
-                </View>
-                <Text variant="caption" tone="muted" weight="600">
-                  {tr('reports:home.stepNumber', { n: i + 1 })}
-                </Text>
-              </View>
-              <View style={{ gap: 4 }}>
-                <Text variant="body" weight="600">
-                  {tr(`reports:home.step.${s.key}.title` as 'reports:home.step.invoice.title')}
-                </Text>
-                <Text variant="small" tone="muted" style={{ lineHeight: 19 }}>
-                  {tr(`reports:home.step.${s.key}.body` as 'reports:home.step.invoice.body')}
-                </Text>
-              </View>
-            </Pressable>
-          ))}
-        </View>
-      </View>
+      {/* The same checklist Home keeps showing until setup is done. */}
+      <SetupChecklist />
 
       <View>
         <SectionHeader title={tr('reports:home.quickActions')} />
@@ -151,12 +94,12 @@ export function FirstRunDesktop() {
                     })}
                   >
                     <View style={{ width: 36, height: 36, borderRadius: t.radius.md, backgroundColor: a.color ? t.c.primary : t.c.chip, alignItems: 'center', justifyContent: 'center' }}>
-                      <MaterialCommunityIcons name={a.icon} size={19} color={a.color ? t.c.onPrimary : t.c.primary} />
+                      <Icon name={a.icon} size={19} color={a.color ? t.c.onPrimary : t.c.primary} />
                     </View>
                     <Text variant="body" weight="500" style={{ flex: 1 }} numberOfLines={1}>
                       {a.label}
                     </Text>
-                    <MaterialCommunityIcons name="chevron-right" size={18} color={t.c.muted} />
+                    <Icon name="chevron-right" size={18} color={t.c.muted} />
                   </Pressable>
                 ) : (
                   // Sized like a card (padding and border count towards flex) so the columns line up.

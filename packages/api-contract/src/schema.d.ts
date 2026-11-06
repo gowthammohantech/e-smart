@@ -165,6 +165,95 @@ export interface paths {
         patch: operations["updateProfile"];
         trace?: never;
     };
+    "/me/mfa": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Whether I have an authenticator app turned on, and whether this session has passed it */
+        get: operations["getMyMfa"];
+        put?: never;
+        post?: never;
+        /** Turns my authenticator off, on a code from it or a recovery code */
+        delete: operations["disableMyMfa"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/mfa/enrollment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** A new authenticator secret to scan; replaces one not yet confirmed */
+        post: operations["startMyMfaEnrollment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/mfa/enrollment/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Turns the authenticator on with a code from it, passes this session, and returns the recovery codes, shown this once
+         * @description From then on every new session of mine is refused (403 MFA_REQUIRED) until it passes verifyMyMfa.
+         */
+        post: operations["confirmMyMfaEnrollment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/mfa/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Passes this session with a code from my authenticator, or one unused recovery code */
+        post: operations["verifyMyMfa"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Deletes the caller's account (app store rule). Their name, email, phone and logins are erased and every session ends. Refused while they are the only owner of a business other people use (transfer ownership first), and for platform operators. When nobody else is on the account it is closed: the subscription is cancelled and the books are kept, unreadable, for the 8 years GST law requires, then erased. */
+        post: operations["deleteMe"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me/onboarding/complete": {
         parameters: {
             query?: never;
@@ -209,6 +298,23 @@ export interface paths {
         post?: never;
         /** Sign a device out. Its refresh token is revoked at once. */
         delete: operations["revokeDevice"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/notification-preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Which kinds of notification this person gets on their phone (all of them still show in the app) */
+        get: operations["getNotificationPreferences"];
+        put: operations["saveNotificationPreferences"];
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -295,6 +401,25 @@ export interface paths {
         put: operations["uploadCompanyLogo"];
         post?: never;
         delete: operations["removeCompanyLogo"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/signature": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** The authorised signatory's signature, as printed on documents */
+        put: operations["uploadCompanySignature"];
+        post?: never;
+        delete: operations["removeCompanySignature"];
         options?: never;
         head?: never;
         patch?: never;
@@ -579,6 +704,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/{companyId}/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * How much the business holds and what its setup is used by
+         * @description Record counts for backup and plan usage, whether anything has been posted, documents per
+         *     branch, how many items and documents use each tax category, expenses per category, and each
+         *     payment account's balance (in base currency) and whether money has gone through it.
+         */
+        get: operations["getCompanyUsage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/{companyId}/payment-accounts": {
         parameters: {
             query?: never;
@@ -800,7 +949,9 @@ export interface paths {
         get?: never;
         /**
          * Store IRP / EWB API credentials
-         * @description Write-only. The server encrypts them (KMS) and never returns them. Settings expose only `irpClientIdMasked`.
+         * @description Write-only. The portal username and password for the e-invoice (IRP) portal, the e-way bill portal, or both. The two
+         *     logins can differ, so each is stored on its own. The server encrypts the password and never returns it; settings
+         *     expose only the usernames. The GSP's own client id and secret are the server's (environment) and are never supplied.
          */
         put: operations["saveComplianceCredentials"];
         post?: never;
@@ -823,6 +974,28 @@ export interface paths {
         put?: never;
         /** Authenticate against the IRP and the EWB portal with the stored credentials */
         post: operations["testComplianceConnection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/parties/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * How many parties a list's filters match, and what they owe or are owed, in base currency
+         * @description Takes the filters of `listParties`. A party in another currency is counted at its latest rate.
+         */
+        get: operations["summarizePartyList"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -888,6 +1061,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/{companyId}/parties/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create many contacts at once, from a spreadsheet the app has read
+         * @description Each row is checked as createParty checks it. A row whose GSTIN, or failing that whose name (in any case), matches a contact already there or an earlier row is skipped as a duplicate. With `dryRun` nothing is written and the results say what would happen; otherwise every good row is created in one transaction.
+         */
+        post: operations["importParties"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/items/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create many items at once, from a spreadsheet the app has read
+         * @description Each row is checked as createItem checks it (unit, tax category, prices, opening stock). A row whose SKU or barcode is already taken, by an item there or an earlier row, or whose name (in any case) matches one, is skipped as a duplicate. A blank SKU takes the next free number. With `dryRun` nothing is written and the results say what would happen; otherwise every good row is created in one transaction, opening stock posted at the primary branch as createItem does.
+         */
+        post: operations["importItems"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/{companyId}/items": {
         parameters: {
             query?: never;
@@ -899,7 +1116,7 @@ export interface paths {
         };
         get: operations["listItems"];
         put?: never;
-        /** @description When `trackInventory` is set and `openingStock > 0`, the server also writes an `opening` stock movement. */
+        /** @description When `trackInventory` is set and `openingStock > 0`, the server also writes an `opening` stock movement, dated `openingStockDate` (today when it is left out). */
         post: operations["createItem"];
         delete?: never;
         options?: never;
@@ -922,6 +1139,204 @@ export interface paths {
         post?: never;
         /** @description `409 ITEM_IN_USE` when documents or stock movements reference it. Set it inactive instead. */
         delete: operations["removeItem"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/item-categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        get: operations["listItemCategories"];
+        put?: never;
+        /** @description `422 ITEM_CATEGORY_EXISTS` when the company already has one by that name. */
+        post: operations["createItemCategory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/item-categories/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["saveItemCategory"];
+        post?: never;
+        /** @description `409 ITEM_CATEGORY_IN_USE` when items reference it. */
+        delete: operations["removeItemCategory"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/ai-usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * This month's AI actions (Lixi messages and provider bill scans) against the allowance
+         * @description The allowance is the plan's, or the owner's lower monthly budget (Company.aiMonthlyLimit). Past it, Lixi and OCR answer `429 AI_LIMIT_REACHED` until the 1st (India time).
+         */
+        get: operations["getAiUsage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/vehicles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        get: operations["listVehicles"];
+        put?: never;
+        /** @description `422 VEHICLE_EXISTS` when the registration is already on the list. */
+        post: operations["createVehicle"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/vehicles/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /** What each vehicle cost over a period (its expenses, base currency) and how many documents it carried */
+        get: operations["summarizeVehicles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/vehicles/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["saveVehicle"];
+        post?: never;
+        /** @description `409 VEHICLE_IN_USE` when an expense or document names it; mark it inactive instead. */
+        delete: operations["removeVehicle"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/custom-fields": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        get: operations["listCustomFields"];
+        put?: never;
+        /** @description `422 CUSTOM_FIELD_EXISTS` when the record type already has a field by that label. */
+        post: operations["createCustomField"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/custom-fields/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** @description The record type and kind stay as they were; a select can gain choices but not lose one a record holds. */
+        put: operations["saveCustomField"];
+        post?: never;
+        /** @description The field goes; values records held for it are no longer shown. To keep them, mark it inactive instead. */
+        delete: operations["removeCustomField"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/brands": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        get: operations["listBrands"];
+        put?: never;
+        /** @description `422 BRAND_EXISTS` when the company already has one by that name. */
+        post: operations["createBrand"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/brands/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["saveBrand"];
+        post?: never;
+        /** @description `409 BRAND_IN_USE` when items reference it. */
+        delete: operations["removeBrand"];
         options?: never;
         head?: never;
         patch?: never;
@@ -955,7 +1370,7 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** @description Purchase-side kinds (`purchaseOrder`, `goodsReceipt`, `purchaseBill`, `purchaseReturn`) need the `purchases` module. */
+        /** @description Purchase-side kinds (`purchaseOrder`, `goodsReceipt`, `purchaseBill`, `purchaseReturn`, `supplierCreditNote`, `supplierDebitNote`) need the `purchases` module. */
         get: operations["listDocuments"];
         put?: never;
         /**
@@ -967,6 +1382,55 @@ export interface paths {
          *     deliveries, invoices, receipts, bills and returns when they are finalised.
          */
         post: operations["createDocument"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/documents/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * How many documents a list's filters match, what they add up to, and how many are in each status
+         * @description Takes the filters of `listDocuments`, so a paged list can show its count, total and status
+         *     chips without loading every page. `byStatus` ignores the `status` filter (the chips show every
+         *     status there is); `count` and `total` apply it. The total is in base currency and leaves out
+         *     cancelled and rejected documents.
+         */
+        get: operations["summarizeDocumentList"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/tds/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * The TDS a supplier's bill would keep back, as saving it would work it out
+         * @description Thresholds and catch-up count the deductee's earlier bills in the financial year (by PAN),
+         *     so the editor doesn't need every bill on the device. Nothing is saved. A company with no TAN
+         *     deducts nothing.
+         */
+        post: operations["previewTds"];
         delete?: never;
         options?: never;
         head?: never;
@@ -989,6 +1453,28 @@ export interface paths {
          * @description The client's `lineCalc` gives an instant preview. This endpoint is the authoritative check.
          */
         post: operations["calculateDocument"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/documents/openings/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * What customers owed, and what was owed to suppliers, invoice by invoice, when the books started here
+         * @description Each row becomes an openingInvoice (a customer owes it) or openingBill (we owe a supplier), issued under its original number and due date, for the amount still outstanding. They are paid, aged and shown on statements like an invoice or bill, and post only Dr party / Cr Opening balances (or the other way for a bill), never sales, purchases or GST (RULES 6.12). The party is found by GSTIN, or failing that by name in any case, and must be on that side (customer or supplier, or both). A party that already has an opening balance is refused, so nothing is counted twice: clear the balance, or leave its rows out. A number already used for that kind, here or earlier in the batch, is a duplicate. With `dryRun` nothing is written; otherwise every good row is created in one transaction.
+         */
+        post: operations["importOpeningDocuments"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1019,6 +1505,65 @@ export interface paths {
          *     e-invoiced document is locked (`409 DOCUMENT_LOCKED`).
          */
         patch: operations["updateDocument"];
+        trace?: never;
+    };
+    "/companies/{companyId}/approvals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /** Documents waiting for an owner or admin to approve them, oldest first */
+        get: operations["listApprovals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/documents/{id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approves a document waiting for approval and issues it (409 NOT_AWAITING_APPROVAL otherwise) */
+        post: operations["approveDocument"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/documents/{id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sends a document waiting for approval back to its creator as a draft, with why */
+        post: operations["rejectDocument"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/companies/{companyId}/documents/{id}/finalize": {
@@ -1108,6 +1653,29 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["duplicateDocument"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/documents/{id}/recurrence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Repeat an issued invoice weekly, monthly, quarterly or yearly
+         * @description The invoice becomes the template: each day the scheduler issues a copy for every date that has fallen due (same customer, lines and prices at the tax rates of the day, due the same number of days after its date), numbered from the series and e-invoiced like any other, and emails it when `autoSend` is on. Counting from the template's date keeps a series on the 31st at month ends. `none` stops it. Only an issued, uncancelled invoice that is not itself a copy can repeat (422 NOT_RECURRABLE).
+         */
+        put: operations["setDocumentRecurrence"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1245,6 +1813,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/{companyId}/compliance/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * E-invoice and e-way bill counts for badges and the compliance hub
+         * @description E-invoices by status (a finalised invoice or credit note that must be reported and has no
+         *     attempt yet counts as pending), e-way bills by status as of now, live bills that run out
+         *     within 24 hours, and finalised documents that need an e-way bill and have no live one.
+         */
+        get: operations["getComplianceSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/compliance/documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The documents behind the compliance register, newest first
+         * @description `need=eInvoice` lists invoices and credit notes that are or must be reported, by e-invoice
+         *     status (one that must be reported and has no attempt yet is pending). `need=ewayBill` lists
+         *     finalised documents that need an e-way bill and have no live one.
+         */
+        get: operations["listComplianceDocuments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/{companyId}/eway-bills": {
         parameters: {
             query?: never;
@@ -1362,6 +1978,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/{companyId}/payments/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * How many payments a list's filters match, and what they add up to in base currency
+         * @description Takes the filters of `listPayments`, so a paged list can show its count and total without loading every page.
+         */
+        get: operations["summarizePaymentList"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/{companyId}/payments": {
         parameters: {
             query?: never;
@@ -1381,6 +2019,65 @@ export interface paths {
          *     `paid`) of every allocated document.
          */
         post: operations["createPayment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/payment-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /** Payments waiting for approval (or decided), oldest request first; others see only their own */
+        get: operations["listPaymentRequests"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/payment-requests/{id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Records the payment as the approver (checked as any payment is); 409 NOT_AWAITING_APPROVAL once decided */
+        post: operations["approvePaymentRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/payment-requests/{id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Turns a payment request down, with why; nothing is recorded */
+        post: operations["rejectPaymentRequest"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1418,6 +2115,336 @@ export interface paths {
             cookie?: never;
         };
         get: operations["getPaymentReceiptPdf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/bank-statements/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Undo an import
+         * @description Takes the statement and all its lines away. Whatever its lines were matched to stays in the books, free to match again; payments, expenses and vouchers recorded from its lines are not removed.
+         */
+        delete: operations["removeBankStatement"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/bank-statements/parse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Read an Excel (.xlsx) or CSV bank statement into rows of text
+         * @description The first worksheet of an .xlsx (dates as dd/mm/yyyy, numbers as plain text), or a CSV
+         *     (UTF-8). At most 5 MB once decoded. The app maps the rows to lines with core's
+         *     `readStatement` and imports them with `importBankStatement`. A legacy .xls gets
+         *     422 `UNSUPPORTED_FILE`.
+         */
+        post: operations["parseBankStatement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/payment-accounts/{id}/bank-statements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The statements imported into a bank account, newest first
+         * @description Each with how many of its lines are still to explain, matched and excluded.
+         */
+        get: operations["listBankStatements"];
+        put?: never;
+        /**
+         * Import a bank statement's lines into a bank account
+         * @description Lines already imported on this account (same date, amount, narration and running balance)
+         *     are skipped as duplicates. New lines are matched to the account's payments, expenses and
+         *     posted vouchers where there is no doubt (`autoMatched`). With `dryRun` nothing is written
+         *     and the lines come back flagged `duplicate` (200). Only a bank account
+         *     (422 `NOT_A_BANK_ACCOUNT`), in its own currency.
+         */
+        post: operations["importBankStatement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/payment-accounts/{id}/bank-lines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * A bank account's statement lines, newest first
+         * @description A matched line carries `match`; an unmatched one up to three `suggestions`.
+         */
+        get: operations["listBankLines"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/payment-accounts/{id}/bank-lines/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** How many of a bank account's lines are matched, waiting and excluded, and the latest statement balance */
+        get: operations["summarizeBankLines"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/payment-accounts/{id}/reconciliation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** Bank reconciliation statement as of a day */
+        get: operations["getBankReconciliation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/bank-lines/{id}/candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * What in the books a line could be matched to
+         * @description The payments, expenses and posted vouchers through the line's account, dated within 30 days of it either
+         *     way, that no other line is matched to, whatever their amount: those of the line's amount first, then by
+         *     how near their date. `q` keeps those whose number, reference or party's name contains it. At most 100.
+         */
+        get: operations["listBankLineCandidates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/bank-lines/{id}/match": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Match a line to the payment, expense or voucher it is
+         * @description The record must be on the line's account with the same signed amount
+         *     (422 `MATCH_AMOUNT_DIFFERS`), and not matched to another line (409 `ALREADY_MATCHED`).
+         *     A matched line is unmatched first.
+         */
+        post: operations["matchBankLine"];
+        /** Undo a line's match */
+        delete: operations["unmatchBankLine"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/bank-lines/{id}/exclude": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Set a line aside as needing no record in the books */
+        post: operations["excludeBankLine"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/bank-lines/{id}/include": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Bring an excluded line back, unmatched */
+        post: operations["includeBankLine"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/bank-lines/{id}/payment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record the payment a line is, and match it
+         * @description Money in is a payment received, money out a payment made, on the line's date, for its
+         *     amount, through its account, with its reference. Same checks as
+         *     `createPayment` (open period, party kind, allocations; money paid needs the payables module).
+         */
+        post: operations["createPaymentFromBankLine"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/bank-lines/{id}/expense": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record a debit line as an expense, and match it
+         * @description Only money out (422 `NOT_MONEY_OUT`). The expense takes the line's date, amount, account and reference; needs the expenses module.
+         */
+        post: operations["createExpenseFromBankLine"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/bank-lines/{id}/voucher": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record a line against a ledger account, as a voucher, and match it
+         * @description For what is neither a party's payment nor an expense: interest the bank paid, a loan received or
+         *     repaid, capital brought in, drawings. Money in is a receipt voucher (the bank account debited, `account`
+         *     credited); money out a journal (`account` debited, the bank account credited). The voucher takes the
+         *     line's date, amount and reference, and is checked as any voucher is (422 as for `createVoucher`).
+         *     `account` can't be a cash or bank account: a transfer between them is a contra, matched with `matchBankLine`.
+         */
+        post: operations["createVoucherFromBankLine"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/expenses/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * How many expenses a list's filters match, what they add up to, and the split by category
+         * @description Takes the filters of `listExpenses`. Amounts are in base currency.
+         */
+        get: operations["summarizeExpenseList"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1464,6 +2491,352 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/{companyId}/ledger-accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        get: operations["listLedgerAccounts"];
+        put?: never;
+        /** @description An account the business adds itself. System accounts and those mirroring parties, cash and bank accounts and expense categories are derived and need no record. An account a voucher uses cannot be removed (409 ACCOUNT_IN_USE). */
+        post: operations["createLedgerAccount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/ledger-accounts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get: operations["getLedgerAccount"];
+        put: operations["saveLedgerAccount"];
+        post?: never;
+        delete: operations["removeLedgerAccount"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/cost-centres": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        get: operations["listCostCentres"];
+        put?: never;
+        /** @description A project, department or the like. Documents, expenses and voucher lines can carry one, for profit by cost centre. One in use cannot be removed (409 COST_CENTRE_IN_USE). */
+        post: operations["createCostCentre"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/cost-centres/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get: operations["getCostCentre"];
+        put: operations["saveCostCentre"];
+        post?: never;
+        delete: operations["removeCostCentre"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/budgets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /** The business's budgets, the latest year first */
+        get: operations["listBudgets"];
+        put?: never;
+        /**
+         * @description A plan for each income and expense account, month by month over a financial year (RULES 6.16), for the whole
+         *     business or one branch or cost centre. `yearFrom` is the year's first day; each line's `months` are its twelve
+         *     months from then, in base-currency paise, income as earned and expenses as spent.
+         */
+        post: operations["createBudget"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/budgets/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get: operations["getBudget"];
+        put: operations["saveBudget"];
+        post?: never;
+        delete: operations["removeBudget"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/budgets/{id}/variance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The budget against the books
+         * @description For each account planned: what was planned over `from`–`to` (within the budget's year; a month covered in part
+         *     is planned in proportion to its days), what the books show, and the difference, month by month. The books
+         *     cover every branch, so a user limited to some is refused (403 BOOKS_ALL_BRANCHES).
+         */
+        get: operations["getBudgetVariance"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/fixed-assets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The fixed asset register
+         * @description Every asset, with what has been written off and what it stands at as of `asOf` (default today). `status` keeps those still held (`active`) or gone (`disposed`).
+         */
+        get: operations["listFixedAssets"];
+        put?: never;
+        /**
+         * @description Adds an asset to the register (RULES 6.15). Its cost is in the books already, on the bill or voucher it was
+         *     bought on, in `account` (`sys:fixedAssets` or a fixed-asset ledger account); the register posts its
+         *     depreciation by the day, at each month's end, and its disposal. Straight line (`slm`) needs `lifeMonths`,
+         *     written down value (`wdv`) a `rate`. Bought before the books began, give the depreciation already written
+         *     off (`openingDepreciation`) and the day it stood at (`openingAsOf`). Nothing it posts may fall in a closed
+         *     period (409 PERIOD_LOCKED).
+         */
+        post: operations["createFixedAsset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/fixed-assets/schedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The fixed asset schedule for a period
+         * @description Asset by asset, as the notes to the accounts show it: cost and depreciation at the start of `from`, what was bought, written off and disposed of, and at the end of `to`. Base-currency paise.
+         */
+        get: operations["getFixedAssetSchedule"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/fixed-assets/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /** @description The asset, with its depreciation year by year through the year it is fully written off (or disposed of). */
+        get: operations["getFixedAsset"];
+        /** @description Saves the asset, a disposal among it (`disposedOn`). Refused when what it posts would change in a closed period (409 PERIOD_LOCKED). */
+        put: operations["saveFixedAsset"];
+        post?: never;
+        /** @description Takes the asset out of the register, and its depreciation out of the books; refused when any of it falls in a closed period (409 PERIOD_LOCKED). Its cost stays where its bill or voucher put it. */
+        delete: operations["removeFixedAsset"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/books/{view}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                view: "trial-balance" | "profit-loss" | "balance-sheet" | "ledger" | "day-book" | "cost-centres" | "accounts" | "integrity";
+            };
+            cookie?: never;
+        };
+        /**
+         * One of the books' statements, worked out from the whole book
+         * @description The same `@esmart/core` ledger functions the app ran on the device, on the server's book:
+         *     `trial-balance` (core trialBalance over from–to), `profit-loss` (ProfitAndLoss over from–to), `balance-sheet` (BalanceSheet as of `to`), `ledger`
+         *     (one account's LedgerStatement over from–to; needs `account`), `day-book` (DayBookEntry[] over
+         *     from–to), `cost-centres` (CostCentreRow[] over from–to) and `accounts` (the chart of accounts,
+         *     the book it names accounts from, and each account's balance as of `to`) and `integrity` (IntegrityCheck[] as of
+         *     `to`: the ledger against the records it comes from). `profit-loss` and `balance-sheet` take `breakdown`
+         *     (ProfitAndLossColumns / BalanceSheetColumns, a column per month or quarter of from–to) or `compare` (two
+         *     columns: the range and the one before it, or the same dates last year). Amounts are base-currency
+         *     paise, as core gives them. The books cover every branch, so a user limited to some is refused.
+         */
+        get: operations["getBooksView"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/vouchers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        get: operations["listVouchers"];
+        put?: never;
+        /** @description The server assigns `number` from the kind's series. A voucher sent with status `draft` is kept out of the books and takes no number (its `number` is its id) until a save sets status `posted`; a draft may be unbalanced or have one line, and is not refused in a closed period. A posted voucher must follow every rule. Debits must equal credits; a contra moves money only between cash and bank accounts; a GST journal touches a GST ledger; a TDS challan clears TDS payable. Refused in a closed period (409 PERIOD_LOCKED). */
+        post: operations["createVoucher"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/vouchers/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Journals from a spreadsheet, each checked as one entered by hand
+         * @description Up to 500 journals. With asDrafts each is kept as a draft (unbalanced ones too); otherwise each is posted and must follow every voucher rule. dryRun checks and saves nothing; the good ones are saved in one transaction.
+         */
+        post: operations["importVouchers"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/voucher-templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        get: operations["listVoucherTemplates"];
+        put?: never;
+        post: operations["createVoucherTemplate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/voucher-templates/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["saveVoucherTemplate"];
+        post?: never;
+        delete: operations["removeVoucherTemplate"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/vouchers/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get: operations["getVoucher"];
+        put: operations["saveVoucher"];
+        post?: never;
+        delete: operations["removeVoucher"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/{companyId}/stock/levels": {
         parameters: {
             query?: never;
@@ -1475,6 +2848,29 @@ export interface paths {
         };
         /** On-hand quantity per item (and branch), derived from the movement ledger */
         get: operations["getStockLevels"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/items/{id}/ledger": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        /**
+         * One item's stock on hand, value and movements with a running balance
+         * @description The movements come newest first, at most 200; the balance after each is counted from the first.
+         */
+        get: operations["getItemLedger"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1642,6 +3038,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/{companyId}/cash-forecast": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Cash and bank week by week, from what is owed each way and what recurs
+         * @description Today's cash and bank balances, plus open invoices and debit notes by due date, less open bills by due date, plus copies of recurring invoices and recurring expenses on their dates. Overdue amounts count in the first week, marked. Base-currency minor units, as core's CashForecast.
+         */
+        get: operations["getCashForecast"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/{companyId}/receivables": {
         parameters: {
             query?: never;
@@ -1698,13 +3116,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/{companyId}/report-data/{reportKey}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                reportKey: "sales-summary" | "purchase-summary" | "expense-summary" | "receivables" | "payables" | "stock" | "tax-summary" | "payments" | "advances" | "profit" | "tds-register" | "tds-payable" | "tds-receivable" | "tds-26q" | "tds-challans" | "msme-payables" | "gstr1";
+            };
+            cookie?: never;
+        };
+        /**
+         * A report as the app shows it, worked out on the server
+         * @description The same `@esmart/core` reports function the app ran on the device, on the server's records
+         *     (the whole book up to `to`, so balances carry their history), with the same filters. Shaped as
+         *     core returns it, amounts as Money in base currency. A report outside the plan is refused.
+         */
+        get: operations["getReportData"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/{companyId}/reports/{reportKey}": {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 companyId: components["parameters"]["CompanyId"];
-                reportKey: "sales-summary" | "purchase-summary" | "expense-summary" | "receivables" | "payables" | "stock" | "tax-summary" | "payments" | "profit";
+                reportKey: "sales-summary" | "purchase-summary" | "expense-summary" | "receivables" | "payables" | "stock" | "tax-summary" | "payments" | "profit" | "tds-register" | "trial-balance" | "msme-payables";
             };
             cookie?: never;
         };
@@ -1715,11 +3158,298 @@ export interface paths {
          *     The response schema depends on `reportKey`: sales/purchase-summary →
          *     TransactionSummary, expense-summary → ExpenseSummary, receivables/payables →
          *     AgingReport, stock → StockReport, tax-summary → TaxSummary, payments →
-         *     PaymentSummary, profit → ProfitSnapshot.
+         *     PaymentSummary, profit → ProfitSnapshot, tds-register → TdsRegister,
+         *     trial-balance → TrialBalance (the whole books, not only the period's documents),
+         *     msme-payables → MsmePayables (as of `to`; `from` is ignored).
          */
         get: operations["getReport"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/gst/portal-sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /** The business's GSTINs and whether each is connected to the GST portal */
+        get: operations["listGstPortalSessions"];
+        put?: never;
+        /**
+         * Opens the taxpayer's GST portal session with the OTP sent to their registered phone
+         * @description The taxpayer switches API access on in the portal (Profile → Manage API Access) first. The session lasts six hours and refreshes on its own for as long as they chose there (up to 30 days).
+         */
+        post: operations["connectGstPortal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/gst/portal-sessions/otp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Asks the GST portal to send an OTP to the taxpayer's registered phone */
+        post: operations["requestGstPortalOtp"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/gst/portal-sessions/{gstin}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                gstin: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["disconnectGstPortal"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/gst/returns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /** GSTR-1 and GSTR-3B for a financial year, as recorded here and, when connected, as the portal tracks them */
+        get: operations["listGstReturns"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/gst/gstr2b": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /** A period's GSTR-2B matched against the purchase register */
+        get: operations["getGstr2b"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/gst/gstr2b/fetch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Downloads a period's GSTR-2B through the GST portal session, keeping decisions already made
+         * @description 409 GSTR2B_NOT_GENERATED until GSTN has made it (the 14th of the next month, for most).
+         */
+        post: operations["fetchGstr2b"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/gst/gstr2b/claim": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Claims the period's credit on every matched bill (GSTR-3B reads it from there) */
+        post: operations["claimGstr2b"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/gst/gstr2b/lines/{id}/decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** A person's call on one line of 2B */
+        put: operations["decideGstr2bLine"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/gst/gstr3b": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /** A period's GSTR-3B worked out from the books, with the tax set off from credit and cash */
+        get: operations["getGstr3b"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/gst/returns/{returnType}/save": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                returnType: "gstr1" | "gstr3b";
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Saves the period’s return to the GST portal (again, if it changed)
+         * @description GSTR-1 from the period’s sales; GSTR-3B from the books, with the set-off. Saving replaces what was saved before. 409 RETURN_FILED once filed.
+         */
+        post: operations["saveGstReturn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/gst/returns/{returnType}/offset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                returnType: "gstr1" | "gstr3b";
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** GSTR-3B: sets off the liability from credit and cash, as the saved return says */
+        post: operations["offsetGstReturn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/gst/returns/{returnType}/proceed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                returnType: "gstr1" | "gstr3b";
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** GSTR-1: freezes the saved data for filing */
+        post: operations["proceedGstReturn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/gst/returns/{returnType}/evc": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                returnType: "gstr1" | "gstr3b";
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sends the EVC OTP to the authorised signatory’s phone */
+        post: operations["requestGstReturnEvc"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/gst/returns/{returnType}/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                returnType: "gstr1" | "gstr3b";
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Files the return with the EVC OTP. Cannot be undone.
+         * @description 503 FILING_DISABLED until GST_FILING_ENABLED is on. GSTR-3B needs the period’s GSTR-1 filed first. The portal is asked first whether it is already filed, so a return is never filed twice; an answer lost on the way is settled by the portal’s tracker. Filing GSTR-3B closes the books through the period and posts the set-off as a GST journal.
+         */
+        post: operations["fileGstReturn"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1775,6 +3505,139 @@ export interface paths {
         };
         /** Everything the home tab shows, in one call */
         get: operations["getDashboard"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/hubs/sales": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Everything the Sales tab shows, in one call
+         * @description The period's invoicing and collections (this month unless `range` says otherwise, with the
+         *     period before when `compare=previous`), its sales trend, what customers owe (as the receivables
+         *     aging works it out), how many of each sales document there are, the top five customers by value
+         *     invoiced in the period, and the six latest invoices. Fields named `…ThisMonth` hold the period's
+         *     figure. Amounts are in base currency; drafts and cancelled invoices count
+         *     towards nothing but the document counts.
+         */
+        get: operations["getSalesHub"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/hubs/purchases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Everything the Purchases tab shows, in one call
+         * @description The period's bills and expenses (this month unless `range` says otherwise, with the period
+         *     before when `compare=previous`), what the business owes suppliers (as the payables aging works
+         *     it out), how many of each purchase document there are, the period's expenses by category with
+         *     the Expenses tab's figures, and the six latest bills. Fields named `…ThisMonth` hold the
+         *     period's figure. Amounts are in base currency. The expense figures are left
+         *     out on a plan without expenses.
+         */
+        get: operations["getPurchasesHub"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/hubs/home": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Everything the Home tab shows, in one call
+         * @description The period's sales, collections, expenses and profit (this month unless `range` says
+         *     otherwise, with the period before when `compare=previous`), the sales trend and cash in and out
+         *     at the chosen grain, invoices by status, cash and bank balances, stock health, the latest money
+         *     in and out, receivables (with the four most overdue invoices) and payables as the aging works
+         *     them out, counts that need attention, and the five latest invoices. Fields named `…ThisMonth`
+         *     hold the period's figure; profit is the profit report's. Amounts are in base currency. Expense, payable and
+         *     stock figures are left out on a plan without them.
+         */
+        get: operations["getHomeHub"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/hubs/accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Everything the Accounts & P&L tab shows, in one call
+         * @description The period's profit (as the profit report gives it), cash in and out of cash and bank by kind,
+         *     the GST position, and, for a user who sees every branch, the balance sheet at the period's end
+         *     and the accounts that moved most. The books cover every branch, so a user limited to some gets
+         *     `books: false` and no balance sheet or account movement.
+         */
+        get: operations["getAccountsHub"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/hubs/compliance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * What's due to the tax department, and where the credit stands
+         * @description Returns and deposits due in the 45 days behind and 60 ahead (GSTR-1 or IFF and GSTR-3B or
+         *     PMT-06 for each GSTIN, by its filing frequency, and the TDS deposit for a business with a TAN),
+         *     with whether each was filed as recorded here; the last month's GSTR-2B against the purchase
+         *     register (on a plan with purchases); and the TDS still to deposit (for a user who sees the books).
+         *     Informational: it files nothing.
+         */
+        get: operations["getComplianceHub"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2213,6 +4076,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/mfa": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Whether the operator has an authenticator set up, and whether this session has passed it */
+        get: operations["getMfaStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/mfa/enrollment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** A new authenticator secret to scan. Replaces one not yet confirmed; refused once set up (reset from the command line). */
+        post: operations["startMfaEnrollment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/mfa/enrollment/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Turns the authenticator on with a code from it, verifies this session, and returns the recovery codes. They are shown this once. */
+        post: operations["confirmMfaEnrollment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/mfa/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Passes this session with a code from the authenticator, or one unused recovery code */
+        post: operations["verifyMfa"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/metrics/overview": {
         parameters: {
             query?: never;
@@ -2405,6 +4336,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/users/{userId}/platform-role": {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                userId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Make a user a platform superadmin or support operator, or remove their platform access
+         * @description Signs the user out everywhere, so their next session opens under the new role's rules (an authenticator, 12-hour sessions). `SELF`: you can't change your own role. `USER_DISABLED`: enable the user first. `LAST_SUPERADMIN`: there must always be one. `NO_CHANGE`: they already have that role.
+         */
+        put: operations["setPlatformUserRole"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/audit-events": {
         parameters: {
             query?: never;
@@ -2573,6 +4528,27 @@ export interface components {
              * @description Last day the LUT covers; absent means open-ended
              */
             lutValidTill?: string;
+            /**
+             * @description Unset reads as monthly. How GSTR-1 and GSTR-3B are filed. QRMP: quarterly returns with monthly payment.
+             * @enum {string}
+             */
+            returnFrequency?: "monthly" | "qrmp";
+        };
+        /**
+         * @description The account customers pay into, printed on invoices; with `upiId`, a UPI QR for the amount
+         *     due too. Sent whole: an empty string clears a field, and an absent object leaves them all as they are.
+         */
+        BankDetails: {
+            bankName?: string;
+            /** @description Name the account is held in */
+            accountName?: string;
+            /** @description Up to 34 letters and digits; single spaces between groups are allowed and dropped when saved */
+            accountNumber?: string;
+            /** @description Indian Financial System Code */
+            ifsc?: string;
+            branch?: string;
+            /** @description Virtual payment address, e.g. `vertex@okhdfc` */
+            upiId?: string;
         };
         Company: components["schemas"]["Versioned"] & {
             readonly id?: string;
@@ -2581,6 +4557,24 @@ export interface components {
             legalName?: string;
             /** Format: uri */
             readonly logoUri?: string;
+            /**
+             * Format: uri
+             * @description The authorised signatory's signature, printed above that line on documents. Set through /signature.
+             */
+            readonly signatureUri?: string;
+            bankDetails?: components["schemas"]["BankDetails"];
+            /** @description How its documents look. Statutory content always prints; every option defaults to the standard page. */
+            invoiceTemplate?: {
+                accentColor?: string;
+                showDiscountColumn?: boolean;
+                showTaxColumn?: boolean;
+                showHsn?: boolean;
+                showLogo?: boolean;
+                footerText?: string;
+                compact?: boolean;
+            };
+            /** @description The owner's monthly AI budget (Lixi messages plus provider bill scans), below the plan's allowance. Null is the plan's. */
+            aiMonthlyLimit?: number | null;
             /** @description Stable slug, e.g. `wholesale` */
             businessType: string;
             country: string;
@@ -2592,11 +4586,46 @@ export interface components {
             website?: string;
             taxRegistration?: components["schemas"]["TaxRegistration"];
             fiscalYearStartMonth: number;
+            /** @description Modules switched off within the plan: hidden, and their operations refused (403 MODULE_OFF); their records stay. Only an owner can change it. */
+            disabledModules?: ("purchases" | "inventory" | "expenses" | "ocr" | "fx" | "branches" | "payables" | "books")[];
+            /** @description Documents of a kind whose total (in base currency) is over the amount wait for an owner or admin before they are issued; with kind `payment`, payments made over it wait as payment requests. Only an owner can change them. */
+            approvalRules?: {
+                /** @description A document kind, or `payment` for payments made to suppliers (RULES 6.14). */
+                kind: components["schemas"]["DocumentKind"] | "payment";
+                overMinor: number;
+            }[];
+            /**
+             * Format: date
+             * @description Books are closed up to and including this date: no document dated then can be finalised or cancelled. Only an owner can change it.
+             */
+            lockedThroughDate?: string | null;
+            /**
+             * Format: date
+             * @description Perpetual stock from this day, which must start a financial year after any closed period: tracked goods post to Stock in hand at a moving weighted-average cost as they come in and go out, and the goods sold to Cost of goods sold. Null keeps the books periodic (closing stock valued from the stock ledger). Only an owner can change it; `422 PERPETUAL_NOT_YEAR_START`, `409 PERIOD_LOCKED`.
+             */
+            perpetualStockFrom?: string | null;
+            /**
+             * @description How stock is costed as it goes out (RULES 6.2): `average`, a moving weighted average (the default), or `fifo`, first in, first out. It values every period, so it changes only while no period is closed (`409 PERIOD_LOCKED`), and only by an owner.
+             * @enum {string}
+             */
+            stockCosting?: "average" | "fifo";
+            /** @description Tax deduction account number. With it, TDS is worked out on supplier bills under their section. An empty string clears it. */
+            tan?: string;
             /**
              * @description When false, finalising a sale that would take a tracked item below zero at its branch fails with 422 INSUFFICIENT_STOCK.
              * @default false
              */
             allowNegativeStock: boolean;
+            /**
+             * @description RBI's bank rate in percent; MSME late-payment interest is three times it (MSMED Act s.16)
+             * @default 5.5
+             */
+            msmeBankRate: number;
+            /**
+             * @description How many days apart a GSTR-2B line and a bill with the same amounts may be dated and still be claimable without a person accepting it; 0 means the same day only.
+             * @default 3
+             */
+            gstr2bDateToleranceDays: number;
             /** @description Changed only through billing */
             readonly plan?: components["schemas"]["PlanTier"];
         };
@@ -2612,7 +4641,7 @@ export interface components {
             /** @description The branch's own GSTIN when it is registered separately; printed as the seller */
             gstin?: string;
         };
-        User: {
+        User: components["schemas"]["Versioned"] & {
             readonly id?: string;
             readonly accountId?: string;
             name?: string;
@@ -2645,7 +4674,7 @@ export interface components {
             monthly?: number;
             yearly?: number;
             features?: string[];
-            modules?: ("purchases" | "inventory" | "expenses" | "ocr" | "fx" | "branches" | "payables")[];
+            modules?: ("purchases" | "inventory" | "expenses" | "ocr" | "fx" | "branches" | "payables" | "books")[];
             popular?: boolean;
         };
         Subscription: {
@@ -2661,12 +4690,12 @@ export interface components {
             /** @enum {string} */
             provider?: "razorpay" | "appStore" | "playStore";
         };
-        TaxCategory: {
+        TaxCategory: components["schemas"]["Versioned"] & {
             readonly id?: string;
             readonly companyId?: string;
             /** @example GST 18% */
             name: string;
-            /** @description Combined percentage, split at calculation time */
+            /** @description Combined percentage, split at calculation time. Up to 100, or 999.999 for CESS */
             rate: number;
             /** @enum {string} */
             type: "GST" | "CGST" | "SGST" | "IGST" | "VAT" | "CESS" | "NONE";
@@ -2675,14 +4704,69 @@ export interface components {
             effectiveFrom: string;
             description?: string;
         };
-        ExpenseCategory: {
+        ExpenseCategory: components["schemas"]["Versioned"] & {
             readonly id?: string;
             readonly companyId?: string;
             name: string;
             icon?: string;
             color?: string;
         };
-        PaymentAccount: {
+        VoucherTemplate: components["schemas"]["Versioned"] & {
+            readonly id?: string;
+            readonly companyId?: string;
+            name: string;
+            /** @enum {string} */
+            kind: "journal" | "contra" | "gstJournal" | "tdsChallan" | "receipt";
+            narration?: string;
+            lines: {
+                account: string;
+                /** @enum {string} */
+                side: "dr" | "cr";
+                /** @description Left out to fill in on each use */
+                amount?: components["schemas"]["Money"];
+                narration?: string;
+                costCentreId?: string;
+            }[];
+        };
+        Vehicle: components["schemas"]["Versioned"] & {
+            readonly id?: string;
+            readonly companyId?: string;
+            /** @description As on the RC; spaces and dashes are dropped: TN09AB1234 */
+            registration: string;
+            name?: string;
+            /** @enum {string} */
+            status?: "active" | "inactive";
+        };
+        CustomField: components["schemas"]["Versioned"] & {
+            readonly id?: string;
+            readonly companyId?: string;
+            /** @enum {string} */
+            entity: "party" | "item" | "document";
+            label: string;
+            /** @enum {string} */
+            kind: "text" | "number" | "date" | "select" | "checkbox";
+            /** @description A select's choices, in order */
+            options?: string[];
+            required?: boolean;
+            /** @description Printed on documents: a document field on its own PDF, a party field on documents to that party */
+            showOnPdf?: boolean;
+            position?: number;
+            /** @enum {string} */
+            status?: "active" | "inactive";
+        };
+        ItemCategory: components["schemas"]["Versioned"] & {
+            readonly id?: string;
+            readonly companyId?: string;
+            name: string;
+            /** @description Hex, like #4DA3FF; a neutral grey when left out */
+            color?: string;
+        };
+        Brand: components["schemas"]["Versioned"] & {
+            readonly id?: string;
+            readonly companyId?: string;
+            name: string;
+        };
+        PaymentAccount: components["schemas"]["Versioned"] & {
             readonly id?: string;
             readonly companyId?: string;
             name: string;
@@ -2691,10 +4775,18 @@ export interface components {
             currency: string;
             accountNumber?: string;
             openingBalance: components["schemas"]["Money"];
+            /**
+             * Format: date
+             * @description The day the opening balance was counted; not after today.
+             */
+            openingBalanceDate?: string;
+            /** @description A foreign-currency account: the opening balance's rate to base on its date, from the company's exchange rates */
+            readonly openingRate?: number;
+            /** @description In base currency */
             readonly currentBalance?: components["schemas"]["Money"];
             isDefault?: boolean;
         };
-        ExchangeRate: {
+        ExchangeRate: components["schemas"]["Versioned"] & {
             readonly id?: string;
             readonly companyId?: string;
             from: string;
@@ -2705,11 +4797,11 @@ export interface components {
             /** @enum {string} */
             source?: "manual" | "provider";
         };
-        NumberingSeries: {
+        NumberingSeries: components["schemas"]["Versioned"] & {
             readonly id?: string;
             readonly companyId?: string;
             /** @enum {string} */
-            kind: "quote" | "salesOrder" | "delivery" | "invoice" | "salesReturn" | "purchaseOrder" | "goodsReceipt" | "purchaseBill" | "purchaseReturn" | "payment" | "expense";
+            kind: "quote" | "proforma" | "salesOrder" | "delivery" | "invoice" | "salesReturn" | "purchaseOrder" | "goodsReceipt" | "purchaseBill" | "purchaseReturn" | "creditNote" | "debitNote" | "supplierCreditNote" | "supplierDebitNote" | "selfInvoice" | "payment" | "expense" | "journal" | "contra" | "gstJournal" | "tdsChallan" | "receipt";
             /** @example INV */
             prefix: string;
             nextNumber: number;
@@ -2719,7 +4811,7 @@ export interface components {
             /** @enum {string} */
             resetPolicy?: "never" | "yearly" | "monthly";
         };
-        Transporter: {
+        Transporter: components["schemas"]["Versioned"] & {
             readonly id?: string;
             readonly companyId?: string;
             name: string;
@@ -2741,11 +4833,12 @@ export interface components {
             /** @example 30 */
             reportingWindowDays?: number;
             autoGenerateEInvoiceOnFinalise?: boolean;
+            /** @description The e-invoice (IRP) portal username */
             irpUsername?: string;
+            /** @description The e-way bill portal username */
+            ewbUsername?: string;
             /** @example ELX-****-9F21 */
             readonly irpClientIdMasked?: string;
-            /** @enum {string} */
-            irpEnvironment?: "sandbox" | "production";
             ewayBillEnabled?: boolean;
             ewayBillThreshold?: components["schemas"]["Money"];
             autoGenerateEwayBillOnFinalise?: boolean;
@@ -2766,8 +4859,11 @@ export interface components {
             /** Format: date-time */
             readonly lastBackupAt?: string;
         };
-        /** @enum {string} */
-        PartyKind: "customer" | "supplier";
+        /**
+         * @description both: buys and sells, one ledger under Sundry Debtors, on sales and purchase documents. general: a contact only, on no document or payment. Listing customers or suppliers includes both.
+         * @enum {string}
+         */
+        PartyKind: "customer" | "supplier" | "both" | "general";
         /** @enum {string} */
         GstRegistrationType: "regular" | "composition" | "unregistered" | "sez" | "overseas";
         Party: components["schemas"]["Versioned"] & {
@@ -2781,6 +4877,25 @@ export interface components {
             /** @description GSTIN */
             taxId?: string;
             gstRegistrationType?: components["schemas"]["GstRegistrationType"];
+            /** @description Income-tax PAN; read from the GSTIN when not given */
+            pan?: string;
+            /**
+             * @description The supplier's Udyam category; their bills fall due within 45 days (MSMED Act s.15)
+             * @enum {string}
+             */
+            msmeType?: "micro" | "small" | "medium";
+            /** @example UDYAM-MH-26-0012345 */
+            udyamNumber?: string;
+            /** @description Bills from this supplier are under reverse charge unless a line says otherwise */
+            reverseCharge?: boolean;
+            /** @description The TDS section this supplier's bills fall under by default */
+            tdsSection?: components["schemas"]["TdsSectionCode"];
+            /** @description A lower or nil deduction certificate (s.197) */
+            lowerTdsCertificate?: {
+                rate: number;
+                /** Format: date */
+                validTill: string;
+            };
             /** Format: email */
             email?: string;
             phone?: string;
@@ -2789,16 +4904,32 @@ export interface components {
             shippingAddress?: components["schemas"]["Address"];
             creditLimit?: components["schemas"]["Money"];
             openingBalance: components["schemas"]["Money"];
+            /**
+             * Format: date
+             * @description The day the opening balance stands at; not after today. Unset reads as the start of the books.
+             */
+            openingBalanceDate?: string;
+            /**
+             * @description dr: they owe us; cr: we owe them. Unset is the kind's usual side (customer and both dr, supplier cr). A general contact has no opening balance.
+             * @enum {string}
+             */
+            openingBalanceSide?: "dr" | "cr";
             paymentTermsDays: number;
             notes?: string;
             /** @enum {string} */
             status?: "active" | "inactive";
+            /** @description Values of the company custom fields, by field id (listCustomFields); checked against them */
+            customFields?: {
+                [key: string]: unknown;
+            };
         };
         PartyWithBalance: components["schemas"]["Party"] & {
             readonly outstanding?: components["schemas"]["Money"];
             readonly overdue?: components["schemas"]["Money"];
             /** @description Unallocated payments */
             readonly advance?: components["schemas"]["Money"];
+            /** @description Only for a party that is both: what we owe them on bills (outstanding is what they owe on invoices) */
+            readonly payable?: components["schemas"]["Money"];
         };
         PartyStatement: {
             party?: components["schemas"]["Party"];
@@ -2808,7 +4939,7 @@ export interface components {
                 /** Format: date */
                 date?: string;
                 /** @enum {string} */
-                entityType?: "document" | "payment" | "opening";
+                entityType?: "document" | "payment" | "voucher" | "opening";
                 entityId?: string;
                 number?: string;
                 debit?: components["schemas"]["Money"];
@@ -2819,6 +4950,10 @@ export interface components {
         Item: components["schemas"]["Versioned"] & {
             readonly id?: string;
             readonly companyId?: string;
+            /** @description Values of the company custom fields, by field id (listCustomFields); checked against them */
+            customFields?: {
+                [key: string]: unknown;
+            };
             sku: string;
             name: string;
             description?: string;
@@ -2832,11 +4967,21 @@ export interface components {
             hsnCode?: string;
             barcode?: string;
             trackInventory?: boolean;
+            gst?: components["schemas"]["GstFlags"];
             /** @description Used only on create */
             openingStock?: number;
+            /**
+             * Format: date
+             * @description The day the opening stock was counted; not after today, and no document with this item can be dated before it. Used only on create, and only when trackInventory is set.
+             */
+            openingStockDate?: string;
             reorderLevel?: number;
             /** Format: uri */
             readonly imageUri?: string;
+            /** @description An item category of this company, or null for none */
+            categoryId?: string | null;
+            /** @description A brand of this company, or null for none */
+            brandId?: string | null;
             /** @enum {string} */
             status?: "active" | "inactive";
         };
@@ -2844,10 +4989,477 @@ export interface components {
             readonly stockOnHand?: number;
             readonly low?: boolean;
         };
-        /** @enum {string} */
-        DocumentKind: "quote" | "salesOrder" | "delivery" | "invoice" | "salesReturn" | "purchaseOrder" | "goodsReceipt" | "purchaseBill" | "purchaseReturn";
+        /**
+         * @description creditNote and debitNote lower or raise what an invoice charged, with no goods moving; supplierCreditNote and supplierDebitNote are a supplier's against their bill. Each is usually raised against its invoice or bill (sourceDocumentId); a direct note, against no one invoice or bill, must give its noteReason. Credit notes, like returns, settle what the source still owes, and a direct one is credit the party holds, like an advance; debit notes are owed and paid like an invoice or bill. openingInvoice and openingBill are what was still owed, invoice by invoice, when the books started here (importOpeningDocuments): paid and aged like an invoice or bill, posted only to Opening balances, never in sales, purchases or GST.
+         * @enum {string}
+         */
+        DocumentKind: "quote" | "proforma" | "salesOrder" | "delivery" | "invoice" | "salesReturn" | "purchaseOrder" | "goodsReceipt" | "purchaseBill" | "purchaseReturn" | "creditNote" | "debitNote" | "supplierCreditNote" | "supplierDebitNote" | "openingInvoice" | "openingBill";
         /** @enum {string} */
         DocStatus: "draft" | "sent" | "accepted" | "rejected" | "expired" | "confirmed" | "fulfilled" | "cancelled" | "delivered" | "issued" | "partiallyPaid" | "paid" | "overdue" | "requested" | "approved" | "processed" | "received" | "billed";
+        LedgerAccount: components["schemas"]["Versioned"] & {
+            readonly id?: string;
+            readonly companyId?: string;
+            name: string;
+            /** @enum {string} */
+            group: "capital" | "reserves" | "loans" | "sundryCreditors" | "dutiesTaxes" | "provisions" | "currentLiabilities" | "fixedAssets" | "investments" | "sundryDebtors" | "cashInHand" | "bankAccounts" | "stockInHand" | "loansAdvances" | "currentAssets" | "salesAccounts" | "directIncomes" | "indirectIncomes" | "purchaseAccounts" | "directExpenses" | "indirectExpenses";
+            /** @description Debit positive, as of the day the books begin */
+            openingBalance: components["schemas"]["Money"];
+            /**
+             * Format: date
+             * @description The day the opening balance stands at; not after today. Unset reads as the start of the books.
+             */
+            openingBalanceDate?: string;
+            /** @enum {string} */
+            status?: "active" | "inactive";
+        };
+        Budget: components["schemas"]["Versioned"] & {
+            readonly id?: string;
+            name: string;
+            /**
+             * Format: date
+             * @description The first day of the financial year it plans
+             */
+            yearFrom: string;
+            branchId?: string;
+            costCentreId?: string;
+            notes?: string;
+            lines: {
+                /** @description An income or expense account, by key */
+                account: string;
+                /** @description Base-currency paise for each month from the year's first */
+                months: number[];
+            }[];
+        };
+        BudgetVariance: {
+            /** Format: date */
+            from: string;
+            /** Format: date */
+            to: string;
+            income: components["schemas"]["BudgetActual"];
+            expense: components["schemas"]["BudgetActual"];
+            profit: components["schemas"]["BudgetActual"];
+            rows: {
+                account: components["schemas"]["LedgerAccountRef"];
+                /** @enum {string} */
+                nature: "income" | "expense";
+                budget: number;
+                actual: number;
+                variance: number;
+                favourable: boolean;
+                months: {
+                    /** Format: date */
+                    month: string;
+                    budget: number;
+                    actual: number;
+                }[];
+            }[];
+        };
+        BudgetActual: {
+            budget: number;
+            actual: number;
+        };
+        LedgerAccountRef: {
+            key: string;
+            name: string;
+            group: string;
+        };
+        FixedAsset: components["schemas"]["Versioned"] & {
+            readonly id?: string;
+            readonly companyId?: string;
+            branchId?: string;
+            name: string;
+            /** @description What kind of asset: Computers, Vehicles, Furniture… */
+            category?: string;
+            /** @description The fixed-asset account its cost sits in, by key: `sys:fixedAssets` or `acc:<id>` */
+            account: string;
+            assetCode?: string;
+            /** Format: date */
+            acquiredOn: string;
+            /**
+             * Format: date
+             * @description Depreciation runs from this day
+             */
+            inUseFrom: string;
+            cost: components["schemas"]["Money"];
+            /** @description What it is expected to fetch at the end; never written off */
+            residualValue?: components["schemas"]["Money"];
+            /**
+             * @description Straight line over `lifeMonths`, or written down value at `rate` percent a year
+             * @enum {string}
+             */
+            method: "slm" | "wdv";
+            lifeMonths?: number;
+            rate?: number;
+            /** @description Written off before the books began here, by `openingAsOf` */
+            openingDepreciation?: components["schemas"]["Money"];
+            /** Format: date */
+            openingAsOf?: string;
+            /** @description The purchase bill it was bought on, when bought here */
+            sourceDocumentId?: string;
+            costCentreId?: string;
+            /**
+             * Format: date
+             * @description Sold, scrapped or lost: depreciation stops and it leaves the books that day
+             */
+            disposedOn?: string;
+            disposalNote?: string;
+            notes?: string;
+            /** @enum {string} */
+            readonly status?: "active" | "disposed";
+            /** @description Written off by `asOf` (today, unless the list was asked for another day) */
+            readonly accumulatedDepreciation?: components["schemas"]["Money"];
+            readonly bookValue?: components["schemas"]["Money"];
+            /** @description Only from getFixedAsset: depreciation by financial year */
+            readonly years?: {
+                label: string;
+                /** Format: date */
+                from: string;
+                /** Format: date */
+                to: string;
+                opening: components["schemas"]["Money"];
+                depreciation: components["schemas"]["Money"];
+                closing: components["schemas"]["Money"];
+            }[];
+        };
+        FixedAssetSchedule: {
+            /** Format: date */
+            from: string;
+            /** Format: date */
+            to: string;
+            rows: components["schemas"]["FixedAssetScheduleRow"][];
+            totals: components["schemas"]["FixedAssetScheduleRow"];
+        };
+        FixedAssetScheduleRow: {
+            assetId?: string;
+            name?: string;
+            category?: string;
+            account?: string;
+            openingCost: number;
+            additions: number;
+            disposals: number;
+            closingCost: number;
+            openingDepreciation: number;
+            depreciation: number;
+            depreciationOnDisposals: number;
+            closingDepreciation: number;
+            openingValue: number;
+            closingValue: number;
+        };
+        CostCentre: components["schemas"]["Versioned"] & {
+            readonly id?: string;
+            readonly companyId?: string;
+            name: string;
+            /** @example Project */
+            category?: string;
+            /** @description The centre this one sits under */
+            parentId?: string;
+            /** @enum {string} */
+            status?: "active" | "inactive";
+        };
+        VoucherLine: {
+            /**
+             * @description An account key: sys:<name>, sys:tdsPayable:<section>, party:<id>, pay:<id>, exp:<id> or acc:<id>
+             * @example pay:pac_123
+             */
+            account: string;
+            debit: components["schemas"]["Money"];
+            credit: components["schemas"]["Money"];
+            narration?: string;
+            costCentreId?: string;
+        };
+        Voucher: components["schemas"]["Versioned"] & {
+            readonly id?: string;
+            readonly companyId?: string;
+            branchId?: string;
+            /**
+             * @description receipt: money in that isn't from an invoice (interest, rent, a refund); it debits cash or bank only
+             * @enum {string}
+             */
+            kind: "journal" | "contra" | "gstJournal" | "tdsChallan" | "receipt";
+            readonly number?: string;
+            /** Format: date */
+            date: string;
+            narration?: string;
+            /** @description A TDS challan's number and BSR code, a cheque number */
+            reference?: string;
+            /** @description A TDS challan's deposit details (ITNS 281), for the challan register and Form 26Q */
+            challan?: {
+                bsrCode: string;
+                serial: string;
+                /** Format: date */
+                depositedOn: string;
+            };
+            /**
+             * @description Omitted on create means posted; omitted on save keeps it. A posted voucher cannot go back to draft.
+             * @enum {string}
+             */
+            status?: "draft" | "posted";
+            /** Format: date-time */
+            readonly postedAt?: string;
+            lines: components["schemas"]["VoucherLine"][];
+            readonly createdBy?: string;
+        };
+        TrialBalance: {
+            rows?: {
+                account?: string;
+                name?: string;
+                group?: string;
+                /** @description Debit positive */
+                opening?: components["schemas"]["Money"];
+                debit?: components["schemas"]["Money"];
+                credit?: components["schemas"]["Money"];
+                /** @description Debit positive */
+                closing?: components["schemas"]["Money"];
+            }[];
+            totalDebit?: components["schemas"]["Money"];
+            totalCredit?: components["schemas"]["Money"];
+        };
+        GstPortalSession: {
+            gstin?: string;
+            username?: string;
+            connected?: boolean;
+            /** Format: date-time */
+            expiresAt?: string;
+            /**
+             * Format: date-time
+             * @description Until when it renews without a new OTP
+             */
+            refreshableUntil?: string;
+            /** Format: date-time */
+            otpRequestedAt?: string;
+        };
+        GstReturn: {
+            id?: string;
+            gstin?: string;
+            /** @enum {string} */
+            returnType?: "gstr1" | "gstr3b";
+            /** @description MMYYYY */
+            period?: string;
+            /** @enum {string} */
+            status?: "prepared" | "saved" | "submitted" | "filed" | "failed" | "notFiled";
+            arn?: string;
+            /** Format: date */
+            filedOn?: string;
+            referenceId?: string;
+            lastError?: string;
+        };
+        Gstr2bBill: {
+            documentId?: string;
+            /** @enum {string} */
+            kind?: "purchaseBill" | "supplierCreditNote" | "supplierDebitNote";
+            number?: string;
+            supplierNumber?: string;
+            /** Format: date */
+            date?: string;
+            taxable?: components["schemas"]["Money"];
+            tax?: components["schemas"]["Money"];
+            claimedIn?: string;
+        };
+        Gstr2bReconciliation: {
+            gstin?: string;
+            period?: string;
+            fetched?: boolean;
+            /** Format: date-time */
+            fetchedAt?: string;
+            /** Format: date */
+            generatedOn?: string;
+            summary?: {
+                lines?: number;
+                matched?: number;
+                matchedWithinTolerance?: number;
+                manuallyLinked?: number;
+                claimed?: number;
+                partial?: number;
+                probable?: number;
+                missingInBooks?: number;
+                missingIn2b?: number;
+                claimableTax?: components["schemas"]["Money"];
+            };
+            rows?: {
+                id?: string;
+                section?: string;
+                supplierGstin?: string;
+                supplierName?: string;
+                /** @enum {string} */
+                documentType?: "I" | "C" | "D" | "BOE" | "ISD";
+                number?: string;
+                /** Format: date */
+                date?: string;
+                taxable?: components["schemas"]["Money"];
+                tax?: components["schemas"]["Money"];
+                reverseCharge?: boolean;
+                itcAvailable?: boolean;
+                itcReason?: string;
+                /**
+                 * @description matchedWithinTolerance: amounts agree, dated a few days apart. partial: number agrees, amount or date doesn't (see reasons). claimed: its bill's credit is claimed for this period.
+                 * @enum {string}
+                 */
+                status?: "matched" | "matchedWithinTolerance" | "manuallyLinked" | "claimed" | "partial" | "probable" | "missingInBooks" | "notOurs" | "claimLater";
+                /** @description What differs between the line and its bill */
+                reasons?: ("taxable" | "tax" | "date" | "number")[];
+                /** @enum {string} */
+                decision?: "accepted" | "notOurs" | "claimLater";
+                bill?: components["schemas"]["Gstr2bBill"];
+                difference?: {
+                    taxable?: components["schemas"]["Money"];
+                    tax?: components["schemas"]["Money"];
+                    days?: number;
+                };
+            }[];
+            missingIn2b?: components["schemas"]["Gstr2bBill"][];
+        };
+        GstAmounts: {
+            taxable?: components["schemas"]["Money"];
+            igst?: components["schemas"]["Money"];
+            cgst?: components["schemas"]["Money"];
+            sgst?: components["schemas"]["Money"];
+            cess?: components["schemas"]["Money"];
+        };
+        Gstr3bView: {
+            gstin?: string;
+            period?: string;
+            /** Format: date */
+            dueDate?: string;
+            /** @description Whether this server files returns (GST_FILING_ENABLED) */
+            filingEnabled?: boolean;
+            outward?: {
+                taxable?: components["schemas"]["GstAmounts"];
+                zeroRated?: components["schemas"]["GstAmounts"];
+                nilExempt?: components["schemas"]["GstAmounts"];
+                reverseCharge?: components["schemas"]["GstAmounts"];
+                nonGst?: components["schemas"]["GstAmounts"];
+            };
+            interStateUnregistered?: {
+                placeOfSupply?: string;
+                taxable?: components["schemas"]["Money"];
+                igst?: components["schemas"]["Money"];
+            }[];
+            itc?: {
+                importOfGoods?: components["schemas"]["GstAmounts"];
+                importOfServices?: components["schemas"]["GstAmounts"];
+                reverseCharge?: components["schemas"]["GstAmounts"];
+                isd?: components["schemas"]["GstAmounts"];
+                allOther?: components["schemas"]["GstAmounts"];
+                reversedRules?: components["schemas"]["GstAmounts"];
+                reversedOther?: components["schemas"]["GstAmounts"];
+                net?: components["schemas"]["GstAmounts"];
+                reclaimed?: components["schemas"]["GstAmounts"];
+            };
+            inwardExempt?: {
+                interState?: components["schemas"]["Money"];
+                intraState?: components["schemas"]["Money"];
+            };
+            interest?: components["schemas"]["GstAmounts"];
+            lateFee?: components["schemas"]["GstAmounts"];
+            /** @description How the tax is paid. credit[from][to], cash by kind, credit carried in from last month and forward to the next. */
+            setOff?: {
+                liability?: components["schemas"]["GstAmounts"];
+                credit?: {
+                    [key: string]: components["schemas"]["GstAmounts"];
+                };
+                cash?: components["schemas"]["GstAmounts"];
+                carriedIn?: components["schemas"]["GstAmounts"];
+                carriedForward?: components["schemas"]["GstAmounts"];
+            };
+            /** @description This period's GSTR-1 and GSTR-3B as recorded */
+            returns?: components["schemas"]["GstReturn"][];
+            /** @description What makes up each table, keyed as the portal numbers them (3.1a … 3.1e, 3.2, 4A1 … 4A5, 4B1, 4B2, 4D1, 5): one row per document, expense or advance, signed (a credit note takes away). */
+            breakup?: {
+                [key: string]: (components["schemas"]["GstAmounts"] & {
+                    /** @enum {string} */
+                    type?: "document" | "expense" | "advance";
+                    id?: string;
+                    kind?: string;
+                    number?: string;
+                    /** Format: date */
+                    date?: string;
+                    partyId?: string;
+                    partyName?: string;
+                })[];
+            };
+        };
+        /**
+         * @description 194J(a) is 194JA, 194I(b) is 194IB, and so on.
+         * @enum {string}
+         */
+        TdsSectionCode: "194C" | "194JA" | "194JB" | "194H" | "194IA" | "194IB" | "194A" | "194Q";
+        TdsDeduction: {
+            section: components["schemas"]["TdsSectionCode"];
+            rate: number;
+            amount: components["schemas"]["Money"];
+        };
+        /** @description Bills of micro and small suppliers still unpaid (MSMED Act s.15: by the agreed day, at most 45 days, else 15), and for the CA what wasn't paid in time this financial year (s.43B(h)) */
+        MsmePayables: {
+            rows?: {
+                documentId?: string;
+                number?: string;
+                supplierDocNumber?: string;
+                partyId?: string;
+                partyName?: string;
+                /** @enum {string} */
+                msmeType?: "micro" | "small";
+                /** Format: date */
+                date?: string;
+                /** Format: date */
+                dueDate?: string;
+                outstanding?: components["schemas"]["Money"];
+                /** @description Negative once overdue */
+                daysLeft?: number;
+                /** @description s.16 interest so far, at three times the bank rate, compounded monthly */
+                interest?: components["schemas"]["Money"];
+            }[];
+            notPaidInTime?: {
+                documentId?: string;
+                number?: string;
+                partyId?: string;
+                partyName?: string;
+                /** Format: date */
+                date?: string;
+                /** Format: date */
+                dueDate?: string;
+                amount?: components["schemas"]["Money"];
+            }[];
+            /** @description RBI's bank rate used for the interest, percent */
+            bankRate?: number;
+            outstanding?: components["schemas"]["Money"];
+            overdue?: components["schemas"]["Money"];
+        };
+        TdsRegister: {
+            rows?: {
+                section?: string;
+                sectionLabel?: string;
+                partyId?: string;
+                partyName?: string;
+                pan?: string;
+                /** @example FY 2026-27 Q1 */
+                quarter?: string;
+                base?: components["schemas"]["Money"];
+                tds?: components["schemas"]["Money"];
+                documents?: number;
+            }[];
+            total?: components["schemas"]["Money"];
+        };
+        /** @description How GST treats an item. Kept on each document line as it was when the line was written. */
+        GstFlags: {
+            /**
+             * @description Unset reads as taxable. Nil-rated, exempt and non-GST supplies carry no tax and are reported separately
+             * @enum {string}
+             */
+            supplyType?: "taxable" | "nil" | "exempt" | "nonGst";
+            /** @description Recovered at cost as the customer's pure agent (Rule 33): no tax, outside the taxable value */
+            reimbursement?: boolean;
+            /** @description An asset; its input tax credit is reported separately */
+            capitalGoods?: boolean;
+            /**
+             * @description Unset reads as eligible. Whether GST paid on it can be claimed; blocked is s.17(5)
+             * @enum {string}
+             */
+            itcEligibility?: "eligible" | "blocked" | "ineligible";
+            /** @description A notified reverse-charge supply; the buyer pays the GST */
+            reverseCharge?: boolean;
+            /** @description Compensation cess, percent of the taxable value */
+            cessRate?: number;
+        };
         DocumentLine: {
             id?: string;
             itemId?: string;
@@ -2869,6 +5481,10 @@ export interface components {
             readonly taxRate?: number;
             /** @default false */
             taxInclusive: boolean;
+            /** @description Defaults to the item's; kept as it was once the document is finalised */
+            gst?: components["schemas"]["GstFlags"];
+            /** @description A reimbursement line: the customer's billable expense it recovers. An expense is recovered once (409 EXPENSE_ALREADY_RECOVERED) */
+            expenseId?: string;
         };
         TaxComponent: {
             /** @enum {string} */
@@ -2881,6 +5497,8 @@ export interface components {
             categoryId?: string;
             categoryName?: string;
             rate?: number;
+            /** @description Tax the buyer pays the government; not part of the total */
+            reverseCharge?: boolean;
             taxableAmount?: components["schemas"]["Money"];
             components?: components["schemas"]["TaxComponent"][];
             totalTax?: components["schemas"]["Money"];
@@ -2891,7 +5509,14 @@ export interface components {
             documentDiscount?: components["schemas"]["Money"];
             taxableAmount?: components["schemas"]["Money"];
             taxLines?: components["schemas"]["TaxLine"][];
+            /** @description Tax charged on the document, cess included; reverse-charge tax is not */
             totalTax?: components["schemas"]["Money"];
+            /** @description Tax the buyer owes under reverse charge; not in the grand total */
+            reverseChargeTax?: components["schemas"]["Money"];
+            /** @description TCS collected from the buyer (s.206C), inside the grand total */
+            tcs?: components["schemas"]["Money"];
+            /** @description Pure-agent reimbursements, added after tax */
+            reimbursements?: components["schemas"]["Money"];
             charges?: components["schemas"]["Money"];
             roundOff?: components["schemas"]["Money"];
             grandTotal?: components["schemas"]["Money"];
@@ -2900,6 +5525,10 @@ export interface components {
         NewDocumentInput: {
             kind: components["schemas"]["DocumentKind"];
             partyId: string;
+            /** @description Values of the company custom fields, by field id (listCustomFields); checked against them */
+            customFields?: {
+                [key: string]: unknown;
+            };
             /** @description Defaults to the user's active branch */
             branchId?: string;
             /** Format: date */
@@ -2923,9 +5552,42 @@ export interface components {
             terms?: string;
             reference?: string;
             supplierDocNumber?: string;
+            /** @description On an import bill (a purchase bill from an overseas supplier): the bill of entry customs assessed it on, with the IGST and cess paid there. That IGST is input credit, claimed in 3B 4A(1) once 2B shows the bill of entry. */
+            billOfEntry?: {
+                number: string;
+                /** Format: date */
+                date: string;
+                portCode: string;
+                assessableValue: components["schemas"]["Money"];
+                igst: components["schemas"]["Money"];
+                cess?: components["schemas"]["Money"];
+            };
+            /** @description A purchase bill that is an Input Service Distributor's invoice: its credit goes to 3B 4A(4) */
+            isdInvoice?: boolean;
             placeOfSupplyStateCode?: string;
+            /** @description The whole document is under reverse charge; the buyer pays the GST */
+            reverseCharge?: boolean;
             attachmentIds?: string[];
             sourceDocumentId?: string;
+            /**
+             * @description Why a credit or debit note was raised
+             * @enum {string}
+             */
+            noteReason?: "discount" | "priceChange" | "taxCorrection" | "deficiency" | "other";
+            /** @description The project or department it belongs to */
+            costCentreId?: string;
+            /** @description The vehicle it moved on */
+            vehicleId?: string;
+            /**
+             * @description On an invoice: the TCS section (s.206C) the sale falls under, or none. The rate follows the section, higher when the buyer has no PAN; a 206C(1F) sale collects only over ₹10 lakh.
+             * @enum {string}
+             */
+            tcsSection?: "none" | "scrap" | "liquor" | "tenduLeaves" | "timberLease" | "timberOther" | "forestProduce" | "minerals" | "motorVehicle" | "luxuryGoods";
+            /**
+             * @description On a supplier's bill or debit note: the TDS section, or none. Defaults to the supplier's; worked out only for a company with a TAN.
+             * @enum {string}
+             */
+            tdsSection?: "none" | "194C" | "194JA" | "194JB" | "194H" | "194IA" | "194IB" | "194A" | "194Q";
             /** @description Finalise an invoice even though it takes the customer past their credit limit; without it that is 422 CREDIT_LIMIT_EXCEEDED. */
             overrideCreditLimit?: boolean;
             /**
@@ -2941,6 +5603,57 @@ export interface components {
             readonly number?: string;
             status?: components["schemas"]["DocStatus"];
             totals?: components["schemas"]["DocumentTotals"];
+            /** @description The party's GSTIN when the document was finalised */
+            readonly partyGstin?: string;
+            /** @description TDS deducted on the bill: what is owed the supplier is the grand total less this */
+            tds?: components["schemas"]["TdsDeduction"];
+            /** @description The self-invoice for a reverse-charge purchase from an unregistered supplier (Rule 46(f)) */
+            readonly selfInvoiceNumber?: string;
+            /**
+             * Format: date
+             * @description Input tax credit reversed after 180 days unpaid
+             */
+            readonly itcReversedOn?: string;
+            /**
+             * Format: date
+             * @description Credit claimed again once paid
+             */
+            readonly itcReclaimedOn?: string;
+            /** @description The GSTR-2B period (MMYYYY) whose line this bill matched; its credit is claimed in that return */
+            readonly itcClaimPeriod?: string;
+            readonly partyStateCode?: string;
+            /**
+             * @description Set with setDocumentRecurrence
+             * @enum {string}
+             */
+            readonly recurrence?: "none" | "weekly" | "monthly" | "quarterly" | "yearly";
+            /** @description TCS collected on the sale; the amount is totals.tcs */
+            readonly tcs?: {
+                section?: string;
+                rate?: number;
+            };
+            /**
+             * Format: date
+             * @description The date of the next copy; unset once the series has ended
+             */
+            readonly nextRecurrenceDate?: string;
+            /** Format: date */
+            readonly recurrenceEndDate?: string;
+            readonly recurrenceAutoSend?: boolean;
+            /** @description On a copy, the recurring invoice it was issued from */
+            readonly recurringParentId?: string;
+            /** @description Set when the document was sent for approval: it stays a draft until an owner or admin approves it (which issues it) or rejects it */
+            readonly approval?: {
+                /** @enum {string} */
+                status?: "pending" | "approved" | "rejected";
+                requestedBy?: string;
+                /** Format: date-time */
+                requestedAt?: string;
+                decidedBy?: string;
+                /** Format: date-time */
+                decidedAt?: string;
+                note?: string;
+            };
             compliance?: components["schemas"]["ComplianceInfo"];
             readonly createdBy?: string;
         };
@@ -2957,9 +5670,18 @@ export interface components {
             date?: string;
             /** Format: date */
             dueDate?: string;
+            /** @description On a purchase: the supplier's own number for it */
+            supplierDocNumber?: string;
+            /** @description The GSTR-2B period (MMYYYY) its credit was claimed in */
+            itcClaimPeriod?: string;
             grandTotal?: components["schemas"]["Money"];
+            /** @description To base currency */
+            exchangeRate?: number;
+            totalTax?: components["schemas"]["Money"];
             outstanding?: components["schemas"]["Money"];
             eInvoiceStatus?: components["schemas"]["EInvoiceStatus"];
+            /** @description The IRN once one is issued */
+            irn?: string;
             /** @enum {string} */
             ewayBillStatus?: "notApplicable" | "notRequired" | "pending" | "generated" | "cancelled" | "expired";
         };
@@ -3165,7 +5887,34 @@ export interface components {
         PaymentAllocation: {
             documentId: string;
             readonly documentNumber?: string;
+            readonly documentKind?: components["schemas"]["DocumentKind"];
+            /** @description Cash: what the payment itself settles; may be zero when an adjustment below settles the document */
             amount: components["schemas"]["Money"];
+            /** @description Settled without cash: TDS the customer deducted, or the business deducted from a supplier */
+            tdsDeducted?: components["schemas"]["Money"];
+            /** @description Settled without cash: a discount allowed or received */
+            discount?: components["schemas"]["Money"];
+            /** @description Settled without cash: written off as bad debt (owner, admin or accountant) */
+            writeOff?: components["schemas"]["Money"];
+        };
+        PaymentRequest: {
+            id: string;
+            /** @enum {string} */
+            status: "pending" | "approved" | "rejected";
+            payment: components["schemas"]["Payment"];
+            partyName: string;
+            amount: components["schemas"]["Money"];
+            requestedBy: string;
+            requestedByName?: string;
+            /** Format: date-time */
+            requestedAt: string;
+            decidedBy?: string;
+            decidedByName?: string;
+            /** Format: date-time */
+            decidedAt?: string;
+            note?: string;
+            paymentId?: string;
+            version: number;
         };
         Payment: components["schemas"]["Versioned"] & {
             readonly id?: string;
@@ -3174,6 +5923,8 @@ export interface components {
             readonly number?: string;
             direction: components["schemas"]["PaymentDirection"];
             partyId: string;
+            /** @description The customer's or supplier's name, so a list needn't look each one up */
+            readonly partyName?: string;
             /** Format: date */
             date: string;
             amount: components["schemas"]["Money"];
@@ -3185,14 +5936,180 @@ export interface components {
             allocations?: components["schemas"]["PaymentAllocation"][];
             readonly unallocated?: components["schemas"]["Money"];
             readonly fxGainLoss?: components["schemas"]["Money"];
+            /** @description A receipt that is an advance for services owes GST when received (s.13(2)), at this rate and place of supply; invoices raised against it later take the tax back (GSTR-1 table 11). Advances for goods carry none. */
+            advanceTax?: {
+                taxCategoryId: string;
+                /** @description The rate on the day received */
+                readonly rate?: number;
+                placeOfSupplyStateCode: string;
+            };
+            /** @description On money paid: the TDS section of what its allocations kept back (tdsDeducted), so it is reported under that section in 26Q and TDS payable */
+            tdsSection?: string;
+            /** @description Money paid back to a customer (direction `paid`) out of the advance on this receipt: no allocations, no more than is left of that advance. Prints as the refund voucher (Rule 51); a service advance's tax comes back on its date. */
+            refundOf?: string;
+            /** @description On a receipt, what has been paid back out of it */
+            readonly refunds?: {
+                paymentId: string;
+                number?: string;
+                /** Format: date */
+                date: string;
+                amount: components["schemas"]["Money"];
+            }[];
             /** @enum {string} */
             readonly source?: "manual" | "gateway";
             notes?: string;
             attachmentIds?: string[];
             readonly createdBy?: string;
         };
+        /** @enum {string} */
+        BankLineStatus: "unmatched" | "matched" | "excluded";
+        /** @enum {string} */
+        BankMatchType: "payment" | "expense" | "voucher";
+        /** @description A payment, expense or voucher in the books, as a bank line matches it. `amount` is signed as the bank sees it (+ money into the account). */
+        BankLineRecord: {
+            type: components["schemas"]["BankMatchType"];
+            id: string;
+            number?: string;
+            /** Format: date */
+            date: string;
+            amount: components["schemas"]["Money"];
+            reference?: string;
+            partyName?: string;
+        };
+        BankLineSuggestion: components["schemas"]["BankLineRecord"] & {
+            score: number;
+            /** @description The record's reference or number (a UTR, a cheque number) is in the line */
+            referenceHit: boolean;
+        };
+        BankStatementLine: {
+            id: string;
+            statementId: string;
+            accountId: string;
+            /** Format: date */
+            date: string;
+            description: string;
+            reference?: string;
+            /** @description + money into the account (a credit on the statement), − money out */
+            amount: components["schemas"]["Money"];
+            /** @description The running balance the bank printed */
+            balance?: components["schemas"]["Money"];
+            status: components["schemas"]["BankLineStatus"];
+            excludedReason?: string;
+            match?: components["schemas"]["BankLineRecord"];
+            suggestions?: components["schemas"]["BankLineSuggestion"][];
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        BankStatement: {
+            id: string;
+            accountId: string;
+            fileName: string;
+            /** Format: date */
+            from: string;
+            /** Format: date */
+            to: string;
+            openingBalance?: components["schemas"]["Money"];
+            closingBalance?: components["schemas"]["Money"];
+            /** @description Lines it added (duplicates are not counted) */
+            lineCount: number;
+            createdBy: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        BankStatementImport: {
+            fileName: string;
+            /** @default false */
+            dryRun: boolean;
+            lines: {
+                /** Format: date */
+                date: string;
+                description: string;
+                /** @description Cut to 100 characters */
+                reference?: string;
+                /** @description + money in, − money out; not zero */
+                amount: components["schemas"]["Money"];
+                balance?: components["schemas"]["Money"];
+            }[];
+        };
+        BankStatementImportResult: {
+            statement?: components["schemas"]["BankStatement"];
+            imported: number;
+            duplicates: number;
+            autoMatched: number;
+            /** @description The file's lines in its order, each flagged when it was already imported (or repeats an earlier line of this file with no running balance to tell them apart) */
+            lines: {
+                /** Format: date */
+                date: string;
+                description: string;
+                reference?: string;
+                amount: components["schemas"]["Money"];
+                balance?: components["schemas"]["Money"];
+                duplicate: boolean;
+            }[];
+        };
+        BankLineSummary: {
+            unmatched: number;
+            matched: number;
+            excluded: number;
+            lastStatement?: components["schemas"]["BankStatement"];
+            /** @description The running balance on the latest line that has one */
+            statementBalance?: components["schemas"]["Money"];
+            /** Format: date */
+            statementBalanceDate?: string;
+        };
+        /**
+         * @description Bank reconciliation statement. `adjustedBookBalance` = book balance + lines the books
+         *     don't have yet (credits − debits). `adjustedStatementBalance` = statement balance +
+         *     deposits not yet credited − payments not yet debited. They agree (`difference` 0) when
+         *     every difference is explained. Records dated before the account's first imported
+         *     statement (`since`) are taken as cleared.
+         */
+        BankReconciliation: {
+            /** Format: date */
+            asOf: string;
+            /**
+             * Format: date
+             * @description First day of the earliest statement imported
+             */
+            since?: string;
+            bookBalance: components["schemas"]["Money"];
+            /** @description The running balance on the last line on or before `asOf` that has one; absent when none does */
+            statementBalance?: components["schemas"]["Money"];
+            /** Format: date */
+            statementBalanceDate?: string;
+            /** @description In the books, on or before `asOf`, matched to no line */
+            unclearedPayments: {
+                /** @description Deposited but not yet credited by the bank */
+                deposits: components["schemas"]["BankLineRecord"][];
+                /** @description Paid but not yet debited by the bank */
+                payments: components["schemas"]["BankLineRecord"][];
+                depositsTotal: components["schemas"]["Money"];
+                /** @description As a positive amount */
+                paymentsTotal: components["schemas"]["Money"];
+            };
+            /** @description On the statement, on or before `asOf`, neither matched nor excluded */
+            unrecordedLines: {
+                credits: components["schemas"]["BankStatementLine"][];
+                debits: components["schemas"]["BankStatementLine"][];
+                creditsTotal: components["schemas"]["Money"];
+                /** @description As a positive amount */
+                debitsTotal: components["schemas"]["Money"];
+            };
+            adjustedBookBalance: components["schemas"]["Money"];
+            adjustedStatementBalance?: components["schemas"]["Money"];
+            /** @description adjustedBookBalance − adjustedStatementBalance */
+            difference?: components["schemas"]["Money"];
+        };
         Expense: components["schemas"]["Versioned"] & {
             readonly id?: string;
+            /** @description The live invoice that recovered it as a reimbursement line */
+            readonly recoveredBy?: {
+                documentId?: string;
+                number?: string;
+            };
             readonly companyId?: string;
             branchId?: string;
             readonly number?: string;
@@ -3206,11 +6123,27 @@ export interface components {
             taxCategoryId?: string;
             taxAmount?: components["schemas"]["Money"];
             taxInclusive?: boolean;
+            /** @description Decides CGST+SGST or IGST; defaults to the company's state */
+            placeOfSupplyStateCode?: string;
+            /** @description The supplier's GSTIN on the bill, when there's no saved supplier */
+            supplierGstin?: string;
+            /**
+             * @description Unset reads as eligible
+             * @enum {string}
+             */
+            itcEligibility?: "eligible" | "blocked" | "ineligible";
+            /** @description The business pays this tax itself under reverse charge; amount is then the supplier's price without it */
+            reverseCharge?: boolean;
             accountId: string;
             method: components["schemas"]["PaymentMethod"];
             reference?: string;
             notes?: string;
             billable?: boolean;
+            /** @description Billable: the customer it is recovered from, as a reimbursement line on their invoice */
+            customerId?: string;
+            costCentreId?: string;
+            /** @description The vehicle it was spent on */
+            vehicleId?: string;
             /** @enum {string} */
             recurrence?: "none" | "weekly" | "monthly" | "quarterly" | "yearly";
             /** Format: date */
@@ -3225,6 +6158,10 @@ export interface components {
             companyId?: string;
             branchId?: string;
             itemId?: string;
+            /** @description On lists: the item's name, so a list needn't look each one up */
+            itemName?: string;
+            /** @description On lists: the item's SKU */
+            itemSku?: string;
             type?: components["schemas"]["StockMovementType"];
             quantity?: number;
             unitCost?: components["schemas"]["Money"];
@@ -3315,6 +6252,12 @@ export interface components {
             /** @description Why; kept in the platform audit log */
             reason: string;
         };
+        PlatformRoleChange: {
+            /** @description `null` removes platform access */
+            platformRole: components["schemas"]["PlatformRole"] | null;
+            /** @description Why; kept in the platform audit log */
+            reason: string;
+        };
         PlatformAccount: {
             id: string;
             name: string;
@@ -3391,6 +6334,16 @@ export interface components {
                 count: number;
             }[];
             userCount: number;
+            /** @description What this company's AI use cost the platform, by month (India time), newest first, the last six months with any use. */
+            aiCost?: {
+                month: string;
+                /** @description Lixi messages and bill scans counted against the allowance */
+                actions: number;
+                inputTokens: number;
+                outputTokens: number;
+                /** @description As the provider reported it; 0 where it reports none (Anthropic, most non-OpenRouter servers) */
+                costUsd: number;
+            }[];
         };
         PlatformPlanOverride: {
             plan: components["schemas"]["PlanTier"];
@@ -3443,6 +6396,42 @@ export interface components {
                 count: number;
             }[];
         };
+        /** @description Proof it's really them, as at sign-in. The password if they have one, otherwise a fresh code sent to their verified phone. */
+        DeleteAccountRequest: {
+            /**
+             * @description Typed by the user
+             * @enum {string}
+             */
+            confirm: "DELETE";
+            /** Format: password */
+            password?: string;
+            otpRequestId?: string;
+            otpCode?: string;
+        };
+        NotificationPreferences: {
+            /** @description Kinds not pushed to this person's devices */
+            pushMuted: ("invoiceSent" | "paymentReceived" | "invoiceOverdue" | "lowStock" | "compliance" | "syncFailure" | "system")[];
+        };
+        MfaStatus: {
+            /** @description An authenticator is set up */
+            enrolled: boolean;
+            /** @description This session passed it */
+            verified: boolean;
+            recoveryCodesLeft: number;
+        };
+        MfaEnrollment: {
+            /** @description Base32, for typing into the app by hand */
+            secret: string;
+            /** @description What the QR code holds */
+            otpauthUri: string;
+        };
+        MfaCode: {
+            /** @description Six digits from the app, or a recovery code */
+            code: string;
+        };
+        MfaRecoveryCodes: {
+            recoveryCodes: string[];
+        };
         PlatformAuditEvent: {
             id: string;
             actorId: string;
@@ -3470,6 +6459,8 @@ export interface components {
             /** @enum {string} */
             category?: "payments" | "compliance" | "messaging" | "accounting" | "storage";
             connected?: boolean;
+            /** @description False while the integration is coming soon: connecting it is refused (409 INTEGRATION_COMING_SOON). */
+            available?: boolean;
             configRoute?: string;
         };
         ExportJob: {
@@ -3533,6 +6524,9 @@ export interface components {
             /** Format: date */
             asOf?: string;
             total?: components["schemas"]["Money"];
+            overdue?: components["schemas"]["Money"];
+            /** @description Not yet overdue and due within seven days */
+            dueSoon?: components["schemas"]["Money"];
             buckets?: {
                 /** @enum {string} */
                 key?: "current" | "d1_30" | "d31_60" | "d61_90" | "d90plus";
@@ -3659,6 +6653,16 @@ export interface components {
             total?: number;
             cancelled?: number;
         };
+        Gstr1AdvanceRow: {
+            placeOfSupply?: string;
+            rate?: number;
+            interState?: boolean;
+            taxable?: components["schemas"]["Money"];
+            igst?: components["schemas"]["Money"];
+            cgst?: components["schemas"]["Money"];
+            sgst?: components["schemas"]["Money"];
+            cess?: components["schemas"]["Money"];
+        };
         Gstr1Summary: {
             period?: string;
             b2b?: components["schemas"]["Gstr1Row"][];
@@ -3670,6 +6674,11 @@ export interface components {
             hsn?: components["schemas"]["HsnRow"][];
             nil?: components["schemas"]["NilRow"][];
             docs?: components["schemas"]["DocIssueRow"][];
+            /** @description Table 11: tax on advances for services received in the period and not yet invoiced (11A), and on earlier advances invoiced in it (11B) */
+            advances?: {
+                received?: components["schemas"]["Gstr1AdvanceRow"][];
+                adjusted?: components["schemas"]["Gstr1AdvanceRow"][];
+            };
             totals?: {
                 taxableValue?: components["schemas"]["Money"];
                 tax?: components["schemas"]["Money"];
@@ -3691,6 +6700,80 @@ export interface components {
             pendingCompliance?: number;
             recentDocuments?: components["schemas"]["DocumentSummary"][];
             unreadNotifications?: number;
+        };
+        /** @description The dates a hub's figures cover, and the period `previous` figures cover when compared */
+        DashboardPeriod: {
+            /** @enum {string} */
+            range: "today" | "week" | "month" | "quarter" | "year" | "custom";
+            /** Format: date */
+            from: string;
+            /** Format: date */
+            to: string;
+            /**
+             * @description The trend's grain, after any step up
+             * @enum {string}
+             */
+            grain: "day" | "week" | "month";
+            previous?: {
+                /** Format: date */
+                from: string;
+                /** Format: date */
+                to: string;
+            };
+        };
+        CashFlowPoint: {
+            /** @description The bucket: yyyy-mm-dd (a day, or a week's Monday) or yyyy-mm */
+            key: string;
+            inflow: components["schemas"]["Money"];
+            outflow: components["schemas"]["Money"];
+        };
+        StatusCount: {
+            status: components["schemas"]["DocStatus"];
+            count: number;
+            total: components["schemas"]["Money"];
+        };
+        PartyTotal: {
+            partyId: string;
+            name: string;
+            total: components["schemas"]["Money"];
+        };
+        /** @description As the profit report works it out (core `profitSnapshot`): taxable revenue less the average cost of goods sold, less expenses that are not billable */
+        ProfitFigures: {
+            revenue: components["schemas"]["Money"];
+            costOfGoods: components["schemas"]["Money"];
+            grossProfit: components["schemas"]["Money"];
+            expenses: components["schemas"]["Money"];
+            netProfit: components["schemas"]["Money"];
+            /** @description Net profit as a percentage of revenue */
+            margin: number;
+        };
+        MoneyMovement: {
+            id: string;
+            /** @enum {string} */
+            kind: "received" | "paid" | "expense";
+            /** Format: date */
+            date: string;
+            amount: components["schemas"]["Money"];
+            /** @description The party, or the expense's category */
+            label: string;
+            accountName?: string;
+        };
+        FilingDue: {
+            /** @enum {string} */
+            kind: "gstr1" | "iff" | "gstr3b" | "pmt06" | "tds";
+            /** @description MMYYYY for GST; yyyy-mm (the month deducted) for TDS */
+            period: string;
+            /** @description The registration it is for; absent for TDS */
+            gstin?: string;
+            /** Format: date */
+            due: string;
+            /** @description IFF is a choice under QRMP */
+            optional: boolean;
+            /**
+             * @description Filed as recorded here; TDS is filed once the month's deductions are deposited; PMT-06 shows pending or overdue only
+             * @enum {string}
+             */
+            status: "filed" | "pending" | "overdue";
         };
         LixiChatRequest: {
             /** @description The conversation so far, oldest first, ending with the user's question. */
@@ -3864,6 +6947,16 @@ export interface components {
         From: string;
         To: string;
         BranchIdQuery: string;
+        /** @description The period, in India time. `year` is the company's financial year; `custom` takes `from` and `to`. */
+        DashboardRange: "today" | "week" | "month" | "quarter" | "year" | "custom";
+        /** @description First day, with `range=custom` */
+        DashboardFrom: string;
+        /** @description Last day, with `range=custom` */
+        DashboardTo: string;
+        /** @description `previous` adds the same figures for the period just before, the same length */
+        DashboardCompare: "none" | "previous";
+        /** @description Trend bars by the day, Monday-week or month. A grain that would draw too many bars steps up; by the month a trend shows six months at least. */
+        DashboardGrain: "day" | "week" | "month";
     };
     requestBodies: never;
     headers: {
@@ -3894,6 +6987,8 @@ export interface operations {
                     password: string;
                     /** @example en */
                     locale?: string;
+                    /** @description The terms and privacy policy version the person agreed to (the date on the pages, e.g. 2026-11-02); stored with when. */
+                    termsVersion?: string;
                 };
             };
         };
@@ -4127,6 +7222,152 @@ export interface operations {
             };
         };
     };
+    getMyMfa: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MfaStatus"];
+                };
+            };
+        };
+    };
+    disableMyMfa: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MfaCode"];
+            };
+        };
+        responses: {
+            /** @description Turned off */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    startMyMfaEnrollment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MfaEnrollment"];
+                };
+            };
+            409: components["responses"]["Conflict"];
+        };
+    };
+    confirmMyMfaEnrollment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MfaCode"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MfaRecoveryCodes"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    verifyMyMfa: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MfaCode"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MfaStatus"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    deleteMe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeleteAccountRequest"];
+            };
+        };
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
     completeOnboarding: {
         parameters: {
             query?: never;
@@ -4186,6 +7427,51 @@ export interface operations {
                 content?: never;
             };
             404: components["responses"]["NotFound"];
+        };
+    };
+    getNotificationPreferences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationPreferences"];
+                };
+            };
+        };
+    };
+    saveNotificationPreferences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotificationPreferences"];
+            };
+        };
+        responses: {
+            /** @description Saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationPreferences"];
+                };
+            };
+            422: components["responses"]["Unprocessable"];
         };
     };
     registerPushToken: {
@@ -4379,6 +7665,58 @@ export interface operations {
         };
     };
     removeCompanyLogo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    uploadCompanySignature: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /**
+                     * Format: binary
+                     * @description PNG or JPEG, up to 5 MB; a transparent PNG prints best
+                     */
+                    file?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Signature stored */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Company"];
+                };
+            };
+        };
+    };
+    removeCompanySignature: {
         parameters: {
             query?: never;
             header?: never;
@@ -4677,6 +8015,8 @@ export interface operations {
             content: {
                 "application/json": {
                     password?: string;
+                    /** @description As in signUp */
+                    termsVersion?: string;
                 };
             };
         };
@@ -5000,6 +8340,61 @@ export interface operations {
                 content?: never;
             };
             409: components["responses"]["Conflict"];
+        };
+    };
+    getCompanyUsage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        counts: {
+                            auditEvents: number;
+                            parties: number;
+                            customers: number;
+                            items: number;
+                            documents: number;
+                            invoices: number;
+                            payments: number;
+                            expenses: number;
+                            stockMovements: number;
+                        };
+                        /** @description Documents past draft */
+                        postedDocuments: number;
+                        documentsByBranch: {
+                            [key: string]: number;
+                        };
+                        /** @description Items plus documents with a line in each category */
+                        taxCategoryUse: {
+                            [key: string]: number;
+                        };
+                        expenseCategories: {
+                            [key: string]: {
+                                count: number;
+                                total: components["schemas"]["Money"];
+                            };
+                        };
+                        paymentAccounts: {
+                            [key: string]: {
+                                balance: components["schemas"]["Money"];
+                                inUse: boolean;
+                            };
+                        };
+                    };
+                };
+            };
         };
     };
     listPaymentAccounts: {
@@ -5488,14 +8883,14 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    /** @enum {string} */
-                    environment: "sandbox" | "production";
-                    /** @description The GSP/ASP used to reach NIC, e.g. `cleartax`, `masters-india`, `nic-direct` */
-                    gspProvider?: string;
+                    /**
+                     * @description Which portal this login is for. `both` stores the same login for each.
+                     * @default both
+                     * @enum {string}
+                     */
+                    portal?: "einvoice" | "ewaybill" | "both";
                     username: string;
                     password: string;
-                    clientId?: string;
-                    clientSecret?: string;
                 };
             };
         };
@@ -5535,6 +8930,38 @@ export interface operations {
                             ok?: boolean;
                             message?: string;
                         };
+                    };
+                };
+            };
+        };
+    };
+    summarizePartyList: {
+        parameters: {
+            query?: {
+                kind?: components["schemas"]["PartyKind"];
+                status?: "active" | "inactive";
+                /** @description Free-text search */
+                q?: components["parameters"]["Q"];
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        count: number;
+                        outstanding: components["schemas"]["Money"];
+                        overdue: components["schemas"]["Money"];
+                        advance: components["schemas"]["Money"];
                     };
                 };
             };
@@ -5706,6 +9133,88 @@ export interface operations {
             };
         };
     };
+    importParties: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    rows: components["schemas"]["Party"][];
+                    /** @default false */
+                    dryRun?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description What happened to each row */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        created?: number;
+                        skipped?: number;
+                        invalid?: number;
+                        results?: {
+                            index?: number;
+                            /** @enum {string} */
+                            status?: "created" | "duplicate" | "invalid";
+                            id?: string;
+                            issues?: components["schemas"]["ComplianceIssue"][];
+                        }[];
+                    };
+                };
+            };
+        };
+    };
+    importItems: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    rows: components["schemas"]["Item"][];
+                    /** @default false */
+                    dryRun?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description What happened to each row */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        created?: number;
+                        skipped?: number;
+                        invalid?: number;
+                        results?: {
+                            index?: number;
+                            /** @enum {string} */
+                            status?: "created" | "duplicate" | "invalid";
+                            id?: string;
+                            issues?: components["schemas"]["ComplianceIssue"][];
+                        }[];
+                    };
+                };
+            };
+        };
+    };
     listItems: {
         parameters: {
             query?: {
@@ -5714,8 +9223,14 @@ export interface operations {
                 /** @description Exact match, used by the scanner */
                 barcode?: string;
                 lowStock?: boolean;
+                /** @description low: in stock but at or under its reorder level; out: tracked and none on hand; tracked: every item that keeps stock; untracked: services and items without stock */
+                stock?: "low" | "out" | "tracked" | "untracked";
                 /** @description Branch for `stockOnHand` */
                 branchId?: string;
+                /** @description Items in this item category */
+                categoryId?: string;
+                /** @description Items of this brand */
+                brandId?: string;
                 /** @description Free-text search */
                 q?: components["parameters"]["Q"];
                 limit?: components["parameters"]["Limit"];
@@ -5853,6 +9368,507 @@ export interface operations {
             409: components["responses"]["Conflict"];
         };
     };
+    listItemCategories: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data?: components["schemas"]["ItemCategory"][];
+                    };
+                };
+            };
+        };
+    };
+    createItemCategory: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ItemCategory"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemCategory"];
+                };
+            };
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    saveItemCategory: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description ETag from the last read */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ItemCategory"];
+            };
+        };
+        responses: {
+            /** @description Saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemCategory"];
+                };
+            };
+            412: components["responses"]["PreconditionFailed"];
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    removeItemCategory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getAiUsage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @example 2026-11 */
+                        month: string;
+                        limit: number;
+                        planLimit: number;
+                        budget?: number | null;
+                        total: number;
+                        used: {
+                            lixi: number;
+                            ocr: number;
+                        };
+                    };
+                };
+            };
+        };
+    };
+    listVehicles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data?: components["schemas"]["Vehicle"][];
+                    };
+                };
+            };
+        };
+    };
+    createVehicle: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Vehicle"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Vehicle"];
+                };
+            };
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    summarizeVehicles: {
+        parameters: {
+            query?: {
+                from?: components["parameters"]["From"];
+                to?: components["parameters"]["To"];
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data?: {
+                            vehicleId?: string;
+                            registration?: string;
+                            name?: string;
+                            expenses?: components["schemas"]["Money"];
+                            expenseCount?: number;
+                            documentCount?: number;
+                        }[];
+                    };
+                };
+            };
+        };
+    };
+    saveVehicle: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description ETag from the last read */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Vehicle"];
+            };
+        };
+        responses: {
+            /** @description Saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Vehicle"];
+                };
+            };
+            412: components["responses"]["PreconditionFailed"];
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    removeVehicle: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description ETag from the last read */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            409: components["responses"]["Conflict"];
+        };
+    };
+    listCustomFields: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data?: components["schemas"]["CustomField"][];
+                    };
+                };
+            };
+        };
+    };
+    createCustomField: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomField"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomField"];
+                };
+            };
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    saveCustomField: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description ETag from the last read */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomField"];
+            };
+        };
+        responses: {
+            /** @description Saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomField"];
+                };
+            };
+            412: components["responses"]["PreconditionFailed"];
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    removeCustomField: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description ETag from the last read */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            412: components["responses"]["PreconditionFailed"];
+        };
+    };
+    listBrands: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data?: components["schemas"]["Brand"][];
+                    };
+                };
+            };
+        };
+    };
+    createBrand: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Brand"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Brand"];
+                };
+            };
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    saveBrand: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description ETag from the last read */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Brand"];
+            };
+        };
+        responses: {
+            /** @description Saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Brand"];
+                };
+            };
+            412: components["responses"]["PreconditionFailed"];
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    removeBrand: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            409: components["responses"]["Conflict"];
+        };
+    };
     uploadItemImage: {
         parameters: {
             query?: never;
@@ -5890,6 +9906,8 @@ export interface operations {
                 kind?: components["schemas"]["DocumentKind"][];
                 status?: components["schemas"]["DocStatus"][];
                 partyId?: string;
+                /** @description true: only invoices that repeat */
+                recurring?: boolean;
                 branchId?: components["parameters"]["BranchIdQuery"];
                 from?: components["parameters"]["From"];
                 to?: components["parameters"]["To"];
@@ -5955,6 +9973,91 @@ export interface operations {
             422: components["responses"]["Unprocessable"];
         };
     };
+    summarizeDocumentList: {
+        parameters: {
+            query?: {
+                kind?: components["schemas"]["DocumentKind"][];
+                status?: components["schemas"]["DocStatus"][];
+                partyId?: string;
+                branchId?: components["parameters"]["BranchIdQuery"];
+                from?: components["parameters"]["From"];
+                to?: components["parameters"]["To"];
+                /** @description Free-text search */
+                q?: components["parameters"]["Q"];
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        count: number;
+                        total: components["schemas"]["Money"];
+                        byStatus: {
+                            status: components["schemas"]["DocStatus"];
+                            count: number;
+                            /** @description In base currency */
+                            total: components["schemas"]["Money"];
+                        }[];
+                    };
+                };
+            };
+        };
+    };
+    previewTds: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    partyId: string;
+                    /** Format: date */
+                    date: string;
+                    /** @description The bill's taxable value, in base currency */
+                    taxable: components["schemas"]["Money"];
+                    /**
+                     * @description The bill's own choice; defaults to the supplier's
+                     * @enum {string}
+                     */
+                    section?: "none" | "194C" | "194JA" | "194JB" | "194H" | "194IA" | "194IB" | "194A" | "194Q";
+                    /** @description The bill being edited, left out of the year so far */
+                    documentId?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @description The section TDS was worked under; absent when none applies */
+                        section?: string;
+                        rate: number;
+                        amount: components["schemas"]["Money"];
+                        reason?: string;
+                    };
+                };
+            };
+        };
+    };
     calculateDocument: {
         parameters: {
             query?: never;
@@ -5977,6 +10080,61 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DocumentTotals"];
+                };
+            };
+        };
+    };
+    importOpeningDocuments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    rows: {
+                        /** @enum {string} */
+                        kind: "openingInvoice" | "openingBill";
+                        /** @description GSTIN or name of the customer or supplier */
+                        party: string;
+                        /** @description The invoice or bill number it was raised under */
+                        number: string;
+                        /** Format: date */
+                        date: string;
+                        /** Format: date */
+                        dueDate?: string;
+                        /** @description What is still outstanding on it, in the company's currency */
+                        amount: components["schemas"]["Money"];
+                    }[];
+                    /** @default false */
+                    dryRun?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description What happened to each row */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        created?: number;
+                        skipped?: number;
+                        invalid?: number;
+                        results?: {
+                            index?: number;
+                            /** @enum {string} */
+                            status?: "created" | "duplicate" | "invalid";
+                            id?: string;
+                            partyName?: string;
+                            issues?: components["schemas"]["ComplianceIssue"][];
+                        }[];
+                    };
                 };
             };
         };
@@ -6058,6 +10216,84 @@ export interface operations {
             };
             409: components["responses"]["Conflict"];
             412: components["responses"]["PreconditionFailed"];
+        };
+    };
+    listApprovals: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data?: components["schemas"]["BusinessDocument"][];
+                    };
+                };
+            };
+        };
+    };
+    approveDocument: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Issued */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BusinessDocument"];
+                };
+            };
+            409: components["responses"]["Conflict"];
+        };
+    };
+    rejectDocument: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    note: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Sent back */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BusinessDocument"];
+                };
+            };
+            409: components["responses"]["Conflict"];
         };
     };
     finalizeDocument: {
@@ -6191,6 +10427,51 @@ export interface operations {
             };
         };
     };
+    setDocumentRecurrence: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description ETag from the last read */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    recurrence: "none" | "weekly" | "monthly" | "quarterly" | "yearly";
+                    /**
+                     * Format: date
+                     * @description No copy is dated after this
+                     */
+                    endDate?: string;
+                    /**
+                     * @description Email each copy to the customer when it is issued
+                     * @default false
+                     */
+                    autoSend?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BusinessDocument"];
+                };
+            };
+            412: components["responses"]["PreconditionFailed"];
+            422: components["responses"]["Unprocessable"];
+        };
+    };
     getDocumentPdf: {
         parameters: {
             query?: {
@@ -6240,6 +10521,13 @@ export interface operations {
                         url?: string;
                         /** Format: date-time */
                         expiresAt?: string;
+                        /**
+                         * Format: uri
+                         * @description A signed link straight to the PDF in blob storage
+                         */
+                        pdfUrl?: string;
+                        /** Format: date-time */
+                        pdfExpiresAt?: string;
                     };
                 };
             };
@@ -6287,6 +10575,7 @@ export interface operations {
                     };
                 };
             };
+            502: components["responses"]["UpstreamError"];
         };
     };
     createPaymentLink: {
@@ -6416,6 +10705,77 @@ export interface operations {
             502: components["responses"]["UpstreamError"];
         };
     };
+    getComplianceSummary: {
+        parameters: {
+            query?: {
+                branchId?: components["parameters"]["BranchIdQuery"];
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        eInvoice: {
+                            notApplicable: number;
+                            pending: number;
+                            generated: number;
+                            cancelled: number;
+                            failed: number;
+                        };
+                        eway: {
+                            active: number;
+                            expired: number;
+                            cancelled: number;
+                        };
+                        expiringSoon: number;
+                        ewayOutstanding: number;
+                    };
+                };
+            };
+        };
+    };
+    listComplianceDocuments: {
+        parameters: {
+            query: {
+                need: "eInvoice" | "ewayBill";
+                /** @description For `eInvoice` only */
+                status?: components["schemas"]["EInvoiceStatus"];
+                /** @description Number, party or IRN */
+                q?: string;
+                limit?: number;
+                branchId?: components["parameters"]["BranchIdQuery"];
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["DocumentSummary"][];
+                    };
+                };
+            };
+        };
+    };
     listEwayBills: {
         parameters: {
             query?: {
@@ -6423,6 +10783,8 @@ export interface operations {
                 status?: components["schemas"]["EwayBillStatus"];
                 documentId?: string;
                 expiringWithinHours?: number;
+                /** @description Bill number, document number or consignee */
+                q?: string;
                 branchId?: components["parameters"]["BranchIdQuery"];
                 from?: components["parameters"]["From"];
                 to?: components["parameters"]["To"];
@@ -6639,6 +11001,41 @@ export interface operations {
             502: components["responses"]["UpstreamError"];
         };
     };
+    summarizePaymentList: {
+        parameters: {
+            query?: {
+                direction?: components["schemas"]["PaymentDirection"];
+                partyId?: string;
+                method?: components["schemas"]["PaymentMethod"];
+                accountId?: string;
+                branchId?: components["parameters"]["BranchIdQuery"];
+                from?: components["parameters"]["From"];
+                to?: components["parameters"]["To"];
+                /** @description Free-text search */
+                q?: components["parameters"]["Q"];
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        count: number;
+                        total: components["schemas"]["Money"];
+                    };
+                };
+            };
+        };
+    };
     listPayments: {
         parameters: {
             query?: {
@@ -6703,7 +11100,97 @@ export interface operations {
                     "application/json": components["schemas"]["Payment"];
                 };
             };
+            /** @description `PAYMENT_HELD`: a payment made over the company's payment approval rule, by someone who is not an owner or admin, is not recorded but kept as a payment request (`requestId`) for them to approve. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
             422: components["responses"]["Unprocessable"];
+        };
+    };
+    listPaymentRequests: {
+        parameters: {
+            query?: {
+                status?: "pending" | "approved" | "rejected";
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data?: components["schemas"]["PaymentRequest"][];
+                    };
+                };
+            };
+        };
+    };
+    approvePaymentRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Approved; `payment` is the payment recorded */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentRequest"];
+                };
+            };
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    rejectPaymentRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    note: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Rejected */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentRequest"];
+                };
+            };
+            409: components["responses"]["Conflict"];
         };
     };
     getPayment: {
@@ -6803,6 +11290,512 @@ export interface operations {
             };
         };
     };
+    removeBankStatement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    parseBankStatement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    fileName: string;
+                    /** @description The file, base64 encoded */
+                    contentBase64: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The rows, as text */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        rows: string[][];
+                    };
+                };
+            };
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    listBankStatements: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: (components["schemas"]["BankStatement"] & {
+                            unmatched: number;
+                            matched: number;
+                            excluded: number;
+                        })[];
+                    };
+                };
+            };
+        };
+    };
+    importBankStatement: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BankStatementImport"];
+            };
+        };
+        responses: {
+            /** @description Dry run; nothing written */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankStatementImportResult"];
+                };
+            };
+            /** @description Imported */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankStatementImportResult"];
+                };
+            };
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    listBankLines: {
+        parameters: {
+            query?: {
+                status?: components["schemas"]["BankLineStatus"];
+                from?: components["parameters"]["From"];
+                to?: components["parameters"]["To"];
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page"] & {
+                        data?: components["schemas"]["BankStatementLine"][];
+                    };
+                };
+            };
+        };
+    };
+    summarizeBankLines: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankLineSummary"];
+                };
+            };
+        };
+    };
+    getBankReconciliation: {
+        parameters: {
+            query?: {
+                /** @description Defaults to today */
+                asOf?: string;
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankReconciliation"];
+                };
+            };
+        };
+    };
+    listBankLineCandidates: {
+        parameters: {
+            query?: {
+                q?: string;
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["BankLineRecord"][];
+                    };
+                };
+            };
+        };
+    };
+    matchBankLine: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description ETag from the last read */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    type: components["schemas"]["BankMatchType"];
+                    id: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Matched */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankStatementLine"];
+                };
+            };
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    unmatchBankLine: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description ETag from the last read */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Unmatched */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankStatementLine"];
+                };
+            };
+        };
+    };
+    excludeBankLine: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description ETag from the last read */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    reason?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Excluded */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankStatementLine"];
+                };
+            };
+        };
+    };
+    includeBankLine: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description ETag from the last read */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Included */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BankStatementLine"];
+                };
+            };
+        };
+    };
+    createPaymentFromBankLine: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    partyId: string;
+                    /** @description Defaults to bank */
+                    method?: components["schemas"]["PaymentMethod"];
+                    allocations?: components["schemas"]["PaymentAllocation"][];
+                    notes?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Recorded and matched */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        line: components["schemas"]["BankStatementLine"];
+                        payment: components["schemas"]["Payment"];
+                    };
+                };
+            };
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    createExpenseFromBankLine: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    categoryId: string;
+                    supplierId?: string;
+                    taxCategoryId?: string;
+                    notes?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Recorded and matched */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        line: components["schemas"]["BankStatementLine"];
+                        expense: components["schemas"]["Expense"];
+                    };
+                };
+            };
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    createVoucherFromBankLine: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description The ledger account key, as in a voucher line (e.g. `acc:…`, `sys:capital`) */
+                    account: string;
+                    narration?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Recorded and matched */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        line: components["schemas"]["BankStatementLine"];
+                        voucher: components["schemas"]["Voucher"];
+                    };
+                };
+            };
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    summarizeExpenseList: {
+        parameters: {
+            query?: {
+                categoryId?: string;
+                supplierId?: string;
+                billable?: boolean;
+                recurring?: boolean;
+                branchId?: components["parameters"]["BranchIdQuery"];
+                from?: components["parameters"]["From"];
+                to?: components["parameters"]["To"];
+                /** @description Free-text search */
+                q?: components["parameters"]["Q"];
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        count: number;
+                        total: components["schemas"]["Money"];
+                        tax: components["schemas"]["Money"];
+                        byCategory: {
+                            categoryId: string;
+                            total: components["schemas"]["Money"];
+                        }[];
+                    };
+                };
+            };
+        };
+    };
     listExpenses: {
         parameters: {
             query?: {
@@ -6810,6 +11803,12 @@ export interface operations {
                 supplierId?: string;
                 billable?: boolean;
                 recurring?: boolean;
+                /** @description Only billable expenses no live invoice has recovered yet */
+                unrecovered?: boolean;
+                /** @description Billable to this customer or to no one in particular */
+                forCustomer?: string;
+                /** @description With `unrecovered`: this document's own lines don't count as recovering */
+                exceptDocumentId?: string;
                 branchId?: components["parameters"]["BranchIdQuery"];
                 from?: components["parameters"]["From"];
                 to?: components["parameters"]["To"];
@@ -6941,6 +11940,914 @@ export interface operations {
             };
         };
     };
+    listLedgerAccounts: {
+        parameters: {
+            query?: {
+                from?: components["parameters"]["From"];
+                to?: components["parameters"]["To"];
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page"] & {
+                        data?: components["schemas"]["LedgerAccount"][];
+                    };
+                };
+            };
+        };
+    };
+    createLedgerAccount: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LedgerAccount"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerAccount"];
+                };
+            };
+        };
+    };
+    getLedgerAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerAccount"];
+                };
+            };
+        };
+    };
+    saveLedgerAccount: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description ETag from the last read */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LedgerAccount"];
+            };
+        };
+        responses: {
+            /** @description Saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerAccount"];
+                };
+            };
+        };
+    };
+    removeLedgerAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listCostCentres: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page"] & {
+                        data?: components["schemas"]["CostCentre"][];
+                    };
+                };
+            };
+        };
+    };
+    createCostCentre: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CostCentre"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CostCentre"];
+                };
+            };
+        };
+    };
+    getCostCentre: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CostCentre"];
+                };
+            };
+        };
+    };
+    saveCostCentre: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description ETag from the last read */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CostCentre"];
+            };
+        };
+        responses: {
+            /** @description Saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CostCentre"];
+                };
+            };
+        };
+    };
+    removeCostCentre: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listBudgets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["Budget"][];
+                    };
+                };
+            };
+        };
+    };
+    createBudget: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Budget"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Budget"];
+                };
+            };
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    getBudget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Budget"];
+                };
+            };
+        };
+    };
+    saveBudget: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description ETag from the last read */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Budget"];
+            };
+        };
+        responses: {
+            /** @description Saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Budget"];
+                };
+            };
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    removeBudget: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description ETag from the last read */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getBudgetVariance: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BudgetVariance"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    listFixedAssets: {
+        parameters: {
+            query?: {
+                status?: "active" | "disposed";
+                asOf?: string;
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["FixedAsset"][];
+                    };
+                };
+            };
+        };
+    };
+    createFixedAsset: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FixedAsset"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FixedAsset"];
+                };
+            };
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    getFixedAssetSchedule: {
+        parameters: {
+            query: {
+                from: string;
+                to: string;
+                /** @description Only the assets of this branch */
+                branchId?: string;
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FixedAssetSchedule"];
+                };
+            };
+        };
+    };
+    getFixedAsset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FixedAsset"];
+                };
+            };
+        };
+    };
+    saveFixedAsset: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description ETag from the last read */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FixedAsset"];
+            };
+        };
+        responses: {
+            /** @description Saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FixedAsset"];
+                };
+            };
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    removeFixedAsset: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description ETag from the last read */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getBooksView: {
+        parameters: {
+            query: {
+                from?: string;
+                to: string;
+                /** @description The account key, for `ledger` */
+                account?: string;
+                /** @description For `profit-loss` and `balance-sheet`: a column per month or quarter */
+                breakdown?: "month" | "quarter";
+                /** @description For `profit-loss` and `balance-sheet`: beside the period before, or the same dates last year */
+                compare?: "previousPeriod" | "previousYear";
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                view: "trial-balance" | "profit-loss" | "balance-sheet" | "ledger" | "day-book" | "cost-centres" | "accounts" | "integrity";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    listVouchers: {
+        parameters: {
+            query?: {
+                kind?: "journal" | "contra" | "gstJournal" | "tdsChallan" | "receipt";
+                status?: "draft" | "posted";
+                from?: components["parameters"]["From"];
+                to?: components["parameters"]["To"];
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page"] & {
+                        data?: components["schemas"]["Voucher"][];
+                    };
+                };
+            };
+        };
+    };
+    createVoucher: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Voucher"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Voucher"];
+                };
+            };
+        };
+    };
+    importVouchers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @default false */
+                    asDrafts?: boolean;
+                    /** @default false */
+                    dryRun?: boolean;
+                    vouchers: {
+                        /** @enum {string} */
+                        kind?: "journal" | "contra" | "gstJournal" | "tdsChallan" | "receipt";
+                        /** Format: date */
+                        date: string;
+                        reference?: string;
+                        narration?: string;
+                        lines: components["schemas"]["VoucherLine"][];
+                    }[];
+                };
+            };
+        };
+        responses: {
+            /** @description What happened to each journal */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        created?: number;
+                        invalid?: number;
+                        results?: {
+                            index?: number;
+                            /** @enum {string} */
+                            status?: "created" | "invalid";
+                            id?: string;
+                            number?: string;
+                            issues?: components["schemas"]["ComplianceIssue"][];
+                        }[];
+                    };
+                };
+            };
+        };
+    };
+    listVoucherTemplates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data?: components["schemas"]["VoucherTemplate"][];
+                    };
+                };
+            };
+        };
+    };
+    createVoucherTemplate: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VoucherTemplate"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VoucherTemplate"];
+                };
+            };
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    saveVoucherTemplate: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description ETag from the last read */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VoucherTemplate"];
+            };
+        };
+        responses: {
+            /** @description Saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VoucherTemplate"];
+                };
+            };
+            412: components["responses"]["PreconditionFailed"];
+        };
+    };
+    removeVoucherTemplate: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description ETag from the last read */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getVoucher: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Voucher"];
+                };
+            };
+        };
+    };
+    saveVoucher: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description ETag from the last read */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Voucher"];
+            };
+        };
+        responses: {
+            /** @description Saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Voucher"];
+                };
+            };
+        };
+    };
+    removeVoucher: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     getStockLevels: {
         parameters: {
             query?: {
@@ -6948,6 +12855,8 @@ export interface operations {
                 itemId?: string;
                 /** @description Only items at or below `reorderLevel` */
                 lowStock?: boolean;
+                /** @description What a document dated this day can take out: stock by the end of it, never more than the lowest on a later day */
+                asOf?: string;
             };
             header?: never;
             path: {
@@ -6977,6 +12886,43 @@ export interface operations {
             };
         };
     };
+    getItemLedger: {
+        parameters: {
+            query?: {
+                branchId?: components["parameters"]["BranchIdQuery"];
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        onHand: number;
+                        /** @description Weighted-average value of what is on hand, in base currency */
+                        value: components["schemas"]["Money"];
+                        low: boolean;
+                        /** @description Sold on finalised invoices, all time */
+                        soldQuantity: number;
+                        rows: {
+                            movement: components["schemas"]["StockMovement"];
+                            delta: number;
+                            balance: number;
+                        }[];
+                    };
+                };
+            };
+        };
+    };
     listStockMovements: {
         parameters: {
             query?: {
@@ -6986,6 +12932,8 @@ export interface operations {
                 branchId?: components["parameters"]["BranchIdQuery"];
                 from?: components["parameters"]["From"];
                 to?: components["parameters"]["To"];
+                /** @description Free-text search */
+                q?: components["parameters"]["Q"];
                 limit?: components["parameters"]["Limit"];
                 cursor?: components["parameters"]["Cursor"];
             };
@@ -7300,6 +13248,32 @@ export interface operations {
             };
         };
     };
+    getCashForecast: {
+        parameters: {
+            query?: {
+                weeks?: number;
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
     getReceivables: {
         parameters: {
             query?: {
@@ -7386,6 +13360,36 @@ export interface operations {
             };
         };
     };
+    getReportData: {
+        parameters: {
+            query: {
+                from: string;
+                to: string;
+                branchId?: components["parameters"]["BranchIdQuery"];
+                partyId?: string;
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                reportKey: "sales-summary" | "purchase-summary" | "expense-summary" | "receivables" | "payables" | "stock" | "tax-summary" | "payments" | "advances" | "profit" | "tds-register" | "tds-payable" | "tds-receivable" | "tds-26q" | "tds-challans" | "msme-payables" | "gstr1";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
     getReport: {
         parameters: {
             query: {
@@ -7398,7 +13402,7 @@ export interface operations {
             header?: never;
             path: {
                 companyId: components["parameters"]["CompanyId"];
-                reportKey: "sales-summary" | "purchase-summary" | "expense-summary" | "receivables" | "payables" | "stock" | "tax-summary" | "payments" | "profit";
+                reportKey: "sales-summary" | "purchase-summary" | "expense-summary" | "receivables" | "payables" | "stock" | "tax-summary" | "payments" | "profit" | "tds-register" | "trial-balance" | "msme-payables";
             };
             cookie?: never;
         };
@@ -7410,12 +13414,439 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TransactionSummary"] | components["schemas"]["ExpenseSummary"] | components["schemas"]["AgingReport"] | components["schemas"]["StockReport"] | components["schemas"]["TaxSummary"] | components["schemas"]["PaymentSummary"] | components["schemas"]["ProfitSnapshot"];
+                    "application/json": components["schemas"]["TransactionSummary"] | components["schemas"]["ExpenseSummary"] | components["schemas"]["AgingReport"] | components["schemas"]["StockReport"] | components["schemas"]["TaxSummary"] | components["schemas"]["PaymentSummary"] | components["schemas"]["MsmePayables"] | components["schemas"]["ProfitSnapshot"] | components["schemas"]["TdsRegister"] | components["schemas"]["TrialBalance"];
                     "text/csv": string;
                     "application/pdf": string;
                 };
             };
             403: components["responses"]["Forbidden"];
+        };
+    };
+    listGstPortalSessions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data?: components["schemas"]["GstPortalSession"][];
+                    };
+                };
+            };
+        };
+    };
+    connectGstPortal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    gstin: string;
+                    otp: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Connected */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GstPortalSession"];
+                };
+            };
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    requestGstPortalOtp: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    gstin: string;
+                    /** @description The GST portal username */
+                    username: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OTP sent */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    disconnectGstPortal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                gstin: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Disconnected */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listGstReturns: {
+        parameters: {
+            query: {
+                fy: string;
+                gstin?: string;
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data?: components["schemas"]["GstReturn"][];
+                        /** @description Whether the portal was asked */
+                        portal?: boolean;
+                    };
+                };
+            };
+        };
+    };
+    getGstr2b: {
+        parameters: {
+            query: {
+                gstin: string;
+                period: string;
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Gstr2bReconciliation"];
+                };
+            };
+        };
+    };
+    fetchGstr2b: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    gstin: string;
+                    period: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Downloaded and matched */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Gstr2bReconciliation"];
+                };
+            };
+        };
+    };
+    claimGstr2b: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    gstin: string;
+                    period: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Claimed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        claimed?: number;
+                    };
+                };
+            };
+        };
+    };
+    decideGstr2bLine: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    decision: "accepted" | "notOurs" | "claimLater" | "undecided";
+                    /** @description With accepted: the bill this line is, when the matcher did not find it */
+                    documentId?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Recorded */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getGstr3b: {
+        parameters: {
+            query: {
+                gstin: string;
+                period: string;
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Gstr3bView"];
+                };
+            };
+        };
+    };
+    saveGstReturn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                returnType: "gstr1" | "gstr3b";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    gstin: string;
+                    period: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GstReturn"];
+                };
+            };
+        };
+    };
+    offsetGstReturn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                returnType: "gstr1" | "gstr3b";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    gstin: string;
+                    period: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GstReturn"];
+                };
+            };
+        };
+    };
+    proceedGstReturn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                returnType: "gstr1" | "gstr3b";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    gstin: string;
+                    period: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GstReturn"];
+                };
+            };
+        };
+    };
+    requestGstReturnEvc: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                returnType: "gstr1" | "gstr3b";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    gstin: string;
+                    period: string;
+                    /** @description The authorised signatory’s PAN; defaults to the one in the GSTIN */
+                    pan?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GstReturn"];
+                };
+            };
+        };
+    };
+    fileGstReturn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                returnType: "gstr1" | "gstr3b";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    gstin: string;
+                    period: string;
+                    pan?: string;
+                    otp: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GstReturn"];
+                };
+            };
         };
     };
     getGstr1: {
@@ -7495,6 +13926,427 @@ export interface operations {
             };
         };
     };
+    getSalesHub: {
+        parameters: {
+            query?: {
+                branchId?: components["parameters"]["BranchIdQuery"];
+                /** @description The period, in India time. `year` is the company's financial year; `custom` takes `from` and `to`. */
+                range?: components["parameters"]["DashboardRange"];
+                /** @description First day, with `range=custom` */
+                from?: components["parameters"]["DashboardFrom"];
+                /** @description Last day, with `range=custom` */
+                to?: components["parameters"]["DashboardTo"];
+                /** @description `previous` adds the same figures for the period just before, the same length */
+                compare?: components["parameters"]["DashboardCompare"];
+                /** @description Trend bars by the day, Monday-week or month. A grain that would draw too many bars steps up; by the month a trend shows six months at least. */
+                grain?: components["parameters"]["DashboardGrain"];
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        period: components["schemas"]["DashboardPeriod"];
+                        /** @description In the period (named for the default, this month) */
+                        invoicedThisMonth: components["schemas"]["Money"];
+                        /** @description Invoices issued in the period */
+                        invoicesThisMonth: number;
+                        /** @description Received in the period */
+                        collectedThisMonth: components["schemas"]["Money"];
+                        /** @description The same figures for the period before, with `compare=previous` */
+                        previous?: {
+                            invoiced: components["schemas"]["Money"];
+                            invoices: number;
+                            collected: components["schemas"]["Money"];
+                        };
+                        salesTrend: components["schemas"]["MonthValue"][];
+                        outstanding: {
+                            amount: components["schemas"]["Money"];
+                            /** @description Open invoices and debit notes */
+                            count: number;
+                        };
+                        overdue: {
+                            amount: components["schemas"]["Money"];
+                            count: number;
+                        };
+                        /** @description Documents of each sales kind, in every status */
+                        counts: {
+                            [key: string]: number;
+                        };
+                        paymentsReceived: number;
+                        eInvoicesGenerated: number;
+                        /** @description The five who were invoiced most in the period */
+                        topCustomers: components["schemas"]["PartyTotal"][];
+                        recentInvoices: components["schemas"]["DocumentSummary"][];
+                    };
+                };
+            };
+        };
+    };
+    getPurchasesHub: {
+        parameters: {
+            query?: {
+                branchId?: components["parameters"]["BranchIdQuery"];
+                /** @description The period, in India time. `year` is the company's financial year; `custom` takes `from` and `to`. */
+                range?: components["parameters"]["DashboardRange"];
+                /** @description First day, with `range=custom` */
+                from?: components["parameters"]["DashboardFrom"];
+                /** @description Last day, with `range=custom` */
+                to?: components["parameters"]["DashboardTo"];
+                /** @description `previous` adds the same figures for the period just before, the same length */
+                compare?: components["parameters"]["DashboardCompare"];
+                /** @description Trend bars by the day, Monday-week or month. A grain that would draw too many bars steps up; by the month a trend shows six months at least. */
+                grain?: components["parameters"]["DashboardGrain"];
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        period: components["schemas"]["DashboardPeriod"];
+                        /** @description In the period (named for the default, this month) */
+                        billedThisMonth: components["schemas"]["Money"];
+                        /** @description In the period */
+                        expensesThisMonth?: components["schemas"]["Money"];
+                        /** @description The same figures for the period before, with `compare=previous` */
+                        previous?: {
+                            billed: components["schemas"]["Money"];
+                            expenses?: components["schemas"]["Money"];
+                        };
+                        /** @description The Expenses tab, for the period. Left out on a plan without expenses. */
+                        expenseInsights?: {
+                            count: number;
+                            /** @description GST on the period's expenses */
+                            tax: components["schemas"]["Money"];
+                            /** @description The part of that tax the business can claim as credit */
+                            itcEligibleTax: components["schemas"]["Money"];
+                            /** @description Spent on customers' behalf */
+                            billable: components["schemas"]["Money"];
+                            trend: components["schemas"]["MonthValue"][];
+                            /** @description The five paid most */
+                            topSuppliers: components["schemas"]["PartyTotal"][];
+                            /** @description Recurring expenses due in the next 30 days, soonest first */
+                            upcomingRecurring: {
+                                id: string;
+                                /** Format: date */
+                                nextDate: string;
+                                amount: components["schemas"]["Money"];
+                                category: string;
+                                description?: string;
+                                /** @enum {string} */
+                                recurrence: "weekly" | "monthly" | "quarterly" | "yearly";
+                            }[];
+                        };
+                        payable: {
+                            amount: components["schemas"]["Money"];
+                            /** @description Open bills and supplier debit notes */
+                            count: number;
+                        };
+                        overdue: {
+                            amount: components["schemas"]["Money"];
+                            count: number;
+                        };
+                        /** @description Documents of each purchase kind, in every status */
+                        counts: {
+                            [key: string]: number;
+                        };
+                        expenses?: number;
+                        paymentsMade: number;
+                        /** @description In the period, largest first */
+                        expensesByCategory?: {
+                            categoryId: string;
+                            name: string;
+                            total: components["schemas"]["Money"];
+                        }[];
+                        recentBills: components["schemas"]["DocumentSummary"][];
+                    };
+                };
+            };
+        };
+    };
+    getHomeHub: {
+        parameters: {
+            query?: {
+                branchId?: components["parameters"]["BranchIdQuery"];
+                /** @description The period, in India time. `year` is the company's financial year; `custom` takes `from` and `to`. */
+                range?: components["parameters"]["DashboardRange"];
+                /** @description First day, with `range=custom` */
+                from?: components["parameters"]["DashboardFrom"];
+                /** @description Last day, with `range=custom` */
+                to?: components["parameters"]["DashboardTo"];
+                /** @description `previous` adds the same figures for the period just before, the same length */
+                compare?: components["parameters"]["DashboardCompare"];
+                /** @description Trend bars by the day, Monday-week or month. A grain that would draw too many bars steps up; by the month a trend shows six months at least. */
+                grain?: components["parameters"]["DashboardGrain"];
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        period: components["schemas"]["DashboardPeriod"];
+                        /** @description In the period (named for the default, this month) */
+                        salesThisMonth: components["schemas"]["Money"];
+                        invoicesThisMonth: number;
+                        collectedThisMonth: components["schemas"]["Money"];
+                        expensesThisMonth?: components["schemas"]["Money"];
+                        expenseEntriesThisMonth?: number;
+                        /** @description Net profit as the profit report gives it for the same period and branch. Left out on a plan without expenses. */
+                        profit?: components["schemas"]["Money"];
+                        /** @description The same figures for the period before, with `compare=previous` */
+                        previous?: {
+                            sales: components["schemas"]["Money"];
+                            invoices: number;
+                            collected: components["schemas"]["Money"];
+                            expenses?: components["schemas"]["Money"];
+                            profit?: components["schemas"]["Money"];
+                        };
+                        /** @description Money into and out of cash and bank per trend bucket: receipts, payments, expenses and vouchers; transfers between own accounts left out */
+                        cashFlow: components["schemas"]["CashFlowPoint"][];
+                        /** @description The period's invoices by the status they're in today */
+                        invoiceStatus: components["schemas"]["StatusCount"][];
+                        /** @description What each cash and bank account holds now. The accounts are the company's, whichever branch is chosen. */
+                        cash: {
+                            total: components["schemas"]["Money"];
+                            accounts: {
+                                id: string;
+                                name: string;
+                                type: string;
+                                balance: components["schemas"]["Money"];
+                            }[];
+                        };
+                        /** @description Stock health now. Left out on a plan without inventory. */
+                        inventory?: {
+                            /** @description At weighted-average cost */
+                            value: components["schemas"]["Money"];
+                            tracked: number;
+                            /** @description At or below the reorder level, not yet out */
+                            low: number;
+                            out: number;
+                            /** @description In stock, nothing taken out in 90 days */
+                            dead: number;
+                            deadValue?: components["schemas"]["Money"];
+                        };
+                        /** @description The period's latest ten receipts, payments and expenses, newest first */
+                        moneyMovement: components["schemas"]["MoneyMovement"][];
+                        salesTrend: components["schemas"]["MonthValue"][];
+                        receivable: {
+                            total: components["schemas"]["Money"];
+                            overdue: components["schemas"]["Money"];
+                            /** @description Due within the next seven days */
+                            dueSoon: components["schemas"]["Money"];
+                            overdueCount: number;
+                            buckets: {
+                                /** @enum {string} */
+                                key: "current" | "d1_30" | "d31_60" | "d61_90" | "d90plus";
+                                amount: components["schemas"]["Money"];
+                                count: number;
+                            }[];
+                        };
+                        /** @description The four most overdue */
+                        overdueInvoices: {
+                            document: components["schemas"]["DocumentSummary"];
+                            daysOverdue: number;
+                        }[];
+                        payable?: {
+                            total: components["schemas"]["Money"];
+                            overdue: components["schemas"]["Money"];
+                            count: number;
+                        };
+                        lowStockCount?: number;
+                        draftInvoices: number;
+                        /** @description Quotes sent and not yet answered */
+                        openQuotes: number;
+                        recentInvoices: components["schemas"]["DocumentSummary"][];
+                        /** @description No invoices, payments or expenses yet */
+                        firstRun: boolean;
+                    };
+                };
+            };
+        };
+    };
+    getAccountsHub: {
+        parameters: {
+            query?: {
+                branchId?: components["parameters"]["BranchIdQuery"];
+                /** @description The period, in India time. `year` is the company's financial year; `custom` takes `from` and `to`. */
+                range?: components["parameters"]["DashboardRange"];
+                /** @description First day, with `range=custom` */
+                from?: components["parameters"]["DashboardFrom"];
+                /** @description Last day, with `range=custom` */
+                to?: components["parameters"]["DashboardTo"];
+                /** @description `previous` adds the same figures for the period just before, the same length */
+                compare?: components["parameters"]["DashboardCompare"];
+                /** @description Trend bars by the day, Monday-week or month. A grain that would draw too many bars steps up; by the month a trend shows six months at least. */
+                grain?: components["parameters"]["DashboardGrain"];
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        period: components["schemas"]["DashboardPeriod"];
+                        profit: components["schemas"]["ProfitFigures"];
+                        previousProfit?: components["schemas"]["ProfitFigures"];
+                        /** @description Net profit per trend bucket */
+                        profitTrend: components["schemas"]["MonthValue"][];
+                        /** @description Direct-method cash movement. Opening and closing only without a branch, as the accounts are the company's. */
+                        cash: {
+                            opening?: components["schemas"]["Money"];
+                            inflow: components["schemas"]["Money"];
+                            outflow: components["schemas"]["Money"];
+                            net: components["schemas"]["Money"];
+                            closing?: components["schemas"]["Money"];
+                            /** @description From customers and receipt vouchers */
+                            receipts: components["schemas"]["Money"];
+                            /** @description To suppliers and others (negative) */
+                            payments: components["schemas"]["Money"];
+                            /** @description Negative */
+                            expenses: components["schemas"]["Money"];
+                            /** @description TDS challans and GST payments (negative) */
+                            tax: components["schemas"]["Money"];
+                            /** @description Other vouchers */
+                            other: components["schemas"]["Money"];
+                        };
+                        /** @description As the tax summary report gives it for the period */
+                        tax: {
+                            /** @description GST on sales */
+                            output: components["schemas"]["Money"];
+                            /** @description GST on purchases and expenses */
+                            input: components["schemas"]["Money"];
+                            netPayable: components["schemas"]["Money"];
+                        };
+                        /** @description Whether the user sees the books (every branch) */
+                        books: boolean;
+                        balanceSheet?: {
+                            /** Format: date */
+                            asOf: string;
+                            assets: {
+                                heading: string;
+                                total: components["schemas"]["Money"];
+                            }[];
+                            liabilities: {
+                                heading: string;
+                                total: components["schemas"]["Money"];
+                            }[];
+                            totalAssets: components["schemas"]["Money"];
+                            totalLiabilities: components["schemas"]["Money"];
+                            /** @description The year's profit so far */
+                            currentProfit: components["schemas"]["Money"];
+                        };
+                        /** @description The eight accounts with the most debits and credits in the period */
+                        accountMovement?: {
+                            account: string;
+                            name: string;
+                            group: string;
+                            opening: components["schemas"]["Money"];
+                            debit: components["schemas"]["Money"];
+                            credit: components["schemas"]["Money"];
+                            closing: components["schemas"]["Money"];
+                        }[];
+                    };
+                };
+            };
+        };
+    };
+    getComplianceHub: {
+        parameters: {
+            query?: {
+                branchId?: components["parameters"]["BranchIdQuery"];
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        calendar: components["schemas"]["FilingDue"][];
+                        /** @description The latest period fetched in the last three months, or last month's when none is */
+                        itc?: {
+                            gstin: string;
+                            /** @description MMYYYY */
+                            period: string;
+                            fetched: boolean;
+                            lines?: number;
+                            /** @description Matched exactly, within tolerance or by hand, or claimed */
+                            matched?: number;
+                            /** @description Partly matched or only probably */
+                            mismatched?: number;
+                            /** @description On 2B with no bill recorded */
+                            missingInBooks?: number;
+                            /** @description Bills the suppliers haven't reported */
+                            missingIn2b?: number;
+                            /** @description Tax on those bills */
+                            missingIn2bTax?: components["schemas"]["Money"];
+                            claimableTax?: components["schemas"]["Money"];
+                        };
+                        tdsDue?: {
+                            total: components["schemas"]["Money"];
+                            overdue: components["schemas"]["Money"];
+                            rows: {
+                                section: string;
+                                /** @description yyyy-mm deducted */
+                                month: string;
+                                balance: components["schemas"]["Money"];
+                                /** Format: date */
+                                dueDate: string;
+                                overdue: boolean;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+    };
     search: {
         parameters: {
             query: {
@@ -7518,7 +14370,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         parties?: components["schemas"]["Party"][];
-                        items?: components["schemas"]["Item"][];
+                        items?: components["schemas"]["ItemWithStock"][];
                         documents?: components["schemas"]["DocumentSummary"][];
                         payments?: components["schemas"]["Payment"][];
                     };
@@ -7694,6 +14546,8 @@ export interface operations {
                 entityType?: string;
                 entityId?: string;
                 actorId?: string;
+                /** @description Action, record or who did it */
+                q?: string;
                 from?: components["parameters"]["From"];
                 to?: components["parameters"]["To"];
                 limit?: components["parameters"]["Limit"];
@@ -7959,8 +14813,11 @@ export interface operations {
                     "application/json": {
                         results?: {
                             id?: string;
-                            /** @enum {string} */
-                            status?: "applied" | "conflict" | "rejected";
+                            /**
+                             * @description retry: not an outcome (a passing server error, rate limit or expired token), send the same entry again
+                             * @enum {string}
+                             */
+                            status?: "applied" | "conflict" | "rejected" | "retry";
                             /** @description Server copy after the mutation, or at conflict */
                             entity?: Record<string, never>;
                             error?: components["schemas"]["Problem"];
@@ -7977,6 +14834,10 @@ export interface operations {
                 since?: string;
                 companyId?: string;
                 limit?: number;
+                /** @description Snapshot only: these entity types in full (e.g. the setup a device needs to work). With neither this nor `changedSince`, every type is sent in full; changes after a cursor always cover every type. */
+                entityTypes?: string[];
+                /** @description Snapshot only: other entity types too, but only those whose latest change is at or after this */
+                changedSince?: string;
             };
             header?: never;
             path?: never;
@@ -8253,6 +15114,108 @@ export interface operations {
             };
             502: components["responses"]["UpstreamError"];
             503: components["responses"]["FeatureUnavailable"];
+        };
+    };
+    getMfaStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MfaStatus"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    startMfaEnrollment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MfaEnrollment"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    confirmMfaEnrollment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MfaCode"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MfaRecoveryCodes"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    verifyMfa: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MfaCode"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MfaStatus"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
         };
     };
     getPlatformOverview: {
@@ -8536,6 +15499,38 @@ export interface operations {
         };
         responses: {
             /** @description Enabled */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformUser"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    setPlatformUserRole: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlatformRoleChange"];
+            };
+        };
+        responses: {
+            /** @description Changed */
             200: {
                 headers: {
                     [name: string]: unknown;

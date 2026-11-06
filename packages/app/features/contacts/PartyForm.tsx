@@ -1,47 +1,64 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, ScrollView, View, ViewStyle } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { FieldRow, FormContainer, FormSection, SplitPane } from '@esmart/ui/components/Layout';
 import { Text } from '@esmart/ui/components/Text';
 import { Button } from '@esmart/ui/components/Button';
 import { FormActions } from '@esmart/ui/components/ActionBar';
-import { AmountField, PhoneField, PickerField, SwitchField, TextField, usePhoneInput } from '@esmart/ui/components/Field';
+import { AmountField, focusFirstInvalid, PhoneField, PickerField, Segmented, SwitchField, TextField, usePhoneInput } from '@esmart/ui/components/Field';
+import { buysFrom, hasLedger, sellsTo, usualSide, type BalanceSide } from '@esmart/core/domain/partyKinds';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { CityField } from '@esmart/ui/components/pickers/CityField';
-import { useToast } from '@esmart/ui/components/Toast';
-import { GstRegistrationType, Party, PartyKind } from '@esmart/core/types';
+import { useServerSave } from '../../components/useServerSave';
+import { useSaveShortcut } from '../../components/useSaveShortcut';
+import { GstRegistrationType, MsmeType, Party, PartyKind } from '@esmart/core/types';
+import { TDS_SECTIONS, tdsSection } from '@esmart/core/data/tdsSections';
+import { DateField } from '@esmart/ui/components/pickers/DateField';
+import { GST_REGISTRATION_LABELS } from '@esmart/core/domain/eInvoice';
 import { INDIAN_STATES, WORLD_COUNTRIES, countryName, stateName as stateNameOf } from '@esmart/core/data/masters';
 import { OTHER_COUNTRY_CODE } from '@esmart/core/domain/stateCodes';
 import { citiesForState } from '@esmart/core/data/cities';
-import { GST_REGISTRATION_LABELS } from '@esmart/core/domain/eInvoice';
 import { CURRENCIES } from '@esmart/core/lib/currencies';
 import { fromMajor, toMajor, zero } from '@esmart/core/lib/money';
 import { uid } from '@esmart/core/lib/id';
-import { nowISO } from '@esmart/core/lib/date';
+import { nowISO, today } from '@esmart/core/lib/date';
 import { Errors, gstinRequiredFor, hasErrors, partyGstinError, required, validEmail, validPostalCode } from '@esmart/core/lib/validators';
 import { useAppStore } from '../../store/appStore';
-import { useBaseCurrency, useParties } from '../../store/selectors';
+import { useBaseCurrency, useHasModule, useParties } from '../../store/selectors';
 import { SHOW_SCROLLBAR, useBreakpoint } from '@esmart/ui/theme/breakpoints';
 import { useGoBack } from '../../navigation/useGoBack';
+import { useGstinLookup, type GstinDetails } from '../gstin/useGstinLookup';
+import { CustomFieldsSection } from '../customFields/CustomFieldsSection';
+import type { CustomValues } from '@esmart/core/domain/customFields';
+
+const CODE_PREFIX: Record<PartyKind, string> = { customer: 'C', supplier: 'S', both: 'B', general: 'G' };
 
 const TERMS = [0, 7, 15, 21, 30, 45, 60, 90];
+const MSME_OPTIONS = ['none', 'micro', 'small', 'medium'] as const;
 
-export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
+export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?: Party }) {
   const t = useTheme();
-  const { t: tr } = useTranslation(['contacts', 'common']);
+  const { t: tr } = useTranslation(['contacts', 'common', 'settings', 'domain', 'purchases', 'books']);
   const router = useRouter();
   const goBack = useGoBack();
+  // Added from a document's party picker: back to the document, which picks the new party.
+  const { then } = useLocalSearchParams<{ then?: string }>();
   // Where Cancel and Save land when there is no screen to go back to.
-  const backTo = party ? `/(app)/contacts/${kind === 'customer' ? 'customers' : 'suppliers'}/${party.id}` : '/(app)/(tabs)/contacts';
-  const toast = useToast();
+  // The route's kind to start with; a new contact can be both or general, and a customer or supplier can become both.
+  const [kind, setKind] = useState<PartyKind>(party?.kind ?? routeKind);
+  const hasPurchases = useHasModule('purchases');
+  const kindOptions: PartyKind[] = !party || party.kind === 'general' ? ['customer', 'supplier', 'both', 'general'] : party.kind === 'both' ? ['both'] : [party.kind, 'both'];
+  const allowedKinds = kindOptions.filter((k) => hasPurchases || !buysFrom(k));
+  const backTo = party ? `/(app)/contacts/${party.kind === 'supplier' ? 'suppliers' : 'customers'}/${party.id}` : '/(app)/(tabs)/contacts';
+  const { run: serverSave, saving, blocked } = useServerSave();
   // Always 'phone' in the native apps, so the desktop layout only ever reaches a browser.
   const breakpoint = useBreakpoint();
   const desktop = breakpoint !== 'phone';
 
   const baseCurrency = useBaseCurrency();
-  const existing = useParties(kind);
+  const existing = useParties();
   const saveParty = useAppStore((s) => s.saveParty);
   const activeCompanyId = useAppStore((s) => s.activeCompanyId);
 
@@ -66,8 +83,15 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
   const [terms, setTerms] = useState(party?.paymentTermsDays ?? 30);
   const [creditLimit, setCreditLimit] = useState(party?.creditLimit ? String(toMajor(party.creditLimit)) : '');
   const [openingBalance, setOpeningBalance] = useState(
-    party?.openingBalance && party.openingBalance.minor !== 0 ? String(toMajor(party.openingBalance)) : '',
+    party?.openingBalance && party.openingBalance.minor !== 0 ? String(Math.abs(toMajor(party.openingBalance))) : '',
   );
+  const [openingDate, setOpeningDate] = useState<string | undefined>(party?.openingBalanceDate);
+  const [customFields, setCustomFields] = useState<CustomValues>(party?.customFields ?? {});
+  // Dr: they owe us; Cr: we owe them. A negative stored amount (an old advance) reads as the other side.
+  const [openingSide, setOpeningSide] = useState<BalanceSide>(() => {
+    const side = party?.openingBalanceSide ?? usualSide(party?.kind ?? routeKind);
+    return (party?.openingBalance.minor ?? 0) < 0 ? (side === 'dr' ? 'cr' : 'dr') : side;
+  });
   const [line1, setLine1] = useState(billing?.line1 ?? '');
   const [city, setCity] = useState(billing?.city ?? '');
   const [stateCode, setStateCode] = useState(billing?.stateCode ?? '');
@@ -76,6 +100,15 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
   const [shipLine1, setShipLine1] = useState(party?.shippingAddress?.line1 ?? '');
   const [shipCity, setShipCity] = useState(party?.shippingAddress?.city ?? '');
   const [notes, setNotes] = useState(party?.notes ?? '');
+  const [pan, setPan] = useState(party?.pan ?? '');
+  const [msmeType, setMsmeType] = useState<MsmeType | undefined>(party?.msmeType);
+  const [udyam, setUdyam] = useState(party?.udyamNumber ?? '');
+  const [reverseCharge, setReverseCharge] = useState(!!party?.reverseCharge);
+  const [msmeOpen, setMsmeOpen] = useState(false);
+  const [tdsSectionCode, setTdsSectionCode] = useState(party?.tdsSection);
+  const [tdsOpen, setTdsOpen] = useState(false);
+  const [certRate, setCertRate] = useState(party?.lowerTdsCertificate ? String(party.lowerTdsCertificate.rate) : '');
+  const [certValidTill, setCertValidTill] = useState(party?.lowerTdsCertificate?.validTill ?? '');
   const [active, setActive] = useState((party?.status ?? 'active') === 'active');
 
   const [stateOpen, setStateOpen] = useState(false);
@@ -91,24 +124,79 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
     if (shipCity && !cities.includes(shipCity)) setShipCity('');
   };
 
-  const label = kind === 'customer' ? 'Customer' : 'Supplier';
+  const nameLabel = kind === 'supplier' ? tr('contacts:form.supplierName') : tr('contacts:form.customerName');
+  const termsLabel = (days: number) => (days === 0 ? tr('contacts:form.dueOnReceipt') : tr('contacts:form.termsDays', { count: days }));
+  // A GSTIN brings the party's registered name, GST type and address from the GST portal.
+  const fillFromPortal = (d: GstinDetails) => {
+    const registeredName = d.legalName ?? d.tradeName;
+    if (registeredName) setName(registeredName);
+    if (d.registrationType && gstinRequiredFor(d.registrationType)) setRegistration(d.registrationType);
+    const a = d.address;
+    if (!a) return;
+    const street = [a.line1, a.line2].filter(Boolean).join(', ');
+    if (street) setLine1(street);
+    const code = a.stateCode ?? taxId.slice(0, 2);
+    if (INDIAN_STATES.some((s) => s.code === code)) changeState(code);
+    if (a.city) setCity(a.city);
+    if (a.postalCode) setPostalCode(a.postalCode);
+  };
+  const gstinLookup = useGstinLookup({ gstin: taxId, opened: party?.taxId, enabled: needsGstin, fill: fillFromPortal });
 
-  const save = () => {
+  /**
+   * After "Save & add another": a clean form for the next contact, keeping what tends to
+   * repeat in a run of them (currency, payment terms, state).
+   */
+  const resetForAnother = () => {
+    setName('');
+    setContact('');
+    setTaxId('');
+    setRegistration('unregistered');
+    setCountry('');
+    setRegion('');
+    setEmail('');
+    phone.reset();
+    setCreditLimit('');
+    setOpeningBalance('');
+    setOpeningDate(undefined);
+    setLine1('');
+    setCity('');
+    setPostalCode('');
+    setSameShipping(true);
+    setShipLine1('');
+    setShipCity('');
+    setNotes('');
+    setPan('');
+    setMsmeType(undefined);
+    setUdyam('');
+    setReverseCharge(false);
+    setTdsSectionCode(undefined);
+    setCertRate('');
+    setCertValidTill('');
+    setErrors({});
+    requestAnimationFrame(() => (globalThis.document?.getElementById('party-form-name') as HTMLElement | null)?.focus());
+  };
+  // Not when the form was opened to pick a contact (?then=back): that one goes straight back.
+  const offersAnother = !party && then !== 'back';
+
+  const save = async (another = false) => {
     const gstin = needsGstin ? taxId.trim().toUpperCase() : '';
     const next: Errors<'name' | 'email' | 'phone' | 'taxId' | 'country' | 'postalCode'> = {
-      name: required(name, `${label} name`),
+      name: required(name, nameLabel),
       email: validEmail(email),
       phone: phone.error(),
       taxId:
         partyGstinError(registration, gstin) ??
         (gstin && stateCode && gstin.slice(0, 2) !== stateCode
-          ? `This GSTIN is registered in ${stateNameOf(gstin.slice(0, 2))}, not the state below`
+          ? tr('contacts:form.gstinStateMismatch', { state: stateNameOf(gstin.slice(0, 2)) })
           : undefined),
       country: overseas && !country ? tr('contacts:form.countryRequired') : undefined,
       postalCode: validPostalCode(postalCode, overseas ? country : 'IN', overseas ? undefined : stateCode),
     };
     setErrors(next);
-    if (hasErrors(next)) return;
+    if (hasErrors(next)) {
+      focusFirstInvalid();
+      return;
+    }
 
     // An overseas party's place of supply is "other country" (96): exports and imports are inter-state.
     const stateName = overseas ? region.trim() : (INDIAN_STATES.find((s) => s.code === stateCode)?.name ?? '');
@@ -116,7 +204,7 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
     const partyCountry = overseas ? country : 'IN';
     const nextCode =
       party?.code ??
-      `${kind === 'customer' ? 'C' : 'S'}-${String(existing.length + 1).padStart(3, '0')}`;
+      `${CODE_PREFIX[kind]}-${String(existing.filter((p) => p.kind === kind).length + 1).padStart(3, '0')}`;
 
     const record: Party = {
       id: party?.id ?? uid(kind === 'customer' ? 'cus' : 'sup'),
@@ -127,7 +215,14 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
       displayName: contact.trim() || undefined,
       taxId: gstin || undefined,
       gstRegistrationType: registration,
-      email: email.trim() || undefined,
+      // A GSTIN carries the PAN; the server reads it from there when this is blank.
+      pan: overseas ? undefined : pan.trim().toUpperCase() || undefined,
+      msmeType: buysFrom(kind) ? msmeType : undefined,
+      udyamNumber: buysFrom(kind) && msmeType ? udyam.trim().toUpperCase() || undefined : undefined,
+      reverseCharge: buysFrom(kind) && reverseCharge ? true : undefined,
+      tdsSection: buysFrom(kind) ? tdsSectionCode : undefined,
+      lowerTdsCertificate: buysFrom(kind) && tdsSectionCode && certRate && certValidTill ? { rate: Number(certRate), validTill: certValidTill } : undefined,
+      email: email.trim().toLowerCase() || undefined,
       phone: phone.value || undefined,
       currency,
       billingAddress: {
@@ -149,27 +244,39 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
             country: partyCountry,
           },
       creditLimit: creditLimit ? fromMajor(creditLimit, currency) : undefined,
-      openingBalance: openingBalance ? fromMajor(openingBalance, currency) : zero(currency),
+      openingBalance: openingBalance && hasLedger(kind) ? fromMajor(openingBalance, currency) : zero(currency),
+      openingBalanceDate: openingBalance && hasLedger(kind) ? openingDate : undefined,
+      // Said only when it isn't the kind's usual side, so most records stay as they were.
+      openingBalanceSide: openingBalance && hasLedger(kind) && openingSide !== usualSide(kind) ? openingSide : undefined,
       paymentTermsDays: terms,
+      customFields,
       notes: notes.trim() || undefined,
       status: active ? 'active' : 'inactive',
       createdAt: party?.createdAt ?? nowISO(),
     };
 
-    saveParty(record);
-    toast.show(party ? `${label} updated` : `${label} added`, 'success');
+    const savedMessage =
+      kind === 'customer'
+        ? tr(party ? 'contacts:form.customerUpdated' : 'contacts:form.customerAdded')
+        : tr(party ? 'contacts:form.supplierUpdated' : 'contacts:form.supplierAdded');
+    const res = await serverSave(() => saveParty(record), savedMessage, { icon: 'account-check-outline', detail: record.name });
+    if (!res) return;
+    const id = res.id ?? record.id;
     if (party) goBack(backTo);
-    else router.replace(kind === 'customer' ? `/(app)/contacts/customers/${record.id}` : `/(app)/contacts/suppliers/${record.id}`);
+    else if (another) resetForAnother();
+    else if (then === 'back' && router.canGoBack()) router.back();
+    else router.replace(kind === 'supplier' ? `/(app)/contacts/suppliers/${id}` : `/(app)/contacts/customers/${id}`);
   };
+  useSaveShortcut(() => void save(), !saving, offersAnother ? () => void save(true) : undefined);
 
   // Every field is built once and placed twice: stacked in one column on a
   // phone, grouped into cards across two columns on a desktop browser.
-  const nameField = <TextField label={`${label} name`} value={name} onChangeText={setName} placeholder={tr('contacts:form.businessName')} error={errors.name} required icon="domain" />;
+  const nameField = <TextField id="party-form-name" label={nameLabel} value={name} onChangeText={setName} placeholder={tr('contacts:form.businessName')} error={errors.name} required icon="domain" />;
   const contactField = <TextField label={tr('contacts:form.contactPerson')} value={contact} onChangeText={setContact} placeholder={tr('contacts:form.contactPlaceholder')} icon="account-outline" />;
   const registrationField = (
     <PickerField
       label={tr('contacts:form.gstRegistration')}
-      value={GST_REGISTRATION_LABELS[registration]}
+      value={tr(`domain:gstRegistration.${registration}`)}
       onPress={() => setRegistrationOpen(true)}
       icon="shield-account-outline"
       hint={tr('contacts:form.sezHint')}
@@ -192,10 +299,61 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
       autoCapitalize="characters"
       icon="card-account-details-outline"
       error={errors.taxId}
-      hint={tr('contacts:form.gstinHint')}
+      hint={gstinLookup.hint ?? tr('contacts:form.gstinHint')}
+      suffix={gstinLookup.suffix}
       required
     />
   ) : null;
+  const panField = overseas ? null : (
+    <TextField
+      label="PAN"
+      value={pan}
+      onChangeText={(v) => setPan(v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10))}
+      placeholder={/^\d{2}[A-Z]{5}\d{4}[A-Z]/.test(taxId) ? taxId.slice(2, 12) : 'AABCV1234F'}
+      autoCapitalize="characters"
+      icon="card-text-outline"
+      hint={tr('contacts:form.panHint')}
+    />
+  );
+  const supplierTaxFields =
+    buysFrom(kind) ? (
+      <>
+        <PickerField
+          label={tr('contacts:form.msme')}
+          value={tr(`contacts:form.msmeType.${msmeType ?? 'none'}`)}
+          onPress={() => setMsmeOpen(true)}
+          icon="factory"
+          hint={tr('contacts:form.msmeHint')}
+        />
+        {msmeType ? (
+          <TextField label={tr('contacts:form.udyam')} value={udyam} onChangeText={(v) => setUdyam(v.toUpperCase())} placeholder="UDYAM-TN-02-0012345" autoCapitalize="characters" icon="numeric" />
+        ) : null}
+        <SwitchField label={tr('contacts:form.reverseCharge')} description={tr('contacts:form.reverseChargeHint')} value={reverseCharge} onValueChange={setReverseCharge} />
+        <PickerField
+          label={tr('contacts:form.tdsSection')}
+          value={tdsSectionCode ? `${tdsSection(tdsSectionCode)?.label} · ${tdsSection(tdsSectionCode)?.nature}` : tr('purchases:tds.none')}
+          onPress={() => setTdsOpen(true)}
+          icon="bank-minus"
+          hint={tr('contacts:form.tdsSectionHint')}
+        />
+        {tdsSectionCode ? (
+          <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
+            <TextField
+              label={tr('contacts:form.lowerTdsRate')}
+              value={certRate}
+              onChangeText={(v) => setCertRate(v.replace(/[^0-9.]/g, ''))}
+              placeholder="—"
+              keyboardType="decimal-pad"
+              hint={tr('contacts:form.lowerTds')}
+              containerStyle={{ flex: 1 }}
+            />
+            <View style={{ flex: 1 }}>
+              <DateField label={tr('contacts:form.lowerTdsValidTill')} value={certValidTill} onChange={setCertValidTill} />
+            </View>
+          </View>
+        ) : null}
+      </>
+    ) : null;
   const phoneField = <PhoneField label={tr('contacts:form.phone')} {...phone.field} placeholder="98765 43210" error={errors.phone} />;
   const emailField = <TextField label={tr('contacts:form.email')} value={email} onChangeText={setEmail} placeholder={tr('contacts:form.emailPlaceholder')} keyboardType="email-address" autoCapitalize="none" icon="email-outline" error={errors.email} />;
 
@@ -239,24 +397,51 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
   );
 
   const currencyField = <PickerField label={tr('contacts:form.currency')} value={currency} onPress={() => setCurrencyOpen(true)} icon="cash-multiple" />;
-  const termsField = <PickerField label={tr('contacts:form.paymentTerms')} value={terms === 0 ? 'Due on receipt' : `${terms} days`} onPress={() => setTermsOpen(true)} icon="calendar-clock" />;
+  const termsField = !hasLedger(kind) ? null : <PickerField label={tr('contacts:form.paymentTerms')} value={termsLabel(terms)} onPress={() => setTermsOpen(true)} icon="calendar-clock" />;
   const creditLimitField =
-    kind === 'customer' ? (
+    sellsTo(kind) ? (
       <AmountField label={tr('contacts:form.creditLimit')} value={creditLimit} onChangeValue={setCreditLimit} currency={currency} hint={tr('contacts:form.creditLimitHint')} />
     ) : null;
-  const openingBalanceField = (
-    <AmountField
-      label={tr('contacts:form.openingBalance')}
-      value={openingBalance}
-      onChangeValue={setOpeningBalance}
-      currency={currency}
-      hint={kind === 'customer' ? 'What they already owed you when you started.' : 'What you already owed them when you started.'}
-    />
+  const openingBalanceField = !hasLedger(kind) ? null : (
+    <>
+      <AmountField
+        label={tr('contacts:form.openingBalance')}
+        value={openingBalance}
+        onChangeValue={setOpeningBalance}
+        currency={currency}
+        hint={kind === 'supplier' ? tr('contacts:form.openingBalanceHintSupplier') : kind === 'both' ? tr('contacts:form.openingBalanceHintBoth') : tr('contacts:form.openingBalanceHintCustomer')}
+      />
+      {openingBalance ? (
+        <Segmented
+          options={(['dr', 'cr'] as const).map((s) => ({ value: s, label: tr(`contacts:form.openingSide.${s}`) }))}
+          value={openingSide}
+          onChange={(v) => setOpeningSide(v as BalanceSide)}
+        />
+      ) : null}
+      {openingBalance ? (
+        <SwitchField label={tr('books:accounts.openingOnDate')} description={tr('books:accounts.openingOnDateHint')} value={!!openingDate} onValueChange={(on) => setOpeningDate(on ? today() : undefined)} />
+      ) : null}
+      {openingBalance && openingDate ? <DateField label={tr('books:accounts.openingDate')} value={openingDate} onChange={setOpeningDate} maximumDate={new Date()} /> : null}
+    </>
   );
+  const kindField =
+    allowedKinds.length > 1 ? (
+      <View style={{ gap: t.spacing.xs }}>
+        <Segmented options={allowedKinds.map((k) => ({ value: k, label: tr(`contacts:kind.${k}`) }))} value={kind} onChange={(v) => setKind(v as PartyKind)} />
+        <Text variant="caption" tone="muted">
+          {tr(`contacts:kindHint.${kind}`)}
+        </Text>
+      </View>
+    ) : null;
+  const customFieldsBlock = <CustomFieldsSection entity="party" values={customFields} onChange={setCustomFields} />;
   const notesField = <TextField label={tr('contacts:form.notes')} value={notes} onChangeText={setNotes} placeholder={tr('contacts:form.notesPlaceholder')} multiline />;
   const activeField = <SwitchField label={tr('contacts:form.active')} description={tr('contacts:form.activeHint')} value={active} onValueChange={setActive} />;
 
-  const submitTitle = party ? 'Save changes' : `Add ${label.toLowerCase()}`;
+  const submitTitle = party
+    ? tr('settings:profile.save')
+    : kind === 'customer'
+      ? tr('common:quickAction.addCustomer')
+      : tr('contacts:form.addSupplier');
 
   const phoneHeading = (title: string) => (
     <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6, marginTop: t.spacing.sm }}>{title}</Text>
@@ -268,6 +453,7 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={SHOW_SCROLLBAR}
     >
+      {kindField}
       {nameField}
       {contactField}
       {registrationField}
@@ -309,7 +495,10 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
       {termsField}
       {creditLimitField}
       {openingBalanceField}
+      {panField}
+      {supplierTaxFields}
 
+      {customFieldsBlock}
       {notesField}
       {activeField}
     </ScrollView>
@@ -317,6 +506,7 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
 
   const details = (
     <FormSection title={tr('contacts:form.businessDetails')}>
+      {kindField}
       <FieldRow>
         {nameField}
         {contactField}
@@ -368,10 +558,13 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
       {termsField}
       {creditLimitField}
       {openingBalanceField}
+      {panField}
+      {supplierTaxFields}
     </FormSection>
   );
   const status = (
     <FormSection title={tr('contacts:form.notesAndStatus')}>
+      {customFieldsBlock}
       {notesField}
       {activeField}
     </FormSection>
@@ -412,7 +605,7 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
   );
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: t.c.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <FormContainer wide={desktop} style={desktop ? { maxWidth: '100%' } : undefined}>
         {desktop ? desktopForm : phoneForm}
 
@@ -420,10 +613,25 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
           {desktop ? (
             <>
               <Button title={tr('common:action.cancel')} variant="ghost" onPress={() => goBack(backTo)} />
-              <Button title={submitTitle} onPress={save} />
+              {offersAnother ? (
+                <Button
+                  title={tr('common:action.saveAndAddAnother')}
+                  tooltip={tr('common:action.saveAndAddAnotherShortcut', { keys: 'Shift+Ctrl+S' })}
+                  variant="secondary"
+                  onPress={() => void save(true)}
+                  loading={saving}
+                  disabled={blocked}
+                />
+              ) : null}
+              <Button shortcut="S" title={submitTitle} onPress={() => void save()} loading={saving} disabled={blocked} />
             </>
           ) : (
-            <Button title={submitTitle} onPress={save} fullWidth size="lg" />
+            <>
+              <Button shortcut="S" title={submitTitle} onPress={() => void save()} loading={saving} disabled={blocked} fullWidth size="lg" />
+              {offersAnother ? (
+                <Button title={tr('common:action.saveAndAddAnother')} variant="ghost" onPress={() => void save(true)} loading={saving} disabled={blocked} fullWidth />
+              ) : null}
+            </>
           )}
         </FormActions>
 
@@ -439,7 +647,7 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
           visible={registrationOpen}
           onClose={() => setRegistrationOpen(false)}
           title={tr('contacts:form.gstRegistration')}
-          options={(Object.keys(GST_REGISTRATION_LABELS) as GstRegistrationType[]).map((k) => ({ value: k, label: GST_REGISTRATION_LABELS[k] }))}
+          options={(Object.keys(GST_REGISTRATION_LABELS) as GstRegistrationType[]).map((k) => ({ value: k, label: tr(`domain:gstRegistration.${k}`) }))}
           value={registration}
           onSelect={(v) => {
             const type = v as GstRegistrationType;
@@ -478,10 +686,28 @@ export function PartyForm({ kind, party }: { kind: PartyKind; party?: Party }) {
           onSelect={setCurrency}
         />
         <SelectSheet
+          visible={tdsOpen}
+          onClose={() => setTdsOpen(false)}
+          title={tr('contacts:form.tdsSection')}
+          options={[{ value: 'none', label: tr('purchases:tds.none') }, ...TDS_SECTIONS.map((x) => ({ value: x.code, label: x.label, description: x.nature }))]}
+          value={tdsSectionCode ?? 'none'}
+          onSelect={(v) => setTdsSectionCode(v === 'none' ? undefined : v)}
+          searchable={false}
+        />
+        <SelectSheet
+          visible={msmeOpen}
+          onClose={() => setMsmeOpen(false)}
+          title={tr('contacts:form.msme')}
+          options={MSME_OPTIONS.map((k) => ({ value: k, label: tr(`contacts:form.msmeType.${k}`) }))}
+          value={msmeType ?? 'none'}
+          onSelect={(v) => setMsmeType(v === 'none' ? undefined : (v as MsmeType))}
+          searchable={false}
+        />
+        <SelectSheet
           visible={termsOpen}
           onClose={() => setTermsOpen(false)}
           title={tr('contacts:form.paymentTerms')}
-          options={TERMS.map((d) => ({ value: String(d), label: d === 0 ? 'Due on receipt' : `${d} days` }))}
+          options={TERMS.map((d) => ({ value: String(d), label: termsLabel(d) }))}
           value={String(terms)}
           onSelect={(v) => setTerms(Number(v))}
           searchable={false}

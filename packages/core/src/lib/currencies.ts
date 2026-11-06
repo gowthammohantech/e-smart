@@ -20,6 +20,13 @@ export const CURRENCIES: CurrencyMeta[] = [
   { code: 'SAR', name: 'Saudi Riyal', symbol: 'SAR', precision: 2, grouping: 'western' },
 ];
 
+/**
+ * The business itself is set up in India and keeps its books in rupees for now,
+ * so onboarding offers only INR (the others stay listed, greyed out). Customers,
+ * suppliers, documents and payments can be in any currency.
+ */
+export const currencyLocked = (code: string) => code !== 'INR';
+
 const byCode = new Map(CURRENCIES.map((c) => [c.code, c]));
 
 export function currencyMeta(code: string): CurrencyMeta {

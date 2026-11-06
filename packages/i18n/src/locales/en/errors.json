@@ -12,6 +12,9 @@
     "minLength": "{{field}} must be at least {{count}} characters",
     "hsnRequired": "HSN/SAC code is required for a GST-registered business",
     "hsnShape": "HSN/SAC code should be 4, 6 or 8 digits",
+    "taxRateRange": "Enter a rate between 0 and {{max}}%",
+    "taxRateDecimals": "A rate can have at most three decimals",
+    "tanShape": "TAN should look like CHED12345A",
     "pincodeShape": "Enter a six-digit PIN code, e.g. 400001",
     "pincodeState": "PIN code {{pin}} is in {{pinState}}, not {{state}}. Check the PIN code or the state.",
     "gstinRequiredForType": "Enter the GSTIN for a registered party",
@@ -23,5 +26,15 @@
     "phoneNumber": "Phone number",
     "yourName": "Your name",
     "businessName": "Business name"
+  },
+  "remote": {
+    "noUploadUrl": "The server did not return an upload link. Try again.",
+    "uploadFailed": "The upload failed ({{status}}). Try again.",
+    "incompleteSession": "The server returned an incomplete session. Sign in again.",
+    "noPdf": "The server did not return the PDF. Try again.",
+    "noLink": "The server did not return a link. Try again.",
+    "exportSlow": "The export is taking longer than expected. Try again shortly.",
+    "exportFailed": "The export failed. Try again.",
+    "portalOffline": "Connect to the internet to reach the GST portal, then try again."
   }
 }

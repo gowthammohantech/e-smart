@@ -1,10 +1,10 @@
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Platform, View, useWindowDimensions } from 'react-native';
+import { Platform, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Tabs } from 'expo-router';
 import { BottomTabBar } from 'expo-router/build/react-navigation/bottom-tabs';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { useComplianceSummary, useModuleSet, useUnreadCount } from '../../../store/selectors';
 import { useUiStore } from '../../../store/uiStore';
@@ -17,18 +17,15 @@ import { TabBar } from '@esmart/ui/components/TabBar';
 import { TabSwipe } from '../../../components/TabSwipe';
 import { countLabel } from '@esmart/core/lib/format';
 import { TABS } from '../../../navigation/tabs';
-
-/** Which tabs each plan shows, in bar order. The rest stay routable but unlisted. */
-const VISIBLE = {
-  // Five fit a 320dp phone with labels; People and Reports are one tap away in More.
-  full: ['index', 'sales', 'purchases', 'inventory', 'more'],
-  sales: ['index', 'sales', 'gst', 'more'],
-} as const;
+import { PHONE_TABS } from '../../../navigation/menu';
+import { PageSurface } from '@esmart/ui/components/Doodles';
 
 /**
- * The full plan has seven tabs, with Lixi reachable by gesture rather than a
- * slot in the bar: hold a tab to ask about it, swipe up on the bar, or tap
- * the floating orb. Each is switchable in Settings → Appearance.
+ * The tab bar shows `PHONE_TABS` for the plan; every other section stays
+ * routable and is reached through More. The full plan has five — Home, Sell,
+ * Buy, Stock, More — with Lixi reachable by gesture rather than a slot in the
+ * bar: hold a tab to ask about it, swipe up on the bar, or tap the floating
+ * orb. Each is switchable in Settings → Appearance.
  *
  * On either plan, swiping a screen left or right moves to the next or
  * previous tab in the bar.
@@ -49,18 +46,12 @@ export default function TabsLayout() {
   // is a finished trip, so it doesn't count.
   const lixiNudge = compliance.eInvoice.failed + compliance.expiringSoon;
   const moduleSet = useModuleSet();
-  const visible: readonly string[] = VISIBLE[moduleSet];
+  const visible: readonly string[] = PHONE_TABS[moduleSet];
   // The bar sits above the system navigation bar (Android draws edge-to-edge)
   // or the home indicator, so its height grows by the inset rather than
   // being fixed — a fixed height pushed the labels under the system bar.
   const insets = useSafeAreaInsets();
   const bottomInset = Math.max(insets.bottom, Platform.OS === 'android' ? 6 : 0);
-  // Seven labels do not fit a narrow phone: shrink them, and below ~340dp
-  // drop them for icons alone (the long-press and swipe peek still name them).
-  const { width } = useWindowDimensions();
-  const crowded = visible.length > 5;
-  const showLabels = !(crowded && width < 340);
-  const labelSize = crowded && width < 380 ? 9 : 10;
   // The swipe peek names the neighbouring tab, so it needs the label too.
   // Rebuilt on a language change, or the peek keeps the old language's word.
   const swipeTabs = useMemo(
@@ -96,18 +87,16 @@ export default function TabsLayout() {
             backgroundColor: t.c.paper,
             borderTopColor: t.c.line,
             borderTopWidth: 0.5,
-            height: (showLabels ? 56 : 48) + bottomInset,
+            height: 56 + bottomInset,
             paddingTop: 6,
             paddingBottom: bottomInset,
           },
-          tabBarShowLabel: showLabels,
-          tabBarItemStyle: crowded ? { paddingHorizontal: 0 } : undefined,
-          tabBarLabelStyle: { fontSize: labelSize, fontWeight: '600' },
+          tabBarLabelStyle: { fontSize: 10, fontWeight: '600' },
           tabBarHideOnKeyboard: true,
         }}
         screenLayout={({ children, route, navigation }) => (
           <TabSwipe tabs={swipeTabs} current={route.name} navigation={navigation}>
-            {children}
+            <PageSurface>{children}</PageSurface>
           </TabSwipe>
         )}
         screenListeners={({ route }) => ({
@@ -128,7 +117,7 @@ export default function TabsLayout() {
               tabBarBadge: tab.name === 'more' && unread > 0 ? countLabel(unread) : undefined,
               tabBarBadgeStyle: { backgroundColor: t.c.bad, fontSize: 10 },
               tabBarIcon: ({ color, focused }) => (
-                <MaterialCommunityIcons name={focused ? tab.activeIcon : tab.icon} size={23} color={color} />
+                <Icon name={focused ? tab.activeIcon : tab.icon} size={23} color={color} />
               ),
             }}
           />

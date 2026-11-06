@@ -18,7 +18,6 @@ export function defaultComplianceSettings(companyId: string, baseCurrency = 'INR
     eInvoiceTurnoverThreshold: fromMajor('50000000', baseCurrency),
     reportingWindowDays: 30,
     autoGenerateEInvoiceOnFinalise: false,
-    irpEnvironment: 'sandbox',
     ewayBillEnabled: true,
     // The statute sets 50,000; several states set a higher intra-state figure.
     ewayBillThreshold: fromMajor('50000', baseCurrency),

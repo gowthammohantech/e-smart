@@ -10,9 +10,11 @@ import { Button } from '@esmart/ui/components/Button';
 import { PickerField, Segmented, TextField } from '@esmart/ui/components/Field';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
-import { useToast } from '@esmart/ui/components/Toast';
+import { useServerSave } from '../../../components/useServerSave';
+import { useSaveShortcut } from '../../../components/useSaveShortcut';
 import { useAppStore } from '../../../store/appStore';
-import { useBranches, useDefaultBranchId, useItems, useStockLevels } from '../../../store/selectors';
+import { useBranches, useDefaultBranchId } from '../../../store/selectors';
+import { useTrackedItems } from '../../../remote/queries';
 import { formatQty } from '@esmart/core/lib/format';
 import { today } from '@esmart/core/lib/date';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
@@ -22,13 +24,13 @@ export default function StockAdjust() {
   const t = useTheme();
   const { t: tr } = useTranslation(['inventory', 'nav']);
   const goBack = useGoBack();
-  const toast = useToast();
+  const { run: serverSave, saving, blocked } = useServerSave();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ itemId?: string }>();
 
-  const items = useItems().filter((i) => i.trackInventory);
+  // Every tracked item and what's on hand at the active branch, from the server.
+  const { items, stock } = useTrackedItems();
   const branches = useBranches();
-  const stock = useStockLevels();
   const addStockMovement = useAppStore((s) => s.addStockMovement);
   const activeCompanyId = useAppStore((s) => s.activeCompanyId);
   const defaultBranchId = useDefaultBranchId();
@@ -49,31 +51,36 @@ export default function StockAdjust() {
   const delta = direction === 'increase' ? qty : -qty;
   const resulting = current + delta;
 
-  const REASONS =
+  // The chosen reason is saved as the movement's note, in the words the user picked it in.
+  const REASON_KEYS =
     direction === 'decrease'
-      ? ['Damaged', 'Lost or stolen', 'Expired', 'Sample given', 'Stock count correction', 'Internal use']
-      : ['Found stock', 'Stock count correction', 'Returned from customer', 'Production output'];
+      ? (['damaged', 'lost', 'expired', 'sample', 'countCorrection', 'internalUse'] as const)
+      : (['found', 'countCorrection', 'customerReturn', 'production'] as const);
+  const REASONS = REASON_KEYS.map((k) => tr(`inventory:adjust.reasons.${k}`));
 
   const canSave = !!itemId && qty > 0 && !!branchId;
 
   const save = () => {
     if (!canSave || !item) return;
-    addStockMovement({
-      companyId: activeCompanyId,
-      branchId,
-      itemId: item.id,
-      type: 'adjustment',
-      quantity: delta,
-      unitCost: item.purchasePrice,
-      date,
-      notes: reason || undefined,
+    void serverSave(() => {
+      addStockMovement({
+        companyId: activeCompanyId,
+        branchId,
+        itemId: item.id,
+        type: 'adjustment',
+        quantity: delta,
+        unitCost: item.purchasePrice,
+        date,
+        notes: reason || undefined,
+      });
+    }, tr('inventory:adjust.done'), { icon: 'package-variant', detail: item.name }).then((res) => {
+      if (res) goBack(`/(app)/catalog/items/${item.id}`);
     });
-    toast.show(tr('inventory:adjust.done'), 'success');
-    goBack(`/(app)/catalog/items/${item.id}`);
   };
+  useSaveShortcut(() => void save(), !saving && canSave);
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: t.c.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Stack.Screen options={{ title: tr('nav:title.stockAdjustment') }} />
 
       <ScrollView
@@ -95,8 +102,8 @@ export default function StockAdjust() {
 
         <Segmented
           options={[
-            { value: 'decrease', label: 'Decrease' },
-            { value: 'increase', label: 'Increase' },
+            { value: 'decrease', label: tr('inventory:adjust.decrease') },
+            { value: 'increase', label: tr('inventory:adjust.increase') },
           ]}
           value={direction}
           onChange={(v) => {
@@ -129,8 +136,8 @@ export default function StockAdjust() {
         {item ? (
           <Card variant="flat" style={{ gap: t.spacing.sm }}>
             {[
-              { label: 'Current stock', value: `${formatQty(current)} ${item.unit}` },
-              { label: 'Adjustment', value: `${delta >= 0 ? '+' : ''}${formatQty(delta)} ${item.unit}` },
+              { label: tr('inventory:adjust.currentStock'), value: `${formatQty(current)} ${item.unit}` },
+              { label: tr('inventory:adjust.adjustment'), value: `${delta >= 0 ? '+' : ''}${formatQty(delta)} ${item.unit}` },
             ].map((r) => (
               <View key={r.label} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                 <Text variant="caption" tone="muted">
@@ -164,7 +171,7 @@ export default function StockAdjust() {
           backgroundColor: t.c.paper,
         }}
       >
-        <Button title={tr('inventory:adjust.submit')} onPress={save} disabled={!canSave} fullWidth size="lg" />
+        <Button shortcut="S" title={tr('inventory:adjust.submit')} onPress={() => void save()} loading={saving} disabled={blocked || !canSave} fullWidth size="lg" />
       </View>
 
       <SelectSheet

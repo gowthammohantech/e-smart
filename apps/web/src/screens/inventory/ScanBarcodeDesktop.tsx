@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { focusRing, type WebPressState } from '@esmart/ui/theme/interaction';
 import { Text } from '@esmart/ui/components/Text';
@@ -11,7 +11,8 @@ import { Badge } from '@esmart/ui/components/Badge';
 import { TextField } from '@esmart/ui/components/Field';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { Illustration } from '@esmart/ui/components/Illustration';
-import { useItems, useStockLevels } from '@esmart/app/store/selectors';
+import { useItemPages } from '@esmart/app/remote/queries';
+import type { Item } from '@esmart/core/types';
 import { formatMoney, formatQty } from '@esmart/core/lib/format';
 import { Panel, TwoColumns } from './parts';
 
@@ -25,12 +26,14 @@ export function ScanBarcodeDesktop() {
   const { t: tr } = useTranslation(['inventory', 'nav']);
   const router = useRouter();
 
-  const items = useItems();
-  const stock = useStockLevels();
   const [code, setCode] = useState('');
 
-  const withBarcodes = items.filter((i) => i.barcode);
-  const match = items.find((i) => i.barcode === code.trim());
+  // Samples from the first page of items; the code typed is looked up on the server, exactly.
+  const firstPage = useItemPages({}).rows as unknown as (Item & { stockOnHand?: number })[];
+  const withBarcodes = firstPage.filter((i) => i.barcode);
+  const found = useItemPages({ barcode: code.trim() }, !!code.trim()).rows as unknown as (Item & { stockOnHand?: number })[];
+  const match = code.trim() ? found[0] : undefined;
+  const stock: Record<string, number> = match ? { [match.id]: match.stockOnHand ?? 0 } : {};
 
   return (
     <View style={{ flex: 1 }}>
@@ -57,7 +60,7 @@ export function ScanBarcodeDesktop() {
                 </Text>
               </Card>
 
-              <Panel title="Look up a code" subtitle="Type or paste it, or use a scanner that types for you" icon="barcode-scan">
+              <Panel title={tr('inventory:scan.lookUp')} subtitle={tr('inventory:scan.lookUpHint')} icon="barcode-scan">
                 <TextField
                   label={tr('inventory:scan.barcode')}
                   value={code}
@@ -97,15 +100,15 @@ export function ScanBarcodeDesktop() {
                           justifyContent: 'center',
                         }}
                       >
-                        <MaterialCommunityIcons name="check" size={22} color={t.c.good} />
+                        <Icon name="check" size={22} color={t.c.good} />
                       </View>
                       <View style={{ flex: 1, gap: 3 }}>
                         <Text weight="600">{match.name}</Text>
                         <Text variant="caption" tone="muted">
-                          {formatMoney(match.salePrice)} · {formatQty(stock[match.id] ?? 0)} {match.unit} in stock
+                          {formatMoney(match.salePrice)} · {tr('inventory:scan.inStock', { qty: formatQty(stock[match.id] ?? 0), unit: match.unit })}
                         </Text>
                       </View>
-                      <MaterialCommunityIcons name="chevron-right" size={20} color={t.c.muted} />
+                      <Icon name="chevron-right" size={20} color={t.c.muted} />
                     </Pressable>
                   ) : (
                     <Card variant="flat">
@@ -125,14 +128,14 @@ export function ScanBarcodeDesktop() {
             </>
           }
           side={
-            <Panel title={tr('inventory:scan.tryOne')} subtitle="Sample barcodes from your items" icon="format-list-bulleted">
+            <Panel title={tr('inventory:scan.tryOne')} subtitle={tr('inventory:scan.samplesHint')} icon="format-list-bulleted">
               <View style={{ marginHorizontal: -t.spacing.xl, marginBottom: -t.spacing.lg }}>
                 {withBarcodes.slice(0, 8).map((i, idx, arr) => (
                   <Pressable
                     key={i.id}
                     onPress={() => setCode(i.barcode ?? '')}
                     accessibilityRole="button"
-                    accessibilityLabel={`Use barcode for ${i.name}`}
+                    accessibilityLabel={tr('inventory:scan.a11yUse', { name: i.name })}
                     style={(state) => {
                       const { hovered, focused } = state as WebPressState;
                       return [

@@ -4,7 +4,10 @@ export { ApiError };
 export type { Schema };
 
 const KEY = 'esmart.admin.tokens';
-export const API_URL = `${(import.meta.env.VITE_API_URL ?? 'http://localhost:4000').replace(/\/$/, '')}/v1`;
+const BASE = import.meta.env.VITE_API_URL?.trim() || (import.meta.env.DEV ? 'http://localhost:4000' : '');
+/** False for a production build made without VITE_API_URL; main.tsx says so instead of calling localhost. */
+export const API_CONFIGURED = BASE !== '';
+export const API_URL = `${BASE.replace(/\/$/, '')}/v1`;
 
 /**
  * Operator tokens live in sessionStorage: they are cleared with the tab, so

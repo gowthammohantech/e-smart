@@ -148,6 +148,8 @@ export const platformHandlers = defineHandlers({
     ]);
     const statuses = await subscriptionStatuses(ctx.db, companies.map((c) => c.id));
     const [wire] = await accountsToPlatform(ctx.db, [account]);
+    // Reading a tenant's people is personal data: who looked, and when, is kept.
+    await recordPlatformAction(ctx.db, ctx.user, ctx.req, { action: 'account.viewed', target: { type: 'account', id: account.id, label: account.name }, reason: 'Viewed' });
     return {
       account: wire,
       companies: companies.map((c) => companyToPlatform(c, statuses.get(c.id))),
@@ -216,13 +218,28 @@ export const platformHandlers = defineHandlers({
     if (!company) throw notFound('Company');
     const SE = schema.subscriptionEvents;
     const D = schema.documents;
-    const [[account], [subscription], history, documents, [members]] = await Promise.all([
+    const AI = schema.aiUsage;
+    const [[account], [subscription], history, documents, [members], aiCost] = await Promise.all([
       ctx.db.select().from(A).where(eq(A.id, company.accountId)),
       ctx.db.select().from(schema.subscriptions).where(eq(schema.subscriptions.companyId, company.id)),
       ctx.db.select().from(SE).where(eq(SE.companyId, company.id)).orderBy(desc(SE.createdAt), desc(SE.id)).limit(50),
       ctx.db.select({ kind: D.kind, count: sql<number>`count(*)::int` }).from(D).where(eq(D.companyId, company.id)).groupBy(D.kind).orderBy(asc(D.kind)),
       ctx.db.select({ n: count() }).from(schema.userCompanies).where(eq(schema.userCompanies.companyId, company.id)),
+      ctx.db
+        .select({
+          month: AI.month,
+          actions: sql<string>`sum(${AI.count})`,
+          inputTokens: sql<string>`sum(${AI.inputTokens})`,
+          outputTokens: sql<string>`sum(${AI.outputTokens})`,
+          costMicroUsd: sql<string>`sum(${AI.costMicroUsd})`,
+        })
+        .from(AI)
+        .where(eq(AI.companyId, company.id))
+        .groupBy(AI.month)
+        .orderBy(desc(AI.month))
+        .limit(6),
     ]);
+    await recordPlatformAction(ctx.db, ctx.user, ctx.req, { action: 'company.viewed', target: { type: 'company', id: company.id, label: company.name }, reason: 'Viewed' });
     return {
       company: companyToPlatform(company, subscription?.status),
       accountName: account.name,
@@ -231,6 +248,14 @@ export const platformHandlers = defineHandlers({
       planHistory: history.map((h) => ({ id: h.id, fromPlan: h.fromPlan, toPlan: h.toPlan, event: h.event, createdAt: h.createdAt.toISOString() })),
       documentCounts: documents,
       userCount: members.n,
+      // Postgres hands sums of bigints back as strings.
+      aiCost: aiCost.map((r) => ({
+        month: r.month,
+        actions: Number(r.actions),
+        inputTokens: Number(r.inputTokens),
+        outputTokens: Number(r.outputTokens),
+        costUsd: Number(r.costMicroUsd) / 1_000_000,
+      })),
     };
   },
 
@@ -320,6 +345,14 @@ export const platformHandlers = defineHandlers({
       .where(and(...filters, k.where))
       .orderBy(...k.orderBy)
       .limit(k.take);
+    // A search by name, email or phone, or one account's people, is a lookup of someone; the plain list isn't.
+    if (q?.trim() || accountId) {
+      await recordPlatformAction(ctx.db, ctx.user, ctx.req, {
+        action: 'users.searched',
+        target: accountId ? { type: 'account', id: accountId, label: accountId } : { type: 'user', id: '*', label: `"${q!.trim()}"` },
+        reason: q?.trim() ? `Searched "${q.trim()}"` : 'Listed the account\'s users',
+      });
+    }
     return k.page(
       rows.slice(0, k.take - 1).map((r) => userToPlatform(r.row, r.account)),
       rows.map((r) => ({ cursorAt: r.cursorAt, id: r.row.id })),
@@ -332,6 +365,44 @@ export const platformHandlers = defineHandlers({
 
   async enablePlatformUser(ctx) {
     return setUserEnabled(ctx, true);
+  },
+
+  /**
+   * Grants, changes or removes platform operator access, as db:platform-admin does from the command line.
+   * The user is signed out everywhere so their next session opens under the new role's rules.
+   */
+  async setPlatformUserRole(ctx) {
+    const reason = reasonOf(ctx.body);
+    const next = ctx.body.platformRole ?? null;
+    if (ctx.params.userId === ctx.user.id) throw conflict('SELF', "You can't change your own platform role");
+    const { user, account } = await ctx.db.transaction(async (tx) => {
+      // Lock every superadmin too, so two demotions at once can't leave none.
+      await tx.select({ id: U.id }).from(U).where(eq(U.platformRole, 'superadmin')).for('update');
+      const [current] = await tx.select().from(U).where(eq(U.id, ctx.params.userId)).for('update');
+      if (!current) throw notFound('User');
+      if (current.platformRole === next) throw conflict('NO_CHANGE', next ? `This user is already a platform ${next}` : 'This user has no platform role');
+      if (next && current.status === 'disabled') throw conflict('USER_DISABLED', 'Enable this user before giving them a platform role');
+      if (current.platformRole === 'superadmin') {
+        const [{ n }] = await tx.select({ n: count() }).from(U).where(and(eq(U.platformRole, 'superadmin'), sql`${U.id} <> ${current.id}`));
+        if (n === 0) throw conflict('LAST_SUPERADMIN', 'There must always be at least one superadmin');
+      }
+      const [updated] = await tx
+        .update(U)
+        .set({ platformRole: next, version: current.version + 1, updatedAt: ctx.now })
+        .where(eq(U.id, current.id))
+        .returning();
+      await revokeAllSessions(tx, current.id, ctx.now);
+      await recordPlatformAction(tx, ctx.user, ctx.req, {
+        action: next ? 'operator.role_granted' : 'operator.role_removed',
+        target: { type: 'user', id: current.id, label: `${current.name} <${current.email}>` },
+        reason,
+        before: { platformRole: current.platformRole },
+        after: { platformRole: next },
+      });
+      const [acct] = await tx.select({ name: A.name, suspendedAt: A.suspendedAt }).from(A).where(eq(A.id, current.accountId));
+      return { user: updated, account: acct };
+    });
+    return userToPlatform(user, account);
   },
 
   /** Newest first. `from` and `to` are inclusive UTC dates. */

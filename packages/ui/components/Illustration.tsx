@@ -1,6 +1,5 @@
 import React from 'react';
 import { StyleProp, View, ViewStyle } from 'react-native';
-import { Image } from 'expo-image';
 import { useTheme } from '../theme/ThemeProvider';
 import {
   ILLUSTRATIONS,
@@ -10,7 +9,7 @@ import {
 } from '../illustrations/registry';
 
 /**
- * A decorative illustration.
+ * A decorative, gently animated illustration.
  *
  * Hidden from assistive technology by default — the heading and message beside
  * it already carry the meaning, so announcing the art would only add noise.
@@ -31,9 +30,8 @@ export function Illustration({
   style?: StyleProp<ViewStyle>;
   accessibilityLabel?: string;
   /**
-   * Opt-in tinted disc behind the art. Off by default — both the placeholder
-   * set and Storyset's own illustrations carry their own background shape, and
-   * a second disc competes with it.
+   * Opt-in tinted disc behind the art. Off by default — every scene draws its
+   * own soft backdrop, and a second disc competes with it.
    */
   tint?: boolean;
 }) {
@@ -41,6 +39,7 @@ export function Illustration({
   const h = height ?? ILLUSTRATION_SIZES[size];
   const w = h * (4 / 3);
   const decorative = !accessibilityLabel;
+  const Scene = ILLUSTRATIONS[name];
 
   return (
     <View
@@ -62,13 +61,7 @@ export function Illustration({
           }}
         />
       ) : null}
-      <Image
-        source={ILLUSTRATIONS[name]}
-        style={{ width: w, height: h }}
-        contentFit="contain"
-        cachePolicy="memory-disk"
-        transition={220}
-      />
+      <Scene width={w} height={h} />
     </View>
   );
 }

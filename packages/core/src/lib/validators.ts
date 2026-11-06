@@ -10,7 +10,12 @@ import i18n from '@esmart/i18n';
  */
 
 export const GSTIN_RE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
-export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+/**
+ * What Gmail, Outlook, Yahoo and Google Workspace hand out between them:
+ * lowercase letters, digits and . _ - + before the @, starting and ending
+ * with a letter or digit, never two dots in a row.
+ */
+export const EMAIL_RE = /^(?!.*\.\.)[a-z0-9](?:[a-z0-9._+-]*[a-z0-9])?@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/;
 export const PHONE_RE = /^[+]?[0-9\s-]{7,16}$/;
 
 export function required(value: string | undefined | null, label: string): string | undefined {
@@ -52,6 +57,29 @@ export function validPostalCode(value: string | undefined, country = 'IN', state
     return i18n.t('errors:validation.pincodeState', { pin: v, pinState, state: stateNameOf(stateCode) });
   }
   return undefined;
+}
+
+/**
+ * A tax rate as the server takes it: 0–100%, or up to 999.999% for cess
+ * (tobacco, aerated drinks), with at most three decimals.
+ */
+export function validTaxRate(value: string, type?: string): string | undefined {
+  const v = value.trim();
+  const max = type === 'CESS' ? 999.999 : 100;
+  const rate = Number(v);
+  if (!v || !Number.isFinite(rate)) return i18n.t('errors:validation.taxRateRange', { max });
+  if (rate < 0 || rate > max) return i18n.t('errors:validation.taxRateRange', { max });
+  if (!/^\d+(\.\d{1,3})?$/.test(v)) return i18n.t('errors:validation.taxRateDecimals');
+  return undefined;
+}
+
+/** Tax deduction account number: four letters, five digits, a letter (e.g. CHED12345A). */
+export const TAN_RE = /^[A-Z]{4}[0-9]{5}[A-Z]$/;
+
+export function validTan(value: string | undefined): string | undefined {
+  const v = (value ?? '').trim().toUpperCase();
+  if (!v) return undefined;
+  return TAN_RE.test(v) ? undefined : i18n.t('errors:validation.tanShape');
 }
 
 export const HSN_RE = /^\d{4}(\d{2})?(\d{2})?$/;

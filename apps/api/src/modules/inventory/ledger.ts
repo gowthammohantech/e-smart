@@ -1,6 +1,6 @@
 import { and, eq, inArray, lte, type SQL } from 'drizzle-orm';
 import type { Schema } from '@esmart/api-contract';
-import { isLowStock, stockOnHand, stockValue } from '@esmart/core/domain/stockLedger';
+import { isLowStock, stockOnHand, valueStock, type StockCosting } from '@esmart/core/domain/stockLedger';
 import type { Item, StockMovement } from '@esmart/core/types';
 import { schema } from '@esmart/db';
 import type { DbOrTx } from '../../lib/audit';
@@ -75,7 +75,7 @@ export type Level = { itemId: string; branchId: string; onHand: number; reorderL
  * against the item's reorder level, and `stockValue` (weighted average of
  * what came in there).
  */
-export function levelAt(item: Item, branchId: string, movements: StockMovement[], baseCurrency: string): Level {
+export function levelAt(item: Item, branchId: string, movements: StockMovement[], baseCurrency: string, method: StockCosting = 'average'): Level {
   const here = movements.filter((m) => m.itemId === item.id && m.branchId === branchId);
   const onHand = stockOnHand(item.id, here, branchId);
   return {
@@ -84,6 +84,6 @@ export function levelAt(item: Item, branchId: string, movements: StockMovement[]
     onHand,
     reorderLevel: item.reorderLevel,
     low: isLowStock(item, onHand),
-    value: stockValue(item, here, baseCurrency),
+    value: valueStock(item, here, baseCurrency, method),
   };
 }

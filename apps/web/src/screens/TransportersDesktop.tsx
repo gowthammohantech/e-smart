@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Animated, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Stack } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { focusRing, type WebPressState } from '@esmart/ui/theme/interaction';
 import { Card } from '@esmart/ui/components/Card';
@@ -12,12 +12,14 @@ import { Button } from '@esmart/ui/components/Button';
 import { PhoneField, TextField, usePhoneInput } from '@esmart/ui/components/Field';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { Fab } from '@esmart/ui/components/Fab';
-import { useToast } from '@esmart/ui/components/Toast';
+import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { useAppStore } from '@esmart/app/store/appStore';
 import { useTransporters } from '@esmart/app/store/selectors';
 import { Transporter } from '@esmart/core/types';
 import { formatGstin, isValidTransporterId } from '@esmart/core/domain/gstin';
 import { uid } from '@esmart/core/lib/id';
+import { useSaveShortcut } from '@esmart/app/components/useSaveShortcut';
+import { useServerSave } from '@esmart/app/components/useServerSave';
 
 const DIALOG_WIDTH = 560;
 
@@ -30,8 +32,8 @@ const DIALOG_WIDTH = 560;
  */
 export function TransportersDesktop() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['nav', 'settings', 'common']);
-  const toast = useToast();
+  const { t: tr } = useTranslation(['nav', 'settings', 'common', 'errors']);
+  const { run: serverSave, saving } = useServerSave();
 
   const transporters = useTransporters();
   const saveTransporter = useAppStore((s) => s.saveTransporter);
@@ -46,6 +48,7 @@ export function TransportersDesktop() {
   const [nameError, setNameError] = useState<string | undefined>();
   const [idError, setIdError] = useState<string | undefined>();
   const [phoneError, setPhoneError] = useState<string | undefined>();
+  const [confirmDelete, setConfirmDelete] = useState<Transporter | null>(null);
   const [fade] = useState(() => new Animated.Value(0));
 
   const open = (transporter?: Transporter) => {
@@ -63,31 +66,44 @@ export function TransportersDesktop() {
 
   const close = () => setSheetOpen(false);
 
-  const save = () => {
-    const missingName = !name.trim();
-    const badId = !isValidTransporterId(transporterId);
-    setNameError(missingName ? 'Name is required' : undefined);
-    setIdError(badId ? 'Transporter ID must be a valid 15-character GSTIN or TRANSIN' : undefined);
+  const save = async () => {
+    const id = transporterId.trim().toUpperCase();
+    const badName = name.trim() ? undefined : tr('errors:validation.required', { field: tr('settings:transporters.name') });
+    const badId = !isValidTransporterId(id)
+      ? tr('settings:transporters.idInvalid')
+      : transporters.some((x) => x.transporterId === id && x.id !== editing?.id)
+        ? tr('settings:transporters.idTaken')
+        : undefined;
     const badPhone = phone.error();
+    setNameError(badName);
+    setIdError(badId);
     setPhoneError(badPhone);
-    if (missingName || badId || badPhone) return;
-    saveTransporter({
+    if (badName || badId || badPhone) return;
+    const transporter: Transporter = {
       id: editing?.id ?? uid('trn'),
       companyId: editing?.companyId ?? activeCompanyId,
       name: name.trim(),
       transporterId: transporterId.trim().toUpperCase(),
       phone: phone.value || undefined,
       status: 'active',
-    });
-    toast.show(editing ? 'Transporter updated' : 'Transporter added', 'success');
-    close();
+    };
+    // The form stays open until the server has it, so a refusal can be fixed here.
+    const res = await serverSave(
+      () => saveTransporter(transporter),
+      editing ? tr('settings:transporters.updated') : tr('settings:transporters.added'),
+      { icon: 'truck-outline' },
+    );
+    if (res) close();
   };
 
+  // Ctrl+S (⌘+S) does what Save does, while the form is open.
+  useSaveShortcut(save, sheetOpen);
+
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('nav:title.transporters') }} />
 
-      <ScrollView contentContainerStyle={{ paddingBottom: 48 }}>
+      <ScrollView contentContainerStyle={{ paddingHorizontal: t.spacing.lg, paddingBottom: 48 }}>
         {transporters.length === 0 ? (
           <Card padded={false}>
             <EmptyState
@@ -124,7 +140,7 @@ export function TransportersDesktop() {
                   ];
                 }}
               >
-                <MaterialCommunityIcons name="truck-outline" size={20} color={t.c.muted} />
+                <Icon name="truck-outline" size={20} color={t.c.muted} />
                 <View style={{ flex: 1, gap: 2 }}>
                   <Text variant="body" weight="600">
                     {transporter.name}
@@ -134,7 +150,7 @@ export function TransportersDesktop() {
                   </Text>
                 </View>
                 {transporter.status === 'inactive' ? <Badge label={tr('settings:transporters.inactive')} tone="neutral" size="sm" /> : null}
-                <MaterialCommunityIcons name="chevron-right" size={18} color={t.c.muted} />
+                <Icon name="chevron-right" size={18} color={t.c.muted} />
               </Pressable>
             ))}
           </Card>
@@ -196,14 +212,14 @@ export function TransportersDesktop() {
                   justifyContent: 'center',
                 }}
               >
-                <MaterialCommunityIcons name="truck-outline" size={24} color={t.c.primary} />
+                <Icon name="truck-outline" size={24} color={t.c.primary} />
               </View>
               <View style={{ flex: 1, gap: 2 }}>
                 <Text variant="h3" weight="700">
-                  {editing ? 'Edit transporter' : 'Add a transporter'}
+                  {editing ? tr('settings:transporters.editTitle') : tr('settings:transporters.add')}
                 </Text>
                 <Text variant="small" tone="muted">
-                  Carriers you pick from when you fill in Part-B of an e-way bill.
+                  {tr('settings:transporters.dialogBody')}
                 </Text>
               </View>
               <Pressable
@@ -225,7 +241,7 @@ export function TransportersDesktop() {
                   ];
                 }}
               >
-                <MaterialCommunityIcons name="close" size={20} color={t.c.muted} />
+                <Icon name="close" size={20} color={t.c.muted} />
               </Pressable>
             </View>
 
@@ -251,11 +267,12 @@ export function TransportersDesktop() {
                     icon="card-account-details-outline"
                     value={transporterId}
                     onChangeText={(v) => {
-                      setTransporterId(v.toUpperCase());
+                      setTransporterId(((v) => v.toUpperCase().replace(/[^0-9A-Z]/g, '').slice(0, 15))(v));
                       setIdError(undefined);
                     }}
                     placeholder="27AABCT5512M1Z6"
                     autoCapitalize="characters"
+                    maxLength={15}
                     error={idError}
                     hint={tr('settings:transporters.idHint')}
                   />
@@ -290,19 +307,32 @@ export function TransportersDesktop() {
                   variant="danger"
                   icon="trash-can-outline"
                   onPress={() => {
-                    removeTransporter(editing.id);
                     close();
-                    toast.show(tr('settings:transporters.removed'), 'success');
+                    setConfirmDelete(editing);
                   }}
                 />
               ) : null}
               <View style={{ flex: 1 }} />
               <Button title={tr('common:component.cancel')} variant="ghost" onPress={close} />
-              <Button title={tr('settings:transporters.save')} onPress={save} />
+              <Button shortcut="S" title={tr('settings:transporters.save')} onPress={save} loading={saving} disabled={saving} />
             </View>
           </Animated.View>
         </View>
       </Modal>
+
+      <ConfirmDialog
+        visible={!!confirmDelete}
+        title={tr('settings:transporters.deleteTitle', { name: confirmDelete?.name ?? '' })}
+        message={tr('settings:transporters.deleteMessage')}
+        confirmLabel={tr('settings:transporters.delete')}
+        destructive
+        onCancel={() => setConfirmDelete(null)}
+        onConfirm={() => {
+          const x = confirmDelete;
+          setConfirmDelete(null);
+          if (x) void serverSave(() => removeTransporter(x.id), tr('settings:transporters.removed'), { icon: 'truck-remove-outline' });
+        }}
+      />
     </View>
   );
 }

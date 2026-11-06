@@ -43,6 +43,321 @@
       "when": 1792214333260,
       "tag": "0005_verified_phone_unique",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793015415128,
+      "tag": "0006_separate_portal_credentials",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793016996978,
+      "tag": "0007_drop_portal_environment",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793385286729,
+      "tag": "0008_documents_number_unique",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793386770340,
+      "tag": "0009_change_log_tx_id",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1793388237728,
+      "tag": "0010_period_lock_and_rate_history",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1793562435556,
+      "tag": "0011_item_opening_stock_date",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1793587118008,
+      "tag": "0012_payment_account_opening_balance_date",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1793639565408,
+      "tag": "0013_auth_hardening",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1793640191728,
+      "tag": "0014_operator_mfa",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1793641349526,
+      "tag": "0015_account_deletion",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1793671635137,
+      "tag": "0016_background_jobs",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1793673064199,
+      "tag": "0017_compliance_attempts",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1793673984928,
+      "tag": "0018_push_preferences",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1793701909987,
+      "tag": "0019_gst_treatment",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1793705974052,
+      "tag": "0020_credit_debit_notes",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1793709216335,
+      "tag": "0021_tds_rcm_itc",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1793710999341,
+      "tag": "0022_books",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1793714582819,
+      "tag": "0023_gst_returns",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1793720070327,
+      "tag": "0024_gstr2b",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1793755303923,
+      "tag": "0025_extras",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1793757004884,
+      "tag": "0026_opening_rate",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1793799057276,
+      "tag": "0027_opening_balance_date",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1793799742272,
+      "tag": "0028_receipt_vouchers_challan",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1793805009343,
+      "tag": "0029_change_log_latest_index",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1793821062556,
+      "tag": "0030_advance_refunds",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1793824007004,
+      "tag": "0031_company_rule_settings",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1793824248915,
+      "tag": "0032_undated_account_openings",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1793824364501,
+      "tag": "0033_payment_tds_section",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1793824643595,
+      "tag": "0034_bill_of_entry_isd",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1793843607252,
+      "tag": "0035_voucher_status",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1793843649047,
+      "tag": "0036_item_categories_brands",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1793844649233,
+      "tag": "0037_perpetual_stock",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1793845160867,
+      "tag": "0038_recurring_invoices",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1793845976089,
+      "tag": "0039_party_both_general",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1793846603940,
+      "tag": "0040_company_bank_signature",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1793846991298,
+      "tag": "0041_bank_statements",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1793851909651,
+      "tag": "0042_proforma",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1793853147866,
+      "tag": "0043_disabled_modules",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1793853552095,
+      "tag": "0044_custom_fields",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1793854368588,
+      "tag": "0045_approvals",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1793855355353,
+      "tag": "0046_opening_documents",
+      "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1793866002679,
+      "tag": "0047_templates_tcs_vehicles_ai_requests",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1793867047360,
+      "tag": "0048_fixed_assets",
+      "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1793872338052,
+      "tag": "0049_fifo_budgets",
+      "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1793906572095,
+      "tag": "0050_ai_usage_cost",
+      "breakpoints": true
     }
   ]
 }

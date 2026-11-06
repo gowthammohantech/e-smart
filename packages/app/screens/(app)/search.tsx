@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
@@ -30,7 +30,7 @@ export default function GlobalSearch() {
   const pages = matchPages(useAppPages(), query);
 
   return (
-    <View style={{ flex: 1, backgroundColor: t.c.bg }}>
+    <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('nav:title.search') }} />
 
       <View style={{ paddingHorizontal: t.spacing.lg, paddingTop: t.spacing.md }}>
@@ -59,7 +59,7 @@ export default function GlobalSearch() {
                     key={h}
                     onPress={() => setQuery(h)}
                     accessibilityRole="button"
-                    accessibilityLabel={`Search ${h}`}
+                    accessibilityLabel={tr('nav:shell.searchFor', { query: h })}
                     style={({ pressed }) => ({
                       flexDirection: 'row',
                       alignItems: 'center',
@@ -70,7 +70,7 @@ export default function GlobalSearch() {
                       backgroundColor: pressed ? t.c.card2 : 'transparent',
                     })}
                   >
-                    <MaterialCommunityIcons name="history" size={18} color={t.c.muted} />
+                    <Icon name="history" size={18} color={t.c.muted} />
                     <Text variant="body" style={{ flex: 1 }}>
                       {h}
                     </Text>
@@ -87,7 +87,7 @@ export default function GlobalSearch() {
             />
           )
         ) : results.length === 0 && pages.length === 0 ? (
-          <EmptyState illustration="search-empty" icon="magnify-close" title={tr('common:search.noMatches')} message={`Nothing in ${'this business'} matches "${query}".`} />
+          <EmptyState illustration="search-empty" icon="magnify-close" title={tr('common:search.noMatches')} message={tr('nav:shell.noMatchesInBusiness', { query })} />
         ) : (
           <>
           {pages.length > 0 ? (
@@ -118,7 +118,7 @@ export default function GlobalSearch() {
                       backgroundColor: pressed ? t.c.card2 : 'transparent',
                     })}
                   >
-                    <MaterialCommunityIcons name={p.icon} size={19} color={t.c.primary} />
+                    <Icon name={p.icon} size={19} color={t.c.primary} />
                     <View style={{ flex: 1, gap: 2 }}>
                       <Text variant="body" weight="600" numberOfLines={1}>
                         {p.title}
@@ -129,7 +129,7 @@ export default function GlobalSearch() {
                         </Text>
                       ) : null}
                     </View>
-                    <MaterialCommunityIcons name="chevron-right" size={18} color={t.c.muted} />
+                    <Icon name="chevron-right" size={18} color={t.c.muted} />
                   </Pressable>
                 ))}
               </Card>
@@ -163,7 +163,7 @@ export default function GlobalSearch() {
                       backgroundColor: pressed ? t.c.card2 : 'transparent',
                     })}
                   >
-                    <MaterialCommunityIcons name={r.icon} size={19} color={t.c.primary} />
+                    <Icon name={r.icon} size={19} color={t.c.primary} />
                     <View style={{ flex: 1, gap: 2 }}>
                       <Text variant="body" weight="600" numberOfLines={1}>
                         {r.title}

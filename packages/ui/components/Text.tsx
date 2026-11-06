@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, Text as RNText, TextProps, TextStyle } from 'react-native';
+import { Platform, StyleSheet, Text as RNText, TextProps, TextStyle } from 'react-native';
 import { useTheme } from '../theme/ThemeProvider';
 
 export type TextVariant =
@@ -38,19 +38,51 @@ export function Text({ variant = 'body', tone = 'default', weight, center, style
     lineHeight: t.type.lineHeight(size),
   });
 
-  const sizes: Record<TextVariant, TextStyle> = {
-    display: { ...px(t.fontSize.display, -0.8), fontWeight: '800' },
-    h1: { ...px(t.fontSize.h1, -0.6), fontWeight: '700' },
-    h2: { ...px(t.fontSize.h2, -0.4), fontWeight: '700' },
-    h3: { ...px(t.fontSize.h3, -0.2), fontWeight: '700' },
-    title: { ...px(t.fontSize.title, 0), fontWeight: '600' },
-    body: { ...px(t.fontSize.body, 0), fontWeight: '400' },
-    small: { ...px(t.fontSize.small, 0), fontWeight: '400' },
-    caption: { ...px(t.fontSize.caption, 0), fontWeight: '500' },
-    micro: { ...px(t.fontSize.micro, 0.4), fontWeight: '600' },
-    // Digits are ASCII in every language, so the tabular figures stay.
-    mono: { ...px(t.fontSize.small, 0), fontWeight: '500', fontVariant: ['tabular-nums'] },
-  };
+  const sizes: Record<TextVariant, TextStyle> = WEB
+    ? {
+        // Inter at desktop sizes: headings a weight lighter than the phone's,
+        // with the slight negative tracking Inter is drawn for.
+        display: { ...px(t.fontSize.display, -0.7), fontWeight: '700' },
+        h1: { ...px(t.fontSize.h1, -0.55), fontWeight: '600' },
+        h2: { ...px(t.fontSize.h2, -0.35), fontWeight: '600' },
+        h3: { ...px(t.fontSize.h3, -0.2), fontWeight: '600' },
+        title: { ...px(t.fontSize.title, -0.1), fontWeight: '600' },
+        body: { ...px(t.fontSize.body, 0), fontWeight: '400' },
+        small: { ...px(t.fontSize.small, 0), fontWeight: '400' },
+        caption: { ...px(t.fontSize.caption, 0), fontWeight: '500' },
+        micro: { ...px(t.fontSize.micro, 0.3), fontWeight: '600' },
+        mono: { ...px(t.fontSize.small, 0), fontWeight: '500', fontVariant: ['tabular-nums'] },
+      }
+    : {
+        display: { ...px(t.fontSize.display, -0.8), fontWeight: '800' },
+        h1: { ...px(t.fontSize.h1, -0.6), fontWeight: '700' },
+        h2: { ...px(t.fontSize.h2, -0.4), fontWeight: '700' },
+        h3: { ...px(t.fontSize.h3, -0.2), fontWeight: '700' },
+        title: { ...px(t.fontSize.title, 0), fontWeight: '600' },
+        body: { ...px(t.fontSize.body, 0), fontWeight: '400' },
+        small: { ...px(t.fontSize.small, 0), fontWeight: '400' },
+        caption: { ...px(t.fontSize.caption, 0), fontWeight: '500' },
+        micro: { ...px(t.fontSize.micro, 0.4), fontWeight: '600' },
+        // Digits are ASCII in every language, so the tabular figures stay.
+        mono: { ...px(t.fontSize.small, 0), fontWeight: '500', fontVariant: ['tabular-nums'] },
+      };
+
+  // Caller overrides go through the same script metrics as the variants. A
+  // new size without a line height would keep the variant's leading, which
+  // under Tamil puts a 10px label on a 23px line; and the tracking on
+  // uppercase captions spreads Tamil vowel signs away from their letters.
+  const override = StyleSheet.flatten(style);
+  const leading: TextStyle | null =
+    override?.fontSize != null && override.lineHeight == null
+      ? { lineHeight: t.type.lineHeight(override.fontSize) }
+      : null;
+  const tracked: TextStyle | null =
+    override?.letterSpacing != null ? { letterSpacing: t.type.tracking(override.letterSpacing) } : null;
+  // Screens ask for 700 where the system font needed it to read as bold; Inter
+  // reaches the same emphasis at 600, and at 700 it shouts.
+  const heavy = (w?: TextStyle['fontWeight']) => w === '700' || w === '800' || w === 'bold' || w === 700 || w === 800;
+  const callerWeight = override?.fontWeight ?? weight;
+  const softened: TextStyle | null = WEB && heavy(callerWeight) ? { fontWeight: '600' } : null;
 
   const tones: Record<TextTone, string> = {
     default: t.c.text,
@@ -66,14 +98,20 @@ export function Text({ variant = 'body', tone = 'default', weight, center, style
     <RNText
       style={[
         sizes[variant],
+        t.fontFamily ? { fontFamily: t.fontFamily } : null,
         { color: tones[tone] },
         weight ? { fontWeight: weight } : null,
         center ? styles.center : null,
+        leading,
         style,
+        tracked,
+        softened,
       ]}
       {...rest}
     />
   );
 }
+
+const WEB = Platform.OS === 'web';
 
 const styles = StyleSheet.create({ center: { textAlign: 'center' } });
