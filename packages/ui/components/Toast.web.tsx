@@ -92,6 +92,43 @@ function levelWithHeader() {
   root.setProperty('--esmart-toast-top', `${Math.max(0, r.top + r.height / 2 - PILL_HALF)}px`);
 }
 
+/**
+ * How long a toast stays up. Sileo pauses while the pointer is on a toast and
+ * starts the whole time again when it leaves; here the time runs on from when
+ * the toast appeared. Hovered past it, the toast stays until the pointer
+ * leaves, then goes at once; left sooner, it goes when the time is up.
+ */
+const TOAST_MS = 5000;
+// Sileo shows one toast at a time, all under this id; a new one replaces it.
+const SILEO_ID = 'sileo-default';
+const clock = { shown: 0, timer: 0 as ReturnType<typeof setTimeout> | 0, overdue: false };
+const hovered = () => !!document.querySelector('[data-sileo-toast]:hover');
+
+/** Starts the time for the toast now showing; `held` (a loading toast) has none until it settles. */
+function startClock(held = false) {
+  const shown = ++clock.shown;
+  clock.overdue = false;
+  if (clock.timer) clearTimeout(clock.timer);
+  clock.timer = 0;
+  if (held) return;
+  clock.timer = setTimeout(() => {
+    // A newer toast has its own time.
+    if (shown !== clock.shown) return;
+    if (hovered()) clock.overdue = true;
+    else sileo.dismiss(SILEO_ID);
+  }, TOAST_MS);
+}
+
+if (typeof document !== 'undefined') {
+  // Time up while hovered: it goes the moment the pointer is off the toast.
+  document.addEventListener('mouseout', (e) => {
+    if (!clock.overdue) return;
+    if (e.relatedTarget instanceof Element && e.relatedTarget.closest('[data-sileo-toast]')) return;
+    clock.overdue = false;
+    sileo.dismiss(SILEO_ID);
+  });
+}
+
 const ToastContext = createContext<ToastApi | null>(null);
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
@@ -162,7 +199,13 @@ function PageToaster({ children }: { children: React.ReactNode }) {
 
   // The pill is the theme's own card: white on the light theme, and on the dark
   // one a shade lighter than the page so it doesn't sink into the top bar.
-  const options = useMemo<Partial<SileoOptions>>(() => ({ fill: t.c.card, roundness: 18 }), [t.c.card]);
+  // Its own timer follows the same 5 seconds as the clock above. The message
+  // stays open until the toast goes: folded back early, it would shrink out
+  // from under a pointer reading it, and the toast would no longer be hovered.
+  const options = useMemo<Partial<SileoOptions>>(
+    () => ({ fill: t.c.card, roundness: 18, duration: TOAST_MS, autopilot: { collapse: 0 } }),
+    [t.c.card],
+  );
   // Sileo names its theme after the text it puts on the pill, the opposite of
   // the page's: its "dark" is dark text for a light pill.
   const sileoTheme = t.scheme === 'dark' ? 'light' : 'dark';
@@ -191,6 +234,7 @@ function PageToaster({ children }: { children: React.ReactNode }) {
       };
     };
     const withAction = (opts: SileoOptions, action: NonNullable<ToastOptions['action']>) => {
+      startClock();
       const id = sileo.action({
         ...opts,
         button: {
@@ -206,10 +250,15 @@ function PageToaster({ children }: { children: React.ReactNode }) {
       show: (text, tone = 'info', options) => {
         if (!desktop) levelWithHeader();
         if (options?.action) withAction(body(text, tone, options), options.action);
-        else sileo[tone](body(text, tone, options));
+        else {
+          startClock();
+          sileo[tone](body(text, tone, options));
+        }
       },
       promise: (task, messages) => {
         if (!desktop) levelWithHeader();
+        // Up for as long as the task runs; its time starts once it settles.
+        startClock(true);
         // The returned promise is the task itself; Sileo handles its own copy of the rejection.
         void sileo.promise(task, {
           loading: { title: messages.loading },
@@ -224,8 +273,9 @@ function PageToaster({ children }: { children: React.ReactNode }) {
           (value) => {
             const { text, action, ...rest } = settledContent(messages.success, value);
             if (action) withAction(body(text, 'success', { icon: messages.icon, ...rest, action }), action);
+            else startClock();
           },
-          () => {},
+          () => startClock(),
         );
         return task;
       },
