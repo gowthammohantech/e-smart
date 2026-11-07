@@ -12,7 +12,8 @@ import { Button } from '@esmart/ui/components/Button';
 import { Card } from '@esmart/ui/components/Card';
 import { Illustration } from '@esmart/ui/components/Illustration';
 import { useAppStore } from '../../store/appStore';
-import { queueLogo } from '../../remote/logo';
+import { setLocalLogo, uploadLogo } from '../../remote/logo';
+import { saveOnline } from '../../remote/save';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { COUNTRIES } from '@esmart/core/data/masters';
 import { joinPhone } from '@esmart/core/lib/phone';
@@ -25,7 +26,7 @@ const NEXT_STEPS: { icon: IconName; labelKey: string; bodyKey: string }[] = [
 
 export default function Done() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['onboarding']);
+  const { t: tr } = useTranslation(['onboarding', 'common', 'settings']);
   const toast = useToast();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -40,51 +41,67 @@ export default function Done() {
 
   // Read at once, not after a re-render: a double tap would create the business twice.
   const finished = useRef(false);
-  const finish = (goToInvoice: boolean) => {
+  const finish = async (goToInvoice: boolean) => {
     if (finished.current) return;
     finished.current = true;
     setBusy(true);
     const country = COUNTRIES.find((c) => c.code === draft.country);
 
-    const companyId = createCompany({
-      name: draft.name || tr('onboarding:done.defaultName'),
-      legalName: draft.legalName || undefined,
-      logoUri: draft.logoUri,
-      businessType: draft.businessType,
-      // Free only for now, whatever an older saved draft says.
-      plan: 'free',
-      country: draft.country,
-      baseCurrency: draft.baseCurrency,
-      address: draft.address,
-      email: draft.email || undefined,
-      phone: joinPhone(draft.phoneDialCode, draft.phone) || undefined,
-      fiscalYearStartMonth: draft.fiscalYearStartMonth,
-      taxRegistration: {
-        regime: country?.regime ?? 'NONE',
-        identifier: draft.taxIdentifier || undefined,
-        identifierLabel: country?.taxIdLabel ?? tr('onboarding:done.defaultTaxLabel'),
-        registered: draft.taxRegistered,
-        compositionScheme: draft.compositionScheme,
-        placeOfSupplyStateCode: draft.address.stateCode,
-      },
+    // One save: the business, then its invoice numbering, which goes once the server has made the business.
+    const res = await saveOnline(() => {
+      const companyId = createCompany({
+        name: draft.name || tr('onboarding:done.defaultName'),
+        legalName: draft.legalName || undefined,
+        logoUri: draft.logoUri,
+        businessType: draft.businessType,
+        // Free only for now, whatever an older saved draft says.
+        plan: 'free',
+        country: draft.country,
+        baseCurrency: draft.baseCurrency,
+        address: draft.address,
+        email: draft.email || undefined,
+        phone: joinPhone(draft.phoneDialCode, draft.phone) || undefined,
+        fiscalYearStartMonth: draft.fiscalYearStartMonth,
+        taxRegistration: {
+          regime: country?.regime ?? 'NONE',
+          identifier: draft.taxIdentifier || undefined,
+          identifierLabel: country?.taxIdLabel ?? tr('onboarding:done.defaultTaxLabel'),
+          registered: draft.taxRegistered,
+          compositionScheme: draft.compositionScheme,
+          placeOfSupplyStateCode: draft.address.stateCode,
+        },
+      });
+
+      // Apply the numbering choices to the newly created invoice series.
+      const series = useAppStore
+        .getState()
+        .numberingSeries.find((s) => s.companyId === companyId && s.kind === 'invoice');
+      if (series) {
+        saveNumberingSeries({
+          ...series,
+          prefix: draft.invoicePrefix || 'INV',
+          nextNumber: Number(draft.invoiceNextNumber) || 1,
+          includeFiscalYear: draft.includeFiscalYear,
+        });
+      }
+      return companyId;
     });
-
-    // Uploads by itself once the business has reached the server; until then the picked image is what shows.
-    if (draft.logoUri) queueLogo(companyId, draft.logoUri);
-
-    // Apply the numbering choices to the newly created invoice series.
-    const series = useAppStore
-      .getState()
-      .numberingSeries.find((s) => s.companyId === companyId && s.kind === 'invoice');
-    if (series) {
-      saveNumberingSeries({
-        ...series,
-        prefix: draft.invoicePrefix || 'INV',
-        nextNumber: Number(draft.invoiceNextNumber) || 1,
-        includeFiscalYear: draft.includeFiscalYear,
+    void numberingSeries;
+    if (res.outcome !== 'saved' || !res.id) {
+      finished.current = false;
+      setBusy(false);
+      toast.show(res.outcome === 'refused' ? tr('common:save.refused', { reason: res.error }) : tr('common:save.unreachable'), 'error');
+      return;
+    }
+    // The logo goes up once the business is on the server; one that fails can be added again in the profile.
+    if (draft.logoUri) {
+      const companyId = res.id;
+      setLocalLogo(companyId, draft.logoUri);
+      void uploadLogo(companyId, draft.logoUri).catch(() => {
+        setLocalLogo(companyId, undefined);
+        toast.show(tr('settings:company.logoFailed', { reason: '' }), 'error');
       });
     }
-    void numberingSeries;
 
     completeOnboarding();
     reset();

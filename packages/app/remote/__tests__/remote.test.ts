@@ -127,65 +127,6 @@ describe('queueing', () => {
 });
 
 describe('syncing', () => {
-  it('swaps offline ids for server ids everywhere once the create syncs', async () => {
-    actions().saveParty(party());
-    const doc = actions().documents[0];
-    actions().updateDocument(doc.id, { partyId: 'pty_offline1' });
-    const [create, patch] = queue();
-    expect(patch.body).toMatchObject({ partyId: 'pty_offline1' });
-
-    POST.mockResolvedValueOnce({
-      data: {
-        results: [
-          { id: create.id, status: 'applied', entity: { ...party(), id: 'pty_SERVER', version: 1 } },
-          { id: patch.id, status: 'applied', entity: { ...actions().documents[0], partyId: 'pty_SERVER', version: 2 } },
-        ],
-      },
-    });
-    await syncNow();
-
-    expect(actions().parties.some((p) => p.id === 'pty_offline1')).toBe(false);
-    expect(actions().parties.find((p) => p.id === 'pty_SERVER')?.name).toBe('Offline Traders');
-    expect(actions().documents.find((d) => d.id === doc.id)?.partyId).toBe('pty_SERVER');
-    expect(useRemoteMeta.getState().versions.pty_SERVER).toBe(1);
-    expect(queue()).toHaveLength(0);
-  });
-
-  it('keeps a conflicting change for the user and shows the server copy', async () => {
-    const existing = actions().parties[0];
-    actions().saveParty({ ...existing, name: 'Mine' });
-    const [entry] = queue();
-    POST.mockResolvedValueOnce({ data: { results: [{ id: entry.id, status: 'conflict', entity: { ...existing, name: 'Theirs', version: 3 } }] } });
-    await syncNow();
-
-    expect(actions().parties.find((p) => p.id === existing.id)?.name).toBe('Theirs');
-    expect(queue()[0]).toMatchObject({ status: 'failed', conflict: expect.objectContaining({ name: 'Theirs' }) });
-
-    // Retrying sends the change again against the server's new version.
-    retrySync(entry.id);
-    expect(queue()[0].status).toBe('pending');
-  });
-
-  it('holds changes while offline and sends them in order when back', async () => {
-    POST.mockRejectedValue(new TypeError('Network request failed'));
-    actions().saveParty(party({ id: 'pty_a', name: 'A' }));
-    actions().saveParty(party({ id: 'pty_b', name: 'B' }));
-    await syncNow();
-    expect(useRemoteMeta.getState().online).toBe(false);
-    expect(queue().map((e) => e.status)).toEqual(['pending', 'pending']);
-    // The UI kept working: both are in the store already.
-    expect(actions().parties.filter((p) => ['pty_a', 'pty_b'].includes(p.id))).toHaveLength(2);
-
-    POST.mockReset();
-    POST.mockImplementation(async (_path: string, { body }: { body: { mutations: { id: string; clientEntityId: string }[] } }) => ({
-      data: { results: body.mutations.map((m) => ({ id: m.id, status: 'applied', entity: { id: m.clientEntityId.replace('pty_', 'srv_'), version: 1 } })) },
-    }));
-    await syncNow();
-    const sent = POST.mock.calls[0][1].body.mutations.map((m: { clientEntityId: string }) => m.clientEntityId);
-    expect(sent).toEqual(['pty_a', 'pty_b']);
-    expect(useRemoteMeta.getState().online).toBe(true);
-    expect(queue()).toHaveLength(0);
-  });
 
   it('applies what the server changed since the last pull', async () => {
     const doc = actions().documents[0];

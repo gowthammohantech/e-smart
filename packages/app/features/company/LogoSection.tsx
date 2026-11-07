@@ -8,17 +8,14 @@ import { Button } from '@esmart/ui/components/Button';
 import { Text } from '@esmart/ui/components/Text';
 import { useToast } from '@esmart/ui/components/Toast';
 import { isNetworkError } from '../../remote/api';
-import { LogoError, queueLogo, removeLogo, setLocalLogo, uploadLogo } from '../../remote/logo';
-import { useLogoQueue } from '../../remote/logoQueue';
-import { knownToServer } from '../../remote/meta';
+import { LogoError, removeLogo, setLocalLogo, uploadLogo } from '../../remote/logo';
 import { useActiveCompany, useCurrentUser } from '../../store/selectors';
 import { pickLogo } from './pickLogo';
 
 /**
  * The business logo on the business profile: the current one, with change and
- * remove. A change shows at once and uploads in the background; with no
- * connection (or before the business has reached the server) it is kept and
- * uploads by itself later.
+ * remove. A change shows at once while it uploads; one that doesn't go
+ * through puts the old logo back and says why.
  */
 export function LogoSection() {
   const t = useTheme();
@@ -26,14 +23,12 @@ export function LogoSection() {
   const toast = useToast();
   const company = useActiveCompany();
   const user = useCurrentUser();
-  const pending = useLogoQueue((s) => (company ? s.pending[company.id] : undefined));
   const [busy, setBusy] = useState<'upload' | 'remove' | null>(null);
 
   // The server only lets owners and admins change it.
   if (!company || !(user?.role === 'owner' || user?.role === 'admin')) return null;
 
   const hasLogo = !!company.logoUri;
-  const waiting = !!pending && !pending.failed;
 
   const choose = async () => {
     const picked = await pickLogo();
@@ -43,33 +38,15 @@ export function LogoSection() {
       return;
     }
     const before = company.logoUri;
-    // Not on the server yet: keep it, and it goes up after the business does.
-    if (!knownToServer(company.id)) {
-      queueLogo(company.id, picked.uri);
-      toast.show(tr('settings:company.logoQueued'), 'info', { icon: 'cloud-upload-outline', detail: company.name });
-      return;
-    }
     setLocalLogo(company.id, picked.uri);
     setBusy('upload');
     try {
-      // No connection is not a failure: the logo waits and goes up later.
-      const sent = await toast.promise(
-        uploadLogo(company.id, picked.uri).then(
-          () => 'uploaded' as const,
-          (err: unknown) => {
-            if (isNetworkError(err)) return 'queued' as const;
-            throw err;
-          },
-        ),
-        {
-          loading: tr('settings:company.logoUploading'),
-          success: (r) => ({ text: tr(r === 'uploaded' ? 'settings:company.logoUpdated' : 'settings:company.logoQueued'), detail: company.name }),
-          error: (err) => (err instanceof LogoError ? err.message : tr('settings:company.logoBadType')),
-          icon: 'image-check-outline',
-        },
-      );
-      if (sent === 'uploaded') useLogoQueue.getState().clear(company.id);
-      else queueLogo(company.id, picked.uri);
+      await toast.promise(uploadLogo(company.id, picked.uri), {
+        loading: tr('settings:company.logoUploading'),
+        success: { text: tr('settings:company.logoUpdated'), detail: company.name },
+        error: (err) => (isNetworkError(err) ? tr('settings:company.logoOffline') : err instanceof LogoError ? err.message : tr('settings:company.logoBadType')),
+        icon: 'image-check-outline',
+      });
     } catch {
       setLocalLogo(company.id, before);
     } finally {
@@ -81,15 +58,7 @@ export function LogoSection() {
     setBusy('remove');
     try {
       await toast.promise(
-        (async () => {
-          if (waiting && !knownToServer(company.id)) {
-            // Never reached the server: just forget it.
-            useLogoQueue.getState().clear(company.id);
-            setLocalLogo(company.id, undefined);
-          } else {
-            await removeLogo(company.id);
-          }
-        })(),
+        removeLogo(company.id),
         {
           loading: tr('settings:company.logoRemoving'),
           success: { text: tr('settings:company.logoRemoved'), detail: company.name },
@@ -108,7 +77,7 @@ export function LogoSection() {
     <Card variant="flat" style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.lg }}>
       <View>
         <CompanyLogo uri={company.logoUri} name={company.name} size={72} />
-        {busy === 'upload' || waiting ? (
+        {busy === 'upload' ? (
           <View
             style={{ position: 'absolute', inset: 0, borderRadius: 14, backgroundColor: 'rgba(0,0,0,0.35)', alignItems: 'center', justifyContent: 'center' }}
             accessibilityLabel={tr('settings:company.logoUploading')}
@@ -118,8 +87,8 @@ export function LogoSection() {
         ) : null}
       </View>
       <View style={{ flex: 1, gap: t.spacing.sm }}>
-        <Text variant="caption" tone={pending?.failed ? 'bad' : 'muted'} style={{ lineHeight: 18 }}>
-          {pending?.failed ? tr('settings:company.logoFailed', { reason: pending.failed }) : tr('settings:company.logoHint')}
+        <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
+          {tr('settings:company.logoHint')}
         </Text>
         <View style={{ flexDirection: 'row', gap: t.spacing.md, flexWrap: 'wrap' }}>
           <Button

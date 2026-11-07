@@ -28,11 +28,8 @@ import { formatMoney, formatPercent } from '@esmart/core/lib/format';
 import { addDaysISO, today } from '@esmart/core/lib/date';
 import { fromMajor, money, subtract, toMajor, zero , inclusiveTax, percent } from '@esmart/core/lib/money';
 import { uid } from '@esmart/core/lib/id';
-import { isNetworkError } from '../../remote/api';
 import { uploadAttachment } from '../../remote/attachments';
 import { knownToServer } from '../../remote/meta';
-import { useReceiptQueue } from '../../remote/receiptQueue';
-import { keepQueued } from '../../remote/keptFiles';
 import { describeError } from '../../remote/errors';
 import { useAppStore } from '../../store/appStore';
 import { usePartyRecord, usePartySearch, useServerAccountBalances } from '../../remote/queries';
@@ -195,7 +192,6 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
     }
 
     const attachmentIds = [...(expense?.attachmentIds ?? [])];
-    let receiptLater: string | undefined;
     if (receiptUri) {
       // The scan already uploaded its image; a photo picked here goes up now. Uploads need a connection.
       if (receiptUri === initial?.receiptUri && initial.receiptAttachmentId) {
@@ -219,11 +215,9 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
             },
           );
           attachmentIds.push(uploaded.id);
-        } catch (err) {
-          // No connection: the expense is saved now and its receipt follows when one returns.
-          // Any other failure was already reported by the upload's toast.
-          if (isNetworkError(err)) receiptLater = receiptUri;
-          else return;
+        } catch {
+          // The upload's toast already said why; nothing is saved without its receipt.
+          return;
         } finally {
           setUploading(false);
         }
@@ -262,7 +256,7 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
       createdAt: expense?.createdAt ?? new Date().toISOString(),
     };
 
-    const res = await serverSave(() => saveExpense(record), receiptLater ? undefined : expense ? tr('purchases:form.expenseUpdated') : tr('purchases:form.expenseRecorded'), {
+    const res = await serverSave(() => saveExpense(record), expense ? tr('purchases:form.expenseUpdated') : tr('purchases:form.expenseRecorded'), {
       icon: 'receipt-text-check-outline',
       detail: [formatMoney(totalPaid), attachmentIds.length ? tr('purchases:form.withReceipt') : ''].filter(Boolean).join(' · '),
       // A new expense keeps the button busy until it has left: a second tap would record it again.
@@ -275,12 +269,6 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
       return;
     }
     const id = res.id ?? res.result;
-    if (receiptLater) {
-      useReceiptQueue.getState().add(id, record.companyId, receiptLater);
-      // A browser's picked file lasts only as long as the page; keep it for a reload.
-      keepQueued(receiptLater, useReceiptQueue.getState().swapUri);
-      toast.show(tr('purchases:form.receiptQueued'), 'success');
-    }
     await leaveGuard.release();
     if (expense) goBack(`/(app)/expenses/${expense.id}`);
     else router.replace(`/(app)/expenses/${id}`);

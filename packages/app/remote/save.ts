@@ -1,26 +1,18 @@
 import { useCallback, useRef, useState } from 'react';
 import { useAppStore, type AppState } from '../store/appStore';
 import { COLLECTIONS } from './collections';
-import { askToWorkOffline, canWrite, useConnectivity } from './connectivity';
+import { canWrite } from './connectivity';
 import { resolveId, useRemoteMeta } from './meta';
 import * as outbox from './outbox';
-import { syncSoon, waitForOutcome, type Outcome } from './sync';
-
-/** How long a save waits for the server's first answer. */
-export const ONLINE_WAIT_MS = 8_000;
-/** A change sent but not answered is asked about again this many times, this far apart. */
-const RECHECKS = 2;
-const RECHECK_GAP_MS = 1_000;
+import { sendEntries } from './send';
 
 export type SaveResult<T> = {
   result: T;
   /**
-   * `saved`: the server has it. `queued`: kept on this device (offline mode), sent when it can be.
-   * `refused`: the server said no, and the change was undone. `unreachable`: no connection, so
-   * nothing was kept (undone, or not run at all while view-only). `unconfirmed`: sent, but no
-   * answer even after asking again; undone here, and back with the next pull if the server has it.
+   * `saved`: the server has it. `refused`: the server said no, and the change was undone.
+   * `unreachable`: no connection, so nothing was kept (undone, or not run at all).
    */
-  outcome: 'saved' | 'queued' | 'refused' | 'unreachable' | 'unconfirmed';
+  outcome: 'saved' | 'refused' | 'unreachable';
   error?: string;
   /** The server's code for a refusal, e.g. PAYMENT_HELD. */
   errorCode?: string;
@@ -72,65 +64,40 @@ let inSave = 0;
 export const savingOnline = () => inSave > 0;
 
 /**
- * Waits for the server's answer to what an action queued. Online, a change
- * counts only once the server has it: one it refuses, or that gets no answer
- * in time, is undone and dropped from the outbox. Offline (the person agreed
- * to it), the change stays on the device and the sync engine sends it later.
+ * Sends what an action queued straight to the server and waits for its answer. A change counts only
+ * once the server has it: one it refuses, or that can't reach it, is undone here and nothing is kept.
  */
-export async function confirm<T>(result: T, before: AppState, after: AppState, fresh: outbox.Entry[], waitMs = ONLINE_WAIT_MS): Promise<SaveResult<T>> {
+export async function confirm<T>(result: T, before: AppState, after: AppState, fresh: outbox.Entry[]): Promise<SaveResult<T>> {
   const localId = typeof result === 'string' && result ? result : undefined;
   if (!fresh.length) return { result, outcome: 'saved', id: localId };
-  if (useConnectivity.getState().mode !== 'online') return { result, outcome: 'queued', id: localId };
 
-  const all = fresh.map((e) => e.id);
-  const answers = new Map<string, Outcome>();
-  const keepQueued = () => ['offline', 'draining'].includes(useConnectivity.getState().mode);
-  // Sent but unanswered: the server may have it. It keeps its answer per change id, so asking
-  // again under the same id finds out without any risk of saving it twice.
-  const sentUnanswered = () => all.filter((id) => answers.get(id)?.kind === 'queued' && outbox.entries().some((e) => e.id === id && e.sentAt));
-  let ask = all;
-  for (let round = 0; ; round++) {
-    const done = waitForOutcome(ask, round === 0 ? waitMs : RECHECK_GAP_MS + waitMs / 2);
-    syncSoon(round === 0 ? 0 : RECHECK_GAP_MS);
-    for (const [id, o] of await done) answers.set(id, o);
-    ask = sentUnanswered();
-    if (!ask.length || round >= RECHECKS || keepQueued()) break;
-  }
-  const unconfirmed = new Set(sentUnanswered());
+  const answers = await sendEntries(fresh.map((e) => e.id));
   const outcomes = [...answers.entries()];
-
-  const refused = outcomes.filter(([, o]) => o.kind === 'rejected' || o.kind === 'conflict');
-  // Gone offline while it waited, and the person chose to keep working: it stays queued.
-  const unanswered = keepQueued() ? [] : outcomes.filter(([, o]) => o.kind === 'queued');
-  const failing = [...refused, ...unanswered];
+  const failing = outcomes.filter(([, o]) => o.kind !== 'applied');
   if (failing.length) {
     const ids = new Set(failing.map(([id]) => fresh.find((e) => e.id === id)!.entityId));
     // A conflict already brought in the server's copy; only a refusal, or no answer, leaves our change to undo.
     const undo = failing.filter(([, o]) => o.kind !== 'conflict');
     if (undo.length) rollback(before, after, failing.length === outcomes.length ? undefined : ids);
     outbox.dropAll(failing.map(([id]) => id));
-    if (refused.length) {
-      const first = refused[0][1] as { error: string; code?: string };
+    const refused = failing.find(([, o]) => o.kind === 'rejected' || o.kind === 'conflict');
+    if (refused) {
+      const first = refused[1] as { error: string; code?: string };
       return { result, outcome: 'refused', error: first.error, ...(first.code && { errorCode: first.code }), id: localId };
     }
-    // Sent and never answered: it may yet show up from the server, so don't say it wasn't saved.
-    const maybe = unanswered.some(([id]) => unconfirmed.has(id));
-    return { result, outcome: maybe ? 'unconfirmed' : 'unreachable', id: localId };
+    return { result, outcome: 'unreachable', id: localId };
   }
   const id = localId && resolveId(localId, useRemoteMeta.getState().idAliases);
-  return { result, outcome: outcomes.every(([, o]) => o.kind === 'applied') ? 'saved' : 'queued', id };
+  return { result, outcome: 'saved', id };
 }
 
 /**
  * Runs a store action and waits for the server's answer before returning: the
- * user sees its number, totals and refusals at once. View-only (no connection,
- * offline not agreed to) the action doesn't run, and the person is asked.
+ * user sees its number, totals and refusals at once. With no connection the
+ * action doesn't run.
  */
-export async function saveOnline<T>(run: () => T, opts: { waitMs?: number } = {}): Promise<SaveResult<T>> {
-  if (!canWrite()) {
-    askToWorkOffline();
-    return { result: undefined as T, outcome: 'unreachable' };
-  }
+export async function saveOnline<T>(run: () => T): Promise<SaveResult<T>> {
+  if (!canWrite()) return { result: undefined as T, outcome: 'unreachable' };
   const known = new Set(useAppStore.getState().syncQueue.map((e) => e.id));
   const before = useAppStore.getState();
   let result: T;
@@ -142,7 +109,7 @@ export async function saveOnline<T>(run: () => T, opts: { waitMs?: number } = {}
   }
   const after = useAppStore.getState();
   const fresh = outbox.entries().filter((e) => !known.has(e.id));
-  return confirm(result, before, after, fresh, opts.waitMs);
+  return confirm(result, before, after, fresh);
 }
 
 /**
@@ -157,14 +124,14 @@ export async function saveOnline<T>(run: () => T, opts: { waitMs?: number } = {}
 export function useSaveOnline() {
   const [saving, setSaving] = useState(false);
   const lock = useRef(false);
-  const save = useCallback(async <T>(run: () => T, opts?: { waitMs?: number; hold?: boolean }): Promise<SaveResult<T> | null> => {
+  const save = useCallback(async <T>(run: () => T, opts?: { hold?: boolean }): Promise<SaveResult<T> | null> => {
     if (lock.current) return null;
     lock.current = true;
     setSaving(true);
     let keep = false;
     try {
-      const res = await saveOnline(run, opts);
-      keep = !!opts?.hold && (res.outcome === 'saved' || res.outcome === 'queued');
+      const res = await saveOnline(run);
+      keep = !!opts?.hold && res.outcome === 'saved';
       return res;
     } finally {
       if (!keep) {

@@ -617,7 +617,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       sourceDocumentId: draft.sourceDocumentId,
     };
 
-    // One save: online it waits for the server, which numbers and checks it; in offline mode it stays here.
+    // One save: it waits for the server, which numbers and checks it.
     const res = await saveOnline(
       () => {
         let saved = documentId;
@@ -631,8 +631,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
     );
     // Another save from this screen is still running.
     if (!res) return;
-    if (res.outcome === 'unreachable' || res.outcome === 'unconfirmed') {
-      toast.show(tr(`common:save.${res.outcome}`), 'error');
+    if (res.outcome === 'unreachable') {
+      toast.show(tr('common:save.unreachable'), 'error');
       return;
     }
     if (!res.result) {
@@ -648,13 +648,11 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
     // that; an issued bill is usually paid next, so its toast offers that.
     const issuedInvoice = kind === 'invoice' && (finalize || editingIssued);
     toast.show(
-      res.outcome === 'queued'
-        ? tr('common:save.queued')
-        : editingIssued
-          ? tr('common:documentEditor.updatedIssued', { kind: kindName })
-          : finalize
-            ? tr('common:documentEditor.finalised', { kind: kindName })
-            : tr('common:documentEditor.savedDraft'),
+      editingIssued
+        ? tr('common:documentEditor.updatedIssued', { kind: kindName })
+        : finalize
+          ? tr('common:documentEditor.finalised', { kind: kindName })
+          : tr('common:documentEditor.savedDraft'),
       'success',
       {
         icon: finalize || editingIssued ? 'file-check-outline' : 'content-save-outline',

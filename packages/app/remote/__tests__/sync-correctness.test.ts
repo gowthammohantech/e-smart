@@ -66,42 +66,6 @@ describe('document actions', () => {
   });
 });
 
-describe('a payment and an edit of the invoice it pays', () => {
-  it('sends the edit after the payment, on the version the payment left', async () => {
-    const invoice = actions().documents.find((d) => d.kind === 'invoice')!;
-    const template = actions().payments[0];
-    actions().savePayment({ ...template, id: 'pay_offline1', number: '', amount: { minor: 100, currency: invoice.currency }, allocations: [{ documentId: invoice.id, amount: { minor: 100, currency: invoice.currency } }] } as never);
-    actions().updateDocument(invoice.id, { notes: 'Edited after the payment' });
-
-    const batches: { path: string; baseVersion?: number }[][] = [];
-    POST.mockImplementation(async (path: string, opts: { body: { mutations: { id: string; path: string; baseVersion?: number; clientEntityId?: string; body?: unknown }[] } }) => {
-      if (path !== '/sync/push') return { data: {} };
-      const mutations = opts.body.mutations;
-      batches.push(mutations.map((m) => ({ path: m.path, baseVersion: m.baseVersion })));
-      return {
-        data: {
-          results: mutations.map((m) =>
-            m.path.endsWith('/payments')
-              ? { id: m.id, status: 'applied', entity: { ...(m.body as object), id: 'pay_SERVER', version: 1 } }
-              : { id: m.id, status: 'applied', entity: { ...invoice, notes: 'Edited after the payment', version: 6 } },
-          ),
-        },
-      };
-    });
-    GET.mockImplementation(async (path: string) => {
-      if (path === '/companies/{companyId}/documents/{id}') return { data: { ...invoice, version: 5 } };
-      if (path === '/sync/pull') return { data: { changes: [], cursor: '1', hasMore: false } };
-      return { data: { data: [], nextCursor: null } };
-    });
-    await syncNow();
-
-    // The payment went alone; the edit followed, on the version the payment left (5, not 1).
-    expect(batches[0].map((m) => m.path)).toEqual([expect.stringMatching(/\/payments$/)]);
-    expect(batches[1]).toEqual([{ path: expect.stringContaining(`/documents/${invoice.id}`), baseVersion: 5 }]);
-    expect(queue()).toHaveLength(0);
-  });
-});
-
 describe('paging lists', () => {
   it('reads past 4,000 rows, and stops a newest-first list at its cut-off', async () => {
     let calls = 0;

@@ -5,8 +5,7 @@ import { useCanWrite } from '../remote/connectivity';
 import { useSaveOnline, type SaveResult } from '../remote/save';
 
 /**
- * A save from a screen: online it waits for the server and says what it
- * answered; in offline mode it says the change is kept on this device.
+ * A save from a screen: it waits for the server and says what it answered.
  * Resolves with the result, or undefined when nothing was saved: the server
  * refused, or couldn't be reached (and the change was undone), or another
  * save from the same screen was still running (a double tap).
@@ -17,7 +16,7 @@ export function useServerSave() {
   const { t: tr } = useTranslation(['common']);
   const toast = useToast();
   const { save, saving, release } = useSaveOnline();
-  // View-only: the save button is greyed out; the header's badge offers offline mode.
+  // No connection: the save button is greyed out and the header says so.
   const blocked = !useCanWrite();
   const run = useCallback(
     async <T>(action: () => T, success?: string, options?: ToastOptions & { hold?: boolean }): Promise<SaveResult<T> | undefined> => {
@@ -34,12 +33,11 @@ export function useServerSave() {
         toast.show(tr('common:save.refused', { reason: res.error }), 'error');
         return undefined;
       }
-      if (res.outcome === 'unreachable' || res.outcome === 'unconfirmed') {
-        toast.show(tr(`common:save.${res.outcome}`), 'error');
+      if (res.outcome === 'unreachable') {
+        toast.show(tr('common:save.unreachable'), 'error');
         return undefined;
       }
-      if (res.outcome === 'queued') toast.show(tr('common:save.queued'), 'success');
-      else if (success) toast.show(success, 'success', toastOptions);
+      if (success) toast.show(success, 'success', toastOptions);
       return res;
     },
     [save, toast, tr],

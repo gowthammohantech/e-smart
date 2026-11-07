@@ -2,7 +2,7 @@ import { Linking, Platform } from 'react-native';
 import type { PlanTier } from '@esmart/core/types';
 import { bookChannel, useAppStore, type AppState } from '../store/appStore';
 import { api } from './api';
-import { askToWorkOffline, canWrite } from './connectivity';
+import { canWrite } from './connectivity';
 import { useRemoteMeta } from './meta';
 import { MUTATIONS } from './mutations';
 import * as outbox from './outbox';
@@ -18,9 +18,9 @@ const ANYWHERE = new Set(['markNotificationRead', 'markAllNotificationsRead', 'c
 
 /**
  * Turns the store into a cache of the server's books. Every action still
- * updates the store at once and queues what it means to the API; online, the
- * change is then undone unless the server confirms it (see save.ts `confirm`).
- * Only when the person has agreed to work offline does it wait in the outbox.
+ * updates the store at once and describes what it means to the API; that is
+ * sent straight away, and the change is undone unless the server takes it
+ * (see save.ts `confirm`).
  *
  * Only the outermost action queues: `duplicateDocument` calls
  * `createDocument` internally, and the server has its own duplicate.
@@ -38,11 +38,8 @@ export function installRemote() {
     const anywhere = ANYWHERE.has(name);
     (patch as Record<string, unknown>)[name] = (...args: unknown[]) => {
       const outer = depth === 0;
-      // View-only: nothing changes until the connection is back or the person agrees to work offline.
-      if (outer && !anywhere && !canWrite()) {
-        askToWorkOffline();
-        return undefined;
-      }
+      // No connection: nothing changes until it is back.
+      if (outer && !anywhere && !canWrite()) return undefined;
       const before = store.getState();
       depth++;
       let result: unknown;
@@ -59,7 +56,7 @@ export function installRemote() {
         if (!anywhere && !savingOnline()) {
           const fresh = outbox.entries().filter((e) => !known.has(e.id));
           void confirm(result, before, after, fresh).then((r) => {
-            if (r.outcome === 'refused' || r.outcome === 'unreachable' || r.outcome === 'unconfirmed') onUnconfirmed.forEach((l) => l(r));
+            if (r.outcome === 'refused' || r.outcome === 'unreachable') onUnconfirmed.forEach((l) => l(r));
           });
         }
       }
