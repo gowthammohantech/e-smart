@@ -72,7 +72,7 @@ export async function materializeRecurringExpenses(deps: Pick<Deps, 'db'> & Part
     .select({ id: schema.companies.id })
     .from(schema.companies)
     .innerJoin(schema.accounts, eq(schema.accounts.id, schema.companies.accountId))
-    .where(isNull(schema.accounts.suspendedAt));
+    .where(and(isNull(schema.accounts.suspendedAt), isNull(schema.companies.archivedAt)));
   const due = await deps.db
     .select({ id: E.id })
     .from(E)

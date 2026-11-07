@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, ne } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNotNull, isNull, ne } from 'drizzle-orm';
 import { applyProfileLocks } from '@esmart/core/domain/companyLock';
 import { isValidGstin, normalizeGstin } from '@esmart/core/domain/gstin';
 import type { Company as CoreCompany } from '@esmart/core/types';
@@ -12,6 +12,7 @@ import { financialYearOf } from '@esmart/core/lib/date';
 import { recordChange } from '../../lib/audit';
 import { newId } from '../../lib/ids';
 import { addressTo } from '../../lib/wire';
+import { companyArchiveHandlers } from './archive';
 import { branchHandlers } from './branches';
 import { createNumberingSeries, logCompanyDefaults, seedCompanyDefaults } from './defaults';
 import { companyImageHandlers, companyWithImages } from './logo';
@@ -35,7 +36,9 @@ export const companiesHandlers = defineHandlers({
   async listCompanies(ctx) {
     const ids = ctx.user.companyIds;
     if (!ids.length) return { data: [] };
-    const rows = await ctx.db.select().from(schema.companies).where(inArray(schema.companies.id, ids)).orderBy(asc(schema.companies.createdAt));
+    // Archived businesses are out of the list; `archived=true` lists only them, to restore one.
+    const archived = ctx.query.archived ? isNotNull(schema.companies.archivedAt) : isNull(schema.companies.archivedAt);
+    const rows = await ctx.db.select().from(schema.companies).where(and(inArray(schema.companies.id, ids), archived)).orderBy(asc(schema.companies.createdAt));
     return { data: await Promise.all(rows.map(async (r) => companyWithImages(ctx.deps, ctx.db, r))) };
   },
 
@@ -167,6 +170,7 @@ export const companiesHandlers = defineHandlers({
   },
 
   ...companyImageHandlers,
+  ...companyArchiveHandlers,
   ...branchHandlers,
 });
 

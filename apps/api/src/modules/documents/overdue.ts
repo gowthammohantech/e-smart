@@ -20,7 +20,7 @@ export async function notifyOverdueInvoices(deps: Pick<Deps, 'db' | 'now'> & Dep
     .select({ id: schema.companies.id })
     .from(schema.companies)
     .innerJoin(schema.accounts, eq(schema.accounts.id, schema.companies.accountId))
-    .where(isNull(schema.accounts.suspendedAt));
+    .where(and(isNull(schema.accounts.suspendedAt), isNull(schema.companies.archivedAt)));
   const marked = await deps.db
     .update(D)
     .set({ overdueNotifiedAt: deps.now() })

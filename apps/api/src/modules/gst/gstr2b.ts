@@ -272,6 +272,8 @@ export async function fetchDueGstr2b(deps: Deps): Promise<number> {
     const [done] = await deps.db.select({ g: P.gstin }).from(P).where(and(eq(P.companyId, s.companyId), eq(P.gstin, s.gstin), eq(P.period, period)));
     if (done) continue;
     const [company] = await deps.db.select().from(schema.companies).where(eq(schema.companies.id, s.companyId));
+    // An archived business files nothing more.
+    if (!company || company.archivedAt) continue;
     try {
       const r = await fetchGstr2b(deps.db, deps, company, null, s.gstin, period);
       if (!r.generated) continue;

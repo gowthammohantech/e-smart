@@ -462,6 +462,9 @@ paths:
     get:
       tags: [Companies]
       operationId: listCompanies
+      summary: The businesses the caller can open. Archived ones are left out unless `archived=true`, which lists only them.
+      parameters:
+        - { name: archived, in: query, required: false, schema: { type: boolean, default: false } }
       responses:
         '200':
           description: OK
@@ -530,6 +533,47 @@ paths:
               schema: { $ref: '#/components/schemas/Company' }
         '412': { $ref: '#/components/responses/PreconditionFailed' }
         '422': { $ref: '#/components/responses/Unprocessable' }
+  /companies/{companyId}/archive:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    post:
+      tags: [Companies]
+      operationId: archiveCompany
+      summary: >-
+        Closes one business. Its subscription is cancelled now, it leaves everyone's business list, and its books
+        turn read-only (exports still work) for the 8 years GST law requires, then are erased. An owner can restore
+        it before then. Refused for the account's last business that is still open (409 LAST_COMPANY; delete the
+        account instead), when the name doesn't match (422), or when the password or code is wrong (401 REAUTH_FAILED).
+      x-roles: [owner]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ArchiveCompanyRequest' }
+      responses:
+        '200':
+          description: Archived
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Company' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '502': { $ref: '#/components/responses/UpstreamError' }
+  /companies/{companyId}/restore:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    post:
+      tags: [Companies]
+      operationId: restoreCompany
+      summary: Opens an archived business again, on the free plan. Its books are as they were left.
+      x-roles: [owner]
+      x-archived-allowed: true
+      responses:
+        '200':
+          description: Restored
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Company' }
+        '409': { $ref: '#/components/responses/Conflict' }
   /companies/{companyId}/logo:
     parameters: [{ $ref: '#/components/parameters/CompanyId' }]
     put:
@@ -5743,8 +5787,9 @@ paths:
     post:
       tags: [Exports]
       operationId: createExport
-      summary: Export the whole company (backup), or Tally vouchers, as a background job
+      summary: Export the whole company (backup), or Tally vouchers, as a background job. Also allowed while the business is archived.
       x-roles: [owner, admin]
+      x-archived-allowed: true
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
@@ -6702,6 +6747,17 @@ components:
             msmeBankRate: { type: number, minimum: 0, maximum: 50, default: 5.5, description: "RBI's bank rate in percent; MSME late-payment interest is three times it (MSMED Act s.16)" }
             gstr2bDateToleranceDays: { type: integer, minimum: 0, maximum: 30, default: 3, description: 'How many days apart a GSTR-2B line and a bill with the same amounts may be dated and still be claimable without a person accepting it; 0 means the same day only.' }
             plan: { allOf: [{ $ref: '#/components/schemas/PlanTier' }], readOnly: true, description: Changed only through billing }
+            archivedAt: { type: string, format: date-time, readOnly: true, description: 'Set when an owner archived the business (/archive). Its books are read-only: anything but a read, an export or /restore is refused with 409 COMPANY_ARCHIVED.' }
+            purgeAfter: { type: string, format: date-time, readOnly: true, description: 'An archived business is erased after this, 8 years from archiving, as GST law keeps books 72 months. /restore before then brings it back.' }
+    ArchiveCompanyRequest:
+      type: object
+      required: [confirmName]
+      description: The business's name typed in, and proof it's really them, as at sign-in. The password if they have one, otherwise a fresh code sent to their verified phone.
+      properties:
+        confirmName: { type: string, description: "The business's name, typed by the owner; compared ignoring case and surrounding spaces" }
+        password: { type: string, format: password }
+        otpRequestId: { type: string }
+        otpCode: { type: string }
     Branch:
       allOf:
         - $ref: '#/components/schemas/Versioned'

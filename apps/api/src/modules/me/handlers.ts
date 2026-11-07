@@ -19,10 +19,15 @@ export const meHandlers = defineHandlers({
   async getMe(ctx) {
     const [row] = await ctx.db.select().from(schema.users).where(eq(schema.users.id, ctx.user.id));
     const companies = ctx.user.companyIds.length
-      ? await ctx.db.select().from(schema.companies).where(inArray(schema.companies.id, ctx.user.companyIds)).orderBy(asc(schema.companies.createdAt))
+      ? await ctx.db
+          .select()
+          .from(schema.companies)
+          .where(and(inArray(schema.companies.id, ctx.user.companyIds), isNull(schema.companies.archivedAt)))
+          .orderBy(asc(schema.companies.createdAt))
       : [];
+    // An archived business is in nobody's list, so it can't be the one they open.
     const defaultCompanyId =
-      row.defaultCompanyId && ctx.user.companyIds.includes(row.defaultCompanyId) ? row.defaultCompanyId : companies[0]?.id;
+      row.defaultCompanyId && companies.some((c) => c.id === row.defaultCompanyId) ? row.defaultCompanyId : companies[0]?.id;
     return {
       user: await userToWire(ctx.db, row),
       accountId: row.accountId,

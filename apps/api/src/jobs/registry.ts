@@ -13,7 +13,7 @@ import { remindMsmeDue } from '../modules/ledger/msme';
 import { fetchDueGstr2b } from '../modules/gst/gstr2b';
 import { notifyOverdueInvoices } from '../modules/documents/overdue';
 import { runQueuedExtraction } from '../modules/ocr/handlers';
-import { purgeDueAccounts } from '../modules/platform/purge';
+import { purgeDueAccounts, purgeDueCompanies } from '../modules/platform/purge';
 import { backupDatabase } from './dbBackup';
 import type { Schedule } from './schedule';
 import type { JobHandler } from './worker';
@@ -64,6 +64,7 @@ export const JOB_HANDLERS: Record<string, JobHandler> = {
   'ocr.extract': ({ deps, payload }) => runQueuedExtraction(deps, String(payload.extractionId)),
   'accounts.purge': async ({ deps, log }) => {
     await purgeDueAccounts(deps, log);
+    await purgeDueCompanies(deps, log);
   },
   'db.backup': async ({ deps, log }) => {
     if (!deps.config.DB_BACKUP_ENABLED) return;

@@ -386,6 +386,13 @@
       "when": 1793960343775,
       "tag": "0054_edit_latest_direct_notes",
       "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1794035395471,
+      "tag": "0055_company_archive",
+      "breakpoints": true
     }
   ]
 }

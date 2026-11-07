@@ -23,6 +23,8 @@ export type Operation = {
   platformRoles: PlatformRole[] | null;
   /** `x-mfa-exempt`: a platform route an operator may call before passing the authenticator check. */
   mfaExempt: boolean;
+  /** `x-archived-allowed`: a write still allowed on an archived business (exports, restoring it). */
+  archivedAllowed: boolean;
   planModule: Module | null;
   /** False for `security: []` operations (auth, plans, most reference data). */
   secured: boolean;
@@ -110,6 +112,7 @@ export function loadOperations() {
           roles: op['x-roles'] ?? null,
           platformRoles: op['x-platform-roles'] ?? null,
           mfaExempt: op['x-mfa-exempt'] === true,
+          archivedAllowed: op['x-archived-allowed'] === true,
           planModule: op['x-plan-module'] ?? null,
           secured: isWebhook ? false : !(Array.isArray(op.security) && op.security.length === 0),
           successStatus,

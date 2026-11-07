@@ -16,11 +16,13 @@ const RETENTION_YEARS = 8;
 type DeleteCtx = Ctx<'deleteMe'>;
 type UserRow = typeof U.$inferSelect;
 
+type Proof = { password?: string; otpRequestId?: string; otpCode?: string };
+
 /** The password, or a fresh code sent to the phone they verified: either proof they could sign in with. */
-async function reauthenticate(ctx: DeleteCtx, user: UserRow) {
-  const { otpRequestId, otpCode } = ctx.body;
+export async function reauthenticate(ctx: Pick<DeleteCtx, 'db' | 'now'>, user: UserRow, proof: Proof) {
+  const { otpRequestId, otpCode } = proof;
   if (!otpRequestId) {
-    if (!(await verifyPasswordTimed(user.passwordHash, ctx.body.password ?? ''))) throw unauthorized('REAUTH_FAILED', 'That password is not right');
+    if (!(await verifyPasswordTimed(user.passwordHash, proof.password ?? ''))) throw unauthorized('REAUTH_FAILED', 'That password is not right');
     return;
   }
   if (!otpCode || !user.phone || !user.phoneVerifiedAt) throw unauthorized('REAUTH_FAILED', 'Enter the code we sent to your phone');
@@ -59,7 +61,7 @@ export const deleteAccountHandlers = defineHandlers({
     const [user] = await ctx.db.select().from(U).where(eq(U.id, ctx.user.id));
     // Operators can reach every tenant: removing one is a deliberate act from the command line, not a button.
     if (user.platformRole) throw conflict('OPERATOR_CANNOT_SELF_DELETE', 'Platform operators are removed by another operator, not from the app');
-    await reauthenticate(ctx, user);
+    await reauthenticate(ctx, user, ctx.body);
 
     const { companies, others } = await othersOnAccount(ctx, user);
     const lastOwner = user.role === 'owner' && (await otherActiveOwners(ctx.db, user.accountId, user.id)) === 0;

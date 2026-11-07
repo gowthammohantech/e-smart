@@ -60,6 +60,8 @@ export async function companyToWire(deps: Deps, row: CompanyRow, logoKey?: strin
     gstr2bDateToleranceDays: row.gstr2bDateToleranceDays,
     tan: row.tan,
     plan: row.plan,
+    archivedAt: row.archivedAt?.toISOString(),
+    purgeAfter: row.purgeAfter?.toISOString(),
     ...versioned(row),
   });
 }

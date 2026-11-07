@@ -360,6 +360,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** The businesses the caller can open. Archived ones are left out unless `archived=true`, which lists only them. */
         get: operations["listCompanies"];
         put?: never;
         /** Create a company. Onboarding sends branches, tax and numbering in the same call. */
@@ -382,6 +383,44 @@ export interface paths {
         get: operations["getCompany"];
         put: operations["saveCompany"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Closes one business. Its subscription is cancelled now, it leaves everyone's business list, and its books turn read-only (exports still work) for the 8 years GST law requires, then are erased. An owner can restore it before then. Refused for the account's last business that is still open (409 LAST_COMPANY; delete the account instead), when the name doesn't match (422), or when the password or code is wrong (401 REAUTH_FAILED). */
+        post: operations["archiveCompany"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Opens an archived business again, on the free plan. Its books are as they were left. */
+        post: operations["restoreCompany"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3995,7 +4034,7 @@ export interface paths {
         };
         get: operations["listExports"];
         put?: never;
-        /** Export the whole company (backup), or Tally vouchers, as a background job */
+        /** Export the whole company (backup), or Tally vouchers, as a background job. Also allowed while the business is archived. */
         post: operations["createExport"];
         delete?: never;
         options?: never;
@@ -4765,6 +4804,25 @@ export interface components {
             gstr2bDateToleranceDays: number;
             /** @description Changed only through billing */
             readonly plan?: components["schemas"]["PlanTier"];
+            /**
+             * Format: date-time
+             * @description Set when an owner archived the business (/archive). Its books are read-only: anything but a read, an export or /restore is refused with 409 COMPANY_ARCHIVED.
+             */
+            readonly archivedAt?: string;
+            /**
+             * Format: date-time
+             * @description An archived business is erased after this, 8 years from archiving, as GST law keeps books 72 months. /restore before then brings it back.
+             */
+            readonly purgeAfter?: string;
+        };
+        /** @description The business's name typed in, and proof it's really them, as at sign-in. The password if they have one, otherwise a fresh code sent to their verified phone. */
+        ArchiveCompanyRequest: {
+            /** @description The business's name, typed by the owner; compared ignoring case and surrounding spaces */
+            confirmName: string;
+            /** Format: password */
+            password?: string;
+            otpRequestId?: string;
+            otpCode?: string;
         };
         Branch: components["schemas"]["Versioned"] & {
             readonly id?: string;
@@ -7843,7 +7901,9 @@ export interface operations {
     };
     listCompanies: {
         parameters: {
-            query?: never;
+            query?: {
+                archived?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -7951,6 +8011,59 @@ export interface operations {
             };
             412: components["responses"]["PreconditionFailed"];
             422: components["responses"]["Unprocessable"];
+        };
+    };
+    archiveCompany: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArchiveCompanyRequest"];
+            };
+        };
+        responses: {
+            /** @description Archived */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Company"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            502: components["responses"]["UpstreamError"];
+        };
+    };
+    restoreCompany: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Restored */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Company"];
+                };
+            };
+            409: components["responses"]["Conflict"];
         };
     };
     uploadCompanyLogo: {

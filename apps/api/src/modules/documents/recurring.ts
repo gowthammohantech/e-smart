@@ -52,7 +52,7 @@ export async function issueRecurringInvoices(deps: Deps, today: string | Date): 
     .select({ id: schema.companies.id })
     .from(schema.companies)
     .innerJoin(schema.accounts, eq(schema.accounts.id, schema.companies.accountId))
-    .where(isNull(schema.accounts.suspendedAt));
+    .where(and(isNull(schema.accounts.suspendedAt), isNull(schema.companies.archivedAt)));
   const due = await deps.db
     .select({ id: D.id })
     .from(D)

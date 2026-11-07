@@ -1852,11 +1852,17 @@ export const companies = pgTable("companies", {
 	signatureAttachmentId: varchar("signature_attachment_id", { length: 40 }),
 	plan: planTier().default('free').notNull(),
 	onboardingCompletedAt: timestamp("onboarding_completed_at", { withTimezone: true, mode: 'date' }),
+	// An owner closed this business: its books are read-only and kept until purge_after (GST law's
+	// 72 months), then erased. Restoring it before then clears all three.
+	archivedAt: timestamp("archived_at", { withTimezone: true, mode: 'date' }),
+	archivedBy: varchar("archived_by", { length: 40 }),
+	purgeAfter: timestamp("purge_after", { withTimezone: true, mode: 'date' }),
 	version: integer().default(1).notNull(),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
 }, (table): PgTableExtraConfigValue[] => [
 	index("companies_account_id_idx").using("btree", table.accountId.asc().nullsLast()),
+	index("companies_purge_after_idx").using("btree", table.purgeAfter.asc().nullsLast()),
 	index("companies_tax_identifier_idx").using("btree", table.taxIdentifier.asc().nullsLast()),
 	foreignKey({
 			columns: [table.accountId],

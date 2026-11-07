@@ -114,6 +114,10 @@ export function registerGuards(app: FastifyInstance, deps: Deps) {
       // Here they act with the role they were given in this business.
       const here = user.companyRoles?.[companyId];
       if (here) user.role = here;
+      // An archived business keeps its books as they were: they can be read and exported, nothing more.
+      if (req.company.archivedAt && op.method !== 'GET' && !op.archivedAllowed) {
+        throw new ApiError(409, 'COMPANY_ARCHIVED', 'This business is archived, so its books are read-only. An owner can restore it in Settings.');
+      }
     }
 
     if (op.roles && !op.roles.includes(user.role)) {

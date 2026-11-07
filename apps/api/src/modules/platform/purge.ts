@@ -33,6 +33,54 @@ export type PurgePlan = { accountId: string; companies: string[]; rows: Record<s
  */
 export async function purgeAccount(deps: Pick<Deps, 'db' | 'now' | 'providers'>, accountId: string, opts: { dryRun: boolean }): Promise<PurgePlan> {
   const companies = (await deps.db.select({ id: schema.companies.id }).from(schema.companies).where(eq(schema.companies.accountId, accountId))).map((c) => c.id);
+  return eraseCompanies(deps, accountId, companies, opts, async (tx, plan) => {
+    await tx.update(schema.accounts).set({ purgeAfter: null, suspendedReason: 'purged', updatedAt: deps.now() }).where(eq(schema.accounts.id, accountId));
+    await auditPurge(tx, accountId, {
+      action: 'account.purged',
+      targetType: 'account',
+      targetId: accountId,
+      targetLabel: accountId,
+      reason: 'Retention period after the account was deleted has ended',
+      before: { companies: companies.length, rows: plan.rows, objects: plan.objects.length },
+    });
+  });
+}
+
+/** One archived business, the same way: its rows and files go; the account and its other businesses stay. */
+export async function purgeCompany(deps: Pick<Deps, 'db' | 'now' | 'providers'>, companyId: string, opts: { dryRun: boolean }): Promise<PurgePlan> {
+  const [company] = await deps.db
+    .select({ id: schema.companies.id, accountId: schema.companies.accountId, name: schema.companies.name })
+    .from(schema.companies)
+    .where(and(eq(schema.companies.id, companyId), isNotNull(schema.companies.archivedAt)));
+  // Restored since it was picked, or already gone.
+  if (!company) return { accountId: '', companies: [], rows: {}, objects: [] };
+  return eraseCompanies(deps, company.accountId, [company.id], opts, async (tx, plan) => {
+    await auditPurge(tx, company.accountId, {
+      action: 'company.purged',
+      targetType: 'company',
+      targetId: company.id,
+      targetLabel: company.name,
+      reason: 'Retention period after the business was archived has ended',
+      before: { rows: plan.rows, objects: plan.objects.length },
+    });
+  });
+}
+
+type PurgeAudit = Pick<typeof schema.platformAuditEvents.$inferInsert, 'action' | 'targetType' | 'targetId' | 'targetLabel' | 'reason' | 'before'>;
+
+/** Recorded against the account owner, as the system acting for them. */
+async function auditPurge(tx: DbOrTx, accountId: string, event: PurgeAudit) {
+  const [owner] = await tx.select({ id: schema.accounts.ownerUserId }).from(schema.accounts).where(eq(schema.accounts.id, accountId));
+  if (owner?.id) await tx.insert(schema.platformAuditEvents).values({ id: newId('pae'), actorId: owner.id, actorEmail: 'system:purge', ...event });
+}
+
+async function eraseCompanies(
+  deps: Pick<Deps, 'db' | 'now' | 'providers'>,
+  accountId: string,
+  companies: string[],
+  opts: { dryRun: boolean },
+  finish: (tx: DbOrTx, plan: PurgePlan) => Promise<void>,
+): Promise<PurgePlan> {
   const tables = await companyTables(deps.db, KEEP);
   const plan: PurgePlan = { accountId, companies, rows: {}, objects: [] };
 
@@ -53,7 +101,7 @@ export async function purgeAccount(deps: Pick<Deps, 'db' | 'now' | 'providers'>,
   if (opts.dryRun) return plan;
 
   await deps.db.transaction(async (tx) => {
-    await tx.update(schema.users).set({ defaultCompanyId: null }).where(eq(schema.users.accountId, accountId));
+    if (companies.length) await tx.update(schema.users).set({ defaultCompanyId: null }).where(inArray(schema.users.defaultCompanyId, companies));
     for (const companyId of companies) {
       for (const c of CYCLES) {
         const scoped = tables.get(c.table);
@@ -63,21 +111,7 @@ export async function purgeAccount(deps: Pick<Deps, 'db' | 'now' | 'providers'>,
       await deleteAll(tx, [...tables.values()], companyId);
     }
     if (companies.length) await tx.delete(schema.companies).where(inArray(schema.companies.id, companies));
-    await tx.update(schema.accounts).set({ purgeAfter: null, suspendedReason: 'purged', updatedAt: deps.now() }).where(eq(schema.accounts.id, accountId));
-    const [owner] = await tx.select({ id: schema.accounts.ownerUserId }).from(schema.accounts).where(eq(schema.accounts.id, accountId));
-    if (owner?.id) {
-      await tx.insert(schema.platformAuditEvents).values({
-        id: newId('pae'),
-        actorId: owner.id,
-        actorEmail: 'system:purge',
-        action: 'account.purged',
-        targetType: 'account',
-        targetId: accountId,
-        targetLabel: accountId,
-        reason: 'Retention period after the account was deleted has ended',
-        before: { companies: companies.length, rows: plan.rows, objects: plan.objects.length },
-      });
-    }
+    await finish(tx, plan);
   });
 
   // Files after the rows: a failed delete here leaves an orphan file, never a row pointing at nothing.
@@ -113,6 +147,20 @@ export async function purgeDueAccounts(deps: Pick<Deps, 'db' | 'now' | 'provider
   for (const { id } of due) {
     const plan = await purgeAccount(deps, id, { dryRun: deps.config.PURGE_DRY_RUN });
     log.info({ plan, dryRun: deps.config.PURGE_DRY_RUN }, deps.config.PURGE_DRY_RUN ? 'purge (dry run): would erase' : 'purged closed account');
+  }
+  return due.length;
+}
+
+/** The same daily job's other half: every archived business whose keep-until date has passed. */
+export async function purgeDueCompanies(deps: Pick<Deps, 'db' | 'now' | 'providers' | 'config'>, log: { info: (o: object, m?: string) => void }) {
+  const C = schema.companies;
+  const due = await deps.db
+    .select({ id: C.id })
+    .from(C)
+    .where(and(isNotNull(C.archivedAt), isNotNull(C.purgeAfter), lt(C.purgeAfter, deps.now())));
+  for (const { id } of due) {
+    const plan = await purgeCompany(deps, id, { dryRun: deps.config.PURGE_DRY_RUN });
+    log.info({ plan, dryRun: deps.config.PURGE_DRY_RUN }, deps.config.PURGE_DRY_RUN ? 'purge (dry run): would erase business' : 'purged archived business');
   }
   return due.length;
 }
