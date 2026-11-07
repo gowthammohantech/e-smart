@@ -17,6 +17,7 @@ import { useActiveCompany } from '../../../store/selectors';
 import { useCompanyUsage } from '../../../remote/queries';
 import { profileLocks } from '@esmart/core/domain/companyLock';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
+import { FieldRow } from '@esmart/ui/components/Layout';
 import { Card } from '@esmart/ui/components/Card';
 import { Icon } from '@esmart/ui/components/Icon';
 import { BUSINESS_TYPES, COUNTRIES, INDIAN_STATES } from '@esmart/core/data/masters';
@@ -186,12 +187,16 @@ export default function CompanySettings() {
           </Card>
         ) : null}
         <LogoSection />
-        <TextField label={tr('settings:company.name')} value={name} onChangeText={setName} error={errors.name} required icon="domain" />
-        <TextField label={tr('settings:company.legalName')} value={legalName} onChangeText={setLegalName} placeholder={tr('settings:company.legalPlaceholder')} editable={!locks.legalName} />
+        <FieldRow>
+          <TextField label={tr('settings:company.name')} value={name} onChangeText={setName} error={errors.name} required icon="domain" />
+          <TextField label={tr('settings:company.legalName')} value={legalName} onChangeText={setLegalName} placeholder={tr('settings:company.legalPlaceholder')} editable={!locks.legalName} />
+        </FieldRow>
         <PickerField label={tr('settings:company.type')} value={tr(`onboarding:businessType.${businessType}` as 'onboarding:businessType.other')} onPress={() => setTypeOpen(true)} icon="storefront-outline" />
 
-        <TextField label={tr('settings:company.email')} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" icon="email-outline" error={errors.email} />
-        <PhoneField label={tr('settings:company.phone')} {...phone.field} error={errors.phone} />
+        <FieldRow>
+          <TextField label={tr('settings:company.email')} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" icon="email-outline" error={errors.email} />
+          <PhoneField label={tr('settings:company.phone')} {...phone.field} error={errors.phone} />
+        </FieldRow>
         <TextField label={tr('settings:company.website')} value={website} onChangeText={setWebsite} autoCapitalize="none" icon="web" />
 
         <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('settings:company.registeredAddress')}</Text>
@@ -245,8 +250,10 @@ export default function CompanySettings() {
         <SignatureSection />
 
         <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('settings:company.taxAndFy')}</Text>
-        <PickerField label={tr('settings:company.country')} value={country?.name} onPress={() => {}} icon="earth" hint={tr('settings:company.countryFixed')} disabled />
-        <PickerField label={tr('settings:company.baseCurrency')} value={currency ? `${currency.name} (${currency.code})` : undefined} onPress={() => {}} icon="cash-multiple" disabled />
+        <FieldRow>
+          <PickerField label={tr('settings:company.country')} value={country?.name} onPress={() => {}} icon="earth" hint={tr('settings:company.countryFixed')} disabled />
+          <PickerField label={tr('settings:company.baseCurrency')} value={currency ? `${currency.name} (${currency.code})` : undefined} onPress={() => {}} icon="cash-multiple" disabled />
+        </FieldRow>
         <PickerField label={tr('settings:company.fyStarts')} value={months[fyMonth - 1]} onPress={() => setFyOpen(true)} icon="calendar-range" disabled={locks.fiscalYear} />
 
         <SwitchField

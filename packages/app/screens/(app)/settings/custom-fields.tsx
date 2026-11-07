@@ -50,7 +50,7 @@ export default function CustomFieldsScreen() {
   };
 
   return (
-    <FormContainer>
+    <FormContainer style={{ maxWidth: '100%' }}>
       <Stack.Screen options={{ title: tr('settings:customFields.title') }} />
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, gap: t.spacing.lg }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <Text variant="small" tone="muted">

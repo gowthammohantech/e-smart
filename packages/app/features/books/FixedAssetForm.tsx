@@ -136,7 +136,7 @@ export function FixedAssetForm({ asset, prefill }: { asset?: FixedAsset; prefill
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <FormContainer>
+      <FormContainer wide>
         <ScrollView contentContainerStyle={{ padding: t.spacing.lg, gap: t.spacing.lg, paddingBottom: 140 }} showsVerticalScrollIndicator={SHOW_SCROLLBAR} keyboardShouldPersistTaps="handled">
           <Card style={{ gap: t.spacing.lg }}>
             <TextField label={tr('books:assets.name')} value={name} onChangeText={setName} placeholder={tr('books:assets.namePlaceholder')} required maxLength={200} />

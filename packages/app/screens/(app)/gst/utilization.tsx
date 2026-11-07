@@ -181,7 +181,7 @@ export default function GstUtilizationScreen() {
   return (
     <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('compliance:utilization.title') }} />
-      <FormContainer wide>
+      <FormContainer style={{ maxWidth: '100%' }}>
         <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: t.spacing.xxxl, gap: t.spacing.lg }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
           <Text variant="small" tone="muted">
             {tr('compliance:utilization.hint')}

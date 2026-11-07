@@ -143,10 +143,10 @@ export default function ItemList() {
       <Stack.Screen options={{ title: tr('nav:title.itemsAndServices') }} />
       {desktop ? (
         <View style={{ flex: 1, paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.lg, gap: t.spacing.md }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
-            <View style={{ width: 260 }}>{tabs}</View>
-            <View style={{ width: 340 }}>
-              <SearchBar value={query} onChangeText={setQuery} placeholder={tr('inventory:catalog.search')} />
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: t.spacing.md }}>
+            <View style={{ flexBasis: 260, flexShrink: 1, minWidth: 200 }}>{tabs}</View>
+            <View style={{ flexBasis: 340, flexShrink: 1, minWidth: 220 }}>
+              <SearchBar compact value={query} onChangeText={setQuery} placeholder={tr('inventory:catalog.search')} />
             </View>
             {filters}
             <View style={{ flex: 1 }} />

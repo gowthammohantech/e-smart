@@ -86,7 +86,7 @@ export default function TransferScreen() {
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Stack.Screen options={{ title: tr('books:transfer.title') }} />
-      <FormContainer>
+      <FormContainer wide>
         <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: t.spacing.xxxl, gap: t.spacing.lg }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
           <Text variant="small" tone="muted">
             {tr('books:transfer.hint')}

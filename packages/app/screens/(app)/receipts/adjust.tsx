@@ -9,7 +9,7 @@ import { Card } from '@esmart/ui/components/Card';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { AmountField, PickerField, Segmented } from '@esmart/ui/components/Field';
 import { Icon } from '@esmart/ui/components/Icon';
-import { FormContainer, FormSection } from '@esmart/ui/components/Layout';
+import { Columns, FormContainer, FormSection } from '@esmart/ui/components/Layout';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { Text } from '@esmart/ui/components/Text';
 import { useToast } from '@esmart/ui/components/Toast';
@@ -136,7 +136,7 @@ export default function AdjustAdvances() {
   return (
     <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('books:adjust.title') }} />
-      <FormContainer>
+      <FormContainer style={{ maxWidth: 1100 }}>
         <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: t.spacing.xxxl, gap: t.spacing.lg }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
           <Text variant="small" tone="muted">
             {tr('books:adjust.intro')}
@@ -163,43 +163,49 @@ export default function AdjustAdvances() {
             <EmptyState icon="swap-horizontal" title={!credits.length ? tr('books:adjust.noCredit') : tr('books:adjust.noOpen')} message={tr('books:adjust.emptyHint')} compact />
           ) : (
             <>
-              <FormSection title={tr('books:adjust.credits')}>
-                <Card padded={false}>
-                  {credits.map((c) => {
-                    const key = `${c.sourceType}:${c.id}`;
-                    return row(
-                      key,
-                      c.number,
-                      `${tr(c.sourceType === 'note' ? 'books:adjust.note' : side === 'customer' ? 'books:adjust.advance' : 'books:adjust.advancePaid')} · ${formatDate(c.date)}`,
-                      <View style={{ alignItems: 'flex-end', gap: 2 }}>
-                        <Text variant="small" weight="700">{formatMoney(c.left as Money)}</Text>
-                        {serviceAdvance(c) ? <Badge label={tr('books:adjust.gst')} tone="info" size="sm" /> : null}
-                      </View>,
-                      { selected: creditKey === key, onPress: () => pick(key) },
-                    );
-                  })}
-                </Card>
-              </FormSection>
-              <FormSection title={tr('books:adjust.open')}>
-                <Card padded={false}>
-                  {open.map((o) =>
-                    row(
-                      o.documentId,
-                      o.number,
-                      `${kindLabel(o.kind)} · ${formatDate(o.date)}`,
-                      <Text variant="small" weight="700">{formatMoney(o.outstanding as Money)}</Text>,
-                      {
-                        onPress: chosen ? () => fill(o.documentId) : undefined,
-                        selected: !!amounts[o.documentId],
-                        warn: serviceAdvance(chosen) && goodsOnly(o.documentId) ? tr('books:adjust.notService') : undefined,
-                        extra: chosen ? (
-                          <AmountField label={tr('books:adjust.amount')} value={amounts[o.documentId] ?? ''} onChangeValue={(v) => setAmounts((a) => ({ ...a, [o.documentId]: v }))} currency={baseCurrency} />
-                        ) : null,
-                      },
-                    ),
-                  )}
-                </Card>
-              </FormSection>
+              <Columns
+                left={
+                  <FormSection title={tr('books:adjust.credits')}>
+                    <Card padded={false}>
+                      {credits.map((c) => {
+                        const key = `${c.sourceType}:${c.id}`;
+                        return row(
+                          key,
+                          c.number,
+                          `${tr(c.sourceType === 'note' ? 'books:adjust.note' : side === 'customer' ? 'books:adjust.advance' : 'books:adjust.advancePaid')} · ${formatDate(c.date)}`,
+                          <View style={{ alignItems: 'flex-end', gap: 2 }}>
+                            <Text variant="small" weight="700">{formatMoney(c.left as Money)}</Text>
+                            {serviceAdvance(c) ? <Badge label={tr('books:adjust.gst')} tone="info" size="sm" /> : null}
+                          </View>,
+                          { selected: creditKey === key, onPress: () => pick(key) },
+                        );
+                      })}
+                    </Card>
+                  </FormSection>
+                }
+                right={
+                  <FormSection title={tr('books:adjust.open')}>
+                    <Card padded={false}>
+                      {open.map((o) =>
+                        row(
+                          o.documentId,
+                          o.number,
+                          `${kindLabel(o.kind)} · ${formatDate(o.date)}`,
+                          <Text variant="small" weight="700">{formatMoney(o.outstanding as Money)}</Text>,
+                          {
+                            onPress: chosen ? () => fill(o.documentId) : undefined,
+                            selected: !!amounts[o.documentId],
+                            warn: serviceAdvance(chosen) && goodsOnly(o.documentId) ? tr('books:adjust.notService') : undefined,
+                            extra: chosen ? (
+                              <AmountField label={tr('books:adjust.amount')} value={amounts[o.documentId] ?? ''} onChangeValue={(v) => setAmounts((a) => ({ ...a, [o.documentId]: v }))} currency={baseCurrency} />
+                            ) : null,
+                          },
+                        ),
+                      )}
+                    </Card>
+                  </FormSection>
+                }
+              />
               {chosen ? (
                 <>
                   {over ? (

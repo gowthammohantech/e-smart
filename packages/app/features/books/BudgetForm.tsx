@@ -93,7 +93,7 @@ export function BudgetForm({ budget }: { budget?: Budget }) {
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <FormContainer>
+      <FormContainer style={{ maxWidth: '100%' }}>
         <ScrollView contentContainerStyle={{ padding: t.spacing.lg, gap: t.spacing.lg, paddingBottom: 140 }} showsVerticalScrollIndicator={SHOW_SCROLLBAR} keyboardShouldPersistTaps="handled">
           <Card style={{ gap: t.spacing.lg }}>
             <TextField label={tr('books:budgets.name')} value={name} onChangeText={setName} required maxLength={200} />

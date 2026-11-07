@@ -257,7 +257,7 @@ export function ImportFlow<T>({
   );
 
   return (
-    <FormContainer wide>
+    <FormContainer style={{ maxWidth: '100%' }}>
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, gap: t.spacing.lg, paddingBottom: t.spacing.xxxl }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <View style={{ gap: t.spacing.xs }}>
           <Text variant="h3" weight="700">

@@ -80,7 +80,7 @@ export function ImportContacts() {
   const willCreate = outcomes ? outcomes.filter((o) => o.status === 'created').length : good.length;
 
   return (
-    <FormContainer>
+    <FormContainer wide>
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, gap: t.spacing.lg, paddingBottom: t.spacing.xxxl }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <Text variant="small" tone="muted">
           {tr('contacts:import.hint')}

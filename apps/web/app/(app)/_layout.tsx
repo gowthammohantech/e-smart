@@ -26,8 +26,9 @@ export default function WebAppLayout() {
   // Settings pages get their own list of pages beside them (and a narrower,
   // form-width column); everything else uses the full content width.
   const inSettings = pathname.startsWith('/settings');
-  // Plan & billing lays its tiers side by side, so it takes the full column.
-  const wideSettings = pathname.startsWith('/settings/plan') || pathname.startsWith('/settings/sync');
+  // Plan & billing lays its tiers side by side, and invoice design its controls
+  // beside the preview, so they take the full column.
+  const wideSettings = pathname.startsWith('/settings/plan') || pathname.startsWith('/settings/sync') || pathname.startsWith('/settings/invoice-design');
   usePlanGuard();
 
   const stack = (

@@ -153,7 +153,7 @@ export function VoucherForm({ voucher, onSaved, initialKind }: { voucher?: Vouch
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <FormContainer wide>
+      <FormContainer style={{ maxWidth: 1100 }}>
         <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: t.spacing.xxxl, gap: t.spacing.lg }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
           {voucher ? null : (
             <Segmented

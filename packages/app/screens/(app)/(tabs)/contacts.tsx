@@ -129,12 +129,12 @@ export default function ContactsTab() {
       <View
         style={
           desktop
-            ? { paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.md, flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }
+            ? { paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.md, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: t.spacing.md }
             : { paddingHorizontal: t.spacing.lg, gap: t.spacing.md, paddingBottom: t.spacing.md }
         }
       >
         {hasSuppliers ? (
-          <View style={desktop ? { width: 340 } : undefined}>
+          <View style={desktop ? { flexBasis: 340, flexShrink: 1, minWidth: 260 } : undefined}>
           <Segmented
             options={[
               { value: 'customer', label: tr('contacts:hub.customers') },
@@ -146,7 +146,7 @@ export default function ContactsTab() {
           />
           </View>
         ) : null}
-        <View style={desktop ? { width: 380 } : undefined}>
+        <View style={desktop ? { flexBasis: 380, flexShrink: 1, minWidth: 220 } : undefined}>
           <SearchBar compact value={query} onChangeText={setQuery} placeholder={asCustomer ? tr('contacts:hub.searchCustomers') : tr('contacts:hub.searchSuppliers')} />
         </View>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: t.spacing.lg, ...(desktop ? { flex: 1, justifyContent: 'flex-end' } : null) }}>

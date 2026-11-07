@@ -142,7 +142,7 @@ export function ImportJournals() {
   const reset = () => setOutcomes(null);
 
   return (
-    <FormContainer>
+    <FormContainer wide>
       <ScrollView
         contentContainerStyle={{
           padding: t.spacing.lg,

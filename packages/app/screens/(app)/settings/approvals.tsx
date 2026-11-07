@@ -45,7 +45,7 @@ export default function ApprovalRulesScreen() {
     );
 
   return (
-    <FormContainer>
+    <FormContainer style={{ maxWidth: '100%' }}>
       <Stack.Screen options={{ title: tr('settings:approvals.title') }} />
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, gap: t.spacing.lg }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <Text variant="small" tone="muted">

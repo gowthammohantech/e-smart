@@ -104,7 +104,7 @@ export default function GstChallanScreen() {
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Stack.Screen options={{ title: tr('compliance:challan.title') }} />
-      <FormContainer wide>
+      <FormContainer style={{ maxWidth: 960 }}>
         <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: t.spacing.xxxl, gap: t.spacing.lg }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
           <Text variant="small" tone="muted">
             {tr('compliance:challan.hint')}
