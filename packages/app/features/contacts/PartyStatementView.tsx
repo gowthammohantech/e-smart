@@ -10,7 +10,7 @@ import { ListRow } from '@esmart/ui/components/ListRow';
 import { Text } from '@esmart/ui/components/Text';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { useToast } from '@esmart/ui/components/Toast';
-import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { financialYearOf, formatDate, today } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
 import type { Money } from '@esmart/core/lib/money';
@@ -29,6 +29,7 @@ type Entry = NonNullable<ReturnType<typeof usePartyStatement>['data']>['entries'
  */
 export function PartyStatementView({ party }: { party: Party }) {
   const t = useTheme();
+  const desktop = useIsDesktop();
   const router = useRouter();
   const toast = useToast();
   const { t: tr } = useTranslation(['contacts', 'common']);
@@ -134,7 +135,7 @@ export function PartyStatementView({ party }: { party: Party }) {
             <EmptyState icon="book-open-outline" title={tr('contacts:statement.empty')} message={tr('contacts:statement.emptyBody')} />
           )}
 
-          <Button title={tr('contacts:statement.download')} icon="file-pdf-box" onPress={() => void download()} loading={busy} disabled={busy} fullWidth size="lg" />
+          <Button title={tr('contacts:statement.download')} icon="file-pdf-box" onPress={() => void download()} loading={busy} disabled={busy} fullWidth={!desktop} style={desktop ? { alignSelf: 'flex-end' } : undefined} />
         </>
       )}
     </ScrollView>

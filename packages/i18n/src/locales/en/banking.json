@@ -127,7 +127,7 @@
     "title": "Exclude this line?",
     "body": "An excluded line needs nothing in the books, such as a transfer already recorded or a bank's own reversal. It stays out of the reconciliation until you include it again.",
     "reason": "Reason",
-    "reasonPlaceholder": "Optional, e.g. reversed the same day",
+    "reasonPlaceholder": "Optional",
     "confirm": "Exclude"
   },
   "field": {

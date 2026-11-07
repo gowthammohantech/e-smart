@@ -286,7 +286,7 @@ export function ItemForm({ item }: { item?: Item }) {
         </ScrollView>
 
         <FormActions>
-          <Button shortcut="S" title={item ? tr('inventory:form.saveChanges') : tr('common:quickAction.addItem')} onPress={() => void save()} loading={saving} disabled={blocked} fullWidth size="lg" />
+          <Button shortcut="S" title={item ? tr('inventory:form.saveChanges') : tr('common:quickAction.addItem')} onPress={() => void save()} loading={saving} disabled={blocked} fullWidth />
           {item ? null : (
             <Button title={tr('common:action.saveAndAddAnother')} variant="ghost" onPress={() => void save(true)} loading={saving} disabled={blocked} fullWidth />
           )}

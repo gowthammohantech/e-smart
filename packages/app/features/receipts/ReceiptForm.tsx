@@ -11,9 +11,9 @@ import { FormActions } from '@esmart/ui/components/ActionBar';
 import { AmountField, PickerField, TextField } from '@esmart/ui/components/Field';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
-import { FormContainer } from '@esmart/ui/components/Layout';
+import { FieldRow, FormContainer } from '@esmart/ui/components/Layout';
 import { useToast } from '@esmart/ui/components/Toast';
-import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { accountFor, chartOfAccounts, type Account } from '@esmart/core/domain/ledger/accounts';
 import { fromMajor, money, zero } from '@esmart/core/lib/money';
 import { toAmountInput } from '@esmart/core/lib/format';
@@ -44,6 +44,7 @@ export const receiptLines = (v: Voucher) => ({ into: v.lines.find((l) => l.debit
  */
 export function ReceiptForm({ voucher, onSaved }: { voucher?: Voucher; onSaved: (id: string) => void }) {
   const t = useTheme();
+  const desktop = useIsDesktop();
   const { t: tr } = useTranslation(['books', 'common', 'purchases']);
   const toast = useToast();
   const { run: serverSave, saving, blocked } = useServerSave();
@@ -151,11 +152,13 @@ export function ReceiptForm({ voucher, onSaved }: { voucher?: Voucher; onSaved: 
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <FormContainer>
+      <FormContainer wide>
         <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: t.spacing.xxxl, gap: t.spacing.lg }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
-          <AmountField label={tr('books:receipts.amount')} value={amount} onChangeValue={setAmount} currency={baseCurrency} size="lg" required autoFocus={!voucher} />
-          <PickerField label={tr('books:receipts.source')} value={label(source)} placeholder={tr('books:receipts.pickSource')} onPress={() => setPicking('source')} icon="tag-outline" required hint={tr('books:receipts.sourceHint')} />
-          <PickerField label={tr('books:receipts.into')} value={label(into)} placeholder={tr('books:receipts.pickInto')} onPress={() => setPicking('into')} icon="bank-outline" required />
+          <AmountField label={tr('books:receipts.amount')} value={amount} onChangeValue={setAmount} currency={baseCurrency} size={desktop ? 'md' : 'lg'} required autoFocus={!voucher} />
+          <FieldRow>
+            <PickerField label={tr('books:receipts.source')} value={label(source)} placeholder={tr('books:receipts.pickSource')} onPress={() => setPicking('source')} icon="tag-outline" required hint={tr('books:receipts.sourceHint')} />
+            <PickerField label={tr('books:receipts.into')} value={label(into)} placeholder={tr('books:receipts.pickInto')} onPress={() => setPicking('into')} icon="bank-outline" required />
+          </FieldRow>
           <DateField label={tr('books:vouchers.date')} value={date} onChange={setDate} maximumDate={new Date()} />
           <PickerField
             label={tr('books:receipts.party')}
@@ -167,8 +170,10 @@ export function ReceiptForm({ voucher, onSaved }: { voucher?: Voucher; onSaved: 
             onClear={() => setPartyId(undefined)}
           />
           {!partyId ? <TextField label={tr('books:receipts.from')} value={from} onChangeText={setFrom} placeholder={tr('books:receipts.fromPlaceholder')} icon="account-question-outline" /> : null}
-          <CostCentreField value={costCentreId} onChange={setCostCentreId} />
-          <TextField label={tr('books:vouchers.reference')} value={reference} onChangeText={setReference} placeholder={tr('books:receipts.referencePlaceholder')} icon="pound" />
+          <FieldRow>
+            <CostCentreField value={costCentreId} onChange={setCostCentreId} />
+            <TextField label={tr('books:vouchers.reference')} value={reference} onChangeText={setReference} placeholder={tr('books:receipts.referencePlaceholder')} icon="pound" />
+          </FieldRow>
           <TextField label={tr('books:vouchers.narration')} value={narration} onChangeText={setNarration} placeholder={tr('books:vouchers.narrationPlaceholder')} multiline />
           <Pressable onPress={() => void attachSlip()} accessibilityRole="button" accessibilityLabel={tr('books:receipts.attach')}>
             <Card variant="flat" style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
@@ -186,7 +191,7 @@ export function ReceiptForm({ voucher, onSaved }: { voucher?: Voucher; onSaved: 
           </Pressable>
         </ScrollView>
         <FormActions>
-          <Button title={tr('books:receipts.save')} onPress={() => void save()} loading={saving || uploading} disabled={blocked || uploading || !ready} fullWidth size="lg" shortcut="S" />
+          <Button title={tr('books:receipts.save')} onPress={() => void save()} loading={saving || uploading} disabled={blocked || uploading || !ready} fullWidth shortcut="S" />
         </FormActions>
       </FormContainer>
 

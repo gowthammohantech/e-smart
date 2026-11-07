@@ -123,7 +123,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
                 }
               }}
               onSubmitEditing={() => open(entries[index])}
-              style={{ flex: 1, height: 56, fontSize: t.fontSize.title, color: t.c.text, outlineStyle: 'none' } as object}
+              style={{ flex: 1, height: 44, fontSize: t.fontSize.body, color: t.c.text, outlineStyle: 'none' } as object}
             />
             <Text variant="micro" tone="muted" weight="700">
               {tr('nav:shell.escKey')}

@@ -13,7 +13,7 @@ import { FormContainer, FormSection } from '@esmart/ui/components/Layout';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { Text } from '@esmart/ui/components/Text';
 import { useToast } from '@esmart/ui/components/Toast';
-import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { formatDate } from '@esmart/core/lib/date';
 import { formatMoney, toAmountInput } from '@esmart/core/lib/format';
 import { fromMajor, money, type Money } from '@esmart/core/lib/money';
@@ -34,6 +34,7 @@ type Side = 'customer' | 'supplier';
  */
 export default function AdjustAdvances() {
   const t = useTheme();
+  const desktop = useIsDesktop();
   const router = useRouter();
   const toast = useToast();
   const { t: tr } = useTranslation(['books', 'common', 'domain']);
@@ -206,7 +207,7 @@ export default function AdjustAdvances() {
                       {tr('books:adjust.over', { amount: formatMoney(chosen.left as Money) })}
                     </Text>
                   ) : null}
-                  <Button title={tr('books:adjust.applyChosen', { amount: formatMoney(money(typedTotal, baseCurrency)) })} onPress={applyChosen} loading={busy} disabled={busy || !typed.length || over} fullWidth size="lg" />
+                  <Button title={tr('books:adjust.applyChosen', { amount: formatMoney(money(typedTotal, baseCurrency)) })} onPress={applyChosen} loading={busy} disabled={busy || !typed.length || over} fullWidth={!desktop} style={desktop ? { alignSelf: 'flex-start' } : undefined} />
                 </>
               ) : (
                 <>
@@ -215,7 +216,7 @@ export default function AdjustAdvances() {
                       {tr('books:adjust.autoNotService')}
                     </Text>
                   ) : null}
-                  <Button title={tr('books:adjust.applyAll')} icon="sort-calendar-ascending" onPress={() => void apply()} loading={busy} disabled={busy} fullWidth size="lg" />
+                  <Button title={tr('books:adjust.applyAll')} icon="sort-calendar-ascending" onPress={() => void apply()} loading={busy} disabled={busy} fullWidth={!desktop} style={desktop ? { alignSelf: 'flex-start' } : undefined} />
                   <Text variant="caption" tone="muted">
                     {tr('books:adjust.applyAllHint')}
                   </Text>

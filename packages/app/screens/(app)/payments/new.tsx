@@ -972,7 +972,6 @@ export default function NewPayment() {
               onPress={() => void save()} loading={saving}
               disabled={blocked || !canSave}
               fullWidth
-              size="lg"
             />
           </View>
         )}

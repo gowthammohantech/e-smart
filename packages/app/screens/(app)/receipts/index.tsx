@@ -116,7 +116,7 @@ export default function ReceiptsList() {
         <Stack.Screen options={{ title: tr('books:receipts.title') }} />
         <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: t.spacing.sm }}>
           <View style={{ width: 380 }}>
-            <SearchBar value={query} onChangeText={setQuery} placeholder={tr('books:receipts.search')} />
+            <SearchBar compact value={query} onChangeText={setQuery} placeholder={tr('books:receipts.search')} />
           </View>
           <FilterMenu
             icon="calendar-range"
@@ -186,7 +186,7 @@ export default function ReceiptsList() {
     <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('books:receipts.title') }} />
       <View style={{ paddingHorizontal: t.spacing.lg, paddingTop: t.spacing.md, gap: t.spacing.md }}>
-        <SearchBar value={query} onChangeText={setQuery} placeholder={tr('books:receipts.search')} />
+        <SearchBar compact value={query} onChangeText={setQuery} placeholder={tr('books:receipts.search')} />
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: t.spacing.sm, paddingRight: t.spacing.lg }}>
           {DATE_RANGE_PRESET_KEYS.map((p) => {
             const active = range === p;

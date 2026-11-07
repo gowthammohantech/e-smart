@@ -103,7 +103,7 @@ export function PaymentListView({ direction }: { direction: PaymentDirection }) 
         }
       >
         <View style={desktop ? { width: 300 } : undefined}>
-          <SearchBar value={query} onChangeText={setQuery} placeholder={tr('sales:list.search')} />
+          <SearchBar compact value={query} onChangeText={setQuery} placeholder={tr('sales:list.search')} />
         </View>
         {desktop ? (
           <FilterMenu

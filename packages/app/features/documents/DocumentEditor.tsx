@@ -1301,7 +1301,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
         label={tr('sales:editor.notes')}
         value={draft.notes}
         onChangeText={(notes) => patch({ notes })}
-        placeholder={tr('sales:editor.notesHint')}
+        hint={tr('sales:editor.notesHint')}
         multiline
       />
 

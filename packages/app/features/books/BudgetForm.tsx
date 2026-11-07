@@ -144,7 +144,7 @@ export function BudgetForm({ budget }: { budget?: Budget }) {
           {budget?.id ? <Button title={tr('books:budgets.remove')} variant="danger" icon="delete-outline" onPress={() => setConfirmRemove(true)} disabled={!canWrite || busy} /> : null}
         </ScrollView>
         <FormActions>
-          <Button title={tr('books:budgets.save')} onPress={() => void save()} loading={busy} disabled={!canWrite || busy || !name.trim()} fullWidth size="lg" shortcut="S" />
+          <Button title={tr('books:budgets.save')} onPress={() => void save()} loading={busy} disabled={!canWrite || busy || !name.trim()} fullWidth shortcut="S" />
         </FormActions>
       </FormContainer>
       <SelectSheet

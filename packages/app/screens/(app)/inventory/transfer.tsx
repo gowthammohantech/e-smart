@@ -157,7 +157,6 @@ export default function StockTransfer() {
           disabled={!canSave}
           loading={saving}
           fullWidth
-          size="lg"
         />
       </View>
 

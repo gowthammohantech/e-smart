@@ -31,6 +31,7 @@ export default function GlobalSearch() {
 
       <View style={{ paddingHorizontal: t.spacing.lg, paddingTop: t.spacing.md }}>
         <SearchBar
+          compact
           value={query}
           onChangeText={setQuery}
           placeholder={tr('common:search.placeholder')}

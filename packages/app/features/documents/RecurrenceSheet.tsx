@@ -70,7 +70,7 @@ export function RecurrenceSheet({ doc, visible, onClose }: { doc: BusinessDocume
             {tr('sales:recurring.next', { date: formatDate(doc.nextRecurrenceDate) })}
           </Text>
         ) : null}
-        <Button title={tr('sales:recurring.save')} onPress={() => void save()} loading={saving} disabled={saving} fullWidth size="lg" />
+        <Button title={tr('sales:recurring.save')} onPress={() => void save()} loading={saving} disabled={saving} fullWidth />
       </View>
     </Sheet>
   );

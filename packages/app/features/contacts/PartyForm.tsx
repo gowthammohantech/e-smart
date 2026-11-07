@@ -663,7 +663,7 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
             </>
           ) : (
             <>
-              <Button shortcut="S" title={submitTitle} onPress={() => void save()} loading={saving} disabled={blocked} fullWidth size="lg" />
+              <Button shortcut="S" title={submitTitle} onPress={() => void save()} loading={saving} disabled={blocked} fullWidth />
               {offersAnother ? (
                 <Button title={tr('common:action.saveAndAddAnother')} variant="ghost" onPress={() => void save(true)} loading={saving} disabled={blocked} fullWidth />
               ) : null}

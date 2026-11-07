@@ -215,7 +215,7 @@ export function FixedAssetForm({ asset, prefill }: { asset?: FixedAsset; prefill
               {problem}
             </Text>
           ) : null}
-          <Button title={tr(asset?.id ? 'books:assets.save' : 'books:assets.add')} onPress={() => void save()} loading={busy} disabled={!canWrite || busy || !!problem} fullWidth size="lg" shortcut="S" />
+          <Button title={tr(asset?.id ? 'books:assets.save' : 'books:assets.add')} onPress={() => void save()} loading={busy} disabled={!canWrite || busy || !!problem} fullWidth shortcut="S" />
         </FormActions>
       </FormContainer>
 

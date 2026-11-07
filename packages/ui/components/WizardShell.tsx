@@ -223,7 +223,7 @@ export function WizardShell({
           gap: t.spacing.sm,
         }}
       >
-        <Button title={primaryLabel} onPress={onPrimary} disabled={primaryDisabled} fullWidth size="lg" />
+        <Button title={primaryLabel} onPress={onPrimary} disabled={primaryDisabled} fullWidth />
         {secondaryLabel && onSecondary ? (
           <Button title={secondaryLabel} variant="ghost" onPress={onSecondary} fullWidth />
         ) : null}

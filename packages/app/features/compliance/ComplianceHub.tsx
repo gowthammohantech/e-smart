@@ -178,6 +178,7 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
 
       <View style={{ height: t.spacing.md }} />
       <SearchBar
+        compact
         value={query}
         onChangeText={setQuery}
         placeholder={tab === 'eInvoice' ? tr('compliance:hub.searchEInvoice') : tr('compliance:hub.searchEway')}

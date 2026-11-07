@@ -180,7 +180,7 @@ export default function ExpensesList() {
         <Stack.Screen options={{ title: tr('nav:title.expenses') }} />
         <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: t.spacing.sm }}>
           <View style={{ width: 380 }}>
-            <SearchBar value={query} onChangeText={setQuery} placeholder={tr('purchases:expense.search')} />
+            <SearchBar compact value={query} onChangeText={setQuery} placeholder={tr('purchases:expense.search')} />
           </View>
           <FilterMenu
             icon="calendar-range"
@@ -287,7 +287,7 @@ export default function ExpensesList() {
       <Stack.Screen options={{ title: tr('nav:title.expenses') }} />
 
       <View style={{ paddingHorizontal: t.spacing.lg, paddingTop: t.spacing.md, gap: t.spacing.md }}>
-        <SearchBar value={query} onChangeText={setQuery} placeholder={tr('purchases:expense.search')} />
+        <SearchBar compact value={query} onChangeText={setQuery} placeholder={tr('purchases:expense.search')} />
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: t.spacing.sm, paddingRight: t.spacing.lg }}>
           {rangeChips}
         </ScrollView>

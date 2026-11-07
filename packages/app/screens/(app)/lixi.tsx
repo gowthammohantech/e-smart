@@ -298,12 +298,12 @@ export default function LixiChat({ onClose, initialAsk }: LixiChatProps = {}) {
           onBlur={() => setComposerFocused(false)}
           style={{
             flex: 1,
-            minHeight: 44,
+            minHeight: 38,
             maxHeight: 120,
             paddingHorizontal: t.spacing.lg,
-            paddingTop: 12,
-            paddingBottom: 12,
-            borderRadius: 22,
+            paddingTop: 9,
+            paddingBottom: 9,
+            borderRadius: 19,
             backgroundColor: t.c.card,
             borderWidth: t.scheme === 'dark' ? 1 : 0,
             borderColor: t.c.line,
@@ -319,16 +319,16 @@ export default function LixiChat({ onClose, initialAsk }: LixiChatProps = {}) {
           accessibilityRole="button"
           accessibilityLabel={tr('lixi:ui.send')}
           style={({ pressed }) => ({
-            width: 44,
-            height: 44,
-            borderRadius: 22,
+            width: 38,
+            height: 38,
+            borderRadius: 19,
             alignItems: 'center',
             justifyContent: 'center',
             backgroundColor: draft.trim() && !thinking ? LIXI.blue : t.c.mutedSoft,
             transform: [{ scale: pressed ? 0.92 : 1 }],
           })}
         >
-          <Icon name="arrow-up" size={22} color={draft.trim() && !thinking ? '#fff' : t.c.muted} />
+          <Icon name="arrow-up" size={20} color={draft.trim() && !thinking ? '#fff' : t.c.muted} />
         </Pressable>
       </View>
 

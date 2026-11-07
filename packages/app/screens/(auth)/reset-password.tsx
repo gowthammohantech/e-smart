@@ -60,7 +60,7 @@ export default function ResetPassword() {
         required
       />
       <TextField label={tr('auth:reset.confirm')} value={confirm} onChangeText={setConfirm} secureTextEntry icon="lock-check-outline" error={errors.confirm} required />
-      <Button title={tr('auth:reset.submit')} onPress={submit} loading={busy} disabled={!token} fullWidth size="lg" />
+      <Button title={tr('auth:reset.submit')} onPress={submit} loading={busy} disabled={!token} fullWidth />
     </AuthShell>
   );
 }

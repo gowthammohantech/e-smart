@@ -134,7 +134,7 @@ export default function Otp() {
               flex: 1,
               // A browser input has an intrinsic width; let the row share it out.
               minWidth: 0,
-              height: 58,
+              height: 48,
               borderRadius: t.radius.md,
               borderWidth: 1,
               borderColor: error ? t.c.bad : d || (Platform.OS === 'web' && focusedBox === i) ? t.c.primary : t.c.line,
@@ -142,7 +142,7 @@ export default function Otp() {
               ...WEB_INPUT_RESET,
               backgroundColor: t.c.card2,
               color: t.c.text,
-              fontSize: t.fontSize.h3,
+              fontSize: t.fontSize.title,
               fontWeight: '700',
               textAlign: 'center',
             }}
@@ -156,7 +156,7 @@ export default function Otp() {
         </Text>
       ) : null}
 
-      <Button title={tr('auth:otp.submit')} onPress={verify} loading={busy} fullWidth size="lg" />
+      <Button title={tr('auth:otp.submit')} onPress={verify} loading={busy} fullWidth />
 
       <View style={{ alignItems: 'center' }}>
         {seconds > 0 ? (

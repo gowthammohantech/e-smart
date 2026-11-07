@@ -158,7 +158,7 @@ export default function Done() {
           </>
         ) : (
           <>
-            <Button title={tr('onboarding:done.createInvoice')} onPress={() => finish(true)} loading={busy} fullWidth size="lg" />
+            <Button title={tr('onboarding:done.createInvoice')} onPress={() => finish(true)} loading={busy} fullWidth />
             <Button title={tr('onboarding:done.goToDashboard')} variant="ghost" onPress={() => finish(false)} disabled={busy} fullWidth />
           </>
         )}

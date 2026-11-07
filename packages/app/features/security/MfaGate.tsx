@@ -67,7 +67,7 @@ export function MfaGate() {
             error={error ?? undefined}
             onSubmitEditing={() => void submit()}
           />
-          <Button title={tr('settings:security.verify')} onPress={() => void submit()} loading={busy} disabled={busy || code.trim().length < 6} fullWidth size="lg" />
+          <Button title={tr('settings:security.verify')} onPress={() => void submit()} loading={busy} disabled={busy || code.trim().length < 6} fullWidth />
           <Button title={tr('settings:devices.signOut')} variant="ghost" onPress={() => {
               setCode('');
               setError(null);

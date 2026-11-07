@@ -136,7 +136,7 @@ export default function TransferScreen() {
         </ScrollView>
         <View>
           <FormActions>
-            <Button title={tr('books:transfer.save')} onPress={() => void save()} loading={saving} disabled={blocked || !!problem} fullWidth size="lg" shortcut="S" />
+            <Button title={tr('books:transfer.save')} onPress={() => void save()} loading={saving} disabled={blocked || !!problem} fullWidth shortcut="S" />
           </FormActions>
         </View>
       </FormContainer>

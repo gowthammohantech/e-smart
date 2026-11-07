@@ -79,7 +79,7 @@ export function RefundAdvanceSheet({ receipt, visible, onClose, onSaved }: { rec
       onClose={onClose}
       title={tr('sales:refund.title')}
       subtitle={tr('sales:refund.subtitle', { number: receipt.number, amount: formatMoney(left) })}
-      footer={<Button title={tr('sales:refund.save')} icon="cash-refund" onPress={() => void save()} loading={saving} disabled={!canSave} fullWidth size="lg" />}
+      footer={<Button title={tr('sales:refund.save')} icon="cash-refund" onPress={() => void save()} loading={saving} disabled={!canSave} fullWidth />}
     >
       <View style={{ gap: t.spacing.md, paddingBottom: t.spacing.md }}>
         <AmountField

@@ -91,6 +91,7 @@ export default function InventoryTab() {
 
         <View style={{ gap: t.spacing.md, marginTop: t.spacing.xl }}>
           <SearchBar
+            compact
             value={query}
             onChangeText={setQuery}
             placeholder={tr('inventory:hub.searchPlaceholder')}

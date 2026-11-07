@@ -110,7 +110,7 @@ export default function SignIn() {
               {tr('auth:signIn.forgot')}
             </Text>
           ) : null}
-          <Button title={tr('auth:signIn.submit')} onPress={submitEmail} loading={busy} fullWidth size="lg" />
+          <Button title={tr('auth:signIn.submit')} onPress={submitEmail} loading={busy} fullWidth />
           {desktop ? null : (
             <Button title={tr('auth:signIn.forgot')} variant="ghost" onPress={unlessBusy(() => router.push('/(auth)/forgot-password'))} />
           )}
@@ -126,7 +126,7 @@ export default function SignIn() {
             hint={tr('auth:signIn.otpHint')}
             onSubmitEditing={submitPhone}
           />
-          <Button title={tr('auth:signIn.sendCode')} onPress={submitPhone} fullWidth size="lg" />
+          <Button title={tr('auth:signIn.sendCode')} onPress={submitPhone} fullWidth />
         </View>
       )}
 

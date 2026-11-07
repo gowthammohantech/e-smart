@@ -94,7 +94,7 @@ export function DeleteAccountSheet({ visible, onClose }: { visible: boolean; onC
       onClose={close}
       title={tr('settings:deleteAccount.title')}
       footer={
-        <Button title={busy ? tr('settings:deleteAccount.deleting') : tr('settings:deleteAccount.confirm')} variant="danger" onPress={submit} disabled={!ready} fullWidth size="lg" />
+        <Button title={busy ? tr('settings:deleteAccount.deleting') : tr('settings:deleteAccount.confirm')} variant="danger" onPress={submit} disabled={!ready} fullWidth />
       }
     >
       <View style={{ gap: t.spacing.md }}>

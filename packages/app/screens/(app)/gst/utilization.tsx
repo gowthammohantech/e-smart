@@ -323,7 +323,7 @@ export default function GstUtilizationScreen() {
         </ScrollView>
         {view && !existing.length ? (
           <FormActions>
-            <Button title={tr('compliance:utilization.post')} onPress={() => void post()} loading={busy} disabled={busy || !!issues.length} fullWidth size="lg" shortcut="S" />
+            <Button title={tr('compliance:utilization.post')} onPress={() => void post()} loading={busy} disabled={busy || !!issues.length} fullWidth shortcut="S" />
           </FormActions>
         ) : null}
       </FormContainer>

@@ -209,9 +209,9 @@ export function VoucherForm({ voucher, onSaved, initialKind }: { voucher?: Vouch
         <FormActions>
           {/* A posted voucher stays posted; a new one or a draft can be kept as a draft. */}
           {!voucher || isDraft ? (
-            <Button title={tr('books:vouchers.saveDraft')} variant="secondary" onPress={() => void save('draft')} loading={saving} disabled={blocked || !!draftProblem} fullWidth size="lg" />
+            <Button title={tr('books:vouchers.saveDraft')} variant="ghost" onPress={() => void save('draft')} loading={saving} disabled={blocked || !!draftProblem} fullWidth />
           ) : null}
-          <Button title={tr(isDraft ? 'books:vouchers.post' : 'books:vouchers.save')} onPress={() => void save('posted')} loading={saving} disabled={blocked || !!problem} fullWidth size="lg" shortcut="S" />
+          <Button title={tr(isDraft ? 'books:vouchers.post' : 'books:vouchers.save')} onPress={() => void save('posted')} loading={saving} disabled={blocked || !!problem} fullWidth shortcut="S" />
         </FormActions>
       </FormContainer>
 

@@ -54,7 +54,7 @@ export default function ForgotPassword() {
         error={errors.email}
         required
       />
-      <Button title={tr('auth:forgot.submit')} onPress={submit} fullWidth size="lg" />
+      <Button title={tr('auth:forgot.submit')} onPress={submit} fullWidth />
     </AuthShell>
   );
 }

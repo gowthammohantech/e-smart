@@ -577,7 +577,7 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
           </FormActions>
         ) : (
           <FormActions>
-            <Button shortcut="S" title={submitTitle} onPress={() => void save()} loading={saving || uploading} disabled={blocked || amount.minor <= 0} fullWidth size="lg" />
+            <Button shortcut="S" title={submitTitle} onPress={() => void save()} loading={saving || uploading} disabled={blocked || amount.minor <= 0} fullWidth />
           </FormActions>
         )}
 

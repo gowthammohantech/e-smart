@@ -50,7 +50,7 @@ export default function Welcome() {
       </View>
 
       <View style={{ gap: t.spacing.md }}>
-        <Button title={tr('auth:welcome.getStarted')} onPress={() => router.push('/(auth)/sign-up')} fullWidth size="lg" />
+        <Button title={tr('auth:welcome.getStarted')} onPress={() => router.push('/(auth)/sign-up')} fullWidth />
         <Button title={tr('auth:welcome.haveAccount')} variant="ghost" onPress={() => router.push('/(auth)/sign-in')} fullWidth />
         <Text variant="micro" tone="muted" center>
           {tr('auth:welcome.buildNote')}

@@ -134,7 +134,6 @@ export default function AcceptInvite() {
           onPress={invite.existingUser ? joinExisting : () => setStep('password')}
           loading={busy}
           fullWidth
-          size="lg"
         />
         <Text variant="caption" tone="muted" center>
           {tr('auth:invite.agree')}{' '}
@@ -143,7 +142,7 @@ export default function AcceptInvite() {
           <Text variant="caption" tone="primary" onPress={() => void Linking.openURL(LEGAL.privacy)}>{tr('auth:signUp.readPrivacy')}</Text>
         </Text>
         {errors.password ? <Text variant="small" tone="bad">{errors.password}</Text> : null}
-        {onMobileBrowser() ? <Button title={tr('auth:invite.openApp')} variant="secondary" onPress={openInApp} fullWidth size="lg" /> : null}
+        {onMobileBrowser() ? <Button title={tr('auth:invite.openApp')} variant="ghost" onPress={openInApp} fullWidth /> : null}
       </AuthShell>
     );
   }
@@ -161,7 +160,7 @@ export default function AcceptInvite() {
         required
       />
       <TextField label={tr('auth:invite.confirmPassword')} value={confirm} onChangeText={setConfirm} secureTextEntry icon="lock-check-outline" error={errors.confirm} required />
-      <Button title={tr('auth:invite.submit')} onPress={submit} loading={busy} fullWidth size="lg" />
+      <Button title={tr('auth:invite.submit')} onPress={submit} loading={busy} fullWidth />
     </AuthShell>
   );
 }

@@ -4,6 +4,7 @@ import { Platform, Pressable, StyleProp, TextInput, View, ViewStyle } from 'reac
 import { Icon } from './Icon';
 import { useTheme } from '../theme/ThemeProvider';
 import { WEB_INPUT_RESET, webFocusHalo } from './Field';
+import { useIsDesktop } from '../theme/breakpoints';
 
 export function SearchBar({
   value,
@@ -13,6 +14,7 @@ export function SearchBar({
   autoFocus,
   onSubmitEditing,
   right,
+  compact,
 }: {
   value: string;
   onChangeText: (v: string) => void;
@@ -21,10 +23,14 @@ export function SearchBar({
   autoFocus?: boolean;
   onSubmitEditing?: () => void;
   right?: React.ReactNode;
+  /** Opt-in: a desktop toolbar's height (38) instead of 44, to sit level with its buttons. */
+  compact?: boolean;
 }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['common']);
   const [focused, setFocused] = useState(false);
+  const desktop = useIsDesktop();
+  const small = !!compact && desktop;
   // Only a browser shows focus on the bar; a phone keeps its look while typing.
   const webFocused = Platform.OS === 'web' && focused;
   return (
@@ -39,13 +45,13 @@ export function SearchBar({
           borderWidth: 1,
           borderColor: webFocused ? t.c.primary : t.c.inputBorder,
           paddingHorizontal: t.spacing.md,
-          height: 44,
+          height: small ? 38 : 44,
           ...webFocusHalo(t, webFocused),
         },
         style,
       ]}
     >
-      <Icon name="magnify" size={19} color={t.c.muted} />
+      <Icon name="magnify" size={small ? 17 : 19} color={t.c.muted} />
       <TextInput
         value={value}
         onChangeText={onChangeText}

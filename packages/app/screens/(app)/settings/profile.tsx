@@ -115,7 +115,7 @@ export default function Profile() {
       <DeleteAccountSheet visible={deleting} onClose={() => setDeleting(false)} />
 
       <FormActions>
-        <Button shortcut="S" title={tr('settings:profile.save')} onPress={save} loading={saving} disabled={saving} fullWidth size="lg" />
+        <Button shortcut="S" title={tr('settings:profile.save')} onPress={save} loading={saving} disabled={saving} fullWidth />
       </FormActions>
     </KeyboardAvoidingView>
   );

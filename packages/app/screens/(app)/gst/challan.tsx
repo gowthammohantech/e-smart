@@ -166,7 +166,7 @@ export default function GstChallanScreen() {
           </FormSection>
         </ScrollView>
         <FormActions>
-          <Button title={tr('compliance:challan.save')} onPress={() => void save()} loading={saving} disabled={blocked || !!problem} fullWidth size="lg" shortcut="S" />
+          <Button title={tr('compliance:challan.save')} onPress={() => void save()} loading={saving} disabled={blocked || !!problem} fullWidth shortcut="S" />
         </FormActions>
       </FormContainer>
       <SelectSheet

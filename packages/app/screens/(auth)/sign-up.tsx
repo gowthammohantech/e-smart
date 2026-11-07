@@ -118,7 +118,7 @@ export default function SignUp() {
         ) : null}
       </View>
 
-      <Button title={tr('auth:signUp.submit')} onPress={submit} loading={busy} fullWidth size="lg" />
+      <Button title={tr('auth:signUp.submit')} onPress={submit} loading={busy} fullWidth />
 
       <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 5, marginTop: t.spacing.sm }}>
         <Text variant="small" tone="muted">{tr('auth:signUp.haveAccount')}</Text>

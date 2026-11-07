@@ -407,7 +407,7 @@ function EwayBillFormDesktop({ doc }: { doc: BusinessDocument }) {
 
       <ValidityCard form={form} />
 
-      {inHeader ? null : <Button shortcut="S" title={tr('compliance:ewb.generate')} icon="truck-fast-outline" loading={busy} onPress={submit} fullWidth size="lg" />}
+      {inHeader ? null : <Button shortcut="S" title={tr('compliance:ewb.generate')} icon="truck-fast-outline" loading={busy} onPress={submit} style={{ alignSelf: 'flex-end' }} />}
     </>
   );
 
