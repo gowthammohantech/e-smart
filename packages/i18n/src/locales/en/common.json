@@ -364,5 +364,11 @@
     "message": "You can keep working on this device. Your changes will be saved here and sent to the server once the connection has been back for a few seconds.",
     "accept": "Work offline",
     "decline": "Not now"
+  },
+  "update": {
+    "title": "Update required",
+    "body": "This version of the app is no longer supported. Update to version {{version}} or later to keep working.",
+    "action": "Update the app",
+    "reload": "Reload"
   }
 }

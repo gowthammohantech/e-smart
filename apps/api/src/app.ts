@@ -12,6 +12,7 @@ import { registerGuards } from './auth/guards';
 import type { Deps, Handlers, WebhookHandlers } from './context';
 import { problemHandler } from './http/errors';
 import { registerIdempotency } from './http/idempotency';
+import { registerAppVersionGate } from './http/appVersion';
 import { handlers as defaultHandlers, webhookHandlers as defaultWebhooks } from './modules';
 import { registerRoutes } from './openapi/routes';
 import { loadOperations } from './openapi/spec';
@@ -74,7 +75,7 @@ export async function buildApp(deps: Deps, opts: BuildOptions = {}): Promise<Fas
   await app.register(cors, {
     origin: deps.config.CORS_ORIGINS === '*' ? true : deps.config.CORS_ORIGINS.split(',').map((s) => s.trim()),
     exposedHeaders: ['ETag', 'Idempotent-Replayed', 'Content-Disposition'],
-    allowedHeaders: ['Authorization', 'Content-Type', 'If-Match', 'Idempotency-Key'],
+    allowedHeaders: ['Authorization', 'Content-Type', 'If-Match', 'Idempotency-Key', 'X-App-Version'],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   });
   await app.register(rateLimit, {
@@ -104,6 +105,7 @@ export async function buildApp(deps: Deps, opts: BuildOptions = {}): Promise<Fas
   await app.register(multipart, { limits: { fileSize: 10 * 1024 * 1024, files: 1 } });
   await app.register(rawBody, { global: false, encoding: 'utf8', runFirst: true });
 
+  registerAppVersionGate(app, deps.config.MIN_APP_VERSION);
   registerGuards(app, deps);
   registerIdempotency(app, deps);
 

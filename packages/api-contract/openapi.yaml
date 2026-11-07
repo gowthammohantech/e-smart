@@ -33,6 +33,10 @@ info:
       from the offline queue are then safe. Keys are kept for 24 hours.
     - **Pagination** is by cursor: `?limit=50&cursor=...` returns
       `{ data, nextCursor }`.
+    - **App version**: the native apps send `X-App-Version` (e.g. `1.0.5`).
+      When the server's `MIN_APP_VERSION` is newer, any request answers `426`
+      with code `APP_UPDATE_REQUIRED` and `minVersion`. Requests without the
+      header are served.
     - **Errors** use `application/problem+json` with a stable `code`. Validation
       failures and compliance rejections also carry `issues[]`, which has the
       same shape as `ComplianceIssue`.
@@ -6516,6 +6520,7 @@ components:
     CompanyId: { name: companyId, in: path, required: true, schema: { type: string, example: cmp_vertex } }
     Id: { name: id, in: path, required: true, schema: { type: string } }
     IdempotencyKey: { name: Idempotency-Key, in: header, required: false, schema: { type: string, format: uuid } }
+    AppVersion: { name: X-App-Version, in: header, required: false, description: The native app's version; older than the server's minimum gets 426, schema: { type: string, example: 1.0.5 } }
     IfMatch: { name: If-Match, in: header, required: false, description: ETag from the last read, schema: { type: string } }
     Q: { name: q, in: query, description: Free-text search, schema: { type: string } }
     Limit: { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
@@ -6570,6 +6575,9 @@ components:
       content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
     Unprocessable:
       description: Validation failed; see `issues[]`
+      content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
+    UpdateRequired:
+      description: '`APP_UPDATE_REQUIRED`: this app version is older than the server serves; the body carries `minVersion`'
       content: { application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } } }
     TooManyRequests:
       description: Rate limited; see `Retry-After`

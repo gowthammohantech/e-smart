@@ -7284,6 +7284,15 @@ export interface components {
                 "application/problem+json": components["schemas"]["Problem"];
             };
         };
+        /** @description `APP_UPDATE_REQUIRED`: this app version is older than the server serves; the body carries `minVersion` */
+        UpdateRequired: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
         /** @description Rate limited; see `Retry-After` */
         TooManyRequests: {
             headers: {
@@ -7317,6 +7326,8 @@ export interface components {
         CompanyId: string;
         Id: string;
         IdempotencyKey: string;
+        /** @description The native app's version; older than the server's minimum gets 426 */
+        AppVersion: string;
         /** @description ETag from the last read */
         IfMatch: string;
         /** @description Free-text search */

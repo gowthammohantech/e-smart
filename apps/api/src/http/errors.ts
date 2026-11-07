@@ -14,6 +14,7 @@ const TITLES: Record<number, string> = {
   412: 'Precondition Failed',
   415: 'Unsupported Media Type',
   422: 'Unprocessable Content',
+  426: 'Upgrade Required',
   428: 'Precondition Required',
   429: 'Too Many Requests',
   500: 'Internal Server Error',

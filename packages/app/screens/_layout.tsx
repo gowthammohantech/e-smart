@@ -21,6 +21,7 @@ import { OfflinePrompt } from '../components/OfflinePrompt';
 import { installGlobalErrorHandlers } from '../lib/reporter';
 import { usePushNotifications } from '../features/session/usePushNotifications';
 import { MfaGate } from '../features/security/MfaGate';
+import { UpdateGate } from '../features/session/UpdateGate';
 
 // Remote mode wraps the store's actions once, before anything renders.
 installRemote();
@@ -88,6 +89,7 @@ function RootNavigator() {
         <Stack.Screen name="(app)" />
       </Stack>
       <MfaGate />
+      <UpdateGate />
     </>
   );
 }

@@ -34,6 +34,8 @@ export type ApiClientOptions = {
   timeoutMs?: number;
   /** Told of every refused request before it is thrown, e.g. to ask for an authenticator code on MFA_REQUIRED. */
   onProblem?: (error: ApiError) => void;
+  /** Extra headers sent with every request, e.g. the app's version. */
+  headers?: Record<string, string>;
 };
 
 // The contract's routes with `security: []`. Reference data is public, but a
@@ -133,6 +135,7 @@ export function createApiClient(options: ApiClientOptions) {
 
   const middleware: Middleware = {
     async onRequest({ request }) {
+      for (const [name, value] of Object.entries(options.headers ?? {})) request.headers.set(name, value);
       if (request.method === 'POST' && !request.headers.has('Idempotency-Key')) {
         request.headers.set('Idempotency-Key', newKey());
       }

@@ -68,6 +68,14 @@ const Env = z.object({
    * Trusting more lets a client choose its own IP, and with it a fresh rate-limit bucket.
    */
   TRUST_PROXY_HOPS: z.coerce.number().int().min(0).default(1),
+  /**
+   * The oldest app version (`1.0.5`) the API still serves. Older native builds get 426
+   * APP_UPDATE_REQUIRED. Unset: every version is served.
+   */
+  MIN_APP_VERSION: z
+    .string()
+    .regex(/^\d+(\.\d+)*$/)
+    .optional(),
 
   SMS_PROVIDER: z.enum(['log', 'msg91', 'pay4sms']).default('log'),
   MSG91_AUTH_KEY: z.string().optional(),
