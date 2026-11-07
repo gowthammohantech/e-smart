@@ -29,6 +29,7 @@ import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { useGoBack } from '../../../navigation/useGoBack';
 import { LogoSection } from '../../../features/company/LogoSection';
 import { SignatureSection } from '../../../features/company/SignatureSection';
+import { ArchiveSection } from '../../../features/company/ArchiveSection';
 
 
 /** A sample UPI ID for the field's placeholder: an address, the same in every language. */
@@ -350,6 +351,8 @@ export default function CompanySettings() {
           hint={tr('settings:company.gstr2bToleranceHint')}
           icon="calendar-range"
         />
+
+        <ArchiveSection />
       </ScrollView>
 
       <FormActions>

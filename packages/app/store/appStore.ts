@@ -160,6 +160,8 @@ type Actions = {
   /* company */
   setActiveCompany: (companyId: string) => void;
   setActiveBranch: (branchId: string) => void;
+  /** Drops a business from this device (archived, or access taken away) and opens another. Nothing is sent. */
+  forgetCompany: (companyId: string) => void;
   saveCompany: (company: Company) => void;
   setPlan: (companyId: string, plan: PlanTier) => void;
   createCompany: (partial: Omit<Company, 'id' | 'accountId' | 'createdAt'>) => string;
@@ -597,6 +599,25 @@ export const useAppStore = create<AppState>()(
           set({ activeCompanyId: companyId, activeBranchId: branch?.id ?? null });
         },
         setActiveBranch: (branchId) => set({ activeBranchId: branchId }),
+        forgetCompany: (companyId) => {
+          const s = get();
+          if (!s.companies.some((c) => c.id === companyId)) return;
+          const next: Record<string, unknown> = { companies: s.companies.filter((c) => c.id !== companyId) };
+          // Every collection whose rows belong to one business.
+          for (const [key, value] of Object.entries(s)) {
+            if (key === 'companies' || !Array.isArray(value)) continue;
+            if (value.some((r) => (r as { companyId?: string } | null)?.companyId === companyId)) {
+              next[key] = value.filter((r) => (r as { companyId?: string } | null)?.companyId !== companyId);
+            }
+          }
+          next.syncQueue = (s.syncQueue ?? []).filter((e) => !e.path?.startsWith(`/companies/${companyId}/`) && e.path !== `/companies/${companyId}`);
+          set(next as Partial<AppState>);
+          if (s.activeCompanyId === companyId) {
+            const other = get().companies[0];
+            if (other) get().setActiveCompany(other.id);
+            else set({ activeCompanyId: '', activeBranchId: null });
+          }
+        },
         saveCompany: (incoming) => {
           const s = get();
           const prev = s.companies.find((c) => c.id === incoming.id);

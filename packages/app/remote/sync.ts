@@ -451,8 +451,16 @@ async function pushAll(session: number): Promise<boolean> {
 async function pullNewCompanies(started: number) {
   const { data: me } = await api.GET('/me');
   assertSession(started);
+  // Only a real list says what's gone; an answer without one changes nothing here.
+  if (!Array.isArray(me?.companies)) return;
+  const listed = new Set((me.companies as { id?: string }[]).map((c) => c.id));
+  // Archived, or no longer theirs to open: it goes from this device too. One made here and not yet
+  // sent isn't on the server's list either, so it stays.
+  for (const c of useAppStore.getState().companies) {
+    if (!listed.has(c.id) && knownToServer(c.id)) useAppStore.getState().forgetCompany(c.id);
+  }
   const known = new Set(useAppStore.getState().companies.map((c) => c.id));
-  for (const { id } of (me?.companies ?? []) as { id?: string }[]) {
+  for (const id of listed) {
     if (id && !known.has(id)) await pullCompany(id, started);
   }
 }
