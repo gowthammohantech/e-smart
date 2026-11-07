@@ -6,6 +6,7 @@ import { useTheme } from '../theme/ThemeProvider';
 import { useIsDesktop } from '../theme/breakpoints';
 import { Button } from './Button';
 import { usePageAction } from './PageHeader';
+import { useToastClearance } from './Toast';
 
 /**
  * The bar under a form that holds its Save button. A phone pins it full
@@ -16,8 +17,11 @@ export function FormActions({ children }: { children: React.ReactNode }) {
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const desktop = useIsDesktop();
+  // A toast lands above the bar instead of over its Save button.
+  const onLayout = useToastClearance();
   return (
     <View
+      onLayout={desktop ? undefined : onLayout}
       style={
         desktop
           ? {
@@ -67,9 +71,11 @@ export function PrimaryActionBar({
   const insets = useSafeAreaInsets();
   const desktop = useIsDesktop();
   const hosted = usePageAction(desktop ? { label: title, icon, onPress, tooltip, loading } : null);
+  const onLayout = useToastClearance();
   if (hosted) return null;
   return (
     <View
+      onLayout={onLayout}
       style={{
         position: 'absolute',
         left: 0,

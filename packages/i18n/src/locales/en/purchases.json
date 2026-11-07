@@ -52,7 +52,7 @@
     "receipt": "Receipt",
     "receiptUploadFailed": "The receipt couldn't be uploaded: {{reason}} Remove it to save without it, or try again when you're online.",
     "receiptUploading": "Uploading the receipt…",
-    "receiptQueued": "Receipt will upload when you are back online. Expense saved.",
+    "receiptQueued": "Expense saved. Receipt uploads when online.",
     "noTax": "No tax",
     "receiptAttached": "Receipt attached",
     "receiptFor": "The receipt for {{number}}",

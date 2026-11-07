@@ -14,7 +14,7 @@ import { Stepper } from '@esmart/ui/components/Stepper';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { TotalsPanel } from '@esmart/ui/components/TotalsPanel';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
-import { useToast } from '@esmart/ui/components/Toast';
+import { useToast, useToastClearance } from '@esmart/ui/components/Toast';
 import { AmountField, PickerField, QuantityStepper, Segmented, SwitchField, TextField } from '@esmart/ui/components/Field';
 import { useDecimalText } from '../../components/useDecimalText';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
@@ -129,6 +129,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   const { t: tr } = useTranslation(['common', 'domain', 'sales', 'purchases']);
   const router = useRouter();
   const toast = useToast();
+  // The phone footer (total and buttons) is tall; a toast sits above it.
+  const onFooterLayout = useToastClearance();
   const { save: saveOnline, saving, release: releaseSave } = useSaveOnline();
   // View-only (no internet, offline not agreed to): the header's badge says so and offers offline mode.
   const blocked = !useCanWrite();
@@ -529,7 +531,11 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
     if (short.length) {
       return tr('sales:editor.insufficientStock', {
         date: formatDate(draft.date),
-        names: short.map((s) => tr('sales:editor.stockShort', { name: s.name, onHand: s.onHand, needed: s.needed, unit: s.unit })).join(', '),
+        // A long order would fill the screen; three names and a count are enough.
+          names: [
+            ...short.slice(0, 3).map((s) => tr('sales:editor.stockShort', { name: s.name, onHand: s.onHand, needed: s.needed, unit: s.unit })),
+            ...(short.length > 3 ? [tr('sales:editor.stockMore', { count: short.length - 3 })] : []),
+          ].join(', '),
       });
     }
     return undefined;
@@ -1485,6 +1491,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           </ScrollView>
 
           <View
+            onLayout={onFooterLayout}
             style={{
               paddingHorizontal: t.spacing.lg,
               paddingTop: t.spacing.md,

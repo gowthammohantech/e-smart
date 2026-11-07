@@ -70,7 +70,8 @@
     "roundOffAmountHint": "Enter a negative value to round down, e.g. -0.40.",
     "roundOffTooLarge": "Round-off must be less than {{amount}} either way.",
     "linesMissingHsn": "HSN/SAC is required on every line of a GST invoice. Missing on: {{names}}",
-    "insufficientStock": "Not enough stock at this branch on {{date}}: {{names}}. Add stock or turn on “Allow negative stock” in company settings.",
+    "insufficientStock": "Not enough stock on {{date}}: {{names}}. Add stock or allow negative stock in settings.",
+    "stockMore": "+{{count}} more",
     "stockShort": "{{name}} ({{onHand}} {{unit}} in stock, {{needed}} needed)",
     "itemInStock": "{{qty}} {{unit}} in stock",
     "itemLowStock": "Low stock · {{qty}} {{unit}} left",
@@ -222,7 +223,7 @@
       "eInvoiced": "Can't edit: it has an IRN (e-invoice)",
       "ewayBill": "Can't edit: it has an e-way bill",
       "returnFiled": "Can't edit: its GSTR-1 month is filed",
-      "laterStock": "Can't edit: its items have moved since, and stock is costed FIFO"
+      "laterStock": "Can't edit: its stock has moved since (FIFO)"
     },
     "creditApplications": {
       "title": "Credit notes adjusted",
@@ -315,7 +316,7 @@
     "adjustAdvance": "Adjust",
     "advanceAdjusted": "{{amount}} adjusted from advances",
     "advanceNothingToAdjust": "No advance could be adjusted",
-    "nothingLeftToApply": "The whole amount is already applied — increase the amount first",
+    "nothingLeftToApply": "All of it is applied. Increase the amount first",
     "currency": "Currency",
     "insufficientInAccount": "{{account}} has only {{balance}}",
     "insufficientBalance": "More than the balance of {{balance}}",

@@ -331,10 +331,7 @@ export default function OcrReview() {
           <Button title={tr('inventory:ocr.rescan')} variant="ghost" onPress={() => router.replace('/(app)/ocr/capture')} style={{ flex: 1 }} />
           <Button
             title={isExpense ? tr('purchases:ocr.createExpense') : tr('purchases:ocr.createBill')}
-            onPress={() => {
-              toast.show(tr('inventory:ocr.carriedFields'), 'success', { icon: 'text-box-check-outline' });
-              router.replace(isExpense ? '/(app)/expenses/new?fromScan=1' : '/(app)/purchases/bills/new?fromScan=1');
-            }}
+            onPress={create}
             style={{ flex: 2 }}
           />
         </View>

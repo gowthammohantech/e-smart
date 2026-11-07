@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import type { LayoutChangeEvent } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Icon } from './Icon';
 import { Toaster, sileo, type SileoOptions } from 'sileo';
@@ -44,7 +45,7 @@ if (typeof document !== 'undefined' && !document.getElementById('esmart-sileo'))
     [data-sileo-toast] { font: inherit; color: inherit; text-align: left; -webkit-tap-highlight-color: transparent; }
     [data-sileo-canvas] { filter: var(--esmart-toast-shadow); }
     [data-sileo-title] { text-transform: none; font-weight: 600; }
-    [data-sileo-description] { min-height: 50px; display: flex; flex-direction: column; justify-content: center; padding: 14px 16px; line-height: 1.4; }
+    [data-sileo-description] { min-height: 40px; display: flex; flex-direction: column; justify-content: center; padding: 10px 14px; line-height: 1.4; overflow-wrap: anywhere; }
     [data-sileo-viewport][data-theme="light"] [data-sileo-description] { color: rgba(255, 255, 255, 0.82); }
     [data-sileo-viewport][data-theme="dark"] [data-sileo-description] { color: rgba(20, 26, 36, 0.78); }
     [data-sileo-button] { width: 100%; height: 2.25rem; margin-top: 12px; padding: 0 12px; font-size: 0.8125rem; font-weight: 600; text-decoration: none; white-space: nowrap; }
@@ -302,6 +303,15 @@ function PageToaster({ children }: { children: React.ReactNode }) {
 
 // Outside a provider a toast goes nowhere, as in Toast.tsx.
 const silent: ToastApi = { show: () => {}, promise: (task) => task };
+
+/**
+ * A browser's toast drops in from the top, so a page's bottom bar never needs
+ * clearing; kept so screens call the same API on every platform.
+ */
+export function useToastClearance(): (e: LayoutChangeEvent) => void {
+  return noClearance;
+}
+const noClearance = () => {};
 
 export function useToast(): ToastApi {
   return useContext(ToastContext) ?? silent;

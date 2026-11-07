@@ -1,5 +1,5 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Animated, Pressable, View } from 'react-native';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Animated, Pressable, View, type LayoutChangeEvent } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from './Icon';
 import { useTheme } from '../theme/ThemeProvider';
@@ -24,10 +24,39 @@ const ToastContext = createContext<ToastApi>({
   promise: (task) => task,
 });
 
+/** Footers registered with useToastClearance, so the toast can sit above the tallest. */
+const ClearanceContext = createContext<(key: number, height: number) => void>(() => {});
+
 let nextId = 0;
+let nextFooter = 0;
+
+/** Where a toast sits above the bottom: clear of the tab bar, or of a taller footer. */
+const TAB_BAR_CLEARANCE = 88;
+/** How long a toast stays: long enough to read, never long enough to get in the way. */
+const readingTime = (text: string, detail?: string) => Math.min(5000, Math.max(2200, 60 * (text.length + (detail?.length ?? 0))));
+const TOAST_MAX_WIDTH = 420;
+
+/**
+ * For a screen's pinned bottom bar (FormActions, an editor's footer): put the
+ * returned handler on its onLayout and the toast lands above the bar instead
+ * of over its buttons.
+ */
+export function useToastClearance(): (e: LayoutChangeEvent) => void {
+  const register = useContext(ClearanceContext);
+  const [key] = useState(() => ++nextFooter);
+  useEffect(() => () => register(key, 0), [register, key]);
+  return useCallback((e: LayoutChangeEvent) => register(key, e.nativeEvent.layout.height), [register, key]);
+}
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [message, setMessage] = useState<ToastMessage | null>(null);
+  const footers = useRef(new Map<number, number>());
+  const [clearance, setClearance] = useState(0);
+  const register = useCallback((key: number, height: number) => {
+    if (height > 0) footers.current.set(key, height);
+    else footers.current.delete(key);
+    setClearance(Math.max(0, ...footers.current.values()));
+  }, []);
 
   const put = useCallback((text: string, tone: ToastMessage['tone'], options?: ToastOptions) => {
     // The id keys a remount, so a new message restarts the animation.
@@ -57,13 +86,15 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <ToastContext.Provider value={api}>
-      {children}
-      {message ? <ToastView key={message.id} message={message} onDone={done} /> : null}
+      <ClearanceContext.Provider value={register}>
+        {children}
+        {message ? <ToastView key={message.id} message={message} onDone={done} clearance={clearance} /> : null}
+      </ClearanceContext.Provider>
     </ToastContext.Provider>
   );
 }
 
-function ToastView({ message, onDone }: { message: ToastMessage; onDone: (id: number) => void }) {
+function ToastView({ message, onDone, clearance }: { message: ToastMessage; onDone: (id: number) => void; clearance: number }) {
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const [anim] = useState(() => new Animated.Value(0));
@@ -73,19 +104,21 @@ function ToastView({ message, onDone }: { message: ToastMessage; onDone: (id: nu
 
   useEffect(() => {
     const enter = Animated.spring(anim, { toValue: 1, useNativeDriver: true, damping: 18, stiffness: 220 });
-    // A toast with a button stays a little longer, so there is time to reach it.
+    // A long message stays long enough to read; one with a button a little
+    // longer, so there is time to reach it.
+    const hold = Math.max(readingTime(message.text, message.detail), message.action ? 4000 : 0);
     const run = sticky
       ? enter
       : Animated.sequence([
           enter,
-          Animated.delay(message.action ? 4000 : 2200),
+          Animated.delay(hold),
           Animated.timing(anim, { toValue: 0, duration: 180, useNativeDriver: true }),
         ]);
     run.start(({ finished }) => {
       if (finished && !sticky) onDone(message.id);
     });
     return () => run.stop();
-  }, [anim, onDone, message.id, message.action, sticky]);
+  }, [anim, onDone, message.id, message.action, message.text, message.detail, sticky]);
 
   const icon =
     message.icon ??
@@ -130,28 +163,37 @@ function ToastView({ message, onDone }: { message: ToastMessage; onDone: (id: nu
   const pointerEvents = message.action ? 'box-none' : 'none';
 
   return (
+    <View
+      pointerEvents="box-none"
+      style={{
+        position: 'absolute',
+        left: t.spacing.lg,
+        right: t.spacing.lg,
+        // Footers include the safe area in their height; the tab bar doesn't.
+        bottom: Math.max(insets.bottom + TAB_BAR_CLEARANCE, clearance + t.spacing.sm),
+        alignItems: 'center',
+      }}
+    >
     <Animated.View
       pointerEvents={pointerEvents}
       accessibilityLiveRegion="polite"
       style={[
         {
-          position: 'absolute',
-          left: t.spacing.lg,
-          right: t.spacing.lg,
-          bottom: insets.bottom + 88,
+          width: '100%',
+          maxWidth: TOAST_MAX_WIDTH,
           backgroundColor: t.c.paper,
           borderRadius: t.radius.md,
           borderWidth: 1,
           borderColor: t.c.line,
-          paddingVertical: t.spacing.md,
-          paddingHorizontal: t.spacing.lg,
+          paddingVertical: 10,
+          paddingHorizontal: 14,
           flexDirection: 'row',
           alignItems: 'center',
           gap: t.spacing.md,
           opacity: anim,
           transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) }],
         },
-        t.shadow.sheet,
+        t.shadow.card,
       ]}
     >
       {glyph}
@@ -165,6 +207,7 @@ function ToastView({ message, onDone }: { message: ToastMessage; onDone: (id: nu
       </View>
       {action}
     </Animated.View>
+    </View>
   );
 }
 

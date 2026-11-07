@@ -10,6 +10,6 @@ export function useWelcomeToast() {
   return useCallback(() => {
     const { session, users } = useAppStore.getState();
     const me = users.find((u) => u.id === session.userId);
-    toast.show(tr('auth:signIn.title'), 'success', { icon: 'hand-wave-outline', detail: me ? `${me.name} · ${me.email}` : undefined });
+    toast.show(tr('auth:signIn.title'), 'success', { icon: 'hand-wave-outline', detail: me?.name });
   }, [toast, tr]);
 }

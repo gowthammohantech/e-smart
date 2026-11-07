@@ -393,7 +393,11 @@ ${url}`;
       toast.show(
         tr('sales:editor.insufficientStock', {
           date: formatDate(doc.date),
-          names: short.map((x) => tr('sales:editor.stockShort', { name: x.name, onHand: x.onHand, needed: x.needed, unit: x.unit })).join(', '),
+          // A long order would fill the screen; three names and a count are enough.
+          names: [
+            ...short.slice(0, 3).map((x) => tr('sales:editor.stockShort', { name: x.name, onHand: x.onHand, needed: x.needed, unit: x.unit })),
+            ...(short.length > 3 ? [tr('sales:editor.stockMore', { count: short.length - 3 })] : []),
+          ].join(', '),
         }),
         'warning',
         { icon: 'package-variant-closed-remove' },

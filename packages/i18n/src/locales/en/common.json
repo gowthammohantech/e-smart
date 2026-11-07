@@ -87,7 +87,7 @@
     "numberLabel": "{{kind}} number",
     "finaliseTitle": "Finalise this {{kind, lowercase}}?",
     "finaliseMessage": "A permanent number will be assigned and the {{kind, lowercase}} can no longer be edited freely.",
-    "prefillMissingParty": "That customer isn't available any more. Pick one to continue.",
+    "prefillMissingParty": "That customer is gone. Pick another to continue.",
     "updatedIssued": "{{kind}} updated"
   },
   "documentDetail": {
@@ -102,7 +102,7 @@
     "sent": "On its way to the customer",
     "linkCopied": "Link copied",
     "noPayment": "No payment is taken against a {{kind}}.",
-    "issueFirst": "Issue it first; payment is recorded against an issued document.",
+    "issueFirst": "Issue it first to record a payment.",
     "nothingDue": "Nothing is due on this document."
   },
   "documentEmail": {
@@ -121,12 +121,12 @@
     "regards": "Regards,"
   },
   "save": {
-    "queued": "Saved on this device. It will sync when you are back online.",
+    "queued": "Saved on this device. Syncs when you're online.",
     "refused": "The server refused this: {{reason}}",
-    "refusedLater": "{{label}} wasn't saved: {{reason}}. It's waiting in Settings → Sync.",
-    "unreachable": "Couldn't reach the server, so this wasn't saved. Try again when you're connected.",
-    "unconfirmed": "Couldn't confirm with the server. If it went through, it will appear here shortly; check before entering it again.",
-    "paymentHeld": "Sent for approval. An owner or admin records the payment when they approve it."
+    "refusedLater": "{{label}} not saved: {{reason}}. See Settings → Sync.",
+    "unreachable": "Not saved: can't reach the server. Try again when online.",
+    "unconfirmed": "Not confirmed by the server. Check the list before entering it again.",
+    "paymentHeld": "Sent for approval. It's recorded once an owner or admin approves."
   },
   "component": {
     "confirm": "Confirm",
