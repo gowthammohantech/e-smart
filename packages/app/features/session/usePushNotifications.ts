@@ -22,7 +22,17 @@ export function usePushNotifications(signedIn: boolean) {
     };
     if (!launchHandled) {
       launchHandled = true;
-      void Notifications.getLastNotificationResponseAsync().then(open);
+      // The native side keeps the last tap until it is cleared, so without clearing it every later
+      // cold start would replay that old tap and land on its screen (usually Notifications).
+      try {
+        const last = Notifications.getLastNotificationResponse();
+        if (last) {
+          Notifications.clearLastNotificationResponse();
+          open(last);
+        }
+      } catch {
+        // Not available on this platform build; nothing to replay.
+      }
     }
     const sub = Notifications.addNotificationResponseReceivedListener(open);
     return () => sub.remove();
