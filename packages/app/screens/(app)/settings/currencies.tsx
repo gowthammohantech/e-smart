@@ -7,7 +7,8 @@ import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
 import { Badge } from '@esmart/ui/components/Badge';
-import { Button } from '@esmart/ui/components/Button';
+import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
+import { SheetActions } from '../../../features/company/SheetActions';
 import { PrimaryActionBar } from '@esmart/ui/components/ActionBar';
 import { ListRow } from '@esmart/ui/components/ListRow';
 import { Sheet } from '@esmart/ui/components/Sheet';
@@ -44,6 +45,7 @@ export default function CurrencySettings() {
   const [rate, setRate] = useState('');
   const [effectiveFrom, setEffectiveFrom] = useState(today());
   const [fromOpen, setFromOpen] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<ExchangeRate | null>(null);
 
   // Latest rate per currency pair, with its history for the sparkline.
   const pairs = useMemo(() => {
@@ -150,23 +152,23 @@ export default function CurrencySettings() {
         onClose={() => setEditing(null)}
         title={editing?.id ? tr('settings:currencies.editTitle') : tr('settings:currencies.add')}
         footer={
-          <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
-            {editing?.id ? (
-              <Button
-                title={tr('settings:currencies.delete')}
-                variant="danger"
-                style={{ flex: 1 }}
-                disabled={saving}
-                onPress={async () => {
-                  const id = editing.id;
-                  if (!id) return;
-                  const res = await serverSave(() => removeExchangeRate(id), tr('settings:currencies.deleted'), { icon: 'currency-usd-off' });
-                  if (res) setEditing(null);
-                }}
-              />
-            ) : null}
-            <Button shortcut="S" title={tr('settings:currencies.save')} onPress={save} loading={saving} disabled={!Number(rate) || saving} style={{ flex: 2 }} />
-          </View>
+          <SheetActions
+            saveLabel={tr('settings:currencies.save')}
+            onSave={save}
+            saving={saving}
+            saveDisabled={!Number(rate)}
+            deleteLabel={tr('settings:currencies.delete')}
+            onDelete={
+              editing?.id
+                ? () => {
+                    // Asked first, as every other delete in Settings is.
+                    const r = editing;
+                    setEditing(null);
+                    setConfirmDelete(r);
+                  }
+                : undefined
+            }
+          />
         }
       >
         <View style={{ padding: t.spacing.lg, gap: t.spacing.lg }}>
@@ -191,6 +193,20 @@ export default function CurrencySettings() {
         options={CURRENCIES.filter((c) => c.code !== baseCurrency).map((c) => ({ value: c.code, label: `${c.name} (${c.code})`, trailing: c.symbol }))}
         value={from}
         onSelect={setFrom}
+      />
+
+      <ConfirmDialog
+        visible={!!confirmDelete}
+        title={tr('settings:currencies.deleteTitle', { code: confirmDelete?.from ?? '', date: confirmDelete ? formatDate(confirmDelete.effectiveFrom) : '' })}
+        message={tr('settings:currencies.deleteMessage')}
+        confirmLabel={tr('settings:currencies.delete')}
+        destructive
+        onCancel={() => setConfirmDelete(null)}
+        onConfirm={() => {
+          const r = confirmDelete;
+          setConfirmDelete(null);
+          if (r) void serverSave(() => removeExchangeRate(r.id), tr('settings:currencies.deleted'), { icon: 'currency-usd-off' });
+        }}
       />
     </View>
   );

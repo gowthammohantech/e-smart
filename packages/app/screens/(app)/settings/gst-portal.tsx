@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { Stack } from 'expo-router';
 import type { Schema } from '@esmart/api-contract';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
@@ -15,6 +15,9 @@ import { formatDate } from '@esmart/core/lib/date';
 import { api } from '../../../remote/api';
 import { describeError } from '../../../remote/errors';
 import { useActiveCompany } from '../../../store/selectors';
+import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
+import { SkeletonGroup, SkeletonRows } from '@esmart/ui/components/Skeleton';
+import { LoadFailed } from '../../../features/company/LoadFailed';
 
 type Session = Schema<'GstPortalSession'>;
 
@@ -30,12 +33,15 @@ export default function GstPortalSettings() {
   const path = { companyId: company.id };
   const [sessions, setSessions] = useState<Session[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [confirmDisconnect, setConfirmDisconnect] = useState<string | null>(null);
   const [form, setForm] = useState<Record<string, { username: string; otp: string; sent: boolean }>>({});
 
   const load = useCallback(() => {
+    // A failure keeps whatever was showing, and offers a retry when nothing was.
     api.GET('/companies/{companyId}/gst/portal-sessions', { params: { path } }).then(
-      ({ data, error }) => (error ? toast.show(describeError(error, tr), 'error') : setSessions(data?.data ?? [])),
-      (err: unknown) => toast.show(describeError(err, tr), 'error'),
+      ({ data, error }) => (error ? setLoadFailed(true) : setSessions(data?.data ?? [])),
+      () => setLoadFailed(true),
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [company.id]);
@@ -69,10 +75,13 @@ export default function GstPortalSettings() {
       load();
     });
   const disconnect = (gstin: string) =>
-    run(gstin, () => api.DELETE('/companies/{companyId}/gst/portal-sessions/{gstin}', { params: { path: { ...path, gstin } } }), load);
+    run(gstin, () => api.DELETE('/companies/{companyId}/gst/portal-sessions/{gstin}', { params: { path: { ...path, gstin } } }), () => {
+      toast.show(tr('settings:gstPortal.disconnected'), 'success', { icon: 'link-variant-off' });
+      load();
+    });
 
   return (
-    <View style={{ flex: 1 }}>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Stack.Screen options={{ title: tr('nav:title.gstPortal') }} />
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40, gap: t.spacing.lg }} showsVerticalScrollIndicator={SHOW_SCROLLBAR} keyboardShouldPersistTaps="handled">
         <Card variant="flat" style={{ gap: t.spacing.sm }}>
@@ -83,6 +92,23 @@ export default function GstPortalSettings() {
             {tr('settings:gstPortal.how')}
           </Text>
         </Card>
+        {!sessions && loadFailed ? (
+          <Card padded={false}>
+            <LoadFailed
+              onRetry={() => {
+                setLoadFailed(false);
+                load();
+              }}
+              compact
+            />
+          </Card>
+        ) : !sessions ? (
+          <Card>
+            <SkeletonGroup>
+              <SkeletonRows rows={2} kind="list" />
+            </SkeletonGroup>
+          </Card>
+        ) : null}
         {sessions && !sessions.length ? (
           <Text variant="small" tone="muted">
             {tr('settings:gstPortal.noGstin')}
@@ -103,7 +129,7 @@ export default function GstPortalSettings() {
                   <Text variant="caption" tone="muted">
                     {tr('settings:gstPortal.until', { user: s.username, date: formatDate(s.refreshableUntil!) })}
                   </Text>
-                  <Button title={tr('settings:gstPortal.disconnect')} variant="secondary" onPress={() => void disconnect(s.gstin!)} loading={busy === s.gstin} />
+                  <Button title={tr('settings:gstPortal.disconnect')} variant="secondary" onPress={() => setConfirmDisconnect(s.gstin!)} loading={busy === s.gstin} />
                 </>
               ) : (
                 <>
@@ -122,6 +148,19 @@ export default function GstPortalSettings() {
           );
         })}
       </ScrollView>
-    </View>
+      <ConfirmDialog
+        visible={!!confirmDisconnect}
+        title={tr('settings:gstPortal.disconnectTitle', { gstin: confirmDisconnect ?? '' })}
+        message={tr('settings:gstPortal.disconnectBody')}
+        confirmLabel={tr('settings:gstPortal.disconnect')}
+        destructive
+        onCancel={() => setConfirmDisconnect(null)}
+        onConfirm={() => {
+          const g = confirmDisconnect;
+          setConfirmDisconnect(null);
+          if (g) void disconnect(g);
+        }}
+      />
+    </KeyboardAvoidingView>
   );
 }

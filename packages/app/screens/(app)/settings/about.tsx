@@ -35,7 +35,6 @@ export default function About() {
 
         <Card padded={false}>
           <ListRow title={tr('settings:about.version')} icon="information-outline" right={<Text variant="small" tone="muted">{label}</Text>} />
-          <ListRow title={tr('settings:about.platform')} icon="cellphone" right={<Text variant="small" tone="muted">{tr('settings:about.sdk')}</Text>} />
           <ListRow title={tr('settings:about.data')} icon="database-outline" right={<Text variant="small" tone="muted">{tr('settings:about.syncedData')}</Text>} divider={false} />
         </Card>
 

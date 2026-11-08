@@ -9,7 +9,7 @@ import { Card } from '@esmart/ui/components/Card';
 import { Badge } from '@esmart/ui/components/Badge';
 import { ListRow } from '@esmart/ui/components/ListRow';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
-import { useToast } from '@esmart/ui/components/Toast';
+import { useServerSave } from '../../../components/useServerSave';
 import { DeviceSession } from '@esmart/core/types';
 import { useAppStore } from '../../../store/appStore';
 import { formatRelative } from '@esmart/core/lib/date';
@@ -18,7 +18,7 @@ import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 export default function Devices() {
   const t = useTheme();
   const { t: tr } = useTranslation(['nav', 'settings']);
-  const toast = useToast();
+  const { run: serverSave } = useServerSave();
 
   const devices = useAppStore((s) => s.devices);
   const revokeDevice = useAppStore((s) => s.revokeDevice);
@@ -68,9 +68,10 @@ export default function Devices() {
         destructive
         onCancel={() => setConfirmRevoke(null)}
         onConfirm={() => {
-          if (confirmRevoke) revokeDevice(confirmRevoke.id);
+          const d = confirmRevoke;
           setConfirmRevoke(null);
-          toast.show(tr('settings:devices.signedOut'), 'success', { icon: 'cellphone-remove', detail: confirmRevoke?.label });
+          // "Signed out" only once the server has ended that session.
+          if (d) void serverSave(() => revokeDevice(d.id), tr('settings:devices.signedOut'), { icon: 'cellphone-remove', detail: d.label });
         }}
       />
     </View>

@@ -15,7 +15,9 @@ import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { Fab } from '@esmart/ui/components/Fab';
 import { Segmented } from '@esmart/ui/components/Field';
 import { Sheet } from '@esmart/ui/components/Sheet';
-import { useBaseCurrency } from '../../../store/selectors';
+import { useBaseCurrency, useCanOpen } from '../../../store/selectors';
+import { unitShortName } from '@esmart/core/data/masters';
+import { LoadFailed } from '../../../features/company/LoadFailed';
 import { useAppStore } from '../../../store/appStore';
 import { useItemPages, useServerReport } from '../../../remote/queries';
 import { useDebounced } from '../../../components/useDebounced';
@@ -33,7 +35,7 @@ const FILTERS: Filter[] = ['all', 'low', 'out', 'services'];
 
 export default function InventoryTab() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['inventory', 'common', 'nav']);
+  const { t: tr } = useTranslation(['inventory', 'common', 'nav', 'reports']);
   const router = useRouter();
 
   const baseCurrency = useBaseCurrency();
@@ -46,10 +48,14 @@ export default function InventoryTab() {
   const filter: Filter = FILTERS.includes(params.filter as Filter) ? (params.filter as Filter) : 'all';
   const setFilter = (f: Filter) => setParams({ filter: f === 'all' ? undefined : f });
   const [actionsOpen, setActionsOpen] = useState(false);
+  const canOpen = useCanOpen();
 
   // Worked out by the server: the figures from its stock report, the list a page at a time.
   const day = today();
-  const stockReport = useServerReport<{ totalValue?: Money; lowCount?: number; outCount?: number; trackedCount?: number }>('stock', { from: day, to: day, branchId }).data;
+  const stockQuery = useServerReport<{ totalValue?: Money; lowCount?: number; outCount?: number; trackedCount?: number }>('stock', { from: day, to: day, branchId });
+  const stockReport = stockQuery.data;
+  // Failed: a dash, never a ₹0 that reads as an empty store.
+  const reportFailed = !stockReport && stockQuery.isError;
   const report = {
     totalValue: stockReport?.totalValue ?? zero(baseCurrency),
     lowCount: stockReport?.lowCount ?? 0,
@@ -79,14 +85,20 @@ export default function InventoryTab() {
         scrollEventThrottle={200}
       >
         <StatRow>
-          <StatTile label={tr('inventory:hub.stockValue')} value={report.totalValue} icon="warehouse" loading={!stockReport} caption={tr('inventory:hub.trackedItems', { count: report.trackedCount })} />
+          <StatTile
+            label={tr('inventory:hub.stockValue')}
+            value={reportFailed ? '—' : report.totalValue}
+            icon="warehouse"
+            loading={!stockReport && !reportFailed}
+            caption={reportFailed ? tr('reports:dash.state.failedTitle') : tr('inventory:hub.trackedItems', { count: report.trackedCount })}
+          />
           <StatTile
             label={tr('inventory:hub.lowStock')}
-            value={String(report.lowCount)}
-            loading={!stockReport}
+            value={reportFailed ? '—' : String(report.lowCount)}
+            loading={!stockReport && !reportFailed}
             tone="warn"
             icon="alert-outline"
-            caption={tr('inventory:hub.outOfStock', { count: report.outCount })}
+            caption={reportFailed ? undefined : tr('inventory:hub.outOfStock', { count: report.outCount })}
             onPress={() => router.push('/(app)/inventory/low-stock')}
           />
         </StatRow>
@@ -100,11 +112,13 @@ export default function InventoryTab() {
             right={
               <Pressable
                 onPress={() => router.push('/(app)/inventory/scan')}
-                hitSlop={8}
+                // A full 44pt target, not just the glyph.
+                hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
                 accessibilityRole="button"
                 accessibilityLabel={tr('inventory:hub.scanBarcode')}
+                style={{ width: 44, height: 36, alignItems: 'center', justifyContent: 'center', marginRight: -t.spacing.sm }}
               >
-                <Icon name="barcode-scan" size={19} color={t.c.primary} />
+                <Icon name="barcode-scan" size={20} color={t.c.primary} />
               </Pressable>
             }
           />
@@ -121,10 +135,16 @@ export default function InventoryTab() {
           />
         </View>
 
-        <SectionHeader title={tr('inventory:hub.itemCount', { count: filtered.length })} action={tr('inventory:hub.movements')} onAction={() => router.push('/(app)/inventory/movements')} />
+        <SectionHeader
+          title={
+            // Only what's loaded is counted; more pages to come show as "50+ items".
+            pages.hasNextPage ? tr('inventory:hub.itemCountMore', { count: filtered.length }) : tr('inventory:hub.itemCount', { count: filtered.length })
+          } action={tr('inventory:hub.movements')} onAction={() => router.push('/(app)/inventory/movements')} />
 
         <Card padded={false}>
-          {pages.isLoading && !filtered.length ? (
+          {pages.isError && !filtered.length ? (
+            <LoadFailed onRetry={pages.refetch} compact />
+          ) : pages.isLoading && !filtered.length ? (
             <CardRowsSkeleton kind="list" />
           ) : filtered.length === 0 ? (
             <EmptyState
@@ -182,7 +202,7 @@ export default function InventoryTab() {
                       {item.name}
                     </Text>
                     <Text variant="caption" tone="muted" numberOfLines={1}>
-                      {item.sku} · {formatMoney(item.salePrice)} / {item.unit}
+                      {item.sku} · {formatMoney(item.salePrice)} / {unitShortName(item.unit) || item.unit}
                     </Text>
                   </View>
 
@@ -203,7 +223,7 @@ export default function InventoryTab() {
                           <Badge label={tr('inventory:hub.low')} tone="warning" size="sm" />
                         ) : (
                           <Text variant="micro" tone="muted">
-                            {item.unit}
+                            {unitShortName(item.unit) || item.unit}
                           </Text>
                         )}
                       </>
@@ -229,7 +249,10 @@ export default function InventoryTab() {
           { label: tr('inventory:hub.setOpeningStock'), icon: 'database-import-outline' as const, route: '/(app)/inventory/opening-stock' },
           { label: tr('inventory:hub.scanBarcode'), icon: 'barcode-scan' as const, route: '/(app)/inventory/scan' },
           { label: tr('nav:title.stockMovements'), icon: 'format-list-bulleted' as const, route: '/(app)/inventory/movements' },
-        ].map((a) => (
+        ]
+          // Only what this plan and these modules can open, as Home's sheet does.
+          .filter((a) => canOpen(a.route))
+          .map((a) => (
           <Pressable
             key={a.label}
             onPress={() => {
@@ -247,8 +270,19 @@ export default function InventoryTab() {
               backgroundColor: pressed ? t.c.card2 : 'transparent',
             })}
           >
-            <Icon name={a.icon} size={20} color={t.c.primary} />
-            <Text variant="body" style={{ flex: 1 }}>
+            <View
+              style={{
+                width: 38,
+                height: 38,
+                borderRadius: t.radius.sm,
+                backgroundColor: t.c.chip,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Icon name={a.icon} size={20} color={t.c.primary} />
+            </View>
+            <Text variant="body" weight="500" style={{ flex: 1 }}>
               {a.label}
             </Text>
             <Icon name="chevron-right" size={18} color={t.c.muted} />

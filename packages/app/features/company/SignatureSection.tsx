@@ -9,6 +9,7 @@ import { Icon } from '@esmart/ui/components/Icon';
 import { Sheet } from '@esmart/ui/components/Sheet';
 import { Text } from '@esmart/ui/components/Text';
 import { useToast } from '@esmart/ui/components/Toast';
+import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { isNetworkError } from '../../remote/api';
 import { LogoError } from '../../remote/logo';
 import { removeSignature, uploadSignature } from '../../remote/signature';
@@ -32,10 +33,13 @@ export function SignatureSection() {
   const toast = useToast();
   const company = useActiveCompany();
   const user = useCurrentUser();
-  const [busy, setBusy] = useState(false);
+  // Which action is running: only its own button spins.
+  const [busy, setBusy] = useState<false | 'upload' | 'remove'>(false);
   // Picked and waiting to be confirmed.
   const [pending, setPending] = useState<string | null>(null);
   const [viewing, setViewing] = useState(false);
+  // Removing takes the signature off every document at once: asked first.
+  const [confirmRemove, setConfirmRemove] = useState(false);
   if (!company || !(user?.role === 'owner' || user?.role === 'admin')) return null;
 
   const errorText = (err: unknown) =>
@@ -55,7 +59,7 @@ export function SignatureSection() {
     if (!pending) return;
     const uri = pending;
     setPending(null);
-    setBusy(true);
+    setBusy('upload');
     await toast
       .promise(uploadSignature(company.id, uri), {
         loading: tr('settings:company.signatureUploading'),
@@ -68,10 +72,10 @@ export function SignatureSection() {
   };
 
   const remove = async () => {
-    setBusy(true);
+    setBusy('remove');
     await toast
       .promise(removeSignature(company.id), {
-        loading: tr('settings:company.signatureRemove'),
+        loading: tr('settings:company.signatureRemoving'),
         success: { text: tr('settings:company.signatureRemoved'), detail: company.name },
         error: errorText,
         icon: 'image-remove',
@@ -117,9 +121,12 @@ export function SignatureSection() {
             size="sm"
             icon="signature"
             onPress={choose}
-            loading={busy}
+            loading={busy === 'upload'}
+            disabled={!!busy}
           />
-          {company.signatureUri ? <Button title={tr('settings:company.signatureRemove')} variant="ghost" size="sm" onPress={remove} disabled={busy} /> : null}
+          {company.signatureUri ? (
+            <Button title={tr('settings:company.signatureRemove')} variant="ghost" size="sm" onPress={() => setConfirmRemove(true)} loading={busy === 'remove'} disabled={!!busy} />
+          ) : null}
         </View>
       </View>
 
@@ -144,6 +151,18 @@ export function SignatureSection() {
           </View>
         ) : null}
       </Sheet>
+      <ConfirmDialog
+        visible={confirmRemove}
+        title={tr('settings:company.signatureRemoveTitle')}
+        message={tr('settings:company.signatureRemoveBody')}
+        confirmLabel={tr('settings:company.signatureRemove')}
+        destructive
+        onCancel={() => setConfirmRemove(false)}
+        onConfirm={() => {
+          setConfirmRemove(false);
+          void remove();
+        }}
+      />
     </Card>
   );
 }

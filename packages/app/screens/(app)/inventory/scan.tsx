@@ -8,9 +8,11 @@ import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
 import { Badge } from '@esmart/ui/components/Badge';
 import { TextField } from '@esmart/ui/components/Field';
-import { EmptyState } from '@esmart/ui/components/EmptyState';
+import { EmptyState, SkeletonList } from '@esmart/ui/components/EmptyState';
 import { Illustration } from '@esmart/ui/components/Illustration';
 import { useItemPages } from '../../../remote/queries';
+import { useDebounced } from '../../../components/useDebounced';
+import { unitShortName } from '@esmart/core/data/masters';
 import type { Item } from '@esmart/core/types';
 import { formatMoney, formatQty } from '@esmart/core/lib/format';
 
@@ -28,8 +30,13 @@ export default function ScanBarcode() {
   // Samples from the first page of items; the code typed is looked up on the server, exactly.
   const firstPage = useItemPages({}).rows as unknown as (Item & { stockOnHand?: number })[];
   const withBarcodes = firstPage.filter((i) => i.barcode);
-  const found = useItemPages({ barcode: code.trim() }, !!code.trim()).rows as unknown as (Item & { stockOnHand?: number })[];
-  const match = code.trim() ? found[0] : undefined;
+  // Looked up once typing pauses, not on every keystroke.
+  const lookup = useDebounced(code.trim());
+  const foundPages = useItemPages({ barcode: lookup }, !!lookup);
+  const found = foundPages.rows as unknown as (Item & { stockOnHand?: number })[];
+  // Typing ahead of the lookup, or the lookup on its way: no "No item" yet.
+  const searching = !!code.trim() && (lookup !== code.trim() || foundPages.isFetching);
+  const match = code.trim() && !searching ? found[0] : undefined;
   const stock: Record<string, number> = match ? { [match.id]: match.stockOnHand ?? 0 } : {};
 
   return (
@@ -49,14 +56,19 @@ export default function ScanBarcode() {
           variant="flat"
         >
           <Illustration name="scanning" size="full" />
-          <Text variant="body" weight="600">{tr('inventory:scan.pointCamera')}</Text>
+          {/* No camera yet: say what this screen does, not "point the camera". */}
+          <Text variant="body" weight="600">{tr('inventory:scan.lookUp')}</Text>
           <Text variant="caption" tone="muted" center style={{ maxWidth: 260, lineHeight: 18 }}>{tr('inventory:scan.manualNote')}</Text>
         </Card>
 
         <TextField label={tr('inventory:scan.barcode')} value={code} onChangeText={setCode} placeholder={tr('inventory:scan.barcodePlaceholder')} icon="barcode" autoFocus />
 
         {code.trim().length > 0 ? (
-          match ? (
+          searching ? (
+            <Card padded={false}>
+              <SkeletonList rows={1} />
+            </Card>
+          ) : match ? (
             <Card
               onPress={() => router.push(`/(app)/catalog/items/${match.id}`)}
               style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}
@@ -78,7 +90,7 @@ export default function ScanBarcode() {
                   {match.name}
                 </Text>
                 <Text variant="caption" tone="muted">
-                  {formatMoney(match.salePrice)} · {tr('inventory:scan.inStock', { qty: formatQty(stock[match.id] ?? 0), unit: match.unit })}
+                  {formatMoney(match.salePrice)} · {tr('inventory:scan.inStock', { qty: formatQty(stock[match.id] ?? 0), unit: unitShortName(match.unit) || match.unit })}
                 </Text>
               </View>
               <Icon name="chevron-right" size={18} color={t.c.muted} />
@@ -98,7 +110,9 @@ export default function ScanBarcode() {
           )
         ) : null}
 
-        <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('inventory:scan.tryOne')}</Text>
+        {withBarcodes.length > 0 ? (
+        <>
+        <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('inventory:scan.yourBarcodes')}</Text>
         <Card padded={false}>
           {withBarcodes.slice(0, 8).map((i, idx) => (
             <Pressable
@@ -128,6 +142,8 @@ export default function ScanBarcode() {
             </Pressable>
           ))}
         </Card>
+        </>
+        ) : null}
       </ScrollView>
     </View>
   );

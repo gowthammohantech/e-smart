@@ -20,6 +20,8 @@ import { formatMoney, formatQty } from '@esmart/core/lib/format';
 import { multiply } from '@esmart/core/lib/money';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { CardRowsSkeleton } from '../../../components/ScreenSkeleton';
+import { unitShortName } from '@esmart/core/data/masters';
+import { LoadFailed } from '../../../features/company/LoadFailed';
 
 export default function LowStock() {
   const t = useTheme();
@@ -33,9 +35,11 @@ export default function LowStock() {
 
   // The server's stock report: every tracked item with what's on hand and whether it is low.
   const day = today();
-  const report = useServerReport<{ rows?: { item: Item; onHand: number; low: boolean }[]; outCount?: number }>('stock', { from: day, to: day, branchId }).data;
+  const reportQuery = useServerReport<{ rows?: { item: Item; onHand: number; low: boolean }[]; outCount?: number }>('stock', { from: day, to: day, branchId });
+  const report = reportQuery.data;
   // Until the first answer, no "all stocked" and no zero tiles: shapes where they'll be.
-  const loading = !report;
+  const failed = !report && reportQuery.isError;
+  const loading = !report && !failed;
   const rows = useMemo(
     () => (report?.rows ?? []).filter((r) => r.low && r.item.status === 'active').sort((a, b) => a.onHand - b.onHand),
     [report],
@@ -55,6 +59,12 @@ export default function LowStock() {
       <Stack.Screen options={{ title: tr('nav:title.lowStock') }} />
 
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 + insets.bottom }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
+        {failed ? (
+          <Card padded={false}>
+            <LoadFailed onRetry={reportQuery.refetch} />
+          </Card>
+        ) : (
+        <>
         <StatRow>
           <StatTile label={tr('inventory:lowStock.needAttention')} value={String(rows.length)} tone="warn" icon="alert-outline" caption={tr('inventory:hub.outOfStock', { count: report?.outCount ?? 0 })} loading={loading} />
           <StatTile
@@ -109,7 +119,7 @@ export default function LowStock() {
                       {r.item.name}
                     </Text>
                     <Text variant="caption" tone="muted">
-                      {r.item.sku} · {tr('inventory:lowStock.reorderAt', { qty: formatQty(r.item.reorderLevel), unit: r.item.unit })}
+                      {r.item.sku} · {tr('inventory:lowStock.reorderAt', { qty: formatQty(r.item.reorderLevel), unit: unitShortName(r.item.unit) || r.item.unit })}
                     </Text>
                   </View>
                   <View style={{ alignItems: 'flex-end', gap: 4 }}>
@@ -129,6 +139,8 @@ export default function LowStock() {
             })
           )}
         </Card>
+        </>
+        )}
       </ScrollView>
 
       {rows.length > 0 ? (

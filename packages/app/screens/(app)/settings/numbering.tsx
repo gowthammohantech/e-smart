@@ -15,7 +15,7 @@ import { NumberingSeries } from '@esmart/core/types';
 import { formatNumber } from '@esmart/core/domain/numbering';
 import { seriesLabel } from '@esmart/core/labels';
 import { useAppStore } from '../../../store/appStore';
-import { useBranches, useNumberingSeries } from '../../../store/selectors';
+import { useBranches, useComplianceSettings, useNumberingSeries } from '../../../store/selectors';
 import { today, financialYearOf } from '@esmart/core/lib/date';
 import { E_INVOICE_DOC_NUMBER_MAX, sanitizePrefix } from '@esmart/core/lib/validators';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
@@ -71,8 +71,16 @@ export default function NumberingSettings() {
       }
     : null;
 
+  // Back below a number already issued, on the same prefix, would hand out that number twice.
+  const belowIssued = !!editing && !!draft && draft.prefix === editing.prefix && draft.nextNumber < editing.nextNumber;
+  const numberError = belowIssued ? tr('settings:numbering.belowIssued', { number: editing!.nextNumber }) : undefined;
+  // The IRP takes document numbers of up to 16 characters: with e-invoicing on, longer can't be saved.
+  const eInvoicing = !!useComplianceSettings().eInvoiceEnabled;
+  const tooLong = !!draft && formatNumber(draft, { date: today(), branchCode }).length > E_INVOICE_DOC_NUMBER_MAX;
+  const prefixError = tooLong && eInvoicing ? tr('settings:numbering.tooLongForEInvoice', { count: E_INVOICE_DOC_NUMBER_MAX }) : undefined;
+
   const save = async () => {
-    if (!draft) return;
+    if (!draft || numberError || prefixError) return;
     // The sheet stays open until the server has it, so a refusal can be fixed here.
     const res = await serverSave(
       () => saveNumberingSeries(draft),
@@ -117,7 +125,7 @@ export default function NumberingSettings() {
         visible={!!editing}
         onClose={() => setEditing(null)}
         title={editing ? seriesLabel(tr, editing.kind) : ''}
-        footer={<Button shortcut="S" title={tr('settings:numbering.save')} onPress={save} loading={saving} disabled={saving} fullWidth />}
+        footer={<Button shortcut="S" title={tr('settings:numbering.save')} onPress={save} loading={saving} disabled={saving || !!numberError || !!prefixError} fullWidth />}
       >
         <View style={{ padding: t.spacing.lg, gap: t.spacing.lg }}>
           <Card style={{ alignItems: 'center', gap: 6, paddingVertical: t.spacing.xl }}>
@@ -132,11 +140,8 @@ export default function NumberingSettings() {
               label={tr('settings:numbering.prefix')}
               value={prefix}
               onChangeText={(v) => setPrefix(sanitizePrefix(v))}
-              hint={
-                draft && formatNumber(draft, { date: today(), branchCode }).length > E_INVOICE_DOC_NUMBER_MAX
-                  ? tr('settings:numbering.tooLongForEInvoice', { count: E_INVOICE_DOC_NUMBER_MAX })
-                  : undefined
-              }
+              error={prefixError}
+              hint={tooLong && !eInvoicing ? tr('settings:numbering.tooLongForEInvoice', { count: E_INVOICE_DOC_NUMBER_MAX }) : undefined}
               autoCapitalize="characters"
               containerStyle={{ flex: 1 }}
             />
@@ -144,6 +149,7 @@ export default function NumberingSettings() {
               label={tr('settings:numbering.nextNumber')}
               value={nextNumber}
               onChangeText={(v) => setNextNumber(v.replace(/[^0-9]/g, ''))}
+              error={numberError}
               keyboardType="number-pad"
               containerStyle={{ flex: 1 }}
             />

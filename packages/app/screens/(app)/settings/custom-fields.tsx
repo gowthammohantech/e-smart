@@ -4,7 +4,7 @@ import { ScrollView, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Badge } from '@esmart/ui/components/Badge';
-import { Button } from '@esmart/ui/components/Button';
+import { PrimaryActionBar } from '@esmart/ui/components/ActionBar';
 import { Card } from '@esmart/ui/components/Card';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { Segmented, SwitchField, TextField } from '@esmart/ui/components/Field';
@@ -18,6 +18,8 @@ import type { CustomField, CustomFieldEntity, CustomFieldKind } from '@esmart/co
 import { useServerSave } from '../../../components/useServerSave';
 import { useAppStore } from '../../../store/appStore';
 import { useCustomFields } from '../../../features/customFields/CustomFieldsSection';
+import { SheetActions } from '../../../features/company/SheetActions';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const ENTITIES: CustomFieldEntity[] = ['party', 'item', 'document'];
 const KINDS: CustomFieldKind[] = ['text', 'number', 'date', 'select', 'checkbox'];
@@ -25,6 +27,7 @@ const KINDS: CustomFieldKind[] = ['text', 'number', 'date', 'select', 'checkbox'
 /** The company's own fields: what each kind of record asks for besides the usual, and what prints. */
 export default function CustomFieldsScreen() {
   const t = useTheme();
+  const insets = useSafeAreaInsets();
   const { t: tr } = useTranslation(['settings']);
   const [entity, setEntity] = useState<CustomFieldEntity>('document');
   const fields = useCustomFields(entity, true);
@@ -52,7 +55,7 @@ export default function CustomFieldsScreen() {
   return (
     <FormContainer style={{ maxWidth: '100%' }}>
       <Stack.Screen options={{ title: tr('settings:customFields.title') }} />
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, gap: t.spacing.lg }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
+      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 + insets.bottom, gap: t.spacing.lg }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <Text variant="small" tone="muted">
           {tr('settings:customFields.hint')}
         </Text>
@@ -76,12 +79,36 @@ export default function CustomFieldsScreen() {
             {tr('settings:customFields.empty')}
           </Text>
         )}
-        <Button title={tr('settings:customFields.add')} icon="plus" variant="secondary" onPress={() => open()} />
       </ScrollView>
 
-      <Sheet visible={!!editing} onClose={() => setEditing(null)} title={isNew ? tr('settings:customFields.add') : (editing?.label ?? '')}>
+      <PrimaryActionBar title={tr('settings:customFields.add')} icon="plus" onPress={() => open()} />
+
+      <Sheet
+        visible={!!editing}
+        onClose={() => setEditing(null)}
+        title={isNew ? tr('settings:customFields.add') : (editing?.label ?? '')}
+        footer={
+          editing ? (
+            <SheetActions
+              saveLabel={tr('settings:customFields.save')}
+              onSave={save}
+              saving={saving}
+              saveDisabled={!editing.label.trim()}
+              deleteLabel={tr('settings:customFields.delete')}
+              onDelete={
+                isNew
+                  ? undefined
+                  : () => {
+                      setDeleting(editing);
+                      setEditing(null);
+                    }
+              }
+            />
+          ) : undefined
+        }
+      >
         {editing ? (
-          <View style={{ gap: t.spacing.md, paddingBottom: t.spacing.lg }}>
+          <View style={{ padding: t.spacing.lg, gap: t.spacing.md }}>
             <TextField label={tr('settings:customFields.label')} value={editing.label} onChangeText={(label) => setEditing({ ...editing, label })} maxLength={60} />
             {isNew ? (
               <Segmented options={KINDS.map((k) => ({ value: k, label: tr(`settings:customFields.kind.${k}`) }))} value={editing.kind} onChange={(v) => setEditing({ ...editing, kind: v as CustomFieldKind })} />
@@ -98,8 +125,6 @@ export default function CustomFieldsScreen() {
             {!isNew ? (
               <SwitchField label={tr('settings:customFields.active')} description={tr('settings:customFields.activeHint')} value={(editing.status ?? 'active') === 'active'} onValueChange={(on) => setEditing({ ...editing, status: on ? 'active' : 'inactive' })} />
             ) : null}
-            <Button title={tr('settings:customFields.save')} onPress={() => void save()} loading={saving} disabled={saving || !editing.label.trim()} fullWidth />
-            {!isNew ? <Button title={tr('settings:customFields.delete')} variant="ghost" onPress={() => { setDeleting(editing); setEditing(null); }} /> : null}
           </View>
         ) : null}
       </Sheet>

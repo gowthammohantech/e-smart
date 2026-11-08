@@ -7,7 +7,6 @@ import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
 import { Badge } from '@esmart/ui/components/Badge';
-import { Button } from '@esmart/ui/components/Button';
 import { PrimaryActionBar } from '@esmart/ui/components/ActionBar';
 import { ListRow } from '@esmart/ui/components/ListRow';
 import { Sheet } from '@esmart/ui/components/Sheet';
@@ -29,12 +28,13 @@ import { citiesForState } from '@esmart/core/data/cities';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { useGstinLookup, type GstinDetails } from '../../../features/gstin/useGstinLookup';
 import { useSaveShortcut } from '../../../components/useSaveShortcut';
+import { SheetActions } from '../../../features/company/SheetActions';
 import { useServerSave } from '../../../components/useServerSave';
 
 export default function BranchSettings() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
-  const { t: tr } = useTranslation(['nav', 'settings']);
+  const { t: tr } = useTranslation(['nav', 'settings', 'errors']);
   const { run: serverSave, saving } = useServerSave();
 
   const company = useActiveCompany();
@@ -113,7 +113,12 @@ export default function BranchSettings() {
   const gstinLookup = useGstinLookup({ gstin, opened: editing?.gstin, enabled: !!editing && !locked, fill: fillFromPortal });
 
   const save = async () => {
-    if (!editing || !name.trim()) return;
+    if (!editing) return;
+    // An empty name says so on the field, rather than a Save that silently does nothing.
+    if (!name.trim()) {
+      setErrors({ name: tr('errors:validation.required', { field: tr('settings:branches.name') }) });
+      return;
+    }
     if (locked) {
       // Only the name is the person's to change here; the server keeps the rest as it is too.
       const taken = branches.some((b) => b.id !== editing.id && b.name.trim().toLowerCase() === name.trim().toLowerCase());
@@ -182,7 +187,7 @@ export default function BranchSettings() {
   const docCount = (branchId: string) => usage?.documentsByBranch[branchId] ?? 0;
 
   // Ctrl+S (⌘+S) does what Save does, while the form is open.
-  useSaveShortcut(save, !!editing && !!name.trim());
+  useSaveShortcut(save, !!editing);
 
   return (
     <View style={{ flex: 1 }}>
@@ -208,13 +213,13 @@ export default function BranchSettings() {
               <ListRow
                 key={b.id}
                 title={b.name}
-                subtitle={[b.code, b.address.line1, b.address.city, b.gstin].filter(Boolean).join(' · ')}
-                meta={`${docCount(b.id)} documents`}
+                // The GSTIN first, where it isn't cut off; the street is on the branch itself.
+                subtitle={[b.gstin, b.code, b.address.city].filter(Boolean).join(' · ')}
+                meta={tr('settings:branches.docCount', { count: docCount(b.id) })}
                 icon={b.isPrimary ? 'office-building-outline' : 'warehouse'}
                 divider={i < branches.length - 1}
                 right={b.isPrimary ? <Badge label={tr('settings:branches.primary')} tone="info" size="sm" /> : undefined}
                 onPress={() => open(b)}
-                onLongPress={() => (b.isPrimary || locked ? undefined : setConfirmDelete(b))}
                 chevron
               />
             ))
@@ -234,21 +239,21 @@ export default function BranchSettings() {
         onClose={() => setEditing(null)}
         title={editing?.id ? tr('settings:branches.editTitle') : tr('settings:branches.addTitle')}
         footer={
-          <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
-            {editing?.id && !editing.isPrimary && !locked ? (
-              <Button
-                title={tr('settings:branches.delete')}
-                variant="danger"
-                style={{ flex: 1 }}
-                onPress={() => {
-                  const b = editing;
-                  setEditing(null);
-                  setConfirmDelete(b);
-                }}
-              />
-            ) : null}
-            <Button shortcut="S" title={tr('settings:branches.save')} onPress={save} loading={saving} disabled={!name.trim() || saving} style={{ flex: 2 }} />
-          </View>
+          <SheetActions
+            saveLabel={tr('settings:branches.save')}
+            onSave={save}
+            saving={saving}
+            deleteLabel={tr('settings:branches.delete')}
+            onDelete={
+              editing?.id && !editing.isPrimary && !locked
+                ? () => {
+                    const b = editing;
+                    setEditing(null);
+                    setConfirmDelete(b);
+                  }
+                : undefined
+            }
+          />
         }
       >
         <View style={{ padding: t.spacing.lg, gap: t.spacing.lg }}>

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 import { Stack } from 'expo-router';
@@ -7,6 +7,7 @@ import { Card } from '@esmart/ui/components/Card';
 import { SwitchField } from '@esmart/ui/components/Field';
 import { Text } from '@esmart/ui/components/Text';
 import { FormContainer } from '@esmart/ui/components/Layout';
+import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { MODULE_DEPENDS, MODULES, dependentsOf, hasModule, type Module } from '@esmart/core/domain/plan';
 import { moduleLabel } from '@esmart/core/labels';
@@ -28,6 +29,10 @@ export default function ModulesScreen() {
   const saveCompany = useAppStore((s) => s.saveCompany);
   const { run: serverSave, saving } = useServerSave();
   const inPlan = MODULES.filter((m) => hasModule(plan, m));
+
+  // Switching off hides a part of the app (and what depends on it) for everyone: asked first.
+  const [confirmOff, setConfirmOff] = useState<Module | null>(null);
+  const offTakes = confirmOff ? dependentsOf(confirmOff).filter((d) => inPlan.includes(d) && !disabled.includes(d)) : [];
 
   const toggle = (module: Module, on: boolean) => {
     // Off takes what depends on it along; on brings back what it needs.
@@ -54,7 +59,7 @@ export default function ModulesScreen() {
                   label={moduleLabel(tr, m)}
                   description={[tr(`settings:modules.about.${m}`), needs.length ? tr('settings:modules.needs', { list: needs.join(', ') }) : '', takes.length ? tr('settings:modules.takes', { list: takes.join(', ') }) : ''].filter(Boolean).join(' ')}
                   value={!disabled.includes(m)}
-                  onValueChange={(on) => toggle(m, on)}
+                  onValueChange={(on) => (on ? toggle(m, true) : setConfirmOff(m))}
                   disabled={!owner || saving}
                 />
               </View>
@@ -62,6 +67,23 @@ export default function ModulesScreen() {
           })}
         </Card>
       </ScrollView>
+      <ConfirmDialog
+        visible={!!confirmOff}
+        title={confirmOff ? tr('settings:modules.offTitle', { module: moduleLabel(tr, confirmOff) }) : ''}
+        message={
+          [tr('settings:modules.offBody'), offTakes.length ? tr('settings:modules.takes', { list: offTakes.map((d) => moduleLabel(tr, d)).join(', ') }) : '']
+            .filter(Boolean)
+            .join(' ')
+        }
+        confirmLabel={tr('settings:modules.offConfirm')}
+        destructive
+        onCancel={() => setConfirmOff(null)}
+        onConfirm={() => {
+          const m = confirmOff;
+          setConfirmOff(null);
+          if (m) toggle(m, false);
+        }}
+      />
     </FormContainer>
   );
 }

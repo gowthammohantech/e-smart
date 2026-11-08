@@ -20,6 +20,7 @@ import { formatQty } from '@esmart/core/lib/format';
 import { formatDate } from '@esmart/core/lib/date';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { CardRowsSkeleton, MoreRowsSkeleton } from '../../../components/ScreenSkeleton';
+import { LoadFailed } from '../../../features/company/LoadFailed';
 
 const TYPES: (StockMovementType | 'all')[] = ['all', 'purchaseReceipt', 'salesIssue', 'adjustment', 'transferIn', 'transferOut', 'salesReturn', 'purchaseReturn', 'opening'];
 
@@ -60,9 +61,11 @@ export default function StockMovements() {
                 onPress={() => setType(ty)}
                 accessibilityRole="button"
                 accessibilityState={{ selected: active }}
+                hitSlop={{ top: 4, bottom: 4 }}
                 style={{
                   paddingHorizontal: t.spacing.md,
-                  paddingVertical: 6,
+                  minHeight: 36,
+                  justifyContent: 'center',
                   borderRadius: t.radius.pill,
                   backgroundColor: active ? t.c.primary : t.c.card,
                   borderWidth: active ? 0 : 1,
@@ -77,7 +80,8 @@ export default function StockMovements() {
           })}
         </ScrollView>
         <Text variant="caption" tone="muted">
-          {tr('inventory:movements.count', { count: filtered.length })}
+          {/* What's loaded so far; more pages to come read "50+ movements". */}
+          {pages.hasNextPage ? tr('inventory:movements.countMore', { count: filtered.length }) : tr('inventory:movements.count', { count: filtered.length })}
         </Text>
       </View>
 
@@ -91,7 +95,9 @@ export default function StockMovements() {
         scrollEventThrottle={200}
       >
         <Card padded={false}>
-          {pages.isLoading && !filtered.length ? (
+          {pages.isError && !filtered.length ? (
+            <LoadFailed onRetry={pages.refetch} compact />
+          ) : pages.isLoading && !filtered.length ? (
             <CardRowsSkeleton kind="list" />
           ) : filtered.length === 0 ? (
             <EmptyState illustration="no-movements" icon="swap-vertical" title={tr('inventory:movements.none')} message={tr('inventory:movements.noneBody')} compact />

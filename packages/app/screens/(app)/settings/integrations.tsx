@@ -7,7 +7,7 @@ import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
 import { Badge } from '@esmart/ui/components/Badge';
-import { useToast } from '@esmart/ui/components/Toast';
+import { useServerSave } from '../../../components/useServerSave';
 import { useAppStore } from '../../../store/appStore';
 import { useComplianceSettings } from '../../../store/selectors';
 import { Integration } from '@esmart/core/types';
@@ -27,7 +27,7 @@ const PORTAL_OF: Record<string, 'einvoice' | 'ewaybill'> = { int_einvoice: 'einv
 export default function Integrations() {
   const t = useTheme();
   const { t: tr } = useTranslation(['nav', 'settings']);
-  const toast = useToast();
+  const { run: serverSave } = useServerSave();
   const router = useRouter();
 
   const integrations = useAppStore((s) => s.integrations);
@@ -108,8 +108,8 @@ export default function Integrations() {
                           onPress={() => openConfig(i)}
                           accessibilityRole="button"
                           accessibilityLabel={tr('settings:integrations.configureNamed', { name: i.name })}
-                          hitSlop={6}
-                          style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}
+                          // A 44pt target, though it reads as a link.
+                          style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 4, minHeight: 44, paddingRight: t.spacing.md, marginVertical: -t.spacing.sm }}
                         >
                           <Text variant="caption" tone="primary" weight="600">{tr('settings:integrations.configure')}</Text>
                           <Icon name="chevron-right" size={14} color={t.c.primary} />
@@ -127,8 +127,12 @@ export default function Integrations() {
                           openConfig(i);
                           return;
                         }
-                        toggleIntegration(i.id);
-                        toast.show(i.connected ? tr('settings:integrations.disconnectedNamed', { name: i.name }) : tr('settings:integrations.connectedNamed', { name: i.name }), 'success', { icon: i.connected ? 'link-variant-off' : 'link-variant' });
+                        // Connected or disconnected only once the server has it.
+                        void serverSave(
+                          () => toggleIntegration(i.id),
+                          i.connected ? tr('settings:integrations.disconnectedNamed', { name: i.name }) : tr('settings:integrations.connectedNamed', { name: i.name }),
+                          { icon: i.connected ? 'link-variant-off' : 'link-variant' },
+                        );
                       }}
                       trackColor={{ true: t.c.primary, false: t.c.line }}
                       thumbColor="#FFFFFF"

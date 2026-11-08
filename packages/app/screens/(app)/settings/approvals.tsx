@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Button } from '@esmart/ui/components/Button';
+import { FormActions } from '@esmart/ui/components/ActionBar';
+import { useSaveShortcut } from '../../../components/useSaveShortcut';
 import { Card } from '@esmart/ui/components/Card';
 import { AmountField, SwitchField } from '@esmart/ui/components/Field';
 import { Text } from '@esmart/ui/components/Text';
 import { FormContainer } from '@esmart/ui/components/Layout';
-import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { documentKindLabel } from '@esmart/core/labels';
 import { fromMajor, toMajor } from '@esmart/core/lib/money';
 import type { DocumentKind } from '@esmart/core/types';
@@ -44,7 +46,11 @@ export default function ApprovalRulesScreen() {
       { icon: 'clipboard-check-outline' },
     );
 
+  const desktop = useIsDesktop();
+  useSaveShortcut(() => void save(), owner && !saving);
+
   return (
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
     <FormContainer style={{ maxWidth: '100%' }}>
       <Stack.Screen options={{ title: tr('settings:approvals.title') }} />
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, gap: t.spacing.lg }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
@@ -62,8 +68,15 @@ export default function ApprovalRulesScreen() {
             );
           })}
         </Card>
-        {owner ? <Button title={tr('settings:approvals.save')} onPress={() => void save()} loading={saving} disabled={saving} /> : null}
       </ScrollView>
+      {/* Saved from the bar under the form, as every settings screen with typed input is. */}
+      {owner ? (
+        <FormActions>
+          <Button shortcut="S" title={tr('settings:approvals.save')} onPress={() => void save()} loading={saving} disabled={saving} fullWidth={!desktop}
+          size={desktop ? undefined : 'lg'} />
+        </FormActions>
+      ) : null}
     </FormContainer>
+    </KeyboardAvoidingView>
   );
 }

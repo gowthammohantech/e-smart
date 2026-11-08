@@ -1,14 +1,17 @@
 import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ScrollView, View } from "react-native";
+import { KeyboardAvoidingView, Platform, ScrollView, View } from "react-native";
 import { Stack } from "expo-router";
 import { useTheme } from "@esmart/ui/theme/ThemeProvider";
 import { Button } from "@esmart/ui/components/Button";
 import { Card } from "@esmart/ui/components/Card";
 import { SwitchField, TextField } from "@esmart/ui/components/Field";
 import { Text } from "@esmart/ui/components/Text";
-import { FormContainer } from "@esmart/ui/components/Layout";
-import { SHOW_SCROLLBAR } from "@esmart/ui/theme/breakpoints";
+import { FormActions } from "@esmart/ui/components/ActionBar";
+import { LixiAccessCard } from "../../../features/company/LixiAccessCard";
+import { LoadFailed } from "../../../features/company/LoadFailed";
+import { useSaveShortcut } from "../../../components/useSaveShortcut";
+import { SHOW_SCROLLBAR, useIsDesktop } from "@esmart/ui/theme/breakpoints";
 import { useServerSave } from "../../../components/useServerSave";
 import { useAiUsage } from "../../../remote/queries";
 import { useAppStore } from "../../../store/appStore";
@@ -39,12 +42,25 @@ export default function AiUsageScreen() {
   const budgetValue = capped ? Number.parseInt(budget, 10) : null;
   const badBudget =
     capped && (!Number.isFinite(budgetValue) || (budgetValue ?? 0) < 0);
+  const desktop = useIsDesktop();
+  const save = () =>
+    serverSave(
+      () => saveCompany({ ...company, aiMonthlyLimit: budgetValue }),
+      tr("settings:aiUsage.saved"),
+      { icon: "robot-outline" },
+    ).then(() => usage.refetch());
+  useSaveShortcut(() => void save(), owner && !badBudget && !saving);
 
   return (
-    <FormContainer>
+    // Full width and left-aligned, like the other settings pages, rather than a narrow centred column.
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+    >
       <Stack.Screen options={{ title: tr("settings:aiUsage.title") }} />
       <ScrollView
         contentContainerStyle={{ padding: t.spacing.lg, gap: t.spacing.lg }}
+        keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={SHOW_SCROLLBAR}
       >
         <Text variant="small" tone="muted">
@@ -94,6 +110,8 @@ export default function AiUsageScreen() {
                 </Text>
               ) : null}
             </>
+          ) : usage.isError ? (
+            <LoadFailed onRetry={usage.refetch} compact />
           ) : (
             <SkeletonGroup>
               <SkeletonText lines={3} />
@@ -124,23 +142,24 @@ export default function AiUsageScreen() {
               }
             />
           ) : null}
-          {owner ? (
-            <Button
-              title={tr("settings:aiUsage.save")}
-              loading={saving}
-              disabled={badBudget}
-              onPress={() =>
-                void serverSave(
-                  () =>
-                    saveCompany({ ...company, aiMonthlyLimit: budgetValue }),
-                  tr("settings:aiUsage.saved"),
-                  { icon: "robot-outline" },
-                ).then(() => usage.refetch())
-              }
-            />
-          ) : null}
         </Card>
+        {/* How Lixi opens on this device: switches that save as they flip. */}
+        <LixiAccessCard />
       </ScrollView>
-    </FormContainer>
+      {/* The budget is typed, so it is saved from the bar under the form. */}
+      {owner ? (
+        <FormActions>
+          <Button
+            shortcut="S"
+            title={tr("settings:aiUsage.save")}
+            loading={saving}
+            disabled={badBudget || saving}
+            onPress={() => void save()}
+            fullWidth={!desktop}
+          size={desktop ? undefined : 'lg'}
+          />
+        </FormActions>
+      ) : null}
+    </KeyboardAvoidingView>
   );
 }

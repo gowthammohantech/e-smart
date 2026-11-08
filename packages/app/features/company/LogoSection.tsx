@@ -7,6 +7,7 @@ import { CompanyLogo } from '@esmart/ui/components/CompanyLogo';
 import { Button } from '@esmart/ui/components/Button';
 import { Text } from '@esmart/ui/components/Text';
 import { useToast } from '@esmart/ui/components/Toast';
+import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { isNetworkError } from '../../remote/api';
 import { LogoError, removeLogo, setLocalLogo, uploadLogo } from '../../remote/logo';
 import { useActiveCompany, useCurrentUser } from '../../store/selectors';
@@ -24,6 +25,8 @@ export function LogoSection() {
   const company = useActiveCompany();
   const user = useCurrentUser();
   const [busy, setBusy] = useState<'upload' | 'remove' | null>(null);
+  // Removing takes the logo off every document at once: asked first.
+  const [confirmRemove, setConfirmRemove] = useState(false);
 
   // The server only lets owners and admins change it.
   if (!company || !(user?.role === 'owner' || user?.role === 'admin')) return null;
@@ -99,9 +102,21 @@ export function LogoSection() {
             onPress={choose}
             disabled={busy !== null}
           />
-          {hasLogo ? <Button title={tr('settings:company.logoRemove')} variant="ghost" size="sm" onPress={remove} disabled={busy !== null} /> : null}
+          {hasLogo ? <Button title={tr('settings:company.logoRemove')} variant="ghost" size="sm" onPress={() => setConfirmRemove(true)} disabled={busy !== null} /> : null}
         </View>
       </View>
+      <ConfirmDialog
+        visible={confirmRemove}
+        title={tr('settings:company.logoRemoveTitle')}
+        message={tr('settings:company.logoRemoveBody')}
+        confirmLabel={tr('settings:company.logoRemove')}
+        destructive
+        onCancel={() => setConfirmRemove(false)}
+        onConfirm={() => {
+          setConfirmRemove(false);
+          void remove();
+        }}
+      />
     </Card>
   );
 }

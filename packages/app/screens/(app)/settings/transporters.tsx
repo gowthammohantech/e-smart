@@ -1,19 +1,18 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 import { Stack } from 'expo-router';
-import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Screen } from '@esmart/ui/components/Screen';
 import { Card } from '@esmart/ui/components/Card';
-import { Text } from '@esmart/ui/components/Text';
+import { ListRow } from '@esmart/ui/components/ListRow';
 import { Badge } from '@esmart/ui/components/Badge';
-import { Button } from '@esmart/ui/components/Button';
+import { PrimaryActionBar } from '@esmart/ui/components/ActionBar';
 import { Sheet } from '@esmart/ui/components/Sheet';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { PhoneField, TextField, usePhoneInput } from '@esmart/ui/components/Field';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
-import { Fab } from '@esmart/ui/components/Fab';
+import { SheetActions } from '../../../features/company/SheetActions';
 import { useAppStore } from '../../../store/appStore';
 import { useTransporters } from '../../../store/selectors';
 import { Transporter } from '@esmart/core/types';
@@ -91,7 +90,7 @@ export default function TransportersSettings() {
   return (
     <>
       <Stack.Screen options={{ title: tr('nav:title.transporters') }} />
-      <Screen bottomInset={80}>
+      <Screen bottomInset={100}>
         {transporters.length === 0 ? (
           <Card padded={false}>
             <EmptyState
@@ -107,59 +106,42 @@ export default function TransportersSettings() {
         ) : (
           <Card padded={false}>
             {transporters.map((transporter, i) => (
-              <Pressable
+              <ListRow
                 key={transporter.id}
+                title={transporter.name}
+                subtitle={formatGstin(transporter.transporterId)}
+                icon="truck-outline"
+                right={transporter.status === 'inactive' ? <Badge label={tr('settings:transporters.inactive')} tone="neutral" size="sm" /> : undefined}
+                divider={i < transporters.length - 1}
                 onPress={() => open(transporter)}
-                accessibilityRole="button"
-                accessibilityLabel={transporter.name}
-                style={({ pressed }) => ({
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: t.spacing.md,
-                  padding: t.spacing.lg,
-                  borderBottomWidth: i < transporters.length - 1 ? 0.5 : 0,
-                  borderBottomColor: t.c.line,
-                  backgroundColor: pressed ? t.c.card2 : 'transparent',
-                })}
-              >
-                <Icon name="truck-outline" size={20} color={t.c.muted} />
-                <View style={{ flex: 1, gap: 2 }}>
-                  <Text variant="body" weight="600">
-                    {transporter.name}
-                  </Text>
-                  <Text variant="caption" tone="muted">
-                    {formatGstin(transporter.transporterId)}
-                  </Text>
-                </View>
-                {transporter.status === 'inactive' ? <Badge label={tr('settings:transporters.inactive')} tone="neutral" size="sm" /> : null}
-                <Icon name="chevron-right" size={18} color={t.c.muted} />
-              </Pressable>
+                chevron
+              />
             ))}
           </Card>
         )}
       </Screen>
 
-      <Fab icon="plus" onPress={() => open()} />
+      <PrimaryActionBar title={tr('settings:transporters.add')} icon="plus" onPress={() => open()} />
 
       <Sheet
         visible={sheetOpen}
         onClose={() => setSheetOpen(false)}
         title={editing ? tr('settings:transporters.editTitle') : tr('settings:transporters.add')}
         footer={
-          <View style={{ gap: t.spacing.sm }}>
-            <Button shortcut="S" title={tr('settings:transporters.save')} fullWidth onPress={save} loading={saving} disabled={saving} />
-            {editing ? (
-              <Button
-                title={tr('settings:transporters.delete')}
-                variant="ghost"
-                fullWidth
-                onPress={() => {
-                  setSheetOpen(false);
-                  setConfirmDelete(editing);
-                }}
-              />
-            ) : null}
-          </View>
+          <SheetActions
+            saveLabel={tr('settings:transporters.save')}
+            onSave={save}
+            saving={saving}
+            deleteLabel={tr('settings:transporters.delete')}
+            onDelete={
+              editing
+                ? () => {
+                    setSheetOpen(false);
+                    setConfirmDelete(editing);
+                  }
+                : undefined
+            }
+          />
         }
       >
         <View style={{ padding: t.spacing.lg, gap: t.spacing.md }}>

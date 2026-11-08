@@ -1,19 +1,21 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
 import { Button } from '@esmart/ui/components/Button';
+import { FormActions } from '@esmart/ui/components/ActionBar';
+import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
+import { formatGstin } from '@esmart/core/domain/gstin';
 import { ListRow } from '@esmart/ui/components/ListRow';
-import { AmountField, Segmented, SwitchField, TextField } from '@esmart/ui/components/Field';
+import { AmountField, PickerField, Segmented, SwitchField, TextField } from '@esmart/ui/components/Field';
 import { ComplianceSettings, TransportMode, VehicleType } from '@esmart/core/types';
 import { useAppStore } from '../../../store/appStore';
 import { compliance } from '../../../remote';
 import { describeError } from '../../../remote/errors';
-import { useActiveCompany, useBaseCurrency, useComplianceSettings, useComplianceSummary } from '../../../store/selectors';
+import { useActiveCompany, useBaseCurrency, useComplianceSettings, useComplianceSummary, useTransporters } from '../../../store/selectors';
 import { fromMajor, toMajor } from '@esmart/core/lib/money';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { useSaveShortcut } from '../../../components/useSaveShortcut';
@@ -21,7 +23,6 @@ import { useServerSave } from '../../../components/useServerSave';
 
 export default function EInvoicingSettings() {
   const t = useTheme();
-  const insets = useSafeAreaInsets();
   const { t: tr } = useTranslation(['compliance', 'nav', 'auth', 'settings']);
   const router = useRouter();
   const { run: serverSave, saving } = useServerSave();
@@ -39,6 +40,9 @@ export default function EInvoicingSettings() {
   const [ewayThreshold, setEwayThreshold] = useState(String(toMajor(stored.ewayBillThreshold)));
 
   const patch = (over: Partial<ComplianceSettings>) => setDraft((d) => ({ ...d, ...over }));
+  // The default transporter is picked from the Transporters master, so its 15-character ID is always a valid one.
+  const transporters = useTransporters().filter((x) => x.status !== 'inactive');
+  const [transporterOpen, setTransporterOpen] = useState(false);
 
   // The portal logins are write-only: the server encrypts them and never returns them. The GSP's own client id
   // and secret are the server's (environment), not the business's, so they are never asked for here.
@@ -121,7 +125,11 @@ export default function EInvoicingSettings() {
       .finally(() => setCredBusy(null));
   };
 
+  // A login typed here is saved with everything else by the one Save: no separate "Save login".
+  const loginEdited = !!login.password || (!!login.username.trim() && login.username.trim() !== savedUsername);
+
   const onSave = async () => {
+    if (loginEdited && !(await saveCredentials())) return;
     const settings = {
       ...draft,
       annualTurnover: fromMajor(turnover || '0', currency),
@@ -135,21 +143,11 @@ export default function EInvoicingSettings() {
   useSaveShortcut(onSave);
 
   return (
-    <View style={{ flex: 1 }}>
-      <Stack.Screen
-        options={
-          desktop
-            ? // A desktop puts Save with the page title, top right, instead of a bar at the bottom.
-              {
-                title: tr('nav:title.eInvoicingAndEWayBill'),
-                headerRight: () => <Button shortcut="S" title={tr('compliance:settings.save')} icon="check" onPress={onSave} loading={saving} disabled={saving} />,
-              }
-            : { title: tr('nav:title.eInvoicingAndEWayBill') }
-        }
-      />
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <Stack.Screen options={{ title: tr('nav:title.eInvoicingAndEWayBill') }} />
 
       <ScrollView
-        contentContainerStyle={desktop ? { padding: t.spacing.lg, paddingBottom: t.spacing.xxxl } : { padding: t.spacing.lg, paddingBottom: 140 + insets.bottom }}
+        contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: t.spacing.xxxl }}
         showsVerticalScrollIndicator={SHOW_SCROLLBAR}
         keyboardShouldPersistTaps="handled"
       >
@@ -233,7 +231,6 @@ export default function EInvoicingSettings() {
             autoCorrect={false}
           />
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm, marginTop: t.spacing.xs }}>
-            <Button title={tr('compliance:settings.saveCredentials')} icon="lock-outline" loading={credBusy === 'save'} onPress={() => void saveCredentials()} />
             <Button title={tr('compliance:settings.testConnection')} variant="secondary" icon="lan-connect" loading={credBusy === 'test'} onPress={() => void testConnection()} />
           </View>
           {credMessage ? (
@@ -270,17 +267,19 @@ export default function EInvoicingSettings() {
           currency={currency}
           hint={tr('compliance:settings.requiredHint')}
         />
-        <TextField
-          label={tr('compliance:settings.defaultTransporterId')}
-          value={draft.defaultTransporterId ?? ''}
-          onChangeText={(v) => patch({ defaultTransporterId: v })}
-          autoCapitalize="characters"
-          autoCorrect={false}
-        />
-        <TextField
+        <PickerField
           label={tr('compliance:settings.defaultTransporter')}
-          value={draft.defaultTransporterName ?? ''}
-          onChangeText={(v) => patch({ defaultTransporterName: v })}
+          value={
+            draft.defaultTransporterId
+              ? `${draft.defaultTransporterName || transporters.find((x) => x.transporterId === draft.defaultTransporterId)?.name || ''} · ${formatGstin(draft.defaultTransporterId)}`.replace(/^ · /, '')
+              : undefined
+          }
+          placeholder={tr('settings:eInvoicing.noTransporter')}
+          onPress={() => setTransporterOpen(true)}
+          icon="truck-outline"
+          hint={transporters.length ? tr('settings:eInvoicing.transporterHint') : tr('settings:eInvoicing.noTransportersHint')}
+          clearable={!!draft.defaultTransporterId}
+          onClear={() => patch({ defaultTransporterId: undefined, defaultTransporterName: undefined })}
         />
         <TextField
           label={tr('compliance:settings.defaultDistance')}
@@ -342,24 +341,42 @@ export default function EInvoicingSettings() {
         </Card>
       </ScrollView>
 
-      {desktop ? null : (
-        <View
-          style={{
-            position: 'absolute',
-            left: 0,
-            right: 0,
-            bottom: 0,
-            padding: t.spacing.lg,
-            paddingBottom: insets.bottom + t.spacing.md,
-            borderTopWidth: 1,
-            borderTopColor: t.c.line,
-            backgroundColor: t.c.paper,
-          }}
-        >
-          <Button shortcut="S" title={tr('compliance:settings.save')} icon="check" onPress={onSave} loading={saving} disabled={saving} fullWidth />
-        </View>
-      )}
-    </View>
+      {/* The bar under the form, in the flow so the keyboard lifts it and it never covers the last fields. */}
+      <FormActions>
+        <Button
+          shortcut="S"
+          title={tr('compliance:settings.save')}
+          icon="check"
+          onPress={onSave}
+          loading={saving || credBusy === 'save'}
+          disabled={saving || credBusy !== null}
+          fullWidth={!desktop}
+          size={desktop ? undefined : 'lg'}
+        />
+      </FormActions>
+
+      <SelectSheet
+        visible={transporterOpen}
+        onClose={() => setTransporterOpen(false)}
+        title={tr('compliance:settings.defaultTransporter')}
+        options={transporters.map((x) => ({ value: x.transporterId, label: x.name, description: formatGstin(x.transporterId) }))}
+        value={draft.defaultTransporterId ?? null}
+        onSelect={(id) => patch({ defaultTransporterId: id, defaultTransporterName: transporters.find((x) => x.transporterId === id)?.name })}
+        emptyMessage={tr('settings:eInvoicing.noTransportersHint')}
+        footer={
+          <Button
+            title={tr('settings:transporters.add')}
+            icon="plus"
+            variant="ghost"
+            fullWidth
+            onPress={() => {
+              setTransporterOpen(false);
+              router.push('/(app)/settings/transporters');
+            }}
+          />
+        }
+      />
+    </KeyboardAvoidingView>
   );
 }
 

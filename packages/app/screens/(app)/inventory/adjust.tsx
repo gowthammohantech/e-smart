@@ -14,7 +14,8 @@ import { useServerSave } from '../../../components/useServerSave';
 import { useSaveShortcut } from '../../../components/useSaveShortcut';
 import { useAppStore } from '../../../store/appStore';
 import { useBranches, useDefaultBranchId } from '../../../store/selectors';
-import { useTrackedItems } from '../../../remote/queries';
+import { useServerStockLevels, useTrackedItems } from '../../../remote/queries';
+import { unitShortName } from '@esmart/core/data/masters';
 import { formatQty } from '@esmart/core/lib/format';
 import { today } from '@esmart/core/lib/date';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
@@ -50,7 +51,12 @@ export default function StockAdjust() {
   const [reasonOpen, setReasonOpen] = useState(false);
 
   const item = items.find((i) => i.id === itemId);
-  const current = itemId ? (stock[itemId] ?? 0) : 0;
+  // On hand at the branch being adjusted, not the one picked in the switcher.
+  const levels = useServerStockLevels(branchId, !!branchId).data;
+  const activeBranchId = useAppStore((s) => s.activeBranchId);
+  const fallback = branchId === activeBranchId ? stock : {};
+  const current = itemId ? (levels ? (levels[itemId] ?? 0) : (fallback[itemId] ?? 0)) : 0;
+  const unit = item ? unitShortName(item.unit) || item.unit : '';
   const qty = Number(quantity) || 0;
   const delta = direction === 'increase' ? qty : -qty;
   const resulting = current + delta;
@@ -130,7 +136,7 @@ export default function StockAdjust() {
           suffix={
             item ? (
               <Text variant="caption" tone="muted">
-                {item.unit}
+                {unit}
               </Text>
             ) : undefined
           }
@@ -144,8 +150,8 @@ export default function StockAdjust() {
         {item ? (
           <Card variant="flat" style={{ gap: t.spacing.sm }}>
             {[
-              { label: tr('inventory:adjust.currentStock'), value: `${formatQty(current)} ${item.unit}` },
-              { label: tr('inventory:adjust.adjustment'), value: `${delta >= 0 ? '+' : ''}${formatQty(delta)} ${item.unit}` },
+              { label: tr('inventory:adjust.currentStock'), value: `${formatQty(current)} ${unit}` },
+              { label: tr('inventory:adjust.adjustment'), value: `${delta >= 0 ? '+' : ''}${formatQty(delta)} ${unit}` },
             ].map((r) => (
               <View key={r.label} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                 <Text variant="caption" tone="muted">
@@ -160,7 +166,7 @@ export default function StockAdjust() {
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
               <Text variant="body" weight="700">{tr('inventory:adjust.newStock')}</Text>
               <Text variant="body" weight="700" tone={resulting < 0 ? 'bad' : 'good'}>
-                {formatQty(resulting)} {item.unit}
+                {formatQty(resulting)} {unit}
               </Text>
             </View>
             {resulting < 0 ? (
@@ -179,14 +185,14 @@ export default function StockAdjust() {
           backgroundColor: t.c.paper,
         }}
       >
-        <Button shortcut="S" title={tr('inventory:adjust.submit')} onPress={() => void save()} loading={saving} disabled={blocked || !canSave} fullWidth />
+        <Button shortcut="S" title={tr('inventory:adjust.submit')} onPress={() => void save()} loading={saving} disabled={blocked || !canSave} fullWidth size="lg" />
       </View>
 
       <SelectSheet
         visible={itemOpen}
         onClose={() => setItemOpen(false)}
         title={tr('inventory:adjust.selectItem')}
-        options={items.map((i) => ({ value: i.id, label: i.name, description: i.sku, trailing: `${formatQty(stock[i.id] ?? 0)} ${i.unit}` }))}
+        options={items.map((i) => ({ value: i.id, label: i.name, description: i.sku, trailing: `${formatQty(levels ? (levels[i.id] ?? 0) : (fallback[i.id] ?? 0))} ${unitShortName(i.unit) || i.unit}` }))}
         value={itemId}
         onSelect={setItemId}
       />

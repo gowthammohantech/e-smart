@@ -7,7 +7,6 @@ import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
 import { Badge } from '@esmart/ui/components/Badge';
-import { Button } from '@esmart/ui/components/Button';
 import { PrimaryActionBar } from '@esmart/ui/components/ActionBar';
 import { ListRow } from '@esmart/ui/components/ListRow';
 import { Sheet } from '@esmart/ui/components/Sheet';
@@ -24,13 +23,14 @@ import { formatDate, today } from '@esmart/core/lib/date';
 import { uid } from '@esmart/core/lib/id';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { useSaveShortcut } from '../../../components/useSaveShortcut';
+import { SheetActions } from '../../../features/company/SheetActions';
 import { useServerSave } from '../../../components/useServerSave';
 import { validTaxRate } from '@esmart/core/lib/validators';
 
 export default function TaxSettings() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
-  const { t: tr } = useTranslation(['nav', 'settings']);
+  const { t: tr } = useTranslation(['nav', 'settings', 'errors']);
   const { run: serverSave, saving } = useServerSave();
 
   const company = useActiveCompany();
@@ -46,6 +46,8 @@ export default function TaxSettings() {
   const [effectiveFrom, setEffectiveFrom] = useState(today());
   const [description, setDescription] = useState('');
   const [rateError, setRateError] = useState<string | undefined>();
+  // An empty name says so on the field, not by a Save that does nothing.
+  const [nameError, setNameError] = useState<string | undefined>();
 
   const regime = company?.taxRegistration?.regime ?? 'NONE';
 
@@ -56,12 +58,17 @@ export default function TaxSettings() {
     setEffectiveFrom(c?.effectiveFrom ?? today());
     setDescription(c?.description ?? '');
     setRateError(undefined);
+    setNameError(undefined);
   };
 
   const usageOf = (id: string) => usage?.taxCategoryUse[id] ?? 0;
 
   const save = async () => {
-    if (!editing || !name.trim()) return;
+    if (!editing) return;
+    if (!name.trim()) {
+      setNameError(tr('errors:validation.required', { field: tr('settings:taxes.name') }));
+      return;
+    }
     const error = validTaxRate(rate, editing.type);
     setRateError(error);
     if (error) return;
@@ -84,13 +91,13 @@ export default function TaxSettings() {
   };
 
   // Ctrl+S (⌘+S) does what Save does, while the form is open.
-  useSaveShortcut(save, !!editing && !!name.trim());
+  useSaveShortcut(save, !!editing);
 
   return (
     <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('nav:title.taxes') }} />
 
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 + insets.bottom }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
+      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 140 + insets.bottom }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <Card variant="flat" style={{ marginBottom: t.spacing.lg, gap: t.spacing.sm }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
             <Badge label={regime} tone="info" />
@@ -134,10 +141,11 @@ export default function TaxSettings() {
               { label: tr('settings:taxes.applied.rounding'), value: tr('settings:taxes.applied.roundingValue') },
             ].map((r) => (
               <View key={r.label} style={{ flexDirection: 'row', justifyContent: 'space-between', gap: t.spacing.md }}>
-                <Text variant="small" tone="muted">
+                <Text variant="small" tone="muted" style={{ flexShrink: 0 }}>
                   {r.label}
                 </Text>
-                <Text variant="small" weight="600" style={{ flexShrink: 1, textAlign: 'right' }}>
+                {/* A long value wraps in its own column, right-aligned, instead of under the label. */}
+                <Text variant="small" weight="600" style={{ flex: 1, textAlign: 'right' }}>
                   {r.value}
                 </Text>
               </View>
@@ -153,25 +161,29 @@ export default function TaxSettings() {
         onClose={() => setEditing(null)}
         title={editing?.id ? tr('settings:taxes.editTitle') : tr('settings:taxes.add')}
         footer={
-          <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
-            {editing?.id ? (
-              <Button
-                title={tr('settings:taxes.delete')}
-                variant="danger"
-                style={{ flex: 1 }}
-                onPress={() => {
+          <SheetActions
+            saveLabel={tr('settings:taxes.save')}
+            onSave={save}
+            saving={saving}
+                        deleteLabel={tr('settings:taxes.delete')}
+            onDelete={
+              editing?.id
+                ? () => {
                   const c = editing;
                   setEditing(null);
                   setConfirmDelete(c);
-                }}
-              />
-            ) : null}
-            <Button shortcut="S" title={tr('settings:taxes.save')} onPress={save} loading={saving} disabled={!name.trim() || saving} style={{ flex: 2 }} />
-          </View>
+                }
+                : undefined
+            }
+          />
         }
       >
         <View style={{ padding: t.spacing.lg, gap: t.spacing.lg }}>
-          <TextField label={tr('settings:taxes.name')} value={name} onChangeText={setName} placeholder={tr('settings:taxes.namePlaceholder')} required />
+          <TextField label={tr('settings:taxes.name')} value={name} onChangeText={(v) => {
+            setName(v);
+            setNameError(undefined);
+          }}
+          error={nameError} placeholder={tr('settings:taxes.namePlaceholder')} required />
           <TextField
             label={tr('settings:taxes.rate')}
             value={rate}

@@ -12,11 +12,10 @@ import { Avatar } from '@esmart/ui/components/Avatar';
 import { CompanyLogo } from '@esmart/ui/components/CompanyLogo';
 import { PhoneField, TextField, usePhoneInput } from '@esmart/ui/components/Field';
 import { ListRow } from '@esmart/ui/components/ListRow';
-import { useToast } from '@esmart/ui/components/Toast';
 import { useAppStore } from '../../../store/appStore';
 import { useCompanies, useCurrentUser } from '../../../store/selectors';
 import { Errors, hasErrors, required, validEmail } from '@esmart/core/lib/validators';
-import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import type { UserRole } from '@esmart/core/types';
 import { useGoBack } from '../../../navigation/useGoBack';
 import { useSaveShortcut } from '../../../components/useSaveShortcut';
@@ -33,15 +32,14 @@ const ROLE_LABELS = {
 
 export default function Profile() {
   const t = useTheme();
+  const desktop = useIsDesktop();
   const { t: tr } = useTranslation(['nav', 'settings', 'auth', 'onboarding']);
   const goBack = useGoBack();
-  const toast = useToast();
   const { run: serverSave, saving } = useServerSave();
 
   const user = useCurrentUser();
   const companies = useCompanies();
   const saveUser = useAppStore((s) => s.saveUser);
-  const setActiveCompany = useAppStore((s) => s.setActiveCompany);
   const activeCompanyId = useAppStore((s) => s.activeCompanyId);
 
   const [name, setName] = useState(user?.name ?? '');
@@ -97,13 +95,8 @@ export default function Profile() {
               subtitle={`${tr(`onboarding:businessType.${c.businessType}` as 'onboarding:businessType.other')} · ${c.baseCurrency}`}
               left={<CompanyLogo uri={c.logoUri} name={c.name} size={36} />}
               divider={i < companies.length - 1}
+              // Listed, not a switcher: changing business here would drop what's typed above. The business picker does that.
               right={c.id === activeCompanyId ? <Badge label={tr('settings:profile.active')} tone="success" size="sm" /> : undefined}
-              onPress={() => {
-                // Already the active business: nothing switched, so no message.
-                if (c.id === activeCompanyId) return;
-                setActiveCompany(c.id);
-                toast.show(tr('settings:profile.switched', { name: c.name }), 'info', { icon: 'swap-horizontal', detail: c.baseCurrency, varies: true });
-              }}
             />
           ))}
         </Card>
@@ -115,7 +108,7 @@ export default function Profile() {
       <DeleteAccountSheet visible={deleting} onClose={() => setDeleting(false)} />
 
       <FormActions>
-        <Button shortcut="S" title={tr('settings:profile.save')} onPress={save} loading={saving} disabled={saving} fullWidth />
+        <Button shortcut="S" title={tr('settings:profile.save')} onPress={save} loading={saving} disabled={saving} fullWidth={!desktop} size={desktop ? undefined : 'lg'} />
       </FormActions>
     </KeyboardAvoidingView>
   );

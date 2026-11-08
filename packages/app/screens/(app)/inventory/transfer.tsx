@@ -16,6 +16,7 @@ import { useServerSave } from '../../../components/useServerSave';
 import { useAppStore } from '../../../store/appStore';
 import { useBranches, useDefaultBranchId } from '../../../store/selectors';
 import { useServerStockLevels, useTrackedItems } from '../../../remote/queries';
+import { unitShortName } from '@esmart/core/data/masters';
 import { formatQty } from '@esmart/core/lib/format';
 import { today } from '@esmart/core/lib/date';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
@@ -52,10 +53,14 @@ export default function StockTransfer() {
   // What the source branch holds on the transfer date, not today.
   // On hand at each branch now, from the server, which checks the transfer again on saving.
   const fromLevels = useServerStockLevels(fromBranchId, !!fromBranchId).data;
+  // Until the source branch's levels are back, nothing is "only 0 available".
+  const levelsKnown = fromLevels !== undefined;
   const available = item ? (fromLevels?.[item.id] ?? 0) : 0;
+  const unit = item ? unitShortName(item.unit) || item.unit : '';
   const qty = Number(quantity) || 0;
-  const exceeds = qty > available;
-  const canSave = !!itemId && qty > 0 && fromBranchId !== toBranchId && !!toBranchId && !exceeds;
+  const exceeds = levelsKnown && qty > available;
+  const sameBranch = !!fromBranchId && fromBranchId === toBranchId;
+  const canSave = !!itemId && qty > 0 && !sameBranch && !!toBranchId && levelsKnown && !exceeds;
 
   if (branches.length < 2) {
     return (
@@ -109,6 +114,11 @@ export default function StockTransfer() {
             icon="warehouse"
           />
         </View>
+        {sameBranch ? (
+          <Text variant="caption" tone="bad" accessibilityRole="alert">
+            {tr('inventory:transfer.sameBranch')}
+          </Text>
+        ) : null}
 
         <TextField
           label={tr('inventory:transfer.quantity')}
@@ -117,8 +127,8 @@ export default function StockTransfer() {
           placeholder="0"
           keyboardType="decimal-pad"
           icon="counter"
-          error={exceeds ? tr('inventory:transfer.onlyAvailable', { qty: formatQty(available), unit: item?.unit ?? '' }) : undefined}
-          hint={item ? tr('inventory:transfer.available', { qty: formatQty(available), unit: item.unit }) : undefined}
+          error={exceeds ? tr('inventory:transfer.onlyAvailable', { qty: formatQty(available), unit }) : undefined}
+          hint={item ? (levelsKnown ? tr('inventory:transfer.available', { qty: formatQty(available), unit }) : tr('inventory:transfer.checking')) : undefined}
           required
         />
 
@@ -157,6 +167,7 @@ export default function StockTransfer() {
           disabled={!canSave}
           loading={saving}
           fullWidth
+          size="lg"
         />
       </View>
 

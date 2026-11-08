@@ -12,6 +12,8 @@ import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { api } from '../../../remote/api';
 import { describeError } from '../../../remote/errors';
 import { ensurePushRegistered, pushPermission, type PushPermission } from '../../../remote/push';
+import { SkeletonGroup, SkeletonRows } from '@esmart/ui/components/Skeleton';
+import { LoadFailed } from '../../../features/company/LoadFailed';
 
 /** The kinds a person can mute, in the order they matter to a business. */
 const KINDS = ['paymentReceived', 'invoiceOverdue', 'compliance', 'lowStock', 'system'] as const;
@@ -24,6 +26,8 @@ export default function NotificationSettings() {
   const toast = useToast();
   const [permission, setPermission] = useState<PushPermission>('undetermined');
   const [muted, setMuted] = useState<string[] | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   const refresh = useCallback(() => void pushPermission().then(setPermission), []);
   useEffect(() => {
@@ -34,10 +38,10 @@ export default function NotificationSettings() {
   }, [refresh]);
   useEffect(() => {
     api.GET('/me/notification-preferences').then(
-      ({ data }) => setMuted(data?.pushMuted ?? []),
-      (err: unknown) => toast.show(describeError(err, tr), 'error'),
+      ({ data, error }) => (error ? setLoadFailed(true) : setMuted(data?.pushMuted ?? [])),
+      () => setLoadFailed(true),
     );
-  }, [toast, tr]);
+  }, [attempt]);
 
   const toggle = (kind: Kind, on: boolean) => {
     if (!muted) return;
@@ -65,11 +69,30 @@ export default function NotificationSettings() {
             {permission === 'denied' ? <Button title={tr('settings:notifications.openSettings')} variant="secondary" onPress={() => void Linking.openSettings()} /> : null}
           </Card>
         ) : null}
-        <Card style={{ gap: t.spacing.md }}>
-          {KINDS.map((kind) => (
-            <SwitchField key={kind} label={tr(`settings:notifications.kind.${kind}`)} value={!!muted && !muted.includes(kind)} onValueChange={(on) => toggle(kind, on)} />
-          ))}
-        </Card>
+        {/* Until the preferences are back the switches aren't shown "off"; a failure offers a retry. */}
+        {muted ? (
+          <Card style={{ gap: t.spacing.md }}>
+            {KINDS.map((kind) => (
+              <SwitchField key={kind} label={tr(`settings:notifications.kind.${kind}`)} value={!muted.includes(kind)} onValueChange={(on) => toggle(kind, on)} />
+            ))}
+          </Card>
+        ) : loadFailed ? (
+          <Card padded={false}>
+            <LoadFailed
+              onRetry={() => {
+                setLoadFailed(false);
+                setAttempt((n) => n + 1);
+              }}
+              compact
+            />
+          </Card>
+        ) : (
+          <Card>
+            <SkeletonGroup>
+              <SkeletonRows rows={KINDS.length} kind="list" />
+            </SkeletonGroup>
+          </Card>
+        )}
         <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
           {tr('settings:notifications.inApp')}
         </Text>

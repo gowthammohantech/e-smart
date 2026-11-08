@@ -31,7 +31,7 @@ import { useBaseCurrency, useHasModule, useParties } from '../../store/selectors
 import { SHOW_SCROLLBAR, useBreakpoint } from '@esmart/ui/theme/breakpoints';
 import { useGoBack } from '../../navigation/useGoBack';
 import { useGstinLookup, type GstinDetails } from '../gstin/useGstinLookup';
-import { CustomFieldsSection } from '../customFields/CustomFieldsSection';
+import { CustomFieldsSection, customFieldErrors, useCustomFields } from '../customFields/CustomFieldsSection';
 import type { CustomValues } from '@esmart/core/domain/customFields';
 
 const CODE_PREFIX: Record<PartyKind, string> = { customer: 'C', supplier: 'S', both: 'B', general: 'G' };
@@ -88,6 +88,10 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
   );
   const [openingDate, setOpeningDate] = useState<string | undefined>(party?.openingBalanceDate);
   const [customFields, setCustomFields] = useState<CustomValues>(party?.customFields ?? {});
+  // The company's own fields, checked as the server will (required, numbers, dates, choices); shown once Save is tried.
+  const companyFields = useCustomFields('party');
+  const customErrors = customFieldErrors(companyFields, 'party', customFields, tr);
+  const [customTried, setCustomTried] = useState(false);
   // Dr: they owe us; Cr: we owe them. A negative stored amount (an old advance) reads as the other side.
   const [openingSide, setOpeningSide] = useState<BalanceSide>(() => {
     const side = party?.openingBalanceSide ?? usualSide(party?.kind ?? routeKind);
@@ -200,7 +204,8 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
       tcsSection: sellsTo(kind) && tcsApplicable && !tcsSectionCode ? tr('contacts:form.tcsSectionRequired') : undefined,
     };
     setErrors(next);
-    if (hasErrors(next)) {
+    setCustomTried(true);
+    if (hasErrors(next) || Object.keys(customErrors).length) {
       focusFirstInvalid();
       return;
     }
@@ -297,7 +302,8 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
       label="GSTIN"
       value={taxId}
       onChangeText={(v) => {
-        const next = v.toUpperCase();
+        // A GSTIN is 15 letters and digits; spaces and dashes pasted with it are dropped.
+        const next = v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 15);
         setTaxId(next);
         // The first two digits are the state; fill it in if it's still blank.
         if (!stateCode && /^\d{2}/.test(next) && INDIAN_STATES.some((s) => s.code === next.slice(0, 2))) {
@@ -467,7 +473,7 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
         </Text>
       </View>
     ) : null;
-  const customFieldsBlock = <CustomFieldsSection entity="party" values={customFields} onChange={setCustomFields} />;
+  const customFieldsBlock = <CustomFieldsSection entity="party" values={customFields} onChange={setCustomFields} errors={customTried ? customErrors : undefined} />;
   const notesField = <TextField label={tr('contacts:form.notes')} value={notes} onChangeText={setNotes} placeholder={tr('contacts:form.notesPlaceholder')} multiline />;
   const activeField = <SwitchField label={tr('contacts:form.active')} description={tr('contacts:form.activeHint')} value={active} onValueChange={setActive} />;
 

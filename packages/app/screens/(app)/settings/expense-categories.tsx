@@ -5,7 +5,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Card } from '@esmart/ui/components/Card';
-import { Button } from '@esmart/ui/components/Button';
 import { PrimaryActionBar } from '@esmart/ui/components/ActionBar';
 import { ListRow } from '@esmart/ui/components/ListRow';
 import { Sheet } from '@esmart/ui/components/Sheet';
@@ -20,12 +19,13 @@ import { formatMoney } from '@esmart/core/lib/format';
 import { money } from '@esmart/core/lib/money';
 import { uid } from '@esmart/core/lib/id';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { SheetActions } from '../../../features/company/SheetActions';
 import { useServerSave } from '../../../components/useServerSave';
 
 export default function ExpenseCategorySettings() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
-  const { t: tr } = useTranslation(['nav', 'settings']);
+  const { t: tr } = useTranslation(['nav', 'settings', 'errors']);
   const { run: serverSave, saving } = useServerSave();
 
   const company = useActiveCompany();
@@ -38,6 +38,8 @@ export default function ExpenseCategorySettings() {
   const [editing, setEditing] = useState<ExpenseCategory | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<ExpenseCategory | null>(null);
   const [name, setName] = useState('');
+  // An empty name says so on the field, not by a Save that does nothing.
+  const [nameError, setNameError] = useState<string | undefined>();
 
   const totals = useMemo(
     () => Object.fromEntries(Object.entries(usage?.expenseCategories ?? {}).map(([id, v]) => [id, { total: v.total.minor, count: v.count }])) as Record<string, { total: number; count: number }>,
@@ -47,6 +49,7 @@ export default function ExpenseCategorySettings() {
   const open = (c?: ExpenseCategory) => {
     setEditing(c ?? ({ id: '', companyId: company.id, name: '', icon: 'shape-outline', color: '#8E98AC' } as ExpenseCategory));
     setName(c?.name ?? '');
+    setNameError(undefined);
   };
 
   return (
@@ -87,37 +90,39 @@ export default function ExpenseCategorySettings() {
         onClose={() => setEditing(null)}
         title={editing?.id ? tr('settings:categories.editTitle') : tr('settings:categories.add')}
         footer={
-          <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
-            {editing?.id ? (
-              <Button
-                title={tr('settings:categories.delete')}
-                variant="danger"
-                style={{ flex: 1 }}
-                onPress={() => {
-                  const c = editing;
-                  setEditing(null);
-                  setConfirmDelete(c);
-                }}
-              />
-            ) : null}
-            <Button
-              title={tr('settings:categories.save')}
-              onPress={async () => {
-                if (!editing || !name.trim()) return;
+          <SheetActions
+            saveLabel={tr('settings:categories.save')}
+            onSave={async () => {
+                if (!editing) return;
+    if (!name.trim()) {
+      setNameError(tr('errors:validation.required', { field: tr('settings:categories.name') }));
+      return;
+    }
                 const category = { ...editing, id: editing.id || uid('cat'), companyId: company.id, name: name.trim() };
                 // The sheet stays open until the server has it, so a refusal can be fixed here.
                 const res = await serverSave(() => saveExpenseCategory(category), tr('settings:categories.saved'), { icon: 'shape-outline' });
                 if (res) setEditing(null);
               }}
-              loading={saving}
-              disabled={!name.trim() || saving}
-              style={{ flex: 2 }}
-            />
-          </View>
+            saving={saving}
+                        deleteLabel={tr('settings:categories.delete')}
+            onDelete={
+              editing?.id
+                ? () => {
+                  const c = editing;
+                  setEditing(null);
+                  setConfirmDelete(c);
+                }
+                : undefined
+            }
+          />
         }
       >
         <View style={{ padding: t.spacing.lg }}>
-          <TextField label={tr('settings:categories.name')} value={name} onChangeText={setName} placeholder={tr('settings:categories.namePlaceholder')} icon="shape-outline" required />
+          <TextField label={tr('settings:categories.name')} value={name} onChangeText={(v) => {
+            setName(v);
+            setNameError(undefined);
+          }}
+          error={nameError} placeholder={tr('settings:categories.namePlaceholder')} icon="shape-outline" required />
         </View>
       </Sheet>
 

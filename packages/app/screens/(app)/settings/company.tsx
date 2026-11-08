@@ -25,7 +25,7 @@ import { citiesForState } from '@esmart/core/data/cities';
 import { CURRENCIES } from '@esmart/core/lib/currencies';
 import { monthNames } from '@esmart/core/lib/date';
 import { Errors, hasErrors, required, validEmail, validGstin, validPostalCode, validTan } from '@esmart/core/lib/validators';
-import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { useGoBack } from '../../../navigation/useGoBack';
 import { LogoSection } from '../../../features/company/LogoSection';
 import { SignatureSection } from '../../../features/company/SignatureSection';
@@ -36,6 +36,7 @@ import { ArchiveSection } from '../../../features/company/ArchiveSection';
 const UPI_SAMPLE = 'business@okhdfc';
 export default function CompanySettings() {
   const t = useTheme();
+  const desktop = useIsDesktop();
   const { t: tr } = useTranslation(['nav', 'settings', 'onboarding', 'errors']);
   const months = monthNames();
   const goBack = useGoBack();
@@ -87,14 +88,14 @@ export default function CompanySettings() {
   const [typeOpen, setTypeOpen] = useState(false);
   const [stateOpen, setStateOpen] = useState(false);
   const [fyOpen, setFyOpen] = useState(false);
-  const [errors, setErrors] = useState<Errors<'name' | 'email' | 'phone' | 'taxId' | 'postalCode' | 'tan' | 'ifsc' | 'accountNumber' | 'upiId'>>({});
+  const [errors, setErrors] = useState<Errors<'name' | 'email' | 'phone' | 'taxId' | 'postalCode' | 'tan' | 'ifsc' | 'accountNumber' | 'upiId' | 'bankRate' | 'toleranceDays'>>({});
 
   const country = COUNTRIES.find((c) => c.code === company?.country);
   const currency = CURRENCIES.find((c) => c.code === company?.baseCurrency);
 
   const save = async () => {
     // In the order the fields sit on the page, so the toast names the first one you'd reach.
-    const next: Errors<'name' | 'email' | 'phone' | 'taxId' | 'postalCode' | 'tan' | 'ifsc' | 'accountNumber' | 'upiId'> = {
+    const next: Errors<'name' | 'email' | 'phone' | 'taxId' | 'postalCode' | 'tan' | 'ifsc' | 'accountNumber' | 'upiId' | 'bankRate' | 'toleranceDays'> = {
       name: required(name, tr('errors:field.businessName')),
       email: validEmail(email),
       phone: phone.error(),
@@ -105,6 +106,9 @@ export default function CompanySettings() {
       upiId: upiId.trim() && !/^[A-Za-z0-9.\-_]{2,256}@[A-Za-z][A-Za-z0-9]{1,63}$/.test(upiId.trim()) ? tr('settings:company.upiInvalid') : undefined,
       taxId: taxRegistered && company?.country === 'IN' ? validGstin(taxId) : undefined,
       tan: taxRegistered ? validTan(tan) : undefined,
+      // Out of range is said on the field, not quietly swapped for the default.
+      bankRate: bankRate.trim() && !(Number(bankRate) >= 0 && Number(bankRate) <= 50) ? tr('settings:company.msmeBankRateInvalid') : undefined,
+      toleranceDays: toleranceDays.trim() && !(/^\d{1,2}$/.test(toleranceDays.trim()) && Number(toleranceDays) <= 30) ? tr('settings:company.gstr2bToleranceInvalid') : undefined,
     };
     setErrors(next);
     if (hasErrors(next)) {
@@ -341,6 +345,7 @@ export default function CompanySettings() {
           onChangeText={setBankRate}
           keyboardType="decimal-pad"
           hint={tr('settings:company.msmeBankRateHint')}
+          error={errors.bankRate}
           icon="percent-outline"
         />
         <TextField
@@ -349,14 +354,17 @@ export default function CompanySettings() {
           onChangeText={setToleranceDays}
           keyboardType="number-pad"
           hint={tr('settings:company.gstr2bToleranceHint')}
+          error={errors.toleranceDays}
           icon="calendar-range"
         />
 
+        {/* Archiving is its own action, kept apart from the form and its Save. */}
+        <View style={{ height: 1, backgroundColor: t.c.line, marginTop: t.spacing.xl }} />
         <ArchiveSection />
       </ScrollView>
 
       <FormActions>
-        <Button shortcut="S" title={tr('settings:company.save')} onPress={() => void save()} loading={saving} disabled={blocked} fullWidth />
+        <Button shortcut="S" title={tr('settings:company.save')} onPress={() => void save()} loading={saving} disabled={blocked} fullWidth={!desktop} size={desktop ? undefined : 'lg'} />
       </FormActions>
 
       <SelectSheet visible={typeOpen} onClose={() => setTypeOpen(false)} title={tr('settings:company.type')} options={BUSINESS_TYPES.map((b) => ({ value: b, label: tr(`onboarding:businessType.${b}` as 'onboarding:businessType.other') }))} value={businessType} onSelect={setBusinessType} />

@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
+import * as Clipboard from 'expo-clipboard';
+import { LoadFailed } from '../../../features/company/LoadFailed';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Badge } from '@esmart/ui/components/Badge';
 import { Button } from '@esmart/ui/components/Button';
@@ -70,17 +72,24 @@ export default function SecurityScreen() {
     });
 
   const enrolled = !!status.data?.enrolled;
+  // Turn on / Turn off only once the server has said which applies.
+  const known = !!status.data;
   return (
     <FormContainer>
       <Stack.Screen options={{ title: tr('settings:security.title') }} />
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, gap: t.spacing.lg }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
+        {!known && status.isError ? (
+          <Card padded={false}>
+            <LoadFailed onRetry={status.refetch} compact />
+          </Card>
+        ) : (
         <Card style={{ gap: t.spacing.sm }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: t.spacing.md }}>
             <Text variant="body" weight="600">
               {tr('settings:security.authenticator')}
             </Text>
             {/* Not yet known: no "off" badge until the server says so. */}
-            {status.isLoading ? (
+            {!known ? (
               <SkeletonGroup>
                 <Skeleton height={20} width={44} radius={10} />
               </SkeletonGroup>
@@ -88,17 +97,20 @@ export default function SecurityScreen() {
               <Badge label={enrolled ? tr('settings:security.on') : tr('settings:security.off')} tone={enrolled ? 'success' : 'neutral'} size="sm" />
             )}
           </View>
-          <Text variant="small" tone="muted">
-            {tr(enrolled ? 'settings:security.onBody' : 'settings:security.offBody')}
-          </Text>
+          {known ? (
+            <Text variant="small" tone="muted">
+              {tr(enrolled ? 'settings:security.onBody' : 'settings:security.offBody')}
+            </Text>
+          ) : null}
           {enrolled ? (
             <Text variant="caption" tone="muted">
               {tr('settings:security.codesLeft', { count: status.data?.recoveryCodesLeft ?? 0 })}
             </Text>
           ) : null}
         </Card>
+        )}
 
-        {step.kind === 'idle' && !enrolled ? <Button title={tr('settings:security.turnOn')} icon="shield-check-outline" onPress={() => void start()} loading={busy} /> : null}
+        {step.kind === 'idle' && known && !enrolled ? <Button title={tr('settings:security.turnOn')} icon="shield-check-outline" onPress={() => void start()} loading={busy} /> : null}
         {step.kind === 'idle' && enrolled ? <Button title={tr('settings:security.turnOff')} variant="danger" onPress={() => setStep({ kind: 'disable' })} /> : null}
 
         {step.kind === 'scan' ? (
@@ -111,6 +123,14 @@ export default function SecurityScreen() {
             <View style={{ alignSelf: 'stretch', gap: t.spacing.md }}>
               <TextField label={tr('settings:security.code')} value={code} onChangeText={setCode} keyboardType="number-pad" />
               <Button title={tr('settings:security.confirm')} onPress={() => void confirm()} loading={busy} disabled={busy || code.trim().length < 6} />
+              <Button
+                title={tr('settings:security.cancel')}
+                variant="ghost"
+                onPress={() => {
+                  setCode('');
+                  setStep({ kind: 'idle' });
+                }}
+              />
             </View>
           </Card>
         ) : null}
@@ -126,6 +146,14 @@ export default function SecurityScreen() {
             <Text variant="body" selectable style={{ fontFamily: 'monospace', lineHeight: 24 }}>
               {step.codes.join('\n')}
             </Text>
+            <Button
+              title={tr('settings:security.copyCodes')}
+              icon="content-copy"
+              variant="secondary"
+              onPress={() =>
+                void Clipboard.setStringAsync(step.codes.join('\n')).then(() => toast.show(tr('settings:security.codesCopied'), 'success', { icon: 'content-copy' }))
+              }
+            />
             <Button title={tr('settings:security.codesSaved')} onPress={() => setStep({ kind: 'idle' })} />
           </Card>
         ) : null}

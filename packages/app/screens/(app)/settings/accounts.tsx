@@ -7,7 +7,6 @@ import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
 import { Badge } from '@esmart/ui/components/Badge';
-import { Button } from '@esmart/ui/components/Button';
 import { PrimaryActionBar } from '@esmart/ui/components/ActionBar';
 import { ListRow } from '@esmart/ui/components/ListRow';
 import { Sheet } from '@esmart/ui/components/Sheet';
@@ -24,6 +23,7 @@ import { fromMajor, money, toMajor } from '@esmart/core/lib/money';
 import { uid } from '@esmart/core/lib/id';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { useSaveShortcut } from '../../../components/useSaveShortcut';
+import { SheetActions } from '../../../features/company/SheetActions';
 import { useServerSave } from '../../../components/useServerSave';
 
 export default function AccountSettings() {
@@ -148,21 +148,22 @@ export default function AccountSettings() {
         onClose={() => setEditing(null)}
         title={editing?.id ? tr('settings:accounts.editTitle') : tr('settings:accounts.add')}
         footer={
-          <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
-            {editing?.id && accounts.length > 1 && !inUse ? (
-              <Button
-                title={tr('settings:accounts.delete')}
-                variant="danger"
-                style={{ flex: 1 }}
-                onPress={() => {
+          <SheetActions
+            saveLabel={tr('settings:accounts.save')}
+            onSave={save}
+            saving={saving}
+            saveDisabled={!name.trim()}
+            deleteLabel={tr('settings:accounts.delete')}
+            onDelete={
+              editing?.id && accounts.length > 1 && !inUse
+                ? () => {
                   const a = editing;
                   setEditing(null);
                   setConfirmDelete(a);
-                }}
-              />
-            ) : null}
-            <Button shortcut="S" title={tr('settings:accounts.save')} onPress={save} loading={saving} disabled={!name.trim() || saving} style={{ flex: 2 }} />
-          </View>
+                }
+                : undefined
+            }
+          />
         }
       >
         <View style={{ padding: t.spacing.lg, gap: t.spacing.lg }}>

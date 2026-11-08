@@ -9,21 +9,11 @@ import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
 import { Badge } from '@esmart/ui/components/Badge';
 import { StatRow, StatTile } from '@esmart/ui/components/StatTile';
-import { LixiAccess, useUiStore } from '../../../store/uiStore';
+import { useUiStore } from '../../../store/uiStore';
 import { AppLanguage, SUPPORTED_LANGUAGES } from '@esmart/i18n/config';
-import { SwitchField } from '@esmart/ui/components/Field';
-import { LixiMark } from '@esmart/ui/components/LixiOrb';
 import { fromMajor } from '@esmart/core/lib/money';
 import { useBaseCurrency } from '../../../store/selectors';
-import { useToast } from '@esmart/ui/components/Toast';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
-
-const LIXI_WAYS = [
-  { key: 'holdTab', label: 'settings:appearance.way.holdTab', description: 'settings:appearance.way.holdTabHint' },
-  { key: 'swipeUp', label: 'settings:appearance.way.swipeUp', description: 'settings:appearance.way.swipeUpHint' },
-  { key: 'floatingOrb', label: 'settings:appearance.way.floatingOrb', description: 'settings:appearance.way.floatingOrbHint' },
-  { key: 'pullDown', label: 'settings:appearance.way.pullDown', description: 'settings:appearance.way.pullDownHint' },
-] as const satisfies readonly { key: keyof LixiAccess; label: string; description: string }[];
 
 const MODES = [
   { value: 'system', label: 'settings:language.matchDevice', description: 'settings:appearance.mode.systemHint', icon: 'cellphone-cog' },
@@ -111,11 +101,6 @@ export default function Appearance() {
   const setThemeMode = useUiStore((s) => s.setThemeMode);
   const language = useUiStore((s) => s.language);
   const setLanguage = useUiStore((s) => s.setLanguage);
-  const lixiAccess = useUiStore((s) => s.lixiAccess);
-  const setLixiAccess = useUiStore((s) => s.setLixiAccess);
-  const hintsLearned = useUiStore((s) => s.lixiHintsLearned);
-  const resetLixiHints = useUiStore((s) => s.resetLixiHints);
-  const toast = useToast();
 
   return (
     <View style={{ flex: 1 }}>
@@ -157,39 +142,6 @@ export default function Appearance() {
         <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
           {tr('settings:language.note')}
         </Text>
-
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
-          <LixiMark size={20} />
-          <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('settings:appearance.lixiWays')}</Text>
-        </View>
-
-        <Card style={{ gap: t.spacing.xs }}>
-          {LIXI_WAYS.map((w) => (
-            <SwitchField
-              key={w.key}
-              label={tr(w.label)}
-              description={tr(w.description)}
-              value={lixiAccess[w.key]}
-              onValueChange={(on) => setLixiAccess(w.key, on)}
-            />
-          ))}
-          <Text variant="caption" tone="muted" style={{ marginTop: t.spacing.xs }}>
-            {tr('settings:appearance.allOffNote', { more: tr('nav:more.header.title'), askLixi: tr('nav:more.entry.askLixi') })}
-          </Text>
-          {hintsLearned.swipeTabs || hintsLearned.swipeUp || hintsLearned.holdTab ? (
-            <Pressable
-              onPress={() => {
-                resetLixiHints();
-                toast.show(tr('settings:appearance.tipsReset'), 'success', { icon: 'lightbulb-on-outline' });
-              }}
-              accessibilityRole="button"
-              hitSlop={8}
-              style={{ alignSelf: 'flex-start', marginTop: t.spacing.xs }}
-            >
-              <Text variant="caption" weight="700" style={{ color: t.c.primary }}>{tr('settings:appearance.showTipsAgain')}</Text>
-            </Pressable>
-          ) : null}
-        </Card>
 
         <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('settings:appearance.preview')}</Text>
 

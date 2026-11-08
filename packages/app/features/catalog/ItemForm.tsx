@@ -24,12 +24,12 @@ import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { useGoBack } from '../../navigation/useGoBack';
 import { FROM_DOCUMENT, handBack } from '../../navigation/handBack';
 import { GstTreatmentFields } from './GstTreatmentFields';
-import { CustomFieldsSection } from '../customFields/CustomFieldsSection';
+import { CustomFieldsSection, customFieldErrors, useCustomFields } from '../customFields/CustomFieldsSection';
 import type { CustomValues } from '@esmart/core/domain/customFields';
 
 export function ItemForm({ item }: { item?: Item }) {
   const t = useTheme();
-  const { t: tr } = useTranslation(['inventory', 'common']);
+  const { t: tr } = useTranslation(['inventory', 'common', 'settings']);
   const router = useRouter();
   const goBack = useGoBack();
   const { run: serverSave, saving, blocked } = useServerSave();
@@ -72,6 +72,10 @@ export function ItemForm({ item }: { item?: Item }) {
   const [categoryId, setCategoryId] = useState(item?.categoryId ?? '');
   const [brandId, setBrandId] = useState(item?.brandId ?? '');
   const [customFields, setCustomFields] = useState<CustomValues>(item?.customFields ?? {});
+  // The company's own fields, checked as the server will (required, numbers, dates, choices); shown once Save is tried.
+  const companyFields = useCustomFields('item');
+  const customErrors = customFieldErrors(companyFields, 'item', customFields, tr);
+  const [customTried, setCustomTried] = useState(false);
 
   const [unitOpen, setUnitOpen] = useState(false);
   const [taxOpen, setTaxOpen] = useState(false);
@@ -115,7 +119,8 @@ export function ItemForm({ item }: { item?: Item }) {
       next.sku = tr('inventory:form.skuTaken');
     }
     setErrors(next);
-    if (hasErrors(next)) {
+    setCustomTried(true);
+    if (hasErrors(next) || Object.keys(customErrors).length) {
       focusFirstInvalid();
       return;
     }
@@ -206,7 +211,7 @@ export function ItemForm({ item }: { item?: Item }) {
               <PickerField label={tr('inventory:form.brand')} value={brands.find((b) => b.id === brandId)?.name ?? tr('inventory:form.none')} onPress={() => setBrandOpen(true)} icon="star-circle-outline" />
             </>
           ) : null}
-          <CustomFieldsSection entity="item" values={customFields} onChange={setCustomFields} />
+          <CustomFieldsSection entity="item" values={customFields} onChange={setCustomFields} errors={customTried ? customErrors : undefined} />
 
           <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
             <AmountField label={tr('inventory:form.salePrice')} value={salePrice} onChangeValue={setSalePrice} currency={baseCurrency} containerStyle={{ flex: 1 }} />

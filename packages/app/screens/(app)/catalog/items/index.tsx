@@ -24,6 +24,8 @@ import type { Item } from '@esmart/core/types';
 import { formatMoney, formatQty } from '@esmart/core/lib/format';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { ListSkeleton, MoreRowsSkeleton } from '../../../../components/ScreenSkeleton';
+import { LoadFailed } from '../../../../features/company/LoadFailed';
+import { Text } from '@esmart/ui/components/Text';
 
 /**
  * The price list: what you sell and for how much. The full plan reaches items
@@ -159,12 +161,12 @@ export default function ItemList() {
               { key: 'sku', header: tr('common:table.sku'), width: 130, render: (i) => <Cell tone="muted">{i.sku}</Cell> },
               { key: 'hsn', secondary: true, header: tr('common:table.hsn'), width: 120, render: (i) => <Cell tone="muted">{i.hsnCode || '—'}</Cell> },
               {
-                key: 'type',
-                header: tr('common:table.type'),
+                // Goods and services have their own tabs, so this column is the unit an item is sold in.
+                key: 'unit',
+                header: tr('common:table.unit'),
                 secondary: true,
                 width: 120,
-                render: (i) =>
-                  i.type === 'service' ? <Badge label={tr('inventory:catalog.service')} tone="neutral" size="sm" /> : <Cell tone="muted">{unitShortName(i.unit)}</Cell>,
+                render: (i) => <Cell tone="muted">{unitShortName(i.unit) || '—'}</Cell>,
               },
               {
                 key: 'onHand',
@@ -185,7 +187,7 @@ export default function ItemList() {
                 render: (i) => <Cell weight="600" mono>{formatMoney(i.salePrice)}</Cell>,
               },
               // A service carries no stock (nor a goods unit to show as its type), so its tab leaves those out.
-            ] satisfies Column<(typeof filtered)[number]>[]).filter((c) => (tab === 'goods' || (c.key !== 'onHand' && c.key !== 'type')) && (hasPos || c.key !== 'sku'))}
+            ] satisfies Column<(typeof filtered)[number]>[]).filter((c) => (tab === 'goods' || (c.key !== 'onHand' && c.key !== 'unit')) && (hasPos || c.key !== 'sku'))}
             rows={filtered}
             rowKey={(i) => i.id}
             onRowPress={(i) => router.push(`/(app)/catalog/items/${i.id}`)}
@@ -220,9 +222,17 @@ export default function ItemList() {
       >
         {tabs}
         <SearchBar value={query} onChangeText={setQuery} placeholder={tr('inventory:catalog.search')} />
-        <Button title={tr('inventory:import.title')} icon="upload" variant="ghost" size="sm" onPress={() => router.push('/(app)/catalog/items/import' as never)} />
-        {showFilters ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm }}>{filters}</View> : null}
-        {pages.isLoading && !filtered.length ? (
+        {/* Filters on the left and Import on the right, as on a desktop. */}
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: t.spacing.sm }}>
+          {showFilters ? filters : null}
+          <View style={{ flex: 1 }} />
+          <Button title={tr('inventory:import.action')} icon="upload" variant="ghost" size="sm" onPress={() => router.push('/(app)/catalog/items/import' as never)} />
+        </View>
+        {pages.isError && !filtered.length ? (
+          <Card padded={false}>
+            <LoadFailed onRetry={pages.refetch} compact />
+          </Card>
+        ) : pages.isLoading && !filtered.length ? (
           <ListSkeleton kind="list" />
         ) : filtered.length === 0 ? (
           <EmptyState
@@ -240,7 +250,16 @@ export default function ItemList() {
                 title={item.name}
                 subtitle={[hasPos ? item.sku : '', item.hsnCode ? `HSN ${item.hsnCode}` : ''].filter(Boolean).join(' · ') || undefined}
                 meta={`${formatMoney(item.salePrice)} / ${unitShortName(item.unit)}`}
-                right={item.type === 'service' ? <Badge label={tr('inventory:catalog.service')} tone="neutral" size="sm" /> : undefined}
+                right={
+                  item.type === 'service' ? (
+                    <Badge label={tr('inventory:catalog.service')} tone="neutral" size="sm" />
+                  ) : item.trackInventory ? (
+                    // What's on hand, as the desktop table shows it.
+                    <Text variant="small" weight="700" tone={(stock[item.id] ?? 0) <= (item.reorderLevel ?? 0) ? 'bad' : 'default'} style={{ fontVariant: ['tabular-nums'] }}>
+                      {formatQty(stock[item.id] ?? 0)} {unitShortName(item.unit)}
+                    </Text>
+                  ) : undefined
+                }
                 divider={i < filtered.length - 1}
                 onPress={() => router.push(`/(app)/catalog/items/${item.id}`)}
               />

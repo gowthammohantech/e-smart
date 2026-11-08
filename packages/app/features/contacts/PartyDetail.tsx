@@ -35,6 +35,7 @@ import { SplitPane } from '@esmart/ui/components/Layout';
 import { useGoBack } from '../../navigation/useGoBack';
 import { PaymentReminderSheet } from '../ledger/PaymentReminderSheet';
 import { CardRowsSkeleton, ListSkeleton } from '../../components/ScreenSkeleton';
+import { LoadFailed } from '../company/LoadFailed';
 
 type Tab = 'activity' | 'documents' | 'payments' | 'details';
 
@@ -231,7 +232,9 @@ export function PartyDetail({ party }: { party: Party }) {
     <>
     {shownTab === 'activity' ? (
       <Card padded={false}>
-        {!aging && agingQ.isLoading ? (
+        {!aging && agingQ.isError ? (
+          <LoadFailed onRetry={agingQ.refetch} compact />
+        ) : !aging ? (
           <CardRowsSkeleton rows={3} />
         ) : outstanding.length === 0 ? (
           <EmptyState illustration="all-settled" icon="check-all" title={tr('contacts:detail.allSettled')} message={tr('contacts:detail.allSettledBody')} compact />

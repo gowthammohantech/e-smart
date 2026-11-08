@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
@@ -10,11 +10,13 @@ import { Button } from '@esmart/ui/components/Button';
 import { TextField } from '@esmart/ui/components/Field';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { SearchBar } from '@esmart/ui/components/SearchBar';
-import { EmptyState } from '@esmart/ui/components/EmptyState';
+import { EmptyState, SkeletonList } from '@esmart/ui/components/EmptyState';
 import { useServerSave } from '../../../components/useServerSave';
 import { useSaveShortcut } from '../../../components/useSaveShortcut';
 import { useAppStore } from '../../../store/appStore';
-import { useBaseCurrency, useDefaultBranchId } from '../../../store/selectors';
+import { useBaseCurrency, useBranches, useDefaultBranchId } from '../../../store/selectors';
+import { unitShortName } from '@esmart/core/data/masters';
+import { LoadFailed } from '../../../features/company/LoadFailed';
 import { useTrackedItems } from '../../../remote/queries';
 import { formatMoney, formatQty } from '@esmart/core/lib/format';
 import { money } from '@esmart/core/lib/money';
@@ -30,11 +32,14 @@ export default function OpeningStock() {
   const insets = useSafeAreaInsets();
 
   // Every tracked item and what's on hand at the active branch, from the server.
-  const { items, stock } = useTrackedItems();
+  const tracked = useTrackedItems();
+  const { items, stock } = tracked;
+  const branches = useBranches();
   const baseCurrency = useBaseCurrency();
   const addStockMovement = useAppStore((s) => s.addStockMovement);
   const activeCompanyId = useAppStore((s) => s.activeCompanyId);
   const defaultBranchId = useDefaultBranchId();
+  const branchName = branches.find((b) => b.id === defaultBranchId)?.name;
 
   const [query, setQuery] = useState('');
   const [date, setDate] = useState(today());
@@ -75,7 +80,7 @@ export default function OpeningStock() {
   useSaveShortcut(() => void save(), !saving && entered.length > 0);
 
   return (
-    <View style={{ flex: 1 }}>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Stack.Screen options={{ title: tr('nav:title.openingStock') }} />
 
       <View style={{ paddingHorizontal: t.spacing.lg, paddingTop: t.spacing.md, gap: t.spacing.md }}>
@@ -83,14 +88,23 @@ export default function OpeningStock() {
           <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
             {tr('inventory:opening.intro')}
           </Text>
+          {branches.length > 1 && branchName ? (
+            <Text variant="caption" weight="600" style={{ marginTop: t.spacing.xs }}>
+              {tr('inventory:opening.forBranch', { branch: branchName })}
+            </Text>
+          ) : null}
         </Card>
         <DateField label={tr('inventory:opening.asOn')} value={date} onChange={setDate} />
         <SearchBar value={query} onChangeText={setQuery} placeholder={tr('inventory:opening.search')} />
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 140 }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
+      <ScrollView contentContainerStyle={{ padding: t.spacing.lg }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <Card padded={false}>
-          {filtered.length === 0 ? (
+          {tracked.isError && !tracked.data ? (
+            <LoadFailed onRetry={tracked.refetch} compact />
+          ) : tracked.isPending ? (
+            <SkeletonList rows={4} />
+          ) : filtered.length === 0 ? (
             <EmptyState illustration="no-items" icon="package-variant" title={tr('inventory:opening.noTracked')} compact />
           ) : (
             filtered.map((item, i) => (
@@ -110,7 +124,7 @@ export default function OpeningStock() {
                     {item.name}
                   </Text>
                   <Text variant="caption" tone="muted">
-                    {item.sku} · {tr('inventory:opening.currently', { qty: formatQty(stock[item.id] ?? 0), unit: item.unit })}
+                    {item.sku} · {tr('inventory:opening.currently', { qty: formatQty(stock[item.id] ?? 0), unit: unitShortName(item.unit) || item.unit })}
                   </Text>
                 </View>
                 <TextField
@@ -118,6 +132,7 @@ export default function OpeningStock() {
                   onChangeText={(v) => setValues((s) => ({ ...s, [item.id]: v.replace(/[^0-9.]/g, '') }))}
                   placeholder="0"
                   keyboardType="decimal-pad"
+                  accessibilityLabel={tr('inventory:opening.qtyFor', { name: item.name })}
                   containerStyle={{ width: 96 }}
                 />
               </View>
@@ -126,12 +141,9 @@ export default function OpeningStock() {
         </Card>
       </ScrollView>
 
+      {/* In the flow, not floating: the keyboard lifts it and it never covers the last rows. */}
       <View
         style={{
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          bottom: 0,
           padding: t.spacing.lg,
           paddingBottom: insets.bottom + t.spacing.md,
           borderTopWidth: 1,
@@ -148,8 +160,8 @@ export default function OpeningStock() {
             {formatMoney(money(totalValue, baseCurrency))}
           </Text>
         </View>
-        <Button shortcut="S" title={tr('inventory:opening.submit')} onPress={() => void save()} loading={saving} disabled={blocked || entered.length === 0} fullWidth />
+        <Button shortcut="S" title={tr('inventory:opening.submit')} onPress={() => void save()} loading={saving} disabled={blocked || entered.length === 0} fullWidth size="lg" />
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }

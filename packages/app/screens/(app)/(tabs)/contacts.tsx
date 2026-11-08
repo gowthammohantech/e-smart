@@ -29,6 +29,7 @@ import { formatMoney } from '@esmart/core/lib/format';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { ListSkeleton, MoreRowsSkeleton } from '../../../components/ScreenSkeleton';
 import { SkeletonGroup, SkeletonStatGrid } from '@esmart/ui/components/Skeleton';
+import { LoadFailed } from '../../../features/company/LoadFailed';
 
 /** general: contacts with no account (a landlord, the auditor), which read like customers here. */
 type Tab = 'customer' | 'supplier' | 'general';
@@ -50,11 +51,18 @@ export default function ContactsTab() {
   // Read from the server by name, 50 at a time, each with its balance; the count and total cover every page.
   const search = useDebounced(query);
   const pages = usePartyPages({ kind: tab, q: search });
-  const summary = usePartySummary({ kind: tab, q: search }).data;
-  const filtered = pages.rows as unknown as (Party & { outstanding?: Money })[];
+  const summaryQuery = usePartySummary({ kind: tab, q: search });
+  const summary = summaryQuery.data;
+  const filtered = pages.rows as unknown as (Party & { outstanding?: Money; advance?: Money })[];
   /** What a party owes (a customer) or is owed (a supplier), in its own currency. */
   const owed = (p: { outstanding?: Money }) => p.outstanding?.minor ?? 0;
+  /** Paid ahead and not yet applied: not "settled". */
+  const ahead = (p: { advance?: Money }) => p.advance?.minor ?? 0;
+  // "Other" contacts have no account: no receivable, no "customers".
+  const general = tab === 'general';
+  const newRoute = tab === 'supplier' ? '/(app)/contacts/suppliers/new' : tab === 'general' ? '/(app)/contacts/customers/new?kind=general' : '/(app)/contacts/customers/new';
   const count = summary?.count ?? filtered.length;
+  const countLabel = general ? tr('contacts:hub.otherCount', { count }) : asCustomer ? tr('contacts:hub.customerCount', { count }) : tr('contacts:hub.supplierCount', { count });
   const loadMore = () => {
     if (pages.hasNextPage && !pages.isFetchingNextPage) void pages.fetchNextPage();
   };
@@ -117,7 +125,9 @@ export default function ContactsTab() {
     !noneAtAll
       ? tr('common:component.noMatches')
       : asCustomer
-        ? tr('contacts:hub.noCustomers')
+        ? general
+          ? tr('contacts:hub.noOther')
+          : tr('contacts:hub.noCustomers')
         : tr('contacts:hub.noSuppliers');
   const emptyMessage = noneAtAll ? tr('contacts:hub.emptyBody') : tr('contacts:hub.noMatchesBody');
 
@@ -149,18 +159,27 @@ export default function ContactsTab() {
           </View>
         ) : null}
         <View style={desktop ? { flexBasis: 380, flexShrink: 1, minWidth: 220 } : undefined}>
-          <SearchBar compact value={query} onChangeText={setQuery} placeholder={asCustomer ? tr('contacts:hub.searchCustomers') : tr('contacts:hub.searchSuppliers')} />
+          <SearchBar
+            compact
+            value={query}
+            onChangeText={setQuery}
+            placeholder={general ? tr('contacts:hub.searchOther') : asCustomer ? tr('contacts:hub.searchCustomers') : tr('contacts:hub.searchSuppliers')}
+          />
         </View>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: t.spacing.lg, ...(desktop ? { flex: 1, justifyContent: 'flex-end' } : null) }}>
-          <Text variant="caption" tone="muted">
-            {asCustomer ? tr('contacts:hub.customerCount', { count }) : tr('contacts:hub.supplierCount', { count })}
+        {/* Count and balance read together; Import sits apart on the right, all on one centred line. */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md, ...(desktop ? { flex: 1, justifyContent: 'flex-end' } : null) }}>
+          <Text variant="caption" tone="muted" numberOfLines={1} style={{ flexShrink: 1, ...(desktop ? null : { flex: 1 }) }}>
+            {countLabel}
+            {!general && summary ? (
+              <Text variant="caption" weight="600" tone={asCustomer ? 'warn' : 'bad'}>
+                {'  ·  '}
+                {asCustomer
+                  ? tr('contacts:hub.receivable', { amount: formatMoney(totalOutstanding) })
+                  : tr('contacts:hub.payable', { amount: formatMoney(totalOutstanding) })}
+              </Text>
+            ) : null}
           </Text>
           <Button title={tr('contacts:import.action')} icon="upload" variant="ghost" size="sm" onPress={() => router.push('/(app)/contacts/import' as never)} />
-          <Text variant="caption" weight="600" tone={asCustomer ? 'warn' : 'bad'}>
-            {asCustomer
-              ? tr('contacts:hub.receivable', { amount: formatMoney(totalOutstanding) })
-              : tr('contacts:hub.payable', { amount: formatMoney(totalOutstanding) })}
-          </Text>
         </View>
       </View>
 
@@ -182,7 +201,7 @@ export default function ContactsTab() {
               <StatTile label={tr('contacts:hub.tile.overdue')} value={summary.overdue as Money} tone="bad" icon="alert-outline" caption={tr('contacts:hub.tile.overdueCaption')} />
               <StatTile label={tr('contacts:hub.tile.advance')} value={summary.advance as Money} icon="cash-fast" caption={tr('contacts:hub.tile.advanceCaption')} />
             </StatGrid>
-          ) : (
+          ) : summaryQuery.isError ? null : (
             <SkeletonGroup>
               <SkeletonStatGrid tiles={4} across />
             </SkeletonGroup>
@@ -196,9 +215,20 @@ export default function ContactsTab() {
                 render: (p) => (
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm, maxWidth: '100%' }}>
                     <Avatar name={p.name} size={28} />
-                    <Cell weight="600">{p.name}</Cell>
-                    {p.status === 'inactive' ? <Badge label={tr('contacts:hub.inactive')} tone="neutral" size="sm" /> : null}
-                    {p.currency !== baseCurrency ? <Badge label={p.currency} tone="info" size="sm" /> : null}
+                    {/* The name gives way first; the chips keep their full words. */}
+                    <View style={{ flexShrink: 1, minWidth: 0 }}>
+                      <Cell weight="600">{p.name}</Cell>
+                    </View>
+                    {p.status === 'inactive' ? (
+                      <View style={{ flexShrink: 0 }}>
+                        <Badge label={tr('contacts:hub.inactive')} tone="neutral" size="sm" />
+                      </View>
+                    ) : null}
+                    {p.currency !== baseCurrency ? (
+                      <View style={{ flexShrink: 0 }}>
+                        <Badge label={p.currency} tone="info" size="sm" />
+                      </View>
+                    ) : null}
                   </View>
                 ),
               },
@@ -216,8 +246,12 @@ export default function ContactsTab() {
                     <Cell weight="700" tone={asCustomer ? 'warn' : 'bad'} mono>
                       {formatMoney(p.outstanding!)}
                     </Cell>
+                  ) : ahead(p) > 0 ? (
+                    <Cell tone="good" mono>
+                      {tr('contacts:hub.advanceAmount', { amount: formatMoney(p.advance!) })}
+                    </Cell>
                   ) : (
-                    <Cell tone="muted">{tr('contacts:hub.settled')}</Cell>
+                    <Cell tone="muted">{general ? '—' : tr('contacts:hub.settled')}</Cell>
                   ),
               },
             ]}
@@ -243,6 +277,12 @@ export default function ContactsTab() {
             empty={<EmptyState illustration="no-contacts" icon="account-group-outline" title={emptyTitle} message={emptyMessage} compact />}
           />
         </View>
+      ) : pages.isError && !filtered.length ? (
+        <ScrollView contentContainerStyle={{ padding: t.spacing.lg }}>
+          <Card padded={false}>
+            <LoadFailed onRetry={pages.refetch} compact />
+          </Card>
+        </ScrollView>
       ) : pages.isLoading && !filtered.length ? (
         <ListSkeleton />
       ) : sections.length === 0 ? (
@@ -253,11 +293,7 @@ export default function ContactsTab() {
               title={emptyTitle}
               message={emptyMessage}
               actionLabel={noneAtAll ? tr('contacts:hub.addContact') : undefined}
-              onAction={
-                noneAtAll
-                  ? () => router.push(asCustomer ? '/(app)/contacts/customers/new' : '/(app)/contacts/suppliers/new')
-                  : undefined
-              }
+              onAction={noneAtAll ? () => router.push(newRoute as never) : undefined}
               compact
             />
           </Card>
@@ -325,7 +361,16 @@ export default function ContactsTab() {
                         {asCustomer ? tr('contacts:hub.owesYou') : tr('contacts:hub.youOwe')}
                       </Text>
                     </>
-                  ) : (
+                  ) : ahead(p) > 0 ? (
+                    <>
+                      <Text variant="small" weight="700" tone="good">
+                        {formatMoney(p.advance!)}
+                      </Text>
+                      <Text variant="micro" tone="muted">
+                        {tr('contacts:hub.inAdvance')}
+                      </Text>
+                    </>
+                  ) : general ? null : (
                     <Text variant="micro" tone="muted">{tr('contacts:hub.settled')}</Text>
                   )}
                 </View>
@@ -338,9 +383,8 @@ export default function ContactsTab() {
 
       <Fab
         icon="account-plus"
-        onPress={() =>
-          router.push(asCustomer ? '/(app)/contacts/customers/new' : '/(app)/contacts/suppliers/new')
-        }
+        label={tab === 'supplier' ? tr('contacts:hub.newSupplier') : general ? tr('contacts:hub.newContact') : tr('contacts:hub.newCustomer')}
+        onPress={() => router.push(newRoute as never)}
       />
     </View>
   );

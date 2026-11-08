@@ -6,7 +6,6 @@ import { Stack } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Badge } from '@esmart/ui/components/Badge';
-import { Button } from '@esmart/ui/components/Button';
 import { Card } from '@esmart/ui/components/Card';
 import { PrimaryActionBar } from '@esmart/ui/components/ActionBar';
 import { ListRow } from '@esmart/ui/components/ListRow';
@@ -24,6 +23,7 @@ import type { Vehicle } from '@esmart/core/types';
 import { api } from '../../../remote/api';
 import { useAppStore } from '../../../store/appStore';
 import { useActiveCompany, useVehicles } from '../../../store/selectors';
+import { SheetActions } from '../../../features/company/SheetActions';
 import { useServerSave } from '../../../components/useServerSave';
 
 type Spend = { vehicleId: string; expenses: Money; expenseCount: number; documentCount: number };
@@ -32,13 +32,14 @@ type Spend = { vehicleId: string; expenses: Money; expenseCount: number; documen
 export default function VehicleSettings() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
-  const { t: tr } = useTranslation(['settings']);
+  const { t: tr } = useTranslation(['settings', 'errors']);
   const { run: serverSave, saving } = useServerSave();
   const company = useActiveCompany();
   const vehicles = useVehicles(true);
   const saveVehicle = useAppStore((s) => s.saveVehicle);
   const removeVehicle = useAppStore((s) => s.removeVehicle);
   const [editing, setEditing] = useState<Vehicle | null>(null);
+  const [regError, setRegError] = useState<string | undefined>();
   const [confirmDelete, setConfirmDelete] = useState<Vehicle | null>(null);
   const fy = financialYearOf(today(), company.fiscalYearStartMonth);
   const spend = useQuery({
@@ -84,37 +85,39 @@ export default function VehicleSettings() {
         onClose={() => setEditing(null)}
         title={editing?.id ? editing.registration : tr('settings:vehicles.add')}
         footer={
-          <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
-            {editing?.id ? (
-              <Button
-                title={tr('settings:vehicles.delete')}
-                variant="danger"
-                style={{ flex: 1 }}
-                onPress={() => {
-                  const v = editing;
-                  setEditing(null);
-                  setConfirmDelete(v);
-                }}
-              />
-            ) : null}
-            <Button
-              title={tr('settings:vehicles.save')}
-              onPress={async () => {
-                if (!editing || !editing.registration.trim()) return;
+          <SheetActions
+            saveLabel={tr('settings:vehicles.save')}
+            onSave={async () => {
+                if (!editing) return;
+                if (!editing.registration.trim()) {
+                  setRegError(tr('errors:validation.required', { field: tr('settings:vehicles.registration') }));
+                  return;
+                }
                 const vehicle: Vehicle = { ...editing, id: editing.id || uid('veh'), registration: editing.registration.replace(/[\s-]/g, '').toUpperCase(), name: editing.name?.trim() || undefined };
                 const res = await serverSave(() => saveVehicle(vehicle), tr('settings:vehicles.saved'), { icon: 'truck-outline' });
                 if (res) setEditing(null);
               }}
-              loading={saving}
-              disabled={!editing?.registration.trim() || saving}
-              style={{ flex: 2 }}
-            />
-          </View>
+            saving={saving}
+            deleteLabel={tr('settings:vehicles.delete')}
+            onDelete={
+              editing?.id
+                ? () => {
+                  const v = editing;
+                  setEditing(null);
+                  setConfirmDelete(v);
+                }
+                : undefined
+            }
+          />
         }
       >
         {editing ? (
           <View style={{ padding: t.spacing.lg, gap: t.spacing.md }}>
-            <TextField label={tr('settings:vehicles.registration')} value={editing.registration} onChangeText={(registration) => setEditing({ ...editing, registration })} placeholder="TN09AB1234" autoCapitalize="characters" required />
+            <TextField label={tr('settings:vehicles.registration')} value={editing.registration} onChangeText={(registration) => {
+                setEditing({ ...editing, registration });
+                setRegError(undefined);
+              }}
+              error={regError} placeholder="TN09AB1234" autoCapitalize="characters" required />
             <TextField label={tr('settings:vehicles.name')} value={editing.name ?? ''} onChangeText={(name) => setEditing({ ...editing, name })} maxLength={100} />
             {editing.id ? <SwitchField label={tr('settings:vehicles.active')} value={editing.status !== 'inactive'} onValueChange={(on) => setEditing({ ...editing, status: on ? 'active' : 'inactive' })} /> : null}
           </View>

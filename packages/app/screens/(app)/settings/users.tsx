@@ -210,11 +210,13 @@ export default function UserSettings() {
         title={editing?.id ? tr('settings:users.editTitle') : tr('settings:users.invite')}
         footer={
           <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
+            {/* Remove stays on the left, apart from Save, as every settings sheet has it. */}
             {editing?.id && editing.role !== 'owner' ? (
               <Button
                 title={tr('settings:users.remove')}
                 variant="danger"
-                style={{ flex: 1 }}
+                icon="delete-outline"
+                style={{ flex: 1, marginRight: t.spacing.md }}
                 onPress={() => {
                   const u = editing;
                   setEditing(null);
@@ -299,9 +301,10 @@ export default function UserSettings() {
         destructive
         onCancel={() => setConfirmRemove(null)}
         onConfirm={() => {
-          if (confirmRemove) removeUser(confirmRemove.id);
+          const u = confirmRemove;
           setConfirmRemove(null);
-          toast.show(tr('settings:users.removed'), 'success', { icon: 'account-remove-outline', detail: confirmRemove?.name });
+          // "Removed" only once the server has done it.
+          if (u) void serverSave(() => removeUser(u.id), tr('settings:users.removed'), { icon: 'account-remove-outline', detail: u.name });
         }}
       />
     </View>

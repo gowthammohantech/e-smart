@@ -5,7 +5,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Card } from '@esmart/ui/components/Card';
-import { Button } from '@esmart/ui/components/Button';
 import { PrimaryActionBar } from '@esmart/ui/components/ActionBar';
 import { ListRow } from '@esmart/ui/components/ListRow';
 import { Sheet } from '@esmart/ui/components/Sheet';
@@ -18,6 +17,7 @@ import { uid } from '@esmart/core/lib/id';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { useAppStore } from '../../../store/appStore';
 import { useActiveCompany, useItemCategories } from '../../../store/selectors';
+import { SheetActions } from '../../../features/company/SheetActions';
 import { useServerSave } from '../../../components/useServerSave';
 
 /** The colours a category can take; the first is the neutral default. */
@@ -26,7 +26,7 @@ const COLOURS = ['#8E98AC', '#4DA3FF', '#2EC4B6', '#5CB85C', '#F5A623', '#F2711C
 export default function ItemCategorySettings() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
-  const { t: tr } = useTranslation(['nav', 'settings']);
+  const { t: tr } = useTranslation(['nav', 'settings', 'errors']);
   const { run: serverSave, saving } = useServerSave();
 
   const company = useActiveCompany();
@@ -37,11 +37,14 @@ export default function ItemCategorySettings() {
   const [editing, setEditing] = useState<ItemCategory | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<ItemCategory | null>(null);
   const [name, setName] = useState('');
+  // An empty name says so on the field, not by a Save that does nothing.
+  const [nameError, setNameError] = useState<string | undefined>();
   const [color, setColor] = useState(COLOURS[0]);
 
   const open = (c?: ItemCategory) => {
     setEditing(c ?? { id: '', companyId: company.id, name: '', color: COLOURS[0] });
     setName(c?.name ?? '');
+    setNameError(undefined);
     setColor(c?.color ?? COLOURS[0]);
   };
 
@@ -76,37 +79,39 @@ export default function ItemCategorySettings() {
         onClose={() => setEditing(null)}
         title={editing?.id ? tr('settings:itemCategories.editTitle') : tr('settings:itemCategories.add')}
         footer={
-          <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
-            {editing?.id ? (
-              <Button
-                title={tr('settings:itemCategories.delete')}
-                variant="danger"
-                style={{ flex: 1 }}
-                onPress={() => {
-                  const c = editing;
-                  setEditing(null);
-                  setConfirmDelete(c);
-                }}
-              />
-            ) : null}
-            <Button
-              title={tr('settings:itemCategories.save')}
-              onPress={async () => {
-                if (!editing || !name.trim()) return;
+          <SheetActions
+            saveLabel={tr('settings:itemCategories.save')}
+            onSave={async () => {
+                if (!editing) return;
+    if (!name.trim()) {
+      setNameError(tr('errors:validation.required', { field: tr('settings:itemCategories.name') }));
+      return;
+    }
                 const category: ItemCategory = { ...editing, id: editing.id || uid('icat'), companyId: company.id, name: name.trim(), color };
                 // The sheet stays open until the server has it, so a refusal (a name taken) can be fixed here.
                 const res = await serverSave(() => saveItemCategory(category), tr('settings:itemCategories.saved'), { icon: 'tag-outline' });
                 if (res) setEditing(null);
               }}
-              loading={saving}
-              disabled={!name.trim() || saving}
-              style={{ flex: 2 }}
-            />
-          </View>
+            saving={saving}
+                        deleteLabel={tr('settings:itemCategories.delete')}
+            onDelete={
+              editing?.id
+                ? () => {
+                  const c = editing;
+                  setEditing(null);
+                  setConfirmDelete(c);
+                }
+                : undefined
+            }
+          />
         }
       >
         <View style={{ padding: t.spacing.lg, gap: t.spacing.lg }}>
-          <TextField label={tr('settings:itemCategories.name')} value={name} onChangeText={setName} placeholder={tr('settings:itemCategories.namePlaceholder')} icon="tag-outline" maxLength={100} required />
+          <TextField label={tr('settings:itemCategories.name')} value={name} onChangeText={(v) => {
+            setName(v);
+            setNameError(undefined);
+          }}
+          error={nameError} placeholder={tr('settings:itemCategories.namePlaceholder')} icon="tag-outline" maxLength={100} required />
           <View style={{ gap: t.spacing.sm }}>
             <Text variant="small" weight="600">
               {tr('settings:itemCategories.colour')}
