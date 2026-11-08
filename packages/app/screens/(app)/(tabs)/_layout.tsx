@@ -16,6 +16,7 @@ import { tabQuestion } from '../../../features/lixi/brain';
 import { TabBar } from '@esmart/ui/components/TabBar';
 import { TabSwipe } from '../../../components/TabSwipe';
 import { countLabel } from '@esmart/core/lib/format';
+import { inkOn } from '@esmart/ui/theme/contrast';
 import { TABS } from '../../../navigation/tabs';
 import { PHONE_TABS } from '../../../navigation/menu';
 import { PageSurface } from '@esmart/ui/components/Doodles';
@@ -115,7 +116,7 @@ export default function TabsLayout() {
               href: visible.includes(tab.name) ? undefined : null,
               title: tr(`nav:tab.${tab.name}` as 'nav:tab.index'),
               tabBarBadge: tab.name === 'more' && unread > 0 ? countLabel(unread) : undefined,
-              tabBarBadgeStyle: { backgroundColor: t.c.bad, fontSize: 10 },
+              tabBarBadgeStyle: { backgroundColor: t.c.bad, color: inkOn(t.c.bad), fontSize: 10 },
               tabBarIcon: ({ color, focused }) => (
                 <Icon name={focused ? tab.activeIcon : tab.icon} size={23} color={color} />
               ),

@@ -20,7 +20,7 @@ import { appVersion } from '../../../lib/appVersion';
 
 export default function MoreTab() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['common', 'nav']);
+  const { t: tr } = useTranslation(['common', 'nav', 'auth', 'settings']);
   const router = useRouter();
 
   const user = useCurrentUser();
@@ -45,14 +45,14 @@ export default function MoreTab() {
           onPress={() => router.push('/(app)/settings/profile')}
           style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}
         >
-          <Avatar name={user?.name ?? 'You'} size={50} color={user?.avatarColor} />
-          <View style={{ flex: 1, gap: 3 }}>
-            <Text variant="title">{user?.name}</Text>
-            <Text variant="caption" tone="muted">
+          <Avatar name={user?.name ?? tr('settings:profile.you')} size={50} color={user?.avatarColor} />
+          <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
+            <Text variant="title" numberOfLines={1}>{user?.name}</Text>
+            <Text variant="caption" tone="muted" numberOfLines={1}>
               {user?.email}
             </Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 3 }}>
-              <Badge label={user?.role ?? 'owner'} tone="info" size="sm" />
+              <Badge label={tr(`auth:invite.roles.${user?.role ?? 'owner'}` as 'auth:invite.roles.owner')} tone="info" size="sm" />
               <Badge label={company?.name ?? ''} tone="neutral" size="sm" />
             </View>
           </View>

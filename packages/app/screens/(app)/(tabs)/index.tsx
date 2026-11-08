@@ -105,6 +105,49 @@ export default function Home() {
   // and empty charts reads as broken, so show a first-run block instead.
   const isFirstRun = !!hub?.firstRun;
 
+  // One "+" everywhere on Home, first run or not: it offers every kind of new entry.
+  const createSheet = (
+    <Sheet visible={actionsOpen} onClose={() => setActionsOpen(false)} title={tr('reports:home.create')}>
+      {quickActions(tr, t.c.primary).filter((a) => canOpen(a.route)).map((a) => (
+        <Pressable
+          key={a.key}
+          onPress={() => {
+            setActionsOpen(false);
+            router.push(a.route as never);
+          }}
+          accessibilityRole="button"
+          accessibilityLabel={a.label}
+          style={({ pressed }) => ({
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: t.spacing.md,
+            paddingVertical: t.spacing.md,
+            paddingHorizontal: t.spacing.lg,
+            backgroundColor: pressed ? t.c.card2 : 'transparent',
+          })}
+        >
+          <View
+            style={{
+              width: 38,
+              height: 38,
+              borderRadius: t.radius.sm,
+              backgroundColor: t.c.chip,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Icon name={a.icon} size={20} color={t.c.primary} />
+          </View>
+          <Text variant="body" weight="500" style={{ flex: 1 }}>
+            {a.label}
+          </Text>
+          <Icon name="chevron-right" size={18} color={t.c.muted} />
+        </Pressable>
+      ))}
+    </Sheet>
+  );
+  const fab = <Fab icon="plus" label={tr('reports:home.create')} onPress={() => setActionsOpen(true)} />;
+
   if (!hub) {
     return (
       <View style={{ flex: 1 }}>
@@ -125,7 +168,8 @@ export default function Home() {
           <FirstRunDesktop />
         </Screen>
 
-        <Fab icon="plus" label={tr('reports:home.invoice')} onPress={() => router.push('/(app)/sales/invoices/new')} />
+        {fab}
+        {createSheet}
       </View>
     );
   }
@@ -154,7 +198,8 @@ export default function Home() {
           </View>
         </Screen>
 
-        <Fab icon="plus" label={tr('reports:home.invoice')} onPress={() => router.push('/(app)/sales/invoices/new')} />
+        {fab}
+        {createSheet}
       </View>
     );
   }
@@ -303,14 +348,15 @@ export default function Home() {
 
               <SectionHeader title={tr('reports:home.owedToYou')} action={tr('nav:shell.viewAll')} onAction={() => router.push('/(app)/receivables')} />
               <Card style={{ gap: t.spacing.lg }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <View style={{ gap: 3 }}>
+                {/* On a narrow phone the badges drop under the amount rather than squeezing it. */}
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'flex-start', gap: t.spacing.sm }}>
+                  <View style={{ gap: 3, flexShrink: 1, minWidth: 0 }}>
                     <Text variant="caption" tone="muted">{tr('reports:home.totalReceivable')}</Text>
-                    <Text variant="h2" weight="700">
+                    <Text variant="h2" weight="700" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
                       {formatMoney(hub.receivable.total)}
                     </Text>
                   </View>
-                  <View style={{ alignItems: 'flex-end', gap: 5 }}>
+                  <View style={{ alignItems: desktop ? 'flex-end' : 'flex-start', gap: 5 }}>
                     <Badge label={tr('nav:home.amountOverdue', { amount: formatMoney(hub.receivable.overdue) })} tone="danger" size="sm" />
                     <Badge label={tr('nav:home.amountDueSoon', { amount: formatMoney(hub.receivable.dueSoon) })} tone="warning" size="sm" />
                   </View>
@@ -330,11 +376,11 @@ export default function Home() {
               <SectionHeader title={tr('reports:home.youOwe')} action={tr('nav:shell.viewAll')} onAction={() => router.push('/(app)/payables')} />
               <Card
                 onPress={() => router.push('/(app)/payables')}
-                style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+                style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: t.spacing.sm }}
               >
-                <View style={{ gap: 3 }}>
+                <View style={{ gap: 3, flexShrink: 1, minWidth: 0 }}>
                   <Text variant="caption" tone="muted">{tr('reports:home.totalPayable')}</Text>
-                  <Text variant="h3" weight="700">
+                  <Text variant="h3" weight="700" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
                     {formatMoney(hub.payable?.total ?? zero)}
                   </Text>
                 </View>
@@ -426,7 +472,7 @@ export default function Home() {
 
               {overdueInvoices.length > 0 ? (
                 <>
-                  <SectionHeader title={tr('reports:home.attentionCaption')} action={tr('nav:title.receivables')} onAction={() => router.push('/(app)/receivables')} />
+                  <SectionHeader title={tr('reports:home.attentionCaption')} action={tr('nav:shell.viewAll')} onAction={() => router.push('/(app)/receivables')} />
                   <Card padded={false}>
                     {overdueInvoices.map((o, i) => (
                       <DocumentRow
@@ -473,7 +519,7 @@ export default function Home() {
                 )}
               </Card>
 
-              <SectionHeader title={tr('reports:home.recentInvoices')} action={tr('common:action.seeAll')} onAction={() => router.push('/(app)/sales/invoices')} />
+              <SectionHeader title={tr('reports:home.recentInvoices')} action={tr('nav:shell.viewAll')} onAction={() => router.push('/(app)/sales/invoices')} />
               <Card padded={false}>
                 {recent.length === 0 ? (
                   <EmptyState
@@ -502,46 +548,9 @@ export default function Home() {
         />
       </Screen>
 
-      <Fab icon="plus" onPress={() => setActionsOpen(true)} bottom={0} />
+      {fab}
 
-      <Sheet visible={actionsOpen} onClose={() => setActionsOpen(false)} title={tr('reports:home.create')}>
-        {quickActions(tr, t.c.primary).filter((a) => canOpen(a.route)).map((a) => (
-          <Pressable
-            key={a.key}
-            onPress={() => {
-              setActionsOpen(false);
-              router.push(a.route as never);
-            }}
-            accessibilityRole="button"
-            accessibilityLabel={a.label}
-            style={({ pressed }) => ({
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: t.spacing.md,
-              paddingVertical: t.spacing.md,
-              paddingHorizontal: t.spacing.lg,
-              backgroundColor: pressed ? t.c.card2 : 'transparent',
-            })}
-          >
-            <View
-              style={{
-                width: 38,
-                height: 38,
-                borderRadius: t.radius.sm,
-                backgroundColor: t.c.chip,
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Icon name={a.icon} size={20} color={t.c.primary} />
-            </View>
-            <Text variant="body" weight="500" style={{ flex: 1 }}>
-              {a.label}
-            </Text>
-            <Icon name="chevron-right" size={18} color={t.c.muted} />
-          </Pressable>
-        ))}
-      </Sheet>
+      {createSheet}
     </View>
   );
 }

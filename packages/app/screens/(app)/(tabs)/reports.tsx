@@ -7,6 +7,7 @@ import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { AppHeader } from '../../../components/AppHeader';
 import { SectionHeader } from '@esmart/ui/components/Screen';
 import { Card } from '@esmart/ui/components/Card';
+import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { Text } from '@esmart/ui/components/Text';
 import { StatRow, StatTile } from '@esmart/ui/components/StatTile';
 import { Skeleton, SkeletonGroup } from '@esmart/ui/components/Skeleton';
@@ -88,7 +89,8 @@ export default function ReportsTab() {
   const emptyProfit = useMemo(() => profitSnapshot([], [], [], baseCurrency, { range }), [baseCurrency, range]);
   const profitQ = useReportData<ProfitSnapshot>(canOpen('/reports/profit') ? 'profit' : null, range);
   const profit = profitQ.data ?? emptyProfit;
-  const stock = useReportData<StockReport>(canOpen('/reports/stock') ? 'stock' : null, range).data ?? { totalValue: money(0, baseCurrency) };
+  const stockQ = useReportData<StockReport>(canOpen('/reports/stock') ? 'stock' : null, range);
+  const stock = stockQ.data ?? { totalValue: money(0, baseCurrency) };
   const none = money(0, baseCurrency);
   type Aging = { summary: { total: Money } };
   const receivablesQ = useReportData<Aging>(canOpen('/reports/receivables') ? 'receivables' : null, range);
@@ -97,6 +99,12 @@ export default function ReportsTab() {
   const payables = payablesQ.data ?? { summary: { total: none } };
   // First answers still on their way: the tiles shimmer rather than read zero.
   const profitLoading = !profitQ.data && profitQ.isLoading;
+  // A figure that failed to load reads as a dash, never as ₹0; one card offers to try them again.
+  const failed = (q: { data?: unknown; isError: boolean }) => !q.data && q.isError;
+  const profitFailed = failed(profitQ);
+  const anyFailed = [profitQ, stockQ, receivablesQ, payablesQ].some(failed);
+  const retryFailed = () => [profitQ, stockQ, receivablesQ, payablesQ].filter(failed).forEach((q) => void q.refetch());
+  const DASH = '—';
 
   const trend = useMemo(() => {
     const keys = lastNMonths(6);
@@ -107,10 +115,10 @@ export default function ReportsTab() {
   }, [profit.byMonth, baseCurrency]);
 
   const snapshot = [
-    { label: tr('reports:figure.grossProfit'), value: formatMoney(profit.grossProfit) },
-    { label: tr('reports:figure.costOfGoodsSold'), value: formatMoney(profit.costOfGoods) },
-    { label: tr('reports:figure.operatingExpenses'), value: formatMoney(profit.expenses) },
-    { label: tr('reports:figure.stockOnHand'), value: formatMoney(stock.totalValue) },
+    { label: tr('reports:figure.grossProfit'), value: profitFailed ? DASH : formatMoney(profit.grossProfit) },
+    { label: tr('reports:figure.costOfGoodsSold'), value: profitFailed ? DASH : formatMoney(profit.costOfGoods) },
+    { label: tr('reports:figure.operatingExpenses'), value: profitFailed ? DASH : formatMoney(profit.expenses) },
+    { label: tr('reports:figure.stockOnHand'), value: failed(stockQ) ? DASH : formatMoney(stock.totalValue) },
   ];
 
   // Three to a row on a desktop, two on a tablet, the last row padded so every card keeps the same width.
@@ -136,21 +144,33 @@ export default function ReportsTab() {
         {/* Profit and stock need the buying side of the books, so the Sales plan starts at the list. */}
         {full ? (
           <>
+        {anyFailed ? (
+          <Card style={{ marginTop: t.spacing.md }}>
+            <EmptyState
+              icon="cloud-off-outline"
+              title={tr('reports:dash.state.failedTitle')}
+              message={tr('reports:dash.state.failedBody')}
+              actionLabel={tr('reports:dash.state.retry')}
+              onAction={retryFailed}
+              compact
+            />
+          </Card>
+        ) : null}
         <StatGrid>
           <StatRow>
-            <StatTile label={tr('reports:hub.revenueFy')} value={profit.revenue} icon="trending-up" loading={profitLoading} />
+            <StatTile label={tr('reports:hub.revenueFy')} value={profitFailed ? DASH : profit.revenue} icon="trending-up" loading={profitLoading} />
             <StatTile
               label={tr('reports:hub.netProfit')}
-              value={profit.netProfit}
+              value={profitFailed ? DASH : profit.netProfit}
               loading={profitLoading}
-              tone={profit.netProfit.minor >= 0 ? 'good' : 'bad'}
+              tone={profitFailed ? 'default' : profit.netProfit.minor >= 0 ? 'good' : 'bad'}
               icon="chart-line"
-              caption={tr('reports:hub.margin', { percent: formatPercent(profit.margin) })}
+              caption={profitFailed ? undefined : tr('reports:hub.margin', { percent: formatPercent(profit.margin) })}
             />
           </StatRow>
           <StatRow>
-            <StatTile label={tr('reports:hub.receivable')} value={receivables.summary.total} tone="warn" icon="clock-alert-outline" loading={!receivablesQ.data && receivablesQ.isLoading} />
-            <StatTile label={tr('reports:hub.payable')} value={payables.summary.total} tone="bad" icon="file-clock-outline" loading={!payablesQ.data && payablesQ.isLoading} />
+            <StatTile label={tr('reports:hub.receivable')} value={failed(receivablesQ) ? DASH : receivables.summary.total} tone="warn" icon="clock-alert-outline" loading={!receivablesQ.data && receivablesQ.isLoading} />
+            <StatTile label={tr('reports:hub.payable')} value={failed(payablesQ) ? DASH : payables.summary.total} tone="bad" icon="file-clock-outline" loading={!payablesQ.data && payablesQ.isLoading} />
           </StatRow>
         </StatGrid>
 
@@ -160,7 +180,7 @@ export default function ReportsTab() {
             <View style={{ flex: 2, minWidth: 0 }}>
               <SectionHeader title={tr('reports:hub.monthlyProfit')} action={tr('reports:hub.open')} onAction={() => router.push('/(app)/reports/profit')} />
               <Card style={{ flex: 1 }}>
-                {profitLoading ? <SkeletonGroup><Skeleton height={150} radius={10} /></SkeletonGroup> : <BarChart data={trend} caption={tr('reports:hub.profitCaption')} />}
+                {profitLoading ? <SkeletonGroup><Skeleton height={150} radius={10} /></SkeletonGroup> : profitFailed ? <Text variant="small" tone="muted">{tr('reports:dash.state.failedTitle')}</Text> : <BarChart data={trend} caption={tr('reports:hub.profitCaption')} />}
               </Card>
             </View>
             <View style={{ flex: 1, minWidth: 0 }}>
@@ -197,7 +217,7 @@ export default function ReportsTab() {
           <>
         <SectionHeader title={tr('reports:hub.monthlyProfit')} action={tr('reports:hub.open')} onAction={() => router.push('/(app)/reports/profit')} />
         <Card>
-          {profitLoading ? <SkeletonGroup><Skeleton height={150} radius={10} /></SkeletonGroup> : <BarChart data={trend} caption={tr('reports:hub.profitCaption')} />}
+          {profitLoading ? <SkeletonGroup><Skeleton height={150} radius={10} /></SkeletonGroup> : profitFailed ? <Text variant="small" tone="muted">{tr('reports:dash.state.failedTitle')}</Text> : <BarChart data={trend} caption={tr('reports:hub.profitCaption')} />}
         </Card>
 
         <SectionHeader title={tr('reports:hub.snapshot')} />

@@ -1,11 +1,26 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { Icon } from '../Icon';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useIsDesktop } from '../../theme/breakpoints';
 import { FieldShell, useFieldA11y, webFocusHalo } from '../Field';
 import { toISODate } from '@esmart/core/lib/date';
+
+// The browser draws its own calendar button inside a date input, beside ours:
+// two calendar icons, and in dark mode Chrome's is near invisible. Ours is the
+// one shown (and opens the browser's calendar); the browser's is kept in place
+// but clear, so a click at the field's end still opens the calendar while the
+// date's parts stay clickable for typing.
+const DATE_CLASS = 'esmart-date-input';
+if (typeof document !== 'undefined' && !document.getElementById(DATE_CLASS)) {
+  const style = document.createElement('style');
+  style.id = DATE_CLASS;
+  style.textContent = `
+    .${DATE_CLASS}::-webkit-calendar-picker-indicator { opacity: 0; cursor: pointer; }
+  `;
+  document.head.appendChild(style);
+}
 
 /**
  * The browser's own date input. The native picker has no web build, and a
@@ -45,6 +60,17 @@ export function DateField({
   const allowed = (iso: string) => (!min || iso >= min) && (!max || iso <= max);
 
   const a11y = useFieldA11y({ error, hint, required });
+  const input = useRef<HTMLInputElement>(null);
+  const openCalendar = () => {
+    const el = input.current as (HTMLInputElement & { showPicker?: () => void }) | null;
+    if (!el) return;
+    el.focus();
+    try {
+      el.showPicker?.();
+    } catch {
+      // Some browsers refuse outside a direct click; focus is enough to type.
+    }
+  };
 
   return (
     <FieldShell label={label} required={required} hint={hint} error={error} messageId={a11y.messageId}>
@@ -63,8 +89,12 @@ export function DateField({
           ...webFocusHalo(t, focused && !error && !stray),
         }}
       >
-        <Icon name="calendar-outline" size={18} color={t.c.muted} />
+        <Pressable onPress={openCalendar} accessibilityElementsHidden importantForAccessibility="no" {...({ tabIndex: -1 } as object)}>
+          <Icon name="calendar-outline" size={18} color={t.c.muted} />
+        </Pressable>
         <input
+          ref={input}
+          className={DATE_CLASS}
           type="date"
           aria-label={label ?? tr('common:component.date')}
           required={required}

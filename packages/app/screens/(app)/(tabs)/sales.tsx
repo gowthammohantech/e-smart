@@ -121,18 +121,17 @@ export default function SalesTab() {
 
         <SectionHeader
           title={tr('sales:hub.topCustomers')}
-          action={topCustomers.length ? tr('reports:dash.export.csv') : tr('sales:hub.contacts')}
+          // Export when there is something to export; nothing in its place otherwise.
+          action={topCustomers.length ? tr('reports:dash.export.csv') : undefined}
           onAction={() =>
-            topCustomers.length
-              ? exportCsv(tr('sales:hub.topCustomers'), hub?.period, { headers: [tr('sales:hub.contacts'), tr('reports:dash.sales.invoiced')], rows: topCustomers.map((c) => [c.label, major(c.value)]) })
-              : router.push('/(app)/(tabs)/contacts')
+            exportCsv(tr('sales:hub.topCustomers'), hub?.period, { headers: [tr('sales:hub.contacts'), tr('reports:dash.sales.invoiced')], rows: topCustomers.map((c) => [c.label, major(c.value)]) })
           }
         />
         <Card>
           <RankedBars rows={topCustomers} colorFor={(i) => seriesColor(t.scheme, i)} emptyLabel={tr('sales:hub.noSales')} />
         </Card>
 
-        <SectionHeader title={tr('sales:hub.recentInvoices')} action={tr('common:action.seeAll')} onAction={() => router.push('/(app)/sales/invoices')} />
+        <SectionHeader title={tr('sales:hub.recentInvoices')} action={tr('nav:shell.viewAll')} onAction={() => router.push('/(app)/sales/invoices')} />
         <Card padded={false}>
           {recent.length === 0 ? (
             <EmptyState

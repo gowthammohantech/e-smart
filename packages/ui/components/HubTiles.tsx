@@ -46,6 +46,8 @@ export function HubTiles({ tiles }: { tiles: HubTile[] }) {
             padding: t.spacing.lg,
             gap: t.spacing.md,
             opacity: pressed ? 0.75 : 1,
+            // A borderless light tile needs its shadow to show where it ends.
+            ...t.shadow.card,
             ...focusRing(t, focused),
             };
           }}
@@ -78,9 +80,9 @@ export function HubTiles({ tiles }: { tiles: HubTile[] }) {
           </Text>
         </Pressable>
       ))}
-      {breakpoint === 'phone'
-        ? null
-        : Array.from({ length: fillers }, (_, i) => <View key={`filler-${i}`} style={{ width: tileWidth, flexGrow: 1 }} />)}
+      {Array.from({ length: fillers }, (_, i) => (
+        <View key={`filler-${i}`} style={{ width: tileWidth, flexGrow: 1 }} />
+      ))}
     </View>
   );
 }

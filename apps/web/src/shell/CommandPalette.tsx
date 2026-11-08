@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -12,6 +12,7 @@ import { useGlobalSearch } from '@esmart/app/features/search/useGlobalSearch';
 import { matchPages, sectionHref, useAppPages } from '@esmart/app/navigation/pages';
 import { appHref } from '@esmart/app/navigation/menu';
 import { useCanOpen, usePlan } from '@esmart/app/store/selectors';
+import { useDebounced } from '@esmart/app/components/useDebounced';
 
 type Entry = { key: string; group: string; title: string; subtitle?: string; trailing?: string; icon: IconName; route: string };
 
@@ -29,8 +30,12 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
 
   const [query, setQuery] = useState('');
   const [index, setIndex] = useState(0);
-  const { results } = useGlobalSearch(query);
+  const { results, isFetching } = useGlobalSearch(query);
   const searching = query.trim().length >= 2;
+  // Typed but not yet asked (the search waits for typing to pause), or asked and not yet back.
+  const settled = useDebounced(query);
+  const pending = searching && (isFetching || settled !== query);
+  const rows = useRef(new Map<number, View>());
   // Every page in the menu: the sections, the pages under them, the tools and settings.
   const pages = useAppPages();
 
@@ -60,6 +65,12 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
     }));
     return [...actions, ...sections];
   }, [searching, query, pages, results, tr, t.c.primary, allowed, plan]);
+
+  // The arrow keys move the highlight; keep it in view.
+  useEffect(() => {
+    const node = rows.current.get(index) as unknown as HTMLElement | undefined;
+    node?.scrollIntoView?.({ block: 'nearest' });
+  }, [index]);
 
   const open = (entry: Entry | undefined) => {
     if (!entry) return;
@@ -133,7 +144,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
           <ScrollView style={{ maxHeight: 420 }} contentContainerStyle={{ padding: t.spacing.xs }} keyboardShouldPersistTaps="handled">
             {searching && entries.length === 0 ? (
               <Text variant="small" tone="muted" style={{ padding: t.spacing.lg }}>
-                {tr('nav:shell.noMatches', { query: query.trim() })}
+                {pending ? tr('nav:shell.searching') : tr('nav:shell.noMatches', { query: query.trim() })}
               </Text>
             ) : null}
             {entries.map((entry, i) => {
@@ -152,6 +163,10 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
                     </Text>
                   ) : null}
                   <Pressable
+                    ref={(node) => {
+                      if (node) rows.current.set(i, node);
+                      else rows.current.delete(i);
+                    }}
                     onPress={() => open(entry)}
                     onHoverIn={() => setIndex(i)}
                     accessibilityRole="link"

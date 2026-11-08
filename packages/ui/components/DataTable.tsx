@@ -166,6 +166,18 @@ export function DataTable<T>({
   // The table's own width, not the window's: a sidebar, Lixi's panel or a side
   // column can leave it far narrower than the window suggests.
   const [boxWidth, setBoxWidth] = useState(0);
+  // A scrolling table fills the page's height; with only a few rows that left a
+  // blank band inside the card above the pager. When the rows don't fill it, the
+  // card is capped at the rows' height (and let go again once they overflow).
+  const [heightCap, setHeightCap] = useState<number | undefined>(undefined);
+  const fit = useRef({ outer: 0, view: 0, content: 0 });
+  const refit = () => {
+    const { outer, view, content } = fit.current;
+    if (!scroll || !outer || !view || !content) return;
+    const slack = view - content;
+    if (slack > 1) setHeightCap(Math.ceil(outer - slack));
+    else if (slack < -1) setHeightCap(undefined);
+  };
   const columns = useMemo(() => {
     if (narrow) return allColumns.filter((c) => !c.secondary);
     const need = (cols: Column<T>[]) => cols.reduce((sum, c) => sum + (c.width ?? 120), 0) + extrasWidth;
@@ -543,7 +555,19 @@ export function DataTable<T>({
       <View role="table" aria-busy={loading || short || undefined} style={{ flex: scroll ? 1 : undefined }}>
         <View role="rowgroup">{header}</View>
         {scroll ? (
-          <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={SHOW_SCROLLBAR} role="rowgroup">
+          <ScrollView
+            style={{ flex: 1 }}
+            showsVerticalScrollIndicator={SHOW_SCROLLBAR}
+            role="rowgroup"
+            onLayout={(e) => {
+              fit.current.view = e.nativeEvent.layout.height;
+              refit();
+            }}
+            onContentSizeChange={(_, h) => {
+              fit.current.content = h;
+              refit();
+            }}
+          >
             {body}
           </ScrollView>
         ) : (
@@ -564,6 +588,7 @@ export function DataTable<T>({
     <View
       style={{
         flex: scroll ? 1 : undefined,
+        maxHeight: scroll ? heightCap : undefined,
         backgroundColor: t.c.paper,
         borderRadius: t.radius.lg,
         borderWidth: 1,
@@ -571,7 +596,11 @@ export function DataTable<T>({
         overflow: 'hidden',
         ...t.shadow.card,
       }}
-      onLayout={(e) => setBoxWidth(Math.round(e.nativeEvent.layout.width))}
+      onLayout={(e) => {
+        setBoxWidth(Math.round(e.nativeEvent.layout.width));
+        fit.current.outer = e.nativeEvent.layout.height;
+        refit();
+      }}
     >
       {bulkBar}
       {desktop ? (

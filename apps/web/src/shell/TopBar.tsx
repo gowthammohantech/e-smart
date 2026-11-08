@@ -14,7 +14,7 @@ import { countLabel } from '@esmart/core/lib/format';
 import { formatRelative } from '@esmart/core/lib/date';
 import { useAppStore } from '@esmart/app/store/appStore';
 import { ConnectionBadge } from '@esmart/app/components/ConnectionBadge';
-import { useCurrentUser, useNotifications, useUnreadCount } from '@esmart/app/store/selectors';
+import { useBranches, useCurrentUser, useNotifications, useUnreadCount } from '@esmart/app/store/selectors';
 import { LIXI, LixiMark } from '@esmart/ui/components/LixiOrb';
 import { toggleLixiPanel, useLixiPanel } from '../lixiPanel';
 import { useSignOut } from '@esmart/app/features/session/useSignOut';
@@ -27,6 +27,18 @@ import { SETTINGS_HREF } from '@esmart/app/navigation/pages';
 import { appHref } from '@esmart/app/navigation/menu';
 
 export const TOP_BAR_HEIGHT = 56;
+
+// Room each side needs to show names in full: the business (240) and branch (200)
+// pickers on the left; sync, response time, Lixi, the bell and the avatar on the right.
+const LEFT_FULL = 448;
+const LEFT_NO_BRANCH = 240;
+const RIGHT_FULL = 340;
+const SEARCH_MAX = 480;
+const SEARCH_MIN = 220;
+
+/** Mac shows ⌘K; Windows and Linux use Ctrl K. */
+const IS_MAC =
+  Platform.OS === 'web' && typeof navigator !== 'undefined' && /Mac|iPhone|iPad/i.test(navigator.platform || navigator.userAgent || '');
 
 const IconButton = React.forwardRef<
   View,
@@ -159,39 +171,52 @@ export function TopBar() {
   }, []);
 
   const go = (route: string) => router.push(route as never);
-  // A tablet-width window keeps just the logo and branch mark, so search keeps its room.
-  const narrow = useBreakpoint() === 'tablet';
+  const hasBranches = useBranches().length > 0;
+  // The bar's own width, not the window's: the Lixi panel and the sidebar both take from it.
+  const [barWidth, setBarWidth] = useState(0);
+  const tablet = useBreakpoint() === 'tablet';
+  const pad = tablet ? t.spacing.lg : t.spacing.xxl;
+  const inner = barWidth - 2 * pad - 2 * t.spacing.md;
+  const left = hasBranches ? LEFT_FULL : LEFT_NO_BRANCH;
+  // Three layouts, roomiest first: search centred between equal sides; search
+  // between sides sized to what they hold; or (a tablet window, or the Lixi panel
+  // open on a small screen) just the logo and branch mark, so search keeps its room.
+  const centred = barWidth > 0 && inner - 2 * Math.max(left, RIGHT_FULL) >= SEARCH_MIN + 120;
+  const narrow = tablet || (barWidth > 0 && inner - (left + RIGHT_FULL) < SEARCH_MIN);
+  const sideStyle = centred ? { flex: 1, flexBasis: 0 } : null;
 
   return (
     <View
       role="banner"
+      onLayout={(e) => setBarWidth(e.nativeEvent.layout.width)}
       style={{
         height: TOP_BAR_HEIGHT,
         flexDirection: 'row',
         alignItems: 'center',
         gap: t.spacing.md,
-        paddingHorizontal: narrow ? t.spacing.lg : t.spacing.xxl,
+        paddingHorizontal: pad,
         backgroundColor: t.c.paper,
         borderBottomWidth: 1,
         borderBottomColor: t.c.line,
       }}
     >
-      <View style={{ flex: 1, flexBasis: 0, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
+      <View style={[{ flexShrink: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }, sideStyle]}>
         <CompanyPicker compact={narrow} />
         <BranchPicker compact={narrow} />
       </View>
 
       <Pressable
         onPress={() => setPaletteOpen(true)}
-        accessibilityRole="search"
+        accessibilityRole="button"
         accessibilityLabel={tr('nav:shell.searchPlaceholder')}
+        {...({ 'aria-keyshortcuts': IS_MAC ? 'Meta+K' : 'Control+K' } as object)}
         style={(state) => {
           const { hovered, focused } = state as WebPressState;
           return [
             {
-              width: 480,
+              width: SEARCH_MAX,
               flexShrink: 1,
-              minWidth: 200,
+              minWidth: narrow ? 160 : SEARCH_MIN,
               height: 36,
               flexDirection: 'row',
               alignItems: 'center',
@@ -212,17 +237,23 @@ export function TopBar() {
         </Text>
         <View style={{ paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4, borderWidth: 1, borderColor: t.c.line, backgroundColor: t.c.card }}>
           <Text variant="micro" tone="muted" weight="500">
-            {tr('nav:shell.searchShortcut')}
+            {IS_MAC ? tr('nav:shell.searchShortcut') : 'Ctrl K'}
           </Text>
         </View>
       </Pressable>
 
-      <View style={{ flex: 1, flexBasis: 0, minWidth: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: t.spacing.sm }}>
+      <View style={{ flex: 1, flexBasis: 0, minWidth: centred || narrow ? 0 : RIGHT_FULL, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: t.spacing.sm }}>
       <ConnectionBadge style={{ alignSelf: 'center' }} />
       {narrow ? null : <LatencyBadge />}
 
       <LixiButton label={tr('nav:more.entry.askLixi')} />
-      <IconButton ref={bellAnchor} icon="bell-outline" label={tr('nav:shell.notifications')} onPress={openBellMenu} badge={unread} />
+      <IconButton
+        ref={bellAnchor}
+        icon="bell-outline"
+        label={unread > 0 ? tr('nav:tabBadgeA11y', { label: tr('nav:shell.notifications'), count: unread }) : tr('nav:shell.notifications')}
+        onPress={openBellMenu}
+        badge={unread}
+      />
 
       <Pressable
         ref={accountAnchor}
@@ -241,9 +272,22 @@ export function TopBar() {
             {tr('nav:shell.notifications')}
           </Text>
           {unread > 0 ? (
-            <Text variant="small" tone="primary" weight="600" accessibilityRole="button" onPress={markAllRead}>
-              {tr('common:notifications.markAllRead')}
-            </Text>
+            // A menu item, so the arrow keys and Tab reach it like the rest of the menu.
+            <Pressable
+              onPress={markAllRead}
+              accessibilityRole="menuitem"
+              style={(state) => {
+                const { hovered, focused } = state as WebPressState;
+                return [
+                  { paddingHorizontal: t.spacing.sm, paddingVertical: 4, borderRadius: t.radius.sm, backgroundColor: hovered ? t.c.card2 : 'transparent' },
+                  focusRing(t, focused),
+                ];
+              }}
+            >
+              <Text variant="small" tone="primary" weight="600">
+                {tr('common:notifications.markAllRead')}
+              </Text>
+            </Pressable>
           ) : null}
         </View>
         <MenuDivider />

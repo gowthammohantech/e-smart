@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Pressable, View, type LayoutChangeEvent } from 'react-native';
+import { AccessibilityInfo, ActivityIndicator, Animated, Platform, Pressable, View, type LayoutChangeEvent } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from './Icon';
 import { useTheme } from '../theme/ThemeProvider';
@@ -101,6 +101,12 @@ function ToastView({ message, onDone, clearance }: { message: ToastMessage; onDo
   const sticky = message.tone === 'loading';
   // The tone's icon springs in just after the toast lands.
   const pop = usePop({ delay: 140, from: 0.3 });
+
+  // iOS has no live regions: VoiceOver reads a toast only when told to.
+  useEffect(() => {
+    if (Platform.OS !== 'ios') return;
+    AccessibilityInfo.announceForAccessibility(message.detail ? `${message.text}. ${message.detail}` : message.text);
+  }, [message.id, message.text, message.detail]);
 
   useEffect(() => {
     const enter = Animated.spring(anim, { toValue: 1, useNativeDriver: true, damping: 18, stiffness: 220 });

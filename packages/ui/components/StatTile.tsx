@@ -54,8 +54,8 @@ export function StatTile({
         padding: t.spacing.lg,
         gap: WEB ? t.spacing.sm : 6,
         minHeight: 96,
-        justifyContent: 'space-between',
-        ...(WEB ? t.shadow.card : null),
+        // A borderless light tile needs its shadow to show where it ends.
+        ...t.shadow.card,
       }}
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: WEB ? t.spacing.sm : 6 }}>
@@ -84,7 +84,9 @@ export function StatTile({
         </Text>
       )}
 
-      <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>
+      {/* The footer sits at the tile's foot; with nothing in it the value stays under the label rather than dropping. */}
+      {caption || (delta && !loading) || (!loading && trend && trend.length > 1) ? (
+      <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: 'auto' }}>
         {loading && caption ? (
           // A caption is often worked out from the figure ("0% margin"), so it waits with it.
           <View style={{ flex: 1 }}>
@@ -100,6 +102,7 @@ export function StatTile({
         {delta && !loading ? <DeltaBadge pct={delta.pct} inverse={delta.inverse} accessibilityLabel={delta.label} /> : null}
         {!loading && trend && trend.length > 1 ? <Sparkline values={trend} width={54} height={20} color={toneColor} /> : null}
       </View>
+      ) : null}
     </View>
   );
 

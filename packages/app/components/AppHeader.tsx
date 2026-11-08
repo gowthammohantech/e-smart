@@ -15,6 +15,8 @@ import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { useAppStore } from '../store/appStore';
 import { ConnectionBadge } from './ConnectionBadge';
 import { useActiveCompany, useBranches, useUnreadCount } from '../store/selectors';
+import { countLabel } from '@esmart/core/lib/format';
+import { inkOn } from '@esmart/ui/theme/contrast';
 
 /**
  * Tab-level header: company/branch switcher on the left, sync state, global
@@ -41,6 +43,8 @@ export function AppHeader({ title, subtitle }: { title?: string; subtitle?: stri
   const [branchOpen, setBranchOpen] = useState(false);
 
   const branch = branches.find((b) => b.id === activeBranchId);
+  const hasBranches = branches.length > 0;
+  const branchName = branch?.name ?? tr('common:component.allBranches');
   const pathname = usePathname();
 
   // The desktop top bar already has the company switcher, connection state,
@@ -99,7 +103,7 @@ export function AppHeader({ title, subtitle }: { title?: string; subtitle?: stri
             justifyContent: 'center',
           }}
         >
-          <Text style={{ color: '#FFF', fontSize: 9, fontWeight: '700' }}>{badge > 9 ? '9+' : badge}</Text>
+          <Text style={{ color: inkOn(t.c.bad), fontSize: 9, fontWeight: '700' }}>{countLabel(badge)}</Text>
         </View>
       ) : null}
     </Pressable>
@@ -112,6 +116,9 @@ export function AppHeader({ title, subtitle }: { title?: string; subtitle?: stri
         paddingHorizontal: t.spacing.lg,
         paddingBottom: t.spacing.md,
         gap: t.spacing.sm,
+        // Solid, so nothing shows through it (on a phone browser the page scrolls under it).
+        backgroundColor: t.c.bg,
+        zIndex: 1,
       }}
     >
       {/* A phone browser's toast centres on this row (Toast.web.tsx). */}
@@ -131,37 +138,73 @@ export function AppHeader({ title, subtitle }: { title?: string; subtitle?: stri
         ) : null}
         {/* Siblings, not nested: on web each Pressable is a <button>, and a
             button inside a button is invalid HTML and steals the inner press. */}
-        <View style={{ flex: 1, alignItems: 'flex-start' }}>
-          <Pressable
-            onPress={() => setSwitcherOpen(true)}
-            accessibilityRole="button"
-            accessibilityLabel={tr('common:component.switchBusiness', { name: company?.name ?? '' })}
-            style={({ pressed }) => ({
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 6,
-              maxWidth: '100%',
-              opacity: pressed ? 0.7 : 1,
-            })}
-          >
-            <Text variant="title" weight="700" numberOfLines={1} style={{ flexShrink: 1 }}>
-              {title ?? company?.name ?? tr('common:component.business')}
+        {title ? (
+          // A hub's own title is just its name; the business and branch it shows
+          // sit on the line below, and that line opens the switcher.
+          <View style={{ flex: 1, alignItems: 'flex-start' }}>
+            <Text variant="title" weight="700" numberOfLines={1} accessibilityRole="header" style={{ maxWidth: '100%' }}>
+              {title}
             </Text>
-            {!title ? <Icon name="chevron-down" size={18} color={t.c.muted} /> : null}
-          </Pressable>
-          <Pressable
-            onPress={() => setBranchOpen(true)}
-            accessibilityRole="button"
-            accessibilityLabel={tr('common:component.switchBranch', {
-              branch: branch?.name ?? tr('common:component.allBranches'),
-            })}
-            style={({ pressed }) => ({ maxWidth: '100%', opacity: pressed ? 0.7 : 1 })}
-          >
-            <Text variant="caption" tone="muted" numberOfLines={1}>
-              {subtitle ?? `${branch?.name ?? tr('common:component.allBranches')} · ${company?.baseCurrency ?? ''}`}
-            </Text>
-          </Pressable>
-        </View>
+            {subtitle ? (
+              <Text variant="caption" tone="muted" numberOfLines={1} style={{ maxWidth: '100%' }}>
+                {subtitle}
+              </Text>
+            ) : null}
+            <Pressable
+              onPress={() => (companies.length > 1 || !hasBranches ? setSwitcherOpen(true) : setBranchOpen(true))}
+              hitSlop={6}
+              accessibilityRole="button"
+              accessibilityLabel={
+                companies.length > 1 || !hasBranches
+                  ? tr('common:component.switchBusiness', { name: company?.name ?? '' })
+                  : tr('common:component.switchBranch', { branch: branchName })
+              }
+              style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 2, maxWidth: '100%', opacity: pressed ? 0.7 : 1 })}
+            >
+              <Text variant="caption" tone="muted" weight="600" numberOfLines={1} style={{ flexShrink: 1 }}>
+                {hasBranches ? `${company?.name ?? ''} · ${branchName}` : company?.name ?? ''}
+              </Text>
+              <Icon name="chevron-down" size={14} color={t.c.muted} />
+            </Pressable>
+          </View>
+        ) : (
+          <View style={{ flex: 1, alignItems: 'flex-start' }}>
+            <Pressable
+              onPress={() => setSwitcherOpen(true)}
+              accessibilityRole="button"
+              accessibilityLabel={tr('common:component.switchBusiness', { name: company?.name ?? '' })}
+              style={({ pressed }) => ({
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 6,
+                maxWidth: '100%',
+                opacity: pressed ? 0.7 : 1,
+              })}
+            >
+              <Text variant="title" weight="700" numberOfLines={1} style={{ flexShrink: 1 }}>
+                {company?.name ?? tr('common:component.business')}
+              </Text>
+              <Icon name="chevron-down" size={18} color={t.c.muted} />
+            </Pressable>
+            {/* A business without branches has nothing to pick here: the line just says the currency. */}
+            {hasBranches ? (
+              <Pressable
+                onPress={() => setBranchOpen(true)}
+                accessibilityRole="button"
+                accessibilityLabel={tr('common:component.switchBranch', { branch: branchName })}
+                style={({ pressed }) => ({ maxWidth: '100%', opacity: pressed ? 0.7 : 1 })}
+              >
+                <Text variant="caption" tone="muted" numberOfLines={1}>
+                  {`${branchName} · ${company?.baseCurrency ?? ''}`}
+                </Text>
+              </Pressable>
+            ) : (
+              <Text variant="caption" tone="muted" numberOfLines={1}>
+                {company?.baseCurrency ?? ''}
+              </Text>
+            )}
+          </View>
+        )}
 
         {/* On a narrow phone the status badge gives way (shrinks) before the buttons do. */}
         <ConnectionBadge style={{ flexShrink: 1, alignSelf: 'center' }} />
@@ -169,7 +212,14 @@ export function AppHeader({ title, subtitle }: { title?: string; subtitle?: stri
         {desktop ? null : (
           <>
             {iconButton('magnify', tr('common:component.search'), () => router.push('/(app)/search'))}
-            {iconButton('bell-outline', tr('common:component.notifications'), () => router.push('/(app)/notifications'), unread)}
+            {iconButton(
+              'bell-outline',
+              unread > 0
+                ? tr('nav:tabBadgeA11y', { label: tr('common:component.notifications'), count: countLabel(unread) })
+                : tr('common:component.notifications'),
+              () => router.push('/(app)/notifications'),
+              unread,
+            )}
           </>
         )}
       </View>
@@ -202,7 +252,7 @@ export function AppHeader({ title, subtitle }: { title?: string; subtitle?: stri
         options={branches.map((b) => ({
           value: b.id,
           label: b.name,
-          description: `${b.code}${b.isPrimary ? ' · Primary' : ''}`,
+          description: b.isPrimary ? `${b.code} · ${tr('common:component.primaryBranch')}` : b.code,
           icon: b.isPrimary ? 'office-building-outline' : 'warehouse',
         }))}
         value={activeBranchId}

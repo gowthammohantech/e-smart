@@ -3,12 +3,15 @@ import { useTranslation } from 'react-i18next';
 import { Platform, Pressable, View } from 'react-native';
 import { Icon, type IconName } from './Icon';
 import * as Haptics from 'expo-haptics';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useBottomInset } from './useBottomInset';
 import { useTheme } from '../theme/ThemeProvider';
 import { useIsDesktop } from '../theme/breakpoints';
 import type { WebPressState } from '../theme/interaction';
 import { Text } from './Text';
 import { usePageAction } from './PageHeader';
+
+/** Bottom padding a scrolling list needs so its last row clears a phone FAB (56 tall, 16 up, plus a gap). */
+export const FAB_CLEARANCE = 96;
 
 export function Fab({
   icon = 'plus',
@@ -23,7 +26,7 @@ export function Fab({
 }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['common']);
-  const insets = useSafeAreaInsets();
+  const safeBottom = useBottomInset();
   const desktop = useIsDesktop();
   // A desktop has no thumb to reach for a round button: show a compact,
   // labelled "New" button instead, still pinned to the content column.
@@ -35,7 +38,7 @@ export function Fab({
   if (hosted) return null;
 
   return (
-    <View style={{ position: 'absolute', right: t.spacing.lg, bottom: bottom + insets.bottom + t.spacing.lg }}>
+    <View style={{ position: 'absolute', right: t.spacing.lg, bottom: bottom + safeBottom + t.spacing.lg }}>
       <Pressable
         onPress={() => {
           if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});

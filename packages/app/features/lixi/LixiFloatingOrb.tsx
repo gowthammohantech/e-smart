@@ -7,13 +7,18 @@ import { Text } from '@esmart/ui/components/Text';
 import { useUiStore } from '../../store/uiStore';
 import { LIXI, LixiOrb } from '@esmart/ui/components/LixiOrb';
 import { openLixi } from './open';
+import { inkOn } from '@esmart/ui/theme/contrast';
+import { countLabel } from '@esmart/core/lib/format';
 
 const SIZE = 52;
 /** How much of the orb hides past the screen edge while parked. */
 const TUCK = SIZE * 0.35;
-/** Keep clear of the header above and the tab bar below. */
+/**
+ * Keep clear of the header above, and below of the tab bar (56) plus a
+ * screen's FAB (16 up, 56 tall) and a gap, so the orb never sits on it.
+ */
 const TOP_CLEARANCE = 72;
-const BOTTOM_CLEARANCE = 150;
+const BOTTOM_CLEARANCE = 56 + 16 + 56 + 12 + SIZE;
 /** Movement under this is a tap, not a drag. */
 const TAP_SLOP = 6;
 
@@ -101,7 +106,7 @@ export function LixiFloatingOrb({ nudge = 0 }: { nudge?: number }) {
             justifyContent: 'center',
           }}
         >
-          <Text style={{ color: '#fff', fontSize: 10, fontWeight: '800' }}>{nudge}</Text>
+          <Text style={{ color: inkOn(LIXI.red), fontSize: 10, fontWeight: '800' }}>{countLabel(nudge)}</Text>
         </View>
       ) : null}
     </Animated.View>

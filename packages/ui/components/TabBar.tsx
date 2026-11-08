@@ -8,6 +8,7 @@ import { useTheme } from '../theme/ThemeProvider';
 import { LIXI, LixiOrb } from './LixiOrb';
 import { Text } from './Text';
 import { countLabel } from '@esmart/core/lib/format';
+import { inkOn } from '../theme/contrast';
 
 type TabBarProps = Parameters<NonNullable<React.ComponentProps<typeof Tabs>['tabBar']>>[0];
 
@@ -128,7 +129,7 @@ export function TabBar({
                 justifyContent: 'center',
               }}
             >
-              <Text style={{ color: '#fff', fontSize: 9, lineHeight: 12, fontWeight: '800' }} numberOfLines={1}>
+              <Text style={{ color: inkOn(t.c.bad), fontSize: 9, lineHeight: 12, fontWeight: '800' }} numberOfLines={1}>
                 {typeof badge === 'number' ? countLabel(badge) : badge}
               </Text>
             </View>
@@ -249,7 +250,7 @@ export function TabBar({
                 justifyContent: 'center',
               }}
             >
-              <Text style={{ color: '#fff', fontSize: 10, lineHeight: 16, fontWeight: '800' }}>{lixiNudge}</Text>
+              <Text style={{ color: inkOn(LIXI.red), fontSize: 10, lineHeight: 16, fontWeight: '800' }}>{countLabel(lixiNudge)}</Text>
             </View>
           ) : null}
         </Pressable>

@@ -648,7 +648,8 @@ export function Segmented<T extends string>({
               borderRadius: t.radius.sm,
               alignItems: 'center',
               justifyContent: 'center',
-              backgroundColor: active ? (desktop ? t.c.paper : t.c.primary) : 'transparent',
+              // The deeper brand blue: small white text on the bright one is only 4:1.
+              backgroundColor: active ? (desktop ? t.c.paper : t.c.primaryPressed) : 'transparent',
               ...(desktop && active ? t.shadow.card : null),
               opacity: disabled && !active ? 0.4 : 1,
             }}

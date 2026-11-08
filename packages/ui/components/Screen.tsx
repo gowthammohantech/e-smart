@@ -1,6 +1,6 @@
 import React from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleProp, View, ViewStyle } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useBottomInset } from './useBottomInset';
 import { useTheme } from '../theme/ThemeProvider';
 import { Text } from './Text';
 import { SHOW_SCROLLBAR } from '../theme/breakpoints';
@@ -33,13 +33,13 @@ export function Screen({
   background = 'bg',
 }: Props) {
   const t = useTheme();
-  const insets = useSafeAreaInsets();
+  const safeBottom = useBottomInset();
   // 'bg' stays clear so the navigator's doodle page (PageSurface) shows through.
   const bg = background === 'bg' ? 'transparent' : t.c.card;
 
   const inner: StyleProp<ViewStyle> = [
     padded ? { paddingHorizontal: t.spacing.lg } : null,
-    { paddingBottom: bottomInset + insets.bottom + t.spacing.xl },
+    { paddingBottom: bottomInset + safeBottom + t.spacing.xl },
     contentStyle,
   ];
 
@@ -101,11 +101,12 @@ export function SectionHeader({
         style,
       ]}
     >
-      <Text variant="caption" tone="muted" style={{ textTransform: 'uppercase', letterSpacing: 0.8 }}>
+      <Text variant="caption" tone="muted" accessibilityRole="header" style={{ textTransform: 'uppercase', letterSpacing: 0.8 }}>
         {title}
       </Text>
       {action ? (
-        <Pressable onPress={onAction} hitSlop={8} accessibilityRole="button" accessibilityLabel={action}>
+        // Named with its section, so several "Export CSV" links on a page tell apart.
+        <Pressable onPress={onAction} hitSlop={8} accessibilityRole="button" accessibilityLabel={`${action}, ${title}`}>
           <Text variant="small" tone="primary" weight="600">
             {action}
           </Text>

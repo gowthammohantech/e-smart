@@ -115,7 +115,8 @@ export function TabSwipe({
               paddingVertical: 8,
               paddingHorizontal: 12,
               borderRadius: 999,
-              backgroundColor: armed ? t.c.primary : t.c.card,
+              // The deeper brand blue, so the small white label reads at 4.5:1.
+              backgroundColor: armed ? t.c.primaryPressed : t.c.card,
               borderWidth: t.scheme === 'dark' && !armed ? 1 : 0,
               borderColor: t.c.line,
             },

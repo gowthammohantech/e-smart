@@ -89,7 +89,13 @@ export function Menu({
     }
   };
 
-  const top = anchor.y + anchor.height + 6;
+  // Drop down under the anchor; when there is more room above it (a row near the
+  // bottom of the window), open upward instead so the menu never shrinks to nothing.
+  const below = window.height - (anchor.y + anchor.height + 6) - 16;
+  const above = anchor.y - 6 - 16;
+  const up = below < Math.min(maxHeight, 240) && above > below;
+  const room = Math.max(up ? above : below, 120);
+  const vertical = up ? { bottom: window.height - anchor.y + 6 } : { top: anchor.y + anchor.height + 6 };
   const position =
     align === 'right'
       ? { right: Math.max(window.width - (anchor.x + anchor.width), 8) }
@@ -105,10 +111,10 @@ export function Menu({
         style={[
           {
             position: 'absolute',
-            top,
+            ...vertical,
             ...position,
             width,
-            maxHeight: Math.min(maxHeight, window.height - top - 16),
+            maxHeight: Math.min(maxHeight, room),
             backgroundColor: t.c.paper,
             borderRadius: t.radius.md,
             borderWidth: 1,

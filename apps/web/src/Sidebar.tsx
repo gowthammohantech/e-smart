@@ -121,6 +121,7 @@ function NavItem({
   onHoverOut?: () => void;
 }) {
   const t = useTheme();
+  const { t: tr } = useTranslation(['nav']);
   const router = useRouter();
   const row = useRef<View>(null);
   const measure = (then?: (rect: Rect) => void) =>
@@ -145,7 +146,7 @@ function NavItem({
         onFocus={onHoverIn ? () => measure(onHoverIn) : undefined}
         onBlur={onHoverOut}
         accessibilityRole={href ? 'link' : 'button'}
-        accessibilityLabel={label}
+        accessibilityLabel={typeof badge === 'string' ? tr('nav:tabBadgeA11y', { label, count: badge }) : label}
         accessibilityState={{ selected: active, ...(opensPanel ? { expanded } : null) }}
         style={(state) => {
           const { pressed, hovered, focused } = state as WebPressState;
@@ -249,6 +250,7 @@ function PanelItem({
           go(page.route);
         }}
         accessibilityRole="link"
+        accessibilityLabel={typeof badge === 'string' ? tr('nav:tabBadgeA11y', { label, count: badge }) : label}
         accessibilityState={{ selected: active }}
         style={(state) => {
           const { pressed, hovered, focused } = state as WebPressState;
@@ -741,7 +743,8 @@ export function Sidebar() {
             <NavItem
               icon="cog-outline"
               label={tr('nav:shell.settings')}
-              active={inSettings || current === 'more'}
+              // Only settings and More itself: notifications, search and the like have no row here.
+              active={inSettings || pathname === '/more'}
               href={SETTINGS_HREF}
               compact={compact}
               {...tipProps(tr('nav:shell.settings'))}

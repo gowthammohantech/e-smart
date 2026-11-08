@@ -46,3 +46,8 @@ export function readableOn(color: string, bg: string, toward: string, min = 4.5)
   }
   return toward;
 }
+
+/** White or near-black ink, whichever reads better on a solid `bg` (a count badge, a chip fill). */
+export function inkOn(bg: string): string {
+  return contrast('#FFFFFF', bg) >= contrast('#0B0F17', bg) ? '#FFFFFF' : '#0B0F17';
+}

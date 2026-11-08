@@ -24,7 +24,10 @@ export function Card({ children, style, onPress, padded = true, variant = 'raise
     borderWidth: variant === 'outline' || WEB ? 1 : t.scheme === 'dark' ? 1 : 0,
     borderColor: t.c.line,
     padding: padded ? t.spacing.lg : 0,
-    overflow: 'hidden',
+    // iOS clips a view's shadow to its bounds when it hides overflow, which
+    // left a borderless light card with no visible edge; a raised card there
+    // keeps its shadow instead (its corners are already padded clear).
+    overflow: Platform.OS === 'ios' && variant === 'raised' ? 'visible' : 'hidden',
   };
 
   if (onPress) {

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { focusRing, type WebPressState } from '@esmart/ui/theme/interaction';
+import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { Icon } from '@esmart/ui/components/Icon';
 import { Text } from '@esmart/ui/components/Text';
 import { Sheet } from '@esmart/ui/components/Sheet';
@@ -31,11 +32,16 @@ export function PeriodBar({ showGrain = true }: { showGrain?: boolean }) {
   const [customOpen, setCustomOpen] = useState(false);
   const [from, setFrom] = useState(period.from ?? today());
   const [to, setTo] = useState(period.to ?? today());
+  // A thumb needs a taller target than a pointer: 36 tall, plus slop to 44.
+  const desktop = useIsDesktop();
+  const minHeight = desktop ? undefined : 36;
+  const slop = desktop ? undefined : { top: 4, bottom: 4 };
 
   const chip = (key: string, label: string, active: boolean, onPress: () => void, icon?: 'calendar-range' | 'swap-vertical') => (
     <Pressable
       key={key}
       onPress={onPress}
+      hitSlop={slop}
       accessibilityRole="button"
       accessibilityState={{ selected: active }}
       style={(state) => {
@@ -47,6 +53,7 @@ export function PeriodBar({ showGrain = true }: { showGrain?: boolean }) {
             gap: 5,
             paddingHorizontal: t.spacing.md,
             paddingVertical: 7,
+            minHeight,
             borderRadius: t.radius.pill,
             borderWidth: 1,
             borderColor: active ? t.c.primary : hovered ? t.c.muted : t.c.line,
@@ -84,9 +91,10 @@ export function PeriodBar({ showGrain = true }: { showGrain?: boolean }) {
                 <Pressable
                   key={g.value}
                   onPress={() => setPeriod({ ...period, grain: g.value })}
+                  hitSlop={slop}
                   accessibilityRole="button"
                   accessibilityState={{ selected: on }}
-                  style={{ paddingHorizontal: t.spacing.md, paddingVertical: 6, backgroundColor: on ? t.c.chip : t.c.card, borderLeftWidth: i ? 1 : 0, borderLeftColor: t.c.line }}
+                  style={{ paddingHorizontal: t.spacing.md, paddingVertical: 6, minHeight, justifyContent: 'center', backgroundColor: on ? t.c.chip : t.c.card, borderLeftWidth: i ? 1 : 0, borderLeftColor: t.c.line }}
                 >
                   <Text variant="caption" weight="600" tone={on ? 'primary' : 'muted'}>
                     {tr(`reports:dash.period.${g.key}`)}
@@ -115,7 +123,7 @@ export function PeriodBar({ showGrain = true }: { showGrain?: boolean }) {
           />
         }
       >
-        <View style={{ gap: t.spacing.md }}>
+        <View style={{ gap: t.spacing.md, paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.md }}>
           <DateField label={tr('reports:dash.period.from')} value={from} onChange={setFrom} />
           <DateField label={tr('reports:dash.period.to')} value={to} onChange={setTo} error={from && to && from > to ? tr('reports:dash.period.backwards') : undefined} />
         </View>

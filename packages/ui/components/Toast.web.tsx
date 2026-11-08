@@ -59,13 +59,12 @@ if (typeof document !== 'undefined' && !document.getElementById('esmart-sileo'))
   document.head.appendChild(style);
 }
 
-// Every toast lands on the profile avatar at the top bar's right end (TopBar.tsx),
-// hiding it while it is up: the 40px pill's middle on the 60px bar's, and its
-// round end centred on the 34px avatar (16px in from the edge), which puts the
-// pill 4px further out than the avatar. Sileo's own padding on those sides is
-// taken off above.
-const TOAST_TOP = 10;
-const TOAST_RIGHT = 12;
+// On a desktop every toast drops in just under the top bar's right end
+// (TopBar.tsx: 56px tall, 24px side padding), lined up with the bar's edge, so
+// it never covers the avatar, the bell or their menus while it is up.
+const TOP_BAR_HEIGHT = 56;
+const TOAST_TOP = TOP_BAR_HEIGHT + 8;
+const TOAST_RIGHT = 24;
 // In a phone's browser the pill drops in at the top centre, like a phone's own
 // status island, level with the page's header row: the tab pages' header
 // (AppHeader, marked with TOAST_ANCHOR_ID) is measured as the toast appears;

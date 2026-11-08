@@ -149,7 +149,7 @@ export function PageHeader({
         </Pressable>
       ) : null}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md, minHeight: 40 }}>
-        <View style={{ flex: 1, gap: 2 }}>
+        <View style={{ flex: 1, gap: t.spacing.xs }}>
           <Text variant="h2" numberOfLines={1} accessibilityRole="header">
             {title}
           </Text>

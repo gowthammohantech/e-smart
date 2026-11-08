@@ -87,7 +87,10 @@ export default function PurchasesTab() {
               delta={delta(hub?.expensesThisMonth, prev?.expenses, true)}
               onPress={() => setSegment('expenses')}
             />
-          ) : null}
+          ) : (
+            // Holds the lone tile to half the row, the size of the tiles below it.
+            <View style={{ flex: 1 }} />
+          )}
         </StatRow>
         <StatRow>
           <StatTile
@@ -110,7 +113,7 @@ export default function PurchasesTab() {
       <SectionHeader title={tr('purchases:hub.documents')} />
       <HubTiles tiles={tiles} />
 
-      <SectionHeader title={tr('purchases:hub.recentBills')} action={tr('common:action.seeAll')} onAction={() => router.push('/(app)/purchases/bills')} />
+      <SectionHeader title={tr('purchases:hub.recentBills')} action={tr('nav:shell.viewAll')} onAction={() => router.push('/(app)/purchases/bills')} />
       <Card padded={false}>
         {recent.length === 0 ? (
           <EmptyState
@@ -169,11 +172,10 @@ export default function PurchasesTab() {
 
       <SectionHeader
         title={tr('reports:dash.expenses.byCategory')}
-        action={expenseSlices.length ? tr('reports:dash.export.csv') : tr('nav:title.report')}
+        // Export when there is something to export; nothing in its place otherwise.
+        action={expenseSlices.length ? tr('reports:dash.export.csv') : undefined}
         onAction={() =>
-          expenseSlices.length
-            ? exportCsv(tr('reports:dash.expenses.byCategory'), hub?.period, { headers: [tr('reports:dash.expenses.byCategory'), tr('reports:dash.expenses.total')], rows: expenseSlices.map((c) => [c.label, major(c.value)]) })
-            : router.push('/(app)/reports/expense-summary')
+          exportCsv(tr('reports:dash.expenses.byCategory'), hub?.period, { headers: [tr('reports:dash.expenses.byCategory'), tr('reports:dash.expenses.total')], rows: expenseSlices.map((c) => [c.label, major(c.value)]) })
         }
       />
       <Card>
@@ -185,7 +187,7 @@ export default function PurchasesTab() {
         <RankedBars rows={insights.topSuppliers.map((s) => ({ label: s.name, value: s.total as Money }))} colorFor={(i) => seriesColor(t.scheme, i)} emptyLabel={tr('reports:dash.expenses.noSuppliers')} />
       </Card>
 
-      <SectionHeader title={tr('reports:dash.expenses.upcoming')} action={tr('common:action.seeAll')} onAction={() => router.push('/(app)/expenses')} />
+      <SectionHeader title={tr('reports:dash.expenses.upcoming')} action={tr('nav:shell.viewAll')} onAction={() => router.push('/(app)/expenses')} />
       <Card padded={false}>
         {insights.upcomingRecurring.length === 0 ? (
           <Text variant="small" tone="muted" style={{ padding: t.spacing.lg }}>
@@ -238,7 +240,7 @@ export default function PurchasesTab() {
 
       <Fab
         icon="plus"
-        label={showing === 'expenses' ? tr('reports:dash.expenses.segExpenses') : tr('purchases:hub.bill')}
+        label={showing === 'expenses' ? tr('nav:title.expense') : tr('purchases:hub.bill')}
         onPress={() => router.push(showing === 'expenses' ? '/(app)/expenses/new' : '/(app)/purchases/bills/new')}
       />
     </View>

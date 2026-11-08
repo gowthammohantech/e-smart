@@ -39,10 +39,21 @@ export function BarChart({
     );
   }
 
-  const max = Math.max(...data.map((d) => Math.abs(d.value.minor)), 1);
-  const peakIndex = data.reduce((best, d, i) => (Math.abs(d.value.minor) > Math.abs(data[best].value.minor) ? i : best), 0);
+  // A loss is drawn below a zero line in the bad tone, never as a tall positive bar.
+  const posMax = Math.max(0, ...data.map((d) => d.value.minor));
+  const negMax = Math.max(0, ...data.map((d) => -d.value.minor));
+  const span = posMax + negMax || 1;
+  // The labelled bar: the highest value, or the deepest loss when nothing is above zero.
+  const peakIndex =
+    posMax > 0
+      ? data.reduce((best, d, i) => (d.value.minor > data[best].value.minor ? i : best), 0)
+      : data.reduce((best, d, i) => (d.value.minor < data[best].value.minor ? i : best), 0);
   const active = selected ?? peakIndex;
   const plotHeight = height - 26;
+  const usable = plotHeight - 4;
+  // Where zero sits, from the top: the floor when nothing is negative.
+  const zeroY = 2 + (posMax / span) * usable;
+  const hasNegative = negMax > 0;
 
   return (
     <View>
@@ -54,7 +65,7 @@ export function BarChart({
         ) : (
           <View />
         )}
-        <Text variant="small" weight="700">
+        <Text variant="small" weight="700" tone={data[active].value.minor < 0 ? 'bad' : 'default'}>
           {formatMoney(data[active].value)}
           <Text variant="caption" tone="muted">
             {`  ${data[active].label}`}
@@ -64,8 +75,10 @@ export function BarChart({
 
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 2, height: plotHeight }}>
         {data.map((d, i) => {
-          const ratio = Math.abs(d.value.minor) / max;
-          const barHeight = Math.max(3, ratio * (plotHeight - 4));
+          const negative = d.value.minor < 0;
+          const barHeight = Math.max(3, (Math.abs(d.value.minor) / span) * usable);
+          const y = negative ? zeroY : Math.max(0, zeroY - barHeight);
+          const fill = negative ? t.c.bad : barColor;
           const isActive = i === active;
           return (
             <Pressable
@@ -78,13 +91,14 @@ export function BarChart({
               <Svg width="100%" height={plotHeight}>
                 <Rect
                   x="0"
-                  y={plotHeight - barHeight}
+                  y={y}
                   width="100%"
-                  height={barHeight}
+                  height={Math.min(barHeight, plotHeight - y)}
                   rx={4}
                   ry={4}
-                  fill={isActive ? barColor : `${barColor}66`}
+                  fill={isActive ? fill : `${fill}66`}
                 />
+                {hasNegative ? <Line x1="0" x2="100%" y1={zeroY} y2={zeroY} stroke={t.c.lineStrong} strokeWidth={1} /> : null}
               </Svg>
             </Pressable>
           );
