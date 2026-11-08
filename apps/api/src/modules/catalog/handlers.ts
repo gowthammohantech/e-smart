@@ -6,12 +6,12 @@ import type { Schema } from '@esmart/api-contract';
 import { schema } from '@esmart/db';
 import { defineHandlers, type AuthUser, type Deps } from '../../context';
 import { checkIfMatch, setEtag } from '../../http/etag';
-import { ApiError, conflict, invalid, notFound, preconditionFailed, unprocessable, type Issue } from '../../http/errors';
+import { ApiError, conflict, forbidden, invalid, notFound, preconditionFailed, unprocessable, type Issue } from '../../http/errors';
 import { keyset } from '../../http/pagination';
 import { recordChange, type DbOrTx } from '../../lib/audit';
 import { newId } from '../../lib/ids';
 import { storageKeyFor } from '../attachments/keys';
-import { ensureHsn } from './hsn';
+import { ensureHsn, isValidHsn } from './hsn';
 import { catalogMasterHandlers } from './masters';
 import { onHandSql, stockOnHand } from './stock';
 import { itemColumns, itemToWire, itemWithStock } from './wire';
@@ -63,6 +63,10 @@ async function validate(db: DbOrTx, companyId: string, baseCurrency: string, bod
     if (body[f].minor < 0) blocking(`${f}.minor`, 'Prices cannot be negative');
   }
   if ((body.openingStock ?? 0) < 0) blocking('openingStock', 'Opening stock cannot be negative');
+  // A service carries no stock, as adjusting stock refuses it.
+  else if ((body.openingStock ?? 0) > 0 && body.type !== 'goods') blocking('openingStock', 'A service has no stock');
+  // Checked here, so an import's dry run marks the row rather than the import failing on it.
+  if (body.hsnCode && !isValidHsn(body.hsnCode.replace(/\s/g, ''))) blocking('hsnCode', 'An HSN or SAC code has 4, 6 or 8 digits');
   if (body.openingStockDate && body.openingStockDate > today) blocking('openingStockDate', 'Opening stock date cannot be in the future');
   if ((body.reorderLevel ?? 0) < 0) blocking('reorderLevel', 'Reorder level cannot be negative');
   if (issues.length) throw unprocessable(issues);
@@ -107,6 +111,10 @@ async function auditItem(tx: DbOrTx, user: AuthUser, action: 'created' | 'update
   });
 }
 
+async function hasMovements(db: DbOrTx, companyId: string, itemId: string): Promise<boolean> {
+  return (await db.execute(sql`select 1 from stock_movements where company_id = ${companyId} and item_id = ${itemId} limit 1`)).rows.length > 0;
+}
+
 /** Document lines or stock movements that point at the item. */
 async function usage(db: DbOrTx, companyId: string, itemId: string): Promise<string | null> {
   const checks: [string, SQL][] = [
@@ -126,7 +134,10 @@ export const catalogHandlers = defineHandlers({
 
   async listItems(ctx) {
     const { type, status, barcode, lowStock, stock, branchId, categoryId, brandId, q, limit, cursor } = ctx.query;
-    const onHand = onHandSql(ctx.company.id, I.id, branchId);
+    // Someone limited to branches sees the stock at theirs.
+    const limited = ctx.user.branchIds;
+    if (branchId && limited.length && !limited.includes(branchId)) throw forbidden('BRANCH_NOT_ALLOWED', 'You do not work in this branch');
+    const onHand = onHandSql(ctx.company.id, I.id, branchId ?? (limited.length ? limited : undefined));
     const k = keyset({ cursor, limit, sort: I.name, id: I.id, order: 'asc' });
     const filters = [eq(I.companyId, ctx.company.id)];
     if (type) filters.push(eq(I.type, type));
@@ -216,10 +227,14 @@ export const catalogHandlers = defineHandlers({
     const names = new Set(existing.map((e) => e.name.trim().toLowerCase()));
     type Result = { index: number; status: 'created' | 'duplicate' | 'invalid'; id?: string; issues?: Issue[] };
     const results: Result[] = [];
-    const good: { index: number; body: Schema<'Item'> }[] = [];
+    const good: { index: number; body: Schema<'Item'>; customFields: CustomValues }[] = [];
     for (const [index, body] of rows.entries()) {
+      let customFields: CustomValues = {};
       try {
         await validate(ctx.db, ctx.company.id, base, body, today, true);
+        // Values the sheet carries are checked as a new item's are. A sheet with none leaves them
+        // empty: the import has no columns for them, so a required field can't stop every row.
+        if (body.customFields !== undefined) customFields = await cleanCustomValues(ctx.db, ctx.company.id, 'item', body.customFields as CustomValues);
       } catch (err) {
         const issues = err instanceof ApiError ? ((err.extra.issues as Issue[] | undefined) ?? [{ field: '', message: err.message, severity: 'blocking' as const }]) : [{ field: '', message: String(err), severity: 'blocking' as const }];
         results.push({ index, status: 'invalid', issues });
@@ -235,22 +250,27 @@ export const catalogHandlers = defineHandlers({
       if (sku) skus.add(sku);
       if (barcode) barcodes.add(barcode);
       names.add(name);
-      good.push({ index, body });
+      good.push({ index, body, customFields });
     }
     if (!dryRun && good.length) {
       await ctx.db.transaction(async (tx) => {
         const branchId = await primaryBranchId(tx, ctx.company.id);
         // Blank SKUs follow the SKU-0001 series, counted on within the batch.
         let nextNumber = Number((await nextSku(tx, ctx.company.id)).replace(/\D/g, ''));
-        for (const { index, body } of good) {
+        for (const { index, body, customFields } of good) {
           const cols = itemColumns(body, base);
-          if (!cols.sku) cols.sku = `SKU-${String(nextNumber++).padStart(4, '0')}`;
+          if (!cols.sku) {
+            // Past any number a row of this sheet (or an item) already took.
+            while (skus.has(`sku-${String(nextNumber).padStart(4, '0')}`)) nextNumber++;
+            cols.sku = `SKU-${String(nextNumber++).padStart(4, '0')}`;
+            skus.add(cols.sku.toLowerCase());
+          }
           const openingStock = body.openingStock ?? 0;
           const openingStockDate = cols.trackInventory ? (body.openingStockDate ?? today) : null;
           const hsnCode = body.hsnCode ? await ensureHsn(tx, body.hsnCode) : null;
           const [created] = await tx
             .insert(I)
-            .values({ id: newId('itm'), companyId: ctx.company.id, ...cols, hsnCode, openingStock: String(openingStock), openingStockDate })
+            .values({ id: newId('itm'), companyId: ctx.company.id, ...cols, customFields, hsnCode, openingStock: String(openingStock), openingStockDate })
             .returning();
           if (created.trackInventory && openingStock > 0) {
             await tx.insert(schema.stockMovements).values({
@@ -279,7 +299,7 @@ export const catalogHandlers = defineHandlers({
 
   async getItem(ctx) {
     const row = await findItem(ctx.db, ctx.company.id, ctx.params.id);
-    const stock = await stockOnHand(ctx.db, ctx.company.id, [row.id]);
+    const stock = await stockOnHand(ctx.db, ctx.company.id, [row.id], ctx.user.branchIds.length ? ctx.user.branchIds : undefined);
     setEtag(ctx.reply, row.version);
     return itemWithStock(row, stock.get(row.id) ?? 0, await imageUri(ctx.deps, ctx.db, row.imageAttachmentId));
   },
@@ -290,6 +310,10 @@ export const catalogHandlers = defineHandlers({
     const base = current.currency.trim();
     await validate(ctx.db, ctx.company.id, base, ctx.body, businessDate(ctx.now));
     const cols = itemColumns(ctx.body, base);
+    // Stock already moved in this unit, as tracked goods: changing that would strand it.
+    if ((cols.trackInventory !== current.trackInventory || cols.type !== current.type || cols.unit !== current.unit.trim().toUpperCase()) && (await hasMovements(ctx.db, ctx.company.id, current.id))) {
+      throw conflict('ITEM_HAS_STOCK', 'This item has stock movements, so its type, unit and stock tracking cannot change; make a new item instead');
+    }
     const row = await ctx.db.transaction(async (tx) => {
       await assertUnique(tx, ctx.company.id, cols.sku, cols.barcode, current.id);
       const hsnCode = ctx.body.hsnCode ? await ensureHsn(tx, ctx.body.hsnCode) : null;

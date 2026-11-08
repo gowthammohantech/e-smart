@@ -24,6 +24,29 @@ const adjust = (m: Money, itemId: string, quantity: number, over: Record<string,
 type Level = { itemId: string; branchId: string; onHand: number; low: boolean; value: { minor: number } };
 
 describe('inventory', () => {
+  it('values goods bought at what the bill puts in purchases: after the line discount, GST out of an inclusive price', async () => {
+    const m = await moneySetup(t);
+    const rod = await m.item();
+    const bill = await t.post(
+      `${m.c}/documents`,
+      invoiceBody(m, {
+        kind: 'purchaseBill',
+        partyId: m.supplier!.id,
+        supplierDocNumber: 'KS-9',
+        status: 'issued',
+        date: '2026-09-05',
+        lines: [
+          line(m.gst(18), { itemId: rod, quantity: 10, unitPrice: { minor: 10000, currency: 'INR' }, discountMode: 'percent', discountValue: 10 }),
+          line(m.gst(18), { itemId: rod, quantity: 1, unitPrice: { minor: 11800, currency: 'INR' }, taxInclusive: true }),
+        ],
+      }),
+      { token: m.token },
+    );
+    expect(bill.status).toBe(201);
+    const rows = await t.deps.db.select().from(schema.stockMovements).where(eq(schema.stockMovements.referenceId, bill.body.id));
+    expect(rows.map((r) => Number(r.unitCostMinor)).sort((a, b) => a - b)).toEqual([9000, 10000]);
+  });
+
   it('derives stock per branch from opening, receipt, invoice, adjustment and transfer', async () => {
     const m = await moneySetup(t);
     const rod = await m.item({ reorderLevel: '5' });
@@ -127,6 +150,25 @@ describe('inventory', () => {
     // Nothing was written by the refusals.
     const levels = await t.get(`${m.c}/stock/levels`, { token: m.token, query: { itemId: rod, branchId: m.branch.id } });
     expect(levels.body.data[0].onHand).toBe(3);
+  });
+
+  it('checks a back-dated adjustment against the stock on its day, and keeps closed periods closed', async () => {
+    const m = await moneySetup(t);
+    const rod = await m.item();
+    const blr = await secondBranch(m);
+    await t.post(`${m.c}/stock/adjustments`, adjust(m, rod, 10, { date: '2026-09-10', reason: 'found' }), { token: m.token });
+    // There was nothing on 1 Sep, though there is now.
+    const early = await t.post(`${m.c}/stock/adjustments`, adjust(m, rod, -5, { date: '2026-09-01' }), { token: m.token });
+    expect(early.status).toBe(422);
+    expect(early.body.code).toBe('INSUFFICIENT_STOCK');
+    expect((await t.post(`${m.c}/stock/adjustments`, adjust(m, rod, -5, { date: '2026-09-12' }), { token: m.token })).status).toBe(201);
+
+    await t.deps.db.update(schema.companies).set({ lockedThroughDate: '2026-09-30' }).where(eq(schema.companies.id, m.companyId));
+    const locked = await t.post(`${m.c}/stock/adjustments`, adjust(m, rod, 1, { date: '2026-09-20' }), { token: m.token });
+    expect(locked.status).toBe(409);
+    const moved = await t.post(`${m.c}/stock/transfers`, { itemId: rod, fromBranchId: m.branch.id, toBranchId: blr, quantity: 1, date: '2026-09-20' }, { token: m.token });
+    expect(moved.status).toBe(409);
+    expect(moved.body.code).toBe(locked.body.code);
   });
 
   it('is gated by plan and role', async () => {

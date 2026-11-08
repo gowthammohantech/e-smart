@@ -199,6 +199,40 @@ describe('catalog', () => {
 });
 
 describe('items import', () => {
+  it('keeps type, unit and stock tracking once stock has moved, and gives services no stock', async () => {
+    const { token, c, item } = await setup();
+    const created = await t.post(`${c}/items`, item(), { token });
+    const url = `${c}/items/${created.body.id}`;
+    const untracked = await t.put(url, item({ trackInventory: false }), { token, headers: { 'if-match': '"v1"' } });
+    expect(untracked.status).toBe(409);
+    expect(untracked.body.code).toBe('ITEM_HAS_STOCK');
+    expect((await t.put(url, item({ unit: 'box' }), { token, headers: { 'if-match': '"v1"' } })).status).toBe(409);
+    // An item that never moved can still change.
+    const fresh = await t.post(`${c}/items`, item({ sku: 'NEW-1', name: 'Fresh', openingStock: 0 }), { token });
+    expect((await t.put(`${c}/items/${fresh.body.id}`, item({ sku: 'NEW-1', name: 'Fresh', openingStock: 0, trackInventory: false }), { token, headers: { 'if-match': '"v1"' } })).status).toBe(200);
+
+    const service = await t.post(`${c}/items`, item({ sku: 'SVC-1', name: 'Fitting', type: 'service', hsnCode: '998719', openingStock: 3 }), { token });
+    expect(service.status).toBe(422);
+    expect(service.body.issues[0].field).toBe('openingStock');
+  });
+
+  it('marks a bad HSN in the dry run, and numbers blank SKUs past ones the sheet names', async () => {
+    const { token, c, item } = await setup();
+    const rows = [
+      item({ sku: 'SKU-0001', name: 'Named first', openingStock: 0, hsnCode: undefined }),
+      item({ sku: '', name: 'Blank one', openingStock: 0, hsnCode: undefined }),
+      item({ sku: 'H-1', name: 'Bad HSN', hsnCode: '12' }),
+    ];
+    const dry = await t.post(`${c}/items/import`, { rows, dryRun: true }, { token });
+    expect(dry.body.results.map((r: { status: string }) => r.status)).toEqual(['created', 'created', 'invalid']);
+    expect(dry.body.results[2].issues[0].field).toBe('hsnCode');
+    const done = await t.post(`${c}/items/import`, { rows }, { token });
+    expect(done.status).toBe(200);
+    expect(done.body.created).toBe(2);
+    const blank = done.body.results[1].id;
+    expect((await t.get(`${c}/items/${blank}`, { token })).body.sku).toBe('SKU-0002');
+  });
+
   it('checks without saving, then creates the good rows with stock, skipping duplicates', async () => {
     const { token, c, company, item } = await setup();
     await t.post(`${c}/items`, item(), { token });

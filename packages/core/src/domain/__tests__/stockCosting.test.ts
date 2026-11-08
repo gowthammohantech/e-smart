@@ -1,5 +1,5 @@
-import { costMovements, costedStockValue } from '../stockLedger';
-import type { StockMovement, StockMovementType } from '../../types';
+import { costMovements, costedStockValue, stockValue, stockValueFifo } from '../stockLedger';
+import type { Item, StockMovement, StockMovementType } from '../../types';
 
 let n = 0;
 const mv = (type: StockMovementType, quantity: number, unitCost: number, date: string, referenceId?: string, itemId = 'itm_a'): StockMovement => ({
@@ -99,5 +99,29 @@ describe('first in, first out', () => {
   it('moves no value for a cancelled document', () => {
     const ms = [mv('purchaseReceipt', 10, 6000, '2026-04-01', 'bill1'), mv('salesIssue', 4, 0, '2026-04-02', 'inv1'), mv('salesReturn', 4, 0, '2026-04-02', 'inv1')];
     expect(fifo(ms)).toEqual([60000, 0, 0]);
+  });
+});
+
+describe('stock value on hand', () => {
+  const item = { id: 'itm_a', purchasePrice: { minor: 900, currency: 'INR' } } as Item;
+  // Bill A 10 @ ₹100, bill B 10 @ ₹1,000 by mistake, then B cancelled (its reversal carries no cost).
+  const ms = () => [
+    mv('purchaseReceipt', 10, 10000, '2026-04-01', 'billA'),
+    mv('purchaseReceipt', 10, 100000, '2026-04-02', 'billB'),
+    mv('adjustment', -10, 0, '2026-04-03', 'billB'),
+  ];
+
+  it('leaves a cancelled bill out of the average', () => {
+    expect(stockValue(item, ms(), 'INR').minor).toBe(100000);
+  });
+
+  it('leaves a cancelled bill out of the FIFO lots', () => {
+    expect(stockValueFifo(item, ms(), 'INR').minor).toBe(100000);
+  });
+
+  it('does not let a sales return set the price', () => {
+    const list = [mv('purchaseReceipt', 10, 10000, '2026-04-01', 'billA'), mv('salesIssue', 2, 0, '2026-04-02', 'inv1'), mv('salesReturn', 2, 90000, '2026-04-03', 'ret1')];
+    expect(stockValue(item, list, 'INR').minor).toBe(100000);
+    expect(stockValueFifo(item, list, 'INR').minor).toBe(100000);
   });
 });

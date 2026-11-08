@@ -145,13 +145,28 @@ export function ledgerFor(itemId: string, movements: StockMovement[], branchId?:
   });
 }
 
+/**
+ * Movements of a document cancelled since: its movements and their reversal net to nothing, item by
+ * item. Their reversal carries no cost, so left in, they would keep a cancelled receipt in the price.
+ */
+function voidedBy(movements: StockMovement[]): (m: StockMovement) => boolean {
+  const net = new Map<string, number>();
+  for (const m of movements) if (m.referenceId) net.set(`${m.referenceId}|${m.itemId}`, (net.get(`${m.referenceId}|${m.itemId}`) ?? 0) + signedQuantity(m));
+  return (m) => !!m.referenceId && Math.abs(net.get(`${m.referenceId}|${m.itemId}`) ?? 0) < 1e-9;
+}
+
+/** Stock that came in at a price of its own: opening, a purchase receipt, a count found more with a cost. Returns are not. */
+function isPricedLot(m: StockMovement): boolean {
+  return signedQuantity(m) > 0 && m.unitCost.minor > 0 && (m.type === 'opening' || m.type === 'purchaseReceipt' || m.type === 'adjustment');
+}
+
 /** Weighted-average valuation of current stock, in the company base currency. */
 export function stockValue(item: Item, movements: StockMovement[], baseCurrency: string): Money {
   const qty = stockOnHand(item.id, movements);
   if (qty <= 0) return zero(baseCurrency);
-  const inbound = movements.filter(
-    (m) => m.itemId === item.id && signedQuantity(m) > 0 && m.unitCost.minor > 0,
-  );
+  const voided = voidedBy(movements);
+  // A transfer in carries the sending branch's average, so a branch's stock keeps its value.
+  const inbound = movements.filter((m) => m.itemId === item.id && (isPricedLot(m) || (m.type === 'transferIn' && m.unitCost.minor > 0)) && !voided(m));
   if (inbound.length === 0) return multiply(money(item.purchasePrice.minor, baseCurrency), qty);
   const totalQty = inbound.reduce((a, m) => a + signedQuantity(m), 0);
   const totalCost = sum(
@@ -202,10 +217,7 @@ export function costMovements(
 ): CostedMovement[] {
   if (opts.method === 'fifo') return costFifo(items, movements, opts);
   const price = new Map(items.map((i) => [i.id, i.purchasePrice.minor]));
-  // A document cancelled since: its movements and their reversal net to nothing, item by item.
-  const net = new Map<string, number>();
-  for (const m of movements) if (m.referenceId) net.set(`${m.referenceId}|${m.itemId}`, (net.get(`${m.referenceId}|${m.itemId}`) ?? 0) + signedQuantity(m));
-  const voided = (m: StockMovement) => !!m.referenceId && Math.abs(net.get(`${m.referenceId}|${m.itemId}`) ?? 0) < 1e-9;
+  const voided = voidedBy(movements);
 
   const sorted = [...movements].sort((a, b) => (a.date === b.date ? (a.createdAt ?? '').localeCompare(b.createdAt ?? '') : a.date.localeCompare(b.date)));
   const state = new Map<string, { qty: number; value: number }>();
@@ -265,9 +277,7 @@ function costFifo(
   opts: { sourceOf?: (documentId: string) => string | undefined; seed?: Map<string, { qty: number; value: number }> },
 ): CostedMovement[] {
   const price = new Map(items.map((i) => [i.id, i.purchasePrice.minor]));
-  const net = new Map<string, number>();
-  for (const m of movements) if (m.referenceId) net.set(`${m.referenceId}|${m.itemId}`, (net.get(`${m.referenceId}|${m.itemId}`) ?? 0) + signedQuantity(m));
-  const voided = (m: StockMovement) => !!m.referenceId && Math.abs(net.get(`${m.referenceId}|${m.itemId}`) ?? 0) < EPS;
+  const voided = voidedBy(movements);
   const sorted = [...movements].sort((a, b) => (a.date === b.date ? (a.createdAt ?? '').localeCompare(b.createdAt ?? '') : a.date.localeCompare(b.date)));
   const queues = new Map<string, Layer[]>();
   const lastUnit = new Map<string, number>();
@@ -334,7 +344,8 @@ function costFifo(
 export function stockValueFifo(item: Item, movements: StockMovement[], baseCurrency: string): Money {
   const qty = stockOnHand(item.id, movements);
   if (qty <= 0) return zero(baseCurrency);
-  const lots = movements.filter((m) => m.itemId === item.id && signedQuantity(m) > 0 && m.unitCost.minor > 0 && ['opening', 'purchaseReceipt', 'adjustment'].includes(m.type));
+  const voided = voidedBy(movements);
+  const lots = movements.filter((m) => m.itemId === item.id && isPricedLot(m) && !voided(m));
   const newest = [...lots].sort((a, b) => (a.date === b.date ? (b.createdAt ?? '').localeCompare(a.createdAt ?? '') : b.date.localeCompare(a.date)));
   let left = qty;
   let value = 0;

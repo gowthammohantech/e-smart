@@ -20,6 +20,10 @@ import { today } from '@esmart/core/lib/date';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { useGoBack } from '../../../navigation/useGoBack';
 
+type AdjustReason = 'damaged' | 'lost' | 'found' | 'recount' | 'expired' | 'other';
+/** The screen's reasons in the server's words; the rest are "other" (with the words kept in the note). */
+const SERVER_REASON: Record<string, AdjustReason> = { damaged: 'damaged', lost: 'lost', expired: 'expired', found: 'found', countCorrection: 'recount' };
+
 export default function StockAdjust() {
   const t = useTheme();
   const { t: tr } = useTranslation(['inventory', 'nav']);
@@ -57,6 +61,9 @@ export default function StockAdjust() {
       ? (['damaged', 'lost', 'expired', 'sample', 'countCorrection', 'internalUse'] as const)
       : (['found', 'countCorrection', 'customerReturn', 'production'] as const);
   const REASONS = REASON_KEYS.map((k) => tr(`inventory:adjust.reasons.${k}`));
+  // And as the server's reason, so stock reports can group by it.
+  const reasonKey = REASON_KEYS[REASONS.indexOf(reason) as number] as string | undefined;
+  const serverReason = reasonKey ? (SERVER_REASON[reasonKey] ?? 'other') : undefined;
 
   const canSave = !!itemId && qty > 0 && !!branchId;
 
@@ -72,7 +79,8 @@ export default function StockAdjust() {
         unitCost: item.purchasePrice,
         date,
         notes: reason || undefined,
-      });
+        reason: serverReason,
+      } as Parameters<typeof addStockMovement>[0] & { reason?: AdjustReason });
     }, tr('inventory:adjust.done'), { icon: 'package-variant', detail: item.name }).then((res) => {
       if (res) goBack(`/(app)/catalog/items/${item.id}`);
     });

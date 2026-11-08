@@ -18,18 +18,20 @@ export const signedQuantitySql = sql`case when ${M.type} = 'adjustment' then ${M
   when ${M.type} in (${sql.join(OUTBOUND.map((t) => sql`${t}`), sql`, `)}) then -abs(${M.quantity})
   else abs(${M.quantity}) end`;
 
-/** Stock on hand for the item in `itemId` (a column, for a correlated subquery), optionally at one branch. */
-export function onHandSql(companyId: string, itemId: PgColumn, branchId?: string): SQL<string> {
-  const branch = branchId ? sql` and ${M.branchId} = ${branchId}` : sql``;
+/** Stock on hand for the item in `itemId` (a column, for a correlated subquery), optionally at one branch or some. */
+export function onHandSql(companyId: string, itemId: PgColumn, branchId?: string | string[]): SQL<string> {
+  const ids = branchId === undefined ? [] : Array.isArray(branchId) ? branchId : [branchId];
+  const branch = ids.length ? sql` and ${M.branchId} in (${sql.join(ids.map((id) => sql`${id}`), sql`, `)})` : sql``;
   return sql<string>`coalesce((select sum(${signedQuantitySql}) from ${M} where ${M.companyId} = ${companyId} and ${M.itemId} = ${itemId}${branch}), 0)`;
 }
 
 /** Stock on hand per item id. Items without movements are 0. */
-export async function stockOnHand(db: DbOrTx, companyId: string, itemIds: string[], branchId?: string): Promise<Map<string, number>> {
+export async function stockOnHand(db: DbOrTx, companyId: string, itemIds: string[], branchId?: string | string[]): Promise<Map<string, number>> {
   const out = new Map(itemIds.map((id) => [id, 0]));
   if (!itemIds.length) return out;
   const filters = [eq(M.companyId, companyId), inArray(M.itemId, itemIds)];
-  if (branchId) filters.push(eq(M.branchId, branchId));
+  if (typeof branchId === 'string') filters.push(eq(M.branchId, branchId));
+  else if (branchId?.length) filters.push(inArray(M.branchId, branchId));
   const rows = await db
     .select({ itemId: M.itemId, qty: sql<string>`sum(${signedQuantitySql})` })
     .from(M)

@@ -2,12 +2,13 @@ import { and, asc, eq, exists, gte, ilike, inArray, lte, notInArray, or, sql, ty
 import { isLowStock, ledgerFor, stockMapOn, stockOnHand as coreStockOnHand, stockValue, valueStock } from '@esmart/core/domain/stockLedger';
 import { schema } from '@esmart/db';
 import { defineHandlers, type Ctx } from '../../context';
-import { invalid, notFound, unprocessable, type Issue } from '../../http/errors';
+import { forbidden, invalid, notFound, unprocessable, type Issue } from '../../http/errors';
 import { keyset } from '../../http/pagination';
 import { recordChange, type DbOrTx } from '../../lib/audit';
 import { newId } from '../../lib/ids';
 import { notify } from '../../lib/notify';
 import { stockOnHand } from '../catalog/stock';
+import { assertPeriodOpen } from '../documents/lifecycle';
 import { coreMovements, levelAt, movementToWire, toCoreItem, type ItemRow, type MovementRow } from './ledger';
 
 const M = schema.stockMovements;
@@ -89,6 +90,8 @@ export const inventoryHandlers = defineHandlers({
     const [row] = await ctx.db.select().from(I).where(and(eq(I.companyId, ctx.company.id), eq(I.id, ctx.params.id)));
     if (!row) throw notFound('Item');
     const item = toCoreItem(row);
+    // Someone limited to branches sees only theirs.
+    if (ctx.query.branchId && ctx.user.branchIds.length && !ctx.user.branchIds.includes(ctx.query.branchId)) throw forbidden('BRANCH_NOT_ALLOWED', 'You do not work in this branch');
     const branchIds = ctx.query.branchId ? [ctx.query.branchId] : ctx.user.branchIds;
     const movements = await coreMovements(ctx.db, ctx.company.id, { itemIds: [item.id], branchIds });
     const base = ctx.company.baseCurrency.trim();
@@ -99,7 +102,7 @@ export const inventoryHandlers = defineHandlers({
       .select({ q: sql<string>`coalesce(sum(${L.quantity}), 0)` })
       .from(L)
       .innerJoin(D, eq(D.id, L.documentId))
-      .where(and(eq(D.companyId, ctx.company.id), eq(D.kind, 'invoice'), notInArray(D.status, ['draft', 'cancelled']), eq(L.itemId, item.id)));
+      .where(and(eq(D.companyId, ctx.company.id), eq(D.kind, 'invoice'), notInArray(D.status, ['draft', 'cancelled']), eq(L.itemId, item.id), branchIds.length ? inArray(D.branchId, branchIds) : undefined));
     return {
       onHand,
       value: valueStock(item, movements, base, ctx.company.stockCosting as 'average' | 'fifo'),
@@ -171,6 +174,8 @@ export const inventoryHandlers = defineHandlers({
     const type = body.type ?? 'adjustment';
     const base = ctx.company.baseCurrency.trim();
     const branch = await branchOrFail(ctx, ctx.db, body.branchId, 'branchId');
+    // An adjustment posts to the books under perpetual stock, so a closed period stays closed.
+    assertPeriodOpen(ctx.company, body.date);
 
     const rows = await ctx.db.transaction(async (tx) => {
       const items = await lockItems(tx, ctx.company.id, body.lines.map((l) => l.itemId));
@@ -192,12 +197,17 @@ export const inventoryHandlers = defineHandlers({
       const before = await stockOnHand(tx, ctx.company.id, touched.map((i) => i.id), branch.id);
       const delta = new Map<string, number>();
       for (const l of body.lines) delta.set(l.itemId, (delta.get(l.itemId) ?? 0) + l.quantity);
-      const short = touched.filter((i) => (before.get(i.id) ?? 0) + (delta.get(i.id) ?? 0) < 0);
+      // Only stock there on the adjustment's date (and not used by a later movement) can be taken
+      // out, as for a sale: a back-dated count can't take the stock below zero on its day.
+      const atBranch = await coreMovements(tx, ctx.company.id, { itemIds: touched.map((i) => i.id), branchIds: [branch.id] });
+      const onDate = stockMapOn(atBranch, body.date, branch.id);
+      const available = (id: string) => Math.min(onDate[id] ?? 0, before.get(id) ?? 0);
+      const short = touched.filter((i) => (delta.get(i.id) ?? 0) < 0 && available(i.id) + (delta.get(i.id) ?? 0) < 0);
       if (short.length) {
         throw insufficient(
           short.map((i) => ({
             field: `lines[${body.lines.findIndex((l) => l.itemId === i.id)}].quantity`,
-            message: `${i.name} has ${before.get(i.id) ?? 0} ${i.unit} at ${branch.name}; this would take it to ${(before.get(i.id) ?? 0) + (delta.get(i.id) ?? 0)}`,
+            message: `${i.name} has ${available(i.id)} ${i.unit} at ${branch.name} on ${body.date}; this would take it to ${available(i.id) + (delta.get(i.id) ?? 0)}`,
             severity: 'blocking' as const,
           })),
         );
@@ -247,6 +257,8 @@ export const inventoryHandlers = defineHandlers({
     const from = await branchOrFail(ctx, ctx.db, body.fromBranchId, 'fromBranchId');
     const to = await branchOrFail(ctx, ctx.db, body.toBranchId, 'toBranchId');
     if (Math.round(body.quantity * 1000) !== body.quantity * 1000) throw invalid('quantity', 'At most three decimals');
+    // Transfers are dated stock movements like any other; a closed period stays closed.
+    assertPeriodOpen(ctx.company, body.date);
 
     const rows = await ctx.db.transaction(async (tx) => {
       const item = (await lockItems(tx, ctx.company.id, [body.itemId])).get(body.itemId);

@@ -262,12 +262,12 @@ export const MUTATIONS: Partial<Record<keyof AppState, Builder>> = {
 
   /* stock */
   addStockMovement: ({ args }) => {
-    const m = args[0] as Omit<StockMovement, 'id' | 'createdAt' | 'createdBy'>;
+    const m = args[0] as Omit<StockMovement, 'id' | 'createdAt' | 'createdBy'> & { reason?: string };
     if (m.type !== 'adjustment' && m.type !== 'opening') return;
     outbox.action({
       method: 'POST',
       path: `${c(m.companyId)}/stock/adjustments`,
-      body: { branchId: m.branchId, date: m.date, type: m.type, notes: m.notes, lines: [{ itemId: m.itemId, quantity: m.quantity, unitCost: m.unitCost }] },
+      body: { branchId: m.branchId, date: m.date, type: m.type, reason: m.type === 'adjustment' ? m.reason : undefined, notes: m.notes, lines: [{ itemId: m.itemId, quantity: m.quantity, unitCost: m.unitCost }] },
       entityType: 'item',
       entityId: m.itemId,
       label: m.type === 'opening' ? 'Opening stock' : 'Stock adjustment',
