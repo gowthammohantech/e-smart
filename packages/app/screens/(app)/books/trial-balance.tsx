@@ -4,10 +4,9 @@ import { Stack } from 'expo-router';
 import { trialBalance } from '@esmart/core/domain/ledger/reports';
 import { formatMoney } from '@esmart/core/lib/format';
 import { money } from '@esmart/core/lib/money';
-import { ReportShell, reportTable, useReportScope } from '../../../features/reports/ReportShell';
+import { ReportShell, reportTable, useReportScope, ReportLoading } from '../../../features/reports/ReportShell';
 import { DataTable, KeyFigures, ReportSection } from '../../../features/reports/reportParts';
 import { useBooksView } from '../../../remote/queries';
-import { LoadingView } from '../../../components/LoadingView';
 import { useBaseCurrency } from '../../../store/selectors';
 import { useAccountName, useDrCr } from '../../../features/books/names';
 
@@ -18,7 +17,7 @@ export default function TrialBalanceScreen() {
   const nameOf = useAccountName();
   const drCr = useDrCr();
   const tb = useBooksView<ReturnType<typeof trialBalance>>('trial-balance', scope.filters.range).data;
-  if (!tb) return <LoadingView variant="report" />;
+  if (!tb) return <ReportLoading title={tr('books:hub.trialBalance')} subtitle={tr('books:tb.basis')} scope={scope} onScopeChange={setScope} />;
   const off = tb.totals.closingDebit - tb.totals.closingCredit;
   const m = (minor: number) => formatMoney(money(minor, baseCurrency));
 

@@ -5,10 +5,9 @@ import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { accountFor } from '@esmart/core/domain/ledger/accounts';
 import { dayBook } from '@esmart/core/domain/ledger/reports';
 import { formatDate } from '@esmart/core/lib/date';
-import { ReportShell, reportTable, useReportScope } from '../../../features/reports/ReportShell';
+import { ReportShell, reportTable, useReportScope, ReportLoading } from '../../../features/reports/ReportShell';
 import { DataTable, ReportSection } from '../../../features/reports/reportParts';
 import { useBooksView, useServerBook } from '../../../remote/queries';
-import { LoadingView } from '../../../components/LoadingView';
 import { useAccountName } from '../../../features/books/names';
 
 /** Every entry in a period, voucher by voucher, with its debits and credits. */
@@ -18,7 +17,7 @@ export default function DayBookScreen() {
   const { book } = useServerBook();
   const nameOf = useAccountName();
   const entries = useBooksView<{ entries: ReturnType<typeof dayBook> }>('day-book', scope.filters.range).data?.entries;
-  if (!entries) return <LoadingView variant="report" />;
+  if (!entries) return <ReportLoading title={tr('books:hub.dayBook')} subtitle={tr('books:dayBook.basis')} scope={scope} onScopeChange={setScope} skeleton={{ figures: 0, cols: 5 }} />;
   const label = (key: string) => {
     const a = accountFor(key, book);
     return a ? nameOf(a) : nameOf({ key, name: key, kind: 'system' });

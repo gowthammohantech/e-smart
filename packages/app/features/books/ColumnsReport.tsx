@@ -1,7 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, ScrollView, View } from 'react-native';
-import { useTheme } from '@esmart/ui/theme/ThemeProvider';
+import { ScrollView, View } from 'react-native';
 import { Segmented } from '@esmart/ui/components/Field';
 import { formatMoney } from '@esmart/core/lib/format';
 import { formatDate } from '@esmart/core/lib/date';
@@ -12,6 +11,7 @@ import { useBooksView } from '../../remote/queries';
 import { useBaseCurrency } from '../../store/selectors';
 import { useAccountName } from './names';
 import type { Account } from '@esmart/core/domain/ledger/accounts';
+import { ReportSkeleton } from '../../components/ScreenSkeleton';
 
 export type StatementView = 'single' | 'month' | 'quarter' | 'previousPeriod' | 'previousYear';
 const VIEWS: StatementView[] = ['single', 'month', 'quarter', 'previousPeriod', 'previousYear'];
@@ -95,8 +95,7 @@ export function columnsExport(sections: ColumnsSection[]): { headers: string[]; 
 }
 
 export function ColumnsReport({ sections }: { sections: ColumnsSection[] | undefined }) {
-  const t = useTheme();
-  if (!sections) return <ActivityIndicator color={t.c.muted} style={{ padding: t.spacing.xl }} />;
+  if (!sections) return <ReportSkeleton figures={0} cols={3} />;
   return (
     <>
       {sections.map((s) => {

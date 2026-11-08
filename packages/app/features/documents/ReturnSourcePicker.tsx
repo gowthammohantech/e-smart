@@ -22,6 +22,7 @@ import type { Money } from '@esmart/core/lib/money';
 import { formatMoney } from '@esmart/core/lib/format';
 import { NOTE_SOURCE } from '@esmart/core/domain/documentStates';
 import { DocumentEditor, detailRouteFor } from './DocumentEditor';
+import { ListSkeleton, MoreRowsSkeleton } from '../../components/ScreenSkeleton';
 
 /** Raised against one invoice or bill: returns, and credit and debit notes. */
 type AgainstSource = 'salesReturn' | 'purchaseReturn' | 'creditNote' | 'debitNote' | 'supplierCreditNote' | 'supplierDebitNote';
@@ -165,11 +166,11 @@ function SourceList({ kind }: { kind: AgainstSource }) {
         data={rows}
         keyExtractor={(r) => r.doc.id}
         onEndReached={() => pages.hasNextPage && !pages.isFetchingNextPage && void pages.fetchNextPage()}
-        ListFooterComponent={pages.isFetchingNextPage ? <ActivityIndicator color={t.c.muted} style={{ paddingVertical: t.spacing.md }} /> : null}
+        ListFooterComponent={pages.isFetchingNextPage ? <MoreRowsSkeleton /> : null}
         contentContainerStyle={{ paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.xxxl }}
         ListEmptyComponent={
           pages.isLoading ? (
-            <ActivityIndicator color={t.c.muted} style={{ padding: t.spacing.xl }} />
+            <ListSkeleton rows={5} />
           ) : (
             <Card padded={false}>
               <EmptyState icon="file-search-outline" title={tr('sales:returnPicker.empty')} compact />

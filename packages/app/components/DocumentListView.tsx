@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
+import { Pressable, ScrollView, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Icon } from '@esmart/ui/components/Icon';
 import { useTranslation } from 'react-i18next';
@@ -36,6 +36,8 @@ import { useDebounced } from './useDebounced';
 import { pagedTableProps, useRowsExport, useTableSelection } from './pagedTable';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { listParam, presetParam, useQueryParams } from '../navigation/queryParams';
+import { CardRowsSkeleton, MoreRowsSkeleton } from './ScreenSkeleton';
+import { SkeletonGroup, SkeletonStatGrid } from '@esmart/ui/components/Skeleton';
 
 export type DocumentListFilters = {
   query: string;
@@ -156,7 +158,7 @@ export function DocumentListView({
 
   const moreFooter = pages.hasNextPage ? (
     <View style={{ alignItems: 'center', paddingVertical: t.spacing.md }}>
-      {pages.isFetchingNextPage ? <ActivityIndicator color={t.c.muted} /> : <Button title={tr('common:documentList.loadMore')} variant="ghost" size="sm" onPress={loadMore} />}
+      {pages.isFetchingNextPage ? <MoreRowsSkeleton /> : <Button title={tr('common:documentList.loadMore')} variant="ghost" size="sm" onPress={loadMore} />}
     </View>
   ) : null;
 
@@ -297,6 +299,10 @@ export function DocumentListView({
               );
             })}
           </StatGrid>
+        ) : !summary.data && summary.isLoading ? (
+          <SkeletonGroup>
+            <SkeletonStatGrid tiles={4} across />
+          </SkeletonGroup>
         ) : null}
         <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: t.spacing.sm }}>
           {/* Wide enough for the hint naming what it searches. */}
@@ -523,7 +529,7 @@ export function DocumentListView({
       >
         <Card padded={false}>
           {loading ? (
-            <ActivityIndicator color={t.c.muted} style={{ padding: t.spacing.xl }} />
+            <CardRowsSkeleton />
           ) : filtered.length === 0 ? (
             <EmptyState
               illustration="no-documents" icon="file-search-outline"

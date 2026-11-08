@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, ScrollView, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
@@ -15,6 +15,7 @@ import { FormContainer } from '@esmart/ui/components/Layout';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { api } from '../../../remote/api';
 import { describeError } from '../../../remote/errors';
+import { Skeleton, SkeletonGroup } from '@esmart/ui/components/Skeleton';
 
 type Step = { kind: 'idle' } | { kind: 'scan'; secret: string; uri: string } | { kind: 'codes'; codes: string[] } | { kind: 'disable' };
 
@@ -73,13 +74,19 @@ export default function SecurityScreen() {
     <FormContainer>
       <Stack.Screen options={{ title: tr('settings:security.title') }} />
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, gap: t.spacing.lg }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
-        {status.isLoading ? <ActivityIndicator color={t.c.muted} /> : null}
         <Card style={{ gap: t.spacing.sm }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: t.spacing.md }}>
             <Text variant="body" weight="600">
               {tr('settings:security.authenticator')}
             </Text>
-            <Badge label={enrolled ? tr('settings:security.on') : tr('settings:security.off')} tone={enrolled ? 'success' : 'neutral'} size="sm" />
+            {/* Not yet known: no "off" badge until the server says so. */}
+            {status.isLoading ? (
+              <SkeletonGroup>
+                <Skeleton height={20} width={44} radius={10} />
+              </SkeletonGroup>
+            ) : (
+              <Badge label={enrolled ? tr('settings:security.on') : tr('settings:security.off')} tone={enrolled ? 'success' : 'neutral'} size="sm" />
+            )}
           </View>
           <Text variant="small" tone="muted">
             {tr(enrolled ? 'settings:security.onBody' : 'settings:security.offBody')}

@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ActivityIndicator, ScrollView, View } from "react-native";
+import { ScrollView, View } from "react-native";
 import { Stack, useRouter } from "expo-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "@esmart/ui/theme/ThemeProvider";
@@ -23,6 +23,7 @@ import { useAppStore } from "../../../store/appStore";
 import { useCurrentUser } from "../../../store/selectors";
 import { useApprovalActions } from "../../../features/approvals/ApprovalBanner";
 import { detailRouteFor } from "../../../features/documents/DocumentEditor";
+import { ListSkeleton } from "../../../components/ScreenSkeleton";
 
 /** What waits for an owner or admin: documents and payments over an approval rule's amount, oldest first. */
 export default function ApprovalsScreen() {
@@ -107,10 +108,9 @@ export default function ApprovalsScreen() {
     <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr("sales:approval.title") }} />
       {pending.isLoading || requests.isLoading ? (
-        <ActivityIndicator
-          color={t.c.muted}
-          style={{ padding: t.spacing.xl }}
-        />
+        <View style={{ padding: t.spacing.lg }}>
+          <ListSkeleton rows={5} />
+        </View>
       ) : docs.length || held.length ? (
         <ScrollView
           contentContainerStyle={{ padding: t.spacing.lg, gap: t.spacing.md }}

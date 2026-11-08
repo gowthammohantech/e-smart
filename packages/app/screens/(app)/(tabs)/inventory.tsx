@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, Pressable, ScrollView, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
+import { Pressable, ScrollView, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
@@ -26,6 +26,7 @@ import { zero, type Money } from '@esmart/core/lib/money';
 import type { Item } from '@esmart/core/types';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { useQueryParams } from '../../../navigation/queryParams';
+import { CardRowsSkeleton, MoreRowsSkeleton } from '../../../components/ScreenSkeleton';
 
 type Filter = 'all' | 'low' | 'out' | 'services';
 const FILTERS: Filter[] = ['all', 'low', 'out', 'services'];
@@ -78,10 +79,11 @@ export default function InventoryTab() {
         scrollEventThrottle={200}
       >
         <StatRow>
-          <StatTile label={tr('inventory:hub.stockValue')} value={report.totalValue} icon="warehouse" caption={tr('inventory:hub.trackedItems', { count: report.trackedCount })} />
+          <StatTile label={tr('inventory:hub.stockValue')} value={report.totalValue} icon="warehouse" loading={!stockReport} caption={tr('inventory:hub.trackedItems', { count: report.trackedCount })} />
           <StatTile
             label={tr('inventory:hub.lowStock')}
             value={String(report.lowCount)}
+            loading={!stockReport}
             tone="warn"
             icon="alert-outline"
             caption={tr('inventory:hub.outOfStock', { count: report.outCount })}
@@ -123,7 +125,7 @@ export default function InventoryTab() {
 
         <Card padded={false}>
           {pages.isLoading && !filtered.length ? (
-            <ActivityIndicator color={t.c.muted} style={{ padding: t.spacing.xl }} />
+            <CardRowsSkeleton kind="list" />
           ) : filtered.length === 0 ? (
             <EmptyState
               illustration="no-items"
@@ -214,7 +216,7 @@ export default function InventoryTab() {
             })
           )}
         </Card>
-        {pages.isFetchingNextPage ? <ActivityIndicator color={t.c.muted} style={{ paddingVertical: t.spacing.md }} /> : null}
+        {pages.isFetchingNextPage ? <MoreRowsSkeleton kind="list" /> : null}
       </ScrollView>
 
       <Fab icon="plus" onPress={() => setActionsOpen(true)} />

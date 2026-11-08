@@ -9,10 +9,9 @@ import { BarChart } from '@esmart/ui/components/charts/BarChart';
 import { accountFor } from '@esmart/core/domain/ledger/accounts';
 import { ledgerStatement, type BalancePoint } from '@esmart/core/domain/ledger/reports';
 import { formatDate } from '@esmart/core/lib/date';
-import { ReportShell, reportTable, useReportScope } from '../../../../features/reports/ReportShell';
+import { ReportShell, reportTable, useReportScope, ReportLoading } from '../../../../features/reports/ReportShell';
 import { DataTable, KeyFigures, ReportSection } from '../../../../features/reports/reportParts';
 import { useBooksView, useServerBook } from '../../../../remote/queries';
-import { LoadingView } from '../../../../components/LoadingView';
 import { useBaseCurrency, usePaymentAccounts } from '../../../../store/selectors';
 import { useAccountName, useDrCr } from '../../../../features/books/names';
 
@@ -31,7 +30,7 @@ export default function AccountStatement() {
   const bank = usePaymentAccounts().find((a) => a.type === 'bank' && key === `pay:${a.id}`);
   const account = accountFor(key, book) ?? (key.startsWith('sys:tdsPayable:') ? { key, name: key, group: 'dutiesTaxes' as const, kind: 'system' as const } : undefined);
   const s = useBooksView<ReturnType<typeof ledgerStatement> & { trend?: BalancePoint[] }>('ledger', { ...scope.filters.range, account: key }).data;
-  if (!s) return <LoadingView variant="report" />;
+  if (!s) return <ReportLoading title={account ? nameOf(account) : key} scope={scope} onScopeChange={setScope} skeleton={{ cols: 5 }} />;
   const title = account ? nameOf(account) : key;
   // Cash and bank: how the balance moved, month end by month end.
   const showTrend = (account?.group === 'cashInHand' || account?.group === 'bankAccounts') && (s.trend?.length ?? 0) > 1;

@@ -8,10 +8,9 @@ import { formatMoney } from '@esmart/core/lib/format';
 import { formatDate } from '@esmart/core/lib/date';
 import { money } from '@esmart/core/lib/money';
 import type { IntegrityCheck, IntegrityItem } from '@esmart/core/domain/ledger/integrity';
-import { ReportShell, reportTable, useReportScope } from '../../../features/reports/ReportShell';
+import { ReportShell, reportTable, useReportScope, ReportLoading } from '../../../features/reports/ReportShell';
 import { HeroFigure, ReportSection } from '../../../features/reports/reportParts';
 import { useBooksView } from '../../../remote/queries';
-import { LoadingView } from '../../../components/LoadingView';
 import { useBaseCurrency } from '../../../store/selectors';
 
 /** Where a record that disagrees lives in the app. */
@@ -35,7 +34,7 @@ export default function IntegrityScreen() {
   const { scope, setScope } = useReportScope('thisFY');
   const baseCurrency = useBaseCurrency();
   const res = useBooksView<{ asOf: string; checks: IntegrityCheck[] }>('integrity', { to: scope.filters.range.to }).data;
-  if (!res) return <LoadingView variant="report" />;
+  if (!res) return <ReportLoading title={tr('books:hub.integrity')} subtitle={tr('books:integrity.basis')} scope={scope} onScopeChange={setScope} />;
   const m = (minor: number) => formatMoney(money(minor, baseCurrency));
   const failed = res.checks.filter((c) => !c.ok);
   const itemRow = (c: IntegrityCheck, i: IntegrityItem, last: boolean) => {

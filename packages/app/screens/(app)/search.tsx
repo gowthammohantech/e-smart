@@ -12,6 +12,7 @@ import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { useGlobalSearch } from '../../features/search/useGlobalSearch';
 import { matchPages, useAppPages } from '../../navigation/pages';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { ListSkeleton } from '../../components/ScreenSkeleton';
 
 /** Global search across every record the active company owns. */
 export default function GlobalSearch() {
@@ -21,7 +22,7 @@ export default function GlobalSearch() {
 
   const [query, setQuery] = useState('');
 
-  const { results, grouped } = useGlobalSearch(query);
+  const { results, grouped, isFetching } = useGlobalSearch(query);
   // Screens match too, so "invoices" can open the Invoices list itself.
   const pages = matchPages(useAppPages(), query);
 
@@ -42,6 +43,9 @@ export default function GlobalSearch() {
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         {query.trim().length < 2 ? (
           <EmptyState illustration="search-idle" icon="magnify" title={tr('common:search.title')} message={tr('common:search.subtitleFull')} />
+        ) : results.length === 0 && pages.length === 0 && isFetching ? (
+          // Still asking the server: shapes, not "no matches".
+          <ListSkeleton rows={4} kind="list" />
         ) : results.length === 0 && pages.length === 0 ? (
           <EmptyState illustration="search-empty" icon="magnify-close" title={tr('common:search.noMatches')} message={tr('nav:shell.noMatchesInBusiness', { query })} />
         ) : (

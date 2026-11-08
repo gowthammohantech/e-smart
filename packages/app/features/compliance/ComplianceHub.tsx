@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { keyLabel } from '@esmart/core/labels';
-import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
@@ -25,6 +25,7 @@ import { formatMoney } from '@esmart/core/lib/format';
 import { EWAY_STATUS_META, E_INVOICE_STATUS_META, expiryPhrase } from './complianceMeta';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { useQueryParams } from '../../navigation/queryParams';
+import { ListSkeleton, MoreRowsSkeleton } from '../../components/ScreenSkeleton';
 
 type Tab = 'eInvoice' | 'eway';
 
@@ -217,7 +218,7 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
       </ScrollView>
 
       {loading ? (
-        <ActivityIndicator color={t.c.muted} style={{ padding: t.spacing.xl }} />
+        <ListSkeleton kind="list" />
       ) : tab === 'eInvoice' ? (
         eInvoiceRows.length ? (
           <Card padded={false}>
@@ -312,7 +313,7 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
       )}
       {tab === 'eway' && ewayFilter !== 'pending' && bills.hasNextPage ? (
         <View style={{ alignItems: 'center', paddingVertical: t.spacing.md }}>
-          {bills.isFetchingNextPage ? <ActivityIndicator color={t.c.muted} /> : <Button title={tr('common:documentList.loadMore')} variant="ghost" size="sm" onPress={() => void bills.fetchNextPage()} />}
+          {bills.isFetchingNextPage ? <MoreRowsSkeleton kind="list" /> : <Button title={tr('common:documentList.loadMore')} variant="ghost" size="sm" onPress={() => void bills.fetchNextPage()} />}
         </View>
       ) : null}
     </ScrollView>

@@ -4,10 +4,9 @@ import { Stack } from 'expo-router';
 import { profitAndLoss, type StatementLine } from '@esmart/core/domain/ledger/reports';
 import { formatMoney } from '@esmart/core/lib/format';
 import { money } from '@esmart/core/lib/money';
-import { ReportShell, reportTable, useReportScope } from '../../../features/reports/ReportShell';
+import { ReportShell, reportTable, useReportScope, ReportLoading } from '../../../features/reports/ReportShell';
 import { DataTable, HeroFigure, KeyFigures, ReportSection } from '../../../features/reports/reportParts';
 import { useBooksView } from '../../../remote/queries';
-import { LoadingView } from '../../../components/LoadingView';
 import { useBaseCurrency } from '../../../store/selectors';
 import { useAccountName } from '../../../features/books/names';
 import { ColumnsReport, StatementViewPicker, columnsExport, useColumnsTables, type StatementView } from '../../../features/books/ColumnsReport';
@@ -21,7 +20,7 @@ export default function ProfitAndLossScreen() {
   const [view, setView] = useState<StatementView>('single');
   const columns = useColumnsTables('profit-loss', scope.filters.range, view);
   const pl = useBooksView<ReturnType<typeof profitAndLoss>>('profit-loss', scope.filters.range).data;
-  if (!pl) return <LoadingView variant="report" />;
+  if (!pl) return <ReportLoading title={tr('books:hub.profitLoss')} subtitle={tr('books:pl.basis')} scope={scope} onScopeChange={setScope} />;
   const m = (minor: number) => formatMoney(money(minor, baseCurrency));
   const rows = (lines: StatementLine[]) => lines.map((l) => [nameOf(l.account), m(l.amount)]);
 

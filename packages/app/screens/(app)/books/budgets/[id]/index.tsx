@@ -6,7 +6,7 @@ import { today } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
 import { money } from '@esmart/core/lib/money';
 import { LoadingView } from '../../../../../components/LoadingView';
-import { ReportShell, reportTable, useReportScope } from '../../../../../features/reports/ReportShell';
+import { ReportShell, reportTable, useReportScope, ReportLoading } from '../../../../../features/reports/ReportShell';
 import { DataTable, KeyFigures, ReportSection } from '../../../../../features/reports/reportParts';
 import { useCanWrite } from '../../../../../remote/connectivity';
 import { useBudget, useBudgetVariance } from '../../../../../remote/budgets';
@@ -25,7 +25,8 @@ export default function BudgetVarianceScreen() {
   const now = today();
   const query = useBudgetVariance(id, { from: scope.filters.range.from, to: scope.filters.range.to > now ? now : scope.filters.range.to });
   const v = query.data;
-  if (!budget || !v) return <LoadingView variant="report" />;
+  if (!budget) return <LoadingView variant="report" />;
+  if (!v) return <ReportLoading title={budget.name} subtitle={tr('books:budgets.basis')} scope={scope} onScopeChange={setScope} />;
   const m = (minor: number) => formatMoney(money(minor, currency));
   const pct = (actual: number, plan: number) => (plan ? `${Math.round((actual / plan) * 100)}%` : '—');
   const signed = (n: number) => (n > 0 ? `+${m(n)}` : n < 0 ? `−${m(-n)}` : m(0));

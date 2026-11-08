@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, Pressable, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Card } from '@esmart/ui/components/Card';
@@ -28,6 +28,7 @@ import { useBooksView, useServerBook } from '../../../../remote/queries';
 import { ReportShell, reportTable, useReportScope } from '../../../../features/reports/ReportShell';
 import { useActiveCompany, useBaseCurrency } from '../../../../store/selectors';
 import { useAccountName, useDrCr, useGroupName } from '../../../../features/books/names';
+import { Skeleton, SkeletonGroup } from '@esmart/ui/components/Skeleton';
 
 type Figures = AccountFigures;
 const NO_FIGURES: Figures = { opening: 0, debit: 0, credit: 0, closing: 0 };
@@ -302,7 +303,12 @@ export default function ChartOfAccounts() {
             </View>
           </View>
 
-          {!tb && tbQuery.isLoading ? <ActivityIndicator color={t.c.muted} style={{ padding: t.spacing.lg }} /> : null}
+          {/* The chart is here already; a thin shimmer while its balances arrive. */}
+          {!tb && tbQuery.isLoading ? (
+            <SkeletonGroup>
+              <Skeleton height={4} radius={2} />
+            </SkeletonGroup>
+          ) : null}
 
           <Card padded={false} style={{ overflow: 'hidden' }}>
             {desktop ? (

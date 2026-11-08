@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, Linking, View } from 'react-native';
+import { Linking, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import type { Schema } from '@esmart/api-client';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
@@ -16,6 +16,7 @@ import { remoteSession } from '../../remote';
 import { describeError } from '../../remote/errors';
 import { onMobileBrowser, openInApp as openAppAt } from '../../navigation/openInApp';
 import { LEGAL } from '../../lib/legal';
+import { FormSkeleton } from '../../components/ScreenSkeleton';
 
 type Invite = Schema<'InviteDetails'>;
 
@@ -112,7 +113,7 @@ export default function AcceptInvite() {
   if (loading) {
     return (
       <AuthShell illustration="loading" title={tr('auth:invite.title')} hideBack>
-        <ActivityIndicator color={t.c.primary} />
+        <FormSkeleton fields={2} />
       </AuthShell>
     );
   }

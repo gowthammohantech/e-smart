@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, ScrollView, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
@@ -17,6 +17,7 @@ import { api } from '../../../remote/api';
 import { useAppStore } from '../../../store/appStore';
 import { useBaseCurrency } from '../../../store/selectors';
 import { HeroFigure, KeyFigures } from '../../../features/reports/reportParts';
+import { ReportSkeleton } from '../../../components/ScreenSkeleton';
 
 const HORIZONS = ['4', '13', '26'] as const;
 
@@ -51,7 +52,7 @@ export default function CashForecastScreen() {
         </Text>
         <Segmented options={HORIZONS.map((h) => ({ value: h, label: tr('books:forecast.weeks', { count: Number(h) }) }))} value={weeks} onChange={(v) => setWeeks(v as typeof weeks)} />
         {!f ? (
-          <ActivityIndicator color={t.c.muted} style={{ padding: t.spacing.xl }} />
+          <ReportSkeleton figures={3} />
         ) : (
           <>
             <HeroFigure

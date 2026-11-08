@@ -3,8 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Stack } from 'expo-router';
 import { formatMoney } from '@esmart/core/lib/format';
 import { money } from '@esmart/core/lib/money';
-import { LoadingView } from '../../../../components/LoadingView';
-import { ReportShell, reportTable, useReportScope } from '../../../../features/reports/ReportShell';
+import { ReportShell, reportTable, useReportScope, ReportLoading } from '../../../../features/reports/ReportShell';
 import { DataTable, KeyFigures, ReportSection } from '../../../../features/reports/reportParts';
 import { useFixedAssetSchedule } from '../../../../remote/fixedAssets';
 import { useBaseCurrency } from '../../../../store/selectors';
@@ -24,7 +23,7 @@ export default function FixedAssetScheduleScreen() {
     <>
       <Stack.Screen options={{ title: tr('books:assets.schedule') }} />
       {!s ? (
-        <LoadingView variant="report" />
+        <ReportLoading title={tr('books:assets.schedule')} subtitle={tr('books:assets.scheduleBasis')} scope={scope} onScopeChange={setScope} skeleton={{ figures: 0, cols: 6 }} />
       ) : (
         <ReportShell
           title={tr('books:assets.schedule')}

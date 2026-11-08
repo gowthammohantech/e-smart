@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Badge } from '@esmart/ui/components/Badge';
@@ -24,6 +24,7 @@ import { describeError } from '../../../remote/errors';
 import { refreshSoon } from '../../../remote/refresh';
 import { useDebounced } from '../../../components/useDebounced';
 import { useBaseCurrency, useParties } from '../../../store/selectors';
+import { ListSkeleton } from '../../../components/ScreenSkeleton';
 
 type Side = 'customer' | 'supplier';
 
@@ -158,7 +159,7 @@ export default function AdjustAdvances() {
           ) : null}
 
           {!partyId ? null : data.isLoading ? (
-            <ActivityIndicator color={t.c.muted} />
+            <ListSkeleton kind="list" rows={4} />
           ) : !credits.length || !open.length ? (
             <EmptyState icon="swap-horizontal" title={!credits.length ? tr('books:adjust.noCredit') : tr('books:adjust.noOpen')} message={tr('books:adjust.emptyHint')} compact />
           ) : (

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, ScrollView, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
@@ -18,6 +18,7 @@ import { KeyFigures } from '../../../../features/reports/reportParts';
 import { useCanWrite } from '../../../../remote/connectivity';
 import { useFixedAssets, type FixedAsset } from '../../../../remote/fixedAssets';
 import { useBaseCurrency } from '../../../../store/selectors';
+import { ListSkeleton } from '../../../../components/ScreenSkeleton';
 
 type Show = 'active' | 'disposed' | 'all';
 
@@ -47,7 +48,7 @@ export default function FixedAssets() {
           <ListRow title={tr('books:assets.schedule')} subtitle={tr('books:assets.scheduleHint')} icon="table-large" chevron onPress={() => router.push('/(app)/books/fixed-assets/schedule' as never)} />
         </Card>
         {list.isPending ? (
-          <ActivityIndicator color={t.c.muted} style={{ padding: t.spacing.xl }} />
+          <ListSkeleton kind="list" rows={4} />
         ) : assets.length ? (
           <>
             <KeyFigures

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, Platform, ScrollView, View } from 'react-native';
+import { Platform, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Button } from '@esmart/ui/components/Button';
@@ -19,6 +19,7 @@ import { partyStatementPdf, usePartyStatement } from '../../remote/parties';
 import { describeError } from '../../remote/errors';
 import { deliverFile } from '../reports/exportFiles';
 import { useActiveCompany } from '../../store/selectors';
+import { ReportSkeleton } from '../../components/ScreenSkeleton';
 
 type Entry = NonNullable<ReturnType<typeof usePartyStatement>['data']>['entries'] extends (infer E)[] | undefined ? E : never;
 
@@ -84,7 +85,7 @@ export function PartyStatementView({ party }: { party: Party }) {
       </View>
 
       {statement.isLoading ? (
-        <ActivityIndicator color={t.c.muted} style={{ padding: t.spacing.xl }} />
+        <ReportSkeleton />
       ) : statement.isError ? (
         <EmptyState icon="alert-circle-outline" title={tr('contacts:statement.loadFailed')} message={describeError(statement.error, tr)} actionLabel={tr('common:action.retry')} onAction={() => void statement.refetch()} />
       ) : (

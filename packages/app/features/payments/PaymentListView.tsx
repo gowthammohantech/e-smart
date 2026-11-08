@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, Pressable, ScrollView, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
+import { Pressable, ScrollView, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Cell, DataTable } from '@esmart/ui/components/DataTable';
@@ -25,6 +25,7 @@ import { useDebounced } from '../../components/useDebounced';
 import { pagedTableProps, useRowsExport, useTableSelection } from '../../components/pagedTable';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { presetParam, useQueryParams } from '../../navigation/queryParams';
+import { CardRowsSkeleton, MoreRowsSkeleton } from '../../components/ScreenSkeleton';
 
 export function PaymentListView({ direction }: { direction: PaymentDirection }) {
   const t = useTheme();
@@ -76,7 +77,7 @@ export function PaymentListView({ direction }: { direction: PaymentDirection }) 
 
   const moreFooter = pages.hasNextPage ? (
     <View style={{ alignItems: 'center', paddingVertical: t.spacing.md }}>
-      {pages.isFetchingNextPage ? <ActivityIndicator color={t.c.muted} /> : <Button title={tr('common:documentList.loadMore')} variant="ghost" size="sm" onPress={loadMore} />}
+      {pages.isFetchingNextPage ? <MoreRowsSkeleton /> : <Button title={tr('common:documentList.loadMore')} variant="ghost" size="sm" onPress={loadMore} />}
     </View>
   ) : null;
 
@@ -225,7 +226,7 @@ export function PaymentListView({ direction }: { direction: PaymentDirection }) 
       >
         <Card padded={false}>
           {loading ? (
-            <ActivityIndicator color={t.c.muted} style={{ padding: t.spacing.xl }} />
+            <CardRowsSkeleton />
           ) : filtered.length === 0 ? (
             <EmptyState
               illustration="no-payments"

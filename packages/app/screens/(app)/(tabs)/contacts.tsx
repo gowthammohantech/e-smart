@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, Pressable, ScrollView, SectionList, View } from 'react-native';
+import { Pressable, ScrollView, SectionList, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
@@ -27,6 +27,8 @@ import type { Party } from '@esmart/core/types';
 import { zero, type Money } from '@esmart/core/lib/money';
 import { formatMoney } from '@esmart/core/lib/format';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { ListSkeleton, MoreRowsSkeleton } from '../../../components/ScreenSkeleton';
+import { SkeletonGroup, SkeletonStatGrid } from '@esmart/ui/components/Skeleton';
 
 /** general: contacts with no account (a landlord, the auditor), which read like customers here. */
 type Tab = 'customer' | 'supplier' | 'general';
@@ -93,7 +95,7 @@ export default function ContactsTab() {
 
   const moreFooter = pages.hasNextPage ? (
     <View style={{ alignItems: 'center', paddingVertical: t.spacing.md }}>
-      {pages.isFetchingNextPage ? <ActivityIndicator color={t.c.muted} /> : <Button title={tr('common:documentList.loadMore')} variant="ghost" size="sm" onPress={loadMore} />}
+      {pages.isFetchingNextPage ? <MoreRowsSkeleton /> : <Button title={tr('common:documentList.loadMore')} variant="ghost" size="sm" onPress={loadMore} />}
     </View>
   ) : null;
 
@@ -180,7 +182,11 @@ export default function ContactsTab() {
               <StatTile label={tr('contacts:hub.tile.overdue')} value={summary.overdue as Money} tone="bad" icon="alert-outline" caption={tr('contacts:hub.tile.overdueCaption')} />
               <StatTile label={tr('contacts:hub.tile.advance')} value={summary.advance as Money} icon="cash-fast" caption={tr('contacts:hub.tile.advanceCaption')} />
             </StatGrid>
-          ) : null}
+          ) : (
+            <SkeletonGroup>
+              <SkeletonStatGrid tiles={4} across />
+            </SkeletonGroup>
+          )}
           <DataTable
             columns={[
               {
@@ -238,7 +244,7 @@ export default function ContactsTab() {
           />
         </View>
       ) : pages.isLoading && !filtered.length ? (
-        <ActivityIndicator color={t.c.muted} style={{ padding: t.spacing.xl }} />
+        <ListSkeleton />
       ) : sections.length === 0 ? (
         <ScrollView contentContainerStyle={{ padding: t.spacing.lg }}>
           <Card padded={false}>

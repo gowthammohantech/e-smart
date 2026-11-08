@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, ScrollView } from 'react-native';
+import { ScrollView } from 'react-native';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { Button } from '@esmart/ui/components/Button';
@@ -12,6 +12,7 @@ import { formatDate } from '@esmart/core/lib/date';
 import { removeBankStatement, useBankStatements } from '../../remote/banking';
 import { useCanWrite } from '../../remote/connectivity';
 import { useBankAction } from './parts';
+import { ListSkeleton } from '../../components/ScreenSkeleton';
 
 /**
  * The statements imported into an account, newest first: when, from which file, the dates they cover
@@ -25,7 +26,7 @@ export function ImportsView({ accountId }: { accountId: string }) {
   const canWrite = useCanWrite();
   const { run, busy } = useBankAction();
   const [undo, setUndo] = useState<{ id: string; fileName: string; lineCount: number } | null>(null);
-  if (statements.isPending) return <ActivityIndicator color={t.c.muted} style={{ padding: t.spacing.xl }} />;
+  if (statements.isPending) return <ListSkeleton kind="list" rows={4} />;
   const rows = statements.data ?? [];
   if (!rows.length) return <EmptyState icon="file-upload-outline" title={tr('banking:imports.empty')} message={tr('banking:imports.emptyBody')} />;
   return (

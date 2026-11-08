@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ActivityIndicator, ScrollView, View } from "react-native";
+import { ScrollView, View } from "react-native";
 import { Stack } from "expo-router";
 import { useTheme } from "@esmart/ui/theme/ThemeProvider";
 import { Button } from "@esmart/ui/components/Button";
@@ -13,6 +13,7 @@ import { useServerSave } from "../../../components/useServerSave";
 import { useAiUsage } from "../../../remote/queries";
 import { useAppStore } from "../../../store/appStore";
 import { useActiveCompany, useCurrentUser } from "../../../store/selectors";
+import { SkeletonGroup, SkeletonText } from "@esmart/ui/components/Skeleton";
 
 /**
  * AI actions this month (Lixi messages and bills read by the scanning service) against the
@@ -94,7 +95,9 @@ export default function AiUsageScreen() {
               ) : null}
             </>
           ) : (
-            <ActivityIndicator color={t.c.muted} />
+            <SkeletonGroup>
+              <SkeletonText lines={3} />
+            </SkeletonGroup>
           )}
         </Card>
         <Card style={{ gap: t.spacing.md }}>

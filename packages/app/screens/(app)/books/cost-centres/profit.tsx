@@ -5,11 +5,10 @@ import { costCentreProfit } from '@esmart/core/domain/ledger/reports';
 import { formatMoney } from '@esmart/core/lib/format';
 import { money } from '@esmart/core/lib/money';
 import { Text } from '@esmart/ui/components/Text';
-import { ReportShell, reportTable, useReportScope } from '../../../../features/reports/ReportShell';
+import { ReportShell, reportTable, useReportScope, ReportLoading } from '../../../../features/reports/ReportShell';
 import { DataTable, ReportSection } from '../../../../features/reports/reportParts';
 import { useCostCentres } from '../../../../store/books';
 import { useBooksView } from '../../../../remote/queries';
-import { LoadingView } from '../../../../components/LoadingView';
 import { useBaseCurrency } from '../../../../store/selectors';
 import { useAccountName } from '../../../../features/books/names';
 
@@ -21,7 +20,7 @@ export default function CostCentreProfitScreen() {
   const centres = useCostCentres(true);
   const nameOf = useAccountName();
   const rows = useBooksView<{ rows: ReturnType<typeof costCentreProfit> }>('cost-centres', scope.filters.range).data?.rows;
-  if (!rows) return <LoadingView variant="report" />;
+  if (!rows) return <ReportLoading title={tr('books:hub.costCentreProfit')} subtitle={tr('books:costCentres.basis')} scope={scope} onScopeChange={setScope} skeleton={{ figures: 0 }} />;
   const m = (minor: number) => formatMoney(money(minor, baseCurrency));
   const centreName = (id?: string) => (id ? (centres.find((c) => c.id === id)?.name ?? id) : tr('books:costCentres.none'));
 

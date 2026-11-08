@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, Pressable, ScrollView, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
+import { Pressable, ScrollView, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Button } from '@esmart/ui/components/Button';
@@ -27,6 +27,7 @@ import { presetParam, useQueryParams } from '../../../navigation/queryParams';
 import { useAccountName } from '../../../features/books/names';
 import { useDebounced } from '../../../components/useDebounced';
 import { pagedTableProps, useRowsExport, useTableSelection } from '../../../components/pagedTable';
+import { CardRowsSkeleton, MoreRowsSkeleton } from '../../../components/ScreenSkeleton';
 
 const DEFAULT_RANGE: DateRangePreset = 'last30';
 
@@ -171,7 +172,7 @@ export default function ReceiptsList() {
           side={
             narrow ? null : (
               <>
-                <StatTile label={tr('books:receipts.total')} value={total} tone="good" icon="cash-plus" caption={tr('books:receipts.count', { count })} />
+                <StatTile label={tr('books:receipts.total')} value={total} tone="good" icon="cash-plus" caption={tr('books:receipts.count', { count })} loading={!summary.data && summary.isLoading} />
                 {splitCard}
               </>
             )
@@ -215,13 +216,13 @@ export default function ReceiptsList() {
         scrollEventThrottle={200}
       >
         <StatRow>
-          <StatTile label={tr('books:receipts.total')} value={total} tone="good" icon="cash-plus" caption={tr('books:receipts.count', { count })} />
+          <StatTile label={tr('books:receipts.total')} value={total} tone="good" icon="cash-plus" caption={tr('books:receipts.count', { count })} loading={!summary.data && summary.isLoading} />
         </StatRow>
         {splitCard}
         <View style={{ alignItems: 'flex-start' }}>{adjustButton}</View>
         <Card padded={false}>
           {loading ? (
-            <ActivityIndicator color={t.c.muted} style={{ padding: t.spacing.xl }} />
+            <CardRowsSkeleton />
           ) : receipts.length ? (
             receipts.map((v, i) => (
               <ListRow
@@ -244,7 +245,7 @@ export default function ReceiptsList() {
         </Card>
         {pages.hasNextPage ? (
           <View style={{ alignItems: 'center' }}>
-            {pages.isFetchingNextPage ? <ActivityIndicator color={t.c.muted} /> : <Button title={tr('common:documentList.loadMore')} variant="ghost" size="sm" onPress={loadMore} />}
+            {pages.isFetchingNextPage ? <MoreRowsSkeleton /> : <Button title={tr('common:documentList.loadMore')} variant="ghost" size="sm" onPress={loadMore} />}
           </View>
         ) : null}
       </ScrollView>

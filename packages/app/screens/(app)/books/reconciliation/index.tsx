@@ -14,6 +14,7 @@ import { formatMoney } from '@esmart/core/lib/format';
 import type { PaymentAccount } from '@esmart/core/types';
 import { useBankLineSummary } from '../../../../remote/queries';
 import { usePaymentAccounts } from '../../../../store/selectors';
+import { Skeleton } from '@esmart/ui/components/Skeleton';
 
 /** One bank account: how many of its statement lines are still to explain, and the bank's last balance. */
 function AccountRow({ account, last }: { account: PaymentAccount; last: boolean }) {
@@ -37,7 +38,9 @@ function AccountRow({ account, last }: { account: PaymentAccount; last: boolean 
       chevron
       divider={!last}
       right={
-        s && imported ? (
+        !s ? (
+          <Skeleton height={20} width={72} radius={10} />
+        ) : imported ? (
           s.unmatched ? (
             <Badge label={tr('banking:accounts.toExplain', { count: s.unmatched })} tone="warning" size="sm" />
           ) : (

@@ -19,6 +19,7 @@ import type { Item } from '@esmart/core/types';
 import { formatMoney, formatQty } from '@esmart/core/lib/format';
 import { multiply } from '@esmart/core/lib/money';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { CardRowsSkeleton } from '../../../components/ScreenSkeleton';
 
 export default function LowStock() {
   const t = useTheme();
@@ -33,6 +34,8 @@ export default function LowStock() {
   // The server's stock report: every tracked item with what's on hand and whether it is low.
   const day = today();
   const report = useServerReport<{ rows?: { item: Item; onHand: number; low: boolean }[]; outCount?: number }>('stock', { from: day, to: day, branchId }).data;
+  // Until the first answer, no "all stocked" and no zero tiles: shapes where they'll be.
+  const loading = !report;
   const rows = useMemo(
     () => (report?.rows ?? []).filter((r) => r.low && r.item.status === 'active').sort((a, b) => a.onHand - b.onHand),
     [report],
@@ -53,19 +56,22 @@ export default function LowStock() {
 
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 + insets.bottom }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <StatRow>
-          <StatTile label={tr('inventory:lowStock.needAttention')} value={String(rows.length)} tone="warn" icon="alert-outline" caption={tr('inventory:hub.outOfStock', { count: report?.outCount ?? 0 })} />
+          <StatTile label={tr('inventory:lowStock.needAttention')} value={String(rows.length)} tone="warn" icon="alert-outline" caption={tr('inventory:hub.outOfStock', { count: report?.outCount ?? 0 })} loading={loading} />
           <StatTile
             label={tr('inventory:lowStock.restockCost')}
             value={{ minor: suggestedValue, currency: baseCurrency }}
             icon="cart-outline"
             caption={tr('inventory:lowStock.restockCaption')}
+            loading={loading}
           />
         </StatRow>
 
         <View style={{ height: t.spacing.lg }} />
 
         <Card padded={false}>
-          {rows.length === 0 ? (
+          {loading ? (
+            <CardRowsSkeleton kind="list" rows={6} />
+          ) : rows.length === 0 ? (
             <EmptyState illustration="all-settled" icon="check-all" title={tr('inventory:lowStock.allStocked')} message={tr('inventory:lowStock.allStockedBody')} compact />
           ) : (
             rows.map((r, i) => {

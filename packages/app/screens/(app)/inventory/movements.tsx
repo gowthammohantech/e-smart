@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useCallback} from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, Pressable, ScrollView, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
+import { Pressable, ScrollView, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
@@ -19,6 +19,7 @@ import { StockMovement, StockMovementType } from '@esmart/core/types';
 import { formatQty } from '@esmart/core/lib/format';
 import { formatDate } from '@esmart/core/lib/date';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { CardRowsSkeleton, MoreRowsSkeleton } from '../../../components/ScreenSkeleton';
 
 const TYPES: (StockMovementType | 'all')[] = ['all', 'purchaseReceipt', 'salesIssue', 'adjustment', 'transferIn', 'transferOut', 'salesReturn', 'purchaseReturn', 'opening'];
 
@@ -91,7 +92,7 @@ export default function StockMovements() {
       >
         <Card padded={false}>
           {pages.isLoading && !filtered.length ? (
-            <ActivityIndicator color={t.c.muted} style={{ padding: t.spacing.xl }} />
+            <CardRowsSkeleton kind="list" />
           ) : filtered.length === 0 ? (
             <EmptyState illustration="no-movements" icon="swap-vertical" title={tr('inventory:movements.none')} message={tr('inventory:movements.noneBody')} compact />
           ) : (
@@ -145,7 +146,7 @@ export default function StockMovements() {
             })
           )}
         </Card>
-        {pages.isFetchingNextPage ? <ActivityIndicator color={t.c.muted} style={{ paddingVertical: t.spacing.md }} /> : null}
+        {pages.isFetchingNextPage ? <MoreRowsSkeleton kind="list" /> : null}
       </ScrollView>
     </View>
   );

@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, Pressable, ScrollView, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
+import { Pressable, ScrollView, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { Icon, type IconName } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
@@ -28,6 +28,7 @@ import { Cell, DataTable } from '@esmart/ui/components/DataTable';
 import { SplitPane } from '@esmart/ui/components/Layout';
 import { FilterMenu } from '@esmart/ui/components/FilterMenu';
 import { presetParam, useQueryParams } from '../../../navigation/queryParams';
+import { CardRowsSkeleton, MoreRowsSkeleton } from '../../../components/ScreenSkeleton';
 
 const DEFAULT_RANGE: DateRangePreset = 'last30';
 
@@ -92,7 +93,7 @@ export default function ExpensesList() {
 
   const moreFooter = pages.hasNextPage ? (
     <View style={{ alignItems: 'center', paddingVertical: t.spacing.md }}>
-      {pages.isFetchingNextPage ? <ActivityIndicator color={t.c.muted} /> : <Button title={tr('common:documentList.loadMore')} variant="ghost" size="sm" onPress={loadMore} />}
+      {pages.isFetchingNextPage ? <MoreRowsSkeleton kind="list" /> : <Button title={tr('common:documentList.loadMore')} variant="ghost" size="sm" onPress={loadMore} />}
     </View>
   ) : null;
 
@@ -256,8 +257,8 @@ export default function ExpensesList() {
           side={
             narrow ? null : (
             <>
-              <StatTile label={tr('purchases:expense.totalSpent')} value={total} tone="warn" icon="receipt-text-outline" caption={tr('purchases:expense.entries', { count })} />
-              <StatTile label={tr('purchases:expense.inputTax')} value={taxTotal} icon="percent-outline" caption={tr('purchases:expense.claimable')} />
+              <StatTile label={tr('purchases:expense.totalSpent')} value={total} tone="warn" icon="receipt-text-outline" caption={tr('purchases:expense.entries', { count })} loading={!summary.data && summary.isLoading} />
+              <StatTile label={tr('purchases:expense.inputTax')} value={taxTotal} icon="percent-outline" caption={tr('purchases:expense.claimable')} loading={!summary.data && summary.isLoading} />
               {slices.length > 0 ? (
                 <Card>
                   <DonutChart slices={slices} centerLabel={tr('purchases:expense.total')} />
@@ -293,8 +294,8 @@ export default function ExpensesList() {
         scrollEventThrottle={200}
       >
         <StatRow>
-          <StatTile label={tr('purchases:expense.totalSpent')} value={total} tone="warn" icon="receipt-text-outline" caption={tr('purchases:expense.entries', { count })} />
-          <StatTile label={tr('purchases:expense.inputTax')} value={taxTotal} icon="percent-outline" caption={tr('purchases:expense.claimable')} />
+          <StatTile label={tr('purchases:expense.totalSpent')} value={total} tone="warn" icon="receipt-text-outline" caption={tr('purchases:expense.entries', { count })} loading={!summary.data && summary.isLoading} />
+          <StatTile label={tr('purchases:expense.inputTax')} value={taxTotal} icon="percent-outline" caption={tr('purchases:expense.claimable')} loading={!summary.data && summary.isLoading} />
         </StatRow>
 
         {slices.length > 0 ? (
@@ -309,7 +310,7 @@ export default function ExpensesList() {
 
         <Card padded={false}>
           {loading ? (
-            <ActivityIndicator color={t.c.muted} style={{ padding: t.spacing.xl }} />
+            <CardRowsSkeleton kind="list" />
           ) : filtered.length === 0 ? (
             <EmptyState
               illustration="no-expenses"

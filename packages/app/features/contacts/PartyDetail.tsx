@@ -34,6 +34,7 @@ import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { SplitPane } from '@esmart/ui/components/Layout';
 import { useGoBack } from '../../navigation/useGoBack';
 import { PaymentReminderSheet } from '../ledger/PaymentReminderSheet';
+import { CardRowsSkeleton, ListSkeleton } from '../../components/ScreenSkeleton';
 
 type Tab = 'activity' | 'documents' | 'payments' | 'details';
 
@@ -64,7 +65,8 @@ export function PartyDetail({ party }: { party: Party }) {
 
   // Everything below comes from the server, so the party's whole history needn't be on the device.
   const record = usePartyRecord(party.id).data;
-  const aging = usePartyAging(party.id, isCustomer ? 'customer' : 'supplier').data;
+  const agingQ = usePartyAging(party.id, isCustomer ? 'customer' : 'supplier');
+  const aging = agingQ.data;
   const outstanding = useMemo(
     () =>
       (aging?.documents ?? []).map((o) => ({
@@ -82,7 +84,8 @@ export function PartyDetail({ party }: { party: Party }) {
   const totalOutstanding = (record?.outstanding as Money | undefined) ?? deviceOutstanding;
 
   const billKind: DocumentKind = isCustomer ? 'invoice' : 'purchaseBill';
-  const billed = useDocumentSummary({ kinds: [billKind], partyId: party.id }).data;
+  const billedQ = useDocumentSummary({ kinds: [billKind], partyId: party.id });
+  const billed = billedQ.data;
   // Drafts and cancelled documents don't count towards what was billed.
   const lifetimeValue = money(
     (billed?.byStatus ?? []).filter((b) => !['draft', 'cancelled', 'rejected'].includes(b.status)).reduce((a, b) => a + (b.total?.minor ?? 0), 0),
@@ -219,6 +222,7 @@ export function PartyDetail({ party }: { party: Party }) {
         value={lifetimeValue}
         icon="chart-line"
         caption={tr('contacts:detail.documentCount', { count: billCount })}
+        loading={!billed && billedQ.isLoading}
       />
     </StatRow>
     </>
@@ -227,7 +231,9 @@ export function PartyDetail({ party }: { party: Party }) {
     <>
     {shownTab === 'activity' ? (
       <Card padded={false}>
-        {outstanding.length === 0 ? (
+        {!aging && agingQ.isLoading ? (
+          <CardRowsSkeleton rows={3} />
+        ) : outstanding.length === 0 ? (
           <EmptyState illustration="all-settled" icon="check-all" title={tr('contacts:detail.allSettled')} message={tr('contacts:detail.allSettledBody')} compact />
         ) : (
           outstanding.map((o, i) => (
@@ -268,6 +274,10 @@ export function PartyDetail({ party }: { party: Party }) {
               ) : null}
             </View>
           ))}
+        {/* Nothing yet, and some still on the way: shapes, not "no documents". */}
+        {[quotes, orders, bills, returns].every((g) => g.rows.length === 0) && [quotes, orders, bills, returns].some((g) => g.isLoading) ? (
+          <ListSkeleton rows={4} />
+        ) : null}
         {[quotes, orders, bills, returns].every((g) => !g.isLoading && g.rows.length === 0) ? (
           <Card padded={false}>
             <EmptyState illustration="no-documents" icon="file-outline" title={tr('contacts:detail.noDocuments')} compact />
@@ -278,7 +288,9 @@ export function PartyDetail({ party }: { party: Party }) {
 
     {shownTab === 'payments' ? (
       <Card padded={false}>
-        {partyPayments.length === 0 ? (
+        {partyPayments.length === 0 && payments.isLoading ? (
+          <CardRowsSkeleton kind="list" rows={4} />
+        ) : partyPayments.length === 0 ? (
           <EmptyState illustration="no-payments" icon="cash-remove" title={tr('contacts:detail.noPayments')} compact />
         ) : (
           partyPayments.map((p, i) => (

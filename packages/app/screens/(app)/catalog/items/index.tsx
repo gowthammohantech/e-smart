@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, ScrollView, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
+import { ScrollView, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Card } from '@esmart/ui/components/Card';
@@ -23,6 +23,7 @@ import { useDebounced } from '../../../../components/useDebounced';
 import type { Item } from '@esmart/core/types';
 import { formatMoney, formatQty } from '@esmart/core/lib/format';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { ListSkeleton, MoreRowsSkeleton } from '../../../../components/ScreenSkeleton';
 
 /**
  * The price list: what you sell and for how much. The full plan reaches items
@@ -58,7 +59,7 @@ export default function ItemList() {
   // The phone's list: the next page loads on scroll, with this as the fallback.
   const moreFooter = pages.hasNextPage ? (
     <View style={{ alignItems: 'center', paddingVertical: t.spacing.md }}>
-      {pages.isFetchingNextPage ? <ActivityIndicator color={t.c.muted} /> : <Button title={tr('common:documentList.loadMore')} variant="ghost" size="sm" onPress={loadMore} />}
+      {pages.isFetchingNextPage ? <MoreRowsSkeleton kind="list" /> : <Button title={tr('common:documentList.loadMore')} variant="ghost" size="sm" onPress={loadMore} />}
     </View>
   ) : null;
 
@@ -222,7 +223,7 @@ export default function ItemList() {
         <Button title={tr('inventory:import.title')} icon="upload" variant="ghost" size="sm" onPress={() => router.push('/(app)/catalog/items/import' as never)} />
         {showFilters ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm }}>{filters}</View> : null}
         {pages.isLoading && !filtered.length ? (
-          <ActivityIndicator color={t.c.muted} style={{ padding: t.spacing.xl }} />
+          <ListSkeleton kind="list" />
         ) : filtered.length === 0 ? (
           <EmptyState
             illustration="no-items"

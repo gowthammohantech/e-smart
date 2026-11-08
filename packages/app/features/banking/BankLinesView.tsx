@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, ScrollView, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
+import { ScrollView, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
@@ -20,6 +20,7 @@ import { useBankLines, type BankLine, type BankLineStatus } from '../../remote/q
 import { useBaseCurrency, useHasModule } from '../../store/selectors';
 import { ExcludeSheet, FindMatchSheet, RecordExpenseSheet, RecordPaymentSheet, RecordVoucherSheet } from './LineSheets';
 import { MatchChip, SignedAmount, useBankAction, useRecordLabel, type RecordLike } from './parts';
+import { ListSkeleton, MoreRowsSkeleton } from '../../components/ScreenSkeleton';
 
 type Sheet = 'find' | 'payment' | 'expense' | 'voucher' | 'exclude';
 
@@ -143,7 +144,7 @@ export function BankLinesView({ accountId, status, header }: { accountId: string
       >
         {header}
         {pages.isLoading ? (
-          <ActivityIndicator color={t.c.muted} style={{ padding: t.spacing.xl }} />
+          <ListSkeleton kind="list" />
         ) : pages.isError ? (
           <EmptyState icon="alert-circle-outline" title={tr('common:table.loadFailed')} actionLabel={tr('banking:lines.retry')} onAction={() => void pages.refetch()} compact />
         ) : !pages.rows.length ? (
@@ -205,7 +206,7 @@ export function BankLinesView({ accountId, status, header }: { accountId: string
         )}
         {pages.hasNextPage ? (
           <View style={{ alignItems: 'center', paddingVertical: t.spacing.md }}>
-            {pages.isFetchingNextPage ? <ActivityIndicator color={t.c.muted} /> : <Button title={tr('banking:lines.loadMore')} variant="ghost" size="sm" onPress={loadMore} />}
+            {pages.isFetchingNextPage ? <MoreRowsSkeleton kind="list" /> : <Button title={tr('banking:lines.loadMore')} variant="ghost" size="sm" onPress={loadMore} />}
           </View>
         ) : null}
       </ScrollView>

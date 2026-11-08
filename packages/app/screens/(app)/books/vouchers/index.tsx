@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, ScrollView, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
+import { ScrollView, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Badge } from '@esmart/ui/components/Badge';
@@ -17,6 +17,7 @@ import { formatMoney } from '@esmart/core/lib/format';
 import { money } from '@esmart/core/lib/money';
 import { useVoucherPages, type VoucherQuery } from '../../../../remote/queries';
 import { useBaseCurrency } from '../../../../store/selectors';
+import { ListSkeleton, MoreRowsSkeleton } from '../../../../components/ScreenSkeleton';
 
 export default function VoucherList() {
   const t = useTheme();
@@ -76,10 +77,10 @@ export default function VoucherList() {
               />
             ))}
           </Card>
-          {pages.isFetchingNextPage ? <ActivityIndicator color={t.c.muted} style={{ paddingVertical: t.spacing.md }} /> : null}
+          {pages.isFetchingNextPage ? <MoreRowsSkeleton kind="list" /> : null}
         </ScrollView>
       ) : pages.isLoading ? (
-        <ActivityIndicator color={t.c.muted} style={{ padding: t.spacing.xl }} />
+        <ListSkeleton kind="list" />
       ) : (
         <EmptyState icon="swap-horizontal" title={tr('books:vouchers.empty')} message={tr('books:vouchers.emptyBody')} actionLabel={tr('books:vouchers.new')} onAction={() => router.push('/(app)/books/vouchers/new')} />
       )}

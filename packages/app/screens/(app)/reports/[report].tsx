@@ -12,7 +12,7 @@ import { AgingBars } from '@esmart/ui/components/charts/AgingBars';
 import { seriesColor } from '@esmart/ui/theme/chartColors';
 import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
 
-import { ReportShell, reportTable, useReportScope } from '../../../features/reports/ReportShell';
+import { ReportShell, reportTable, useReportScope, ReportLoading } from '../../../features/reports/ReportShell';
 import type { ReportTable } from '../../../features/reports/reportTable';
 import { DataTable, HeroFigure, KeyFigures, ReportSection } from '../../../features/reports/reportParts';
 import { ReportDesktop } from '../../../features/reports/ReportDesktop';
@@ -37,7 +37,6 @@ import type { tcsPayableSummary, tcsRegister } from '@esmart/core/domain/tcsRepo
 import { BANK_RATE_PERCENT, type msmePayables, type sec43bh } from '@esmart/core/domain/msme';
 import { useActiveCompany, useBaseCurrency, useBranches, useExpenseCategories, useParties } from '../../../store/selectors';
 import { useReportData, type ReportDataKey } from '../../../remote/queries';
-import { LoadingView } from '../../../components/LoadingView';
 
 export default function Report() {
   const t = useTheme();
@@ -124,7 +123,16 @@ export default function Report() {
   const tdsReturn = pick<ReturnType<typeof tdsReturnRows>>(key === 'tds-challans' ? 'tds-challans' : 'tds-26q', { deductees: [], challans: [] });
   const msme = pick<{ rows: ReturnType<typeof msmePayables>; late: ReturnType<typeof sec43bh> }>('msme-payables', { rows: [], late: [] });
 
-  if (meta && serverKey && !data && remote.isLoading) return <LoadingView variant="report" title={meta.title} />;
+  if (meta && serverKey && !data && remote.isLoading)
+    return (
+      <ReportLoading
+        title={meta.title}
+        subtitle={meta.subtitle}
+        scope={scope}
+        onScopeChange={setScope}
+        showPartyFilter={['sales-summary', 'purchase-summary', 'payments', 'advances'].includes(key)}
+      />
+    );
 
   if (!meta) {
     return (

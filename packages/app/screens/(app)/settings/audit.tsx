@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, Pressable, ScrollView, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
+import { Pressable, ScrollView, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { Stack } from 'expo-router';
 import { Icon, type IconName } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
@@ -15,6 +15,7 @@ import { useDebounced } from '../../../components/useDebounced';
 import { formatDateTime } from '@esmart/core/lib/date';
 import { auditChanges } from '@esmart/core/domain/auditDiff';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { CardRowsSkeleton, MoreRowsSkeleton } from '../../../components/ScreenSkeleton';
 
 const ICONS: Record<string, IconName> = {
   created: 'plus-circle-outline',
@@ -72,7 +73,7 @@ export default function AuditTrail() {
       >
         <Card padded={false}>
           {pages.isLoading && !filtered.length ? (
-            <ActivityIndicator color={t.c.muted} style={{ padding: t.spacing.xl }} />
+            <CardRowsSkeleton kind="list" />
           ) : filtered.length === 0 ? (
             <EmptyState icon="history" title={tr('settings:audit.none')} message={tr('settings:audit.noneBody')} compact />
           ) : (
@@ -128,7 +129,7 @@ export default function AuditTrail() {
             })
           )}
         </Card>
-        {pages.isFetchingNextPage ? <ActivityIndicator color={t.c.muted} style={{ paddingVertical: t.spacing.md }} /> : null}
+        {pages.isFetchingNextPage ? <MoreRowsSkeleton kind="list" /> : null}
 
         <Card variant="flat" style={{ marginTop: t.spacing.lg, flexDirection: 'row', gap: t.spacing.md }}>
           <Icon name="lock-outline" size={19} color={t.c.muted} />

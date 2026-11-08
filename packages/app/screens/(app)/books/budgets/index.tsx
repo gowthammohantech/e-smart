@@ -1,6 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, ScrollView, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
@@ -14,6 +14,7 @@ import { financialYearOf } from '@esmart/core/lib/date';
 import { useCanWrite } from '../../../../remote/connectivity';
 import { useBudgets } from '../../../../remote/budgets';
 import { useActiveCompany } from '../../../../store/selectors';
+import { ListSkeleton } from '../../../../components/ScreenSkeleton';
 
 /** The business's budgets, the latest year first. */
 export default function Budgets() {
@@ -33,7 +34,7 @@ export default function Budgets() {
           {tr('books:budgets.intro')}
         </Text>
         {list.isPending ? (
-          <ActivityIndicator color={t.c.muted} style={{ padding: t.spacing.xl }} />
+          <ListSkeleton kind="list" rows={4} />
         ) : rows.length ? (
           <Card padded={false}>
             {rows.map((b, i) => (

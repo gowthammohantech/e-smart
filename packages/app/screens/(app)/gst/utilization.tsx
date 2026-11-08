@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, ScrollView, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import type { Schema } from '@esmart/api-contract';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
@@ -26,6 +26,7 @@ import { useActiveCompany, useBaseCurrency, useBranches } from '../../../store/s
 import { periodLabel, recentPeriods } from '../../../features/compliance/periods';
 import { DataTable, KeyFigures } from '../../../features/reports/reportParts';
 import { useAccountName } from '../../../features/books/names';
+import { ReportSkeleton } from '../../../components/ScreenSkeleton';
 
 type UtilView = Schema<'GstUtilizationView'>;
 type Head = (typeof HEADS)[number];
@@ -200,7 +201,7 @@ export default function GstUtilizationScreen() {
             </View>
           </View>
 
-          {loading && !view ? <ActivityIndicator /> : null}
+          {loading && !view ? <ReportSkeleton figures={4} /> : null}
           {view ? (
             <>
               {!view.outputCheck.ok ? (

@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
@@ -21,6 +21,7 @@ import { useAppStore } from '@esmart/app/store/appStore';
 import { useMovementPages } from '@esmart/app/remote/queries';
 import { useDebounced } from '@esmart/app/components/useDebounced';
 import { useQueryParams } from '@esmart/app/navigation/queryParams';
+import { TableSkeleton } from '@esmart/app/components/ScreenSkeleton';
 
 const TYPES: (StockMovementType | 'all')[] = ['all', 'purchaseReceipt', 'salesIssue', 'adjustment', 'transferIn', 'transferOut', 'salesReturn', 'purchaseReturn', 'opening'];
 
@@ -99,7 +100,7 @@ export function StockMovementsDesktop() {
         </View>
 
         {pages.isLoading && !filtered.length ? (
-          <ActivityIndicator color={t.c.muted} style={{ padding: t.spacing.xl }} />
+          <TableSkeleton cols={6} />
         ) : filtered.length === 0 ? (
           <Card padded={false}>
             <EmptyState illustration="no-movements" icon="swap-vertical" title={tr('inventory:movements.none')} message={tr('inventory:movements.noneBody')} compact />
@@ -199,7 +200,7 @@ export function StockMovementsDesktop() {
         )}
         {pages.hasNextPage ? (
           <View style={{ alignItems: 'center', paddingVertical: t.spacing.md }}>
-            {pages.isFetchingNextPage ? <ActivityIndicator color={t.c.muted} /> : <Button title={tr('common:documentList.loadMore')} variant="ghost" size="sm" onPress={() => void pages.fetchNextPage()} />}
+            {pages.isFetchingNextPage ? <TableSkeleton rows={3} cols={6} /> : <Button title={tr('common:documentList.loadMore')} variant="ghost" size="sm" onPress={() => void pages.fetchNextPage()} />}
           </View>
         ) : null}
       </ScrollView>

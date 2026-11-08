@@ -48,11 +48,32 @@ export function ListSkeleton({
   );
 }
 
-/** Rows to add under a list while the next page is on its way. */
+/** Rows to add under a list while the next page is on its way. Stretches across a centred footer. */
 export function MoreRowsSkeleton({ rows = 3, kind = 'document' }: { rows?: number; kind?: 'document' | 'list' }) {
+  const t = useTheme();
+  return (
+    <SkeletonGroup style={{ alignSelf: 'stretch', borderRadius: t.radius.lg, backgroundColor: t.c.card, overflow: 'hidden' }}>
+      <SkeletonRows rows={rows} kind={kind} />
+    </SkeletonGroup>
+  );
+}
+
+/** Rows for a list that already sits on a card. */
+export function CardRowsSkeleton({ rows = 8, kind = 'document' }: { rows?: number; kind?: 'document' | 'list' }) {
   return (
     <SkeletonGroup>
       <SkeletonRows rows={rows} kind={kind} />
+    </SkeletonGroup>
+  );
+}
+
+/** A wide table on a card, for desktop screens that draw their own. */
+export function TableSkeleton({ rows = 8, cols = 5, label }: { rows?: number; cols?: number; label?: string }) {
+  return (
+    <SkeletonGroup label={label}>
+      <SkeletonCard title={false} style={{ padding: 0 }}>
+        <SkeletonTable rows={rows} cols={cols} />
+      </SkeletonCard>
     </SkeletonGroup>
   );
 }

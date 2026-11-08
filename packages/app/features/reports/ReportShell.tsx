@@ -21,6 +21,7 @@ import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { deliverFile, deliverPdf } from './exportFiles';
 import { presetParam, useQueryParams } from '../../navigation/queryParams';
 import { ReportTable, XLSX_MIME, exportName, tableHtml, toCsv, xlsxBytes } from './reportTable';
+import { ReportSkeleton } from '../../components/ScreenSkeleton';
 
 export type ReportScope = {
   filters: ReportFilters;
@@ -347,4 +348,33 @@ export function useReportScope(initial: DateRangePreset = 'thisFY') {
 /** A report's export: what the PDF, Excel and CSV files are built from. */
 export function reportTable(headers: string[], rows: (string | number)[][]): ReportTable {
   return { headers, rows };
+}
+
+/**
+ * A report whose figures are still on their way: the shell (title, period, branch) is up
+ * and can be changed already; shapes stand where the figures and table will be.
+ */
+export function ReportLoading({
+  title,
+  subtitle,
+  scope,
+  onScopeChange,
+  showPartyFilter,
+  skeleton,
+}: {
+  title: string;
+  subtitle?: string;
+  scope: ReportScope;
+  onScopeChange: (s: ReportScope) => void;
+  showPartyFilter?: boolean;
+  skeleton?: React.ComponentProps<typeof ReportSkeleton>;
+}) {
+  return (
+    <>
+      <Stack.Screen options={{ title }} />
+      <ReportShell title={title} subtitle={subtitle} scope={scope} onScopeChange={onScopeChange} showPartyFilter={showPartyFilter}>
+        <ReportSkeleton {...skeleton} />
+      </ReportShell>
+    </>
+  );
 }

@@ -26,6 +26,7 @@ import { useActiveCompany, useBaseCurrency, useBranches } from '../../../store/s
 import { useReportData } from '../../../remote/queries';
 import { formatMoney, formatPercent, formatQty } from '@esmart/core/lib/format';
 import { money, toMajor } from '@esmart/core/lib/money';
+import { ReportSkeleton } from '../../../components/ScreenSkeleton';
 
 type View_ = Gstr1Table | 'hsn' | 'nil' | 'docs' | 'at' | 'amend';
 
@@ -277,6 +278,11 @@ export default function Gstr1Report() {
         exportRows={exportRows}
         extraExports={wholeMonth && jsonGstin ? [{ key: 'gstn-json', icon: 'code-json', label: tr('compliance:gstr1.exportJson'), run: exportJson }] : []}
       >
+        {/* The first answer still on its way: shapes, not a return of zeros. */}
+        {!remote.data && remote.isLoading ? (
+          <ReportSkeleton />
+        ) : (
+        <>
         <KeyFigures
           rows={[
             { label: tr('compliance:gstr1.documents'), value: String(summary.totals.documents) },
@@ -343,6 +349,8 @@ export default function Gstr1Report() {
           <ReportSection title={tr('compliance:gstr1.rows', { count })}>
             <DataTable headers={headers} rows={tableRows} widths={widths} minWidth={view === 'nil' || view === 'docs' ? undefined : 720} />
           </ReportSection>
+        )}
+        </>
         )}
       </ReportShell>
     </>

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, ScrollView, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { Button } from '@esmart/ui/components/Button';
@@ -15,6 +15,7 @@ import { useRowsExport } from '../../components/pagedTable';
 import { useBankReconciliation, type BankReconciliation } from '../../remote/queries';
 import { KeyFigures, ReportRow, ReportSection, SectionCard } from '../reports/reportParts';
 import { useRecordLabel } from './parts';
+import { ReportSkeleton } from '../../components/ScreenSkeleton';
 
 const m = (x: Money) => formatMoney(x);
 
@@ -103,7 +104,7 @@ export function ReconciliationView({ accountId, accountName }: { accountId: stri
         q.isError ? (
           <EmptyState icon="alert-circle-outline" title={tr('common:table.loadFailed')} actionLabel={tr('banking:lines.retry')} onAction={() => void q.refetch()} compact />
         ) : (
-          <ActivityIndicator color={t.c.muted} style={{ padding: t.spacing.xl }} />
+          <ReportSkeleton figures={4} />
         )
       ) : (
         <>

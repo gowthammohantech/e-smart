@@ -9,6 +9,7 @@ import { SectionHeader } from '@esmart/ui/components/Screen';
 import { Card } from '@esmart/ui/components/Card';
 import { Text } from '@esmart/ui/components/Text';
 import { StatRow, StatTile } from '@esmart/ui/components/StatTile';
+import { Skeleton, SkeletonGroup } from '@esmart/ui/components/Skeleton';
 import { StatGrid } from '@esmart/ui/components/Layout';
 import { BarChart } from '@esmart/ui/components/charts/BarChart';
 import { useActiveCompany, useBaseCurrency, useCanOpen, useModuleSet } from '../../../store/selectors';
@@ -85,12 +86,17 @@ export default function ReportsTab() {
 
   // The figures come from the server's reports, each asked for only when the plan includes it.
   const emptyProfit = useMemo(() => profitSnapshot([], [], [], baseCurrency, { range }), [baseCurrency, range]);
-  const profit = useReportData<ProfitSnapshot>(canOpen('/reports/profit') ? 'profit' : null, range).data ?? emptyProfit;
+  const profitQ = useReportData<ProfitSnapshot>(canOpen('/reports/profit') ? 'profit' : null, range);
+  const profit = profitQ.data ?? emptyProfit;
   const stock = useReportData<StockReport>(canOpen('/reports/stock') ? 'stock' : null, range).data ?? { totalValue: money(0, baseCurrency) };
   const none = money(0, baseCurrency);
   type Aging = { summary: { total: Money } };
-  const receivables = useReportData<Aging>(canOpen('/reports/receivables') ? 'receivables' : null, range).data ?? { summary: { total: none } };
-  const payables = useReportData<Aging>(canOpen('/reports/payables') ? 'payables' : null, range).data ?? { summary: { total: none } };
+  const receivablesQ = useReportData<Aging>(canOpen('/reports/receivables') ? 'receivables' : null, range);
+  const payablesQ = useReportData<Aging>(canOpen('/reports/payables') ? 'payables' : null, range);
+  const receivables = receivablesQ.data ?? { summary: { total: none } };
+  const payables = payablesQ.data ?? { summary: { total: none } };
+  // First answers still on their way: the tiles shimmer rather than read zero.
+  const profitLoading = !profitQ.data && profitQ.isLoading;
 
   const trend = useMemo(() => {
     const keys = lastNMonths(6);
@@ -132,18 +138,19 @@ export default function ReportsTab() {
           <>
         <StatGrid>
           <StatRow>
-            <StatTile label={tr('reports:hub.revenueFy')} value={profit.revenue} icon="trending-up" />
+            <StatTile label={tr('reports:hub.revenueFy')} value={profit.revenue} icon="trending-up" loading={profitLoading} />
             <StatTile
               label={tr('reports:hub.netProfit')}
               value={profit.netProfit}
+              loading={profitLoading}
               tone={profit.netProfit.minor >= 0 ? 'good' : 'bad'}
               icon="chart-line"
               caption={tr('reports:hub.margin', { percent: formatPercent(profit.margin) })}
             />
           </StatRow>
           <StatRow>
-            <StatTile label={tr('reports:hub.receivable')} value={receivables.summary.total} tone="warn" icon="clock-alert-outline" />
-            <StatTile label={tr('reports:hub.payable')} value={payables.summary.total} tone="bad" icon="file-clock-outline" />
+            <StatTile label={tr('reports:hub.receivable')} value={receivables.summary.total} tone="warn" icon="clock-alert-outline" loading={!receivablesQ.data && receivablesQ.isLoading} />
+            <StatTile label={tr('reports:hub.payable')} value={payables.summary.total} tone="bad" icon="file-clock-outline" loading={!payablesQ.data && payablesQ.isLoading} />
           </StatRow>
         </StatGrid>
 
@@ -153,7 +160,7 @@ export default function ReportsTab() {
             <View style={{ flex: 2, minWidth: 0 }}>
               <SectionHeader title={tr('reports:hub.monthlyProfit')} action={tr('reports:hub.open')} onAction={() => router.push('/(app)/reports/profit')} />
               <Card style={{ flex: 1 }}>
-                <BarChart data={trend} caption={tr('reports:hub.profitCaption')} />
+                {profitLoading ? <SkeletonGroup><Skeleton height={150} radius={10} /></SkeletonGroup> : <BarChart data={trend} caption={tr('reports:hub.profitCaption')} />}
               </Card>
             </View>
             <View style={{ flex: 1, minWidth: 0 }}>
@@ -174,9 +181,13 @@ export default function ReportsTab() {
                     <Text variant="small" tone="muted">
                       {row.label}
                     </Text>
-                    <Text variant="body" weight="600" style={{ fontVariant: ['tabular-nums'] }}>
-                      {row.value}
-                    </Text>
+                    {profitLoading ? (
+                      <Skeleton height={14} width={80} radius={4} />
+                    ) : (
+                      <Text variant="body" weight="600" style={{ fontVariant: ['tabular-nums'] }}>
+                        {row.value}
+                      </Text>
+                    )}
                   </View>
                 ))}
               </Card>
@@ -186,7 +197,7 @@ export default function ReportsTab() {
           <>
         <SectionHeader title={tr('reports:hub.monthlyProfit')} action={tr('reports:hub.open')} onAction={() => router.push('/(app)/reports/profit')} />
         <Card>
-          <BarChart data={trend} caption={tr('reports:hub.profitCaption')} />
+          {profitLoading ? <SkeletonGroup><Skeleton height={150} radius={10} /></SkeletonGroup> : <BarChart data={trend} caption={tr('reports:hub.profitCaption')} />}
         </Card>
 
         <SectionHeader title={tr('reports:hub.snapshot')} />
@@ -196,9 +207,13 @@ export default function ReportsTab() {
               <Text variant="small" tone="muted">
                 {row.label}
               </Text>
-              <Text variant="small" weight="600" style={{ fontVariant: ['tabular-nums'] }}>
-                {row.value}
-              </Text>
+              {profitLoading ? (
+                <Skeleton height={12} width={72} radius={4} />
+              ) : (
+                <Text variant="small" weight="600" style={{ fontVariant: ['tabular-nums'] }}>
+                  {row.value}
+                </Text>
+              )}
             </View>
           ))}
         </Card>
