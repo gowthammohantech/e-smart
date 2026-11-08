@@ -8,6 +8,7 @@ import { Money } from '@esmart/core/lib/money';
 import { formatCompactMoney } from '@esmart/core/lib/format';
 import { Sparkline } from './charts/BarChart';
 import { DeltaBadge } from './DeltaBadge';
+import { Skeleton } from './Skeleton';
 
 const WEB = Platform.OS === 'web';
 
@@ -21,6 +22,7 @@ export function StatTile({
   trend,
   delta,
   flex = 1,
+  loading,
 }: {
   label: string;
   value: Money | string;
@@ -32,6 +34,8 @@ export function StatTile({
   /** Change against the period before, in percent (null: nothing to compare with). `inverse` for a cost. */
   delta?: { pct: number | null; inverse?: boolean; label?: string };
   flex?: number;
+  /** The figure is still on its way: the label stays, the value shimmers. */
+  loading?: boolean;
 }) {
   const t = useTheme();
   const display = typeof value === 'string' ? value : formatCompactMoney(value);
@@ -67,14 +71,18 @@ export function StatTile({
         ) : null}
       </View>
 
-      <Text
-        variant={WEB ? 'h2' : 'h3'}
-        weight={WEB ? '600' : '700'}
-        numberOfLines={1}
-        style={WEB ? { color: toneColor, fontVariant: ['tabular-nums'] } : { color: toneColor }}
-      >
-        {display}
-      </Text>
+      {loading ? (
+        <Skeleton height={WEB ? 28 : 22} width="70%" radius={6} />
+      ) : (
+        <Text
+          variant={WEB ? 'h2' : 'h3'}
+          weight={WEB ? '600' : '700'}
+          numberOfLines={1}
+          style={WEB ? { color: toneColor, fontVariant: ['tabular-nums'] } : { color: toneColor }}
+        >
+          {display}
+        </Text>
+      )}
 
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>
         {caption ? (
@@ -84,8 +92,8 @@ export function StatTile({
         ) : (
           <View style={{ flex: 1 }} />
         )}
-        {delta ? <DeltaBadge pct={delta.pct} inverse={delta.inverse} accessibilityLabel={delta.label} /> : null}
-        {trend && trend.length > 1 ? <Sparkline values={trend} width={54} height={20} color={toneColor} /> : null}
+        {delta && !loading ? <DeltaBadge pct={delta.pct} inverse={delta.inverse} accessibilityLabel={delta.label} /> : null}
+        {!loading && trend && trend.length > 1 ? <Sparkline values={trend} width={54} height={20} color={toneColor} /> : null}
       </View>
     </View>
   );

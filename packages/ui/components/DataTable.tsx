@@ -8,7 +8,7 @@ import { focusRing, type WebPressState } from '../theme/interaction';
 import { Text } from './Text';
 import { Button } from './Button';
 import { Checkbox } from './Checkbox';
-import { Skeleton } from './EmptyState';
+import { ShimmerProvider, Skeleton } from './Skeleton';
 import { Menu, MenuItem, useMenuAnchor } from './Menu';
 
 export type Column<T> = {
@@ -539,6 +539,7 @@ export function DataTable<T>({
   // part of it) and outside the sideways scroll, so they stay in view.
   const content = (
     <>
+      <ShimmerProvider>
       <View role="table" aria-busy={loading || short || undefined} style={{ flex: scroll ? 1 : undefined }}>
         <View role="rowgroup">{header}</View>
         {scroll ? (
@@ -550,6 +551,7 @@ export function DataTable<T>({
         )}
         {footerRow ? <View role="rowgroup">{footerRow}</View> : null}
       </View>
+      </ShimmerProvider>
     </>
   );
 

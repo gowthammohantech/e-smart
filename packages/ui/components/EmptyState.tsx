@@ -6,6 +6,7 @@ import { Text } from './Text';
 import { Button } from './Button';
 import { Illustration } from './Illustration';
 import { IllustrationName } from '../illustrations/registry';
+import { SkeletonGroup, SkeletonRows } from './Skeleton';
 import { useEntrance, usePulse } from '../illustrations/motion';
 
 export function EmptyState({
@@ -66,26 +67,14 @@ function IconDisc({ icon, compact }: { icon: IconName; compact?: boolean }) {
   );
 }
 
-export function Skeleton({ height = 16, width = '100%', radius = 8 }: { height?: number; width?: number | `${number}%`; radius?: number }) {
-  const t = useTheme();
-  const shimmer = usePulse({ min: 0.45, duration: 1300 });
-  return <Animated.View style={{ height, width, borderRadius: radius, backgroundColor: t.c.card2, opacity: shimmer }} />;
-}
+/** Kept for older imports; the shimmer lives in `./Skeleton`. */
+export { Skeleton } from './Skeleton';
 
+/** Rows of avatar, two lines and an amount, as a list of documents loads. */
 export function SkeletonList({ rows = 5 }: { rows?: number }) {
-  const t = useTheme();
   return (
-    <View style={{ gap: t.spacing.md, paddingVertical: t.spacing.md }}>
-      {Array.from({ length: rows }).map((_, i) => (
-        <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
-          <Skeleton height={38} width={38} radius={19} />
-          <View style={{ flex: 1, gap: 6 }}>
-            <Skeleton height={13} width="62%" />
-            <Skeleton height={11} width="38%" />
-          </View>
-          <Skeleton height={16} width={64} />
-        </View>
-      ))}
-    </View>
+    <SkeletonGroup>
+      <SkeletonRows rows={rows} kind="document" />
+    </SkeletonGroup>
   );
 }
