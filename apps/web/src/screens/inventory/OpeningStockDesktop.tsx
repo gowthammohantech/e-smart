@@ -17,6 +17,7 @@ import { useAppStore } from '@esmart/app/store/appStore';
 import { useBaseCurrency, useDefaultBranchId } from '@esmart/app/store/selectors';
 import { useTrackedItems } from '@esmart/app/remote/queries';
 import { formatMoney, formatQty } from '@esmart/core/lib/format';
+import { unitShortName } from '@esmart/core/data/masters';
 import { money } from '@esmart/core/lib/money';
 import { today } from '@esmart/core/lib/date';
 import { Divider, Note, Panel, SummaryRow, TwoColumns } from './parts';
@@ -114,7 +115,7 @@ export function OpeningStockDesktop() {
                       align: 'right',
                       render: (i) => (
                         <Cell mono tone="muted">
-                          {`${formatQty(stock[i.id] ?? 0)} ${i.unit}`}
+                          {`${formatQty(stock[i.id] ?? 0)} ${unitShortName(i.unit) || i.unit}`}
                         </Cell>
                       ),
                     },

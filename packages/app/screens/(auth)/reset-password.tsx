@@ -87,7 +87,7 @@ export default function ResetPassword() {
       />
       <TextField
         // React 19 hands `ref` to TextField, which passes it on to its input.
-        {...({ ref: confirmRef } as object)}
+        ref={confirmRef}
         label={tr('auth:reset.confirm')}
         value={confirm}
         onChangeText={setConfirm}

@@ -137,6 +137,8 @@ export function FieldShell({
 /* ------------------------------------------------------------------ */
 
 type TextFieldProps = TextInputProps & {
+  /** React 19 passes a ref as a prop; it reaches the input through ...rest. */
+  ref?: React.Ref<TextInput>;
   label?: string;
   error?: string;
   hint?: string;

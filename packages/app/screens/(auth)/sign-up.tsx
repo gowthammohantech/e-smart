@@ -89,7 +89,7 @@ export default function SignUp() {
       />
       <TextField
         // React 19 hands `ref` to TextField, which passes it on to its input.
-        {...({ ref: emailRef } as object)}
+        ref={emailRef}
         label={tr('auth:signUp.email')}
         value={email}
         onChangeText={setEmail}
@@ -117,7 +117,7 @@ export default function SignUp() {
       />
       <TextField
         // React 19 hands `ref` to TextField, which passes it on to its input.
-        {...({ ref: passwordRef } as object)}
+        ref={passwordRef}
         label={tr('auth:signUp.password')}
         value={password}
         onChangeText={setPassword}

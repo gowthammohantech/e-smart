@@ -27,7 +27,7 @@ import { useSectionTiles } from '../../../navigation/useSectionTiles';
 
 export default function SalesTab() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['sales', 'common', 'domain', 'reports']);
+  const { t: tr } = useTranslation(['sales', 'common', 'domain', 'reports', 'nav']);
   const router = useRouter();
 
   const baseCurrency = useBaseCurrency();

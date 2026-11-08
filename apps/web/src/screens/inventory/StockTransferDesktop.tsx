@@ -15,6 +15,7 @@ import { useAppStore } from '@esmart/app/store/appStore';
 import { useBranches, useDefaultBranchId } from '@esmart/app/store/selectors';
 import { useServerStockLevels, useTrackedItems } from '@esmart/app/remote/queries';
 import { formatQty } from '@esmart/core/lib/format';
+import { unitShortName } from '@esmart/core/data/masters';
 import { today } from '@esmart/core/lib/date';
 import { Divider, FormFooter, Note, Panel, Row, SummaryRow, TwoColumns } from './parts';
 import { useGoBack } from '@esmart/app/navigation/useGoBack';
@@ -51,6 +52,7 @@ export function StockTransferDesktop() {
   const [toOpen, setToOpen] = useState(false);
 
   const item = items.find((i) => i.id === itemId);
+  const unit = item ? unitShortName(item.unit) || item.unit : '';
   // What the source branch holds on the transfer date, not today.
   // On hand at each branch now, from the server, which checks the transfer again on saving.
   const fromLevels = useServerStockLevels(fromBranchId, !!fromBranchId).data;
@@ -101,8 +103,8 @@ export function StockTransferDesktop() {
                     placeholder="0"
                     keyboardType="decimal-pad"
                     icon="counter"
-                    error={exceeds ? tr('inventory:transfer.onlyAvailable', { qty: formatQty(available), unit: item?.unit ?? '' }) : undefined}
-                    hint={item ? tr('inventory:transfer.available', { qty: formatQty(available), unit: item.unit }) : undefined}
+                    error={exceeds ? tr('inventory:transfer.onlyAvailable', { qty: formatQty(available), unit }) : undefined}
+                    hint={item ? tr('inventory:transfer.available', { qty: formatQty(available), unit }) : undefined}
                     required
                   />
                   <DateField label={tr('inventory:transfer.date')} value={date} onChange={setDate} />
@@ -144,11 +146,11 @@ export function StockTransferDesktop() {
               <Panel title={tr('inventory:transfer.afterTitle')} subtitle={item ? item.name : tr('inventory:transfer.pickItemHint')} icon="clipboard-text-outline">
                 {item ? (
                   <>
-                    <SummaryRow label={tr('inventory:transfer.branchNow', { branch: nameOf(fromBranchId) })} value={`${formatQty(available)} ${item.unit}`} />
-                    <SummaryRow label={tr('inventory:transfer.branchAfter', { branch: nameOf(fromBranchId) })} value={`${formatQty(available - qty)} ${item.unit}`} tone={exceeds ? 'bad' : undefined} strong />
+                    <SummaryRow label={tr('inventory:transfer.branchNow', { branch: nameOf(fromBranchId) })} value={`${formatQty(available)} ${unit}`} />
+                    <SummaryRow label={tr('inventory:transfer.branchAfter', { branch: nameOf(fromBranchId) })} value={`${formatQty(available - qty)} ${unit}`} tone={exceeds ? 'bad' : undefined} strong />
                     <Divider />
-                    <SummaryRow label={tr('inventory:transfer.branchNow', { branch: nameOf(toBranchId) })} value={`${formatQty(atDestination)} ${item.unit}`} />
-                    <SummaryRow label={tr('inventory:transfer.branchAfter', { branch: nameOf(toBranchId) })} value={`${formatQty(atDestination + qty)} ${item.unit}`} tone="good" strong />
+                    <SummaryRow label={tr('inventory:transfer.branchNow', { branch: nameOf(toBranchId) })} value={`${formatQty(atDestination)} ${unit}`} />
+                    <SummaryRow label={tr('inventory:transfer.branchAfter', { branch: nameOf(toBranchId) })} value={`${formatQty(atDestination + qty)} ${unit}`} tone="good" strong />
                     {exceeds ? (
                       <Text variant="caption" tone="bad">
                         {tr('inventory:transfer.exceedsSource')}

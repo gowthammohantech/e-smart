@@ -97,7 +97,7 @@ export default function SignIn() {
           />
           <TextField
             // React 19 hands `ref` to TextField, which passes it on to its input.
-            {...({ ref: passwordRef } as object)}
+            ref={passwordRef}
             label={tr('auth:signIn.password')}
             value={password}
             onChangeText={setPassword}

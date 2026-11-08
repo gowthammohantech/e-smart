@@ -12,7 +12,6 @@ import { useGlobalSearch } from '@esmart/app/features/search/useGlobalSearch';
 import { matchPages, sectionHref, useAppPages } from '@esmart/app/navigation/pages';
 import { appHref } from '@esmart/app/navigation/menu';
 import { useCanOpen, usePlan } from '@esmart/app/store/selectors';
-import { useDebounced } from '@esmart/app/components/useDebounced';
 
 type Entry = { key: string; group: string; title: string; subtitle?: string; trailing?: string; icon: IconName; route: string };
 
@@ -30,11 +29,9 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
 
   const [query, setQuery] = useState('');
   const [index, setIndex] = useState(0);
-  const { results, isFetching } = useGlobalSearch(query);
+  // pending: typed but not yet asked (the search waits for typing to pause), or asked and not yet back.
+  const { results, pending, isError, refetch } = useGlobalSearch(query);
   const searching = query.trim().length >= 2;
-  // Typed but not yet asked (the search waits for typing to pause), or asked and not yet back.
-  const settled = useDebounced(query);
-  const pending = searching && (isFetching || settled !== query);
   const rows = useRef(new Map<number, View>());
   // Every page in the menu: the sections, the pages under them, the tools and settings.
   const pages = useAppPages();
@@ -142,7 +139,30 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
           </View>
 
           <ScrollView style={{ maxHeight: 420 }} contentContainerStyle={{ padding: t.spacing.xs }} keyboardShouldPersistTaps="handled">
-            {searching && entries.length === 0 ? (
+            {searching && isError ? (
+              // The record search failed: say so, with a way to ask again (pages and actions still list below).
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md, padding: t.spacing.md }} accessibilityRole="alert">
+                <Icon name="cloud-off-outline" size={18} color={t.c.bad} />
+                <Text variant="small" tone="muted" style={{ flex: 1 }}>
+                  {tr('common:search.failedTitle')}
+                </Text>
+                <Pressable
+                  onPress={() => void refetch()}
+                  accessibilityRole="button"
+                  style={(state) => ({
+                    paddingHorizontal: t.spacing.md,
+                    paddingVertical: t.spacing.xs,
+                    borderRadius: t.radius.sm,
+                    backgroundColor: (state as WebPressState).hovered || (state as WebPressState).pressed ? t.c.card2 : 'transparent',
+                  })}
+                >
+                  <Text variant="small" weight="600" style={{ color: t.c.primary }}>
+                    {tr('common:search.retry')}
+                  </Text>
+                </Pressable>
+              </View>
+            ) : null}
+            {searching && !isError && entries.length === 0 ? (
               <Text variant="small" tone="muted" style={{ padding: t.spacing.lg }}>
                 {pending ? tr('nav:shell.searching') : tr('nav:shell.noMatches', { query: query.trim() })}
               </Text>

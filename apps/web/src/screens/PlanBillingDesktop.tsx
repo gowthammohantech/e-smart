@@ -50,7 +50,7 @@ export function PlanBillingDesktop() {
     <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('plan:billing.title') }} />
 
-      <ScrollView contentContainerStyle={{ paddingBottom: 48, gap: t.spacing.xxl }}>
+      <ScrollView contentContainerStyle={{ paddingHorizontal: t.spacing.lg, paddingBottom: 48, gap: t.spacing.xxl }}>
         {/* Where you stand */}
         <Card style={{ padding: t.spacing.xxl }}>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: t.spacing.xxl }}>
@@ -84,8 +84,9 @@ export function PlanBillingDesktop() {
 
             <View style={{ flexGrow: 2, flexBasis: 420, flexDirection: 'row', gap: t.spacing.xxl }}>
               {usage.map((u) => (
-                <View key={u.label} style={{ flex: 1, gap: t.spacing.xs }}>
-                  <Text variant="caption" tone="muted" numberOfLines={1}>
+                // Each tile takes the width its label needs; a long label wraps rather than truncates.
+                <View key={u.label} style={{ flexGrow: 1, flexShrink: 1, gap: t.spacing.xs }}>
+                  <Text variant="caption" tone="muted">
                     {u.label}
                   </Text>
                   <Text variant="h3" weight="700">

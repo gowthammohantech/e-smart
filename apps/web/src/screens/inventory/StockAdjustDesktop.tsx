@@ -12,7 +12,8 @@ import { useServerSave } from '@esmart/app/components/useServerSave';
 import { useSaveShortcut } from '@esmart/app/components/useSaveShortcut';
 import { useAppStore } from '@esmart/app/store/appStore';
 import { useBranches, useDefaultBranchId } from '@esmart/app/store/selectors';
-import { useTrackedItems } from '@esmart/app/remote/queries';
+import { useServerStockLevels, useTrackedItems } from '@esmart/app/remote/queries';
+import { unitShortName } from '@esmart/core/data/masters';
 import { formatQty } from '@esmart/core/lib/format';
 import { today } from '@esmart/core/lib/date';
 import { Divider, FormFooter, Note, Panel, Row, SummaryRow, TwoColumns } from './parts';
@@ -48,7 +49,12 @@ export function StockAdjustDesktop() {
   const [reasonOpen, setReasonOpen] = useState(false);
 
   const item = items.find((i) => i.id === itemId);
-  const current = itemId ? (stock[itemId] ?? 0) : 0;
+  // On hand at the branch being adjusted, not the one picked in the switcher.
+  const levels = useServerStockLevels(branchId, !!branchId).data;
+  const activeBranchId = useAppStore((s) => s.activeBranchId);
+  const fallback = branchId === activeBranchId ? stock : {};
+  const current = itemId ? (levels ? (levels[itemId] ?? 0) : (fallback[itemId] ?? 0)) : 0;
+  const unit = item ? unitShortName(item.unit) || item.unit : '';
   const qty = Number(quantity) || 0;
   const delta = direction === 'increase' ? qty : -qty;
   const resulting = current + delta;
@@ -130,7 +136,7 @@ export function StockAdjustDesktop() {
                   suffix={
                     item ? (
                       <Text variant="caption" tone="muted">
-                        {item.unit}
+                        {unit}
                       </Text>
                     ) : undefined
                   }
@@ -152,16 +158,16 @@ export function StockAdjustDesktop() {
             <Panel title={tr('inventory:adjust.result')} subtitle={item ? item.name : tr('inventory:adjust.pickItemHint')} icon="clipboard-text-outline">
               {item ? (
                 <>
-                  <SummaryRow label={tr('inventory:adjust.currentStock')} value={`${formatQty(current)} ${item.unit}`} />
+                  <SummaryRow label={tr('inventory:adjust.currentStock')} value={`${formatQty(current)} ${unit}`} />
                   <SummaryRow
                     label={tr('inventory:adjust.adjustment')}
-                    value={`${delta >= 0 ? '+' : ''}${formatQty(delta)} ${item.unit}`}
+                    value={`${delta >= 0 ? '+' : ''}${formatQty(delta)} ${unit}`}
                     tone={delta === 0 ? undefined : delta > 0 ? 'good' : 'bad'}
                   />
                   <Divider />
                   <SummaryRow
                     label={tr('inventory:adjust.newStock')}
-                    value={`${formatQty(resulting)} ${item.unit}`}
+                    value={`${formatQty(resulting)} ${unit}`}
                     tone={resulting < 0 ? 'bad' : 'good'}
                     strong
                   />
@@ -188,7 +194,7 @@ export function StockAdjustDesktop() {
         visible={itemOpen}
         onClose={() => setItemOpen(false)}
         title={tr('inventory:adjust.selectItem')}
-        options={items.map((i) => ({ value: i.id, label: i.name, description: i.sku, trailing: `${formatQty(stock[i.id] ?? 0)} ${i.unit}` }))}
+        options={items.map((i) => ({ value: i.id, label: i.name, description: i.sku, trailing: `${formatQty(levels ? (levels[i.id] ?? 0) : (fallback[i.id] ?? 0))} ${unitShortName(i.unit) || i.unit}` }))}
         value={itemId}
         onSelect={setItemId}
       />
