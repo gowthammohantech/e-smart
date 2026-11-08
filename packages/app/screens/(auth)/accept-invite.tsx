@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Linking, View } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import type { Schema } from '@esmart/api-client';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { useToast } from '@esmart/ui/components/Toast';
@@ -37,6 +37,7 @@ export default function AcceptInvite() {
   const t = useTheme();
   const { t: tr } = useTranslation(['auth', 'errors']);
   const toast = useToast();
+  const router = useRouter();
   const { token } = useLocalSearchParams<{ token?: string }>();
   const inviteToken = token ? String(token) : undefined;
 
@@ -77,7 +78,11 @@ export default function AcceptInvite() {
     setBusy(true);
     remoteSession
       .acceptInvite(inviteToken, undefined, invite.companyIds[0])
-      .then(() => toast.show(tr('auth:invite.joined', { business: invite.businesses.join(', ') }), 'success', { icon: 'account-group-outline', varies: true }))
+      .then(() => {
+        toast.show(tr('auth:invite.joined', { business: invite.businesses.join(', ') }), 'success', { icon: 'account-group-outline', varies: true });
+        // Someone already signed in stays on this page until sent on: the root layout lets them see it.
+        router.replace('/(app)/(tabs)');
+      })
       .catch((err: unknown) => {
       setBusy(false);
       setErrors({ password: err instanceof ApiError && err.status === 400 ? tr('auth:invite.invalid') : describeError(err, tr) });
@@ -96,6 +101,7 @@ export default function AcceptInvite() {
       .acceptInvite(inviteToken, password)
       .then(() => {
         if (invite) toast.show(tr('auth:invite.joined', { business: invite.businesses.join(', ') }), 'success', { icon: 'account-group-outline', varies: true });
+        router.replace('/(app)/(tabs)');
       })
       .catch((err: unknown) => {
       setBusy(false);

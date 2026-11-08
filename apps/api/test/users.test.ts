@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { schema } from '@esmart/db';
-import { createCompany, ownerWithCompany, setupApi, signUpOwner } from './helpers';
+import { BENGALURU, createCompany, ownerWithCompany, setupApi, signUpOwner } from './helpers';
 import { inviteTokenFor, joinTeam } from './team-helpers';
 
 const t = setupApi();
@@ -308,6 +308,29 @@ describe('users', () => {
       expect((await t.get(`/companies/${host.company.id}`, { token: guest.token })).status).toBe(403);
       expect((await t.get(`/companies/${guest.company.id}`, { token: guest.token })).status).toBe(200);
       expect((await t.get('/users', { token: host.token })).body.data.some((u: { email: string }) => u.email === guest.email)).toBe(false);
+    });
+
+    it("keeps a guest's branch limit in the host's business only, and the home team can edit them without touching it", async () => {
+      const home = await ownerWithCompany(t, { plan: 'business' });
+      const host = await ownerWithCompany(t, { plan: 'business' });
+      const blr = await t.post(`/companies/${host.company.id}/branches`, { name: 'Bengaluru', code: 'blr', address: BENGALURU }, { token: host.token });
+      expect(blr.status).toBe(201);
+      const member = await joinTeam(t, home.token, { role: 'admin', companyIds: [home.company.id!] });
+      await t.post('/users', { name: 'M', email: member.email, role: 'viewer', companyIds: [host.company.id], branchIds: [blr.body.id] }, { token: host.token });
+      const accepted = await t.post(`/invites/${inviteTokenFor(t, member.email)}/accept`, {});
+      expect(accepted.status).toBe(200);
+      const token = accepted.body.accessToken as string;
+
+      // At home they reach every branch, so the all-branch books open; in the host's business they don't.
+      expect((await t.get(`/companies/${home.company.id}/books/trial-balance`, { token, query: { from: '2026-04-01', to: '2027-03-31' } })).status).toBe(200);
+      expect((await t.get(`/companies/${host.company.id}/books/trial-balance`, { token, query: { from: '2026-04-01', to: '2027-03-31' } })).body.code).toBe('BOOKS_ALL_BRANCHES');
+
+      // The home team sees only its own business on them, and saving that back keeps the guest access.
+      const row = (await t.get('/users', { token: home.token })).body.data.find((u: { email: string }) => u.email === member.email);
+      expect(row).toMatchObject({ companyIds: [home.company.id], branchIds: [] });
+      const saved = await t.put(`/users/${row.id}`, { ...row, role: 'sales' }, { token: home.token, headers: { 'if-match': `"v${row.version}"` } });
+      expect(saved.status).toBe(200);
+      expect((await t.get(`/companies/${host.company.id}`, { token })).status).toBe(200);
     });
 
     it('holds a seat for the offer, and still refuses an address already on the team', async () => {

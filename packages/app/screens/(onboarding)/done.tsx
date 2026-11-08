@@ -14,6 +14,8 @@ import { Illustration } from '@esmart/ui/components/Illustration';
 import { useAppStore } from '../../store/appStore';
 import { setLocalLogo, uploadLogo } from '../../remote/logo';
 import { saveOnline } from '../../remote/save';
+import { api } from '../../remote/api';
+import { describeError } from '../../remote/errors';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { COUNTRIES } from '@esmart/core/data/masters';
 import { joinPhone } from '@esmart/core/lib/phone';
@@ -35,16 +37,34 @@ export default function Done() {
   const [busy, setBusy] = useState(false);
 
   const createCompany = useAppStore((s) => s.createCompany);
-  const completeOnboarding = useAppStore((s) => s.completeOnboarding);
   const numberingSeries = useAppStore((s) => s.numberingSeries);
   const saveNumberingSeries = useAppStore((s) => s.saveNumberingSeries);
 
   // Read at once, not after a re-render: a double tap would create the business twice.
   const finished = useRef(false);
+  // The business the server already made: a retry after the last step failed doesn't make a second.
+  const created = useRef<string | null>(null);
   const finish = async (goToInvoice: boolean) => {
     if (finished.current) return;
     finished.current = true;
     setBusy(true);
+    if (!created.current && !(await createBusiness())) return;
+    // Waited for: a launch that finds setup unfinished on the server sends the owner through it again.
+    try {
+      await api.POST('/me/onboarding/complete', {});
+    } catch (err) {
+      finished.current = false;
+      setBusy(false);
+      toast.show(describeError(err, tr) || tr('common:save.unreachable'), 'error');
+      return;
+    }
+    useAppStore.setState((s) => ({ session: { ...s.session, onboardingComplete: true } }));
+    reset();
+    toast.show(tr('onboarding:done.created'), 'success', { icon: 'store-check-outline', detail: draft.name || tr('onboarding:done.defaultName') });
+    router.replace(goToInvoice ? '/(app)/sales/invoices/new' : '/(app)/(tabs)');
+  };
+
+  const createBusiness = async (): Promise<boolean> => {
     const country = COUNTRIES.find((c) => c.code === draft.country);
 
     // One save: the business, then its invoice numbering, which goes once the server has made the business.
@@ -91,8 +111,9 @@ export default function Done() {
       finished.current = false;
       setBusy(false);
       toast.show(res.outcome === 'refused' ? tr('common:save.refused', { reason: res.error }) : tr('common:save.unreachable'), 'error');
-      return;
+      return false;
     }
+    created.current = res.id;
     // The logo goes up once the business is on the server; one that fails can be added again in the profile.
     if (draft.logoUri) {
       const companyId = res.id;
@@ -103,10 +124,7 @@ export default function Done() {
       });
     }
 
-    completeOnboarding();
-    reset();
-    toast.show(tr('onboarding:done.created'), 'success', { icon: 'store-check-outline', detail: draft.name || tr('onboarding:done.defaultName') });
-    router.replace(goToInvoice ? '/(app)/sales/invoices/new' : '/(app)/(tabs)');
+    return true;
   };
 
   return (

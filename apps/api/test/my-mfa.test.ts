@@ -37,6 +37,15 @@ describe('authenticator app for business users', () => {
     expect((await t.post('/me/mfa/verify', { code: recovery }, { token: again })).body.code).toBe('MFA_CODE_INVALID');
   });
 
+  it('lets a session held at the prompt sign out, which really ends it', async () => {
+    const owner = await signUpOwner(t, { password: PASSWORD });
+    const { secret } = (await t.post('/me/mfa/enrollment', {}, { token: owner.token })).body;
+    await t.post('/me/mfa/enrollment/confirm', { code: codeAt(secret, Date.now()) }, { token: owner.token });
+    const held = await signIn(owner.user.email!);
+    expect((await t.post('/auth/sign-out', {}, { token: held })).status).toBe(204);
+    expect((await t.get('/me/mfa', { token: held })).body.code).toBe('SESSION_REVOKED');
+  });
+
   it('turns off only with a code', async () => {
     const owner = await signUpOwner(t, { password: PASSWORD });
     const { secret } = (await t.post('/me/mfa/enrollment', {}, { token: owner.token })).body;

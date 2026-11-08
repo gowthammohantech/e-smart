@@ -79,15 +79,24 @@ async function resolveAccess(db: DbOrTx, actor: AuthUser, role: Role, companyIds
   return { companies, branches };
 }
 
-async function replaceAccess(tx: DbOrTx, userId: string, access: { companies: string[]; branches: string[] }) {
-  await tx.delete(schema.userCompanies).where(eq(schema.userCompanies.userId, userId));
-  await tx.delete(schema.userBranches).where(eq(schema.userBranches.userId, userId));
+/** Replaces what a user reaches on this account; their access to other accounts' businesses (as a guest) stays. */
+async function replaceAccess(tx: DbOrTx, userId: string, accountId: string, access: { companies: string[]; branches: string[] }) {
+  const accountCompanies = tx.select({ id: schema.companies.id }).from(schema.companies).where(eq(schema.companies.accountId, accountId));
+  await tx.delete(schema.userCompanies).where(and(eq(schema.userCompanies.userId, userId), inArray(schema.userCompanies.companyId, accountCompanies)));
+  await tx
+    .delete(schema.userBranches)
+    .where(and(eq(schema.userBranches.userId, userId), inArray(schema.userBranches.branchId, tx.select({ id: schema.branches.id }).from(schema.branches).where(inArray(schema.branches.companyId, accountCompanies)))));
   if (access.companies.length) await tx.insert(schema.userCompanies).values(access.companies.map((companyId) => ({ userId, companyId })));
   if (access.branches.length) await tx.insert(schema.userBranches).values(access.branches.map((branchId) => ({ userId, branchId })));
 }
 
-async function companiesOf(db: DbOrTx, userId: string): Promise<string[]> {
-  const rows = await db.select({ id: schema.userCompanies.companyId }).from(schema.userCompanies).where(eq(schema.userCompanies.userId, userId));
+/** The companies a user reaches; with `onAccount`, only those on that account. */
+async function companiesOf(db: DbOrTx, userId: string, onAccount?: string): Promise<string[]> {
+  const rows = await db
+    .select({ id: schema.userCompanies.companyId })
+    .from(schema.userCompanies)
+    .innerJoin(schema.companies, eq(schema.companies.id, schema.userCompanies.companyId))
+    .where(and(eq(schema.userCompanies.userId, userId), onAccount ? eq(schema.companies.accountId, onAccount) : undefined));
   return rows.map((r) => r.id);
 }
 
@@ -332,7 +341,7 @@ async function inviteExistingUser(ctx: Ctx<'inviteUser'>, existing: UserRow, bod
 export const usersHandlers = defineHandlers({
   async listUsers(ctx) {
     const rows = await ctx.db.select().from(U).where(eq(U.accountId, ctx.user.accountId)).orderBy(asc(U.createdAt), asc(U.id));
-    const team = await Promise.all(rows.map((r) => userToWire(ctx.db, r)));
+    const team = await Promise.all(rows.map((r) => userToWire(ctx.db, r, ctx.user.accountId)));
     const guests = await guestsOf(ctx.db, ctx.user.accountId);
     return { data: [...team, ...(await Promise.all(guests.map((g) => guestToWire(ctx.db, g.row, g.companies))))] };
   },
@@ -369,7 +378,7 @@ export const usersHandlers = defineHandlers({
           defaultCompanyId: access.companies[0] ?? null,
         })
         .returning();
-      await replaceAccess(tx, created.id, access);
+      await replaceAccess(tx, created.id, ctx.user.accountId, access);
       const token = await issueInvite(tx, created, ctx.user.id, ctx.now);
       await recordUserChange(tx, ctx.user, access.companies, { action: 'invited', user: created, after: await userToWire(tx, created) });
       return { user: created, token };
@@ -407,8 +416,13 @@ export const usersHandlers = defineHandlers({
       throw conflict('LAST_OWNER', 'The account needs at least one active owner');
     }
 
-    const beforeCompanies = await companiesOf(ctx.db, current.id);
-    const branchRows = await ctx.db.select({ id: schema.userBranches.branchId }).from(schema.userBranches).where(eq(schema.userBranches.userId, current.id));
+    // Only this account's businesses: what they reach as someone else's guest is not ours to change.
+    const beforeCompanies = await companiesOf(ctx.db, current.id, ctx.user.accountId);
+    const branchRows = await ctx.db
+      .select({ id: schema.userBranches.branchId })
+      .from(schema.userBranches)
+      .innerJoin(schema.branches, eq(schema.branches.id, schema.userBranches.branchId))
+      .where(and(eq(schema.userBranches.userId, current.id), inArray(schema.branches.companyId, beforeCompanies.length ? beforeCompanies : ['-'])));
     const access = await resolveAccess(
       ctx.db,
       ctx.user,
@@ -422,7 +436,7 @@ export const usersHandlers = defineHandlers({
       await assertSeatsFree(ctx.db, reactivated ? access.companies : access.companies.filter((id) => !beforeCompanies.includes(id)), ctx.now, current.id);
     }
     const row = await ctx.db.transaction(async (tx) => {
-      const before = await userToWire(tx, current);
+      const before = await userToWire(tx, current, ctx.user.accountId);
       const phone = body.phone === undefined ? current.phone : body.phone.trim() || null;
       const [updated] = await tx
         .update(U)
@@ -433,25 +447,26 @@ export const usersHandlers = defineHandlers({
           avatarColor: body.avatarColor ?? current.avatarColor,
           role,
           status,
-          defaultCompanyId: current.defaultCompanyId && access.companies.includes(current.defaultCompanyId) ? current.defaultCompanyId : (access.companies[0] ?? null),
+          // A default in someone else's business (where they are a guest) is not this edit's to change.
+          defaultCompanyId: current.defaultCompanyId && (access.companies.includes(current.defaultCompanyId) || !beforeCompanies.includes(current.defaultCompanyId)) ? current.defaultCompanyId : (access.companies[0] ?? null),
           version: current.version + 1,
           updatedAt: ctx.now,
         })
         .where(and(eq(U.id, current.id), eq(U.version, current.version)))
         .returning();
       if (!updated) throw preconditionFailed();
-      await replaceAccess(tx, updated.id, access);
+      await replaceAccess(tx, updated.id, ctx.user.accountId, access);
       if (status === 'disabled' && current.status !== 'disabled') await revokeAllSessions(tx, updated.id, ctx.now);
       await recordUserChange(tx, ctx.user, [...beforeCompanies, ...access.companies], {
         action: 'updated',
         user: updated,
         before,
-        after: await userToWire(tx, updated),
+        after: await userToWire(tx, updated, ctx.user.accountId),
       });
       return updated;
     });
     setEtag(ctx.reply, row.version);
-    return userToWire(ctx.db, row);
+    return userToWire(ctx.db, row, ctx.user.accountId);
   },
 
   /**
@@ -481,11 +496,11 @@ export const usersHandlers = defineHandlers({
     if (current.role === 'owner' && current.status === 'active' && (await otherActiveOwners(ctx.db, ctx.user.accountId, current.id)) === 0) {
       throw conflict('LAST_OWNER', 'The account needs at least one active owner');
     }
-    const companies = await companiesOf(ctx.db, current.id);
+    const companies = await companiesOf(ctx.db, current.id, ctx.user.accountId);
     await ctx.db.transaction(async (tx) => {
-      const before = await userToWire(tx, current);
+      const before = await userToWire(tx, current, ctx.user.accountId);
       await revokeAllSessions(tx, current.id, ctx.now);
-      await replaceAccess(tx, current.id, { companies: [], branches: [] });
+      await replaceAccess(tx, current.id, ctx.user.accountId, { companies: [], branches: [] });
       await tx.delete(I).where(eq(I.userId, current.id));
       if (current.passwordHash) {
         // They have a login of their own, so losing access here is not the end of

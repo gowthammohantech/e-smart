@@ -1212,7 +1212,8 @@ export function watchStoreForQueries(): () => void {
   };
   const unsubscribe = useAppStore.subscribe((s, prev) => {
     if (s.session.userId !== prev.session.userId || s.activeCompanyId !== prev.activeCompanyId) {
-      if (!s.session.authenticated) queryClient.clear();
+      // Signed out, or someone else took over without signing out (accepting an invite): nothing cached is theirs.
+      if (!s.session.authenticated || (prev.session.userId && s.session.userId !== prev.session.userId)) queryClient.clear();
       return;
     }
     // A payment changes what an invoice still owes, and so its status.

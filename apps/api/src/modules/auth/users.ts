@@ -1,4 +1,4 @@
-import { eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { schema } from '@esmart/db';
 import type { Schema } from '@esmart/api-contract';
 import type { DbOrTx } from '../../lib/audit';
@@ -15,11 +15,24 @@ export function avatarColorFor(seed: string): string {
   return AVATAR_COLORS[h % AVATAR_COLORS.length];
 }
 
-/** The User wire shape, with the companies and branches the user can reach. */
-export async function userToWire(db: DbOrTx, row: UserRow): Promise<Schema<'User'>> {
+/**
+ * The User wire shape, with the companies and branches the user can reach.
+ * With `onAccount`, only those on that account: a team list must not show (or
+ * save back) the businesses a member reaches as a guest of someone else.
+ */
+export async function userToWire(db: DbOrTx, row: UserRow, onAccount?: string): Promise<Schema<'User'>> {
   const [companies, branches] = await Promise.all([
-    db.select({ id: schema.userCompanies.companyId }).from(schema.userCompanies).where(eq(schema.userCompanies.userId, row.id)),
-    db.select({ id: schema.userBranches.branchId }).from(schema.userBranches).where(eq(schema.userBranches.userId, row.id)),
+    db
+      .select({ id: schema.userCompanies.companyId })
+      .from(schema.userCompanies)
+      .innerJoin(schema.companies, eq(schema.companies.id, schema.userCompanies.companyId))
+      .where(and(eq(schema.userCompanies.userId, row.id), onAccount ? eq(schema.companies.accountId, onAccount) : undefined)),
+    db
+      .select({ id: schema.userBranches.branchId })
+      .from(schema.userBranches)
+      .innerJoin(schema.branches, eq(schema.branches.id, schema.userBranches.branchId))
+      .innerJoin(schema.companies, eq(schema.companies.id, schema.branches.companyId))
+      .where(and(eq(schema.userBranches.userId, row.id), onAccount ? eq(schema.companies.accountId, onAccount) : undefined)),
   ]);
   return compact({
     id: row.id,

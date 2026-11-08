@@ -33,6 +33,9 @@ if (API_CONFIGURED) void startUp();
 /** A crash anywhere below the root shows this instead of a blank screen. */
 export { ErrorFallback as ErrorBoundary };
 
+/** Pages opened from an emailed link: they work whether or not someone is signed in. */
+const LINK_PAGES = ['accept-invite', 'reset-password'] as const;
+
 function RootNavigator() {
   const t = useTheme();
   useRemoteSync();
@@ -53,11 +56,14 @@ function RootNavigator() {
   useEffect(() => {
     if (!hydrated) return;
     const group = segments[0];
+    // An invitation or a password-reset link is for whoever opens it, signed in or not.
+    const linkPage = group === '(auth)' && (LINK_PAGES as readonly string[]).includes(String((segments as string[])[1] ?? ''));
 
     if (!authenticated && group !== '(auth)') {
       router.replace('/(auth)/welcome');
       return;
     }
+    if (authenticated && linkPage) return;
     if (authenticated && !onboardingComplete && group !== '(onboarding)') {
       router.replace('/(onboarding)/tax');
       return;

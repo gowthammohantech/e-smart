@@ -4,6 +4,7 @@ import { getTokens, setTokens } from './tokens';
 import { uuid } from './uuid';
 import { Platform } from 'react-native';
 import * as Application from 'expo-application';
+import Constants from 'expo-constants';
 import { useMfaGate } from '../features/security/mfaGateStore';
 import { useUpdateGate } from '../features/session/updateGateStore';
 import { recordTiming } from './latency';
@@ -12,7 +13,9 @@ import { recordTiming } from './latency';
  * Every build names its version, so the server can turn away one it no longer serves. The web is
  * always the build just deployed, so it says so instead.
  */
-const version = Platform.OS === 'web' ? 'web' : (Application.nativeApplicationVersion ?? 'unknown');
+// A build that can't read its installed version (a dev client) names the version it was built from:
+// without one the server takes it for an offline-first build and turns it away.
+const version = Platform.OS === 'web' ? 'web' : (Application.nativeApplicationVersion ?? Constants.expoConfig?.version ?? 'unknown');
 
 /** The typed API client. Only used in remote mode. A session held for an authenticator code raises the gate. */
 export const api = createApiClient({

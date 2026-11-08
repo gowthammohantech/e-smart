@@ -110,7 +110,8 @@ async function start(): Promise<void> {
       legacyRead = null;
       return;
     }
-    const { data: who } = await api.GET('/me');
+    // Through readMe: a session held for its authenticator code asks for it rather than signing out.
+    const who = await readMe();
     const userId = who?.user?.id;
     if (!userId) throw new RemoteError('incompleteSession', 'The server returned no user');
     await open(userId, legacy?.userId === userId ? { preferCompanyId: legacy.activeCompanyId, preferBranchId: legacy.activeBranchId } : {});
@@ -123,7 +124,9 @@ async function start(): Promise<void> {
     // Taken and removed: nothing is left to read on a later start.
     legacyRead = null;
   } catch (err) {
-    if (isNetworkError(err)) {
+    if (isNetworkError(err) || !sessionEnded(err)) {
+      // Unreachable, or the server is having trouble (a deploy's 502, a 429, a 426 that raises the
+      // update gate): the session is still good, so keep it and let them try again.
       useStartup.setState({ state: 'offline' });
       return;
     }
@@ -133,6 +136,18 @@ async function start(): Promise<void> {
     useAppStore.setState({ hydrated: true });
     useStartup.setState({ state: 'ready' });
   }
+}
+
+/**
+ * Whether a failed launch means the session is over: the server refused it (401, or a 403 such as a
+ * suspended account), the authenticator prompt was given up, or it answered without a user. Any
+ * other failure leaves the tokens alone.
+ */
+export function sessionEnded(err: unknown): boolean {
+  if (err instanceof MfaCancelled) return true;
+  if (err instanceof RemoteError) return err.code === 'incompleteSession';
+  if (err instanceof ApiError) return err.status === 401 || (err.status === 403 && err.code !== 'MFA_REQUIRED');
+  return false;
 }
 
 /** Read once per launch, even if the first start-up has to be retried. */

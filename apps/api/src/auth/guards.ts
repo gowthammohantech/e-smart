@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { schema } from '@esmart/db';
 import { FULL_PLAN, hasModule, moduleEnabled, type Module } from '@esmart/core/domain/plan';
@@ -114,6 +114,14 @@ export function registerGuards(app: FastifyInstance, deps: Deps) {
       // Here they act with the role they were given in this business.
       const here = user.companyRoles?.[companyId];
       if (here) user.role = here;
+      // Branch limits are per business: limits from another business mean nothing here (none here = all branches).
+      if (user.branchIds.length) {
+        const own = await deps.db
+          .select({ id: schema.branches.id })
+          .from(schema.branches)
+          .where(and(eq(schema.branches.companyId, companyId), inArray(schema.branches.id, user.branchIds)));
+        user.branchIds = own.map((b) => b.id);
+      }
       // An archived business keeps its books as they were: they can be read and exported, nothing more.
       if (req.company.archivedAt && op.method !== 'GET' && !op.archivedAllowed) {
         throw new ApiError(409, 'COMPANY_ARCHIVED', 'This business is archived, so its books are read-only. An owner can restore it in Settings.');
