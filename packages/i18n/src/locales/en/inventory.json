@@ -339,6 +339,7 @@
       "openingStock": "Opening stock",
       "reorderLevel": "Reorder level"
     },
+    "customColumns": "Columns for your own fields, headed by their names: {{labels}}.",
     "dryRun": "{{created}} new, {{skipped}} already there, {{invalid}} to fix",
     "col": {
       "price": "Price",

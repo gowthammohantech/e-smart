@@ -22,12 +22,16 @@ import type { Voucher, VoucherKind, VoucherTemplate } from '@esmart/core/types';
 import { useServerSave } from '../../components/useServerSave';
 import { useAppStore } from '../../store/appStore';
 import { useServerBook } from '../../remote/queries';
-import { useActiveCompany, useBaseCurrency, useDefaultBranchId } from '../../store/selectors';
+import { useActiveCompany, useBaseCurrency, useCurrentUser, useDefaultBranchId } from '../../store/selectors';
 import { useAccountName, useGroupName } from './names';
 import { VoucherGrid, gridLine, type GridLine } from './VoucherGrid';
 
 /** Kept in step with VOUCHER_BLOCKED_KEYS in the API's books handlers. */
 const BOOKS_ONLY = ['sys:openingStock', 'sys:accumulatedDepreciation', 'sys:goodsReceivedNotBilled'];
+
+/** Earlier years' profit: posted only by an owner or admin, with a narration (RULES 6.25; the server checks it too). */
+const RESERVES = 'sys:retainedEarnings';
+const RESERVES_ROLES = ['owner', 'admin'];
 
 const KINDS: VoucherKind[] = ['journal', 'contra', 'gstJournal', 'tdsChallan'];
 
@@ -60,6 +64,10 @@ export function VoucherForm({ voucher, onSaved, initialKind }: { voucher?: Vouch
   const nameOf = useAccountName();
   const groupName = useGroupName();
 
+  const role = useCurrentUser()?.role;
+  // Shown to an owner or admin; a voucher that already posts to it keeps showing it.
+  const reservesOpen = RESERVES_ROLES.includes(role ?? '') || !!voucher?.lines.some((l) => l.account === RESERVES);
+
   const params = useLocalSearchParams<{ kind?: string }>();
   const [kind, setKind] = useState<VoucherKind>(voucher?.kind ?? initialKind ?? voucherKindParam(params.kind) ?? 'journal');
   const [date, setDate] = useState(voucher?.date ?? today());
@@ -86,13 +94,13 @@ export function VoucherForm({ voucher, onSaved, initialKind }: { voucher?: Vouch
     const tdsPayable: Account[] = TDS_SECTIONS.map((s) => accountFor(`sys:tdsPayable:${s.code}`, book)!);
     const tcsPayable: Account[] = TCS_SECTIONS.map((s) => accountFor(`sys:tcsPayable:${s.code}`, book)!);
     // Accounts only the books post to (stock, the asset register, goods receipts); the server refuses them too.
-    const all = [...chartOfAccounts(book).filter((a) => !BOOKS_ONLY.includes(a.key)), ...tdsPayable, ...tcsPayable];
+    const all = [...chartOfAccounts(book).filter((a) => !BOOKS_ONLY.includes(a.key) && (reservesOpen || a.key !== RESERVES)), ...tdsPayable, ...tcsPayable];
     const cash = (a: Account) => a.group === 'cashInHand' || a.group === 'bankAccounts';
     if (kind === 'contra') return all.filter(cash);
     // The same challan deposits TCS collected, so TCS payable may be cleared too.
     if (kind === 'tdsChallan') return all.filter((a) => cash(a) || a.key.startsWith('sys:tdsPayable') || a.key.startsWith('sys:tcsPayable'));
     return all;
-  }, [book, kind]);
+  }, [book, kind, reservesOpen]);
   const accountOptions = useMemo(() => accounts.map((a) => ({ value: a.key, label: nameOf(a), description: groupName(a.group) })), [accounts, nameOf, groupName]);
 
   const minor = (v: string) => fromMajor(v || '0', baseCurrency).minor;
@@ -105,7 +113,17 @@ export function VoucherForm({ voucher, onSaved, initialKind }: { voucher?: Vouch
   const isDraft = voucher?.status === 'draft';
   // Kept to finish later: a draft only needs a line, and is checked in full when it is posted.
   const draftProblem = filled.length ? null : tr('books:vouchers.needsOne');
-  const problem = filled.length < 2 ? tr('books:vouchers.needsTwo') : debit !== credit ? tr('books:vouchers.unbalanced') : challanBad ? tr('books:vouchers.challanInvalid') : null;
+  const reservesBare = filled.some((l) => l.account === RESERVES) && !narration.trim();
+  const problem =
+    filled.length < 2
+      ? tr('books:vouchers.needsTwo')
+      : debit !== credit
+        ? tr('books:vouchers.unbalanced')
+        : challanBad
+          ? tr('books:vouchers.challanInvalid')
+          : reservesBare
+            ? tr('books:vouchers.reservesNeedNarration')
+            : null;
 
   /**
    * As in a ledger book: picking an account on an empty row fills in what's left to balance, and

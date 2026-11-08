@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Platform, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -13,7 +13,8 @@ import { useToast } from '@esmart/ui/components/Toast';
 import { FormContainer } from '@esmart/ui/components/Layout';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { parseCsv } from '@esmart/core/lib/csv';
-import { guessItemColumns, itemsFromCsv, type ImportedItem, type ItemImportField, type ItemImportRow } from '@esmart/core/domain/itemImport';
+import { customFieldColumns, guessItemColumns, itemsFromCsv, type ImportedItem, type ItemImportField, type ItemImportRow } from '@esmart/core/domain/itemImport';
+import type { CustomField } from '@esmart/core/domain/customFields';
 import { ImportFlow, type ColumnMapping, type ImportColumn } from '../import/ImportFlow';
 import { formatMoney, formatPercent } from '@esmart/core/lib/format';
 import { today } from '@esmart/core/lib/date';
@@ -23,10 +24,14 @@ import { refreshSoon } from '../../remote/refresh';
 import { pickCsvOnWeb } from '../../components/pickCsv';
 import { useBaseCurrency, useHasModule, useTaxCategories } from '../../store/selectors';
 import { useAppStore } from '../../store/appStore';
+import { useCustomFields } from '../customFields/CustomFieldsSection';
 
 type Outcome = { index: number; status: 'created' | 'duplicate' | 'invalid'; issues?: { message?: string }[] };
-/** A sample of the sheet: column names as spreadsheets have them, in English in every language. */
-const SAMPLE_CSV = ['Name,SKU,Unit,Sale price,Purchase price,GST %,HSN,Opening stock', 'Ball Bearing 6203,BRG-6203,Nos,250,180,18,84821011,40'].join('\n');
+/** A sample of the sheet: column names as spreadsheets have them, in English in every language; the business's own item fields after them. */
+const sampleCsv = (custom: CustomField[]) =>
+  [['Name,SKU,Unit,Sale price,Purchase price,GST %,HSN,Opening stock', ...custom.map((f) => f.label)].join(','), ['Ball Bearing 6203,BRG-6203,Nos,250,180,18,84821011,40', ...custom.map(() => '')].join(',')].join('\n');
+/** The hint, with the columns the business's own fields are read from. */
+const withCustomHint = (hint: string, custom: CustomField[], line: (labels: string) => string) => (custom.length ? `${hint} ${line(custom.map((f) => f.label).join(', '))}` : hint);
 
 const ITEM_FIELDS: ItemImportField[] = ['name', 'sku', 'type', 'unit', 'salePrice', 'purchasePrice', 'taxRate', 'hsnCode', 'barcode', 'openingStock', 'reorderLevel', 'description'];
 type ItemRecord = ImportedItem & { row: number };
@@ -47,17 +52,22 @@ function ImportItemsFlow() {
   const currency = useBaseCurrency();
   const taxCategories = useTaxCategories();
   const tracksStock = useHasModule('inventory');
+  const customFields = useCustomFields('item');
+  // Which of the business's own fields the file has a column for (by header), kept for the request.
+  const customColumns = useRef<Record<string, number>>({});
 
   const fields = useMemo(() => ITEM_FIELDS.map((key) => ({ key, label: tr(`inventory:import.field.${key}`), required: key === 'name' })), [tr]);
   const detect = useCallback((rows: string[][]) => ({ headerRow: 0, mapping: guessItemColumns(rows[0] ?? []) }), []);
   const toRecords = useCallback(
     (rows: string[][], headerRow: number, mapping: ColumnMapping) => {
+      customColumns.current = headerRow >= 0 ? customFieldColumns(rows[headerRow] ?? [], customFields) : {};
       // itemsFromCsv reads the row after its first as data: hand it the header and what follows.
       const read = itemsFromCsv(rows.slice(Math.max(headerRow, 0)), mapping as Partial<Record<ItemImportField, number>>, {
         currency,
         taxCategories,
         trackInventory: tracksStock,
         openingStockDate: today(),
+        customFields: { fields: customFields, columns: customColumns.current },
       });
       const offset = Math.max(headerRow, 0);
       return {
@@ -65,7 +75,7 @@ function ImportItemsFlow() {
         errors: read.filter((r) => !r.item).map((r) => ({ row: r.line + offset, message: r.problems.join(' · ') })),
       };
     },
-    [currency, taxCategories, tracksStock],
+    [currency, taxCategories, tracksStock, customFields],
   );
   const taxRate = useCallback((id: string) => taxCategories.find((c) => c.id === id)?.rate ?? 0, [taxCategories]);
   const columns = useMemo<ImportColumn<ItemRecord>[]>(
@@ -83,7 +93,7 @@ function ImportItemsFlow() {
   const send = async (records: ItemRecord[], dryRun: boolean) => {
     const { data, error } = await api.POST('/companies/{companyId}/items/import', {
       params: { path: { companyId } },
-      body: { rows: records.map(({ row: _row, ...item }) => item) as never, dryRun },
+      body: { rows: records.map(({ row: _row, ...item }) => item) as never, dryRun, customFieldColumns: Object.keys(customColumns.current) },
     });
     if (error || !data) throw error ?? new Error('No answer from the server');
     return data;
@@ -92,7 +102,7 @@ function ImportItemsFlow() {
   return (
     <ImportFlow<ItemRecord>
       title={tr('inventory:import.title')}
-      hint={tr('inventory:import.hint')}
+      hint={withCustomHint(tr('inventory:import.hint'), customFields, (labels) => tr('inventory:import.customColumns', { labels }))}
       accept={['.csv']}
       fields={fields}
       detect={detect}
@@ -102,7 +112,8 @@ function ImportItemsFlow() {
       onDryRun={async (records) => {
         const res = await send(records, true);
         return {
-          summary: tr('inventory:import.dryRun', { created: res.created ?? 0, skipped: res.skipped ?? 0, invalid: res.invalid ?? 0 }),
+          // A required field the file has no column for: said here, the items are still created.
+          summary: [tr('inventory:import.dryRun', { created: res.created ?? 0, skipped: res.skipped ?? 0, invalid: res.invalid ?? 0 }), ...(res.warnings ?? [])].join(' · '),
           rowFlags: (res.results ?? []).map((r) =>
             r.status === 'duplicate' ? tr('inventory:import.status.duplicate') : r.status === 'invalid' ? (r.issues ?? []).map((x) => x.message).join(' · ') : undefined,
           ),
@@ -139,19 +150,23 @@ function ImportItemsPaste() {
   const [text, setText] = useState('');
   const [outcomes, setOutcomes] = useState<Outcome[] | null>(null);
   const [busy, setBusy] = useState(false);
+  const customFields = useCustomFields('item');
+  const [warnings, setWarnings] = useState<string[]>([]);
 
   // Read on every change: the preview shows what the sheet holds before anything is sent.
   const parsed = useMemo(() => {
     const rows = parseCsv(text);
-    if (rows.length < 2) return { rows: [] as ItemImportRow[], columns: {} as ReturnType<typeof guessItemColumns> };
+    if (rows.length < 2) return { rows: [] as ItemImportRow[], columns: {} as ReturnType<typeof guessItemColumns>, custom: {} as Record<string, number> };
     const columns = guessItemColumns(rows[0]);
-    return { rows: itemsFromCsv(rows, columns, { currency, taxCategories, trackInventory: tracksStock, openingStockDate: today() }), columns };
-  }, [text, currency, taxCategories, tracksStock]);
+    const custom = customFieldColumns(rows[0], customFields);
+    return { rows: itemsFromCsv(rows, columns, { currency, taxCategories, trackInventory: tracksStock, openingStockDate: today(), customFields: { fields: customFields, columns: custom } }), columns, custom };
+  }, [text, currency, taxCategories, tracksStock, customFields]);
   const good = parsed.rows.filter((r) => r.item);
   const noName = parsed.rows.length > 0 && parsed.columns.name === undefined;
   const changeText = (v: string) => {
     setText(v);
     setOutcomes(null);
+    setWarnings([]);
   };
 
   const send = async (dryRun: boolean) => {
@@ -159,10 +174,11 @@ function ImportItemsPaste() {
     try {
       const { data, error } = await api.POST('/companies/{companyId}/items/import', {
         params: { path: { companyId } },
-        body: { rows: good.map((r) => r.item!) as never, dryRun },
+        body: { rows: good.map((r) => r.item!) as never, dryRun, customFieldColumns: Object.keys(parsed.custom) },
       });
       if (error || !data) throw error ?? new Error('No answer from the server');
       setOutcomes((data.results ?? []) as Outcome[]);
+      setWarnings(data.warnings ?? []);
       if (!dryRun) {
         refreshSoon();
         toast.show(tr('inventory:import.done', { count: data.created ?? 0 }), 'success', {
@@ -186,7 +202,7 @@ function ImportItemsPaste() {
     <FormContainer>
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, gap: t.spacing.lg, paddingBottom: t.spacing.xxxl }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <Text variant="small" tone="muted">
-          {tr('inventory:import.hint')}
+          {withCustomHint(tr('inventory:import.hint'), customFields, (labels) => tr('inventory:import.customColumns', { labels }))}
         </Text>
         {Platform.OS === 'web' ? (
           <Button
@@ -200,13 +216,19 @@ function ImportItemsPaste() {
             }
           />
         ) : null}
-        <TextField label={tr('inventory:import.paste')} value={text} onChangeText={changeText} placeholder={SAMPLE_CSV} multiline autoCapitalize="none" />
+        <TextField label={tr('inventory:import.paste')} value={text} onChangeText={changeText} placeholder={sampleCsv(customFields)} multiline autoCapitalize="none" />
 
         {noName ? (
           <Text variant="caption" tone="bad">
             {tr('inventory:import.noNameColumn')}
           </Text>
         ) : null}
+
+        {warnings.map((w) => (
+          <Text key={w} variant="caption" tone="warn">
+            {w}
+          </Text>
+        ))}
 
         {parsed.rows.length ? (
           <>

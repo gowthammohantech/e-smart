@@ -62,6 +62,9 @@ type AnyCtx = Pick<Ctx<'getVoucher'>, 'company' | 'user' | 'db' | 'now'>;
  * A journal into one would quietly undo what its source works out (RULES 6.10, 6.15).
  */
 export const VOUCHER_BLOCKED_KEYS = ['sys:openingStock', 'sys:accumulatedDepreciation', 'sys:goodsReceivedNotBilled'];
+/** Earlier years' profit: open to vouchers, but only posted by these roles and with a narration. */
+export const RETAINED_EARNINGS = 'sys:retainedEarnings';
+export const RETAINED_EARNINGS_ROLES: string[] = ['owner', 'admin'];
 
 const blocking = (issues: Issue[]) => (field: string, message: string) => issues.push({ field, message, severity: 'blocking' });
 
@@ -199,6 +202,14 @@ export async function voucherColumns(ctx: AnyCtx, db: DbOrTx, body: Schema<'Vouc
     if (!accountFor(l.account, book)) block(`${field}.account`, `No account ${l.account} in this company`);
     if (VOUCHER_BLOCKED_KEYS.includes(l.account)) block(`${field}.account`, `${accountFor(l.account, book)?.name ?? l.account} is worked out by the books; a voucher cannot post to it`);
   });
+  // Earlier years' profit takes appropriations and prior-period corrections only (AS 5): posted by an
+  // owner or admin, with the reason in the narration. An accountant may prepare it as a draft.
+  if (lines.some((l) => l.account === RETAINED_EARNINGS)) {
+    if (!draft && !RETAINED_EARNINGS_ROLES.includes(ctx.user.role)) {
+      throw forbidden('RETAINED_EARNINGS_ROLE', 'Only an owner or admin can post to earlier years’ profit; save it as a draft for them to post');
+    }
+    if (!draft && !body.narration?.trim()) block('narration', 'Say why earlier years’ profit changes: a voucher posting to it needs a narration');
+  }
   // An inactive account takes no new entries; lines already on this voucher may stay.
   const kept = exceptId ? new Set(((await db.select({ lines: V.lines }).from(V).where(eq(V.id, exceptId)))[0]?.lines as StoredLine[] | undefined)?.map((l) => l.account) ?? []) : new Set<string>();
   const fresh = (prefix: string) => [...new Set(lines.map((l) => l.account).filter((k) => k.startsWith(`${prefix}:`) && !kept.has(k)).map((k) => k.slice(prefix.length + 1)))];

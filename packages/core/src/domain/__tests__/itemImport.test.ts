@@ -1,6 +1,7 @@
 import type { TaxCategory } from '../../types';
 import { parseCsv } from '../../lib/csv';
-import { guessItemColumns, itemsFromCsv, unitCodeOf } from '../itemImport';
+import { customFieldColumns, guessItemColumns, itemsFromCsv, unitCodeOf } from '../itemImport';
+import type { CustomField } from '../customFields';
 
 const taxes = [0, 5, 12, 18, 28].map((rate) => ({ id: `gst${rate}`, name: `GST ${rate}%`, rate }) as TaxCategory);
 const defaults = { currency: 'INR', taxCategories: taxes, trackInventory: true, openingStockDate: '2026-11-05' };
@@ -53,5 +54,24 @@ describe('items from a CSV', () => {
   it('knows the units spreadsheets write', () => {
     expect(['Pcs', 'nos.', 'Ltrs', 'mtr', 'BOX', 'kilo'].map(unitCodeOf)).toEqual(['PCS', 'NOS', 'LTR', 'MTR', 'BOX', 'KG']);
     expect(unitCodeOf('bags')).toBeUndefined();
+  });
+});
+
+describe('custom field columns', () => {
+  const fields: CustomField[] = [
+    { id: 'cf_brand', entity: 'item', label: 'Brand', kind: 'select', options: ['SKF', 'FAG'], required: true },
+    { id: 'cf_size', entity: 'item', label: 'Bore size', kind: 'number' },
+    { id: 'cf_since', entity: 'item', label: 'Stocked since', kind: 'date' },
+    { id: 'cf_party', entity: 'party', label: 'Zone', kind: 'text' },
+  ];
+  it('finds them by label in any case and reads values as each field wants', () => {
+    const rows = parseCsv(['Name,brand,BORE  SIZE,Stocked since,Zone', 'Bearing,skf,"1,200",05/11/2026,North', 'Grease,Timken,x,2026-11-31,'].join('\n'));
+    const columns = customFieldColumns(rows[0], fields);
+    expect(columns).toEqual({ cf_brand: 1, cf_size: 2, cf_since: 3 });
+    const [bearing, grease] = itemsFromCsv(rows, guessItemColumns(rows[0]), { ...defaults, customFields: { fields, columns } });
+    expect(bearing.item?.customFields).toEqual({ cf_brand: 'SKF', cf_size: 1200, cf_since: '2026-11-05' });
+    expect(grease.item).toBeUndefined();
+    expect(grease.problems.join(' ')).toContain('Brand "Timken"');
+    expect(grease.problems.join(' ')).toContain('Bore size "x"');
   });
 });

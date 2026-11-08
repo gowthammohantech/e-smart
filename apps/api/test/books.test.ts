@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { schema } from '@esmart/db';
 import { setupApi } from './helpers';
 import { issueInvoice, line, moneySetup, type Money } from './money-fixtures';
+import { joinTeam } from './team-helpers';
 
 const t = setupApi();
 beforeEach(() => t.setNow('2026-09-29T10:00:00Z'));
@@ -317,6 +318,23 @@ describe('books: keeping the ledger whole', () => {
     expect(off.status).toBe(200);
     const again = await t.post(`${m.c}/vouchers`, voucher('journal', [[`acc:${acc.body.id}`, 1_000, 0], ['sys:otherIncome', 0, 1_000]]), { token: m.token });
     expect(again.status).toBe(422);
+  });
+
+  it("earlier years' profit: owner or admin, with a narration", async () => {
+    const m = await moneySetup(t);
+    const lines: [string, number, number][] = [['sys:retainedEarnings', 5_000, 0], ['sys:otherIncome', 0, 5_000]];
+    const clerk = await joinTeam(t, m.token, { role: 'accountant', companyIds: [m.companyId] });
+    const posted = await t.post(`${m.c}/vouchers`, voucher('journal', lines, { narration: 'Prior-year correction' }), { token: clerk.token });
+    expect(posted.status).toBe(403);
+    expect(posted.body.code).toBe('RETAINED_EARNINGS_ROLE');
+    // An accountant prepares it; the owner posts it.
+    const draft = await t.post(`${m.c}/vouchers`, voucher('journal', lines, { narration: 'Prior-year correction', status: 'draft' }), { token: clerk.token });
+    expect(draft.status).toBe(201);
+    const bare = await t.post(`${m.c}/vouchers`, voucher('journal', lines), { token: m.token });
+    expect(bare.status).toBe(422);
+    expect(JSON.stringify(bare.body)).toContain('narration');
+    const ok = await t.post(`${m.c}/vouchers`, voucher('journal', lines, { narration: 'Transfer to general reserve' }), { token: m.token });
+    expect(ok.status).toBe(201);
   });
 
   it('holds an opening dated the day after the close, keeps a voucher in its year, and audits a delete in full', async () => {

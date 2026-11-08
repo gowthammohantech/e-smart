@@ -264,6 +264,24 @@ describe('items import', () => {
     expect(Number(moves[0].quantity)).toBe(4);
   });
 
+  it('enforces a required custom field only when the sheet has its column, and warns otherwise', async () => {
+    const { token, c, item } = await setup();
+    const brand = await t.post(`${c}/custom-fields`, { entity: 'item', label: 'Brand', kind: 'select', options: ['SKF', 'FAG'], required: true }, { token });
+    expect(brand.status).toBe(201);
+    const id = brand.body.id as string;
+    // No column: rows go through, and the dry run says the field will be empty.
+    const bare = await t.post(`${c}/items/import`, { rows: [item({ sku: 'A-1', name: 'Bearing A' })], dryRun: true }, { token });
+    expect(bare.body).toMatchObject({ created: 1, invalid: 0 });
+    expect(bare.body.warnings[0]).toContain('Brand');
+    // With the column: a blank or wrong value is a row to fix, a good one is kept.
+    const rows = [item({ sku: 'B-1', name: 'Bearing B' }), item({ sku: 'B-2', name: 'Bearing C', customFields: { [id]: 'NTN' } }), item({ sku: 'B-3', name: 'Bearing D', customFields: { [id]: 'SKF' } })];
+    const res = await t.post(`${c}/items/import`, { rows, customFieldColumns: [id] }, { token });
+    expect(res.body).toMatchObject({ created: 1, invalid: 2 });
+    expect(res.body.warnings).toBeUndefined();
+    const made = await t.get(`${c}/items/${res.body.results[2].id}`, { token });
+    expect(made.body.customFields).toEqual({ [id]: 'SKF' });
+  });
+
   it('is for owners, admins and accountants', async () => {
     const { c, item } = await setup();
     const res = await t.post(`${c}/items/import`, { rows: [item()] }, {});

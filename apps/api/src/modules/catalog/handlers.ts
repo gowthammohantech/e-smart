@@ -1,6 +1,6 @@
 import { businessDate } from '@esmart/core/lib/date';
-import type { CustomValues } from '@esmart/core/domain/customFields';
-import { cleanCustomValues } from '../settings/customFields';
+import { checkCustomValues, type CustomValues } from '@esmart/core/domain/customFields';
+import { cleanCustomValues, loadCustomFields } from '../settings/customFields';
 import { and, asc, desc, eq, getTableColumns, gt, ilike, ne, not, or, sql, lte, type SQL } from 'drizzle-orm';
 import type { Schema } from '@esmart/api-contract';
 import { schema } from '@esmart/db';
@@ -217,9 +217,15 @@ export const catalogHandlers = defineHandlers({
   },
 
   async importItems(ctx) {
-    const { rows, dryRun } = ctx.body;
+    const { rows, dryRun, customFieldColumns } = ctx.body;
     const base = ctx.company.baseCurrency.trim();
     const today = businessDate(ctx.now);
+    // A required field is enforced only when the sheet has its column; one without a column can't
+    // stop every row, so it is created empty and the dry run says so.
+    const columns = new Set(customFieldColumns ?? []);
+    const itemFields = (await loadCustomFields(ctx.db, ctx.company.id, 'item')).filter((f) => (f.status ?? 'active') === 'active');
+    const checked = itemFields.map((f) => (columns.has(f.id) ? f : { ...f, required: false }));
+    const warnings = itemFields.filter((f) => f.required && f.kind !== 'checkbox' && !columns.has(f.id)).map((f) => `${f.label} is required but the sheet has no column for it: these items are created without it`);
     // What is already there, to tell duplicates by SKU, barcode or name in any case.
     const existing = await ctx.db.select({ sku: I.sku, barcode: I.barcode, name: I.name }).from(I).where(eq(I.companyId, ctx.company.id));
     const skus = new Set(existing.map((e) => e.sku.toLowerCase()));
@@ -232,9 +238,12 @@ export const catalogHandlers = defineHandlers({
       let customFields: CustomValues = {};
       try {
         await validate(ctx.db, ctx.company.id, base, body, today, true);
-        // Values the sheet carries are checked as a new item's are. A sheet with none leaves them
-        // empty: the import has no columns for them, so a required field can't stop every row.
-        if (body.customFields !== undefined) customFields = await cleanCustomValues(ctx.db, ctx.company.id, 'item', body.customFields as CustomValues);
+        // Values the sheet carries are checked as a new item's are.
+        if (checked.length) {
+          const { values, problems } = checkCustomValues(checked, 'item', (body.customFields ?? {}) as CustomValues);
+          if (problems.length) throw unprocessable(problems.map((p) => ({ field: `customFields.${p.fieldId}`, message: p.message, severity: 'blocking' as const })));
+          customFields = values;
+        }
       } catch (err) {
         const issues = err instanceof ApiError ? ((err.extra.issues as Issue[] | undefined) ?? [{ field: '', message: err.message, severity: 'blocking' as const }]) : [{ field: '', message: String(err), severity: 'blocking' as const }];
         results.push({ index, status: 'invalid', issues });
@@ -294,7 +303,7 @@ export const catalogHandlers = defineHandlers({
     } else for (const { index } of good) results.push({ index, status: 'created' });
     results.sort((a, b) => a.index - b.index);
     const count = (st: Result['status']) => results.filter((r) => r.status === st).length;
-    return { created: count('created'), skipped: count('duplicate'), invalid: count('invalid'), results };
+    return { created: count('created'), skipped: count('duplicate'), invalid: count('invalid'), ...(warnings.length && { warnings }), results };
   },
 
   async getItem(ctx) {

@@ -2,6 +2,7 @@ import type { Item, TaxCategory } from '../types';
 import { fromMajor, money } from '../lib/money';
 import { cleanAmount, matchColumns, squashHeader } from '../lib/csv';
 import { UNITS, SERVICE_UNIT_CODES } from '../data/masters';
+import type { CustomField, CustomValues } from './customFields';
 
 /**
  * Items from a spreadsheet: a price list or stock sheet as Excel, Tally, Vyapar
@@ -63,6 +64,69 @@ export function unitCodeOf(raw: string): string | undefined {
   return UNITS.some((u) => u.code === code) ? code : undefined;
 }
 
+/**
+ * Which column holds each active item custom field: a header that reads as the field's label, in
+ * any case and spacing. Keyed by field id; a field the sheet has no column for is left out.
+ */
+export function customFieldColumns(header: string[], fields: CustomField[]): Record<string, number> {
+  const norm = (v: string) => v.replace(/\s+/g, ' ').trim().toLowerCase();
+  const out: Record<string, number> = {};
+  for (const f of fields) {
+    if (f.entity !== 'item' || (f.status ?? 'active') !== 'active') continue;
+    const i = header.findIndex((h) => norm(String(h ?? '')) === norm(f.label));
+    if (i >= 0) out[f.id] = i;
+  }
+  return out;
+}
+
+/** A sheet's DD/MM/YYYY (or YYYY-MM-DD) as YYYY-MM-DD, or undefined. */
+function isoDate(raw: string): string | undefined {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const m = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/.exec(raw);
+  return m ? `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}` : undefined;
+}
+
+/**
+ * One row's custom field values from their columns, typed as the field wants. A value that can't be
+ * read is a problem; an empty cell is left out (the server says whether a required one may be).
+ */
+export function customValuesOf(cells: string[], columns: Record<string, number>, fields: CustomField[]): { values: CustomValues; problems: string[] } {
+  const values: CustomValues = {};
+  const problems: string[] = [];
+  for (const f of fields) {
+    const i = columns[f.id];
+    if (i === undefined) continue;
+    const raw = String(cells[i] ?? '').trim();
+    if (!raw) continue;
+    switch (f.kind) {
+      case 'number': {
+        const n = Number(raw.replace(/,/g, ''));
+        if (Number.isFinite(n)) values[f.id] = n;
+        else problems.push(`${f.label} "${raw}" is not a number`);
+        break;
+      }
+      case 'checkbox':
+        values[f.id] = /^(y|yes|true|1|✓)$/i.test(raw);
+        break;
+      case 'date': {
+        const d = isoDate(raw);
+        if (d) values[f.id] = d;
+        else problems.push(`${f.label} "${raw}" is not a date (DD/MM/YYYY)`);
+        break;
+      }
+      case 'select': {
+        const choice = (f.options ?? []).find((o) => o.toLowerCase() === raw.toLowerCase());
+        if (choice) values[f.id] = choice;
+        else problems.push(`${f.label} "${raw}" is not one of ${(f.options ?? []).join(', ')}`);
+        break;
+      }
+      default:
+        values[f.id] = raw;
+    }
+  }
+  return { values, problems };
+}
+
 export type ImportedItem = Omit<Item, 'id' | 'companyId' | 'createdAt' | 'imageUri' | 'gst'>;
 export type ItemImportRow = { line: number; item?: ImportedItem; problems: string[] };
 
@@ -75,7 +139,7 @@ export type ItemImportRow = { line: number; item?: ImportedItem; problems: strin
 export function itemsFromCsv(
   rows: string[][],
   columns: Partial<Record<ItemImportField, number>>,
-  defaults: { currency: string; taxCategories: TaxCategory[]; trackInventory: boolean; openingStockDate: string },
+  defaults: { currency: string; taxCategories: TaxCategory[]; trackInventory: boolean; openingStockDate: string; customFields?: { fields: CustomField[]; columns: Record<string, number> } },
 ): ItemImportRow[] {
   const fallbackTax = defaults.taxCategories.find((c) => c.rate === 18) ?? defaults.taxCategories[0];
   return rows.slice(1).map((cells, i) => {
@@ -127,6 +191,8 @@ export function itemsFromCsv(
     const openingStock = quantity('openingStock', 'Opening stock');
     const reorderLevel = quantity('reorderLevel', 'Reorder level');
     const trackInventory = type === 'goods' && defaults.trackInventory;
+    const custom = defaults.customFields ? customValuesOf(cells, defaults.customFields.columns, defaults.customFields.fields) : undefined;
+    if (custom) problems.push(...custom.problems);
 
     const item: ImportedItem | undefined =
       problems.length || !tax || !unit
@@ -146,6 +212,7 @@ export function itemsFromCsv(
             openingStock: trackInventory ? openingStock : 0,
             ...(trackInventory && openingStock > 0 && { openingStockDate: defaults.openingStockDate }),
             reorderLevel: trackInventory ? reorderLevel : 0,
+            ...(custom && Object.keys(custom.values).length && { customFields: custom.values }),
             status: 'active',
           };
     return { line, item, problems };

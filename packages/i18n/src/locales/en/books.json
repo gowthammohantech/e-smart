@@ -161,6 +161,7 @@
     "edit": "Edit voucher",
     "deleteTitle": "Delete {{number}}?",
     "deleteMessage": "Its entries come off the books.",
+    "reservesNeedNarration": "Say why earlier years’ profit changes: add a narration",
     "unbalanced": "Debits and credits must be equal",
     "needsTwo": "A voucher needs at least two lines",
     "drCr": "Dr/Cr",
