@@ -1,13 +1,11 @@
 import { Platform } from 'react-native';
 import type { Company } from '@esmart/core/types';
 import { useAppStore } from '../store/appStore';
-import { api, isNetworkError } from './api';
+import { api } from './api';
 import { applyEntity } from './apply';
 import { API_BASE_URL } from './config';
-import { useLogoQueue } from './logoQueue';
-import { knownToServer } from './meta';
 import { getTokens } from './tokens';
-import { fileBlob, keepQueued } from './keptFiles';
+import { fileBlob } from './keptFiles';
 
 /** The server refused the logo, or it can't be read. `status` also keeps it from being taken for a lost connection. */
 export class LogoError extends Error {
@@ -22,7 +20,6 @@ export class LogoError extends Error {
 }
 
 /** After this many failed attempts with the server reachable, the picked file is given up on. */
-const MAX_TRIES = 3;
 
 async function formFor(uri: string): Promise<FormData> {
   const form = new FormData();
@@ -82,50 +79,10 @@ export async function uploadLogo(companyId: string, uri: string): Promise<void> 
 
 export async function removeLogo(companyId: string): Promise<void> {
   await api.DELETE('/companies/{companyId}/logo', { params: { path: { companyId } } });
-  useLogoQueue.getState().clear(companyId);
   // Removing bumped the company's version; pick it up so the next save isn't a conflict.
   const { data } = await api.GET('/companies/{companyId}', { params: { path: { companyId } } });
   if (data) applyEntity('company', { ...data, logoUri: undefined });
   else setLocalLogo(companyId, undefined);
-}
-
-/**
- * Remembers a logo for a company that hasn't reached the server yet (it was
- * set up offline, or a moment ago). It uploads by itself once the company is
- * there; until then the picked file is what shows.
- */
-export function queueLogo(companyId: string, uri: string) {
-  useLogoQueue.getState().set(companyId, uri);
-  setLocalLogo(companyId, uri);
-  // A browser's picked file lasts only as long as the page; keep it for a reload.
-  keepQueued(uri, useLogoQueue.getState().swapUri);
-}
-
-let flushing = false;
-
-/** Uploads queued logos whose company the server now has. Never throws; the next sync tries again. */
-export async function flushPendingLogos(): Promise<void> {
-  if (flushing) return;
-  flushing = true;
-  try {
-    for (const [companyId, entry] of Object.entries(useLogoQueue.getState().pending)) {
-      if (entry.failed || !knownToServer(companyId)) continue;
-      try {
-        await uploadLogo(companyId, entry.uri);
-        useLogoQueue.getState().clear(companyId);
-      } catch (err) {
-        if (isNetworkError(err) && entry.tries + 1 < MAX_TRIES) {
-          useLogoQueue.getState().tried(companyId);
-          return;
-        }
-        useLogoQueue.getState().fail(companyId, err instanceof LogoError ? err.message : 'The logo could not be uploaded.');
-        // The picked file never made it, so stop showing it as the logo.
-        setLocalLogo(companyId, undefined);
-      }
-    }
-  } finally {
-    flushing = false;
-  }
 }
 
 let linksRefreshedAt = 0;
@@ -134,13 +91,12 @@ const LINK_REFRESH_MS = 30 * 60_000;
 
 /**
  * Keeps each company's logo and signature links fresh, and picks up either
- * changed on another device. A logo still waiting to upload is left alone.
+ * changed on another device.
  */
 export async function refreshLogoLinks(): Promise<void> {
   const { data } = await api.GET('/companies');
   const server = new Map((data?.data ?? []).map((c) => [c.id, c.logoUri as string | undefined]));
   const signatures = new Map((data?.data ?? []).map((c) => [c.id, c.signatureUri as string | undefined]));
-  const pending = useLogoQueue.getState().pending;
   const stale = Date.now() - linksRefreshedAt > LINK_REFRESH_MS;
   const { companies } = useAppStore.getState();
   let changed = false;
@@ -149,11 +105,9 @@ export async function refreshLogoLinks(): Promise<void> {
     let out = c;
     const sig = signatures.get(c.id);
     if (!(!!sig === !!c.signatureUri && !(sig && stale))) out = { ...out, signatureUri: sig };
-    if (!pending[c.id]) {
-      const link = server.get(c.id);
-      // A new link every time would rewrite the whole stored book each sync, so only swap when it matters.
-      if (!(!!link === !!c.logoUri && !(link && stale))) out = { ...out, logoUri: link };
-    }
+    const link = server.get(c.id);
+    // A new link every time would re-render every logo each refresh, so only swap when it matters.
+    if (!(!!link === !!c.logoUri && !(link && stale))) out = { ...out, logoUri: link };
     if (out !== c) changed = true;
     return out;
   });

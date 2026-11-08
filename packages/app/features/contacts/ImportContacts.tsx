@@ -15,7 +15,7 @@ import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { guessColumns, parseCsv, partiesFromCsv, type ImportKind, type ImportRow } from '@esmart/core/domain/partyImport';
 import { api } from '../../remote/api';
 import { describeError } from '../../remote/errors';
-import { syncSoon } from '../../remote/sync';
+import { refreshSoon } from '../../remote/refresh';
 import { useBaseCurrency } from '../../store/selectors';
 import { useAppStore } from '../../store/appStore';
 import { useCustomFields } from '../customFields/CustomFieldsSection';
@@ -65,7 +65,7 @@ export function ImportContacts() {
       if (error || !data) throw error ?? new Error('No answer from the server');
       setOutcomes((data.results ?? []) as Outcome[]);
       if (!dryRun) {
-        syncSoon();
+        refreshSoon();
         toast.show(tr('contacts:import.done', { count: data.created ?? 0 }), 'success', { icon: 'account-check-outline', detail: tr('contacts:import.skipped', { count: parsed.rows.length - (data.created ?? 0) }) });
         router.replace('/(app)/(tabs)/contacts');
       }

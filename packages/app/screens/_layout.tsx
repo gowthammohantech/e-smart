@@ -14,18 +14,21 @@ import { I18nProvider } from '../i18n/I18nProvider';
 import { useAppStore } from '../store/appStore';
 import { useUiStore } from '../store/uiStore';
 import { API_CONFIGURED, installRemote, useRemoteSync } from '../remote';
+import { startUp, useStartup } from '../remote/session';
+import { Button } from '@esmart/ui/components/Button';
 import { queryClient, useQueryStoreWatch } from '../remote/queries';
 import { i18nInstance as i18n } from '@esmart/i18n';
 import { ErrorFallback, FallbackArt } from '../components/ErrorFallback';
-import { OfflinePrompt } from '../components/OfflinePrompt';
+import { SaveToasts } from '../components/SaveToasts';
 import { installGlobalErrorHandlers } from '../lib/reporter';
 import { usePushNotifications } from '../features/session/usePushNotifications';
 import { MfaGate } from '../features/security/MfaGate';
 import { UpdateGate } from '../features/session/UpdateGate';
 
-// Remote mode wraps the store's actions once, before anything renders.
+// The store's actions are wrapped once, before anything renders; then the session (if any) loads.
 installRemote();
 installGlobalErrorHandlers();
+if (API_CONFIGURED) void startUp();
 
 /** A crash anywhere below the root shows this instead of a blank screen. */
 export { ErrorFallback as ErrorBoundary };
@@ -37,11 +40,12 @@ function RootNavigator() {
   const router = useRouter();
   const segments = useSegments();
 
-  // Both stores gate the first paint: the data store decides which route the
-  // person belongs on, the UI store decides the theme and the language.
+  // Both gate the first paint: the session (loaded from the server) decides which
+  // route the person belongs on, the UI store decides the theme and the language.
   const dataHydrated = useAppStore((s) => s.hydrated);
   const uiHydrated = useUiStore((s) => s.hydrated);
   const hydrated = dataHydrated && uiHydrated;
+  const startup = useStartup((s) => s.state);
   const authenticated = useAppStore((s) => s.session.authenticated);
   const onboardingComplete = useAppStore((s) => s.session.onboardingComplete);
   usePushNotifications(hydrated && authenticated && onboardingComplete);
@@ -63,6 +67,7 @@ function RootNavigator() {
     }
   }, [hydrated, authenticated, onboardingComplete, segments, router]);
 
+  if (!hydrated && startup === 'offline') return <StartOffline />;
   if (!hydrated) {
     return (
       <View style={{ flex: 1, backgroundColor: t.c.bg, alignItems: 'center', justifyContent: 'center' }} accessibilityRole="progressbar">
@@ -91,6 +96,20 @@ function RootNavigator() {
       <MfaGate />
       <UpdateGate />
     </>
+  );
+}
+
+/** Opened with a session but no connection: the books are on the server, so wait for it. */
+function StartOffline() {
+  const t = useTheme();
+  return (
+    <View style={{ flex: 1, backgroundColor: t.c.bg, alignItems: 'center', justifyContent: 'center', padding: t.spacing.xl, gap: t.spacing.lg }}>
+      <PageBackdrop />
+      <Illustration name="offline" size="full" />
+      <Text style={{ fontSize: 18, fontWeight: '700', color: t.c.text, textAlign: 'center' }}>{i18n.t('common:network.offlineTitle')}</Text>
+      <Text style={{ fontSize: 15, color: t.c.muted, textAlign: 'center', maxWidth: 360, lineHeight: 21 }}>{i18n.t('common:network.offlineBody')}</Text>
+      <Button title={i18n.t('common:network.retry')} icon="refresh" onPress={() => void startUp()} />
+    </View>
   );
 }
 
@@ -128,7 +147,7 @@ export default function RootLayout() {
             <AppThemeProvider>
               <ToastProvider>
                 <RootNavigator />
-                <OfflinePrompt />
+                <SaveToasts />
               </ToastProvider>
             </AppThemeProvider>
           </I18nProvider>

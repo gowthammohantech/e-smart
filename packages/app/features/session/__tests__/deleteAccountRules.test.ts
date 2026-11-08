@@ -1,6 +1,6 @@
 import { canDeleteAccount } from '../deleteAccountRules';
 
-const ok = { online: true, unsent: 0, typed: 'DELETE', byPhone: false, codeRequested: false, code: '', password: 'pw', busy: false };
+const ok = { online: true, typed: 'DELETE', byPhone: false, codeRequested: false, code: '', password: 'pw', busy: false };
 
 describe('canDeleteAccount', () => {
   it('allows it with everything in place', () => {
@@ -8,9 +8,8 @@ describe('canDeleteAccount', () => {
     expect(canDeleteAccount({ ...ok, typed: '  DELETE ' })).toBe(true);
   });
 
-  it('refuses offline, with unsent changes, or while already deleting', () => {
+  it('refuses offline, or while already deleting', () => {
     expect(canDeleteAccount({ ...ok, online: false })).toBe(false);
-    expect(canDeleteAccount({ ...ok, unsent: 1 })).toBe(false);
     expect(canDeleteAccount({ ...ok, busy: true })).toBe(false);
   });
 

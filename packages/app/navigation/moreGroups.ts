@@ -2,7 +2,6 @@ import { useTranslation } from 'react-i18next';
 import type { IconName } from '@esmart/ui/components/Icon';
 import { countLabel } from '@esmart/core/lib/format';
 import { useCanOpen, useComplianceSummary, useModuleSet, useUnreadCount } from '../store/selectors';
-import { useRemoteMeta } from '../remote/meta';
 import { MENU, PHONE_TABS, SETTINGS, TOOLS, appHref, sectionPath, type MenuBadge, type MenuPage, type SectionName, type SettingsGroupKey } from './menu';
 
 export type MoreEntry = {
@@ -20,12 +19,10 @@ export type MoreGroup = { key: MoreGroupKey; title: string; entries: MoreEntry[]
 export function useMenuBadges(): Record<MenuBadge, string | undefined> {
   const { t: tr } = useTranslation(['common']);
   const unread = useUnreadCount();
-  const offline = !useRemoteMeta((m) => m.online);
   const failed = useComplianceSummary().eInvoice.failed;
   return {
     unread: unread ? countLabel(unread) : undefined,
     eInvoiceFailed: failed ? String(failed) : undefined,
-    offline: offline ? tr('common:component.offline') : undefined,
   };
 }
 

@@ -4,7 +4,6 @@
  */
 export function canArchiveCompany(s: {
   online: boolean;
-  unsent: number;
   name: string;
   typed: string;
   byPhone: boolean;
@@ -15,5 +14,5 @@ export function canArchiveCompany(s: {
 }): boolean {
   const proof = s.byPhone ? s.codeRequested && /^\d{6}$/.test(s.code.trim()) : s.password.length > 0;
   const named = s.typed.trim().toLocaleLowerCase('en-IN') === s.name.trim().toLocaleLowerCase('en-IN');
-  return s.online && s.unsent === 0 && named && proof && !s.busy;
+  return s.online && named && proof && !s.busy;
 }

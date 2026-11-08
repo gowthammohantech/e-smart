@@ -21,7 +21,7 @@ import { documentKindLabel } from '@esmart/core/labels';
 import type { DocumentKind } from '@esmart/core/types';
 import { adjustOnServer, useAdjustable, usePartyRecord, usePartySearch, type AdjustmentAllocation } from '../../../remote/queries';
 import { describeError } from '../../../remote/errors';
-import { syncSoon } from '../../../remote/sync';
+import { refreshSoon } from '../../../remote/refresh';
 import { useDebounced } from '../../../components/useDebounced';
 import { useBaseCurrency, useParties } from '../../../store/selectors';
 
@@ -92,7 +92,7 @@ export default function AdjustAdvances() {
       toast.show(applied ? tr('books:adjust.done', { amount: formatMoney(money(applied, baseCurrency)) }) : tr('books:adjust.nothing'), applied ? 'success' : 'info', { icon: 'swap-horizontal' });
       setCreditKey(null);
       setAmounts({});
-      syncSoon();
+      refreshSoon();
     } catch (err) {
       toast.show(describeError(err, tr), 'error');
     } finally {

@@ -57,3 +57,14 @@ export function bookBackend(): KvBackend {
     },
   };
 }
+
+/** Removes the book for good: the file, and the key that could read it. */
+export async function destroyBook(): Promise<void> {
+  await SQLite.deleteDatabaseAsync(DB_NAME).catch(() => {});
+  await SecureStore.deleteItemAsync(KEY_NAME).catch(() => {});
+}
+
+/** Whether this phone ever made a book: it has the key. */
+export async function hasBook(): Promise<boolean> {
+  return !!(await SecureStore.getItemAsync(KEY_NAME).catch(() => null));
+}

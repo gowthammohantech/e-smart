@@ -3,14 +3,9 @@ import { BOOK, buildTestBook } from '../../__fixtures__/book';
 import { useAppStore } from '../../store/appStore';
 import { api } from '../api';
 import { installRemote } from '../install';
-import { useConnectivity } from '../connectivity';
 import { useRemoteMeta } from '../meta';
 import * as outbox from '../outbox';
-import { retrySync, syncAll } from '../retry';
-import { resync } from '../session';
 import { uploadAttachment } from '../attachments';
-import { useReceiptQueue } from '../receiptQueue';
-import { endSyncSession, syncNow } from '../sync';
 
 jest.mock('@react-native-async-storage/async-storage', () =>
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -20,10 +15,12 @@ jest.mock('expo-secure-store', () => ({ getItemAsync: async () => null, setItemA
 jest.mock('../config', () => ({ API_BASE_URL: 'http://api.test/v1', DEMO_LOGIN: { email: '', password: '' } }));
 jest.mock('../attachments', () => ({ uploadAttachment: jest.fn() }));
 jest.mock('../api', () => ({
-  api: { GET: jest.fn(), POST: jest.fn() },
+  api: { GET: jest.fn(), POST: jest.fn(), PUT: jest.fn(), PATCH: jest.fn(), DELETE: jest.fn() },
   isNetworkError: (e: unknown) => e instanceof TypeError,
 }));
 
+/** Writes go out and stay out: what each action sends can be read from the outbox meanwhile. */
+const hold = () => new Promise(() => undefined);
 const POST = api.POST as jest.Mock;
 const GET = api.GET as jest.Mock;
 
@@ -74,10 +71,8 @@ function acceptingServer() {
 const sentIn = (call: number) => POST.mock.calls[call][1].body.mutations as Sent[];
 
 beforeEach(() => {
-  // The outbox at work: changes are kept on the device and sent when the server can be reached.
-  useConnectivity.setState({ mode: 'draining', promptOpen: false });
   jest.useFakeTimers();
-  POST.mockReset();
+  for (const m of [api.POST, api.PUT, api.PATCH, api.DELETE] as jest.Mock[]) m.mockReset().mockImplementation(hold);
   GET.mockReset();
   quietServer();
   useRemoteMeta.getState().reset();
@@ -95,94 +90,6 @@ beforeEach(() => {
 });
 
 afterEach(() => jest.useRealTimers());
-
-describe('changes made after an entry was sent', () => {
-
-});
-
-describe('retrying', () => {
-
-});
-
-describe('resilience', () => {
-
-  it('pulls a business again once its plan changes, for what the old plan could not read', async () => {
-    const id = BOOK.companyId;
-    useRemoteMeta.getState().patch({ plans: { [id]: 'free' } });
-    useAppStore.setState({ companies: actions().companies.map((c) => (c.id === id ? { ...c, plan: 'pro' } : c)) });
-    const category = { id: 'exc_SERVER', companyId: id, name: 'Rent', version: 1 };
-    GET.mockImplementation(async (path: string, opts?: { params?: { query?: { companyId?: string } } }) => {
-      if (path === '/sync/pull') {
-        // Only a pull of that business from the start brings what Free kept back.
-        const changes = opts?.params?.query?.companyId === id ? [{ op: 'upsert', entityType: 'expense_category', entityId: category.id, data: category }] : [];
-        return { data: { changes, cursor: '1', hasMore: false } };
-      }
-      return { data: { data: [], nextCursor: null } };
-    });
-    await syncNow();
-
-    expect(actions().expenseCategories.some((c) => c.id === category.id)).toBe(true);
-    expect(useRemoteMeta.getState().plans[id]).toBe('pro');
-  });
-
-  it('B9: drops a late answer from a session that has ended', async () => {
-    let answer!: (v: unknown) => void;
-    GET.mockImplementation((path: string) =>
-      path === '/sync/pull' ? new Promise((resolve) => (answer = resolve)) : Promise.resolve({ data: { data: [], nextCursor: null } }),
-    );
-    const doc = actions().documents[0];
-    const run = syncNow();
-    while (!answer) await Promise.resolve();
-    endSyncSession();
-    answer({ data: { changes: [{ entityType: 'document', entityId: doc.id, op: 'upsert', version: 9, data: { ...doc, number: 'LATE', version: 9 } }], cursor: '99', hasMore: false } });
-    await run;
-    expect(actions().documents.find((d) => d.id === doc.id)?.number).not.toBe('LATE');
-    expect(useRemoteMeta.getState().cursor).not.toBe('99');
-  });
-
-});
-
-describe('pulling', () => {
-
-  it('A9c: loads a business joined on another device, whose history is behind the cursor', async () => {
-    GET.mockImplementation(async (path: string, opts?: { params?: { query?: { companyId?: string } } }) => {
-      if (path === '/me') return { data: { companies: [{ id: 'cmp_joined' }] } };
-      if (path === '/sync/pull' && opts?.params?.query?.companyId === 'cmp_joined') {
-        return { data: { changes: [{ entityType: 'company', entityId: 'cmp_joined', op: 'upsert', version: 1, data: { ...actions().companies[0], id: 'cmp_joined', version: 1 } }], cursor: '9', hasMore: false } };
-      }
-      if (path === '/sync/pull') return { data: { changes: [], cursor: '1', hasMore: false } };
-      return { data: { data: [], nextCursor: null } };
-    });
-    await syncNow();
-    expect(actions().companies.some((c) => c.id === 'cmp_joined')).toBe(true);
-    expect(useRemoteMeta.getState().cursor).toBe('1');
-  });
-});
-
-describe('reloading', () => {
-  it('A6: keeps the book when the reload cannot reach the server', async () => {
-    const before = actions().documents.length;
-    expect(before).toBeGreaterThan(0);
-    GET.mockRejectedValue(new TypeError('Network request failed'));
-
-    await resync().catch(() => undefined);
-
-    expect(actions().documents).toHaveLength(before);
-  });
-
-  it('opens a business that is still there when the active one did not come back', async () => {
-    const other = { ...actions().companies[0], id: 'cmp_other' };
-    useAppStore.setState({ activeCompanyId: 'cmp_gone' });
-    GET.mockImplementation(async (path: string) => {
-      if (path === '/sync/pull') return { data: { changes: [{ op: 'upsert', entityType: 'company', entityId: other.id, data: other }], cursor: '9', hasMore: false } };
-      return { data: { data: [], nextCursor: null } };
-    });
-
-    await resync();
-
-    expect(actions().activeCompanyId).toBe('cmp_other');
-  });
-});
 
 describe('entries that depend on each other', () => {
 
@@ -236,47 +143,4 @@ describe('entries that depend on each other', () => {
     expect(queue()[0].body).toMatchObject({ name: 'Newer Co', numberingSeries: [{ kind: 'invoice', prefix: 'NC' }] });
   });
 
-  it('B3: a queued status change does not make the next edit conflict with itself', async () => {
-    const doc = actions().documents.find((d) => d.kind === 'invoice' && d.status === 'draft')!;
-    // Behaves as the server does: each write bumps the version, a stale If-Match gets 412.
-    let version = 1;
-    POST.mockImplementation(async (_path: string, { body }: { body: { mutations: Sent[] } }) => ({
-      data: {
-        results: body.mutations.map((m) => {
-          if (m.baseVersion !== undefined && m.baseVersion !== version) return { id: m.id, status: 'conflict', entity: { ...doc, version } };
-          version += 1;
-          return { id: m.id, status: 'applied', entity: { ...doc, version } };
-        }),
-      },
-    }));
-
-    actions().setDocumentStatus(doc.id, 'issued');
-    actions().updateDocument(doc.id, { notes: 'After issuing' });
-    await syncNow();
-
-    expect(queue().filter((e) => e.status === 'failed')).toHaveLength(0);
-  });
-
-  it('B5: edits a team member the server already knows instead of inviting them', async () => {
-    const user = actions().users[0];
-    GET.mockImplementation(async (path: string) => {
-      if (path === '/sync/pull') return { data: { changes: [], cursor: '1', hasMore: false } };
-      if (path === '/users') return { data: { data: [{ ...user, version: 3 }] } };
-      return { data: { data: [], nextCursor: null } };
-    });
-    await syncNow();
-
-    actions().saveUser({ ...user, name: 'Renamed' });
-    expect(queue()[0]).toMatchObject({ method: 'PUT', path: `/users/${user.id}`, baseVersion: 3 });
-  });
-
-  it('B6: folds an edit into a failed create instead of queuing a second create', async () => {
-    actions().saveParty(party());
-    const [create] = queue();
-    POST.mockResolvedValueOnce({ data: { results: [{ id: create.id, status: 'rejected', error: { detail: 'No' } }] } });
-    await syncNow();
-
-    actions().saveParty(party({ name: 'Fixed' }));
-    expect(queue().filter((e) => e.method === 'POST' && e.clientEntityId === 'pty_offline1')).toHaveLength(1);
-  });
 });

@@ -8,14 +8,12 @@ import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { focusRing, type WebPressState } from '@esmart/ui/theme/interaction';
 import { Text } from '@esmart/ui/components/Text';
 import { Avatar } from '@esmart/ui/components/Avatar';
-import { Badge } from '@esmart/ui/components/Badge';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { Menu, MenuDivider, MenuItem, useMenuAnchor } from '@esmart/ui/components/Menu';
 import { countLabel } from '@esmart/core/lib/format';
 import { formatRelative } from '@esmart/core/lib/date';
 import { useAppStore } from '@esmart/app/store/appStore';
-import { carriesQueue, ConnectionBadge } from '@esmart/app/components/ConnectionBadge';
-import { useConnectivity } from '@esmart/app/remote';
+import { ConnectionBadge } from '@esmart/app/components/ConnectionBadge';
 import { useCurrentUser, useNotifications, useUnreadCount } from '@esmart/app/store/selectors';
 import { LIXI, LixiMark } from '@esmart/ui/components/LixiOrb';
 import { toggleLixiPanel, useLixiPanel } from '../lixiPanel';
@@ -136,11 +134,6 @@ export function TopBar() {
   const markAllRead = useAppStore((s) => s.markAllNotificationsRead);
   const signOut = useSignOut();
 
-  const pendingSync = useAppStore((s) => s.syncQueue.filter((q) => q.status === 'pending').length);
-  const failedSync = useAppStore((s) => s.syncQueue.filter((q) => q.status === 'failed').length);
-  const mode = useConnectivity((s) => s.mode);
-  const showQueued = pendingSync > 0 && !carriesQueue(mode);
-
   const { setAnchor: bellAnchor, rect: bellRect, open: openBellMenu, close: closeBellMenu } = useMenuAnchor();
   const { setAnchor: accountAnchor, rect: accountRect, open: openAccountMenu, close: closeAccountMenu } = useMenuAnchor();
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -225,18 +218,6 @@ export function TopBar() {
 
       <View style={{ flex: 1, flexBasis: 0, minWidth: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: t.spacing.sm }}>
       <ConnectionBadge style={{ alignSelf: 'center' }} />
-      {/* Failed or queued changes open the sync page, where each can be retried or discarded. */}
-      {failedSync > 0 || showQueued ? (
-        <Pressable
-          onPress={() => router.push('/(app)/settings/sync')}
-          accessibilityRole="button"
-          accessibilityLabel={tr('common:component.openSyncStatus')}
-          style={(state) => [{ flexDirection: 'row', gap: t.spacing.xs, alignSelf: 'center', borderRadius: 999, opacity: (state as WebPressState).hovered ? 0.85 : 1 }, focusRing(t, (state as WebPressState).focused)]}
-        >
-          {failedSync > 0 ? <Badge label={tr('common:component.failedSync', { count: failedSync })} tone="danger" icon="cloud-alert" size="sm" /> : null}
-          {showQueued ? <Badge label={tr('common:component.queuedSync', { count: countLabel(pendingSync) })} tone="info" icon="sync" size="sm" /> : null}
-        </Pressable>
-      ) : null}
 
       <LixiButton label={tr('nav:more.entry.askLixi')} />
       <IconButton ref={bellAnchor} icon="bell-outline" label={tr('nav:shell.notifications')} onPress={openBellMenu} badge={unread} />

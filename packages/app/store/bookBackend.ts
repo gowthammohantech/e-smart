@@ -4,3 +4,9 @@ import { memoryBackend, type KvBackend } from './bookStorage';
 export function bookBackend(): KvBackend {
   return memoryBackend();
 }
+
+export async function destroyBook(): Promise<void> {}
+
+export async function hasBook(): Promise<boolean> {
+  return false;
+}

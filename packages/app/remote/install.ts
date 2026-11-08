@@ -1,14 +1,13 @@
 import { Linking, Platform } from 'react-native';
 import type { PlanTier } from '@esmart/core/types';
-import { bookChannel, useAppStore, type AppState } from '../store/appStore';
+import { useAppStore, type AppState } from '../store/appStore';
 import { api } from './api';
 import { canWrite } from './connectivity';
 import { useRemoteMeta } from './meta';
 import { MUTATIONS } from './mutations';
 import * as outbox from './outbox';
 import { confirm, onUnconfirmed, savingOnline } from './save';
-import { signOut, watchSessionEnd } from './session';
-import { syncSoon } from './sync';
+import { rememberActive, signOut, watchSessionEnd } from './session';
 import { reportError } from '../lib/reporter';
 
 let installed = false;
@@ -77,19 +76,8 @@ export function installRemote() {
     },
   } satisfies Partial<AppState>);
 
-  // Not setState: that also saves, and the saved book hasn't been read back yet,
-  // so it would overwrite it with this empty store. Hydration merges over these.
+  // Not setState: these are actions, not data, and nothing needs to hear about them.
   Object.assign(store.getState(), patch);
-  outbox.onEnqueue.add(() => syncSoon());
   watchSessionEnd();
-  followOtherTabs();
-}
-
-/** On the web another tab may have changed the saved book: take its copy, or the next save here undoes its work. */
-function followOtherTabs() {
-  if (Platform.OS !== 'web' || typeof window === 'undefined') return;
-  bookChannel()?.addEventListener('message', () => void useAppStore.persist.rehydrate());
-  window.addEventListener('storage', (e) => {
-    if (e.key === useRemoteMeta.persist.getOptions().name) void useRemoteMeta.persist.rehydrate();
-  });
+  rememberActive();
 }

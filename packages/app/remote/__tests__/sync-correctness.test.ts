@@ -2,10 +2,9 @@ import { BOOK, buildTestBook } from '../../__fixtures__/book';
 import { useAppStore } from '../../store/appStore';
 import { api } from '../api';
 import { installRemote } from '../install';
-import { useConnectivity } from '../connectivity';
 import { useRemoteMeta } from '../meta';
 import * as outbox from '../outbox';
-import { all, syncNow } from '../sync';
+import { all } from '../refresh';
 
 jest.mock('@react-native-async-storage/async-storage', () =>
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -14,10 +13,12 @@ jest.mock('@react-native-async-storage/async-storage', () =>
 jest.mock('expo-secure-store', () => ({ getItemAsync: async () => null, setItemAsync: async () => {}, deleteItemAsync: async () => {} }));
 jest.mock('../config', () => ({ API_BASE_URL: 'http://api.test/v1', DEMO_LOGIN: { email: '', password: '' } }));
 jest.mock('../api', () => ({
-  api: { GET: jest.fn(), POST: jest.fn() },
+  api: { GET: jest.fn(), POST: jest.fn(), PUT: jest.fn(), PATCH: jest.fn(), DELETE: jest.fn() },
   isNetworkError: (e: unknown) => e instanceof TypeError,
 }));
 
+/** Writes go out and stay out: what each action sends can be read from the outbox meanwhile. */
+const hold = () => new Promise(() => undefined);
 const POST = api.POST as jest.Mock;
 const GET = api.GET as jest.Mock;
 
@@ -34,10 +35,8 @@ function quietServer() {
 }
 
 beforeEach(() => {
-  // The outbox at work: changes are kept on the device and sent when the server can be reached.
-  useConnectivity.setState({ mode: 'draining', promptOpen: false });
   jest.useFakeTimers();
-  POST.mockReset();
+  for (const m of [api.POST, api.PUT, api.PATCH, api.DELETE] as jest.Mock[]) m.mockReset().mockImplementation(hold);
   GET.mockReset();
   quietServer();
   useRemoteMeta.getState().reset();

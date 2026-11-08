@@ -48,13 +48,12 @@ describe('forgetting an archived business on this device', () => {
 });
 
 describe('when Archive may be pressed', () => {
-  const base = { online: true, unsent: 0, name: 'Konkan Exports', typed: ' konkan exports ', byPhone: false, codeRequested: false, code: '', password: 'pw', busy: false };
-  it('needs the name, a proof, the network and nothing unsent', () => {
+  const base = { online: true, name: 'Konkan Exports', typed: ' konkan exports ', byPhone: false, codeRequested: false, code: '', password: 'pw', busy: false };
+  it('needs the name, a proof, and the network', () => {
     expect(canArchiveCompany(base)).toBe(true);
     expect(canArchiveCompany({ ...base, typed: 'Konkan' })).toBe(false);
     expect(canArchiveCompany({ ...base, password: '' })).toBe(false);
     expect(canArchiveCompany({ ...base, online: false })).toBe(false);
-    expect(canArchiveCompany({ ...base, unsent: 1 })).toBe(false);
     expect(canArchiveCompany({ ...base, byPhone: true, codeRequested: true, code: '123456', password: '' })).toBe(true);
     expect(canArchiveCompany({ ...base, byPhone: true, codeRequested: true, code: '123' })).toBe(false);
   });

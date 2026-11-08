@@ -20,7 +20,6 @@ import { DATE_RANGE_PRESET_KEYS, DateRangePreset, formatDate, resolveRange } fro
 import { zero, type Money } from '@esmart/core/lib/money';
 import { useAppStore } from '../../store/appStore';
 import { useBaseCurrency } from '../../store/selectors';
-import { isOpen } from '../../remote/outbox';
 import { usePaymentPages, usePaymentSummary } from '../../remote/queries';
 import { useDebounced } from '../../components/useDebounced';
 import { pagedTableProps, useRowsExport, useTableSelection } from '../../components/pagedTable';
@@ -50,19 +49,7 @@ export function PaymentListView({ direction }: { direction: PaymentDirection }) 
   const pages = usePaymentPages(filter);
   const summary = usePaymentSummary(filter);
 
-  // Recorded offline and not on the server yet: shown first, so a new payment doesn't seem lost.
-  const companyId = useAppStore((s) => s.activeCompanyId);
-  const stored = useAppStore((s) => s.payments);
-  const syncQueue = useAppStore((s) => s.syncQueue);
-  const filtered = useMemo<(Payment & { partyName?: string })[]>(() => {
-    const unsent = new Set(syncQueue.filter(isOpen).map((e) => e.entityId));
-    const parties = useAppStore.getState().parties;
-    const waiting = unsent.size
-      ? stored.filter((p) => p.companyId === companyId && p.direction === direction && unsent.has(p.id)).map((p) => ({ ...p, partyName: parties.find((x) => x.id === p.partyId)?.name }))
-      : [];
-    const seen = new Set(waiting.map((p) => p.id));
-    return [...waiting, ...(pages.rows as unknown as (Payment & { partyName?: string })[]).filter((p) => !seen.has(p.id))];
-  }, [pages.rows, stored, syncQueue, companyId, direction]);
+  const filtered = pages.rows as unknown as (Payment & { partyName?: string })[];
   const nameOf = (p: { partyName?: string }) => p.partyName ?? tr('common:placeholder.unknown');
   const count = summary.data?.count ?? filtered.length;
   const total = (summary.data?.total as Money | undefined) ?? zero(baseCurrency);

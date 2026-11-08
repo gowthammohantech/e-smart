@@ -15,7 +15,6 @@ import { StatRow, StatTile } from '@esmart/ui/components/StatTile';
 import { DonutChart } from '@esmart/ui/components/charts/DonutChart';
 import { useBaseCurrency, useExpenseCategories } from '../../../store/selectors';
 import { useAppStore } from '../../../store/appStore';
-import { isOpen } from '../../../remote/outbox';
 import { useExpensePages, useExpenseSummary } from '../../../remote/queries';
 import { useDebounced } from '../../../components/useDebounced';
 import { pagedTableProps, useRowsExport, useTableSelection } from '../../../components/pagedTable';
@@ -60,16 +59,7 @@ export default function ExpensesList() {
   const pages = useExpensePages(filter);
   const summary = useExpenseSummary(filter);
 
-  // Recorded offline and not on the server yet: shown first, so a new expense doesn't seem lost.
-  const companyId = useAppStore((s) => s.activeCompanyId);
-  const stored = useAppStore((s) => s.expenses);
-  const syncQueue = useAppStore((s) => s.syncQueue);
-  const filtered = useMemo<Expense[]>(() => {
-    const unsent = new Set(syncQueue.filter(isOpen).map((e) => e.entityId));
-    const waiting = unsent.size ? stored.filter((e) => e.companyId === companyId && unsent.has(e.id)) : [];
-    const seen = new Set(waiting.map((e) => e.id));
-    return [...waiting, ...(pages.rows as unknown as Expense[]).filter((e) => !seen.has(e.id))];
-  }, [pages.rows, stored, syncQueue, companyId]);
+  const filtered = pages.rows as unknown as Expense[];
 
   const count = summary.data?.count ?? filtered.length;
   const total = (summary.data?.total as Money | undefined) ?? zero(baseCurrency);

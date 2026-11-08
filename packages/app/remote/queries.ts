@@ -5,8 +5,7 @@ import type { AuditEvent, DocStatus, DocumentKind, EInvoiceStatus, EwayBill, Ewa
 import type { Account, Book } from '@esmart/core/domain/ledger/accounts';
 import { today } from '@esmart/core/lib/date';
 import { fifoAllocate } from '@esmart/core/domain/receivables';
-import { useConnectivity } from './connectivity';
-import { syncSoon } from './sync';
+import { refreshSoon } from './refresh';
 import { useAppStore } from '../store/appStore';
 import type { DashboardPeriod } from '../store/uiStore';
 import { api } from './api';
@@ -721,18 +720,15 @@ export async function adjustOnServer(partyId: string, side: 'customer' | 'suppli
 }
 
 /**
- * "Adjust advances" from a payment screen: on the server while online, which applies direct credit
- * notes too and brings a service advance's GST back on the invoice's date (RULES 8.13); on the device
- * (`onDevice`, appStore.applyAdvances) only in offline mode. `documentIds` limits it to those documents,
+ * "Adjust advances" from a payment screen, on the server: it applies direct credit notes too and
+ * brings a service advance's GST back on the invoice's date (RULES 8.13). `documentIds` limits it to those documents,
  * oldest credit first, notes before payments on the same day. Returns what was applied, by currency.
  */
 export async function adjustAdvancesFor(
   partyId: string,
   direction: 'received' | 'paid',
   documentIds: string[] | undefined,
-  onDevice: () => { minor: number; currency: string }[] | Promise<{ minor: number; currency: string }[]>,
 ): Promise<{ minor: number; currency: string }[]> {
-  if (useConnectivity.getState().mode === 'offline') return onDevice();
   const side = direction === 'received' ? 'customer' : 'supplier';
   const companyId = useAppStore.getState().activeCompanyId;
   let allocations: AdjustmentAllocation[] | undefined;
@@ -753,7 +749,7 @@ export async function adjustAdvancesFor(
   }
   const res = await adjustOnServer(partyId, side, allocations);
   // The payments it rewrote reach the device's book on the next pull.
-  syncSoon();
+  refreshSoon();
   const total = res.applied.reduce((a, x) => a + x.amount.minor, 0);
   return total > 0 ? [{ minor: total, currency: res.applied[0].amount.currency }] : [];
 }

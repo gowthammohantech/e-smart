@@ -11,7 +11,7 @@ import { formatDate } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
 import { ImportFlow, type ColumnMapping, type ImportColumn } from '../import/ImportFlow';
 import { api } from '../../remote/api';
-import { syncSoon } from '../../remote/sync';
+import { refreshSoon } from '../../remote/refresh';
 import { useBaseCurrency } from '../../store/selectors';
 import { useAppStore } from '../../store/appStore';
 
@@ -106,7 +106,7 @@ export function ImportOpenings({ side: initialSide }: { side: Side }) {
         }}
         onConfirm={async (records) => {
           const res = await send(records, false);
-          syncSoon();
+          refreshSoon();
           toast.show(tr('books:openings.done', { count: res.created ?? 0 }), 'success', { icon: 'book-check-outline' });
           router.replace(side === 'receivable' ? '/(app)/receivables' : '/(app)/payables');
         }}

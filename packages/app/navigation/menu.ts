@@ -11,7 +11,7 @@ import type { IconName } from '@esmart/ui/components/Icon';
 export type SectionName = 'index' | 'sales' | 'purchases' | 'inventory' | 'money' | 'gst' | 'contacts' | 'reports' | 'more';
 
 /** A live count shown beside an entry, resolved by `useMenuBadges`. */
-export type MenuBadge = 'unread' | 'eInvoiceFailed' | 'offline';
+export type MenuBadge = 'unread' | 'eInvoiceFailed';
 
 export type MenuPage = {
   key: string;
@@ -185,7 +185,6 @@ export const SETTINGS: { key: SettingsGroupKey; labelKey: string; pages: MenuPag
       { key: 'integrations', labelKey: 'nav:more.entry.integrations', icon: 'puzzle-outline', route: '/settings/integrations' },
       { key: 'backup', labelKey: 'nav:more.entry.backupAndExport', icon: 'database-export-outline', route: '/settings/backup' },
       { key: 'audit', labelKey: 'nav:more.entry.auditTrail', icon: 'history', route: '/settings/audit' },
-      { key: 'sync', labelKey: 'nav:more.entry.syncStatus', icon: 'sync', route: '/settings/sync', badge: 'offline' },
     ],
   },
   {

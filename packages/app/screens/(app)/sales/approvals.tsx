@@ -18,7 +18,7 @@ import { formatMoney } from "@esmart/core/lib/format";
 import type { BusinessDocument } from "@esmart/core/types";
 import { api } from "../../../remote/api";
 import { describeError } from "../../../remote/errors";
-import { syncSoon } from "../../../remote/sync";
+import { refreshSoon } from "../../../remote/refresh";
 import { useAppStore } from "../../../store/appStore";
 import { useCurrentUser } from "../../../store/selectors";
 import { useApprovalActions } from "../../../features/approvals/ApprovalBanner";
@@ -92,7 +92,7 @@ export default function ApprovalsScreen() {
       );
       setDeclining(null);
       setWhy("");
-      syncSoon();
+      refreshSoon();
       await queryClient.invalidateQueries({
         queryKey: ["paymentRequests", companyId],
       });

@@ -57,3 +57,16 @@ export function bookBackend(): KvBackend {
     },
   };
 }
+
+/** Removes the book, and the files kept beside it, for good. */
+export async function destroyBook(): Promise<void> {
+  for (const name of [DB_NAME, 'ebs.files']) globalThis.indexedDB?.deleteDatabase(name);
+}
+
+/** Whether this browser ever made a book. One that can't list its databases is looked in. */
+export async function hasBook(): Promise<boolean> {
+  if (typeof indexedDB === 'undefined') return false;
+  const list = (indexedDB as IDBFactory & { databases?: () => Promise<{ name?: string }[]> }).databases;
+  if (!list) return true;
+  return (await list.call(indexedDB).catch(() => [])).some((d) => d.name === DB_NAME);
+}

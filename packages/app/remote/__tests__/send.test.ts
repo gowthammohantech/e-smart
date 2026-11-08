@@ -4,7 +4,6 @@ import { BOOK, buildTestBook } from '../../__fixtures__/book';
 import { useAppStore } from '../../store/appStore';
 import { api } from '../api';
 import { installRemote } from '../install';
-import { useConnectivity } from '../connectivity';
 import { useRemoteMeta } from '../meta';
 import * as outbox from '../outbox';
 import { saveOnline } from '../save';
@@ -62,7 +61,6 @@ beforeEach(() => {
   const versions: Record<string, number> = {};
   for (const list of [seed.parties, seed.documents, seed.payments, seed.items, seed.companies]) for (const x of list) versions[x.id] = 1;
   useRemoteMeta.setState({ versions, online: true });
-  useConnectivity.setState({ mode: 'online', promptOpen: false });
 });
 
 describe('sending a save straight to the server', () => {
@@ -130,6 +128,25 @@ describe('sending a save straight to the server', () => {
     expect(PATCH).not.toHaveBeenCalled();
     expect(actions().documents.find((d) => d.id === doc.id)?.partyId).toBe(doc.partyId);
     expect(queue()).toHaveLength(0);
+  });
+});
+
+describe('saves made one after another', () => {
+  it('sends an edit made while a status change is still out on the version that change left', async () => {
+    const doc = actions().documents.find((d) => d.kind === 'invoice' && d.status === 'draft')!;
+    // As the server does: each write bumps the version, and a stale If-Match gets 412.
+    let version = 1;
+    const write = async (_path: string, { headers }: Init) => {
+      const match = headers?.['If-Match'];
+      if (match && match !== `"v${version}"`) throw new ApiError(412, { status: 412, title: 'Stale', code: 'VERSION_MISMATCH' });
+      version += 1;
+      return { data: { ...doc, version } };
+    };
+    for (const m of [POST, PUT, PATCH]) m.mockImplementation(write);
+    const first = saveOnline(() => actions().setDocumentStatus(doc.id, 'issued'));
+    const second = saveOnline(() => actions().updateDocument(doc.id, { notes: 'After issuing' }));
+    expect((await first).outcome).toBe('saved');
+    expect((await second).outcome).toBe('saved');
   });
 });
 

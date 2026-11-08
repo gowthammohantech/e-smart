@@ -4,7 +4,7 @@ import { useAppStore } from '../store/appStore';
 import { api } from './api';
 import { useRemoteMeta } from './meta';
 import { queryClient } from './queries';
-import { syncNow } from './sync';
+import { refreshNow } from './refresh';
 
 const ARCHIVED = ['companies', 'archived'] as const;
 
@@ -23,7 +23,7 @@ export async function archiveCompany(companyId: string, body: Schema<'ArchiveCom
 export async function restoreCompany(companyId: string) {
   await api.POST('/companies/{companyId}/restore', { params: { path: { companyId } } });
   void queryClient.invalidateQueries({ queryKey: ARCHIVED });
-  await syncNow();
+  await refreshNow();
 }
 
 /** The account's archived businesses, read from the server (they are never kept on the device). */

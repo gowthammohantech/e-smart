@@ -31,7 +31,6 @@ import { useToast } from '@esmart/ui/components/Toast';
 import { api } from '../remote/api';
 import { describeError } from '../remote/errors';
 import { useBaseCurrency } from '../store/selectors';
-import { isOpen } from '../remote/outbox';
 import { useDocumentPages, useDocumentSummary, type DocumentQuery } from '../remote/queries';
 import { useDebounced } from './useDebounced';
 import { pagedTableProps, useRowsExport, useTableSelection } from './pagedTable';
@@ -52,8 +51,8 @@ const DEFAULT_FILTERS: DocumentListFilters = {
   partyId: null,
 };
 
-/** One row of a list: a server summary, or a document still waiting to sync. */
-type Row = { id: string; number: string; date: string; dueDate?: string; status: DocStatus; partyId?: string; partyName: string; grandTotal: Money; outstanding?: Money; waiting?: boolean };
+/** One row of a list: the server's summary of a document. */
+type Row = { id: string; number: string; date: string; dueDate?: string; status: DocStatus; partyId?: string; partyName: string; grandTotal: Money; outstanding?: Money };
 const asRowData = (r: Row) => ({ number: r.number, date: r.date, status: r.status, totals: { grandTotal: r.grandTotal } });
 
 /** The server sorts these columns; the rest keep the server's order. */
@@ -118,26 +117,13 @@ export function DocumentListView({
   }, [kind, filters.statuses, filters.partyId, filters.range, search]);
   const pages = useDocumentPages({ ...serverQuery, sort: sort && SERVER_SORT[sort.key] ? ((sort.dir === 'desc' ? '-' : '') + SERVER_SORT[sort.key]) as DocumentQuery['sort'] : undefined });
   const summary = useDocumentSummary(serverQuery);
-
-  // Made offline and not on the server yet: shown first, so a new document doesn't seem lost.
   const companyId = useAppStore((s) => s.activeCompanyId);
-  const documents = useAppStore((s) => s.documents);
-  const syncQueue = useAppStore((s) => s.syncQueue);
-  const waiting = useMemo<Row[]>(() => {
-    const unsent = new Set(syncQueue.filter(isOpen).map((e) => e.entityId));
-    if (!unsent.size) return [];
-    const parties = useAppStore.getState().parties;
-    return documents
-      .filter((d) => d.companyId === companyId && d.kind === kind && unsent.has(d.id))
-      .map((d) => ({ id: d.id, number: d.number, date: d.date, dueDate: d.dueDate ?? d.validUntil, status: d.status, partyName: parties.find((p) => p.id === d.partyId)?.name ?? '—', grandTotal: d.totals.grandTotal, waiting: true }));
-  }, [documents, syncQueue, companyId, kind]);
-  const rows = useMemo<Row[]>(() => {
-    const seen = new Set(waiting.map((r) => r.id));
-    const fromServer = pages.rows
-      .filter((d) => !seen.has(d.id!))
-      .map((d) => ({ id: d.id!, number: d.number ?? '', date: d.date!, dueDate: d.dueDate, status: d.status as DocStatus, partyId: d.partyId, partyName: d.partyName ?? '—', grandTotal: d.grandTotal as Money, outstanding: d.outstanding as Money | undefined }));
-    return [...waiting, ...fromServer];
-  }, [pages.rows, waiting]);
+
+  const rows = useMemo<Row[]>(
+    () =>
+      pages.rows.map((d) => ({ id: d.id!, number: d.number ?? '', date: d.date!, dueDate: d.dueDate, status: d.status as DocStatus, partyId: d.partyId, partyName: d.partyName ?? '—', grandTotal: d.grandTotal as Money, outstanding: d.outstanding as Money | undefined })),
+    [pages.rows],
+  );
 
   const availableStatuses = useMemo(() => (summary.data?.byStatus ?? []).map((b) => b.status as DocStatus), [summary.data]);
   const statusCount = (st: DocStatus) => summary.data?.byStatus.find((b) => b.status === st)?.count ?? 0;
@@ -148,7 +134,7 @@ export function DocumentListView({
   const activeFilterCount =
     filters.statuses.length + (filters.partyId ? 1 : 0) + (filters.range !== 'all' ? 1 : 0);
   // Nothing of this kind at all, as against nothing matching the filters.
-  const noneAtAll = !activeFilterCount && !search && summary.data?.count === 0 && !waiting.length;
+  const noneAtAll = !activeFilterCount && !search && summary.data?.count === 0;
   const loading = (pages.isLoading || summary.isLoading) && !rows.length;
   const loadMore = () => {
     if (pages.hasNextPage && !pages.isFetchingNextPage) void pages.fetchNextPage();
@@ -192,7 +178,7 @@ export function DocumentListView({
   const toast = useToast();
   const [bulkBusy, setBulkBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<string[] | null>(null);
-  const chosenRows = (keys: string[]) => rows.filter((r) => keys.includes(r.id) && !r.waiting);
+  const chosenRows = (keys: string[]) => rows.filter((r) => keys.includes(r.id));
   const draftsIn = (keys: string[]) => chosenRows(keys).filter((r) => r.status === 'draft');
   const sendableIn = (keys: string[]) => chosenRows(keys).filter((r) => nextStatuses(kind, r.status).includes('sent'));
   const runBulk = async (targets: Row[], call: (r: Row) => Promise<{ error?: unknown }>, doneKey: 'common:table.deletedDrafts' | 'common:table.markedSent') => {
@@ -382,7 +368,7 @@ export function DocumentListView({
           rowLabel={(d) => `${d.number}, ${d.partyName}, ${formatMoney(d.grandTotal)}`}
           {...pagedTableProps(pages, tr('common:table.loadFailed'), `documents-${kind}`)}
           loading={loading}
-          totalCount={summary.data ? summary.data.count + waiting.length : undefined}
+          totalCount={summary.data ? summary.data.count : undefined}
           selectable
           selectedKeys={selection.selected}
           onSelectionChange={selection.setSelected}
@@ -400,7 +386,7 @@ export function DocumentListView({
           rowActions={(d) => [
             { key: 'open', label: tr('common:table.open'), icon: 'eye-outline', onPress: () => router.push(routeFor(d) as never) },
             // As on the detail screen: only a draft is edited in place.
-            ...(d.status === 'draft' && !d.waiting
+            ...(d.status === 'draft'
               ? [{ key: 'edit', label: tr('common:action.edit'), icon: 'pencil-outline' as const, onPress: () => router.push(`${routeFor(d)}/edit` as never) }]
               : []),
             ...(payable(d)

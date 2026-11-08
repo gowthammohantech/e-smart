@@ -121,11 +121,8 @@
     "regards": "Regards,"
   },
   "save": {
-    "queued": "Saved on this device. Syncs when you're online.",
     "refused": "The server refused this: {{reason}}",
-    "refusedLater": "{{label}} not saved: {{reason}}. See Settings → Sync.",
     "unreachable": "Not saved: can't reach the server. Try again when online.",
-    "unconfirmed": "Not confirmed by the server. Check the list before entering it again.",
     "paymentHeld": "Sent for approval. It's recorded once an owner or admin approves."
   },
   "component": {
@@ -135,10 +132,6 @@
     "clearSearch": "Clear search",
     "close": "Close",
     "create": "Create",
-    "offline": "Offline",
-    "failedSync": "{{count}} failed",
-    "queuedSync": "{{count}} queued",
-    "openSyncStatus": "Open sync status",
     "provisional": "Provisional number",
     "pastCreditNoteDeadline": "Past the GST credit note deadline",
     "notifications": "Notifications",
@@ -175,10 +168,6 @@
     "chartSlice": "{{label}}: {{amount}}, {{percent}} percent",
     "nothingToShow": "Nothing to show yet",
     "noSearchMatch": "Nothing matches that search.",
-    "viewOnly": "No internet · view only",
-    "workOffline": "Work offline",
-    "offlineWaiting": "Offline · {{count}} waiting",
-    "draining": "Syncing {{count}}…",
     "loadingBooks": "Loading your books…",
     "required": "required",
     "switchBusiness": "Switch business. Current: {{name}}"
@@ -359,16 +348,16 @@
     "misconfigured": "This build of the app doesn't know where its server is. Please update the app, or contact support.",
     "cantOpen": "Couldn't open {{what}} on this device."
   },
-  "offlineMode": {
-    "title": "No internet connection",
-    "message": "You can keep working on this device. Your changes will be saved here and sent to the server once the connection has been back for a few seconds.",
-    "accept": "Work offline",
-    "decline": "Not now"
-  },
   "update": {
     "title": "Update required",
     "body": "This version of the app is no longer supported. Update to version {{version}} or later to keep working.",
     "action": "Update the app",
     "reload": "Reload"
+  },
+  "network": {
+    "offline": "No internet connection",
+    "offlineTitle": "You're offline",
+    "offlineBody": "Elixir Books Smart needs an internet connection. Check your connection and try again.",
+    "retry": "Try again"
   }
 }

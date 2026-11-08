@@ -5,7 +5,7 @@ import { useAppStore, type ComplianceResult, type ExtendEwayBillInput, type NewE
 import { api, isNetworkError } from './api';
 import { applyEntity } from './apply';
 import * as outbox from './outbox';
-import { syncNow } from './sync';
+import { refreshNow } from './refresh';
 
 /**
  * E-invoicing and e-way bills. The GST portals are only reachable online, so
@@ -23,7 +23,7 @@ async function call<T>(run: () => Promise<{ data?: T }>, after?: (data: T) => vo
     const { data } = await run();
     if (data) after?.(data);
     // The document's compliance fields changed on the server; bring them in.
-    void syncNow();
+    void refreshNow();
     const r = (data ?? {}) as { ok?: boolean; issues?: ComplianceIssue[] };
     return { ok: r.ok ?? true, issues: r.issues ?? [], data };
   } catch (err) {
@@ -44,7 +44,7 @@ async function call<T>(run: () => Promise<{ data?: T }>, after?: (data: T) => vo
 async function settle(documentId: string): Promise<ComplianceResult | null> {
   const open = () => outbox.entries().filter((e) => outbox.isOpen(e) && (e.entityId === documentId || e.clientEntityId === documentId || e.path.includes(documentId)));
   if (!open().length) return null;
-  await syncNow();
+  await refreshNow();
   const left = open();
   if (!left.length) return null;
   const failed = left.find((e) => e.status === 'failed');
@@ -110,7 +110,7 @@ export type PortalCredentials = {
 /** Stores the IRP / EWB credentials on the server, which encrypts them and never returns them. */
 export async function saveCredentials(companyId: string, input: PortalCredentials): Promise<void> {
   await api.PUT('/companies/{companyId}/compliance-settings/credentials', { params: { path: p(companyId) }, body: input });
-  void syncNow();
+  void refreshNow();
 }
 
 export type ConnectionResult = { irp?: { ok?: boolean; message?: string }; ewb?: { ok?: boolean; message?: string } };

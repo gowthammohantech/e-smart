@@ -46,7 +46,6 @@ export default function PaymentDetail() {
   const accounts = usePaymentAccounts();
   const baseCurrency = useBaseCurrency();
   const removePayment = useAppStore((s) => s.removePayment);
-  const applyAdvances = useAppStore((s) => s.applyAdvances);
 
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [refunding, setRefunding] = useState(false);
@@ -207,9 +206,9 @@ export default function PaymentDetail() {
               size="sm"
               variant="secondary"
               onPress={async () => {
-                // On the server while online (notes too, and a service advance's GST); on the device offline.
+                // On the server: notes too, and a service advance's GST.
                 try {
-                  const applied = await adjustAdvancesFor(payment.partyId, payment.direction, undefined, () => applyAdvances(payment.partyId, payment.direction));
+                  const applied = await adjustAdvancesFor(payment.partyId, payment.direction, undefined);
                   toast.show(
                     applied.length
                       ? tr('sales:payment.advanceAdjusted', { amount: applied.map((m) => formatMoney(m)).join(', ') })

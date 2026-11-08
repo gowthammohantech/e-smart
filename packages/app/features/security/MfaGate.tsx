@@ -9,7 +9,7 @@ import { Text } from '@esmart/ui/components/Text';
 import { api } from '../../remote/api';
 import { describeError } from '../../remote/errors';
 import { queryClient } from '../../remote/queries';
-import { syncSoon } from '../../remote/sync';
+import { refreshSoon } from '../../remote/refresh';
 import { useAppStore } from '../../store/appStore';
 import { useSignOut } from '../session/useSignOut';
 import { useMfaGate } from './mfaGateStore';
@@ -40,7 +40,7 @@ export function MfaGate() {
       setCode('');
       clear();
       void queryClient.invalidateQueries();
-      syncSoon(0);
+      refreshSoon(0);
     } catch (err) {
       setError(describeError(err, tr));
     } finally {

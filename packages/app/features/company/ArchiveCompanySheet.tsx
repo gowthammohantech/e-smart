@@ -11,10 +11,9 @@ import { Card } from '@esmart/ui/components/Card';
 import { TextField } from '@esmart/ui/components/Field';
 import { useToast } from '@esmart/ui/components/Toast';
 import type { Company } from '@esmart/core/types';
-import { remoteSession, syncNow, useRemoteMeta } from '../../remote';
+import { remoteSession, useRemoteMeta } from '../../remote';
 import { archiveCompany } from '../../remote/archive';
 import { describeError } from '../../remote/errors';
-import { isOpen } from '../../remote/outbox';
 import { useAppStore } from '../../store/appStore';
 import { useCurrentUser } from '../../store/selectors';
 import { canArchiveCompany } from './archiveRules';
@@ -30,7 +29,6 @@ export function ArchiveCompanySheet({ company, visible, onClose }: { company: Co
   const toast = useToast();
   const user = useCurrentUser();
   const online = useRemoteMeta((m) => m.online);
-  const unsent = useAppStore((s) => s.syncQueue.filter((e) => isOpen(e) && (e.path ?? '').startsWith(`/companies/${company.id}`)).length);
 
   const [typed, setTyped] = useState('');
   const [password, setPassword] = useState('');
@@ -60,7 +58,7 @@ export function ArchiveCompanySheet({ company, visible, onClose }: { company: Co
     }
   };
 
-  const ready = canArchiveCompany({ online, unsent, name: company.name, typed, byPhone, codeRequested: !!otp, code, password, busy });
+  const ready = canArchiveCompany({ online, name: company.name, typed, byPhone, codeRequested: !!otp, code, password, busy });
 
   const submit = async () => {
     setBusy(true);
@@ -119,12 +117,6 @@ export function ArchiveCompanySheet({ company, visible, onClose }: { company: Co
         {!online ? (
           <Card variant="flat">
             <Text variant="caption" tone="bad">{tr('settings:archiveCompany.offline')}</Text>
-          </Card>
-        ) : null}
-        {unsent > 0 ? (
-          <Card variant="flat" style={{ gap: t.spacing.sm }}>
-            <Text variant="caption" tone="bad">{tr('settings:archiveCompany.unsent', { count: unsent })}</Text>
-            <Button title={tr('settings:deleteAccount.syncNow')} variant="secondary" size="sm" onPress={() => void syncNow()} />
           </Card>
         ) : null}
 

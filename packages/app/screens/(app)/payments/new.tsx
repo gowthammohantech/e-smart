@@ -86,7 +86,6 @@ export default function NewPayment() {
   // The server lets only these roles write off what a party owes.
   const canWriteOff = ['owner', 'admin', 'accountant'].includes(user?.role ?? '');
   const savePayment = useAppStore((s) => s.savePayment);
-  const applyAdvances = useAppStore((s) => s.applyAdvances);
   const defaultBranchId = useDefaultBranchId();
   const activeCompanyId = useAppStore((s) => s.activeCompanyId);
 
@@ -207,12 +206,8 @@ export default function NewPayment() {
     if (!partyId) return;
     let applied: Money[];
     try {
-      // Online the server applies them (notes too, and a service advance's GST); offline the device does,
-      // and then it needs the party's payments and these documents in full.
-      applied = await adjustAdvancesFor(partyId, direction, docId ? [docId] : undefined, async () => {
-        await loadForAdvances(activeCompanyId, partyId, direction, docId ? [docId] : outstanding.map((o) => o.document.id));
-        return applyAdvances(partyId, direction, docId ? [docId] : undefined);
-      });
+      // The server applies them, notes too, and a service advance's GST.
+      applied = await adjustAdvancesFor(partyId, direction, docId ? [docId] : undefined);
     } catch (err) {
       toast.show(describeError(err, tr), 'error');
       return;

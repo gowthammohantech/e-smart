@@ -10,9 +10,8 @@ import { Button } from '@esmart/ui/components/Button';
 import { Card } from '@esmart/ui/components/Card';
 import { TextField } from '@esmart/ui/components/Field';
 import { useToast } from '@esmart/ui/components/Toast';
-import { remoteSession, syncNow, useRemoteMeta } from '../../remote';
+import { remoteSession, useRemoteMeta } from '../../remote';
 import { describeError } from '../../remote/errors';
-import { isOpen } from '../../remote/outbox';
 import { useAppStore } from '../../store/appStore';
 import { useCurrentUser } from '../../store/selectors';
 import { useOnboardingStore } from '../../store/onboardingStore';
@@ -20,7 +19,7 @@ import { canDeleteAccount } from './deleteAccountRules';
 
 /**
  * Deleting the account, as the app stores require it be offered in the app. It needs the network and an
- * empty outbox (unsent work would be lost), the word DELETE, and the password or a code to the phone.
+ * the word DELETE, and the password or a code to the phone.
  */
 export function DeleteAccountSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const t = useTheme();
@@ -29,7 +28,6 @@ export function DeleteAccountSheet({ visible, onClose }: { visible: boolean; onC
   const toast = useToast();
   const user = useCurrentUser();
   const online = useRemoteMeta((m) => m.online);
-  const unsent = useAppStore((s) => s.syncQueue.filter(isOpen).length);
 
   const [typed, setTyped] = useState('');
   const [password, setPassword] = useState('');
@@ -61,7 +59,7 @@ export function DeleteAccountSheet({ visible, onClose }: { visible: boolean; onC
     }
   };
 
-  const ready = canDeleteAccount({ online, unsent, typed, byPhone, codeRequested: !!otp, code, password, busy });
+  const ready = canDeleteAccount({ online, typed, byPhone, codeRequested: !!otp, code, password, busy });
 
   const submit = async () => {
     setBusy(true);
@@ -115,12 +113,6 @@ export function DeleteAccountSheet({ visible, onClose }: { visible: boolean; onC
         {!online ? (
           <Card variant="flat">
             <Text variant="caption" tone="bad">{tr('settings:deleteAccount.offline')}</Text>
-          </Card>
-        ) : null}
-        {unsent > 0 ? (
-          <Card variant="flat" style={{ gap: t.spacing.sm }}>
-            <Text variant="caption" tone="bad">{tr('settings:deleteAccount.unsent', { count: unsent })}</Text>
-            <Button title={tr('settings:deleteAccount.syncNow')} variant="secondary" size="sm" onPress={() => void syncNow()} />
           </Card>
         ) : null}
         {blockedBy ? (

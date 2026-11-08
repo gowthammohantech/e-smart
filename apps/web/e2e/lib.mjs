@@ -35,33 +35,8 @@ export async function signIn(page) {
   await page.waitForURL((u) => !u.pathname.includes('sign-in'), { timeout: 90_000 });
   await page.waitForTimeout(3000);
 }
-/**
- * The book as the web app saved it: IndexedDB `ebs-book`, one record per collection
- * (packages/app/store/bookBackend.web.ts). Never creates the database itself.
- */
-export const book = (page) =>
-  page.evaluate(async () => {
-    const known = (await indexedDB.databases?.()) ?? [];
-    if (!known.some((d) => d.name === 'ebs-book')) return {};
-    return new Promise((resolve, reject) => {
-      const open = indexedDB.open('ebs-book');
-      open.onerror = () => reject(open.error);
-      open.onsuccess = () => {
-        const db = open.result;
-        if (!db.objectStoreNames.contains('book')) return resolve({});
-        const store = db.transaction('book', 'readonly').objectStore('book');
-        const keys = store.getAllKeys();
-        const values = store.getAll();
-        store.transaction.oncomplete = () => {
-          const out = {};
-          keys.result.forEach((k, i) => (out[k] = JSON.parse(values.result[i])));
-          db.close();
-          resolve(out);
-        };
-      };
-    });
-  });
-export const queue = async (page) => (await book(page)).syncQueue ?? [];
+/** Whether the browser holds a copy of the book: the offline-first builds kept one in IndexedDB `ebs-book`. */
+export const keepsBook = (page) => page.evaluate(async () => ((await indexedDB.databases?.()) ?? []).some((d) => d.name === 'ebs-book'));
 
 /** A query against the e2e database: `psql` on E2E_DATABASE_URL (CI), or inside the compose Postgres. */
 export function sql(q) {
@@ -71,40 +46,10 @@ export function sql(q) {
 }
 export const serverParties = (name) => Number(sql(`select count(*) from parties where name = '${name.replace(/'/g, "''")}'`));
 
-/** Browser contexts whose API calls `apiOffline` is failing. */
-const cutOff = new WeakSet();
-
-/**
- * With the API cut off, the app is view-only until the person agrees to work offline (since
- * 5c875d8): saving is greyed out and a "Work offline" badge shows. This agrees, as a person would:
- * once the app has noticed (the badge), the badge opens the prompt, whose "Work offline" accepts.
- * Does nothing for a context that is online.
- */
-export async function ensureCanWrite(page, waitMs = 30_000) {
-  if (!cutOff.has(page.context())) return;
-  const badge = page.getByRole('button', { name: 'Work offline' });
-  // Already agreed this session (the app still in offline mode from before): the plain "Offline" badge.
-  const agreed = page.getByText(/^Offline( · \d+ waiting)?$/);
-  const end = Date.now() + waitMs;
-  while (Date.now() < end) {
-    if (await agreed.count()) return;
-    if (await badge.count()) {
-      await badge.first().click();
-      await page.waitForTimeout(400);
-      await page.getByRole('button', { name: 'Work offline' }).last().click();
-      await agreed.first().waitFor({ timeout: 5_000 }).catch(() => {});
-      return;
-    }
-    await page.waitForTimeout(300);
-  }
-  throw new Error('The app never noticed it was offline (no "Work offline" or "Offline" badge)');
-}
-
 /** Toast text shown after an action, collected as it appears. */
 export async function addCustomer(page, name) {
   await page.goto(`${APP}/contacts/customers/new`, { waitUntil: 'domcontentloaded' });
   await page.getByPlaceholder('Business name').waitFor({ timeout: 30_000 });
-  await ensureCanWrite(page);
   await page.getByPlaceholder('Business name').fill(name);
   const started = Date.now();
   await page.getByText('Add customer', { exact: true }).last().click();
@@ -133,10 +78,8 @@ export function results() {
 /** No internet, as the app sees it: every call to the API fails like a dropped connection. */
 export async function apiOffline(ctx, off) {
   if (off) {
-    cutOff.add(ctx);
     await ctx.route(`${API_ORIGIN}/**`, (route) => route.abort('internetdisconnected'));
   } else {
-    cutOff.delete(ctx);
     await ctx.unroute(`${API_ORIGIN}/**`);
   }
 }

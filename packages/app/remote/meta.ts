@@ -1,10 +1,8 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
-import { createJSONStorage, persist } from 'zustand/middleware';
 
 /**
- * What the sync engine remembers between launches. The outbox itself is the
- * app store's `syncQueue`, so it persists with the data it describes.
+ * What this run knows about the server's copy: each record's version (for If-Match), where a record
+ * made here went once the server named it, and whether the server answers. In memory only.
  */
 export type RemoteMeta = {
   /** /sync/pull cursor; null means the next pull is a full snapshot. */
@@ -33,9 +31,7 @@ export type RemoteMeta = {
   reset: () => void;
 };
 
-export const useRemoteMeta = create<RemoteMeta>()(
-  persist(
-    (set, get) => ({
+export const useRemoteMeta = create<RemoteMeta>()((set, get) => ({
       cursor: null,
       versions: {},
       idAliases: {},
@@ -54,22 +50,7 @@ export const useRemoteMeta = create<RemoteMeta>()(
       addAliases: (map) => set({ idAliases: { ...get().idAliases, ...map } }),
       patch: (p) => set(p),
       reset: () => set({ cursor: null, versions: {}, idAliases: {}, plans: {}, syncing: false, lastSyncAt: undefined, lastError: undefined }),
-    }),
-    {
-      name: 'ebs.remote.meta.v1',
-      storage: createJSONStorage(() => AsyncStorage),
-      // 1: tax and expense categories, payment accounts, rates and transporters
-      // came without a version, so an edit of one went up as a new one. A full
-      // pull once picks up the versions of those already on the device.
-      // 2: team members came without a version, and a business that changed plan
-      // kept missing what the old plan couldn't read. Pulled in full once more.
-      version: 2,
-      migrate: (persisted, version) => (version < 2 ? { ...(persisted as RemoteMeta), cursor: null, plans: {} } : persisted) as RemoteMeta,
-      // Connectivity and an in-flight sync are facts about this run, not state to restore.
-      partialize: ({ cursor, versions, idAliases, plans, lastSyncAt }) => ({ cursor, versions, idAliases, plans, lastSyncAt }) as RemoteMeta,
-    },
-  ),
-);
+}));
 
 export const knownToServer = (id: string) => useRemoteMeta.getState().versions[id] !== undefined;
 

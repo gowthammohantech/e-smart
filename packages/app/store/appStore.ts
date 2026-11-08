@@ -1,7 +1,5 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { CustomField } from '@esmart/core/domain/customFields';
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
 
 import {
   Attachment,
@@ -55,17 +53,12 @@ import { calculateDocument } from '@esmart/core/domain/lineCalc';
 import { DEFAULT_PREFIXES, SERIES_KINDS, formatNumber } from '@esmart/core/domain/numbering';
 import { CREDIT_KINDS, PURCHASE_KINDS, conversionBlock, initialStatus, isFinalized, isPayableDocument } from '@esmart/core/domain/documentStates';
 import { documentAuditSnapshot } from '@esmart/core/domain/auditDiff';
-import { LEGACY_BUSINESS_TYPE_LABELS, expenseCategories as defaultExpenseCategories } from '@esmart/core/data/masters';
+import { expenseCategories as defaultExpenseCategories } from '@esmart/core/data/masters';
 import { allocateAdvances, creditedTo, settledBy, statusForOutstanding } from '@esmart/core/domain/receivables';
 import { expectedTdsForDocument, tdsForDocument } from './tds';
 import { accountFitsMethod } from '@esmart/core/domain/paymentAccounts';
 import { applyProfileLocks } from '@esmart/core/domain/companyLock';
 import { buildTaxContext } from '@esmart/core/domain/taxEngine';
-import { createBookStorage } from './bookStorage';
-import { bookBackend } from './bookBackend';
-import { reportError } from '../lib/reporter';
-import { i18nInstance } from '@esmart/i18n';
-import { useRemoteMeta } from '../remote/meta';
 
 export type AppData = {
   accountId: string;
@@ -318,79 +311,16 @@ export type ExtendEwayBillInput = {
 
 const emptySession: Session = { userId: null, authenticated: false, onboardingComplete: false };
 
-/**
- * Data saved by an older build. The store only ever holds what the API sent,
- * so anything that predates a shape change is simply loaded again from the
- * server: versions before 3 (when the bundled demo dataset still lived here)
- * start empty and signed out.
- *
- * Version 4 turned `Company.businessType` from an English display label into
- * a stable slug, so it survives a language switch. The eight labels that
- * shipped are mapped back; anything else is left as it is.
- *
- * Version 5 gives every company a starter set of expense categories. Companies
- * created in the app used to get none, which left the expense form with a
- * required category it could not fill.
- */
-export function migratePersisted(persisted: unknown, version: number): AppState {
-  if (version < 3) {
-    return { ...emptyData(), session: emptySession, activeCompanyId: '', activeBranchId: '' } as AppState;
-  }
-  let state = persisted as AppState;
-  if (version < 4) {
-    // Business type used to persist its English label, so it stopped matching
-    // the picker the moment the app spoke another language. It is a slug now;
-    // map the eight labels that shipped, and leave anything unrecognised
-    // alone rather than guessing.
-    state = {
-      ...state,
-      companies: (state.companies ?? []).map((c) => ({
-        ...c,
-        businessType: LEGACY_BUSINESS_TYPE_LABELS[c.businessType] ?? c.businessType,
-      })),
-    };
-  }
-  if (version < 5) {
-    const withCategories = new Set((state.expenseCategories ?? []).map((c) => c.companyId));
-    state = {
-      ...state,
-      expenseCategories: [
-        ...(state.expenseCategories ?? []),
-        ...(state.companies ?? [])
-          .filter((c) => !withCategories.has(c.id))
-          .flatMap((c) => starterExpenseCategories(c.id)),
-      ],
-    };
-  }
-  return state;
-}
-
 /** Default expense categories for a new company, with ids unique to it. */
 function starterExpenseCategories(companyId: string): ExpenseCategory[] {
   return defaultExpenseCategories(companyId).map((c) => ({ ...c, id: uid('exc') }));
 }
 
-/** Where the store persisted before it moved to per-collection storage; read once to move it over. */
-const PERSIST_KEY = 'ebs.remote.v1';
-
-/** Tells this browser's other tabs which collections changed (IndexedDB writes raise no `storage` event). */
-let channel: BroadcastChannel | null | undefined;
-export function bookChannel(): BroadcastChannel | null {
-  if (channel === undefined) channel = typeof BroadcastChannel === 'undefined' ? null : new BroadcastChannel('ebs.book');
-  return channel;
-}
-
 /**
- * Builds before the app went API-only kept a bundled demo dataset under its
- * own key. It belongs to no account, so it is dropped, once, on first launch.
+ * The books as the server last sent them, in memory only: nothing is kept on the device. Signing in
+ * (or opening the app with a session) loads the open business's setup from the server again.
  */
-const LEGACY_DEMO_KEY = 'ebs.data.v1';
-void AsyncStorage.removeItem(LEGACY_DEMO_KEY).catch(() => {});
-
-let readAttempts = 0;
-
 export const useAppStore = create<AppState>()(
-  persist(
     (set, get) => {
       /* -------------------------------------------------------------- */
       /* internal helpers                                               */
@@ -1272,35 +1202,4 @@ export const useAppStore = create<AppState>()(
 
       };
     },
-    {
-      name: PERSIST_KEY,
-      version: 5,
-      // One row per collection, encrypted on phones (bookStorage.ts); the old single entry moves over once.
-      storage: createBookStorage<AppState>({
-        backend: bookBackend,
-        legacy: AsyncStorage,
-        legacyKey: PERSIST_KEY,
-        onError: (err, during) => {
-          reportError(err, { source: `book.${during}` });
-          // Shown on the Sync screen: the change is still here in memory and in the queue.
-          if (during === 'write') useRemoteMeta.getState().patch({ lastError: i18nInstance.t('settings:sync.storageFull') });
-        },
-        onWritten: (keys) => bookChannel()?.postMessage({ keys }),
-      }),
-      partialize: (s) => {
-        const { hydrated, ...rest } = s;
-        void hydrated;
-        return rest as AppState;
-      },
-      migrate: (persisted, version) => migratePersisted(persisted, version),
-      onRehydrateStorage: () => (state, error) => {
-        // Only the first read: a re-read for another tab's change must not save this tab's copy back.
-        if (!error) return state?.hydrated ? undefined : state?.setHydrated(true);
-        if (readAttempts++ === 0) return void useAppStore.persist.rehydrate();
-        // The book may still be on disk: carry on, but never save over it this run.
-        useAppStore.persist.setOptions({ storage: { getItem: () => null, setItem: () => {}, removeItem: () => {} } });
-        useAppStore.setState({ hydrated: true });
-      },
-    },
-  ),
 );

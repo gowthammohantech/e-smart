@@ -4,7 +4,7 @@ import { addDaysISO } from '@esmart/core/lib/date';
 import { useAppStore } from '../store/appStore';
 import { api } from './api';
 import { bankingKeys, hubKeys, queryClient, type BankLine } from './queries';
-import { syncSoon } from './sync';
+import { refreshSoon } from './refresh';
 
 /**
  * Bank statement writes: importing, matching lines to the books, setting them
@@ -27,7 +27,7 @@ function changed(accountId: string, books = false) {
   void queryClient.invalidateQueries({ queryKey: bankingKeys.account(c, accountId) });
   if (!books) return;
   for (const key of [['payments', c], ['expenses', c], ['books', c], ['reports', c], hubKeys.all(c)]) void queryClient.invalidateQueries({ queryKey: key });
-  syncSoon();
+  refreshSoon();
 }
 
 export type BankRecordRef = { type: Schema<'BankMatchType'>; id: string };

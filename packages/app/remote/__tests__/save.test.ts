@@ -3,7 +3,6 @@ import { BOOK, buildTestBook } from '../../__fixtures__/book';
 import { useAppStore } from '../../store/appStore';
 import { api } from '../api';
 import { installRemote } from '../install';
-import { useConnectivity } from '../connectivity';
 import { useRemoteMeta } from '../meta';
 import * as outbox from '../outbox';
 import React from 'react';
@@ -74,7 +73,6 @@ beforeEach(() => {
   const versions: Record<string, number> = {};
   for (const list of [seed.parties, seed.documents, seed.payments, seed.items, seed.companies]) for (const x of list) versions[x.id] = 1;
   useRemoteMeta.setState({ versions, online: true });
-  useConnectivity.setState({ mode: 'online', promptOpen: false });
 });
 
 describe('saving', () => {
@@ -160,7 +158,6 @@ describe('saving', () => {
 describe('with no connection', () => {
   beforeEach(() => {
     useRemoteMeta.setState({ online: false });
-    useConnectivity.setState({ mode: 'readonly' });
   });
 
   it('does not run the action or send anything', async () => {

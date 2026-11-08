@@ -7,17 +7,14 @@ import { Icon, type IconName } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { Text } from '@esmart/ui/components/Text';
-import { Badge } from '@esmart/ui/components/Badge';
 import { CompanyLogo } from '@esmart/ui/components/CompanyLogo';
 import { TOAST_ANCHOR_ID, useToast } from '@esmart/ui/components/Toast';
 import { PageHeader } from '@esmart/ui/components/PageHeader';
 import { tabForPath } from '../navigation/tabs';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { useAppStore } from '../store/appStore';
-import { carriesQueue, ConnectionBadge } from './ConnectionBadge';
-import { useConnectivity } from '../remote';
+import { ConnectionBadge } from './ConnectionBadge';
 import { useActiveCompany, useBranches, useUnreadCount } from '../store/selectors';
-import { countLabel } from '@esmart/core/lib/format';
 
 /**
  * Tab-level header: company/branch switcher on the left, sync state, global
@@ -39,10 +36,6 @@ export function AppHeader({ title, subtitle }: { title?: string; subtitle?: stri
   const setActiveCompany = useAppStore((s) => s.setActiveCompany);
   const setActiveBranch = useAppStore((s) => s.setActiveBranch);
   const unread = useUnreadCount();
-  const pendingSync = useAppStore((s) => s.syncQueue.filter((q) => q.status === 'pending').length);
-  const failedSync = useAppStore((s) => s.syncQueue.filter((q) => q.status === 'failed').length);
-  const mode = useConnectivity((s) => s.mode);
-  const showQueued = pendingSync > 0 && !carriesQueue(mode);
 
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [branchOpen, setBranchOpen] = useState(false);
@@ -50,7 +43,7 @@ export function AppHeader({ title, subtitle }: { title?: string; subtitle?: stri
   const branch = branches.find((b) => b.id === activeBranchId);
   const pathname = usePathname();
 
-  // The desktop top bar already has the company switcher, sync state,
+  // The desktop top bar already has the company switcher, connection state,
   // search and notifications; a tab page only needs its title.
   if (desktop) {
     return (
@@ -172,19 +165,6 @@ export function AppHeader({ title, subtitle }: { title?: string; subtitle?: stri
 
         {/* On a narrow phone the status badge gives way (shrinks) before the buttons do. */}
         <ConnectionBadge style={{ flexShrink: 1, alignSelf: 'center' }} />
-        {/* Failed or queued changes open the sync page, where each can be retried or discarded. */}
-        {failedSync > 0 || showQueued ? (
-          <Pressable
-            onPress={() => router.push('/(app)/settings/sync')}
-            hitSlop={6}
-            accessibilityRole="button"
-            accessibilityLabel={tr('common:component.openSyncStatus')}
-            style={{ flexDirection: 'row', gap: t.spacing.xs, flexShrink: 1, alignSelf: 'center' }}
-          >
-            {failedSync > 0 ? <Badge label={tr('common:component.failedSync', { count: failedSync })} tone="danger" icon="cloud-alert" size="sm" style={{ flexShrink: 1 }} /> : null}
-            {showQueued ? <Badge label={tr('common:component.queuedSync', { count: countLabel(pendingSync) })} tone="info" icon="sync" size="sm" style={{ flexShrink: 1 }} /> : null}
-          </Pressable>
-        ) : null}
 
         {desktop ? null : (
           <>

@@ -28,7 +28,7 @@ export default function WebAppLayout() {
   const inSettings = pathname.startsWith('/settings');
   // Plan & billing lays its tiers side by side, and invoice design its controls
   // beside the preview, so they take the full column.
-  const wideSettings = pathname.startsWith('/settings/plan') || pathname.startsWith('/settings/sync') || pathname.startsWith('/settings/invoice-design');
+  const wideSettings = pathname.startsWith('/settings/plan') || pathname.startsWith('/settings/invoice-design');
   usePlanGuard();
 
   const stack = (

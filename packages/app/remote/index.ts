@@ -1,16 +1,14 @@
 /**
- * The app as a client of the API: server-driven while online, offline-first
- * only once the person agrees to it (connectivity.ts). See install.ts for how
- * store actions become mutations, and sync.ts for the engine that sends them.
+ * The app as a client of the API. Every save goes straight to the server (send.ts); the store holds
+ * the books in memory only, loaded at sign-in and kept current by refresh.ts.
  */
 export { API_BASE_URL, API_CONFIGURED, DEMO_LOGIN } from './config';
 export { installRemote } from './install';
 export { useRemoteSync } from './useRemoteSync';
 export { useRemoteMeta } from './meta';
-export { onRefusedLater, syncNow } from './sync';
-export { acceptOffline, askToWorkOffline, declineOffline, useCanWrite, useConnectivity, type Mode } from './connectivity';
+export { refreshNow } from './refresh';
+export { useCanWrite } from './connectivity';
 export { onUnconfirmed, saveOnline, useSaveOnline, type SaveResult } from './save';
-export { retrySync, retryFailed, syncAll } from './retry';
 export * as remoteSession from './session';
 export * as compliance from './compliance';
 export * as remoteUsers from './users';

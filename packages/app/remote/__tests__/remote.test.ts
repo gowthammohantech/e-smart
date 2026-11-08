@@ -3,11 +3,8 @@ import { BOOK, buildTestBook } from '../../__fixtures__/book';
 import { useAppStore } from '../../store/appStore';
 import { api } from '../api';
 import { installRemote } from '../install';
-import { useConnectivity } from '../connectivity';
 import { useRemoteMeta } from '../meta';
 import * as outbox from '../outbox';
-import { retrySync } from '../retry';
-import { syncNow } from '../sync';
 
 jest.mock('@react-native-async-storage/async-storage', () =>
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -16,10 +13,12 @@ jest.mock('@react-native-async-storage/async-storage', () =>
 jest.mock('expo-secure-store', () => ({ getItemAsync: async () => null, setItemAsync: async () => {}, deleteItemAsync: async () => {} }));
 jest.mock('../config', () => ({ API_BASE_URL: 'http://api.test/v1', DEMO_LOGIN: { email: '', password: '' } }));
 jest.mock('../api', () => ({
-  api: { GET: jest.fn(), POST: jest.fn() },
+  api: { GET: jest.fn(), POST: jest.fn(), PUT: jest.fn(), PATCH: jest.fn(), DELETE: jest.fn() },
   isNetworkError: (e: unknown) => e instanceof TypeError,
 }));
 
+/** Writes go out and stay out: what each action sends can be read from the outbox meanwhile. */
+const hold = () => new Promise(() => undefined);
 const POST = api.POST as jest.Mock;
 const GET = api.GET as jest.Mock;
 
@@ -53,10 +52,8 @@ function quietServer() {
 }
 
 beforeEach(() => {
-  // The outbox at work: changes are kept on the device and sent when the server can be reached.
-  useConnectivity.setState({ mode: 'draining', promptOpen: false });
   jest.useFakeTimers();
-  POST.mockReset();
+  for (const m of [api.POST, api.PUT, api.PATCH, api.DELETE] as jest.Mock[]) m.mockReset().mockImplementation(hold);
   GET.mockReset();
   quietServer();
   useRemoteMeta.getState().reset();
@@ -123,20 +120,6 @@ describe('queueing', () => {
     actions().saveNumberingSeries({ ...series, prefix: 'NC', nextNumber: 101 });
     expect(queue()).toHaveLength(1);
     expect(queue()[0].body).toMatchObject({ name: 'New Co', seedDefaults: true, numberingSeries: [{ kind: 'invoice', prefix: 'NC', nextNumber: 101 }] });
-  });
-});
-
-describe('syncing', () => {
-
-  it('applies what the server changed since the last pull', async () => {
-    const doc = actions().documents[0];
-    GET.mockImplementation(async (path: string) => {
-      if (path === '/sync/pull') return { data: { changes: [{ entityType: 'document', entityId: doc.id, op: 'upsert', version: 7, data: { ...doc, number: 'INV/26-27/0099', version: 7 } }], cursor: '42', hasMore: false } };
-      return { data: { data: [], nextCursor: null } };
-    });
-    await syncNow();
-    expect(actions().documents.find((d) => d.id === doc.id)?.number).toBe('INV/26-27/0099');
-    expect(useRemoteMeta.getState().cursor).toBe('42');
   });
 });
 

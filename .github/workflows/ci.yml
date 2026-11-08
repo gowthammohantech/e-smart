@@ -82,7 +82,7 @@ jobs:
           retention-days: 7
 
   e2e:
-    name: Web offline-first scenarios
+    name: Web end-to-end checks
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -123,10 +123,9 @@ jobs:
           EXPO_PUBLIC_API_URL=http://localhost:4100 npx expo export -p web --clear
           PORT=8190 EXPO_PUBLIC_API_URL=http://localhost:4100 node serve.mjs > ../../web.log 2>&1 &
           for i in $(seq 1 30); do curl -sf http://localhost:8190/health && break; sleep 1; done
-      # `refused` is left out: it checks the toast's wording, which reads the title, not the reason.
       - name: Scenarios
         working-directory: apps/web/e2e
-        run: node offline.mjs online,offline,kill,slow,refresh500,tabs,conflict
+        run: node online.mjs
       # axe-core (WCAG 2.2 A/AA) over the key pages, light and dark; serious or critical fails.
       # Runs even if a scenario failed, so one red job shows both.
       - name: Accessibility scan

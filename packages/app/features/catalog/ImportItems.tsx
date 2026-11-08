@@ -19,7 +19,7 @@ import { formatMoney, formatPercent } from '@esmart/core/lib/format';
 import { today } from '@esmart/core/lib/date';
 import { api } from '../../remote/api';
 import { describeError } from '../../remote/errors';
-import { syncSoon } from '../../remote/sync';
+import { refreshSoon } from '../../remote/refresh';
 import { pickCsvOnWeb } from '../../components/pickCsv';
 import { useBaseCurrency, useHasModule, useTaxCategories } from '../../store/selectors';
 import { useAppStore } from '../../store/appStore';
@@ -110,7 +110,7 @@ function ImportItemsFlow() {
       }}
       onConfirm={async (records) => {
         const res = await send(records, false);
-        syncSoon();
+        refreshSoon();
         toast.show(tr('inventory:import.done', { count: res.created ?? 0 }), 'success', {
           icon: 'tag-check-outline',
           detail: tr('inventory:import.skipped', { count: (res.skipped ?? 0) + (res.invalid ?? 0) }),
@@ -164,7 +164,7 @@ function ImportItemsPaste() {
       if (error || !data) throw error ?? new Error('No answer from the server');
       setOutcomes((data.results ?? []) as Outcome[]);
       if (!dryRun) {
-        syncSoon();
+        refreshSoon();
         toast.show(tr('inventory:import.done', { count: data.created ?? 0 }), 'success', {
           icon: 'tag-check-outline',
           detail: tr('inventory:import.skipped', { count: (data.skipped ?? 0) + (data.invalid ?? 0) }),

@@ -3,7 +3,7 @@ import type { Schema } from '@esmart/api-client';
 import { useAppStore } from '../store/appStore';
 import { api } from './api';
 import { useRemoteMeta } from './meta';
-import { syncNow } from './sync';
+import { refreshNow } from './refresh';
 
 type User = Schema<'User'>;
 
@@ -23,7 +23,7 @@ export async function inviteUser(input: { name: string; email: string; role: Non
     return created;
   } catch (err) {
     // The invitation is saved even when the email couldn't be sent: bring it in so it can be resent.
-    if (err instanceof ApiError && err.code === 'EMAIL_SEND_FAILED') void syncNow();
+    if (err instanceof ApiError && err.code === 'EMAIL_SEND_FAILED') void refreshNow();
     throw err;
   }
 }

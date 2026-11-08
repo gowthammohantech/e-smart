@@ -24,7 +24,7 @@ export { SIDEBAR_COMPACT_WIDTH, SIDEBAR_WIDTH };
 
 type Rect = { x: number; y: number; width: number; height: number };
 type GroupKey = Exclude<SidebarGroup, null>;
-/** A live count beside an entry, or `true` for a dot when it isn't a number (offline). */
+/** A live count beside an entry, or `true` for a dot when it isn't a number. */
 type BadgeValue = string | true | undefined;
 
 const WEB = Platform.OS === 'web';

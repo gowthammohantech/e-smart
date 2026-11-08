@@ -1,18 +1,15 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { ApiError, type Schema } from '@esmart/api-client';
-import type { SyncQueueEntry } from '@esmart/core/types';
-import { emptyData, useAppStore, type AppData } from '../store/appStore';
-import { COLLECTIONS } from './collections';
+import { create } from 'zustand';
+import { emptyData, useAppStore } from '../store/appStore';
+import { takeLegacyBook } from '../store/legacyBook';
 import { applyChanges } from './apply';
 import { api, isNetworkError } from './api';
 import { RemoteError } from './errors';
-import { useLogoQueue } from './logoQueue';
 import { useRemoteMeta } from './meta';
-import { useReceiptQueue } from './receiptQueue';
-import { isOpen } from './outbox';
-import { endSyncSession, reloadSnapshot, syncSoon } from './sync';
-import { onTokensChange, setTokens } from './tokens';
+import { endRefreshSession, loadCompany, refreshNow, refreshSoon } from './refresh';
+import { getTokens, onTokensChange, setTokens } from './tokens';
 import { LEGAL } from '../lib/legal';
 import { unregisterPush } from './push';
 import { MfaCancelled, useMfaGate } from '../features/security/mfaGateStore';
@@ -21,43 +18,117 @@ type AuthSession = Schema<'AuthSession'>;
 
 const device = () => ({ label: Platform.OS === 'web' ? 'Web browser' : `${Platform.OS} app`, platform: `${Platform.OS} ${String(Platform.Version ?? '')}`.trim() });
 
+/** The business and branch last open, per person, so the app opens where it was left. */
+const ACTIVE_KEY = 'ebs.active.v1';
+type Active = { userId: string; companyId: string; branchId: string };
+
+async function lastActive(userId: string): Promise<Active | undefined> {
+  try {
+    const saved = JSON.parse((await AsyncStorage.getItem(ACTIVE_KEY)) ?? 'null') as Active | null;
+    return saved?.userId === userId ? saved : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+let rememberingActive = false;
+/** Writes down which business and branch are open whenever that changes. A preference, not data. */
+export function rememberActive() {
+  if (rememberingActive) return;
+  rememberingActive = true;
+  let last = '';
+  useAppStore.subscribe((s) => {
+    const userId = s.session.userId;
+    if (!userId || !s.activeCompanyId) return;
+    const now = JSON.stringify({ userId, companyId: s.activeCompanyId, branchId: s.activeBranchId });
+    if (now === last) return;
+    last = now;
+    void AsyncStorage.setItem(ACTIVE_KEY, now).catch(() => {});
+  });
+}
+
 /**
- * Starts a session from the API's AuthSession: stores the tokens, reads who
- * the user is and the branches of the business they open, then marks the
- * session signed in. The rest of the books download in the background: the
- * sync that starts on sign-in finds no cursor and pulls everything
- * (useRemoteSync), so signing in doesn't wait on the size of the books.
+ * Opens a session for whoever the tokens belong to: reads who they are and their businesses, opens
+ * one (the one asked for, else the one last open, else their default) and loads its setup. Throws
+ * when the server can't be reached; a refused session has already signed out by then.
  */
+async function open(userId: string, opts: { preferCompanyId?: string; preferBranchId?: string; onboardingComplete?: boolean } = {}) {
+  useRemoteMeta.getState().reset();
+  const me = await readMe();
+  const companies = me?.companies ?? [];
+  const has = (id: string | undefined) => !!id && companies.some((c) => c.id === id);
+  const saved = await lastActive(userId);
+  const companyId = [opts.preferCompanyId, saved?.companyId, me?.defaultCompanyId ?? undefined, companies[0]?.id].find(has) ?? '';
+  useAppStore.setState({ ...emptyData(), activeCompanyId: '', activeBranchId: '', accountId: me?.accountId ?? '', users: me?.user ? [me.user as never] : [] });
+  applyChanges(companies.filter((c) => c.id).map((c) => ({ entityType: 'company', entityId: c.id!, op: 'upsert', data: c })));
+  // The first screen needs the business's setup (its branch, tax rates, numbering): waited for.
+  if (companyId) await loadCompany(companyId).catch((err: unknown) => {
+    if (isNetworkError(err)) throw err;
+  });
+  const branches = useAppStore.getState().branches.filter((b) => b.companyId === companyId);
+  const branchId = [opts.preferBranchId, saved?.companyId === companyId ? saved.branchId : undefined].find((id) => branches.some((b) => b.id === id)) ?? (branches.find((b) => b.isPrimary) ?? branches[0])?.id ?? '';
+  useAppStore.setState({
+    activeCompanyId: companyId,
+    activeBranchId: branchId,
+    session: { userId, authenticated: true, onboardingComplete: !!(me?.onboardingComplete ?? opts.onboardingComplete), signedInAt: new Date().toISOString() },
+  });
+  refreshSoon(0);
+}
+
+/** Starts a session from the API's AuthSession: stores the tokens, then opens it. */
 async function begin(auth: AuthSession, preferCompanyId?: string) {
   if (!auth.accessToken || !auth.refreshToken || !auth.user?.id) throw new RemoteError('incompleteSession', 'The server returned an incomplete session');
   await setTokens({ accessToken: auth.accessToken, refreshToken: auth.refreshToken });
-  useRemoteMeta.getState().reset();
-  useAppStore.setState({ ...emptyData(), activeCompanyId: '', activeBranchId: '' });
-
-  const me = await readMe();
-  const companies = me?.companies ?? [];
-  const companyId = (preferCompanyId && companies.some((c) => c.id === preferCompanyId) ? preferCompanyId : undefined) ?? me?.defaultCompanyId ?? companies[0]?.id ?? '';
-  // The first screen opens on a branch: only the open business's branches are waited for.
-  const branches = companyId
-    ? await api
-        .GET('/companies/{companyId}/branches', { params: { path: { companyId } } })
-        .then((r) => r.data?.data ?? [])
-        .catch(() => [])
-    : [];
-  useAppStore.setState({
-    accountId: me?.accountId ?? '',
-    users: me?.user ? [me.user as never] : [],
-    companies: companies as never,
-  });
-  // As the sync would store them, versions included, so an edit before it finishes still matches.
-  applyChanges(branches.map((b) => ({ companyId, entityType: 'branch', entityId: b.id, op: 'upsert', data: b })));
-  useAppStore.setState({
-    activeCompanyId: companyId,
-    activeBranchId: (branches.find((b) => b.isPrimary) ?? branches[0])?.id ?? '',
-    session: { userId: auth.user.id, authenticated: true, onboardingComplete: !!(me?.onboardingComplete ?? auth.onboardingComplete), signedInAt: new Date().toISOString() },
-  });
-  await restoreUnsynced(auth.user.id);
+  await open(auth.user.id, { preferCompanyId, onboardingComplete: auth.onboardingComplete });
 }
+
+/** How opening the app went: still loading, done, or stopped because the server couldn't be reached. */
+export const useStartup = create<{ state: 'loading' | 'ready' | 'offline' }>(() => ({ state: 'loading' }));
+
+/**
+ * At launch: the device keeps only the session's tokens, so a signed-in person's books load from the
+ * server before the first screen. The first launch after the update also sends what an
+ * offline-first build left unsent, then forgets its copy of the book.
+ */
+export async function startUp(): Promise<void> {
+  useStartup.setState({ state: 'loading' });
+  const legacy = await takeLegacyBookOnce();
+  try {
+    const tokens = await getTokens();
+    if (!tokens) {
+      useAppStore.setState({ hydrated: true });
+      useStartup.setState({ state: 'ready' });
+      legacyRead = null;
+      return;
+    }
+    const { data: who } = await api.GET('/me');
+    const userId = who?.user?.id;
+    if (!userId) throw new RemoteError('incompleteSession', 'The server returned no user');
+    await open(userId, legacy?.userId === userId ? { preferCompanyId: legacy.activeCompanyId, preferBranchId: legacy.activeBranchId } : {});
+    if (legacy?.userId === userId && legacy.syncQueue.length) {
+      useAppStore.setState({ syncQueue: legacy.syncQueue });
+      void refreshNow();
+    }
+    useAppStore.setState({ hydrated: true });
+    useStartup.setState({ state: 'ready' });
+    // Taken and removed: nothing is left to read on a later start.
+    legacyRead = null;
+  } catch (err) {
+    if (isNetworkError(err)) {
+      useStartup.setState({ state: 'offline' });
+      return;
+    }
+    // The server ended the session (the tokens are gone by now) or answered nonsense: sign in again.
+    await setTokens(null).catch(() => {});
+    clearLocal();
+    useAppStore.setState({ hydrated: true });
+    useStartup.setState({ state: 'ready' });
+  }
+}
+
+/** Read once per launch, even if the first start-up has to be retried. */
+let legacyRead: ReturnType<typeof takeLegacyBook> | null = null;
+const takeLegacyBookOnce = () => (legacyRead ??= takeLegacyBook());
 
 /**
  * Who signed in. With an authenticator app on, the server holds a new session until its code is
@@ -108,48 +179,16 @@ export async function forgotPassword(email: string) {
   await api.POST('/auth/password/forgot', { body: { email: email.trim() } });
 }
 
-/** Unsynced changes a user left behind on sign-out, kept per user (localStorage on the web). */
-const unsyncedKey = (userId: string) => `ebs.unsynced.${userId}`;
-
-/** Keeps the leaving user's unsynced changes on the device for their next sign-in. */
-function stashUnsynced(): Promise<void> {
-  const { session, syncQueue } = useAppStore.getState();
-  const open = syncQueue.filter(isOpen);
-  if (!session.userId || !open.length) return Promise.resolve();
-  return AsyncStorage.setItem(unsyncedKey(session.userId), JSON.stringify(open)).catch(() => {});
-}
-
-/** Puts a returning user's unsynced changes back in the queue, pending and failed alike, and sends them. */
-async function restoreUnsynced(userId: string) {
-  try {
-    const saved = await AsyncStorage.getItem(unsyncedKey(userId));
-    if (!saved) return;
-    const queue = useAppStore.getState().syncQueue;
-    const back = (JSON.parse(saved) as SyncQueueEntry[]).filter((e) => !queue.some((q) => q.id === e.id));
-    useAppStore.setState({ syncQueue: [...queue, ...back] });
-    await AsyncStorage.removeItem(unsyncedKey(userId));
-    syncSoon(0);
-  } catch {
-    // Unreadable storage: nothing to bring back.
-  }
-}
-
-/** Forgets the session and everything loaded for it on this device, except unsynced changes. */
-function clearLocal(): Promise<void> {
-  // Read before the store empties; written after.
-  const stashed = stashUnsynced();
-  endSyncSession();
+/** Forgets the session and everything loaded for it. */
+function clearLocal() {
+  endRefreshSession();
   useRemoteMeta.getState().reset();
-  // A logo waiting to upload belongs to the account that left.
-  useLogoQueue.getState().reset();
-  useReceiptQueue.getState().reset();
   useAppStore.setState({
     ...emptyData(),
     activeCompanyId: '',
     activeBranchId: '',
     session: { userId: null, authenticated: false, onboardingComplete: false },
   });
-  return stashed;
 }
 
 export async function signOut() {
@@ -161,7 +200,7 @@ export async function signOut() {
     // Signing out works offline too; the server session expires on its own.
   }
   await setTokens(null);
-  await clearLocal();
+  clearLocal();
 }
 
 /**
@@ -173,56 +212,21 @@ export async function deleteAccount(body: Schema<'DeleteAccountRequest'>) {
   await api.POST('/me/delete', { body });
   // The server already dropped the token; forget it here too.
   await AsyncStorage.removeItem('ebs.push.token').catch(() => {});
-  const { userId } = useAppStore.getState().session;
-  useAppStore.setState({ syncQueue: [] });
-  if (userId) await AsyncStorage.removeItem(unsyncedKey(userId)).catch(() => {});
+  await AsyncStorage.removeItem(ACTIVE_KEY).catch(() => {});
   await setTokens(null);
-  await clearLocal();
+  clearLocal();
 }
 
 /** A refresh the server refused (revoked device, reset password) signs out here too. */
 export function watchSessionEnd(): () => void {
   return onTokensChange((t) => {
-    if (!t && useAppStore.getState().session.authenticated) void clearLocal();
+    if (!t && useAppStore.getState().session.authenticated) clearLocal();
   });
 }
 
-/**
- * The rows a change still waits to send, collection by collection. The server
- * doesn't have them yet, so a reload that dropped them would empty the screen
- * (a business made offline, with everything in it).
- */
-function unsentRows(): Partial<AppData> {
-  const s = useAppStore.getState();
-  const unsent = new Set(s.syncQueue.filter(isOpen).map((e) => e.entityId));
-  const kept: Partial<AppData> = {};
-  for (const { collection, key } of Object.values(COLLECTIONS)) {
-    const rows = (s[collection] as unknown as Record<string, unknown>[]).filter((r) => unsent.has(String(r[key])));
-    if (rows.length) (kept as Record<string, unknown>)[collection] = rows;
-  }
-  return kept;
-}
-
-/** Reloads everything from the server, keeping the session (Settings → Sync). */
+/** Loads everything the open business needs from the server again. */
 export async function resync() {
-  try {
-    await reloadSnapshot(() => {
-      const { accountId, session, activeCompanyId, activeBranchId, syncQueue } = useAppStore.getState();
-      useAppStore.setState({ ...emptyData(), ...unsentRows(), accountId, syncQueue, session, activeCompanyId, activeBranchId });
-    });
-    // The active business or branch may have been a discarded change: open one that is still there.
-    const s = useAppStore.getState();
-    if (!s.companies.some((c) => c.id === s.activeCompanyId)) {
-      const companyId = s.companies[0]?.id ?? '';
-      const branches = s.branches.filter((b) => b.companyId === companyId);
-      useAppStore.setState({ activeCompanyId: companyId, activeBranchId: (branches.find((b) => b.isPrimary) ?? branches[0])?.id ?? '' });
-    } else if (!s.branches.some((b) => b.id === s.activeBranchId && b.companyId === s.activeCompanyId)) {
-      const branches = s.branches.filter((b) => b.companyId === s.activeCompanyId);
-      useAppStore.setState({ activeBranchId: (branches.find((b) => b.isPrimary) ?? branches[0])?.id ?? '' });
-    }
-  } catch (err) {
-    useRemoteMeta.getState().patch(isNetworkError(err) ? { online: false } : { lastError: err instanceof Error ? err.message : String(err) });
-  }
+  await refreshNow();
 }
 
 /** Sets a new password from an emailed reset link. Every session is signed out. */
