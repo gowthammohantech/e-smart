@@ -359,5 +359,21 @@
     "offlineTitle": "You're offline",
     "offlineBody": "Elixir Books Smart needs an internet connection. Check your connection and try again.",
     "retry": "Try again"
+  },
+  "latency": {
+    "a11y": "Server response {{ms}} milliseconds, {{tone}}",
+    "title": "Server response: {{tone}}",
+    "basis_one": "Median of the last request",
+    "basis_other": "Median of the last {{count}} requests",
+    "roundTrip": "Round trip",
+    "server": "Server",
+    "network": "Network",
+    "slowest": "Slowest",
+    "updated": "Last request at {{when}}",
+    "tone": {
+      "good": "fast",
+      "fair": "a bit slow",
+      "slow": "slow"
+    }
   }
 }

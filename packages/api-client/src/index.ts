@@ -36,7 +36,28 @@ export type ApiClientOptions = {
   onProblem?: (error: ApiError) => void;
   /** Extra headers sent with every request, e.g. the app's version. */
   headers?: Record<string, string>;
+  /** Told how long every answered request took, e.g. for a speed readout. Not called for one that never got an answer. */
+  onTiming?: (timing: RequestTiming) => void;
 };
+
+/** One answered request: from sending it to its headers arriving, and the part the server says it spent. */
+export type RequestTiming = {
+  method: string;
+  url: string;
+  status: number;
+  /** Round trip in milliseconds, up to the response headers (the body may still be coming). */
+  ms: number;
+  /** The server's own time, from its Server-Timing header, when it sent one. */
+  serverMs?: number;
+  at: number;
+};
+
+/** The `app` entry of a Server-Timing header: `app;dur=12.3`. */
+export function serverDuration(header: string | null): number | undefined {
+  const match = header?.match(/(?:^|,)\s*app\s*;[^,]*?dur=([\d.]+)/);
+  const ms = match ? Number(match[1]) : NaN;
+  return Number.isFinite(ms) ? ms : undefined;
+}
 
 // The contract's routes with `security: []`. Reference data is public, but a
 // GSTIN lookup, HSN search or road distance reaches a provider and needs a
@@ -81,11 +102,28 @@ export function createApiClient(options: ApiClientOptions) {
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     const signal = (input instanceof Request ? input.signal : init?.signal) ?? undefined;
     signal?.addEventListener('abort', () => controller.abort());
+    const started = Date.now();
     try {
-      return await Promise.race([
+      const res = await Promise.race([
         rawFetch(input, { ...init, signal: controller.signal }),
         new Promise<never>((_, reject) => controller.signal.addEventListener('abort', () => reject(new TypeError('The request timed out')))),
       ]);
+      if (options.onTiming) {
+        const at = Date.now();
+        try {
+          options.onTiming({
+            method: (input instanceof Request ? input.method : init?.method) ?? 'GET',
+            url: input instanceof Request ? input.url : String(input),
+            status: res.status,
+            ms: at - started,
+            serverMs: serverDuration(res.headers.get('server-timing')),
+            at,
+          });
+        } catch {
+          // A readout must never fail the request it is timing.
+        }
+      }
+      return res;
     } finally {
       clearTimeout(timer);
     }

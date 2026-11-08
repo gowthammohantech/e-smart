@@ -74,7 +74,7 @@ export async function buildApp(deps: Deps, opts: BuildOptions = {}): Promise<Fas
 
   await app.register(cors, {
     origin: deps.config.CORS_ORIGINS === '*' ? true : deps.config.CORS_ORIGINS.split(',').map((s) => s.trim()),
-    exposedHeaders: ['ETag', 'Idempotent-Replayed', 'Content-Disposition'],
+    exposedHeaders: ['ETag', 'Idempotent-Replayed', 'Content-Disposition', 'Server-Timing'],
     allowedHeaders: ['Authorization', 'Content-Type', 'If-Match', 'Idempotency-Key', 'X-App-Version'],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   });
@@ -111,9 +111,11 @@ export async function buildApp(deps: Deps, opts: BuildOptions = {}): Promise<Fas
 
   if (deps.providers.storage instanceof MemoryStorage) deps.providers.storage.routes(app);
 
-  // Every answer names its request, so a person reporting a problem can quote it.
+  // Every answer names its request, so a person reporting a problem can quote it, and says how long
+  // the server spent on it, so the app can tell the server's time from the network's.
   app.addHook('onSend', async (req, reply) => {
     void reply.header('x-request-id', req.id);
+    void reply.header('server-timing', `app;dur=${reply.elapsedTime.toFixed(1)}`);
   });
 
   app.get('/health', async () => {

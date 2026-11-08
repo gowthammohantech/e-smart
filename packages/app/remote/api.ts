@@ -6,6 +6,7 @@ import { Platform } from 'react-native';
 import * as Application from 'expo-application';
 import { useMfaGate } from '../features/security/mfaGateStore';
 import { useUpdateGate } from '../features/session/updateGateStore';
+import { recordTiming } from './latency';
 
 /**
  * Every build names its version, so the server can turn away one it no longer serves. The web is
@@ -20,6 +21,7 @@ export const api = createApiClient({
   setTokens,
   idempotencyKey: uuid,
   headers: { 'X-App-Version': version },
+  onTiming: recordTiming,
   onProblem: (e) => {
     if (e.code === 'MFA_REQUIRED') useMfaGate.getState().require();
     if (e.code === 'APP_UPDATE_REQUIRED') useUpdateGate.getState().require(String((e.problem as { minVersion?: string }).minVersion ?? ''));

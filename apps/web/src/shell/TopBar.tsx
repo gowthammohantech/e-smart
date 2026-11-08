@@ -20,6 +20,7 @@ import { toggleLixiPanel, useLixiPanel } from '../lixiPanel';
 import { useSignOut } from '@esmart/app/features/session/useSignOut';
 import { NOTIFICATION_META, notificationRoute } from '@esmart/app/features/notifications/notificationMeta';
 import { CommandPalette } from './CommandPalette';
+import { LatencyBadge } from './LatencyBadge';
 import { BranchPicker, CompanyPicker } from './CompanySwitcher';
 import { useBreakpoint } from '@esmart/ui/theme/breakpoints';
 import { SETTINGS_HREF } from '@esmart/app/navigation/pages';
@@ -119,7 +120,7 @@ function LixiButton({ label }: { label: string }) {
 /**
  * The desktop app's top bar, in three parts: the business and branch you're
  * in on the left (each its own picker), search (⌘K) in the middle, and sync
- * state, Lixi, notifications and your account on the right. The two sides
+ * state, server response time, Lixi, notifications and your account on the right. The two sides
  * share the leftover width equally, so search stays centred on the bar.
  */
 export function TopBar() {
@@ -218,6 +219,7 @@ export function TopBar() {
 
       <View style={{ flex: 1, flexBasis: 0, minWidth: 0, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: t.spacing.sm }}>
       <ConnectionBadge style={{ alignSelf: 'center' }} />
+      {narrow ? null : <LatencyBadge />}
 
       <LixiButton label={tr('nav:more.entry.askLixi')} />
       <IconButton ref={bellAnchor} icon="bell-outline" label={tr('nav:shell.notifications')} onPress={openBellMenu} badge={unread} />

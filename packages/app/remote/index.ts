@@ -6,6 +6,7 @@ export { API_BASE_URL, API_CONFIGURED, DEMO_LOGIN } from './config';
 export { installRemote } from './install';
 export { useRemoteSync } from './useRemoteSync';
 export { useRemoteMeta } from './meta';
+export { useLatency, summarise, latencyTone, type LatencySummary } from './latency';
 export { refreshNow } from './refresh';
 export { useCanWrite } from './connectivity';
 export { onUnconfirmed, saveOnline, useSaveOnline, type SaveResult } from './save';
