@@ -21,7 +21,7 @@ import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { Avatar } from '@esmart/ui/components/Avatar';
 
-import { DocumentKind, DocumentLine, NoteReason, Party } from '@esmart/core/types';
+import { DocStatus, DocumentKind, DocumentLine, NoteReason, Party } from '@esmart/core/types';
 import { NOTE_KINDS, PURCHASE_KINDS, isFinalized } from '@esmart/core/domain/documentStates';
 import { TDS_SECTIONS, tdsSection } from '@esmart/core/data/tdsSections';
 import { TCS_SECTIONS, partyTcsSection, tcsRateFor, tcsSection } from '@esmart/core/data/tcsSections';
@@ -31,7 +31,7 @@ import { buildTaxContext } from '@esmart/core/domain/taxEngine';
 import { OTHER_COUNTRY_CODE } from '@esmart/core/domain/stateCodes';
 import { CURRENCIES } from '@esmart/core/lib/currencies';
 import { formatMoney, formatPercent, formatQty } from '@esmart/core/lib/format';
-import { addDaysISO, formatDate, parseDate } from '@esmart/core/lib/date';
+import { addDaysISO, daysBetween, formatDate, parseDate } from '@esmart/core/lib/date';
 import { uid } from '@esmart/core/lib/id';
 import { factorOf, fromMajor, money, subtract, toMajor, zero, type Money } from '@esmart/core/lib/money';
 import { INDIAN_STATES, unitDecimals, unitShortName } from '@esmart/core/data/masters';
@@ -82,8 +82,28 @@ import { expectedSaleTds } from '@esmart/core/domain/tds';
 import { panOfGstin } from '@esmart/core/domain/gstin';
 import { CostCentreField } from '../books/CostCentreField';
 import { BillableExpenses } from './BillableExpenses';
-import { CustomFieldsSection } from '../customFields/CustomFieldsSection';
+import { CustomFieldsSection, customFieldErrors, useCustomFields } from '../customFields/CustomFieldsSection';
 import { VehicleField } from '../vehicles/VehicleField';
+
+/** What finalising moves a draft of this kind to. */
+export function finaliseTarget(kind: DocumentKind): DocStatus {
+  return kind === 'quote' || kind === 'proforma'
+    ? 'sent'
+    : kind === 'salesOrder' || kind === 'purchaseOrder'
+      ? 'confirmed'
+      : kind === 'delivery'
+        ? 'delivered'
+        : kind === 'goodsReceipt'
+          ? 'received'
+          : kind === 'salesReturn' || kind === 'purchaseReturn'
+            ? 'approved'
+            : 'issued';
+}
+
+/** The Finalise button, saying what it does for this kind: Issue invoice, Mark as sent, Confirm order… */
+export function finaliseActionLabel(tr: (key: never) => unknown, kind: DocumentKind): string {
+  return String(tr(`sales:editor.finaliseAction.${kind}` as never));
+}
 
 /** Editor step keys, in order. Names live in `common:editorStep.*`. */
 const STEPS = ['party', 'items', 'extras', 'review'] as const;
@@ -91,6 +111,8 @@ const STEPS = ['party', 'items', 'extras', 'review'] as const;
 /** The documents GST is charged on, where reverse charge can apply. */
 const TAX_KINDS: DocumentKind[] = ['invoice', 'salesReturn', 'purchaseBill', 'purchaseReturn', ...NOTE_KINDS];
 const NOTE_REASONS: NoteReason[] = ['discount', 'priceChange', 'taxCorrection', 'deficiency', 'other'];
+/** The documents goods travel with, where a vehicle is worth recording. */
+const VEHICLE_KINDS: DocumentKind[] = ['invoice', 'salesOrder', 'delivery', 'salesReturn', 'purchaseOrder', 'goodsReceipt', 'purchaseBill', 'purchaseReturn'];
 
 type EditorProps = {
   kind: DocumentKind;
@@ -517,10 +539,20 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // The company's own fields on a document, checked as the server will; shown once a save is tried.
+  const documentFields = useCustomFields('document');
+  const fieldErrors = customFieldErrors(documentFields, 'document', draft.customFields, tr);
+  const [showFieldErrors, setShowFieldErrors] = useState(false);
+  const fieldProblem = Object.values(fieldErrors)[0];
+
   /** Lines that cannot go on a finalised tax document yet. */
   const lineProblem = (): string | undefined => {
     if (dateBeforeSource) return dateBeforeSource;
     if (dateProblem) return dateProblem;
+    if (fieldProblem) {
+      setShowFieldErrors(true);
+      return fieldProblem;
+    }
     const unnamed = draft.lines.find((l) => !l.name.trim());
     if (unnamed) return tr('sales:line.nameRequired');
     // Every line, and the document, must be worth something: rate, gross and
@@ -691,22 +723,9 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   };
 
   const finalizeLocal = (id: string) => {
-    {
-      const target =
-        kind === 'quote' || kind === 'proforma'
-          ? 'sent'
-          : kind === 'salesOrder' || kind === 'purchaseOrder'
-            ? 'confirmed'
-            : kind === 'delivery'
-              ? 'delivered'
-              : kind === 'goodsReceipt'
-                ? 'received'
-                : kind === 'salesReturn' || kind === 'purchaseReturn'
-                  ? 'approved'
-                  : 'issued';
-      setDocumentStatus(id, target, creditOverride ? { overrideCreditLimit: true } : undefined);
-    }
+    setDocumentStatus(id, finaliseTarget(kind), creditOverride ? { overrideCreditLimit: true } : undefined);
   };
+  const finaliseLabel = finaliseActionLabel(tr, kind);
 
   // Ctrl+Enter (⌘+Enter on a Mac, shown on the Finalise button) does what the Finalise button does: the same
   // checks, then the same confirmation, so nothing is finalised without it.
@@ -807,7 +826,14 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       <DateField
         label={tr('common:documentEditor.dateLabel', { kind: kindName })}
         value={draft.date}
-        onChange={(date) => patch({ date })}
+        // The due date (or validity) keeps its distance from the document date when that moves.
+        onChange={(date) =>
+          patch({
+            date,
+            ...(draft.dueDate && (kind === 'invoice' || kind === 'purchaseBill') ? { dueDate: addDaysISO(date, Math.max(0, daysBetween(draft.date, draft.dueDate))) } : {}),
+            ...(draft.validUntil && (kind === 'quote' || kind === 'proforma') ? { validUntil: addDaysISO(date, Math.max(0, daysBetween(draft.date, draft.validUntil))) } : {}),
+          })
+        }
         required
         error={dateBeforeSource ?? dateBeforeOpeningStock}
       />
@@ -916,66 +942,6 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       ) : null}
       </FieldRow>
 
-      {billTds ? (
-        <View style={{ gap: t.spacing.xs }}>
-          <PickerField
-            label={tr('purchases:tds.section')}
-            value={tdsSectionLabel(draft.tdsSection ?? parties.find((p) => p.id === draft.partyId)?.tdsSection)}
-            onPress={() => setTdsOpen(true)}
-            icon="bank-minus"
-            hint={draftTds ? tr('purchases:tds.willKeep', { amount: formatMoney(draftTds.amount), rate: formatPercent(draftTds.rate) }) : tr('purchases:tds.hint')}
-          />
-          {/* Without a TAN nothing is kept back: say so where the section is chosen, with the way to add one. */}
-          {!company?.tan && (draft.tdsSection ?? parties.find((p) => p.id === draft.partyId)?.tdsSection ?? 'none') !== 'none' ? (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm, flexWrap: 'wrap' }}>
-              <Text variant="caption" tone="warn" style={{ flex: 1, minWidth: 180 }}>
-                {tr('purchases:tds.needsTan')}
-              </Text>
-              <Button title={tr('purchases:tds.addTan')} variant="ghost" size="sm" icon="office-building-cog-outline" onPress={() => router.push('/(app)/settings/company')} />
-            </View>
-          ) : null}
-        </View>
-      ) : null}
-
-      {saleTds ? (
-        <View style={{ gap: t.spacing.xs }}>
-          <PickerField
-            label={tr('sales:tds.section')}
-            value={tdsSectionLabel(saleSection)}
-            onPress={() => setTdsOpen(true)}
-            icon="bank-plus"
-            hint={expectedTds ? tr('sales:tds.willDeduct', { amount: formatMoney(expectedTds.amount), net: formatMoney(subtract(totals.grandTotal, expectedTds.amount)) }) : tr('sales:tds.hint')}
-          />
-          {saleSection && saleSection !== 'none' ? (
-            <TextField
-              label={tr('sales:tds.rate')}
-              value={draft.tdsRate !== undefined ? String(draft.tdsRate) : ''}
-              onChangeText={(v) => {
-                const clean = v.replace(/[^0-9.]/g, '');
-                patch({ tdsRate: clean === '' ? undefined : Math.min(Number(clean) || 0, 100) });
-              }}
-              placeholder={expectedTds ? String(expectedTds.rate) : '0'}
-              keyboardType="decimal-pad"
-              icon="percent-outline"
-              hint={tr('sales:tds.rateHint')}
-            />
-          ) : null}
-        </View>
-      ) : null}
-
-      {kind === 'invoice' ? (
-        <PickerField
-          label={tr('sales:tcs.section')}
-          value={draft.tcsSection && draft.tcsSection !== 'none' ? `${tcsSection(draft.tcsSection)?.label ?? draft.tcsSection} · ${tcsSection(draft.tcsSection)?.nature ?? ''}` : tr('sales:tcs.none')}
-          onPress={() => setTcsOpen(true)}
-          icon="cash-plus"
-          hint={totals.tcs ? tr('sales:tcs.willCollect', { amount: formatMoney(totals.tcs) }) : tr('sales:tcs.hint')}
-        />
-      ) : null}
-
-      <CostCentreField value={draft.costCentreId} onChange={(costCentreId) => patch({ costCentreId })} />
-      <VehicleField value={draft.vehicleId} onChange={(vehicleId) => patch({ vehicleId })} />
-      <CustomFieldsSection entity="document" values={draft.customFields ?? {}} onChange={(customFields) => patch({ customFields })} />
 
       {isNote ? (
         <PickerField
@@ -1023,14 +989,6 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
         </View>
       ) : null}
 
-      {taxContext.regime === 'GST' && TAX_KINDS.includes(kind) ? (
-        <SwitchField
-          label={tr('sales:editor.reverseCharge')}
-          description={tr(isPurchase ? 'sales:editor.reverseChargeBillHint' : 'sales:editor.reverseChargeSaleHint')}
-          value={!!draft.reverseCharge}
-          onValueChange={(reverseCharge) => patch({ reverseCharge })}
-        />
-      ) : null}
 
       {draft.currency !== baseCurrency ? (
         <TextField
@@ -1164,8 +1122,9 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
                   />
                   <Text variant="caption" tone="muted">
                     {unitShortName(line.unit)} × {formatMoney(line.unitPrice)}
+                    {/* A fixed discount is in major units, whatever the currency's decimals. */}
                     {line.discountValue > 0
-                      ? ` · −${line.discountMode === 'percent' ? formatPercent(line.discountValue) : formatMoney(money(line.discountValue * 100, draft.currency))}`
+                      ? ` · −${line.discountMode === 'percent' ? formatPercent(line.discountValue) : formatMoney(fromMajor(String(line.discountValue), draft.currency))}`
                       : ''}
                   </Text>
                 </View>
@@ -1194,6 +1153,76 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
 
   const renderExtras = () => (
     <View style={{ gap: t.spacing.lg }}>
+      {/* Tax and bookkeeping details: kept off the first step so a phone's Who step is just who and when. */}
+      {taxContext.regime === 'GST' && TAX_KINDS.includes(kind) ? (
+        <SwitchField
+          label={tr('sales:editor.reverseCharge')}
+          description={tr(isPurchase ? 'sales:editor.reverseChargeBillHint' : 'sales:editor.reverseChargeSaleHint')}
+          value={!!draft.reverseCharge}
+          onValueChange={(reverseCharge) => patch({ reverseCharge })}
+        />
+      ) : null}
+      {billTds ? (
+        <View style={{ gap: t.spacing.xs }}>
+          <PickerField
+            label={tr('purchases:tds.section')}
+            value={tdsSectionLabel(draft.tdsSection ?? parties.find((p) => p.id === draft.partyId)?.tdsSection)}
+            onPress={() => setTdsOpen(true)}
+            icon="bank-minus"
+            hint={draftTds ? tr('purchases:tds.willKeep', { amount: formatMoney(draftTds.amount), rate: formatPercent(draftTds.rate) }) : tr('purchases:tds.hint')}
+          />
+          {/* Without a TAN nothing is kept back: say so where the section is chosen, with the way to add one. */}
+          {!company?.tan && (draft.tdsSection ?? parties.find((p) => p.id === draft.partyId)?.tdsSection ?? 'none') !== 'none' ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm, flexWrap: 'wrap' }}>
+              <Text variant="caption" tone="warn" style={{ flex: 1, minWidth: 180 }}>
+                {tr('purchases:tds.needsTan')}
+              </Text>
+              <Button title={tr('purchases:tds.addTan')} variant="ghost" size="sm" icon="office-building-cog-outline" onPress={() => router.push('/(app)/settings/company')} />
+            </View>
+          ) : null}
+        </View>
+      ) : null}
+
+      {saleTds ? (
+        <View style={{ gap: t.spacing.xs }}>
+          <PickerField
+            label={tr('sales:tds.section')}
+            value={tdsSectionLabel(saleSection)}
+            onPress={() => setTdsOpen(true)}
+            icon="bank-plus"
+            hint={expectedTds ? tr('sales:tds.willDeduct', { amount: formatMoney(expectedTds.amount), net: formatMoney(subtract(totals.grandTotal, expectedTds.amount)) }) : tr('sales:tds.hint')}
+          />
+          {saleSection && saleSection !== 'none' ? (
+            <TextField
+              label={tr('sales:tds.rate')}
+              value={draft.tdsRate !== undefined ? String(draft.tdsRate) : ''}
+              onChangeText={(v) => {
+                const clean = v.replace(/[^0-9.]/g, '');
+                patch({ tdsRate: clean === '' ? undefined : Math.min(Number(clean) || 0, 100) });
+              }}
+              placeholder={expectedTds ? String(expectedTds.rate) : '0'}
+              keyboardType="decimal-pad"
+              icon="percent-outline"
+              hint={tr('sales:tds.rateHint')}
+            />
+          ) : null}
+        </View>
+      ) : null}
+
+      {kind === 'invoice' ? (
+        <PickerField
+          label={tr('sales:tcs.section')}
+          value={draft.tcsSection && draft.tcsSection !== 'none' ? `${tcsSection(draft.tcsSection)?.label ?? draft.tcsSection} · ${tcsSection(draft.tcsSection)?.nature ?? ''}` : tr('sales:tcs.none')}
+          onPress={() => setTcsOpen(true)}
+          icon="cash-plus"
+          hint={totals.tcs ? tr('sales:tcs.willCollect', { amount: formatMoney(totals.tcs) }) : tr('sales:tcs.hint')}
+        />
+      ) : null}
+
+      <CostCentreField value={draft.costCentreId} onChange={(costCentreId) => patch({ costCentreId })} />
+      {/* A vehicle goes with goods on the move, not on a quote or a note. */}
+      {VEHICLE_KINDS.includes(kind) ? <VehicleField value={draft.vehicleId} onChange={(vehicleId) => patch({ vehicleId })} /> : null}
+      <CustomFieldsSection entity="document" values={draft.customFields ?? {}} onChange={(customFields) => patch({ customFields })} errors={showFieldErrors ? fieldErrors : undefined} />
       {/* Where the customer pays: the company's account, as the PDF prints it. Set in settings, not per document. */}
       {kind === 'invoice' || kind === 'quote' || kind === 'proforma' || kind === 'salesOrder' ? (
         <Card variant="flat" style={{ gap: t.spacing.sm }}>
@@ -1235,7 +1264,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       ) : null}
       <View style={{ gap: 6 }}>
         <Text variant="caption" tone="muted" weight="600">{tr('sales:editor.discountOnTotal')}</Text>
-        <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
+        <View style={{ flexDirection: 'row', gap: t.spacing.md, alignItems: 'stretch' }}>
+          {/* Full size, as tall as the amount box beside it. */}
           <Segmented
             options={[
               { value: 'percent', label: '%' },
@@ -1243,8 +1273,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
             ]}
             value={draft.documentDiscountMode}
             onChange={(v) => patch({ documentDiscountMode: v as 'percent' | 'amount' })}
-            style={{ width: 130 }}
-            size="sm"
+            style={{ width: 130, justifyContent: 'center' }}
           />
           <TextField
             value={discountText}
@@ -1255,6 +1284,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
             }}
             keyboardType="decimal-pad"
             placeholder="0"
+            accessibilityLabel={`${tr('sales:editor.discountOnTotal')} (${draft.documentDiscountMode === 'percent' ? '%' : draft.currency})`}
             containerStyle={{ flex: 1 }}
           />
         </View>
@@ -1334,17 +1364,20 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
         multiline
       />
 
-      <Card>
-        <TotalsPanel
-          totals={totals}
-          currency={draft.currency}
-          baseCurrency={baseCurrency}
-          exchangeRate={draft.exchangeRate}
-          compact
-          tds={tdsRow}
-          itc={itcBreakup}
-        />
-      </Card>
+      {/* A desktop keeps the totals in the summary beside the form; shown here too, they'd be there twice. */}
+      {desktop ? null : (
+        <Card>
+          <TotalsPanel
+            totals={totals}
+            currency={draft.currency}
+            baseCurrency={baseCurrency}
+            exchangeRate={draft.exchangeRate}
+            compact
+            tds={tdsRow}
+            itc={itcBreakup}
+          />
+        </Card>
+      )}
     </View>
   );
 
@@ -1357,7 +1390,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
               {tr('common:documentEditor.numberLabel', { kind: kindName })}
             </Text>
             <Text variant="title" weight="700">
-              {documentId ? '—' : nextNumberFor(kind as never)}
+              {/* An issued document keeps its number; a draft gets one when it is finalised. */}
+              {existing && isFinalized(existing.status) ? existing.number : documentId ? tr('common:documentList.draftNumber') : nextNumberFor(kind as never)}
             </Text>
           </View>
           <Badge label={taxBadge} tone="info" />
@@ -1367,9 +1401,9 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
 
         {[
           { label: tr(isPurchase ? 'common:table.supplier' : 'common:table.customer'), value: party?.name ?? '—' },
-          { label: tr('common:table.date'), value: draft.date },
-          ...(draft.dueDate ? [{ label: tr('common:table.due'), value: draft.dueDate }] : []),
-          ...(draft.validUntil ? [{ label: tr('sales:editor.validUntil'), value: draft.validUntil }] : []),
+          { label: tr('common:table.date'), value: formatDate(draft.date) },
+          ...(draft.dueDate ? [{ label: tr('common:table.due'), value: formatDate(draft.dueDate) }] : []),
+          ...(draft.validUntil ? [{ label: tr('sales:editor.validUntil'), value: formatDate(draft.validUntil) }] : []),
           { label: tr('sales:editor.branch'), value: branch?.name ?? '—' },
           { label: tr('sales:editor.lines'), value: String(draft.lines.length) },
         ].map((r) => (
@@ -1408,7 +1442,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       <Card variant="flat" style={{ flexDirection: 'row', gap: t.spacing.md }}>
         <Icon name="information-outline" size={19} color={t.c.muted} />
         <Text variant="caption" tone="muted" style={{ flex: 1, lineHeight: 18 }}>
-          {tr(kind === 'invoice' || kind === 'delivery' ? 'sales:editor.finaliseNoteStock' : 'sales:editor.finaliseNote')}
+          {/* Every kind that moves stock: returns and receipts as well as invoices and deliveries. */}
+          {tr(movesStock && hasInventory ? 'sales:editor.finaliseNoteStock' : 'sales:editor.finaliseNote')}
         </Text>
       </Card>
     </View>
@@ -1446,7 +1481,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
                     ) : null}
                     <Button
                       shortcut="Enter"
-                      title={tr('sales:editor.finalise')}
+                      title={finaliseLabel}
                       icon="check-decagram-outline"
                       onPress={() => {
                         setSendAfter(false);
@@ -1493,6 +1528,15 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           </>
         ) : (
           <>
+          {/* A draft can be kept from any step, not only the last; the last has it in the footer. */}
+          <Stack.Screen
+            options={{
+              headerRight:
+                step < STEPS.length - 1 && !editingIssued
+                  ? () => <Button title={tr('sales:editor.saveDraft')} variant="ghost" size="sm" onPress={() => void save(false)} loading={saving} disabled={blocked || !draft.partyId} />
+                  : undefined,
+            }}
+          />
           <View style={{ paddingHorizontal: t.spacing.lg, paddingTop: t.spacing.md, paddingBottom: t.spacing.sm }}>
             <Stepper steps={STEPS.map((k) => tr(`common:editorStep.${k}` as 'common:editorStep.party'))} current={step} />
           </View>
@@ -1526,6 +1570,21 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
               </View>
             ) : null}
 
+            {/* Save & send, as on a desktop: finalised, then emailed from the document. */}
+            {step === STEPS.length - 1 && !editingIssued && canSend && !onSaved ? (
+              <Button
+                title={tr('sales:editor.saveAndSend')}
+                icon="email-fast-outline"
+                variant="secondary"
+                onPress={() => {
+                  setSendAfter(true);
+                  requestFinalize();
+                }}
+                loading={saving}
+                disabled={blocked || !draft.partyId || draft.lines.length === 0}
+                fullWidth
+              />
+            ) : null}
             <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
               {step > 0 ? (
                 <Button title={tr('sales:editor.back')} variant="ghost" onPress={() => setStep((s) => s - 1)} style={{ flex: 1 }} />
@@ -1543,7 +1602,16 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
                 ) : (
                 <>
                   <Button shortcut="S" title={tr('sales:editor.saveDraft')} variant="ghost" onPress={() => void save(false)} loading={saving} disabled={blocked} style={{ flex: 1 }} />
-                  <Button title={tr('sales:editor.finalise')} onPress={requestFinalize} loading={saving} disabled={blocked} style={{ flex: 1 }} />
+                  <Button
+                    title={finaliseLabel}
+                    onPress={() => {
+                      setSendAfter(false);
+                      requestFinalize();
+                    }}
+                    loading={saving}
+                    disabled={blocked}
+                    style={{ flex: 1 }}
+                  />
                 </>
                 )
               )}
@@ -1761,7 +1829,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           visible={confirmFinalize}
           title={tr('common:documentEditor.finaliseTitle', { kind: kindName })}
           message={tr('common:documentEditor.finaliseMessage', { kind: kindName })}
-          confirmLabel={sendAfter ? tr('sales:editor.saveAndSend') : tr('sales:editor.finalise')}
+          confirmLabel={sendAfter ? tr('sales:editor.saveAndSend') : finaliseLabel}
           icon={sendAfter ? 'email-fast-outline' : 'check-decagram-outline'}
           onCancel={() => {
             setConfirmFinalize(false);

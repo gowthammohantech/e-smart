@@ -8,6 +8,7 @@ import { Icon } from '@esmart/ui/components/Icon';
 import { Menu, MenuItem, useMenuAnchor } from '@esmart/ui/components/Menu';
 import { WEB_INPUT_RESET } from '@esmart/ui/components/Field';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
+import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import type { DocumentLine, GstFlags, ItcEligibility, TaxCategory } from '@esmart/core/types';
 import { calculateLine } from '@esmart/core/domain/lineCalc';
 import type { TaxContext } from '@esmart/core/domain/taxEngine';
@@ -245,7 +246,8 @@ export function LineGrid({
                 style={(state) => [
                   {
                     minWidth: 30,
-                    height: 28,
+                    // As tall as the discount input beside it.
+                    height: 32,
                     paddingHorizontal: 4,
                     borderRadius: t.radius.sm,
                     alignItems: 'center',
@@ -299,6 +301,7 @@ export function LineGrid({
             <View role="cell" style={{ width: W.actions, alignItems: 'center' }}>
               <LineMenu
                 label={tr('sales:grid.lineActions', { n })}
+                name={line.name}
                 onEdit={() => onEdit(line)}
                 onRemove={() => onRemove(line.id)}
                 gstItems={
@@ -443,10 +446,12 @@ function GridInput({
 }
 
 /** A line's ⋯ button: the full editor, or remove. */
-function LineMenu({ label, onEdit, onRemove, gstItems }: { label: string; onEdit: () => void; onRemove: () => void; gstItems?: { icon: string; label: string; onPress: () => void }[] }) {
+function LineMenu({ label, name, onEdit, onRemove, gstItems }: { label: string; name?: string; onEdit: () => void; onRemove: () => void; gstItems?: { icon: string; label: string; onPress: () => void }[] }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['sales']);
   const { setAnchor, rect, open, close, visible } = useMenuAnchor();
+  // Removing a line asks first: it takes its quantity, rate and discount with it.
+  const [confirmRemove, setConfirmRemove] = useState(false);
   return (
     <>
       <Pressable
@@ -496,10 +501,23 @@ function LineMenu({ label, onEdit, onRemove, gstItems }: { label: string; onEdit
           destructive
           onPress={() => {
             close();
-            onRemove();
+            setConfirmRemove(true);
           }}
         />
       </Menu>
+      <ConfirmDialog
+        visible={confirmRemove}
+        title={tr('sales:line.removeTitle')}
+        message={tr('sales:line.removeMessage', { name: name || tr('sales:editor.untitledLine') })}
+        confirmLabel={tr('sales:line.remove')}
+        destructive
+        icon="trash-can-outline"
+        onCancel={() => setConfirmRemove(false)}
+        onConfirm={() => {
+          setConfirmRemove(false);
+          onRemove();
+        }}
+      />
     </>
   );
 }

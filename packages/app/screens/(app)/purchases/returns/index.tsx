@@ -18,7 +18,7 @@ export default function PurchaseReturnList() {
         emptyAction={tr('nav:title.newPurchaseReturn')}
         onEmptyAction={() => router.push('/(app)/purchases/returns/new')}
       />
-      <Fab icon="plus" onPress={() => router.push('/(app)/purchases/returns/new')} />
+      <Fab icon="plus" label={tr('nav:title.newPurchaseReturn')} onPress={() => router.push('/(app)/purchases/returns/new')} />
     </View>
   );
 }

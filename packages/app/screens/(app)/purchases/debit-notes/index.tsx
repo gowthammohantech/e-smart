@@ -18,7 +18,7 @@ export default function SupplierDebitNoteList() {
         emptyAction={tr('nav:title.newSupplierDebitNote')}
         onEmptyAction={() => router.push('/(app)/purchases/debit-notes/new')}
       />
-      <Fab icon="plus" onPress={() => router.push('/(app)/purchases/debit-notes/new')} />
+      <Fab icon="plus" label={tr('nav:title.newSupplierDebitNote')} onPress={() => router.push('/(app)/purchases/debit-notes/new')} />
     </View>
   );
 }

@@ -96,6 +96,9 @@ export function TotalsPanel({
 
       {!isZero(totals.charges) ? <Row label={tr('common:totals.otherCharges')} value={formatMoney(totals.charges)} /> : null}
 
+      {/* TCS is inside the grand total (lineCalc): without its row the rows wouldn't add up to Total. */}
+      {totals.tcs && !isZero(totals.tcs) ? <Row label={tr('common:totals.tcs')} value={formatMoney(totals.tcs)} /> : null}
+
       {!isZero(totals.roundOff) ? (
         <Row label={tr('common:totals.roundOff')} value={formatMoney(totals.roundOff, { signed: true })} />
       ) : null}

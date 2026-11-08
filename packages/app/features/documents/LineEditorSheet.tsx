@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
@@ -84,6 +85,7 @@ function LineEditorForm({
   const [hsnCode, setHsnCode] = useState(line?.hsnCode ?? '');
   const [unitOpen, setUnitOpen] = useState(false);
   const [taxOpen, setTaxOpen] = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState(false);
   const [errors, setErrors] = useState<{ name?: string; hsn?: string; quantity?: string; rate?: string; discount?: string }>({});
   const item = useItems().find((i) => i.id === line?.itemId);
   // A purchase line that isn't stock may carry its own cost centre; stock takes the bill's (RULES 6.20).
@@ -163,16 +165,14 @@ function LineEditorForm({
           {onRemove ? (
             <Button
               title={tr('sales:line.remove')}
-              variant="danger"
               icon="trash-can-outline"
-              onPress={() => {
-                onRemove();
-                onClose();
-              }}
+              // Asks first, and kept apart from Save line so a slip doesn't lose the line.
+              onPress={() => setConfirmRemove(true)}
+              variant="danger"
               style={{ flex: 1 }}
             />
           ) : null}
-          <Button shortcut="S" title={tr('sales:line.saveLine')} onPress={save} style={{ flex: 2 }} />
+          <Button shortcut="S" title={tr('sales:line.saveLine')} onPress={save} style={{ flex: 2, marginLeft: onRemove ? t.spacing.md : 0 }} />
         </View>
       }
     >
@@ -235,8 +235,8 @@ function LineEditorForm({
         <AmountField label={tr('sales:line.rate')} value={price} onChangeValue={setPrice} currency={currency} placeholder="0" error={errors.rate} required />
 
         <View style={{ gap: 6 }}>
-          <Text variant="caption" tone="muted" weight="600">{tr('sales:line.discount')}</Text>
-          <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
+          <Text nativeID="line-discount-label" variant="caption" tone="muted" weight="600">{tr('sales:line.discount')}</Text>
+          <View style={{ flexDirection: 'row', gap: t.spacing.md, alignItems: 'stretch' }}>
             <Segmented
               options={[
                 { value: 'percent', label: '%' },
@@ -244,14 +244,15 @@ function LineEditorForm({
               ]}
               value={discountMode}
               onChange={(v) => setDiscountMode(v as 'percent' | 'amount')}
-              style={{ width: 130 }}
-              size="sm"
+              // Full size, as tall as the amount box beside it.
+              style={{ width: 130, justifyContent: 'center' }}
             />
             <TextField
               value={discountValue}
               onChangeText={(v) => setDiscountValue(v.replace(/[^0-9.]/g, ''))}
               keyboardType="decimal-pad"
               placeholder="0"
+              accessibilityLabel={tr('sales:line.discountValue', { unit: discountMode === 'percent' ? '%' : currency })}
               containerStyle={{ flex: 1 }}
             />
           </View>
@@ -297,7 +298,7 @@ function LineEditorForm({
           }}
         >
           {[
-            { label: tr('common:table.amount'), value: formatMoney(preview.gross) },
+            { label: tr('sales:line.grossAmount'), value: formatMoney(preview.gross) },
             { label: tr('sales:line.discount'), value: `− ${formatMoney(preview.discount)}` },
             { label: tr('common:totals.taxableValue'), value: formatMoney(preview.taxable) },
             { label: tr('sales:line.taxWithRate', { rate: formatPercent(category?.rate ?? 0) }), value: formatMoney(preview.taxAmount) },
@@ -313,7 +314,8 @@ function LineEditorForm({
           ))}
           <View style={{ height: 1, backgroundColor: t.c.line, marginVertical: 2 }} />
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-            <Text variant="small" weight="700">{tr('sales:line.lineTotal')}</Text>
+            {/* With tax: the grid's "Line total" is before tax, so this says which it is. */}
+            <Text variant="small" weight="700">{tr('sales:line.totalWithTax')}</Text>
             <Text variant="small" weight="700">
               {formatMoney(preview.total)}
             </Text>
@@ -321,6 +323,20 @@ function LineEditorForm({
         </View>
       </View>
 
+      <ConfirmDialog
+        visible={confirmRemove}
+        title={tr('sales:line.removeTitle')}
+        message={tr('sales:line.removeMessage', { name: line.name || tr('sales:editor.untitledLine') })}
+        confirmLabel={tr('sales:line.remove')}
+        destructive
+        icon="trash-can-outline"
+        onCancel={() => setConfirmRemove(false)}
+        onConfirm={() => {
+          setConfirmRemove(false);
+          onRemove?.();
+          onClose();
+        }}
+      />
       <SelectSheet
         visible={unitOpen}
         onClose={() => setUnitOpen(false)}

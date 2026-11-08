@@ -18,7 +18,7 @@ export default function GoodsReceiptList() {
         emptyAction={tr('nav:title.newGoodsReceipt')}
         onEmptyAction={() => router.push('/(app)/purchases/receipts/new')}
       />
-      <Fab icon="plus" onPress={() => router.push('/(app)/purchases/receipts/new')} />
+      <Fab icon="plus" label={tr('nav:title.newGoodsReceipt')} onPress={() => router.push('/(app)/purchases/receipts/new')} />
     </View>
   );
 }

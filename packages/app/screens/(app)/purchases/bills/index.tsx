@@ -18,7 +18,7 @@ export default function PurchaseBillList() {
         emptyAction={tr('nav:title.newPurchaseBill')}
         onEmptyAction={() => router.push('/(app)/purchases/bills/new')}
       />
-      <Fab icon="plus" onPress={() => router.push('/(app)/purchases/bills/new')} />
+      <Fab icon="plus" label={tr('nav:title.newPurchaseBill')} onPress={() => router.push('/(app)/purchases/bills/new')} />
     </View>
   );
 }

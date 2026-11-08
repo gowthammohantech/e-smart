@@ -18,7 +18,7 @@ export default function DeliveryList() {
         emptyAction={tr('nav:title.newDeliveryNote')}
         onEmptyAction={() => router.push('/(app)/sales/deliveries/new')}
       />
-      <Fab icon="plus" onPress={() => router.push('/(app)/sales/deliveries/new')} />
+      <Fab icon="plus" label={tr('nav:title.newDeliveryNote')} onPress={() => router.push('/(app)/sales/deliveries/new')} />
     </View>
   );
 }

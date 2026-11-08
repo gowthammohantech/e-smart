@@ -18,7 +18,7 @@ export default function SalesReturnList() {
         emptyAction={tr('nav:title.newSalesReturn')}
         onEmptyAction={() => router.push('/(app)/sales/returns/new')}
       />
-      <Fab icon="plus" onPress={() => router.push('/(app)/sales/returns/new')} />
+      <Fab icon="plus" label={tr('nav:title.newSalesReturn')} onPress={() => router.push('/(app)/sales/returns/new')} />
     </View>
   );
 }

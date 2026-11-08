@@ -18,7 +18,7 @@ export default function PurchaseOrderList() {
         emptyAction={tr('nav:title.newPurchaseOrder')}
         onEmptyAction={() => router.push('/(app)/purchases/orders/new')}
       />
-      <Fab icon="plus" onPress={() => router.push('/(app)/purchases/orders/new')} />
+      <Fab icon="plus" label={tr('nav:title.newPurchaseOrder')} onPress={() => router.push('/(app)/purchases/orders/new')} />
     </View>
   );
 }

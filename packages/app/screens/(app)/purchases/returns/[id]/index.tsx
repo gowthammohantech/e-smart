@@ -27,7 +27,8 @@ export default function PurchaseReturnDetail() {
 
   return (
     <>
-      <Stack.Screen options={{ title: document.number }} />
+      {/* A draft's placeholder number (INVOICE-DRAFT) reads as "Draft". */}
+      <Stack.Screen options={{ title: document.status === 'draft' && document.number.endsWith('-DRAFT') ? tr('common:documentList.draftNumber') : document.number }} />
       <DocumentDetail document={document} />
     </>
   );

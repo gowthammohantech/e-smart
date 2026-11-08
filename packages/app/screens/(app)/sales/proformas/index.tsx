@@ -18,7 +18,7 @@ export default function ProformaList() {
         emptyAction={tr('nav:title.newProforma')}
         onEmptyAction={() => router.push('/(app)/sales/proformas/new')}
       />
-      <Fab icon="plus" onPress={() => router.push('/(app)/sales/proformas/new')} />
+      <Fab icon="plus" label={tr('nav:title.newProforma')} onPress={() => router.push('/(app)/sales/proformas/new')} />
     </View>
   );
 }

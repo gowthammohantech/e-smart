@@ -18,7 +18,7 @@ export default function CreditNoteList() {
         emptyAction={tr('nav:title.newCreditNote')}
         onEmptyAction={() => router.push('/(app)/sales/credit-notes/new')}
       />
-      <Fab icon="plus" onPress={() => router.push('/(app)/sales/credit-notes/new')} />
+      <Fab icon="plus" label={tr('nav:title.newCreditNote')} onPress={() => router.push('/(app)/sales/credit-notes/new')} />
     </View>
   );
 }

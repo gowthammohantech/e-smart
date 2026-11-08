@@ -20,17 +20,18 @@ import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { useToast, type ToastIcon } from '@esmart/ui/components/Toast';
 import { useServerSave } from '../../components/useServerSave';
+import { useSaveOnline } from '../../remote/save';
 import { useSingleFlight } from '../../components/useSingleFlight';
 
 import { BusinessDocument, DocStatus, DocumentKind } from '@esmart/core/types';
 import { tdsSection } from '@esmart/core/data/tdsSections';
-import { NOTE_SOURCE, STATUS_TONE, canTransition, conversionBlock, isFinalized, nextStatuses } from '@esmart/core/domain/documentStates';
+import { NOTE_SOURCE, RECEIVABLE_KINDS, STATUS_TONE, canTransition, conversionBlock, isFinalized, isPayableDocument, nextStatuses } from '@esmart/core/domain/documentStates';
 import { documentKindLabel, paymentMethodLabel, statusLabel } from '@esmart/core/labels';
 import { outstandingOf } from '@esmart/core/domain/receivables';
 import { OUTBOUND_KINDS, shortfallsAgainst } from '@esmart/core/domain/stockLedger';
 import { formatMoney, formatPercent, formatQty } from '@esmart/core/lib/format';
 import { creditNoteDeadline, daysBetween, formatDate, today } from '@esmart/core/lib/date';
-import { money, type Money } from '@esmart/core/lib/money';
+import { fromMajor, money, subtract, type Money } from '@esmart/core/lib/money';
 import { INDIAN_STATES, unitShortName } from '@esmart/core/data/masters';
 import { buildDocumentHtml } from '@esmart/core/render/documentHtml';
 
@@ -48,7 +49,8 @@ import {
   usePayments,
 } from '../../store/selectors';
 import { queryClient, useDocumentRecord, useEwayBillRecord, usePartyRecord, useStockAvailable, useStockMovedBy } from '../../remote/queries';
-import { detailRouteFor, listRouteFor } from './DocumentEditor';
+import { detailRouteFor, finaliseActionLabel, listRouteFor } from './DocumentEditor';
+import { useCustomFields } from '../customFields/CustomFieldsSection';
 import { ComplianceCard } from '../compliance/ComplianceCard';
 import { ApprovalBanner } from '../approvals/ApprovalBanner';
 import { EInvoiceSheet } from '../compliance/EInvoiceSheet';
@@ -80,6 +82,8 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
   const goBack = useGoBack();
   const toast = useToast();
   const { run: serverSave } = useServerSave();
+  // Finalising goes through this one: a credit-limit refusal is offered as a warning to accept, as the editor does.
+  const { save: saveOnline } = useSaveOnline();
 
   const company = useActiveCompany();
   const baseCurrency = useBaseCurrency();
@@ -151,7 +155,20 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
 
   const kindName = documentKindLabel(tr, doc.kind, 1);
   const branch = branches.find((b) => b.id === doc.branchId);
-  const isPayable = doc.kind === 'invoice' || doc.kind === 'purchaseBill';
+  // What money settles: invoices and debit notes (received), bills and supplier debit notes (paid).
+  const isPayable = isPayableDocument(doc.kind);
+  const receivable = RECEIVABLE_KINDS.includes(doc.kind);
+  const paymentRoute = `/(app)/payments/new?direction=${receivable ? 'received' : 'paid'}&partyId=${doc.partyId}&documentId=${doc.id}`;
+  // A draft's placeholder number (INVOICE-DRAFT) reads as "Draft".
+  const shownNumber = doc.status === 'draft' && doc.number.endsWith('-DRAFT') ? tr('common:documentList.draftNumber') : doc.number;
+  /** A line before tax: quantity × rate less its discount, as the editor and its grid show it. */
+  const lineAmount = (line: BusinessDocument['lines'][number]) => {
+    const calc = calculateLine(line, doc.currency, { regime: 'NONE', registered: false });
+    return subtract(calc.gross, calc.discount);
+  };
+  /** A fixed discount is kept in major units: in the document's currency, whatever its decimals. */
+  const discountText = (line: BusinessDocument['lines'][number]) =>
+    line.discountMode === 'percent' ? formatPercent(line.discountValue) : formatMoney(fromMajor(String(line.discountValue), doc.currency));
 
   const relatedPayments = useMemo(
     () => allPayments.filter((p) => p.allocations.some((a) => a.documentId === doc.id)),
@@ -163,7 +180,9 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
     [record?.outstanding, doc, allPayments, allDocuments],
   );
   const paid = money(doc.totals.grandTotal.minor - outstanding.minor, doc.currency);
-  const overdueDays = doc.dueDate ? daysBetween(doc.dueDate, today()) : 0;
+  // Late only while something is still owed: a paid invoice past its date isn't overdue.
+  const owing = isPayable && isFinalized(doc.status) && doc.status !== 'cancelled' && doc.status !== 'paid' && outstanding.minor > 0;
+  const overdueDays = doc.dueDate && owing ? daysBetween(doc.dueDate, today()) : 0;
   // Advances and direct notes the party holds, which the adjustment entry can apply to this document.
   const partyAdvance = (usePartyRecord(doc.partyId).data as { advance?: Money } | undefined)?.advance;
   const canAdjust = outstanding.minor > 0 && isFinalized(doc.status) && (partyAdvance?.minor ?? 0) > 0 && ['invoice', 'debitNote', 'purchaseBill', 'supplierDebitNote'].includes(doc.kind);
@@ -329,6 +348,11 @@ ${url}`;
 
   const convert = async (target: DocumentKind) => {
     setActionsOpen(false);
+    // A return or note against several lines picks which, as from the Returns or Notes list: one way to make them.
+    if (NOTE_SOURCE[target] && doc.lines.length > 1) {
+      router.push(`${listRouteFor(target)}/new?partyId=${doc.partyId}&sourceId=${doc.id}` as never);
+      return;
+    }
     const res = await serverSave(() => convertDocument(doc.id, target), tr('common:documentDetail.createdDraft', { kind: documentKindLabel(tr, target, 1) }), {
       icon: 'file-replace-outline',
       detail: tr('sales:detail.fromDocument', { number: doc.number }),
@@ -405,7 +429,35 @@ ${url}`;
       return;
     }
     setStatusOpen(false);
-    void serverSave(() => setDocumentStatus(doc.id, s), message, { icon: 'flag-checkered', detail: doc.number, varies: true });
+    void applyStatus(s, message);
+  };
+
+  // Over the customer's credit limit the server refuses an invoice; the person may accept that and issue it anyway.
+  const [creditRefusal, setCreditRefusal] = useState<{ status: DocStatus; message: string; reason: string } | null>(null);
+  const applyStatus = async (s: DocStatus, message: string, overrideCreditLimit = false) => {
+    if (!overrideCreditLimit && doc.kind !== 'invoice') {
+      void serverSave(() => setDocumentStatus(doc.id, s), message, { icon: 'flag-checkered', detail: shownNumber, varies: true });
+      return;
+    }
+    const res = await saveOnline(() => setDocumentStatus(doc.id, s, overrideCreditLimit ? { overrideCreditLimit: true } : undefined));
+    if (!res) return;
+    if (res.outcome === 'refused' && res.errorCode === 'CREDIT_LIMIT_EXCEEDED' && !overrideCreditLimit) {
+      setCreditRefusal({ status: s, message, reason: res.error ?? '' });
+      return;
+    }
+    if (res.outcome === 'refused' && res.errorCode === 'PAYMENT_HELD') {
+      toast.show(tr('common:save.paymentHeld'), 'info', { icon: 'clipboard-clock-outline' });
+      return;
+    }
+    if (res.outcome === 'refused') {
+      toast.show(tr('common:save.refused', { reason: res.error }), 'error');
+      return;
+    }
+    if (res.outcome === 'unreachable') {
+      toast.show(tr('common:save.unreachable'), 'error');
+      return;
+    }
+    toast.show(message, 'success', { icon: 'flag-checkered', detail: doc.number, varies: true });
   };
 
   // Finalise asks once, then finalises; the status list is for anything else.
@@ -421,7 +473,7 @@ ${url}`;
               {kindName}
             </Text>
             <Text variant="h3" weight="700">
-              {doc.number}
+              {shownNumber}
             </Text>
             <Text variant="caption" tone="muted">
               {formatDate(doc.date)}
@@ -480,7 +532,7 @@ ${url}`;
         </Pressable>
 
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm }}>
-          {doc.dueDate ? <Badge label={tr('sales:detail.dueOn', { date: formatDate(doc.dueDate, 'dd MMM') })} tone={overdueDays > 0 ? 'danger' : 'neutral'} /> : null}
+          {doc.dueDate ? <Badge label={tr('sales:detail.dueOn', { date: formatDate(doc.dueDate, 'dd MMM yyyy') })} tone={overdueDays > 0 ? 'danger' : 'neutral'} /> : null}
           {doc.validUntil ? <Badge label={tr('sales:detail.validTo', { date: formatDate(doc.validUntil, 'dd MMM') })} tone="neutral" /> : null}
           {doc.currency !== baseCurrency ? <Badge label={`${doc.currency} @ ${doc.exchangeRate.toFixed(2)}`} tone="info" /> : null}
           {doc.placeOfSupplyStateCode ? (
@@ -497,7 +549,8 @@ ${url}`;
     <>
       {/* Payment status */}
       {isPayable && isFinalized(doc.status) && doc.status !== 'cancelled' ? (
-        <Card style={{ marginTop: t.spacing.md, gap: t.spacing.md }}>
+        // On a desktop it heads the side column, level with the header card beside it.
+        <Card style={{ marginTop: desktop ? 0 : t.spacing.md, gap: t.spacing.md }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
             <View style={{ gap: 3 }}>
               <Text variant="caption" tone="muted">{tr('sales:detail.outstanding')}</Text>
@@ -527,13 +580,9 @@ ${url}`;
 
           {outstanding.minor > 0 ? (
             <Button
-              title={doc.kind === 'invoice' ? tr('common:action.recordPayment') : tr('sales:detail.paySupplier')}
-              icon={doc.kind === 'invoice' ? 'cash-plus' : 'cash-minus'}
-              onPress={() =>
-                router.push(
-                  `/(app)/payments/new?direction=${doc.kind === 'invoice' ? 'received' : 'paid'}&partyId=${doc.partyId}&documentId=${doc.id}`,
-                )
-              }
+              title={receivable ? tr('common:action.recordPayment') : tr('sales:detail.paySupplier')}
+              icon={receivable ? 'cash-plus' : 'cash-minus'}
+              onPress={() => router.push(paymentRoute as never)}
               fullWidth
             />
           ) : null}
@@ -572,9 +621,7 @@ ${url}`;
               </Text>
               <Text variant="caption" tone="muted">
                 {formatQty(line.quantity)} {unitShortName(line.unit)} × {formatMoney(line.unitPrice)}
-                {line.discountValue > 0
-                  ? ` · −${line.discountMode === 'percent' ? formatPercent(line.discountValue) : formatMoney(money(line.discountValue * 100, doc.currency))}`
-                  : ''}
+                {line.discountValue > 0 ? ` · −${discountText(line)}` : ''}
               </Text>
               <View style={{ flexDirection: 'row', gap: 5, marginTop: 2 }}>
                 <Badge label={formatPercent(line.taxRate)} tone="neutral" size="sm" />
@@ -582,7 +629,7 @@ ${url}`;
               </View>
             </View>
             <Text variant="body" weight="700" style={{ fontVariant: ['tabular-nums'] }}>
-              {formatMoney(money(Math.round(line.unitPrice.minor * line.quantity), doc.currency))}
+              {formatMoney(lineAmount(line))}
             </Text>
           </View>
         ))}
@@ -654,7 +701,15 @@ ${url}`;
   type HintedBlock = 'periodLocked' | 'hasPayments' | 'hasCredit' | 'hasNotes' | 'eInvoiced' | 'ewayBill' | 'returnFiled' | 'laterStock';
   const editBlock = (record?.editBlock ?? doc.editBlock) as string | undefined;
   const hinted = (b: string | undefined): b is HintedBlock => !!b && !['notLatest', 'notFinal', 'notInvoice'].includes(b);
-  const editHint: string | undefined = !editable && doc.kind === 'invoice' && doc.status !== 'cancelled' && hinted(editBlock) ? tr(`sales:detail.editBlock.${editBlock}`) : undefined;
+  const editHint: string | undefined =
+    editable || doc.status === 'cancelled'
+      ? undefined
+      : doc.kind === 'invoice'
+        ? hinted(editBlock)
+          ? tr(`sales:detail.editBlock.${editBlock}`)
+          : undefined
+        : // Only an invoice is edited once issued (RULES 6.23): say so rather than hide Edit.
+          tr('sales:detail.editIssuedKind', { kind: kindName });
   const openEditor = () => router.push(`${detailRouteFor(doc.kind, doc.id)}/edit` as never);
 
   // Direct credit notes applied to it (or, on a note, where it was applied), each of which can be undone.
@@ -763,8 +818,34 @@ ${url}`;
       <ComplianceCard document={doc} />
     </>
   );
+  // The company's own fields, as the document holds them.
+  const fieldDefs = useCustomFields('document', true);
+  const filledFields = fieldDefs.filter((f) => {
+    const v = doc.customFields?.[f.id];
+    return v !== undefined && v !== null && v !== '' && !(f.kind === 'checkbox' && v === false);
+  });
+  const customFieldsCard = filledFields.length ? (
+    <Card style={{ marginTop: t.spacing.md, gap: t.spacing.sm }}>
+      {filledFields.map((f) => {
+        const v = doc.customFields![f.id];
+        const shown = f.kind === 'checkbox' ? tr('common:component.yes') : f.kind === 'date' && typeof v === 'string' ? formatDate(v) : String(v);
+        return (
+          <View key={f.id} style={{ flexDirection: 'row', justifyContent: 'space-between', gap: t.spacing.md }}>
+            <Text variant="small" tone="muted">
+              {f.label}
+            </Text>
+            <Text variant="small" weight="600" style={{ flexShrink: 1, textAlign: 'right' }}>
+              {shown}
+            </Text>
+          </View>
+        );
+      })}
+    </Card>
+  ) : null;
+
   const notesCard = (
     <>
+      {customFieldsCard}
       {/* Notes */}
       {doc.notes || doc.terms ? (
         <Card style={{ marginTop: t.spacing.md, gap: t.spacing.md }}>
@@ -820,11 +901,7 @@ ${url}`;
             align: 'right',
             render: (line) => (
               <Cell tone="muted" mono>
-                {line.discountValue > 0
-                  ? line.discountMode === 'percent'
-                    ? formatPercent(line.discountValue)
-                    : formatMoney(money(line.discountValue * 100, doc.currency))
-                  : '—'}
+                {line.discountValue > 0 ? discountText(line) : '—'}
               </Cell>
             ),
           },
@@ -836,7 +913,7 @@ ${url}`;
             align: 'right',
             render: (line) => (
               <Cell weight="700" mono>
-                {formatMoney(money(Math.round(line.unitPrice.minor * line.quantity), doc.currency))}
+                {formatMoney(lineAmount(line))}
               </Cell>
             ),
           },
@@ -847,6 +924,22 @@ ${url}`;
     </View>
   );
 
+  // One label for the PDF everywhere: saved in a browser, shared from a phone.
+  const pdfLabel = tr(Platform.OS === 'web' ? 'sales:print.savePdf' : 'sales:print.sharePdf');
+  const pdfIcon = Platform.OS === 'web' ? 'file-download-outline' : 'share-variant';
+  // A quote, order, delivery or receipt is there to be carried forward: that is its main action once it's out.
+  const primaryConversion =
+    isFinalized(doc.status) && doc.status !== 'cancelled' && ['quote', 'proforma', 'salesOrder', 'delivery', 'purchaseOrder', 'goodsReceipt'].includes(doc.kind)
+      ? (conversions.find((c) => c.target === 'invoice' || c.target === 'purchaseBill') ?? conversions[0])
+      : undefined;
+  const finaliseLabel = finaliseActionLabel(tr, doc.kind);
+  // The main action, always last (rightmost): finalise a draft, carry forward, or the PDF.
+  const primaryAction = !isFinalized(doc.status)
+    ? { title: finaliseLabel, icon: 'check-decagram-outline' as IconName, onPress: finalise, loading: false }
+    : primaryConversion
+      ? { title: primaryConversion.label, icon: primaryConversion.icon, onPress: () => void convert(primaryConversion.target), loading: false }
+      : { title: pdfLabel, icon: pdfIcon as IconName, onPress: shareDocument, loading: busy };
+
   const desktopActions = (
     <View style={{ flexDirection: 'row', gap: t.spacing.sm }}>
       {editable ? (
@@ -855,11 +948,8 @@ ${url}`;
         <Button title={tr('sales:detail.edit')} variant="ghost" icon="pencil-off-outline" tooltip={editHint} onPress={() => toast.show(editHint, 'info')} />
       ) : null}
       <Button title={tr('sales:detail.actions')} variant="ghost" icon="dots-horizontal" onPress={() => setActionsOpen(true)} />
-      {!isFinalized(doc.status) ? (
-        <Button title={tr('sales:detail.finalise')} icon="check-decagram-outline" onPress={finalise} />
-      ) : (
-        <Button title={tr('sales:print.savePdf')} icon="file-download-outline" onPress={shareDocument} loading={busy} />
-      )}
+      {primaryConversion ? <Button title={pdfLabel} variant="secondary" icon={pdfIcon} onPress={shareDocument} loading={busy} /> : null}
+      <Button title={primaryAction.title} icon={primaryAction.icon} onPress={primaryAction.onPress} loading={primaryAction.loading} />
     </View>
   );
 
@@ -943,17 +1033,9 @@ ${url}`;
             gap: t.spacing.md,
           }}
         >
-          {!isFinalized(doc.status) ? (
-            <Button
-              title={tr('sales:detail.finalise')}
-              icon="check-decagram-outline"
-              onPress={finalise}
-              style={{ flex: 1 }}
-            />
-          ) : (
-            <Button title={tr('sales:detail.share')} icon="share-variant" onPress={shareDocument} loading={busy} style={{ flex: 1 }} />
-          )}
+          {/* As on a desktop: the main action on the right. */}
           <Button title={tr('sales:detail.actions')} variant="ghost" icon="dots-horizontal" onPress={() => setActionsOpen(true)} style={{ flex: 1 }} />
+          <Button title={primaryAction.title} icon={primaryAction.icon} onPress={primaryAction.onPress} loading={primaryAction.loading} style={{ flex: 1 }} />
         </View>
         </>
       )}
@@ -961,12 +1043,15 @@ ${url}`;
       <RecurrenceSheet doc={doc} visible={recurrenceOpen} onClose={() => setRecurrenceOpen(false)} />
 
       {/* Action sheet */}
-      <Sheet visible={actionsOpen} onClose={() => setActionsOpen(false)} title={doc.number}>
+      <Sheet visible={actionsOpen} onClose={() => setActionsOpen(false)} title={shownNumber}>
         {/* eslint-disable-next-line react-hooks/refs -- these onPress handlers read remoteBusy.current only when tapped, never while rendering */}
-        {[
+        {([
+          // What it can become comes first: the reason most people open this sheet.
+          ...conversions.filter((c) => c !== primaryConversion).map((c) => ({ label: c.label, icon: c.icon, onPress: () => void convert(c.target) })),
           ...(isFinalized(doc.status)
             ? [
-                { label: tr('sales:print.sharePdf'), icon: 'file-pdf-box' as const, onPress: shareDocument },
+                // The PDF is the footer's own button, unless carrying it forward took that place.
+                ...(primaryConversion ? [{ label: pdfLabel, icon: 'file-pdf-box' as const, onPress: shareDocument }] : []),
                 { label: tr('sales:detail.sendEmail'), icon: 'email-outline' as const, onPress: () => sendVia('email') },
                 { label: tr('sales:detail.sendWhatsapp'), icon: 'whatsapp' as const, onPress: () => sendVia('whatsapp') },
                 // An issued invoice, not itself a copy, can repeat; the server says if it can't.
@@ -994,18 +1079,20 @@ ${url}`;
                     : []),
               ]
             : [{ label: tr('sales:detail.edit'), icon: 'pencil-outline' as const, onPress: openEditor }]),
-          {
-            label: doc.kind === 'purchaseBill' ? tr('sales:detail.paySupplier') : tr('common:action.recordPayment'),
-            icon: 'cash-plus' as const,
-            onPress: () => {
-              if (!isPayable) return toast.show(tr('common:documentDetail.noPayment', { kind: kindName }), 'warning');
-              if (!isFinalized(doc.status)) return toast.show(tr('common:documentDetail.issueFirst'), 'warning');
-              if (outstanding.minor <= 0) return toast.show(tr('common:documentDetail.nothingDue'), 'info', { icon: 'check-decagram-outline', detail: doc.number });
-              router.push(
-                `/(app)/payments/new?direction=${doc.kind === 'invoice' ? 'received' : 'paid'}&partyId=${doc.partyId}&documentId=${doc.id}` as never,
-              );
-            },
-          },
+          // Only on what money settles; a quote or an order has nothing to pay.
+          ...(isPayable && doc.status !== 'cancelled'
+            ? [
+                {
+                  label: receivable ? tr('common:action.recordPayment') : tr('sales:detail.paySupplier'),
+                  icon: (receivable ? 'cash-plus' : 'cash-minus') as IconName,
+                  onPress: () => {
+                    if (!isFinalized(doc.status)) return toast.show(tr('common:documentDetail.issueFirst'), 'warning');
+                    if (outstanding.minor <= 0) return toast.show(tr('common:documentDetail.nothingDue'), 'info', { icon: 'check-decagram-outline', detail: doc.number });
+                    router.push(paymentRoute as never);
+                  },
+                },
+              ]
+            : []),
           { label: tr('sales:detail.previewDocument'), icon: 'eye-outline' as const, onPress: () => router.push(`/(app)/documents/${doc.id}`) },
           ...(eInvoiceApplicable && doc.compliance?.eInvoiceStatus !== 'generated' && doc.compliance?.eInvoiceStatus !== 'cancelled'
             ? [{ label: tr('sales:detail.generateEInvoice'), icon: 'shield-check-outline' as const, onPress: () => { setActionsOpen(false); setComplianceSheet('generate'); } }]
@@ -1018,7 +1105,6 @@ ${url}`;
             : ewayRequired
               ? [{ label: tr('compliance:ewb.generate'), icon: 'truck-fast-outline' as const, onPress: () => { setActionsOpen(false); router.push(`/(app)/compliance/eway/new?documentId=${doc.id}`); } }]
               : []),
-          ...conversions.map((c) => ({ label: c.label, icon: c.icon, onPress: () => void convert(c.target) })),
           { label: tr('sales:detail.duplicate'), icon: 'content-duplicate' as const, onPress: () => {
             setActionsOpen(false);
             void serverSave(() => duplicateDocument(doc.id)).then((res) => {
@@ -1028,7 +1114,7 @@ ${url}`;
           ...(transitions.length ? [{ label: tr('common:documentDetail.changeStatus'), icon: 'swap-vertical' as const, onPress: () => { setActionsOpen(false); setStatusOpen(true); } }] : []),
           // A draft quote can be withdrawn too, where its kind allows that.
           ...(doc.status !== 'cancelled' && (isFinalized(doc.status) || canTransition(doc.kind, doc.status, 'cancelled'))
-            ? [{ label: tr('common:documentDetail.cancelKind', { kind: kindName }), icon: 'close-octagon-outline' as const, onPress: () => {
+            ? [{ label: tr('common:documentDetail.cancelKind', { kind: kindName }), icon: 'close-octagon-outline' as const, danger: true, onPress: () => {
                 setActionsOpen(false);
                 // The server refuses while the e-way bill or the IRN is live (in that
                 // order), so say so before the user confirms.
@@ -1044,9 +1130,9 @@ ${url}`;
               } }]
             : []),
           ...(!isFinalized(doc.status)
-            ? [{ label: tr('sales:detail.deleteDraft'), icon: 'trash-can-outline' as const, onPress: () => { setActionsOpen(false); setConfirmDelete(true); } }]
+            ? [{ label: tr('sales:detail.deleteDraft'), icon: 'trash-can-outline' as const, danger: true, onPress: () => { setActionsOpen(false); setConfirmDelete(true); } }]
             : []),
-        ].map((a) => (
+        ] as { label: string; icon: IconName; onPress: () => void; danger?: boolean }[]).map((a, i, all) => (
           <Pressable
             key={a.label}
             // Every action closes the sheet first; it is a modal, so one left open
@@ -1064,10 +1150,12 @@ ${url}`;
               paddingVertical: t.spacing.md,
               paddingHorizontal: t.spacing.lg,
               backgroundColor: pressed ? t.c.card2 : 'transparent',
+              // Cancel and delete sit apart, below a rule, in the danger colour.
+              ...(a.danger && !all[i - 1]?.danger ? { borderTopWidth: 1, borderTopColor: t.c.line, marginTop: t.spacing.sm } : null),
             })}
           >
-            <Icon name={a.icon} size={20} color={t.c.text} />
-            <Text variant="body" style={{ flex: 1 }}>
+            <Icon name={a.icon} size={20} color={a.danger ? t.c.bad : t.c.text} />
+            <Text variant="body" tone={a.danger ? 'bad' : 'default'} style={{ flex: 1 }}>
               {a.label}
             </Text>
           </Pressable>
@@ -1111,12 +1199,27 @@ ${url}`;
         visible={confirmFinalize}
         title={tr('common:documentEditor.finaliseTitle', { kind: kindName })}
         message={tr('common:documentEditor.finaliseMessage', { kind: kindName })}
-        confirmLabel={tr('sales:detail.finalise')}
+        confirmLabel={finaliseLabel}
         icon="check-decagram-outline"
         onCancel={() => setConfirmFinalize(false)}
         onConfirm={() => {
           setConfirmFinalize(false);
           if (finaliseTo) markAs(finaliseTo, tr('common:documentEditor.finalised', { kind: kindName }));
+        }}
+      />
+
+      <ConfirmDialog
+        visible={!!creditRefusal}
+        title={tr('sales:editor.creditLimitTitle')}
+        // The server's own words: what the customer owes and their limit.
+        message={creditRefusal?.reason ?? ''}
+        confirmLabel={tr('sales:editor.creditLimitProceed')}
+        icon="alert-outline"
+        onCancel={() => setCreditRefusal(null)}
+        onConfirm={() => {
+          const r = creditRefusal;
+          setCreditRefusal(null);
+          if (r) void applyStatus(r.status, r.message, true);
         }}
       />
 

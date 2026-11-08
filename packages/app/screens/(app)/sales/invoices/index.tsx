@@ -18,7 +18,7 @@ export default function InvoiceList() {
         emptyAction={tr('nav:title.newInvoice')}
         onEmptyAction={() => router.push('/(app)/sales/invoices/new')}
       />
-      <Fab icon="plus" onPress={() => router.push('/(app)/sales/invoices/new')} />
+      <Fab icon="plus" label={tr('nav:title.newInvoice')} onPress={() => router.push('/(app)/sales/invoices/new')} />
     </View>
   );
 }

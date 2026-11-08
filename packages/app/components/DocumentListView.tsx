@@ -13,7 +13,7 @@ import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { Stagger } from '@esmart/ui/components/Stagger';
 import { Sheet } from '@esmart/ui/components/Sheet';
 import { Button } from '@esmart/ui/components/Button';
-import { Badge, StatusBadge } from '@esmart/ui/components/Badge';
+import { StatusBadge } from '@esmart/ui/components/Badge';
 import { Avatar } from '@esmart/ui/components/Avatar';
 import { Cell, DataTable, type Column, type Sort } from '@esmart/ui/components/DataTable';
 import { FilterMenu } from '@esmart/ui/components/FilterMenu';
@@ -31,7 +31,7 @@ import { useToast } from '@esmart/ui/components/Toast';
 import { api } from '../remote/api';
 import { describeError } from '../remote/errors';
 import { useBaseCurrency } from '../store/selectors';
-import { useDocumentPages, useDocumentSummary, type DocumentQuery } from '../remote/queries';
+import { useDocumentPages, useDocumentSummary, usePartyRecord, type DocumentQuery } from '../remote/queries';
 import { useDebounced } from './useDebounced';
 import { pagedTableProps, useRowsExport, useTableSelection } from './pagedTable';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
@@ -54,7 +54,7 @@ const DEFAULT_FILTERS: DocumentListFilters = {
 };
 
 /** One row of a list: the server's summary of a document. */
-type Row = { id: string; number: string; date: string; dueDate?: string; status: DocStatus; partyId?: string; partyName: string; grandTotal: Money; outstanding?: Money };
+type Row = { id: string; number: string; date: string; dueDate?: string; status: DocStatus; partyId?: string; partyName: string; grandTotal: Money; outstanding?: Money; supplierDocNumber?: string };
 const asRowData = (r: Row) => ({ number: r.number, date: r.date, status: r.status, totals: { grandTotal: r.grandTotal } });
 
 /** The server sorts these columns; the rest keep the server's order. */
@@ -123,7 +123,7 @@ export function DocumentListView({
 
   const rows = useMemo<Row[]>(
     () =>
-      pages.rows.map((d) => ({ id: d.id!, number: d.number ?? '', date: d.date!, dueDate: d.dueDate, status: d.status as DocStatus, partyId: d.partyId, partyName: d.partyName ?? '—', grandTotal: d.grandTotal as Money, outstanding: d.outstanding as Money | undefined })),
+      pages.rows.map((d) => ({ id: d.id!, number: d.number ?? '', date: d.date!, dueDate: d.dueDate, status: d.status as DocStatus, partyId: d.partyId, partyName: d.partyName ?? '—', grandTotal: d.grandTotal as Money, outstanding: d.outstanding as Money | undefined, supplierDocNumber: d.supplierDocNumber || undefined })),
     [pages.rows],
   );
 
@@ -138,6 +138,61 @@ export function DocumentListView({
   // Nothing of this kind at all, as against nothing matching the filters.
   const noneAtAll = !activeFilterCount && !search && summary.data?.count === 0;
   const loading = (pages.isLoading || summary.isLoading) && !rows.length;
+  // The list couldn't load: say so with a retry, never "Nothing matches" or a ₹0 total.
+  const failed = pages.isError && !rows.length;
+  const retry = () => {
+    void pages.refetch();
+    void summary.refetch();
+  };
+  // Opened from a contact (?party=…): the filter names who it is, and can be taken off.
+  const filterParty = usePartyRecord(filters.partyId ?? undefined).data;
+  const purchaseKind = PURCHASE_KINDS.includes(kind);
+  const partyChip = filters.partyId ? (
+    <Pressable
+      onPress={() => setFilters((f) => ({ ...f, partyId: null }))}
+      accessibilityRole="button"
+      accessibilityLabel={tr('common:documentList.clearPartyNamed', { name: filterParty?.name ?? '' })}
+      hitSlop={{ top: 4, bottom: 4 }}
+      style={{
+        height: 36,
+        flexDirection: 'row',
+        alignItems: 'center',
+        alignSelf: 'flex-start',
+        gap: 6,
+        paddingHorizontal: t.spacing.md,
+        borderRadius: t.radius.pill,
+        backgroundColor: t.c.chip,
+        borderWidth: 1,
+        borderColor: t.c.primary,
+      }}
+    >
+      <Icon name={purchaseKind ? 'truck-outline' : 'account-outline'} size={15} color={t.c.primary} />
+      <Text variant="caption" weight="600" tone="primary" numberOfLines={1} style={{ maxWidth: 220 }}>
+        {tr(purchaseKind ? 'common:documentList.supplierFilter' : 'common:documentList.customerFilter', { name: filterParty?.name ?? '…' })}
+      </Text>
+      <Icon name="close" size={15} color={t.c.primary} />
+    </Pressable>
+  ) : null;
+  const failedState = (
+    <EmptyState
+      icon="cloud-off-outline"
+      title={tr('common:table.loadFailed')}
+      message={tr('common:documentList.loadFailedBody')}
+      actionLabel={tr('common:action.retry')}
+      onAction={retry}
+      compact
+    />
+  );
+  /** A status chip: selected ones in the chip fill with primary text, which reads at small sizes. */
+  const chipStyle = (active: boolean) => ({
+    height: 36,
+    justifyContent: 'center' as const,
+    paddingHorizontal: t.spacing.md,
+    borderRadius: t.radius.pill,
+    backgroundColor: active ? t.c.chip : t.c.paper,
+    borderWidth: 1,
+    borderColor: active ? t.c.primary : t.c.line,
+  });
   const loadMore = () => {
     if (pages.hasNextPage && !pages.isFetchingNextPage) void pages.fetchNextPage();
   };
@@ -211,6 +266,13 @@ export function DocumentListView({
       (r) => api.POST('/companies/{companyId}/documents/{id}/status', { params: { path: { companyId, id: r.id } }, body: { status: 'sent' } }),
       'common:table.markedSent',
     );
+  // On a phone row: what an issued invoice or bill still owes, and by when.
+  const owingLabel = (d: Row) => {
+    if (!(kind === 'invoice' || kind === 'purchaseBill') || !isFinalized(d.status) || d.status === 'cancelled' || !d.outstanding || d.outstanding.minor <= 0) return undefined;
+    return d.dueDate
+      ? tr('common:documentList.owingBy', { amount: formatMoney(d.outstanding), date: formatDate(d.dueDate, 'dd MMM') })
+      : tr('common:documentList.owing', { amount: formatMoney(d.outstanding) });
+  };
   const payable = (d: Row) => (kind === 'invoice' || kind === 'purchaseBill') && isFinalized(d.status) && !!d.partyId && (d.outstanding?.minor ?? 0) > 0;
 
   const toggleStatus = (s: DocStatus) =>
@@ -224,15 +286,30 @@ export function DocumentListView({
     const purchase = PURCHASE_KINDS.includes(kind);
     const owes = kind === 'invoice' || kind === 'purchaseBill';
     const columns: Column<Row>[] = [
-      { key: 'number', header: tr('common:table.number'), width: 170, render: (d) => <Cell weight="600">{d.number || tr('common:documentList.waiting')}</Cell>, sortValue: (d) => d.number },
+      {
+        key: 'number',
+        header: tr('common:table.number'),
+        width: 170,
+        render: (d) => (
+          <View style={{ gap: 2, maxWidth: '100%' }}>
+            <Cell weight="600">{d.status === 'draft' && d.number.endsWith('-DRAFT') ? tr('common:documentList.draftNumber') : d.number || tr('common:documentList.waiting')}</Cell>
+            {/* A bill is looked up by the supplier's own number as often as by ours. */}
+            {d.supplierDocNumber ? <Cell tone="muted">{tr('sales:detail.theirNumber', { number: d.supplierDocNumber })}</Cell> : null}
+          </View>
+        ),
+        sortValue: (d) => d.number,
+      },
       {
         key: 'party',
         header: purchase ? tr('common:table.supplier') : tr('common:table.customer'),
         flex: 2,
         render: (d) => (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm, maxWidth: '100%' }}>
+          <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm, maxWidth: '100%' }}>
             <Avatar name={d.partyName} size={26} />
-            <Cell>{d.partyName}</Cell>
+            {/* Takes the column's width before it truncates. */}
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Cell>{d.partyName}</Cell>
+            </View>
           </View>
         ),
       },
@@ -330,29 +407,22 @@ export function DocumentListView({
                 accessibilityRole="button"
                 accessibilityState={{ selected: active }}
                 accessibilityLabel={tr('common:documentList.filterByStatus', { status: statusLabel(tr, st) })}
-                style={{
-                  height: 36,
-                  justifyContent: 'center',
-                  paddingHorizontal: t.spacing.md,
-                  borderRadius: t.radius.pill,
-                  backgroundColor: active ? t.c.primary : t.c.paper,
-                  borderWidth: active ? 0 : 1,
-                  borderColor: t.c.line,
-                }}
+                style={chipStyle(active)}
               >
-                <Text variant="caption" weight="600" style={{ color: active ? t.c.onPrimary : t.c.muted }}>
+                <Text variant="caption" weight="600" tone={active ? 'primary' : 'muted'}>
                   {statusLabel(tr, st)} · {statusCount(st)}
                 </Text>
               </Pressable>
             );
           })}
+          {partyChip}
           {activeFilterCount || filters.query ? (
             <Text variant="caption" tone="primary" weight="600" accessibilityRole="button" onPress={() => setFilters(DEFAULT_FILTERS)}>
               {tr('common:table.clear')}
             </Text>
           ) : null}
           {/* How many match and what they add up to, at the right end of the filter row. */}
-          {loading ? (
+          {failed || summary.isError ? null : loading ? (
             <View style={{ marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
               <Skeleton height={12} width={80} radius={4} />
               <Skeleton height={18} width={90} radius={4} />
@@ -453,14 +523,15 @@ export function DocumentListView({
         <SearchBar
           value={filters.query}
           onChangeText={(query) => setFilters((f) => ({ ...f, query }))}
-          placeholder={tr('common:documentList.search', { kind: documentKindLabel(tr, kind, 2) })}
+          // Short enough not to be cut off on a phone; the desktop's says what it searches.
+          placeholder={tr('common:documentList.searchShort', { kind: documentKindLabel(tr, kind, 2) })}
           right={
             <Pressable
               onPress={() => setFilterOpen(true)}
               hitSlop={8}
               accessibilityRole="button"
               accessibilityLabel={tr('common:filters.title')}
-              style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}
+              style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 3, minWidth: 44, minHeight: 44 }}
             >
               <Icon
                 name="tune-variant"
@@ -480,7 +551,7 @@ export function DocumentListView({
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ gap: t.spacing.sm, paddingRight: t.spacing.lg }}
+            contentContainerStyle={{ gap: t.spacing.sm, paddingRight: t.spacing.lg, paddingVertical: 4 }}
           >
             {availableStatuses.map((s) => {
               const active = filters.statuses.includes(s);
@@ -492,16 +563,11 @@ export function DocumentListView({
                   accessibilityRole="button"
                   accessibilityState={{ selected: active }}
                   accessibilityLabel={tr('common:documentList.filterByStatus', { status: label })}
-                  style={{
-                    paddingHorizontal: t.spacing.md,
-                    paddingVertical: 6,
-                    borderRadius: t.radius.pill,
-                    backgroundColor: active ? t.c.primary : t.c.card,
-                    borderWidth: active ? 0 : 1,
-                    borderColor: t.c.line,
-                  }}
+                  // 36 tall with 4 above and below to tap: 44 in all.
+                  hitSlop={{ top: 4, bottom: 4 }}
+                  style={chipStyle(active)}
                 >
-                  <Text variant="caption" weight="600" style={{ color: active ? t.c.onPrimary : t.c.muted }}>
+                  <Text variant="caption" weight="600" tone={active ? 'primary' : 'muted'}>
                     {label} · {statusCount(s)}
                   </Text>
                 </Pressable>
@@ -510,9 +576,11 @@ export function DocumentListView({
           </ScrollView>
         ) : null}
 
+        {partyChip}
+
         {headerExtra}
 
-        {loading ? (
+        {failed || summary.isError ? null : loading ? (
           // Not "0 invoices · ₹0.00" before the count is in.
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', minHeight: 16 }}>
             <Skeleton height={10} width={90} radius={4} />
@@ -545,6 +613,8 @@ export function DocumentListView({
         <Card padded={false}>
           {loading ? (
             <CardRowsSkeleton />
+          ) : failed ? (
+            failedState
           ) : filtered.length === 0 ? (
             <EmptyState
               illustration="no-documents" icon="file-search-outline"
@@ -560,6 +630,8 @@ export function DocumentListView({
                 <DocumentRow
                   document={asRowData(d)}
                   partyName={d.partyName}
+                  detail={d.supplierDocNumber ? tr('sales:detail.theirNumber', { number: d.supplierDocNumber }) : undefined}
+                  outstandingLabel={owingLabel(d)}
                   divider={i < filtered.length - 1}
                   onPress={() => router.push(routeFor(d) as never)}
                 />
@@ -598,14 +670,8 @@ export function DocumentListView({
                     onPress={() => setFilters((f) => ({ ...f, range: p }))}
                     accessibilityRole="button"
                     accessibilityState={{ selected: active }}
-                    style={{
-                      paddingHorizontal: t.spacing.md,
-                      paddingVertical: 7,
-                      borderRadius: t.radius.pill,
-                      backgroundColor: active ? t.c.chip : t.c.card2,
-                      borderWidth: 1,
-                      borderColor: active ? t.c.primary : t.c.line,
-                    }}
+                    hitSlop={{ top: 4, bottom: 4 }}
+                    style={chipStyle(active)}
                   >
                     <Text variant="caption" weight="600" tone={active ? 'primary' : 'muted'}>
                       {dateRangeLabel(tr, p)}
@@ -622,8 +688,19 @@ export function DocumentListView({
               {availableStatuses.map((s) => {
                 const active = filters.statuses.includes(s);
                 return (
-                  <Pressable key={s} onPress={() => toggleStatus(s)} accessibilityRole="button">
-                    <Badge label={statusLabel(tr, s)} tone={active ? STATUS_TONE[s] : 'neutral'} />
+                  <Pressable
+                    key={s}
+                    onPress={() => toggleStatus(s)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                    accessibilityLabel={tr('common:documentList.filterByStatus', { status: statusLabel(tr, s) })}
+                    hitSlop={{ top: 4, bottom: 4 }}
+                    style={[chipStyle(active), { flexDirection: 'row', alignItems: 'center', gap: 6 }]}
+                  >
+                    {active ? <Icon name="check" size={14} color={t.c.primary} /> : null}
+                    <Text variant="caption" weight="600" tone={active ? 'primary' : 'muted'}>
+                      {statusLabel(tr, s)}
+                    </Text>
                   </Pressable>
                 );
               })}
@@ -632,7 +709,7 @@ export function DocumentListView({
 
           {filters.partyId ? (
             <Button
-              title={tr('common:filters.clearParty')}
+              title={filterParty?.name ? tr('common:documentList.clearPartyNamed', { name: filterParty.name }) : tr('common:filters.clearParty')}
               variant="ghost"
               onPress={() => setFilters((f) => ({ ...f, partyId: null }))}
             />

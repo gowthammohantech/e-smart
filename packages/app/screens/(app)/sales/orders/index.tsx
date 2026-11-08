@@ -18,7 +18,7 @@ export default function SalesOrderList() {
         emptyAction={tr('nav:title.newSalesOrder')}
         onEmptyAction={() => router.push('/(app)/sales/orders/new')}
       />
-      <Fab icon="plus" onPress={() => router.push('/(app)/sales/orders/new')} />
+      <Fab icon="plus" label={tr('nav:title.newSalesOrder')} onPress={() => router.push('/(app)/sales/orders/new')} />
     </View>
   );
 }

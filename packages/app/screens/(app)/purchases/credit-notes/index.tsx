@@ -18,7 +18,7 @@ export default function SupplierCreditNoteList() {
         emptyAction={tr('nav:title.newSupplierCreditNote')}
         onEmptyAction={() => router.push('/(app)/purchases/credit-notes/new')}
       />
-      <Fab icon="plus" onPress={() => router.push('/(app)/purchases/credit-notes/new')} />
+      <Fab icon="plus" label={tr('nav:title.newSupplierCreditNote')} onPress={() => router.push('/(app)/purchases/credit-notes/new')} />
     </View>
   );
 }

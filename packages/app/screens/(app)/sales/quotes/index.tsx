@@ -18,7 +18,7 @@ export default function QuoteList() {
         emptyAction={tr('nav:title.newQuotation')}
         onEmptyAction={() => router.push('/(app)/sales/quotes/new')}
       />
-      <Fab icon="plus" onPress={() => router.push('/(app)/sales/quotes/new')} />
+      <Fab icon="plus" label={tr('nav:title.newQuotation')} onPress={() => router.push('/(app)/sales/quotes/new')} />
     </View>
   );
 }

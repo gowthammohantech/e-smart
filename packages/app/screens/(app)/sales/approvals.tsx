@@ -33,7 +33,9 @@ export default function ApprovalsScreen() {
   const { t: tr } = useTranslation(["sales", "common"]);
   const companyId = useAppStore((s) => s.activeCompanyId);
   const role = useCurrentUser()?.role ?? "";
-  const { approve } = useApprovalActions();
+  const { approve, reject: sendBack } = useApprovalActions();
+  // Party names for the documents' rows, from what the device has.
+  const parties = useAppStore((s) => s.parties);
   const pending = useQuery({
     queryKey: ["approvals", companyId],
     enabled: !!companyId,
@@ -59,7 +61,27 @@ export default function ApprovalsScreen() {
       ).data?.data ?? [],
   });
   const held = requests.data ?? [];
-  const [declining, setDeclining] = useState<string | null>(null);
+  // A payment request being turned down, or a document being sent back, with the reason.
+  const [declining, setDeclining] = useState<{ id: string; what: "payment" | "document" } | null>(null);
+  // The document whose Approve or Send back is on its way: its buttons stay busy until the server answers.
+  const [deciding, setDeciding] = useState<string | null>(null);
+  const decideDocument = async (id: string, number: string, verdict: "approve" | "reject") => {
+    setDeciding(id);
+    try {
+      if (verdict === "approve") await approve(id);
+      else await sendBack(id, why.trim());
+      toast.show(tr(verdict === "approve" ? "sales:approval.approved" : "sales:approval.sentBack"), "success", {
+        icon: verdict === "approve" ? "check" : "undo-variant",
+        detail: number,
+      });
+      setDeclining(null);
+      setWhy("");
+    } catch (err) {
+      toast.show(describeError(err, tr), "error");
+    } finally {
+      setDeciding(null);
+    }
+  };
   const [why, setWhy] = useState("");
   const [busy, setBusy] = useState(false);
   const decide = async (id: string, verdict: "approve" | "reject") => {
@@ -111,6 +133,18 @@ export default function ApprovalsScreen() {
         <View style={{ padding: t.spacing.lg }}>
           <ListSkeleton rows={5} />
         </View>
+      ) : (pending.isError || requests.isError) && !docs.length && !held.length ? (
+        // Not "Nothing waiting" when the list couldn't be fetched.
+        <EmptyState
+          icon="cloud-off-outline"
+          title={tr("common:table.loadFailed")}
+          message={tr("common:documentList.loadFailedBody")}
+          actionLabel={tr("common:action.retry")}
+          onAction={() => {
+            void pending.refetch();
+            void requests.refetch();
+          }}
+        />
       ) : docs.length || held.length ? (
         <ScrollView
           contentContainerStyle={{ padding: t.spacing.lg, gap: t.spacing.md }}
@@ -140,7 +174,7 @@ export default function ApprovalsScreen() {
                             size="sm"
                             variant="secondary"
                             disabled={busy}
-                            onPress={() => setDeclining(r.id)}
+                            onPress={() => setDeclining({ id: r.id, what: "payment" })}
                           />
                           <Button
                             title={tr("sales:approval.approve")}
@@ -168,26 +202,25 @@ export default function ApprovalsScreen() {
                 <ListRow
                   key={d.id}
                   title={`${documentKindLabel(tr, d.kind, 1)} · ${formatMoney(d.totals.grandTotal)}`}
-                  subtitle={d.number}
+                  subtitle={[d.number, parties.find((p) => p.id === d.partyId)?.name].filter(Boolean).join(" · ")}
                   right={
                     canDecide ? (
-                      <Button
-                        title={tr("sales:approval.approve")}
-                        size="sm"
-                        onPress={() =>
-                          void approve(d.id)
-                            .then(() =>
-                              toast.show(
-                                tr("sales:approval.approved"),
-                                "success",
-                                { icon: "check", detail: d.number },
-                              ),
-                            )
-                            .catch((err) =>
-                              toast.show(describeError(err, tr), "error"),
-                            )
-                        }
-                      />
+                      <View style={{ flexDirection: "row", gap: t.spacing.sm }}>
+                        <Button
+                          title={tr("sales:approval.reject")}
+                          size="sm"
+                          variant="secondary"
+                          disabled={deciding !== null}
+                          onPress={() => setDeclining({ id: d.id, what: "document" })}
+                        />
+                        <Button
+                          title={tr("sales:approval.approve")}
+                          size="sm"
+                          loading={deciding === d.id && declining === null}
+                          disabled={deciding !== null}
+                          onPress={() => void decideDocument(d.id, d.number, "approve")}
+                        />
+                      </View>
                     ) : undefined
                   }
                   chevron
@@ -210,21 +243,26 @@ export default function ApprovalsScreen() {
       <Sheet
         visible={declining !== null}
         onClose={() => setDeclining(null)}
-        title={tr("sales:approval.reject")}
+        title={tr(declining?.what === "payment" ? "sales:approval.paymentReject" : "sales:approval.reject")}
       >
         <View style={{ gap: t.spacing.md, paddingBottom: t.spacing.lg }}>
           <TextField
-            label={tr("sales:approval.why")}
+            label={tr(declining?.what === "payment" ? "sales:approval.paymentWhy" : "sales:approval.why")}
             value={why}
             onChangeText={setWhy}
             maxLength={500}
             multiline
           />
           <Button
-            title={tr("sales:approval.reject")}
-            disabled={!why.trim() || busy}
-            loading={busy}
-            onPress={() => declining && void decide(declining, "reject")}
+            title={tr(declining?.what === "payment" ? "sales:approval.paymentReject" : "sales:approval.sendBack")}
+            variant="danger"
+            disabled={!why.trim() || busy || deciding !== null}
+            loading={busy || deciding !== null}
+            onPress={() => {
+              if (!declining) return;
+              if (declining.what === "payment") void decide(declining.id, "reject");
+              else void decideDocument(declining.id, docs.find((x) => x.id === declining.id)?.number ?? "", "reject");
+            }}
           />
         </View>
       </Sheet>

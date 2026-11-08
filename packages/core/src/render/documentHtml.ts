@@ -242,12 +242,15 @@ export function buildDocumentHtml({
     .filter(Boolean)
     .join('');
 
+  // A draft has no number yet: its placeholder (INVOICE-DRAFT) reads as "Draft".
+  const shownNumber = doc.status === 'draft' && doc.number.endsWith('-DRAFT') ? 'Draft' : doc.number;
+
   return `<!DOCTYPE html>
 <html lang="${language}">
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>${label} ${esc(doc.number)}</title>
+<title>${label} ${esc(shownNumber)}</title>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -336,7 +339,7 @@ export function buildDocumentHtml({
       ${doc.kind === 'proforma' ? '<div class="muted">Not a tax invoice. A tax invoice follows on supply or on receipt of payment.</div>' : ''}
       ${billOfSupply ? '<div class="sub">Composition taxable person, not eligible to collect tax on supplies</div>' : ''}
       <div class="meta">
-        <div><strong>${esc(doc.number)}</strong></div>
+        <div><strong>${esc(shownNumber)}</strong></div>
         <div class="muted">Date: ${formatDate(doc.date)}</div>
         ${doc.dueDate ? `<div class="muted">Due: ${formatDate(doc.dueDate)}</div>` : ''}
         ${doc.validUntil ? `<div class="muted">Valid until: ${formatDate(doc.validUntil)}</div>` : ''}

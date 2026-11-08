@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, FlatList, Pressable, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -19,7 +19,8 @@ import { fetchDocumentRecord, useDocumentPages, usePartyRecord, usePartySearch, 
 import { useDebounced } from '../../components/useDebounced';
 import type { DocStatus } from '@esmart/core/types';
 import type { Money } from '@esmart/core/lib/money';
-import { formatMoney } from '@esmart/core/lib/format';
+import { formatMoney, formatQty } from '@esmart/core/lib/format';
+import { unitShortName } from '@esmart/core/data/masters';
 import { NOTE_SOURCE } from '@esmart/core/domain/documentStates';
 import { DocumentEditor, detailRouteFor } from './DocumentEditor';
 import { ListSkeleton, MoreRowsSkeleton } from '../../components/ScreenSkeleton';
@@ -48,7 +49,7 @@ function SourceList({ kind }: { kind: AgainstSource }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['sales', 'common']);
   const router = useRouter();
-  const params = useLocalSearchParams<{ partyId?: string }>();
+  const params = useLocalSearchParams<{ partyId?: string; sourceId?: string }>();
   const { run: serverSave } = useServerSave();
   const [query, setQuery] = useState('');
   const convertDocument = useAppStore((s) => s.convertDocument);
@@ -111,6 +112,18 @@ function SourceList({ kind }: { kind: AgainstSource }) {
       }
     });
 
+  // Opened from an invoice or bill (?sourceId=): straight to choosing its lines, as from the list.
+  const pickedSource = useRef(false);
+  const pickNow = useRef(pick);
+  useEffect(() => {
+    pickNow.current = pick;
+  });
+  useEffect(() => {
+    if (!params.sourceId || pickedSource.current) return;
+    pickedSource.current = true;
+    void pickNow.current(params.sourceId);
+  }, [params.sourceId]);
+
   const allIds = (source?.lines ?? []).map((l) => l.id!).filter(Boolean);
   const toggle = (id: string, on: boolean) => setLineIds((cur) => (on ? [...cur, id] : cur.filter((x) => x !== id)));
 
@@ -171,23 +184,52 @@ function SourceList({ kind }: { kind: AgainstSource }) {
         ListEmptyComponent={
           pages.isLoading ? (
             <ListSkeleton rows={5} />
+          ) : pages.isError ? (
+            // Not "nothing to pick" when the list couldn't be fetched.
+            <Card padded={false}>
+              <EmptyState
+                icon="cloud-off-outline"
+                title={tr('common:table.loadFailed')}
+                message={tr('common:documentList.loadFailedBody')}
+                actionLabel={tr('common:action.retry')}
+                onAction={() => void pages.refetch()}
+                compact
+              />
+            </Card>
           ) : (
             <Card padded={false}>
               <EmptyState icon="file-search-outline" title={tr('sales:returnPicker.empty')} compact />
             </Card>
           )
         }
+        // One list, rows divided as in the other document lists, not a card per row.
         renderItem={({ item, index }) => (
-          <View pointerEvents={busy ? 'none' : 'auto'} aria-busy={pickedId === item.doc.id} style={{ opacity: busy && pickedId !== item.doc.id ? 0.5 : 1 }}>
-            <Card padded={false} style={{ marginBottom: index === rows.length - 1 ? 0 : t.spacing.sm }}>
-              <DocumentRow
-                document={{ number: item.doc.number ?? '', date: item.doc.date!, status: item.doc.status as DocStatus, totals: { grandTotal: item.doc.grandTotal as Money } }}
-                partyName={item.partyName}
-                onPress={() => pick(item.doc.id)}
-                divider={false}
-              />
-              {pickedId === item.doc.id ? <ActivityIndicator color={t.c.muted} style={{ position: 'absolute', right: t.spacing.lg, top: 0, bottom: 0 }} /> : null}
-            </Card>
+          <View
+            pointerEvents={busy ? 'none' : 'auto'}
+            aria-busy={pickedId === item.doc.id}
+            style={{
+              opacity: busy && pickedId !== item.doc.id ? 0.5 : 1,
+              backgroundColor: t.c.card,
+              borderColor: t.c.line,
+              borderLeftWidth: 1,
+              borderRightWidth: 1,
+              borderTopWidth: index === 0 ? 1 : 0,
+              borderBottomWidth: index === rows.length - 1 ? 1 : 0,
+              borderTopLeftRadius: index === 0 ? t.radius.lg : 0,
+              borderTopRightRadius: index === 0 ? t.radius.lg : 0,
+              borderBottomLeftRadius: index === rows.length - 1 ? t.radius.lg : 0,
+              borderBottomRightRadius: index === rows.length - 1 ? t.radius.lg : 0,
+              overflow: 'hidden',
+            }}
+          >
+            <DocumentRow
+              document={{ number: item.doc.number ?? '', date: item.doc.date!, status: item.doc.status as DocStatus, totals: { grandTotal: item.doc.grandTotal as Money } }}
+              partyName={item.partyName}
+              detail={item.doc.supplierDocNumber ? tr('sales:detail.theirNumber', { number: item.doc.supplierDocNumber }) : undefined}
+              onPress={() => pick(item.doc.id)}
+              divider={index < rows.length - 1}
+            />
+            {pickedId === item.doc.id ? <ActivityIndicator color={t.c.muted} style={{ position: 'absolute', right: t.spacing.lg, top: 0, bottom: 0 }} /> : null}
           </View>
         )}
       />
@@ -239,7 +281,7 @@ function SourceList({ kind }: { kind: AgainstSource }) {
             <LineChoice
               key={l.id}
               label={l.name}
-              detail={`${l.quantity} ${l.unit} × ${formatMoney(l.unitPrice as Money)}`}
+              detail={`${formatQty(l.quantity ?? 0)} ${unitShortName(l.unit ?? '')} × ${formatMoney(l.unitPrice as Money)}`}
               checked={lineIds.includes(l.id)}
               onChange={(on) => toggle(l.id!, on)}
             />
