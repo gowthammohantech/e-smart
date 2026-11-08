@@ -104,7 +104,9 @@ type EditorProps = {
     /** From a scanned bill: its date, the supplier's number and the lines read off it. */
     date?: string;
     supplierDocNumber?: string;
-    lines?: { name: string; quantity: number; unitPrice: number }[];
+    lines?: { name: string; quantity: number; unitPrice: number; itemId?: string }[];
+    /** The scanned image, kept on the bill. */
+    attachmentIds?: string[];
     /** Several catalogue items at once, e.g. what Low stock says to reorder. */
     items?: { itemId: string; quantity: number }[];
   };
@@ -207,15 +209,19 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       ...empty,
       date: prefill.date ?? empty.date,
       supplierDocNumber: prefill.supplierDocNumber ?? empty.supplierDocNumber,
+      attachmentIds: prefill.attachmentIds ?? empty.attachmentIds,
     };
     const p = prefill.partyId ? parties.find((x) => x.id === prefill.partyId) : undefined;
     const item = prefill.itemId ? items.find((i) => i.id === prefill.itemId) : undefined;
-    const scanned = (prefill.lines ?? []).map((l) => ({
-      ...blankLine(p?.currency ?? baseCurrency, taxCategories),
-      name: l.name,
-      quantity: l.quantity,
-      unitPrice: fromMajor(String(l.unitPrice), p?.currency ?? baseCurrency),
-    }));
+    // A scanned line the server matched to an item starts from that item, so it moves stock.
+    const scanned = (prefill.lines ?? []).map((l) => {
+      const matched = l.itemId ? items.find((i) => i.id === l.itemId) : undefined;
+      return {
+        ...(matched ? lineFromItem(matched, isPurchase, taxCategories) : { ...blankLine(p?.currency ?? baseCurrency, taxCategories), name: l.name }),
+        quantity: l.quantity,
+        unitPrice: fromMajor(String(l.unitPrice), p?.currency ?? baseCurrency),
+      };
+    });
     const listed = (prefill.items ?? []).flatMap((x) => {
       const it = items.find((i) => i.id === x.itemId);
       return it ? [{ ...lineFromItem(it, isPurchase, taxCategories), quantity: x.quantity }] : [];
@@ -599,7 +605,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       billOfEntry: imported ? draft.billOfEntry : undefined,
       isdInvoice: kind === 'purchaseBill' && !imported ? !!draft.isdInvoice : undefined,
       placeOfSupplyStateCode: draft.placeOfSupplyStateCode,
-      reverseCharge: draft.reverseCharge || undefined,
+      // Sent as false too: left out, the server keeps the supplier's (or the stored) reverse charge.
+      reverseCharge: TAX_KINDS.includes(kind) ? !!draft.reverseCharge : undefined,
       noteReason: isNote ? draft.noteReason : undefined,
       // A direct note says how it stands with GST; with GST it names the supply it adjusts (RULES 6.24).
       noteGst: directNote ? (draft.noteGst ?? 'withGst') : undefined,

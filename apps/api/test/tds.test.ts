@@ -112,6 +112,27 @@ describe('TDS on supplier bills', () => {
     expect(await documentRow(t, b.body.id)).toMatchObject({ amountPaidMinor: 80_000 + 1_180_000 - 20_000 });
   });
 
+  it('cancels a bill whose only settlement is its own TDS', async () => {
+    const m = await deductor();
+    const b = await t.post(`${m.c}/documents`, bill(m, 4_000_000), { token: m.token });
+    expect(await documentRow(t, b.body.id)).toMatchObject({ amountPaidMinor: 80_000 });
+    const cancelled = await t.post(`${m.c}/documents/${b.body.id}/status`, { status: 'cancelled', reason: 'Entered twice' }, { token: m.token });
+    expect(cancelled.status).toBe(200);
+    expect(cancelled.body.status).toBe('cancelled');
+  });
+
+  it('gives TDS back on a purchase return, at the bill’s rate', async () => {
+    const m = await deductor();
+    const b = await t.post(`${m.c}/documents`, bill(m, 4_000_000), { token: m.token });
+    const ret = await t.post(`${m.c}/documents/${b.body.id}/convert`, { targetKind: 'purchaseReturn' }, { token: m.token });
+    expect(ret.status).toBe(201);
+    const done = await t.post(`${m.c}/documents/${ret.body.id}/finalize`, {}, { token: m.token });
+    expect(done.status).toBe(200);
+    expect(done.body.document.tds).toEqual({ section: '194C', rate: 2, amount: inr(80_000) });
+    // The whole bill is returned: settled by its TDS and the return less the TDS it gives back.
+    expect(await documentRow(t, b.body.id)).toMatchObject({ amountPaidMinor: 4_720_000 });
+  });
+
   it('lists TDS by section, deductee and quarter', async () => {
     const m = await deductor();
     await t.post(`${m.c}/documents`, bill(m, 4_000_000), { token: m.token });

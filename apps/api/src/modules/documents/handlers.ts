@@ -41,6 +41,7 @@ import {
   EDIT_BLOCK_MESSAGES,
   FINAL_STATUS,
   canEditLatest,
+  checkCreditLimit,
   effectiveStatus,
   effectiveStatusSql,
   assertNoLiveReturns,
@@ -152,6 +153,10 @@ async function editLatestInvoice(ctx: AnyCtx, tx: DbOrTx, current: DocRow, body:
     .returning();
   if (!updated) throw preconditionFailed();
   await writeLines(tx, current.id, prepared);
+  // An edit that raises what the customer owes is held to their credit limit, as issuing it was.
+  if (!body.overrideCreditLimit && (updated.grandTotalMinor > current.grandTotalMinor || updated.partyId !== current.partyId)) {
+    await checkCreditLimit(tx, updated, ctx.now, { counted: true });
+  }
   await postStock(tx, ctx.company, updated, ctx.user.id);
   // Nothing is allocated to it (or it couldn't be edited); the due date may have moved its status.
   await syncPaymentState(tx, ctx.user, ctx.company.id, [updated.id], ctx.now);
@@ -237,6 +242,15 @@ async function finalizeDraft(ctx: AnyCtx, id: string, target: DocStatus, opts: {
 }
 
 /**
+ * The status a transition starts from. A bill's own TDS reads as paid from the day it is issued, but
+ * no money has settled it: cancelling looks past it, so such a bill reads as issued (or overdue).
+ */
+function statusBefore(row: DocRow, target: DocStatus, now: Date): DocStatus {
+  const ownTds = target === 'cancelled' && row.kind !== 'invoice' ? row.tdsAmountMinor : 0;
+  return effectiveStatus({ ...row, amountPaidMinor: Math.max(row.amountPaidMinor - ownTds, 0) }, today(now));
+}
+
+/**
  * Moves a document between statuses (not out of draft; see finalizeDraft)
  * under a row lock, re-checking the transition against the locked row.
  * Cancelling reverses its stock and withdraws its payment links; a document
@@ -247,13 +261,15 @@ async function changeStatus(ctx: AnyCtx, id: string, target: DocStatus, reason?:
   return ctx.db.transaction(async (tx) => {
     const locked = await findDocument(ctx, tx, id, { lock: true });
     checkIfMatch(ctx.req, locked.version);
-    const from = effectiveStatus(locked, today(ctx.now));
+    const from = statusBefore(locked, target, ctx.now);
     // Before the transition: a fully credited invoice reads as paid, which would hide the reason.
     if (target === 'cancelled') await assertNoLiveReturns(tx, locked);
     if (!canTransition(locked.kind, from, target)) throw conflict('INVALID_TRANSITION', `A ${locked.kind} cannot go from ${from} to ${target}`);
     if (target === 'cancelled') {
       assertPeriodOpen(ctx.company, locked.date);
-      if (locked.amountPaidMinor > 0) throw conflict('DOCUMENT_HAS_PAYMENTS', 'Remove the payments allocated to this document before cancelling it');
+      // Money allocated to it, not what it reads as paid: a bill's own TDS counts as paid from the start.
+      const [allocation] = await tx.select({ id: schema.paymentAllocations.id }).from(schema.paymentAllocations).where(eq(schema.paymentAllocations.documentId, locked.id)).limit(1);
+      if (allocation) throw conflict('DOCUMENT_HAS_PAYMENTS', 'Remove the payments allocated to this document before cancelling it');
       if (locked.currentEwayBillId) {
         const [bill] = await tx.select().from(schema.ewayBills).where(eq(schema.ewayBills.id, locked.currentEwayBillId));
         if (bill && bill.status === 'active' && bill.validUpto >= ctx.now) {
@@ -313,11 +329,52 @@ function frozenChanges(row: DocRow, body: Schema<'NewDocumentInput'>, stored: Li
   cmp('noteGst', body.noteGst, row.noteGst ?? undefined);
   cmp('originalNumber', body.originalNumber, row.originalNumber ?? undefined);
   cmp('originalDate', body.originalDate, row.originalDate ?? undefined);
+  // What an invoice's full edit can change too (RULES 6.23): compared so the edit isn't dropped as a notes-only save.
+  const invoice = row.kind === 'invoice';
+  if (invoice) {
+    const section = (v: string | null | undefined) => (v === undefined ? undefined : v && v !== 'none' ? v : null);
+    cmp('tcsSection', section(body.tcsSection), row.tcsSection ?? null);
+    cmp('tdsSection', section(body.tdsSection), row.tdsSection ?? null);
+    if (section(body.tdsSection) ?? row.tdsSection) cmp('tdsRate', body.tdsRate ?? undefined, row.tdsRate != null ? Number(row.tdsRate) : null);
+    cmp('costCentreId', body.costCentreId === undefined ? undefined : (body.costCentreId ?? null), row.costCentreId ?? null);
+    cmp('vehicleId', body.vehicleId === undefined ? undefined : (body.vehicleId ?? null), row.vehicleId ?? null);
+    cmp('reverseCharge', body.reverseCharge, row.reverseCharge);
+    if (body.customFields !== undefined) cmp('customFields', stableJson(body.customFields ?? {}), stableJson(row.customFields ?? {}));
+  }
   const sig = (l: LineInput) => [l.itemId ?? '', l.name, l.quantity, l.unit, l.unitPriceMinor, l.discountMode, l.discountValue, l.taxCategoryId, l.taxInclusive].join('|');
-  const sent = linesFromWire(body.lines).map(sig);
-  const have = stored.map(sig);
+  // On an invoice the line's wording and GST treatment count too; HSN and GST only when the line sends them.
+  const more = (l: LineInput, have?: LineInput) =>
+    invoice ? [l.description ?? '', l.hsnCode ?? have?.hsnCode ?? '', stableJson(gstShape(l.gst ?? have?.gst))].join('|') : '';
+  const sentLines = linesFromWire(body.lines);
+  const sent = sentLines.map((l, i) => `${sig(l)}|${more(l, stored[i])}`);
+  const have = stored.map((l) => `${sig(l)}|${more(l)}`);
   if (sent.length !== have.length || sent.some((s, i) => s !== have[i])) changed.push('lines');
   return changed;
+}
+
+/** JSON with its keys sorted, so two equal objects compare equal whatever order they came in. */
+function stableJson(v: unknown): string {
+  if (Array.isArray(v)) return `[${v.map(stableJson).join(',')}]`;
+  if (v && typeof v === 'object') {
+    return `{${Object.keys(v)
+      .sort()
+      .filter((k) => (v as Record<string, unknown>)[k] !== undefined)
+      .map((k) => `${JSON.stringify(k)}:${stableJson((v as Record<string, unknown>)[k])}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(v ?? null);
+}
+
+/** A line's GST flags with the defaults spelt out: unset reads as taxable, eligible, no cess. */
+function gstShape(g: LineInput['gst']) {
+  return {
+    supplyType: g?.supplyType ?? 'taxable',
+    reimbursement: !!g?.reimbursement,
+    capitalGoods: !!g?.capitalGoods,
+    itcEligibility: g?.itcEligibility ?? 'eligible',
+    reverseCharge: !!g?.reverseCharge,
+    cessRate: g?.cessRate ?? 0,
+  };
 }
 
 async function eInvoiceGenerated(db: DbOrTx, documentId: string): Promise<boolean> {
@@ -474,9 +531,20 @@ export const documentsHandlers = defineHandlers({
   async approveDocument(ctx) {
     const current = await findDocument(ctx, ctx.db, ctx.params.id);
     if ((current.approval as Approval | null)?.status !== 'pending') throw conflict('NOT_AWAITING_APPROVAL', `${current.number} is not waiting for approval`);
-    await ctx.db.transaction((tx) => decide(tx, ctx.user, current, 'approved', ctx.now));
-    // Issued as the approver, the way its creator asked.
-    const row = await finalizeDraft(ctx, current.id, FINAL_STATUS[current.kind]);
+    const decided = await ctx.db.transaction((tx) => decide(tx, ctx.user, current, 'approved', ctx.now));
+    // Issued as the approver, the way its creator asked. If it can't be issued (a closed period, short
+    // stock, the credit limit), it goes back to waiting: an approval that issued nothing would otherwise
+    // let the draft be changed and issued without one.
+    let row: DocRow;
+    try {
+      row = await finalizeDraft(ctx, current.id, FINAL_STATUS[current.kind]);
+    } catch (e) {
+      await ctx.db
+        .update(D)
+        .set({ approval: current.approval, version: decided.version + 1, updatedAt: ctx.now })
+        .where(and(eq(D.id, current.id), eq(D.version, decided.version)));
+      throw e;
+    }
     setEtag(ctx.reply, row.version);
     return toWire(ctx, row);
   },
@@ -572,9 +640,13 @@ export const documentsHandlers = defineHandlers({
         if (body.kind !== current.kind) throw invalid('kind', 'A document cannot change kind; convert it instead');
         const prepared = await prepareDocument(tx, ctx.company, fieldsFromWire(body, current), linesFromWire(body.lines), { snapshotRates: true, documentId: current.id });
         if (!branchVisible(ctx.user, prepared.columns.branchId)) throw invalid('branchId', 'You cannot move documents to this branch');
+        // An approval is for the amount approved: a draft that changes it, or its party, asks again when issued.
+        const reapprove =
+          (current.approval as Approval | null)?.status === 'approved' &&
+          (prepared.columns.grandTotalBaseMinor !== current.grandTotalBaseMinor || prepared.columns.partyId !== current.partyId);
         [updated] = await tx
           .update(D)
-          .set({ ...prepared.columns, version: current.version + 1, updatedAt: ctx.now })
+          .set({ ...prepared.columns, ...(reapprove && { approval: null }), version: current.version + 1, updatedAt: ctx.now })
           .where(and(eq(D.id, current.id), eq(D.version, current.version)))
           .returning();
         if (!updated) throw preconditionFailed();
@@ -638,7 +710,7 @@ export const documentsHandlers = defineHandlers({
       throw invalid('status', `${target} is derived from payments and the due date; record a payment instead`, 'STATUS_DERIVED');
     }
     const current = await findDocument(ctx, ctx.db, ctx.params.id);
-    const from = effectiveStatus(current, today(ctx.now));
+    const from = statusBefore(current, target, ctx.now);
     // Before the transition: a fully credited invoice reads as paid, which would hide the reason.
     if (target === 'cancelled') await assertNoLiveReturns(ctx.db, current);
     if (!canTransition(current.kind, from, target)) throw conflict('INVALID_TRANSITION', `A ${current.kind} cannot go from ${from} to ${target}`);

@@ -92,7 +92,7 @@ export function RecordPaymentSheet({ line, onClose }: { line: BankLine | null; o
   const [partyQuery, setPartyQuery] = useState('');
   const parties = usePartySearch(into ? 'customer' : 'supplier', useDebounced(partyQuery), partyOpen);
   // What the money settles: the party's open invoices (or bills), oldest first, ticked until the line's amount runs out.
-  const open = useOpenDocuments(partyId, into ? ['invoice', 'debitNote'] : ['purchaseBill', 'supplierDebitNote']);
+  const open = useOpenDocuments(partyId, into ? ['invoice', 'debitNote', 'openingInvoice'] : ['purchaseBill', 'supplierDebitNote', 'openingBill']);
   const [unticked, setUnticked] = useState<Set<string>>(new Set());
   const { run, busy } = useBankAction();
   const lineCurrency = line?.amount.currency;

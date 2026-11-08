@@ -242,10 +242,10 @@ export function tdsReturnRows(
       ];
     });
   const all: TdsDeducteeRow[] = documents
-    .filter((d) => ['purchaseBill', 'supplierDebitNote', 'supplierCreditNote'].includes(d.kind) && !['draft', 'cancelled', 'rejected', 'requested'].includes(d.status) && d.tds?.amount.minor)
+    .filter((d) => ['purchaseBill', 'supplierDebitNote', 'supplierCreditNote', 'purchaseReturn'].includes(d.kind) && !['draft', 'cancelled', 'rejected', 'requested'].includes(d.status) && d.tds?.amount.minor)
     .map((d): TdsDeducteeRow => {
       const rate = d.currency === baseCurrency ? 1 : d.exchangeRate || 1;
-      const sign = d.kind === 'supplierCreditNote' ? -1 : 1;
+      const sign = d.kind === 'supplierCreditNote' || d.kind === 'purchaseReturn' ? -1 : 1;
       const party = parties.find((p) => p.id === d.partyId);
       const q = tdsQuarter(d.date);
       return {

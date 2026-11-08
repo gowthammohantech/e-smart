@@ -4,7 +4,8 @@ import { INVOICE_LIMITS, nextInvoicePlan } from '@esmart/core/domain/plan';
 import { CREDIT_KINDS, NOTE_KINDS, NOTE_SOURCE, PAYABLE_KINDS, isFinalized, isPayableDocument } from '@esmart/core/domain/documentStates';
 import { statusForOutstanding } from '@esmart/core/domain/receivables';
 import { MOVEMENT_SIGN, signedQuantity, stockMapOn } from '@esmart/core/domain/stockLedger';
-import type { BusinessDocument, DocStatus, DocumentKind, StockMovement, StockMovementType } from '@esmart/core/types';
+import { calculateLine } from '@esmart/core/domain/lineCalc';
+import type { BusinessDocument, DocStatus, DocumentKind, DocumentLine, StockMovement, StockMovementType } from '@esmart/core/types';
 import { schema } from '@esmart/db';
 import type { AuthUser, CompanyRow } from '../../context';
 import { conflict, invoiceLimitReached, preconditionFailed, unprocessable } from '../../http/errors';
@@ -13,6 +14,7 @@ import { partyBalances } from '../../lib/balances';
 import { newId } from '../../lib/ids';
 import { assignNumber } from '../../lib/numbering';
 import { replayQueuedAt } from '../../lib/replay';
+import { gstFlagsFrom } from '../../lib/wire';
 import type { DocRow } from './engine';
 
 const D = schema.documents;
@@ -155,6 +157,34 @@ async function movedUpstream(tx: DbOrTx, row: DocRow): Promise<boolean> {
  * zero at its branch: that is 422 INSUFFICIENT_STOCK and the whole
  * finalisation rolls back.
  */
+/**
+ * What one unit on a bought line cost, in the document's currency: its taxable value (after the line's
+ * discount, GST inside a tax-inclusive price taken out) over its quantity, the figure the bill puts in
+ * Purchases. The document's discount after tax is posted to Discount received on its own.
+ */
+function receiptUnitCost(row: DocRow, l: typeof schema.documentLines.$inferSelect): number {
+  const quantity = Number(l.quantity);
+  if (!(quantity > 0)) return l.unitPriceMinor;
+  const currency = row.currency.trim();
+  const line: DocumentLine = {
+    id: l.id,
+    name: l.name,
+    quantity,
+    unit: l.unit,
+    unitPrice: { minor: l.unitPriceMinor, currency },
+    discountMode: l.discountMode,
+    discountValue: Number(l.discountValue),
+    taxCategoryId: l.taxCategoryId,
+    taxRate: Number(l.taxRate),
+    taxInclusive: l.taxInclusive,
+    gst: gstFlagsFrom(l) ?? {},
+  };
+  // Tax comes out of an inclusive price only when the document charged some.
+  const charged = row.totalTaxMinor > 0 || row.reverseChargeTaxMinor > 0;
+  const { taxable } = calculateLine(line, currency, { regime: 'GST', registered: charged, reverseCharge: row.reverseCharge });
+  return taxable.minor / quantity;
+}
+
 export async function postStock(tx: DbOrTx, company: CompanyRow, row: DocRow, actorId: string): Promise<number> {
   const type = movementTypeFor(row.kind);
   if (!type) return 0;
@@ -182,7 +212,7 @@ export async function postStock(tx: DbOrTx, company: CompanyRow, row: DocRow, ac
       const quantity = Number(l.quantity);
       const signed = signedQuantity({ type, quantity } as Parameters<typeof signedQuantity>[0]);
       // Receipts are valued at what was paid; issues and returns at the item's cost.
-      const cost = type === 'purchaseReceipt' ? { minor: Math.round(l.unitPriceMinor * rate), currency: baseCurrency } : { minor: item.purchasePriceMinor, currency: item.currency.trim() };
+      const cost = type === 'purchaseReceipt' ? { minor: Math.round(receiptUnitCost(row, l) * rate), currency: baseCurrency } : { minor: item.purchasePriceMinor, currency: item.currency.trim() };
       return {
         id: newId('stk'),
         companyId: row.companyId,
@@ -283,12 +313,13 @@ export async function reverseStock(tx: DbOrTx, company: CompanyRow, row: DocRow,
  * customer already owes on open invoices plus this one; `row` is still a
  * draft here, so it is not counted twice.
  */
-async function checkCreditLimit(tx: DbOrTx, row: DocRow, now: Date): Promise<void> {
+export async function checkCreditLimit(tx: DbOrTx, row: DocRow, now: Date, opts: { counted?: boolean } = {}): Promise<void> {
   if (row.kind !== 'invoice') return;
   const [party] = await tx.select().from(schema.parties).where(eq(schema.parties.id, row.partyId));
   if (!party?.creditLimitMinor || party.creditLimitMinor <= 0) return;
   const balances = await partyBalances(tx, row.companyId, [{ id: party.id, kind: 'customer' }], today(now));
-  const exposure = (balances.get(party.id)?.outstanding ?? 0) + row.grandTotalMinor;
+  // An issued invoice edited in place is already in what the customer owes.
+  const exposure = (balances.get(party.id)?.outstanding ?? 0) + (opts.counted ? 0 : row.grandTotalMinor);
   if (exposure <= party.creditLimitMinor) return;
   const amount = (minor: number) => `${party.currency.trim()} ${(minor / 100).toFixed(2)}`;
   throw unprocessable(
@@ -513,10 +544,13 @@ export async function syncPaymentState(tx: DbOrTx, actor: AuthUser, companyId: s
     const allocated = (paidOf.get(row.id) ?? 0) + (row.kind === 'invoice' ? 0 : row.tdsAmountMinor);
     const amountPaidMinor = Math.max(allocated, Math.min(allocated + (creditOf.get(row.id) ?? 0), row.grandTotalMinor));
     const status = isFinalized(row.status) ? effectiveStatus({ ...row, amountPaidMinor }, today(now)) : row.status;
-    if (amountPaidMinor === row.amountPaidMinor && status === row.status) continue;
+    // Rule 37: credit taken back once the bill was paid goes out again when it no longer is (a payment
+    // removed); the daily job takes it back again once it is paid.
+    const unreclaim = !!row.itcReclaimedOn && amountPaidMinor < row.grandTotalMinor;
+    if (amountPaidMinor === row.amountPaidMinor && status === row.status && !unreclaim) continue;
     const [updated] = await tx
       .update(D)
-      .set({ amountPaidMinor, status, version: row.version + 1, updatedAt: now })
+      .set({ amountPaidMinor, status, ...(unreclaim && { itcReclaimedOn: null }), version: row.version + 1, updatedAt: now })
       .where(eq(D.id, row.id))
       .returning();
     await recordChange(tx, actor, {

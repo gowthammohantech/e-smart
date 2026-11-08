@@ -76,6 +76,15 @@ describe('GST treatment: documents', () => {
     expect(res.body.partyStateCode).toBe('27');
   });
 
+  it('takes a bill from a reverse-charge supplier out of reverse charge when it says so', async () => {
+    const m = await moneySetup(t);
+    await t.deps.db.update(schema.parties).set({ reverseCharge: true }).where(eq(schema.parties.id, m.supplier!.id));
+    const res = await t.post(`${m.c}/documents`, bill(m, { status: 'issued', reverseCharge: false }), { token: m.token });
+    expect(res.status).toBe(201);
+    expect(res.body.reverseCharge).toBeFalsy();
+    expect(res.body.totals).toMatchObject({ totalTax: { minor: 36000 }, reverseChargeTax: { minor: 0 } });
+  });
+
   it('charges no GST on a composition dealer’s sale', async () => {
     const m = await moneySetup(t);
     await t.deps.db.update(schema.companies).set({ compositionScheme: true }).where(eq(schema.companies.id, m.companyId));

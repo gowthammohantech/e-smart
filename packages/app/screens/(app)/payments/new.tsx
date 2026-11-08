@@ -148,9 +148,9 @@ export default function NewPayment() {
   // the rate effective on the payment date unless the user says otherwise.
   const currency = currencyChoice ?? party?.currency ?? baseCurrency;
 
-  // Money in settles invoices and debit notes; money out, bills and supplier debit notes. What each
+  // Money in settles invoices, debit notes and opening invoices; money out, bills, supplier debit notes and opening bills. What each
   // still owes is the server's figure (returns and credit notes already off), in the payment currency, oldest first.
-  const open = useOpenDocuments(partyId, direction === 'received' ? ['invoice', 'debitNote'] : ['purchaseBill', 'supplierDebitNote']);
+  const open = useOpenDocuments(partyId, direction === 'received' ? ['invoice', 'debitNote', 'openingInvoice'] : ['purchaseBill', 'supplierDebitNote', 'openingBill']);
   const outstanding = useMemo(() => {
     const asOf = today();
     return (open.data ?? [])

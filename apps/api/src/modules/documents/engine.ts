@@ -253,7 +253,8 @@ export function fieldsFromWire(body: Schema<'NewDocumentInput'>, base?: DocRow):
     chargesCurrency: body.charges?.currency,
     applyRoundOff: body.applyRoundOff ?? base?.applyRoundOff ?? null,
     roundOffManualMinor: body.roundOffManual !== undefined ? body.roundOffManual.minor : (base?.roundOffManualMinor ?? null),
-    placeOfSupplyStateCode: keep(body.placeOfSupplyStateCode, base?.placeOfSupplyStateCode),
+    // Another party brings their own state unless one is sent.
+    placeOfSupplyStateCode: keep(body.placeOfSupplyStateCode, base && base.partyId !== body.partyId ? null : base?.placeOfSupplyStateCode),
     reverseCharge: keep(body.reverseCharge, base?.reverseCharge),
     noteReason: keep(body.noteReason, base?.noteReason),
     noteGst: keep(body.noteGst, base?.noteGst as DocFields['noteGst'] | undefined),
@@ -454,9 +455,10 @@ export async function prepareDocument(
     ? await db.select().from(schema.items).where(and(eq(schema.items.companyId, company.id), inArray(schema.items.id, itemIds)))
     : [];
 
-  // A return reverses exactly what was charged, whatever the category says now.
+  // A return, or a note against an invoice or bill, reverses exactly what was charged, whatever the
+  // category says now: the note's line takes its source line's rate when it names the same item.
   const returned = new Map<string, number>();
-  if (f.sourceDocumentId && (f.kind === 'salesReturn' || f.kind === 'purchaseReturn')) {
+  if (f.sourceDocumentId && (f.kind === 'salesReturn' || f.kind === 'purchaseReturn' || NOTE_KINDS.includes(f.kind))) {
     const stored = await db.select().from(schema.documentLines).where(eq(schema.documentLines.documentId, f.sourceDocumentId));
     for (const s of stored) returned.set(s.itemId ?? s.name, Number(s.taxRate));
   }
@@ -582,8 +584,8 @@ export async function prepareDocument(
     const section = f.tdsSection === 'none' ? null : (f.tdsSection ?? party!.tdsSection ?? null);
     const expected = expectedSaleTds({ section, rate: f.tdsRate, sellerPan: panOfGstin(company.taxIdentifier ?? undefined) || undefined, date: f.date, baseMinor });
     if (expected) tds = expected;
-  } else if (f.kind === 'supplierCreditNote' && f.sourceDocumentId) {
-    // A credit note gives back TDS at the rate its bill was taxed at.
+  } else if ((f.kind === 'supplierCreditNote' || f.kind === 'purchaseReturn') && f.sourceDocumentId) {
+    // A credit note or return gives back TDS at the rate its bill was taxed at.
     const [src] = await db.select({ section: D.tdsSection, rate: D.tdsRate }).from(D).where(eq(D.id, f.sourceDocumentId));
     if (src?.section && src.rate) tds = { section: src.section, rate: Number(src.rate), amountMinor: Math.round((baseMinor * Number(src.rate)) / 100) };
   }

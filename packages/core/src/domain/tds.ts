@@ -120,7 +120,7 @@ type Deduction = { partyId?: string; date: string; tds?: { section: string; amou
 
 /**
  * TDS deducted in a period, one row per section, deductee and quarter: the input for Form 26Q.
- * Supplier credit notes give TDS back on the bill they lower.
+ * Supplier credit notes and purchase returns give TDS back on the bill they lower.
  */
 export function tdsRegister(entries: Deduction[], parties: Deductee[], range: { from: string; to: string }): TdsRegisterRow[] {
   const rows = new Map<string, TdsRegisterRow>();
@@ -149,7 +149,9 @@ export function tdsRegister(entries: Deduction[], parties: Deductee[], range: { 
   return [...rows.values()].sort((a, b) => a.quarter.localeCompare(b.quarter) || a.section.localeCompare(b.section) || a.partyName.localeCompare(b.partyName));
 }
 
-const TDS_KINDS = ['purchaseBill', 'supplierDebitNote', 'supplierCreditNote'];
+const TDS_KINDS = ['purchaseBill', 'supplierDebitNote', 'supplierCreditNote', 'purchaseReturn'];
+/** What gives TDS back on the bill it lowers. */
+const TDS_BACK = ['supplierCreditNote', 'purchaseReturn'];
 
 /**
  * The app's own copy of the server's year-so-far (apps/api/src/lib/tds.ts), from the documents on
@@ -175,7 +177,7 @@ export function tdsPriorOnDevice(
     if (d.id === exceptId || !TDS_KINDS.includes(d.kind) || !same.has(d.partyId) || d.date < start || d.date > end) continue;
     if (['draft', 'cancelled', 'rejected'].includes(d.status)) continue;
     if (d.tds && d.tds.section !== section) continue;
-    const sign = d.kind === 'supplierCreditNote' ? -1 : 1;
+    const sign = TDS_BACK.includes(d.kind) ? -1 : 1;
     const rate = d.currency === baseCurrency ? 1 : d.exchangeRate;
     baseMinor += sign * Math.round(d.totals.taxableAmount.minor * rate);
     tdsMinor += sign * (d.tds?.amount.minor ?? 0);

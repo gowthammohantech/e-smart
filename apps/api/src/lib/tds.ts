@@ -40,15 +40,15 @@ export async function tdsYearSoFar(db: DbOrTx, companyId: string, party: PartyRo
   const base = sql<number>`round(${D.taxableAmountMinor} * ${D.exchangeRate})`;
   const docs = await db
     .select({
-      base: sql<number>`coalesce(sum(case when ${D.kind} = 'supplierCreditNote' then -${base} else ${base} end), 0)::bigint`,
-      tds: sql<number>`coalesce(sum(case when ${D.kind} = 'supplierCreditNote' then -${D.tdsAmountMinor} else ${D.tdsAmountMinor} end), 0)::bigint`,
+      base: sql<number>`coalesce(sum(case when ${D.kind} in ('supplierCreditNote', 'purchaseReturn') then -${base} else ${base} end), 0)::bigint`,
+      tds: sql<number>`coalesce(sum(case when ${D.kind} in ('supplierCreditNote', 'purchaseReturn') then -${D.tdsAmountMinor} else ${D.tdsAmountMinor} end), 0)::bigint`,
     })
     .from(D)
     .where(
       and(
         eq(D.companyId, companyId),
         inArray(D.partyId, ids),
-        inArray(D.kind, ['purchaseBill', 'supplierDebitNote', 'supplierCreditNote']),
+        inArray(D.kind, ['purchaseBill', 'supplierDebitNote', 'supplierCreditNote', 'purchaseReturn']),
         notInArray(D.status, ['draft', 'cancelled', 'rejected']),
         or(eq(D.tdsSection, section), sql`${D.tdsSection} is null`),
         gte(D.date, fy.start),

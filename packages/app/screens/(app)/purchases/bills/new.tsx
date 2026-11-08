@@ -30,6 +30,7 @@ export default function NewPurchaseBill() {
           date: isoOrUndefined(field('date')),
           supplierDocNumber: field('reference'),
           lines: scan.lines,
+          attachmentIds: scan.attachmentId ? [scan.attachmentId] : undefined,
         }
       : undefined;
   if (supplier.loading) return <LoadingView />;
