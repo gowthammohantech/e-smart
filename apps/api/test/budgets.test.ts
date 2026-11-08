@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { schema } from '@esmart/db';
 import { setupApi } from './helpers';
-import { issueInvoice, moneySetup } from './money-fixtures';
+import { fundCash, issueInvoice, moneySetup } from './money-fixtures';
 
 const t = setupApi();
 beforeEach(() => t.setNow('2026-09-29T10:00:00Z'));
@@ -13,6 +13,7 @@ const months = (n: number) => Array(12).fill(n);
 describe('budgets', () => {
   it('plans income and expense accounts for a year, and sets the books against it to date', async () => {
     const m = await moneySetup(t);
+    await fundCash(t, m);
     const [cat] = await t.deps.db.select().from(schema.expenseCategories).where(eq(schema.expenseCategories.companyId, m.companyId));
     const bad = await t.post(`${m.c}/budgets`, { name: 'FY 26-27', yearFrom: '2026-05-01', lines: [{ account: 'sys:capital', months: months(1) }, { account: 'sys:sales', months: months(1) }, { account: 'sys:sales', months: months(2) }] }, { token: m.token });
     expect(bad.status).toBe(422);

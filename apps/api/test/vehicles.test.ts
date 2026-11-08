@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { setupApi } from './helpers';
-import { moneySetup } from './money-fixtures';
+import { fundCash, moneySetup } from './money-fixtures';
 
 const t = setupApi();
 const inr = (minor: number) => ({ minor, currency: 'INR' });
@@ -8,6 +8,7 @@ const inr = (minor: number) => ({ minor, currency: 'INR' });
 describe('vehicles', () => {
   it('keeps a list of vehicles, tags expenses with one, sums what each cost, and keeps one in use', async () => {
     const m = await moneySetup(t);
+    await fundCash(t, m);
     const van = await t.post(`${m.c}/vehicles`, { registration: 'tn 09 ab-1234', name: 'Delivery van' }, { token: m.token });
     expect(van.status).toBe(201);
     expect(van.body.registration).toBe('TN09AB1234');

@@ -48,6 +48,7 @@
     "categoryName": "Category name",
     "accountRequired": "Choose the account this was paid from",
     "cashShort": "Cash in hand has only {{balance}}",
+    "accountShort": "{{account}} has only {{balance}}",
     "summary": "Summary",
     "receipt": "Receipt",
     "receiptUploadFailed": "The receipt couldn't be uploaded: {{reason}} Remove it to save without it, or try again when you're online.",

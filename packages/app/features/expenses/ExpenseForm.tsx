@@ -161,15 +161,18 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
   const netAmount = inclusive ? subtract(amount, taxAmount) : amount;
   const totalPaid = inclusive || reverseCharge ? amount : money(amount.minor + taxAmount.minor, baseCurrency);
 
-  // Cash in hand cannot pay out more than it holds (an edit gives back its own amount first).
+  // No account (cash, bank or wallet) pays out more than it holds, as the server checks; an edit
+  // gives back its own amount first, and one that takes no more than before is never refused.
   const account = accounts.find((a) => a.id === accountId);
   const balances = useServerAccountBalances();
+  const own = expense && account && expense.accountId === account.id ? Math.round(expense.amount.minor * (expense.exchangeRate || 1)) : 0;
   const cashBalance = useMemo(() => {
-    if (!account || account.type !== 'cash' || !balances) return undefined;
-    const own = expense && expense.accountId === account.id ? Math.round(expense.amount.minor * (expense.exchangeRate || 1)) : 0;
+    if (!account || !balances) return undefined;
     return (balances[account.id] ?? 0) + own;
-  }, [account, balances, expense]);
-  const cashShort = cashBalance !== undefined && totalPaid.minor > cashBalance;
+  }, [account, balances, own]);
+  const cashShort = cashBalance !== undefined && totalPaid.minor > cashBalance && !(own > 0 && totalPaid.minor <= own);
+  const shortMessage = () =>
+    tr(account?.type === 'cash' ? 'purchases:form.cashShort' : 'purchases:form.accountShort', { balance: formatMoney(money(Math.max(cashBalance ?? 0, 0), baseCurrency)), account: account?.name ?? '' });
 
   const attachReceipt = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.6 });
@@ -187,7 +190,7 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
       return;
     }
     if (cashShort) {
-      setAccountError(tr('purchases:form.cashShort', { balance: formatMoney(money(cashBalance ?? 0, baseCurrency)) }));
+      setAccountError(shortMessage());
       return;
     }
 
@@ -311,7 +314,7 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
       onPress={() => setAccountOpen(true)}
       icon="bank-outline"
       required
-      error={accountError ?? (cashShort ? tr('purchases:form.cashShort', { balance: formatMoney(money(cashBalance ?? 0, baseCurrency)) }) : undefined)}
+      error={accountError ?? (cashShort ? shortMessage() : undefined)}
     />
   );
   const supplierField = (

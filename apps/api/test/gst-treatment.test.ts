@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 import { schema } from '@esmart/db';
 import { setupApi } from './helpers';
-import { documentRow, invoiceBody, line, moneySetup, type Money } from './money-fixtures';
+import { documentRow, fundCash, invoiceBody, line, moneySetup, type Money } from './money-fixtures';
 
 const t = setupApi();
 
@@ -110,6 +110,7 @@ describe('GST treatment: documents', () => {
 describe('GST treatment: expenses', () => {
   it('works out reverse-charge tax on top of the supplier’s price', async () => {
     const m = await moneySetup(t);
+    await fundCash(t, m);
     const [cat] = await t.deps.db.select().from(schema.expenseCategories).where(eq(schema.expenseCategories.companyId, m.companyId));
     const res = await t.post(
       `${m.c}/expenses`,

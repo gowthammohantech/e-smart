@@ -24,9 +24,15 @@ const D = schema.documents;
 /**
  * An account's balance in base-currency minor units, as core's
  * `accountBalances` computes it: opening + received − paid − expenses.
- * `exceptPaymentId` leaves out a payment being rewritten.
+ * `exceptPaymentId` leaves out a payment being rewritten (`exceptVoucherId`, `exceptExpenseId` the same).
  */
-export async function accountBalanceMinor(tx: DbOrTx, account: typeof schema.paymentAccounts.$inferSelect, exceptPaymentId?: string, exceptVoucherId?: string): Promise<number> {
+export async function accountBalanceMinor(
+  tx: DbOrTx,
+  account: typeof schema.paymentAccounts.$inferSelect,
+  exceptPaymentId?: string,
+  exceptVoucherId?: string,
+  exceptExpenseId?: string,
+): Promise<number> {
   const base = sql<string>`coalesce(sum(round(${PAY.amountMinor} * ${PAY.exchangeRate})), 0)`;
   const pays = await tx
     .select({ direction: PAY.direction, total: base })
@@ -37,7 +43,7 @@ export async function accountBalanceMinor(tx: DbOrTx, account: typeof schema.pay
   const [spent] = await tx
     .select({ total: sql<string>`coalesce(sum(round(${E.amountMinor} * ${E.exchangeRate})), 0)` })
     .from(E)
-    .where(eq(E.accountId, account.id));
+    .where(and(eq(E.accountId, account.id), exceptExpenseId ? ne(E.id, exceptExpenseId) : undefined));
   const net = pays.reduce((s, p) => s + (p.direction === 'received' ? 1 : -1) * Number(p.total), 0);
   // Contra and journal vouchers that moved money in or out of it.
   const V = schema.vouchers;

@@ -15,7 +15,7 @@ import { newId } from '../../lib/ids';
 import { assignNumber } from '../../lib/numbering';
 import { rateToBase } from '../documents/engine';
 import { assertPeriodOpen } from '../documents/lifecycle';
-import { expenseTax, linkExpenseAttachments, nextRecurrence } from './engine';
+import { assertAccountCovers, expenseTax, linkExpenseAttachments, nextRecurrence } from './engine';
 import { expensesToWire, type ExpenseRow } from './wire';
 import { costCentreIssues } from '../books/costCentres';
 
@@ -254,6 +254,8 @@ export const expensesHandlers = defineHandlers({
     assertPeriodOpen(ctx.company, ctx.body.date);
     const cols = await prepare(ctx, ctx.db, ctx.body);
     const row = await ctx.db.transaction(async (tx) => {
+      // No account pays out more than it holds, as with payments.
+      await assertAccountCovers(tx, ctx.company.id, ctx.company.baseCurrency.trim(), cols);
       const number = await assignNumber(tx, { companyId: ctx.company.id, kind: 'expense', branchId: cols.branchId, date: cols.date });
       const [created] = await tx
         .insert(E)
@@ -284,6 +286,7 @@ export const expensesHandlers = defineHandlers({
     const cols = await prepare(ctx, ctx.db, ctx.body, current);
     const row = await ctx.db.transaction(async (tx) => {
       await assertNotRecovered(tx, current, cols);
+      await assertAccountCovers(tx, ctx.company.id, ctx.company.baseCurrency.trim(), cols, current);
       const before = await toWire(tx, current);
       const [updated] = await tx
         .update(E)

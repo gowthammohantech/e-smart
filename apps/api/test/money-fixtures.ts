@@ -5,6 +5,14 @@ import { signRazorpayWebhook } from '../src/providers/payments';
 import { BENGALURU, MUMBAI, ownerWithCompany, type TestContext } from './helpers';
 
 /**
+ * Opens the fixtures' cash in hand at ₹1,00,000 (default), for tests that pay expenses out of it: no
+ * account pays out more than it holds (RULES 6.26).
+ */
+export async function fundCash(t: TestContext, m: { cash: { id: string } }, minor = 10_000_000) {
+  await t.deps.db.update(schema.paymentAccounts).set({ openingBalanceMinor: minor }).where(eq(schema.paymentAccounts.id, m.cash.id));
+}
+
+/**
  * Fixtures for the money engine's tests (documents, payments, ledger,
  * billing, webhooks): a Mumbai company with customers in Mumbai and
  * Bengaluru, a supplier, and a stock-tracked item.

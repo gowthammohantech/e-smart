@@ -16,6 +16,7 @@ import { money } from '../../lib/wire';
 import { voucherColumns, voucherToWire } from '../books/handlers';
 import { assertPeriodOpen } from '../documents/lifecycle';
 import { prepare as prepareExpense } from '../expenses/handlers';
+import { assertAccountCovers } from '../expenses/engine';
 import { expensesToWire } from '../expenses/wire';
 import { assertDirectionAllowed, writePayment } from '../payments/engine';
 import { paymentsToWire } from '../payments/wire';
@@ -493,6 +494,8 @@ export const bankingHandlers = defineHandlers({
       const line = await findLine(ctx, tx, ctx.params.id, true);
       if (line.version !== peek.version) throw preconditionFailed();
       if (line.status === 'matched') throw conflict('ALREADY_MATCHED', 'This bank line is already matched; unmatch it first');
+      // The same rule as any expense: no account pays out more than the books say it holds (RULES 6.26).
+      await assertAccountCovers(tx, ctx.company.id, ctx.company.baseCurrency.trim(), cols);
       const E = schema.expenses;
       const number = await assignNumber(tx, { companyId: ctx.company.id, kind: 'expense', branchId: cols.branchId, date: cols.date });
       const [created] = await tx

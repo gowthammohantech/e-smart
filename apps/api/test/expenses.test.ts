@@ -22,6 +22,14 @@ const expense = (m: Money, categoryId: string, over: Record<string, unknown> = {
   ...over,
 });
 
+/** The fixtures' cash in hand, opened at ₹1,00,000: no account pays out more than it holds (RULES 6.26). */
+const FUNDS = 10000000;
+async function funded() {
+  const m = await moneySetup(t);
+  await t.deps.db.update(schema.paymentAccounts).set({ openingBalanceMinor: FUNDS }).where(eq(schema.paymentAccounts.id, m.cash.id));
+  return m;
+}
+
 async function bankAccount(m: Money) {
   const res = await t.post(`${m.c}/payment-accounts`, { name: 'HDFC current', type: 'bank', currency: 'INR', openingBalance: { minor: 1000000, currency: 'INR' } }, { token: m.token });
   expect(res.status).toBe(201);
@@ -30,7 +38,7 @@ async function bankAccount(m: Money) {
 
 describe('expenses', () => {
   it('numbers an expense, computes its input tax from the tax category, and charges the account', async () => {
-    const m = await moneySetup(t);
+    const m = await funded();
     const [cat] = await categories(m);
 
     const inclusive = await t.post(`${m.c}/expenses`, expense(m, cat.id, { taxCategoryId: m.gst(18), taxInclusive: true, taxAmount: { minor: 999, currency: 'INR' }, supplierId: m.supplier!.id, reference: 'BILL-77', billable: true }), { token: m.token });
@@ -57,10 +65,10 @@ describe('expenses', () => {
     const got = await t.get(`${m.c}/expenses/${inclusive.body.id}`, { token: m.token });
     expect(got.body).toEqual(inclusive.body);
 
-    // Cash paid out: 11800 + 5900 + 2500.
+    // Cash paid out of what it opened with: 11800 + 5900 + 2500.
     const accounts = await t.get(`${m.c}/payment-accounts`, { token: m.token });
     const cash = accounts.body.data.find((a: { id: string }) => a.id === m.cash.id);
-    expect(cash.currentBalance).toEqual({ minor: -20200, currency: 'INR' });
+    expect(cash.currentBalance).toEqual({ minor: FUNDS - 20200, currency: 'INR' });
 
     const audit = await t.deps.db.select().from(schema.auditEvents).where(and(eq(schema.auditEvents.companyId, m.companyId), eq(schema.auditEvents.entityType, 'expense')));
     expect(audit.map((a) => a.action)).toEqual(['created', 'created', 'created']);
@@ -96,7 +104,7 @@ describe('expenses', () => {
     expect(res.body).toMatchObject({ code: 'PLAN_UPGRADE_REQUIRED', requiredPlan: 'pro' });
     expect((await t.get(`${basic.c}/expenses`, { token: basic.token })).status).toBe(403);
 
-    const m = await moneySetup(t);
+    const m = await funded();
     const [cat2] = await categories(m);
     const sales = await joinTeam(t, m.token, { role: 'sales', companyIds: [m.companyId] });
     const denied = await t.post(`${m.c}/expenses`, expense(m, cat2.id), { token: sales.token });
@@ -109,7 +117,7 @@ describe('expenses', () => {
   });
 
   it('saves with optimistic concurrency, recomputing tax; lists with filters; removes', async () => {
-    const m = await moneySetup(t);
+    const m = await funded();
     const [cat, other] = await categories(m);
     const a = (await t.post(`${m.c}/expenses`, expense(m, cat.id, { taxCategoryId: m.gst(18), billable: true, notes: 'Diesel for van' }), { token: m.token })).body;
     const b = (await t.post(`${m.c}/expenses`, expense(m, other.id, { date: '2026-09-20', amount: { minor: 3000, currency: 'INR' } }), { token: m.token })).body;
@@ -156,7 +164,7 @@ describe('expenses', () => {
   });
 
   it('keeps an expense billed on a live invoice as it was billed', async () => {
-    const m = await moneySetup(t);
+    const m = await funded();
     const [cat] = await categories(m);
     const exp = (await t.post(`${m.c}/expenses`, expense(m, cat.id, { amount: { minor: 250_000, currency: 'INR' }, billable: true, customerId: m.mumbai.id }), { token: m.token })).body;
     const inv = await t.post(
@@ -186,7 +194,7 @@ describe('expenses', () => {
   });
 
   it('links attachments through the attachments table', async () => {
-    const m = await moneySetup(t);
+    const m = await funded();
     const [cat] = await categories(m);
     const att = (id: string) => ({ id, companyId: m.companyId, name: 'receipt.jpg', mimeType: 'image/jpeg', sizeBytes: 10, storageKey: `k/${id}`, status: 'ready' as const, uploadedBy: m.user.id });
     await t.deps.db.insert(schema.attachments).values([att('att_one'), att('att_two')]);
@@ -205,7 +213,7 @@ describe('expenses', () => {
   });
 
   it('materialises a recurring expense exactly once per period, keeping month ends', async () => {
-    const m = await moneySetup(t);
+    const m = await funded();
     const [cat] = await categories(m);
     const tpl = await t.post(`${m.c}/expenses`, expense(m, cat.id, { date: '2026-07-31', recurrence: 'monthly', taxCategoryId: m.gst(18), notes: 'Rent' }), { token: m.token });
     expect(tpl.body).toMatchObject({ recurrence: 'monthly', nextRecurrenceDate: '2026-08-31' });
@@ -244,5 +252,59 @@ describe('expenses', () => {
     const orphans = await t.deps.db.select().from(E).where(and(eq(E.companyId, m.companyId), eq(E.notes, 'Rent')));
     expect(orphans).toHaveLength(4);
     expect(orphans.every((o) => o.recurringParentId === null)).toBe(true);
+  });
+
+  it('refuses an expense the account can\'t pay, as payments are refused (RULES 6.26)', async () => {
+    const m = await moneySetup(t);
+    const [cat] = await categories(m);
+    const till = await t.post(`${m.c}/payment-accounts`, { name: 'Petty cash', type: 'cash', currency: 'INR', openingBalance: { minor: 10000, currency: 'INR' } }, { token: m.token });
+    expect(till.status).toBe(201);
+    const spend = (minor: number, over: Record<string, unknown> = {}) => expense(m, cat.id, { accountId: till.body.id, amount: { minor, currency: 'INR' }, ...over });
+
+    const short = await t.post(`${m.c}/expenses`, spend(10001), { token: m.token });
+    expect(short.status).toBe(422);
+    expect(short.body.code).toBe('INSUFFICIENT_BALANCE');
+    const exact = await t.post(`${m.c}/expenses`, spend(6000), { token: m.token });
+    expect(exact.status).toBe(201);
+    // 4000 left: an edit gives back its own 6000 first, so up to 10000 fits; more doesn't.
+    const raised = await t.put(`${m.c}/expenses/${exact.body.id}`, { ...exact.body, amount: { minor: 10000, currency: 'INR' } }, { token: m.token, headers: { 'if-match': '"v1"' } });
+    expect(raised.status).toBe(200);
+    const over = await t.put(`${m.c}/expenses/${exact.body.id}`, { ...raised.body, amount: { minor: 10001, currency: 'INR' } }, { token: m.token, headers: { 'if-match': '"v2"' } });
+    expect(over.status).toBe(422);
+    expect(over.body.code).toBe('INSUFFICIENT_BALANCE');
+
+    // A bank account is held to the same rule.
+    const bank = await t.post(`${m.c}/payment-accounts`, { name: 'Small bank', type: 'bank', currency: 'INR', openingBalance: { minor: 500, currency: 'INR' } }, { token: m.token });
+    const fromBank = await t.post(`${m.c}/expenses`, expense(m, cat.id, { accountId: bank.body.id, method: 'bank', amount: { minor: 501, currency: 'INR' } }), { token: m.token });
+    expect(fromBank.status).toBe(422);
+    expect(fromBank.body.code).toBe('INSUFFICIENT_BALANCE');
+
+    // An expense made before the rule (account already short) can still be corrected downwards.
+    await t.deps.db.update(schema.expenses).set({ amountMinor: 50000 }).where(eq(schema.expenses.id, exact.body.id));
+    const fixed = await t.put(`${m.c}/expenses/${exact.body.id}`, { ...raised.body, amount: { minor: 40000, currency: 'INR' }, notes: 'corrected' }, { token: m.token, headers: { 'if-match': '"v2"' } });
+    expect(fixed.status).toBe(200);
+  });
+
+  it('a recurring expense waits for the money, then is recorded on its own date', async () => {
+    const m = await moneySetup(t);
+    const [cat] = await categories(m);
+    const till = await t.post(`${m.c}/payment-accounts`, { name: 'Rent cash', type: 'cash', currency: 'INR', openingBalance: { minor: 15000, currency: 'INR' } }, { token: m.token });
+    const tpl = await t.post(`${m.c}/expenses`, expense(m, cat.id, { accountId: till.body.id, date: '2026-07-31', recurrence: 'monthly', amount: { minor: 10000, currency: 'INR' } }), { token: m.token });
+    expect(tpl.status).toBe(201);
+
+    // 5000 left: August's 10000 can't be paid, so nothing is made and the template stays put.
+    expect((await materializeRecurringExpenses(t.deps, '2026-09-29')).created).toHaveLength(0);
+    expect((await t.get(`${m.c}/expenses/${tpl.body.id}`, { token: m.token })).body).toMatchObject({ nextRecurrenceDate: '2026-08-31', version: 1 });
+    const N = schema.notifications;
+    const notes = await t.deps.db.select().from(N).where(and(eq(N.companyId, m.companyId), eq(N.entityId, tpl.body.id)));
+    expect(notes).toHaveLength(1);
+    expect(notes[0]).toMatchObject({ kind: 'system', entityType: 'expense' });
+
+    // Money in: the waiting occurrence is made on August 31, and September's too.
+    await t.deps.db.update(schema.paymentAccounts).set({ openingBalanceMinor: 40000 }).where(eq(schema.paymentAccounts.id, till.body.id));
+    expect((await materializeRecurringExpenses(t.deps, '2026-09-30')).created).toHaveLength(2);
+    const E = schema.expenses;
+    const made = await t.deps.db.select({ date: E.date }).from(E).where(eq(E.recurringParentId, tpl.body.id)).orderBy(E.date);
+    expect(made.map((r) => r.date)).toEqual(['2026-08-31', '2026-09-30']);
   });
 });

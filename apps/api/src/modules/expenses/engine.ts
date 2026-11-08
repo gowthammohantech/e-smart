@@ -4,9 +4,12 @@ import { inclusiveTax, money, percent, zero, type Money } from '@esmart/core/lib
 import { schema } from '@esmart/db';
 import { nextRecurrence } from '@esmart/core/domain/recurrence';
 import type { AuthUser, Deps } from '../../context';
+import { unprocessable } from '../../http/errors';
 import { recordChange, type DbOrTx } from '../../lib/audit';
 import { newId } from '../../lib/ids';
+import { notify } from '../../lib/notify';
 import { assignNumber } from '../../lib/numbering';
+import { accountBalanceMinor } from '../payments/engine';
 import { expenseToWire, type ExpenseRow } from './wire';
 
 const E = schema.expenses;
@@ -32,6 +35,46 @@ export function expenseTax(amount: Money, rate: number, taxInclusive: boolean, r
   }
   // No net adds up to exactly this amount (it was typed in by hand), so take the tax out of it.
   return inclusiveTax(amount, rate);
+}
+
+/**
+ * What an expense would leave its account short by, or 0 when the account covers it: no account
+ * (cash, bank or wallet) pays out more than it holds, the rule payments follow. The account row is
+ * locked, so two expenses (or an expense and a payment) can't both spend its last rupee. An edit
+ * leaves the expense's own earlier amount out; one that takes no more from the same account than
+ * before is never refused, so an expense recorded before this rule can still be corrected.
+ */
+export async function shortfall(
+  tx: DbOrTx,
+  companyId: string,
+  e: { accountId: string; amountMinor: number; exchangeRate: string | number },
+  current?: { id: string; accountId: string; amountMinor: number; exchangeRate: string | number },
+): Promise<{ shortMinor: number; name: string; balanceMinor: number; amountBase: number }> {
+  const amountBase = Math.round(e.amountMinor * Number(e.exchangeRate));
+  const none = { shortMinor: 0, name: '', balanceMinor: 0, amountBase };
+  if (current && current.accountId === e.accountId && amountBase <= Math.round(current.amountMinor * Number(current.exchangeRate))) return none;
+  const [account] = await tx
+    .select()
+    .from(schema.paymentAccounts)
+    .where(and(eq(schema.paymentAccounts.companyId, companyId), eq(schema.paymentAccounts.id, e.accountId)))
+    .for('update');
+  if (!account) return none;
+  const balanceMinor = await accountBalanceMinor(tx, account, undefined, undefined, current?.id);
+  return { shortMinor: Math.max(amountBase - balanceMinor, 0), name: account.name, balanceMinor, amountBase };
+}
+
+/** 422 INSUFFICIENT_BALANCE when the account can't cover the expense (see `shortfall`). */
+export async function assertAccountCovers(
+  tx: DbOrTx,
+  companyId: string,
+  baseCurrency: string,
+  e: Parameters<typeof shortfall>[2],
+  current?: Parameters<typeof shortfall>[3],
+): Promise<void> {
+  const s = await shortfall(tx, companyId, e, current);
+  if (!s.shortMinor) return;
+  const fmt = (minor: number) => `${baseCurrency} ${(Math.max(minor, 0) / 100).toFixed(2)}`;
+  throw unprocessable([{ field: 'amount.minor', message: `${s.name} holds ${fmt(s.balanceMinor)}; this expense needs ${fmt(s.amountBase)}`, severity: 'blocking' }], 'INSUFFICIENT_BALANCE');
 }
 
 /** Moved to core so the cash-flow forecast counts a series the same way. */
@@ -93,6 +136,20 @@ export async function materializeRecurringExpenses(deps: Pick<Deps, 'db'> & Part
       let next: string | null = template.nextRecurrenceDate;
 
       while (next && next <= asOf) {
+        // An account that can't pay it waits: the occurrence is made, on its own date, once it can.
+        const short = await shortfall(tx, template.companyId, template);
+        if (short.shortMinor) {
+          await notify(tx, deps as Deps, {
+            companyId: template.companyId,
+            userId: template.createdBy,
+            kind: 'system',
+            title: `Recurring expense ${template.number.trim()} not recorded`,
+            body: `${short.name} doesn't hold enough to pay the ${next} occurrence. Add money to the account; it is recorded on the next run.`,
+            entityType: 'expense',
+            entityId: template.id,
+          });
+          break;
+        }
         const number = await assignNumber(tx, { companyId: template.companyId, kind: 'expense', branchId: template.branchId, date: next });
         const [occ] = await tx
           .insert(E)
@@ -113,6 +170,8 @@ export async function materializeRecurringExpenses(deps: Pick<Deps, 'db'> & Part
         next = nextRecurrence(template.date, template.recurrence, next);
       }
 
+      // Nothing could be paid this run: the template stays as it was.
+      if (next === template.nextRecurrenceDate) return;
       const [updated] = await tx
         .update(E)
         .set({ nextRecurrenceDate: next, version: template.version + 1, updatedAt: now })

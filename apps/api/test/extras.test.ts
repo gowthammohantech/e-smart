@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { schema } from '@esmart/db';
 import { remindMsmeDue } from '../src/modules/ledger/msme';
 import { setupApi } from './helpers';
-import { line, moneySetup, pdfText, type Money } from './money-fixtures';
+import { fundCash, line, moneySetup, pdfText, type Money } from './money-fixtures';
 
 const t = setupApi();
 beforeEach(() => t.setNow('2026-09-29T10:00:00Z'));
@@ -14,6 +14,7 @@ const category = async (m: Money) => (await t.deps.db.select().from(schema.expen
 describe('cost centres', () => {
   it('tags documents, expenses and voucher lines, and is kept while in use', async () => {
     const m = await moneySetup(t);
+    await fundCash(t, m);
     const site = await t.post(`${m.c}/cost-centres`, { name: 'Thane site', category: 'Project' }, { token: m.token });
     expect(site.status).toBe(201);
     const wing = await t.post(`${m.c}/cost-centres`, { name: 'Thane site, B wing', parentId: site.body.id }, { token: m.token });
@@ -53,6 +54,7 @@ describe('cost centres', () => {
 describe('reimbursements (pure agent)', () => {
   it('recovers a billable expense once, on an invoice to the customer it is billed to', async () => {
     const m = await moneySetup(t);
+    await fundCash(t, m);
     const cat = await category(m);
     const exp = await t.post(`${m.c}/expenses`, { categoryId: cat.id, date: '2026-09-20', amount: inr(250_000), currency: 'INR', accountId: m.cash.id, method: 'cash', billable: true, customerId: m.mumbai.id }, { token: m.token });
     expect(exp.status).toBe(201);

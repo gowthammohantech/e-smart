@@ -7,7 +7,7 @@ import { purgeAccount } from '../src/modules/platform/purge';
 import { tickSchedules } from '../src/jobs/schedule';
 import { SCHEDULES } from '../src/jobs/registry';
 import { setupApi } from './helpers';
-import { issueInvoice, moneySetup } from './money-fixtures';
+import { fundCash, issueInvoice, moneySetup } from './money-fixtures';
 
 const t = setupApi();
 const E = schema.exportJobs;
@@ -15,6 +15,7 @@ const E = schema.exportJobs;
 describe('scheduled work', () => {
   it('makes the day’s recurring expenses once, from the schedule, however often it ticks', async () => {
     const m = await moneySetup(t);
+    await fundCash(t, m);
     const [cat] = await t.deps.db.select().from(schema.expenseCategories).where(eq(schema.expenseCategories.companyId, m.companyId));
     const tpl = await t.post(`${m.c}/expenses`, { categoryId: cat.id, date: '2026-09-20', amount: { minor: 5000, currency: 'INR' }, currency: 'INR', accountId: m.cash.id, method: 'cash', recurrence: 'weekly' }, { token: m.token });
     // 00:15 IST on 2026-09-28, the day after it fell due.
