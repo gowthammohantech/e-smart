@@ -409,9 +409,9 @@ export function ReportDesktop({ report, data }: { report: string; data: ReportDa
             <KeyFigures
               rows={[
                 { label: tr('reports:figure.revenueTaxable'), value: money(pr.revenue) },
-                { label: tr('reports:figure.costOfGoodsSold'), value: `− ${money(pr.costOfGoods)}` },
+                { label: tr('reports:figure.costOfGoodsSold'), value: money({ ...pr.costOfGoods, minor: -pr.costOfGoods.minor }) },
                 { label: tr('reports:figure.grossProfit'), value: money(pr.grossProfit), tone: 'good' },
-                { label: tr('reports:figure.operatingExpenses'), value: `− ${money(pr.expenses)}`, tone: 'warn' },
+                { label: tr('reports:figure.operatingExpenses'), value: money({ ...pr.expenses, minor: -pr.expenses.minor }), tone: 'warn' },
                 { label: tr('reports:detail.netProfit'), value: money(pr.netProfit), tone: pr.netProfit.minor >= 0 ? 'good' : 'bad' },
               ]}
             />

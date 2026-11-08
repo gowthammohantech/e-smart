@@ -4,7 +4,7 @@ import { Stack } from 'expo-router';
 import { balanceSheet, type BalanceSheetSide } from '@esmart/core/domain/ledger/reports';
 import { formatMoney } from '@esmart/core/lib/format';
 import { money } from '@esmart/core/lib/money';
-import { ReportShell, reportTable, useReportScope, ReportLoading } from '../../../features/reports/ReportShell';
+import { ReportShell, reportTable, useReportScope, ReportLoading, ReportError, failedQuery } from '../../../features/reports/ReportShell';
 import { DataTable, KeyFigures, ReportSection } from '../../../features/reports/reportParts';
 import { useBooksView } from '../../../remote/queries';
 import { useBaseCurrency } from '../../../store/selectors';
@@ -19,12 +19,20 @@ export default function BalanceSheetScreen() {
   const nameOf = useAccountName();
   const [view, setView] = useState<StatementView>('single');
   const columns = useColumnsTables('balance-sheet', scope.filters.range, view);
-  const bs = useBooksView<ReturnType<typeof balanceSheet>>('balance-sheet', { to: scope.filters.range.to }).data;
-  if (!bs) return <ReportLoading title={tr('books:hub.balanceSheet')} subtitle={tr('books:bs.basis')} scope={scope} onScopeChange={setScope} />;
+  const query = useBooksView<ReturnType<typeof balanceSheet>>('balance-sheet', { to: scope.filters.range.to });
+  const bs = query.data;
+  if (failedQuery(query)) return <ReportError title={tr('books:hub.balanceSheet')} subtitle={tr('books:bs.basis')} scope={scope} onScopeChange={setScope} onRetry={query.refetch} error={query.error} asAt />;
+  if (!bs) return <ReportLoading title={tr('books:hub.balanceSheet')} subtitle={tr('books:bs.basis')} scope={scope} onScopeChange={setScope} asAt />;
   const m = (minor: number) => formatMoney(money(minor, baseCurrency));
-  const rows = (side: BalanceSheetSide) => side.flatMap((s) => [[tr(`books:bs.heading.${s.heading}`).toUpperCase(), m(s.total)], ...s.lines.map((l) => [`   ${nameOf(l.account)}`, m(l.amount)])]);
+  // Each group's heading carries its total, in bold; its accounts follow, indented.
+  type Line = { label: string; amount: number; heading?: boolean };
+  const lines = (side: BalanceSheetSide): Line[] =>
+    side.flatMap((s) => [{ label: tr(`books:bs.heading.${s.heading}`), amount: s.total, heading: true }, ...s.lines.map((l) => ({ label: `   ${nameOf(l.account)}`, amount: l.amount }))]);
+  const liabilities: Line[] = [...lines(bs.liabilities), { label: tr('books:bs.currentProfit'), amount: bs.currentProfit, heading: true }];
+  const assets = lines(bs.assets);
+  const headingRows = (side: Line[]) => side.flatMap((l, i) => (l.heading ? [i] : []));
   const off = bs.totalAssets - bs.totalLiabilities;
-
+  const headers = [tr('books:tb.account'), tr('books:accounts.balance')];
 
   return (
     <>
@@ -34,17 +42,25 @@ export default function BalanceSheetScreen() {
         subtitle={tr('books:bs.basis')}
         scope={scope}
         onScopeChange={setScope}
+        asAt
         exportRows={() =>
-          // The columns when they're showing, else the single statement.
-          view !== 'single' && columns ? reportTable(columnsExport(columns).headers, columnsExport(columns).rows) : reportTable(
-            [tr('books:tb.account'), tr('books:accounts.balance')],
-            [...rows(bs.liabilities), [tr('books:bs.currentProfit'), m(bs.currentProfit)], [tr('books:bs.total'), m(bs.totalLiabilities)], ...rows(bs.assets), [tr('books:bs.total'), m(bs.totalAssets)]],
+          // The columns when they're showing, else the single statement. Amounts go out as numbers.
+          view !== 'single' && columns.sections ? reportTable(columnsExport(columns.sections).headers, columnsExport(columns.sections).rows) : reportTable(
+            headers,
+            [
+              [tr('books:bs.liabilities'), ''],
+              ...liabilities.map((l) => [l.label, l.amount / 100]),
+              [tr('books:bs.total'), bs.totalLiabilities / 100],
+              [tr('books:bs.assets'), ''],
+              ...assets.map((l) => [l.label, l.amount / 100]),
+              [tr('books:bs.total'), bs.totalAssets / 100],
+            ],
           )
         }
       >
         <StatementViewPicker value={view} onChange={setView} balanceSheet />
         {view !== 'single' ? (
-          <ColumnsReport sections={columns} />
+          <ColumnsReport tables={columns} />
         ) : (
         <>
         <KeyFigures
@@ -55,10 +71,10 @@ export default function BalanceSheetScreen() {
           ]}
         />
         <ReportSection title={tr('books:bs.liabilities')}>
-          <DataTable headers={[tr('books:tb.account'), tr('books:accounts.balance')]} rows={[...rows(bs.liabilities), [tr('books:bs.currentProfit'), m(bs.currentProfit)]]} widths={[2, 1.2]} />
+          <DataTable headers={headers} rows={liabilities.map((l) => [l.label, m(l.amount)])} strong={headingRows(liabilities)} widths={[2, 1.2]} total={[tr('books:bs.total'), m(bs.totalLiabilities)]} />
         </ReportSection>
         <ReportSection title={tr('books:bs.assets')}>
-          <DataTable headers={[tr('books:tb.account'), tr('books:accounts.balance')]} rows={rows(bs.assets)} widths={[2, 1.2]} />
+          <DataTable headers={headers} rows={assets.map((l) => [l.label, m(l.amount)])} strong={headingRows(assets)} widths={[2, 1.2]} total={[tr('books:bs.total'), m(bs.totalAssets)]} />
         </ReportSection>
         </>
         )}

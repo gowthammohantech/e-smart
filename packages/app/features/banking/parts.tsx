@@ -57,9 +57,11 @@ export function MatchChip({ label, onPress, disabled, strong }: { label: string;
       style={({ pressed }) => ({
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 4,
-        paddingHorizontal: t.spacing.sm,
-        paddingVertical: 4,
+        gap: 6,
+        // A full-size target, not a 24pt tag.
+        minHeight: 40,
+        paddingHorizontal: t.spacing.md,
+        paddingVertical: 6,
         borderRadius: t.radius.pill,
         backgroundColor: pressed ? t.c.card2 : t.c.chip,
         borderWidth: strong ? 1 : 0,
@@ -68,7 +70,7 @@ export function MatchChip({ label, onPress, disabled, strong }: { label: string;
         maxWidth: '100%',
       })}
     >
-      <Icon name="link-variant" size={13} color={t.c.primary} />
+      <Icon name="link-variant" size={16} color={t.c.primary} />
       <Text variant="caption" weight="600" tone="primary" numberOfLines={1} style={{ flexShrink: 1 }}>
         {tr('banking:lines.match', { record: label })}
       </Text>

@@ -21,12 +21,15 @@ import { ListSkeleton } from '../../components/ScreenSkeleton';
  */
 export function ImportsView({ accountId }: { accountId: string }) {
   const t = useTheme();
-  const { t: tr } = useTranslation(['banking']);
+  const { t: tr } = useTranslation(['banking', 'reports']);
   const statements = useBankStatements(accountId);
   const canWrite = useCanWrite();
   const { run, busy } = useBankAction();
   const [undo, setUndo] = useState<{ id: string; fileName: string; lineCount: number } | null>(null);
   if (statements.isPending) return <ListSkeleton kind="list" rows={4} />;
+  // A failed fetch isn't "no statements imported yet".
+  if (statements.isError && !statements.data)
+    return <EmptyState icon="cloud-off-outline" title={tr('reports:dash.state.failedTitle')} message={tr('reports:dash.state.failedBody')} actionLabel={tr('reports:dash.state.retry')} onAction={() => void statements.refetch()} />;
   const rows = statements.data ?? [];
   if (!rows.length) return <EmptyState icon="file-upload-outline" title={tr('banking:imports.empty')} message={tr('banking:imports.emptyBody')} />;
   return (

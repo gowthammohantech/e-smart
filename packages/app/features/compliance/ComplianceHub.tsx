@@ -167,6 +167,7 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
             <Text variant="small" tone="warn" style={{ flex: 1, lineHeight: 18 }}>
               {tr('compliance:hub.expiringBanner', { count: summary.expiringSoon })}
             </Text>
+            <Icon name="chevron-right" size={20} color={t.c.warn} />
           </Card>
         </Pressable>
       ) : null}
@@ -203,6 +204,9 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
               accessibilityRole="button"
               accessibilityState={{ selected: active }}
               style={{
+                // A full 40pt target, as the report filters are.
+                minHeight: 40,
+                justifyContent: 'center',
                 paddingHorizontal: t.spacing.md,
                 paddingVertical: 7,
                 borderRadius: 999,

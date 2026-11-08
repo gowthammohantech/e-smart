@@ -24,8 +24,11 @@ import { detailRouteFor } from '../../../features/documents/DocumentEditor';
 import type { DocumentKind } from '@esmart/core/types';
 import { periodLabel, recentPeriods } from '../../../features/compliance/periods';
 import { DataTable, KeyFigures, ReportSection } from '../../../features/reports/reportParts';
-import { deliverFile } from '../../../features/reports/exportFiles';
-import { XLSX_MIME, toCsv, xlsxBytes, type ReportTable } from '../../../features/reports/reportTable';
+import { deliverFile, deliverPdf } from '../../../features/reports/exportFiles';
+import { ReportFailed } from '../../../features/reports/ReportShell';
+import { ReportSkeleton } from '../../../components/ScreenSkeleton';
+import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
+import { XLSX_MIME, tableHtml, toCsv, xlsxBytes, type ReportTable } from '../../../features/reports/reportTable';
 
 type View3b = Schema<'Gstr3bView'>;
 type Amounts = Schema<'GstAmounts'>;
@@ -34,7 +37,8 @@ type ReturnType = 'gstr1' | 'gstr3b';
 type Status = NonNullable<Schema<'GstReturn'>['status']> | 'none';
 
 const KINDS = ['igst', 'cgst', 'sgst', 'cess'] as const;
-const TONE: Record<Status, 'success' | 'warning' | 'danger' | 'neutral'> = { none: 'neutral', notFiled: 'neutral', prepared: 'neutral', saved: 'neutral', submitted: 'warning', filed: 'success', failed: 'danger' };
+// Each step reads differently: nothing done yet, under way on the portal, ready, filed, or refused.
+const TONE: Record<Status, 'success' | 'warning' | 'danger' | 'neutral' | 'info'> = { none: 'neutral', notFiled: 'danger', prepared: 'neutral', saved: 'info', submitted: 'warning', filed: 'success', failed: 'danger' };
 const OUTWARD = ['taxable', 'zeroRated', 'nilExempt', 'reverseCharge', 'nonGst'] as const;
 const ITC = ['importOfGoods', 'importOfServices', 'reverseCharge', 'isd', 'allOther', 'reversedRules', 'reversedOther', 'net', 'reclaimed'] as const;
 /** Each row as the portal numbers it; the key into the breakup. */
@@ -42,6 +46,7 @@ const OUTWARD_TABLE: Record<(typeof OUTWARD)[number], string> = { taxable: '3.1a
 const ITC_TABLE: Record<(typeof ITC)[number], string> = { importOfGoods: '4A1', importOfServices: '4A2', reverseCharge: '4A3', isd: '4A4', allOther: '4A5', reversedRules: '4B1', reversedOther: '4B2', net: '4C', reclaimed: '4D1' };
 /** The detailed sheet's columns: the table number, its description, then the amounts. */
 const SHEET_WIDTHS = [0.7, 2.4, 1.1, 1, 1, 1, 0.8];
+const SHEET_KINDS = ['text', 'text', 'num', 'num', 'num', 'num', 'num'] as const;
 /** "3.1a" → "3.1(a)", "4A5" → "4A(5)". */
 const tableLabel = (k: string) => k.replace(/^(3\.1|4[ABD])([a-e1-5])$/, '$1($2)');
 
@@ -60,7 +65,7 @@ export default function GstReturnsScreen() {
   const t = useTheme();
   const router = useRouter();
   const toast = useToast();
-  const { t: tr } = useTranslation(['compliance', 'nav']);
+  const { t: tr, i18n } = useTranslation(['compliance', 'nav']);
   const company = useActiveCompany();
   const path = { companyId: company.id };
   const periods = useMemo(() => recentPeriods(), []);
@@ -74,6 +79,11 @@ export default function GstReturnsScreen() {
   const [connected, setConnected] = useState(false);
   const [breakup, setBreakup] = useState<string | null>(null);
   const [layout, setLayout] = useState<'summary' | 'sheet'>('summary');
+  // Until the GSTINs are known, "no GSTIN" isn't said; until a period's figures come, the last period's aren't shown.
+  const [gstinsLoaded, setGstinsLoaded] = useState(false);
+  const [loadState, setLoadState] = useState<'loading' | 'failed' | 'done'>('loading');
+  // Filing with the EVC can't be undone: it is asked first.
+  const [askFile, setAskFile] = useState<ReturnType | null>(null);
   const branches = useBranches();
 
   useEffect(() => {
@@ -85,6 +95,7 @@ export default function GstReturnsScreen() {
       setConnected(sessions.some((x) => x.connected));
       setGstins(list);
       setGstin((g) => g ?? list[0] ?? null);
+      setGstinsLoaded(true);
     };
     api
       .GET('/companies/{companyId}/gst/portal-sessions', { params: { path } })
@@ -95,13 +106,19 @@ export default function GstReturnsScreen() {
 
   const load = useCallback(() => {
     if (!gstin) return Promise.resolve();
-    return api.GET('/companies/{companyId}/gst/gstr3b', { params: { path, query: { gstin, period } } }).then(({ data, error }) => {
-      if (error) toast.show(describeError(error, tr), 'error');
-      else setView(data ?? null);
-    });
+    return api
+      .GET('/companies/{companyId}/gst/gstr3b', { params: { path, query: { gstin, period } } })
+      .then(({ data }) => {
+        setView(data ?? null);
+        setLoadState('done');
+      })
+      .catch(() => setLoadState('failed'));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gstin, period, company.id]);
   useEffect(() => {
+    // Another period or GSTIN: what was on screen belongs to the last one.
+    setView(null);
+    setLoadState('loading');
     void load();
   }, [load]);
 
@@ -241,6 +258,13 @@ export default function GstReturnsScreen() {
     void (format === 'xlsx' ? deliverFile(`${name}.xlsx`, xlsxBytes('GSTR-3B', table), XLSX_MIME) : deliverFile(`${name}.csv`, new TextEncoder().encode(toCsv(table)), 'text/csv'));
   };
 
+  /** The 3B as a printable page, the same rows as the file. */
+  const exportPdf = () => {
+    const table = sheetTable();
+    void deliverPdf(`GSTR3B_${gstin ?? company.id}_${period}.pdf`, tableHtml('GSTR-3B', `${gstin ?? ''} · ${periodLabel(period)}`, table, i18n.language)).catch(() => undefined);
+  };
+
+  /** A return's state; with the portal connected, its next steps too. Without it, only what the books know. */
   const returnCard = (r: ReturnType) => {
     const status = statusOf(r);
     const row = returnOf(r);
@@ -256,6 +280,12 @@ export default function GstReturnsScreen() {
         </View>
         {status === 'filed' ? (
           <Text variant="caption">{tr('compliance:returns.arn', { arn: row?.arn ?? '', date: row?.filedOn ? formatDate(row.filedOn) : '' })}</Text>
+        ) : !connected ? (
+          row?.lastError ? (
+            <Text variant="caption" tone="warn">
+              {row.lastError}
+            </Text>
+          ) : null
         ) : (
           <>
             {row?.lastError ? (
@@ -282,7 +312,7 @@ export default function GstReturnsScreen() {
                 <>
                   <Button title={tr('compliance:returns.sendEvc')} size="sm" variant="secondary" icon="cellphone-message" loading={busy === `${r}:evc`} disabled={!!busy} onPress={() => void step(r, 'evc', tr('compliance:returns.evcSent'))} />
                   <TextField label={tr('compliance:returns.evcOtp')} hint={tr('compliance:returns.evcHint')} value={otp[r]} onChangeText={(v) => setOtp((o) => ({ ...o, [r]: v.replace(/\D/g, '').slice(0, 6) }))} keyboardType="number-pad" />
-                  <Button title={tr('compliance:returns.file')} icon="send-check-outline" loading={busy === `${r}:file`} disabled={!!busy || otp[r].length !== 6} onPress={() => void step(r, 'file', tr('compliance:returns.filed', { name: r === 'gstr1' ? 'GSTR-1' : 'GSTR-3B' }))} />
+                  <Button title={tr('compliance:returns.file')} icon="send-check-outline" loading={busy === `${r}:file`} disabled={!!busy || otp[r].length !== 6} onPress={() => setAskFile(r)} />
                 </>
               )
             ) : null}
@@ -296,7 +326,9 @@ export default function GstReturnsScreen() {
     <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('nav:title.gstReturns') }} />
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40, gap: t.spacing.lg }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
-        {!gstins.length ? (
+        {!gstinsLoaded ? (
+          <ReportSkeleton />
+        ) : !gstins.length ? (
           <EmptyState icon="card-account-details-outline" title={tr('compliance:returns.noGstin')} message={tr('compliance:returns.noGstinBody')} actionLabel={tr('compliance:returns.addGstin')} onAction={() => router.push('/(app)/settings/company')} />
         ) : (
           <>
@@ -310,6 +342,16 @@ export default function GstReturnsScreen() {
                 <PickerField label={tr('compliance:gstr2b.period')} value={periodLabel(period)} onPress={() => setOpen('period')} icon="calendar-month-outline" />
               </View>
             </View>
+            {loadState === 'failed' ? (
+              <ReportFailed
+                onRetry={() => {
+                  setLoadState('loading');
+                  return load();
+                }}
+              />
+            ) : !view ? (
+              <ReportSkeleton />
+            ) : null}
             {view ? (
               <>
                 <KeyFigures
@@ -343,8 +385,15 @@ export default function GstReturnsScreen() {
                     </Text>
                   </Card>
                 ) : null}
-                {connected ? returnCard('gstr1') : null}
-                {connected ? returnCard('gstr3b') : null}
+                {/* Each return's state shows with or without the portal; its steps need the portal. */}
+                {returnCard('gstr1')}
+                {returnCard('gstr3b')}
+                {/* The 3B as a file, whichever layout is on screen. */}
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm }}>
+                  <Button title={tr('compliance:returns.exportPdf')} icon="file-pdf-box" size="sm" variant="secondary" onPress={exportPdf} />
+                  <Button title={tr('compliance:returns.exportExcel')} icon="file-excel-box" size="sm" variant="secondary" onPress={() => exportSheet('xlsx')} />
+                  <Button title={tr('compliance:returns.exportCsv')} icon="file-delimited-outline" size="sm" variant="secondary" onPress={() => exportSheet('csv')} />
+                </View>
                 <Segmented
                   size="sm"
                   value={layout}
@@ -356,12 +405,8 @@ export default function GstReturnsScreen() {
                 />
                 {layout === 'sheet' ? (
                   <>
-                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm }}>
-                      <Button title={tr('compliance:returns.exportExcel')} icon="file-excel-box" size="sm" variant="secondary" onPress={() => exportSheet('xlsx')} />
-                      <Button title={tr('compliance:returns.exportCsv')} icon="file-delimited-outline" size="sm" variant="secondary" onPress={() => exportSheet('csv')} />
-                    </View>
                     <ReportSection title={tr('compliance:returns.sheet.title31')}>
-                      <DataTable headers={sheetHeaders} widths={SHEET_WIDTHS} minWidth={760} rows={sheetRows.filter((x) => x.table.startsWith('3.')).map((x) => sheetRow(x))} />
+                      <DataTable headers={sheetHeaders} widths={SHEET_WIDTHS} minWidth={760} kinds={SHEET_KINDS} rows={sheetRows.filter((x) => x.table.startsWith('3.')).map((x) => sheetRow(x))} />
                     </ReportSection>
                     <ReportSection title={tr('compliance:returns.unregistered')}>
                       <DataTable
@@ -374,7 +419,7 @@ export default function GstReturnsScreen() {
                       />
                     </ReportSection>
                     <ReportSection title={tr('compliance:returns.itc')}>
-                      <DataTable headers={sheetHeaders} widths={SHEET_WIDTHS} minWidth={760} rows={sheetRows.filter((x) => x.table.startsWith('4')).map((x) => sheetRow(x))} />
+                      <DataTable headers={sheetHeaders} widths={SHEET_WIDTHS} minWidth={760} kinds={SHEET_KINDS} rows={sheetRows.filter((x) => x.table.startsWith('4')).map((x) => sheetRow(x))} />
                     </ReportSection>
                     <ReportSection title={tr('compliance:returns.inwardExempt')}>
                       <DataTable
@@ -387,7 +432,7 @@ export default function GstReturnsScreen() {
                       />
                     </ReportSection>
                     <ReportSection title={tr('compliance:returns.interestLateFee')}>
-                      <DataTable headers={sheetHeaders} widths={SHEET_WIDTHS} minWidth={760} rows={sheetRows.filter((x) => x.table === '5.1').map((x) => sheetRow(x))} />
+                      <DataTable headers={sheetHeaders} widths={SHEET_WIDTHS} minWidth={760} kinds={SHEET_KINDS} rows={sheetRows.filter((x) => x.table === '5.1').map((x) => sheetRow(x))} />
                     </ReportSection>
                     <ReportSection title={tr('compliance:returns.sheet.title61a')}>
                       <DataTable
@@ -495,6 +540,19 @@ export default function GstReturnsScreen() {
           ))}
         </View>
       </Sheet>
+      <ConfirmDialog
+        visible={!!askFile}
+        icon="send-check-outline"
+        title={tr('compliance:returns.fileAskTitle', { name: askFile === 'gstr1' ? 'GSTR-1' : 'GSTR-3B', period: periodLabel(period) })}
+        message={tr('compliance:returns.fileAskBody')}
+        confirmLabel={tr('compliance:returns.file')}
+        onCancel={() => setAskFile(null)}
+        onConfirm={() => {
+          const r = askFile!;
+          setAskFile(null);
+          return step(r, 'file', tr('compliance:returns.filed', { name: r === 'gstr1' ? 'GSTR-1' : 'GSTR-3B' }));
+        }}
+      />
       <SelectSheet visible={open === 'gstin'} onClose={() => setOpen(null)} title="GSTIN" options={gstins.map((g) => ({ value: g, label: g }))} value={gstin} onSelect={setGstin} searchable={false} />
       <SelectSheet visible={open === 'period'} onClose={() => setOpen(null)} title={tr('compliance:gstr2b.period')} options={periods.map((p) => ({ value: p, label: periodLabel(p) }))} value={period} onSelect={setPeriod} searchable={false} />
     </View>

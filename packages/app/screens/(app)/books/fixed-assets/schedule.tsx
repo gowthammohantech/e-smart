@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Stack } from 'expo-router';
 import { formatMoney } from '@esmart/core/lib/format';
 import { money } from '@esmart/core/lib/money';
-import { ReportShell, reportTable, useReportScope, ReportLoading } from '../../../../features/reports/ReportShell';
+import { ReportShell, reportTable, useReportScope, ReportLoading, ReportError, failedQuery } from '../../../../features/reports/ReportShell';
 import { DataTable, KeyFigures, ReportSection } from '../../../../features/reports/reportParts';
 import { useFixedAssetSchedule } from '../../../../remote/fixedAssets';
 import { useBaseCurrency } from '../../../../store/selectors';
@@ -22,7 +22,9 @@ export default function FixedAssetScheduleScreen() {
   return (
     <>
       <Stack.Screen options={{ title: tr('books:assets.schedule') }} />
-      {!s ? (
+      {failedQuery(query) ? (
+        <ReportError title={tr('books:assets.schedule')} subtitle={tr('books:assets.scheduleBasis')} scope={scope} onScopeChange={setScope} onRetry={query.refetch} error={query.error} />
+      ) : !s ? (
         <ReportLoading title={tr('books:assets.schedule')} subtitle={tr('books:assets.scheduleBasis')} scope={scope} onScopeChange={setScope} skeleton={{ figures: 0, cols: 6 }} />
       ) : (
         <ReportShell
@@ -43,14 +45,16 @@ export default function FixedAssetScheduleScreen() {
           <ReportSection title={tr('books:assets.sched.cost')}>
             <DataTable
               headers={[heads[0], heads[1], heads[2], heads[3], heads[4]]}
-              rows={[...s.rows.map((r) => [r.name ?? '', m(r.openingCost), m(r.additions), m(r.disposals), m(r.closingCost)]), [tr('books:assets.sched.total'), m(s.totals.openingCost), m(s.totals.additions), m(s.totals.disposals), m(s.totals.closingCost)]]}
+              rows={s.rows.map((r) => [r.name ?? '', m(r.openingCost), m(r.additions), m(r.disposals), m(r.closingCost)])}
+              total={[tr('books:assets.sched.total'), m(s.totals.openingCost), m(s.totals.additions), m(s.totals.disposals), m(s.totals.closingCost)]}
               widths={[1.6, 1, 1, 1, 1]}
             />
           </ReportSection>
           <ReportSection title={tr('books:assets.sched.dep')}>
             <DataTable
               headers={[heads[0], heads[5], heads[6], heads[7], heads[8], heads[9]]}
-              rows={[...s.rows.map((r) => [r.name ?? '', m(r.openingDepreciation), m(r.depreciation), m(r.depreciationOnDisposals), m(r.closingDepreciation), m(r.closingValue)]), [tr('books:assets.sched.total'), m(s.totals.openingDepreciation), m(s.totals.depreciation), m(s.totals.depreciationOnDisposals), m(s.totals.closingDepreciation), m(s.totals.closingValue)]]}
+              rows={s.rows.map((r) => [r.name ?? '', m(r.openingDepreciation), m(r.depreciation), m(r.depreciationOnDisposals), m(r.closingDepreciation), m(r.closingValue)])}
+              total={[tr('books:assets.sched.total'), m(s.totals.openingDepreciation), m(s.totals.depreciation), m(s.totals.depreciationOnDisposals), m(s.totals.closingDepreciation), m(s.totals.closingValue)]}
               widths={[1.6, 1, 1, 1, 1, 1]}
             />
           </ReportSection>

@@ -8,7 +8,7 @@ import { formatMoney } from '@esmart/core/lib/format';
 import { formatDate } from '@esmart/core/lib/date';
 import { money } from '@esmart/core/lib/money';
 import type { IntegrityCheck, IntegrityItem } from '@esmart/core/domain/ledger/integrity';
-import { ReportShell, reportTable, useReportScope, ReportLoading } from '../../../features/reports/ReportShell';
+import { ReportShell, reportTable, useReportScope, ReportLoading, ReportError, failedQuery } from '../../../features/reports/ReportShell';
 import { HeroFigure, ReportSection } from '../../../features/reports/reportParts';
 import { useBooksView } from '../../../remote/queries';
 import { useBaseCurrency } from '../../../store/selectors';
@@ -33,8 +33,10 @@ export default function IntegrityScreen() {
   const router = useRouter();
   const { scope, setScope } = useReportScope('thisFY');
   const baseCurrency = useBaseCurrency();
-  const res = useBooksView<{ asOf: string; checks: IntegrityCheck[] }>('integrity', { to: scope.filters.range.to }).data;
-  if (!res) return <ReportLoading title={tr('books:hub.integrity')} subtitle={tr('books:integrity.basis')} scope={scope} onScopeChange={setScope} />;
+  const query = useBooksView<{ asOf: string; checks: IntegrityCheck[] }>('integrity', { to: scope.filters.range.to });
+  const res = query.data;
+  if (failedQuery(query)) return <ReportError title={tr('books:hub.integrity')} subtitle={tr('books:integrity.basis')} scope={scope} onScopeChange={setScope} onRetry={query.refetch} error={query.error} asAt />;
+  if (!res) return <ReportLoading title={tr('books:hub.integrity')} subtitle={tr('books:integrity.basis')} scope={scope} onScopeChange={setScope} asAt />;
   const m = (minor: number) => formatMoney(money(minor, baseCurrency));
   const failed = res.checks.filter((c) => !c.ok);
   const itemRow = (c: IntegrityCheck, i: IntegrityItem, last: boolean) => {
@@ -59,6 +61,7 @@ export default function IntegrityScreen() {
         subtitle={tr('books:integrity.basis')}
         scope={scope}
         onScopeChange={setScope}
+        asAt
         exportRows={() =>
           reportTable(
             [tr('books:integrity.check'), tr('books:integrity.record'), tr('books:integrity.expected'), tr('books:integrity.actual')],

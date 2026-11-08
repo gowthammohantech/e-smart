@@ -22,7 +22,7 @@ import { ListSkeleton, MoreRowsSkeleton } from '../../../../components/ScreenSke
 export default function VoucherList() {
   const t = useTheme();
   const router = useRouter();
-  const { t: tr } = useTranslation(['books']);
+  const { t: tr } = useTranslation(['books', 'reports']);
   // From the server, newest first, 50 at a time.
   const [status, setStatus] = useState<'all' | 'draft' | 'posted'>('all');
   // `?kind=contra` (the transfer entry's "all transfers") lists one kind.
@@ -81,6 +81,9 @@ export default function VoucherList() {
         </ScrollView>
       ) : pages.isLoading ? (
         <ListSkeleton kind="list" />
+      ) : pages.isError ? (
+        // A failed fetch isn't "no vouchers yet".
+        <EmptyState icon="cloud-off-outline" title={tr('reports:dash.state.failedTitle')} message={tr('reports:dash.state.failedBody')} actionLabel={tr('reports:dash.state.retry')} onAction={() => void pages.refetch()} />
       ) : (
         <EmptyState icon="swap-horizontal" title={tr('books:vouchers.empty')} message={tr('books:vouchers.emptyBody')} actionLabel={tr('books:vouchers.new')} onAction={() => router.push('/(app)/books/vouchers/new')} />
       )}

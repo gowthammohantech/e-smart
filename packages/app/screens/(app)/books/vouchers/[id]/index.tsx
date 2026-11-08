@@ -13,6 +13,8 @@ import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { accountFor } from '@esmart/core/domain/ledger/accounts';
 import { formatDate } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
+import { money } from '@esmart/core/lib/money';
+import { ApiError } from '@esmart/api-client';
 import { useServerSave } from '../../../../../components/useServerSave';
 import { useAppStore } from '../../../../../store/appStore';
 import { useCostCentres, useVouchers } from '../../../../../store/books';
@@ -20,11 +22,13 @@ import { useServerBook, useVoucherRecord } from '../../../../../remote/queries';
 import { LoadingView } from '../../../../../components/LoadingView';
 import { useAccountName } from '../../../../../features/books/names';
 
+const AMOUNT_W = 104;
+
 export default function VoucherDetail() {
   const t = useTheme();
   const router = useRouter();
-  const { t: tr } = useTranslation(['books', 'common']);
-  const { run: serverSave } = useServerSave();
+  const { t: tr } = useTranslation(['books', 'common', 'reports']);
+  const { run: serverSave, saving, blocked } = useServerSave();
   const { id } = useLocalSearchParams<{ id: string }>();
   const voucher = useVouchers().find((v) => v.id === id);
   // Fetched on opening, so it shows even when the book on the device doesn't hold it.
@@ -38,6 +42,14 @@ export default function VoucherDetail() {
   const costCentres = useCostCentres(true);
 
   if (!voucher && remote.isLoading) return <LoadingView />;
+  // Only a voucher the server says isn't there is "not found"; anything else failed to load.
+  if (!voucher && remote.isError && !(remote.error instanceof ApiError && (remote.error.status === 404 || remote.error.status === 403))) {
+    return (
+      <View style={{ flex: 1 }}>
+        <EmptyState icon="cloud-off-outline" title={tr('reports:dash.state.failedTitle')} message={tr('reports:dash.state.failedBody')} actionLabel={tr('reports:dash.state.retry')} onAction={() => void remote.refetch()} />
+      </View>
+    );
+  }
   if (!voucher) {
     return (
       <View style={{ flex: 1 }}>
@@ -51,6 +63,9 @@ export default function VoucherDetail() {
   };
 
   const isDraft = voucher.status === 'draft';
+  const currency = voucher.lines[0]?.debit.currency ?? voucher.lines[0]?.credit.currency ?? 'INR';
+  const totalDebit = voucher.lines.reduce((a, l) => a + l.debit.minor, 0);
+  const totalCredit = voucher.lines.reduce((a, l) => a + l.credit.minor, 0);
   const title = isDraft ? tr('books:vouchers.draftTitle') : voucher.number;
 
   return (
@@ -80,8 +95,20 @@ export default function VoucherDetail() {
           ) : null}
         </Card>
         <Card style={{ gap: t.spacing.md }}>
+          {/* As in a ledger: debits and credits each in their own column, totalled underneath. */}
+          <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
+            <Text variant="caption" tone="muted" weight="700" style={{ flex: 1, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              {tr('books:vouchers.account')}
+            </Text>
+            <Text variant="caption" tone="muted" weight="700" style={{ width: AMOUNT_W, textAlign: 'right', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              {tr('books:vouchers.debit')}
+            </Text>
+            <Text variant="caption" tone="muted" weight="700" style={{ width: AMOUNT_W, textAlign: 'right', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              {tr('books:vouchers.credit')}
+            </Text>
+          </View>
           {voucher.lines.map((l, i) => (
-            <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', gap: t.spacing.md }}>
+            <View key={i} style={{ flexDirection: 'row', gap: t.spacing.md }}>
               <View style={{ flex: 1 }}>
                 <Text variant="body">{label(l.account)}</Text>
                 {l.costCentreId ? (
@@ -89,24 +116,48 @@ export default function VoucherDetail() {
                     {costCentres.find((c) => c.id === l.costCentreId)?.name ?? l.costCentreId}
                   </Text>
                 ) : null}
+                {l.narration ? (
+                  <Text variant="caption" tone="muted">
+                    {l.narration}
+                  </Text>
+                ) : null}
               </View>
-              <Text variant="body" weight="600" style={{ fontVariant: ['tabular-nums'] }}>
-                {l.debit.minor ? `${formatMoney(l.debit)} ${tr('books:accounts.dr')}` : `${formatMoney(l.credit)} ${tr('books:accounts.cr')}`}
+              <Text variant="small" weight="600" style={{ width: AMOUNT_W, textAlign: 'right', fontVariant: ['tabular-nums'] }}>
+                {l.debit.minor ? formatMoney(l.debit) : ''}
+              </Text>
+              <Text variant="small" weight="600" style={{ width: AMOUNT_W, textAlign: 'right', fontVariant: ['tabular-nums'] }}>
+                {l.credit.minor ? formatMoney(l.credit) : ''}
               </Text>
             </View>
           ))}
+          <View style={{ flexDirection: 'row', gap: t.spacing.md, borderTopWidth: 1, borderTopColor: t.c.line, paddingTop: t.spacing.sm }}>
+            <Text variant="small" weight="700" style={{ flex: 1 }}>
+              {tr('books:vouchers.totals')}
+            </Text>
+            <Text variant="small" weight="700" style={{ width: AMOUNT_W, textAlign: 'right', fontVariant: ['tabular-nums'] }}>
+              {formatMoney(money(totalDebit, currency))}
+            </Text>
+            <Text variant="small" weight="700" style={{ width: AMOUNT_W, textAlign: 'right', fontVariant: ['tabular-nums'] }}>
+              {formatMoney(money(totalCredit, currency))}
+            </Text>
+          </View>
         </Card>
         <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
-          <Button title={tr('books:vouchers.delete')} variant="danger" style={{ flex: 1 }} onPress={() => setConfirm(true)} />
-          <Button title={tr('books:vouchers.edit')} variant={isDraft ? 'secondary' : 'primary'} style={{ flex: 1 }} onPress={() => router.push(`/(app)/books/vouchers/${voucher.id}/edit` as never)} />
+          <Button title={tr('books:vouchers.edit')} variant={isDraft ? 'secondary' : 'primary'} style={{ flex: 1 }} onPress={() => router.push(`/(app)/books/vouchers/${voucher.id}/edit` as never)} disabled={saving} />
           {isDraft ? (
             <Button
               title={tr('books:vouchers.post')}
               style={{ flex: 1 }}
+              loading={saving}
+              disabled={blocked}
               // The server checks it in full and says what's wrong if it can't be posted yet.
               onPress={() => void serverSave(() => saveVoucher({ ...voucher, status: 'posted' }), tr('books:vouchers.posted'), { icon: 'check' })}
             />
           ) : null}
+        </View>
+        {/* Deleting is set apart from the everyday actions, smaller and below them. */}
+        <View style={{ alignItems: 'flex-start' }}>
+          <Button title={tr('books:vouchers.delete')} icon="delete-outline" variant="danger" size="sm" onPress={() => setConfirm(true)} disabled={saving} />
         </View>
       </ScrollView>
       <ConfirmDialog

@@ -3,11 +3,12 @@ import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
-import { Segmented } from '@esmart/ui/components/Field';
+import { PickerField, Segmented } from '@esmart/ui/components/Field';
+import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
-import { ReportShell, reportTable, useReportScope } from '../../../features/reports/ReportShell';
+import { ReportShell, reportTable, useReportScope, ReportFailed, failedQuery } from '../../../features/reports/ReportShell';
 import { deliverFile } from '../../../features/reports/exportFiles';
 import { gstr1Json } from '../../../remote/exports';
 import { DataTable, KeyFigures, ReportSection } from '../../../features/reports/reportParts';
@@ -63,6 +64,21 @@ export default function Gstr1Report() {
   const { t: tr } = useTranslation(['compliance', 'nav', 'common']);
   const { scope, setScope } = useReportScope('thisMonth');
   const [view, setView] = useState<View_>('b2b');
+  const [monthOpen, setMonthOpen] = useState(false);
+  // GSTR-1 is filed month by month: any of the last two years' months can be picked (MMYYYY).
+  const months = useMemo(() => {
+    const now = new Date();
+    return Array.from({ length: 24 }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      return `${String(d.getMonth() + 1).padStart(2, '0')}${d.getFullYear()}`;
+    });
+  }, []);
+  const pickMonth = (p: string) => {
+    const yy = Number(p.slice(2));
+    const mm = Number(p.slice(0, 2));
+    const last = new Date(Date.UTC(yy, mm, 0)).toISOString().slice(0, 10);
+    setScope({ preset: 'custom', filters: { ...scope.filters, range: { from: `${p.slice(2)}-${p.slice(0, 2)}-01`, to: last } } });
+  };
 
   const company = useActiveCompany();
   const baseCurrency = useBaseCurrency();
@@ -178,6 +194,22 @@ export default function Gstr1Report() {
           ? [1.1, 0.7, 1.1, 1, 1, 1, 0.8, 1.1]
           : [1.4, 1.1, 0.6, 1.1, 1, 1, 1, 0.8];
 
+  // Which columns are words (numbers, places, series) rather than amounts.
+  const T = 'text' as const;
+  const N = 'num' as const;
+  const kinds =
+    view === 'at' || view === 'b2cs'
+      ? [T, T, N, N, N, N, N, N]
+      : view === 'hsn'
+        ? [T, N, N, N, N, N, N, N]
+        : view === 'nil'
+          ? [T, N, N, N]
+          : view === 'docs'
+            ? [T, T, N, N, N]
+            : view === 'amend'
+              ? [T, T, T, N, N, N, N, N, N]
+              : [T, T, N, N, N, N, N, N];
+
   const exportRows = () => {
     if (view === 'at') {
       return reportTable(
@@ -275,11 +307,24 @@ export default function Gstr1Report() {
         subtitle={tr('compliance:gstr1.outwardSupplies')}
         scope={scope}
         onScopeChange={setScope}
-        exportRows={exportRows}
+        // Figures that failed to load aren't offered as a file.
+        exportRows={failedQuery(remote) ? undefined : exportRows}
         extraExports={wholeMonth && jsonGstin ? [{ key: 'gstn-json', icon: 'code-json', label: tr('compliance:gstr1.exportJson'), run: exportJson }] : []}
       >
-        {/* The first answer still on its way: shapes, not a return of zeros. */}
-        {!remote.data && remote.isLoading ? (
+        {/* The return is for a month: pick it here (the range above also takes a custom span). */}
+        <PickerField
+          label={tr('compliance:gstr1.month')}
+          value={wholeMonth ? periodLabel(period) : undefined}
+          placeholder={tr('compliance:gstr1.pickMonth')}
+          onPress={() => setMonthOpen(true)}
+          icon="calendar-month-outline"
+          hint={wholeMonth ? undefined : tr('compliance:gstr1.notWholeMonth')}
+        />
+        <View style={{ height: t.spacing.lg }} />
+        {/* The first answer still on its way: shapes, not a return of zeros. A failure says so. */}
+        {failedQuery(remote) ? (
+          <ReportFailed onRetry={remote.refetch} />
+        ) : !remote.data ? (
           <ReportSkeleton />
         ) : (
         <>
@@ -299,8 +344,8 @@ export default function Gstr1Report() {
               <DataTable
                 headers={[tr('compliance:gstr1.col.rate'), tr('compliance:gstr1.documents'), tr('compliance:gstr1.col.taxable'), ...taxHeads]}
                 rows={rates.map((l) => [formatPercent(l.rate), String(l.documents), formatMoney(l.taxableValue), ...taxCells(l.igst.minor, l.cgst.minor, l.sgst.minor, l.cess.minor)])}
-                widths={[0.7, 0.7, 1.2, 1, 1, 1, 0.8]}
-                minWidth={620}
+                widths={[0.7, 1.1, 1.2, 1, 1, 1, 0.8]}
+                minWidth={720}
               />
               <Text variant="caption" tone="muted" style={{ marginTop: t.spacing.sm, lineHeight: 18 }}>
                 {tr('compliance:gstr1.rateSummaryNote')}
@@ -347,12 +392,28 @@ export default function Gstr1Report() {
           </Card>
         ) : (
           <ReportSection title={tr('compliance:gstr1.rows', { count })}>
-            <DataTable headers={headers} rows={tableRows} widths={widths} minWidth={view === 'nil' || view === 'docs' ? undefined : 720} />
+            <DataTable
+              headers={headers}
+              rows={tableRows}
+              widths={widths}
+              minWidth={view === 'nil' ? 480 : view === 'docs' ? 560 : 760}
+              kinds={kinds}
+              paged
+            />
           </ReportSection>
         )}
         </>
         )}
       </ReportShell>
+      <SelectSheet
+        visible={monthOpen}
+        onClose={() => setMonthOpen(false)}
+        title={tr('compliance:gstr1.month')}
+        options={months.map((p) => ({ value: p, label: periodLabel(p) }))}
+        value={wholeMonth ? period : undefined}
+        onSelect={pickMonth}
+        searchable={false}
+      />
     </>
   );
 }

@@ -211,7 +211,8 @@ export function VoucherForm({ voucher, onSaved, initialKind }: { voucher?: Vouch
             onRemove={(id) => setLines((ls) => ls.filter((x) => x.id !== id))}
             onAdd={() => setLines((ls) => [...ls, gridLine(debit > credit ? 'cr' : 'dr')])}
           />
-          {problem ? (
+          {/* A voucher not yet begun has nothing wrong with it yet: the problem shows once a line is started. */}
+          {problem && lines.some((l) => l.account || minor(l.amount)) ? (
             <Text variant="caption" tone="bad">
               {problem}
             </Text>

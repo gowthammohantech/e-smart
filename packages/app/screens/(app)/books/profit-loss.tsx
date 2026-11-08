@@ -4,8 +4,8 @@ import { Stack } from 'expo-router';
 import { profitAndLoss, type StatementLine } from '@esmart/core/domain/ledger/reports';
 import { formatMoney } from '@esmart/core/lib/format';
 import { money } from '@esmart/core/lib/money';
-import { ReportShell, reportTable, useReportScope, ReportLoading } from '../../../features/reports/ReportShell';
-import { DataTable, HeroFigure, KeyFigures, ReportSection } from '../../../features/reports/reportParts';
+import { ReportShell, reportTable, useReportScope, ReportLoading, ReportError, failedQuery } from '../../../features/reports/ReportShell';
+import { DataTable, HeroFigure, ReportSection } from '../../../features/reports/reportParts';
 import { useBooksView } from '../../../remote/queries';
 import { useBaseCurrency } from '../../../store/selectors';
 import { useAccountName } from '../../../features/books/names';
@@ -19,11 +19,30 @@ export default function ProfitAndLossScreen() {
   const nameOf = useAccountName();
   const [view, setView] = useState<StatementView>('single');
   const columns = useColumnsTables('profit-loss', scope.filters.range, view);
-  const pl = useBooksView<ReturnType<typeof profitAndLoss>>('profit-loss', scope.filters.range).data;
+  const query = useBooksView<ReturnType<typeof profitAndLoss>>('profit-loss', scope.filters.range);
+  const pl = query.data;
+  if (failedQuery(query)) return <ReportError title={tr('books:hub.profitLoss')} subtitle={tr('books:pl.basis')} scope={scope} onScopeChange={setScope} onRetry={query.refetch} error={query.error} />;
   if (!pl) return <ReportLoading title={tr('books:hub.profitLoss')} subtitle={tr('books:pl.basis')} scope={scope} onScopeChange={setScope} />;
   const m = (minor: number) => formatMoney(money(minor, baseCurrency));
-  const rows = (lines: StatementLine[]) => lines.map((l) => [nameOf(l.account), m(l.amount)]);
 
+  // One layout for the screen and the export: income in one column, expenses in the other,
+  // each section closed by its result (a profit under income, a loss under expenses).
+  type Row = { label: string; income?: number; expense?: number };
+  const incomeRows = (lines: StatementLine[]): Row[] => lines.map((l) => ({ label: nameOf(l.account), income: l.amount }));
+  const expenseRows = (lines: StatementLine[]): Row[] => lines.map((l) => ({ label: nameOf(l.account), expense: l.amount }));
+  const result = (value: number, profit: string, loss: string): Row => (value >= 0 ? { label: profit, income: value } : { label: loss, expense: -value });
+  const trading: Row[] = [
+    { label: tr('books:pl.openingStock'), expense: pl.trading.openingStock },
+    ...expenseRows(pl.trading.expense),
+    ...incomeRows(pl.trading.income),
+    { label: tr('books:pl.closingStock'), income: pl.trading.closingStock },
+  ];
+  const gross = result(pl.grossProfit, tr('books:pl.grossProfit'), tr('books:pl.grossLoss'));
+  const indirect: Row[] = [...incomeRows(pl.indirect.income), ...expenseRows(pl.indirect.expense)];
+  const net = result(pl.netProfit, tr('books:pl.netProfit'), tr('books:pl.netLoss'));
+  const headers = [tr('books:tb.account'), tr('books:pl.income'), tr('books:pl.expenses')];
+  const shown = (r: Row) => [r.label, r.income !== undefined ? m(r.income) : '', r.expense !== undefined ? m(r.expense) : ''];
+  const exported = (r: Row) => [r.label, r.income !== undefined ? r.income / 100 : '', r.expense !== undefined ? r.expense / 100 : ''];
 
   return (
     <>
@@ -34,40 +53,24 @@ export default function ProfitAndLossScreen() {
         scope={scope}
         onScopeChange={setScope}
         exportRows={() =>
-          // The columns when they're showing, else the single statement.
-          view !== 'single' && columns ? reportTable(columnsExport(columns).headers, columnsExport(columns).rows) : reportTable(
-            [tr('books:tb.account'), tr('books:pl.income'), tr('books:pl.expenses')],
-            [
-              [tr('books:pl.openingStock'), '', pl.trading.openingStock / 100],
-              ...[...pl.trading.income, ...pl.indirect.income].map((l) => [nameOf(l.account), l.amount / 100, '']),
-              ...[...pl.trading.expense, ...pl.indirect.expense].map((l) => [nameOf(l.account), '', l.amount / 100]),
-              [tr('books:pl.closingStock'), pl.trading.closingStock / 100, ''],
-              [pl.netProfit >= 0 ? tr('books:pl.netProfit') : tr('books:pl.netLoss'), pl.netProfit / 100, ''],
-            ],
+          // The columns when they're showing, else the single statement as on screen.
+          view !== 'single' && columns.sections ? reportTable(columnsExport(columns.sections).headers, columnsExport(columns.sections).rows) : reportTable(
+            headers,
+            [...trading, gross, ...indirect, net].map(exported),
           )
         }
       >
         <StatementViewPicker value={view} onChange={setView} />
         {view !== 'single' ? (
-          <ColumnsReport sections={columns} />
+          <ColumnsReport tables={columns} />
         ) : (
         <>
-        <HeroFigure label={pl.netProfit >= 0 ? tr('books:pl.netProfit') : tr('books:pl.netLoss')} value={money(Math.abs(pl.netProfit), baseCurrency)} tone={pl.netProfit >= 0 ? 'good' : 'bad'} />
+        <HeroFigure label={net.label} value={money(Math.abs(pl.netProfit), baseCurrency)} tone={pl.netProfit >= 0 ? 'good' : 'bad'} />
         <ReportSection title={tr('books:pl.trading')}>
-          <DataTable
-            headers={[tr('books:tb.account'), tr('books:accounts.balance')]}
-            rows={[
-              ...rows(pl.trading.income),
-              [tr('books:pl.closingStock'), m(pl.trading.closingStock)],
-              [tr('books:pl.openingStock'), `− ${m(pl.trading.openingStock)}`],
-              ...rows(pl.trading.expense).map(([a, v]) => [a, `− ${v}`]),
-            ]}
-            widths={[2, 1.2]}
-          />
+          <DataTable headers={headers} rows={trading.map(shown)} widths={[2, 1.2, 1.2]} total={shown(gross)} />
         </ReportSection>
-        <KeyFigures rows={[{ label: pl.grossProfit >= 0 ? tr('books:pl.grossProfit') : tr('books:pl.grossLoss'), value: m(Math.abs(pl.grossProfit)), tone: pl.grossProfit >= 0 ? 'good' : 'bad' }]} />
         <ReportSection title={tr('books:pl.indirect')}>
-          <DataTable headers={[tr('books:tb.account'), tr('books:accounts.balance')]} rows={[...rows(pl.indirect.income), ...rows(pl.indirect.expense).map(([a, v]) => [a, `− ${v}`])]} widths={[2, 1.2]} />
+          <DataTable headers={headers} rows={[shown(gross), ...indirect.map(shown)]} strong={[0]} widths={[2, 1.2, 1.2]} total={shown(net)} />
         </ReportSection>
         </>
         )}

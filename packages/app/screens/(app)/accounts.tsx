@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
+import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { Screen, SectionHeader } from '@esmart/ui/components/Screen';
 import { Card } from '@esmart/ui/components/Card';
 import { Text } from '@esmart/ui/components/Text';
@@ -25,6 +26,9 @@ import { major, useCardExport } from '../../features/dashboard/exportCard';
  * Accounts & P&L: the period's profit as the profit report gives it, where the cash went, the GST
  * position, and, for someone who sees every branch, the balance sheet and the accounts that moved.
  */
+/** Tiles share their row equally, however long their figures. */
+const EQUAL_TILE = { flex: 1, minWidth: 0 } as const;
+
 export default function AccountsHub() {
   const t = useTheme();
   const { t: tr } = useTranslation(['reports', 'books', 'common']);
@@ -32,12 +36,14 @@ export default function AccountsHub() {
   const scope = useDashboardScope();
   const query = useAccountsHub(scope);
   const exportCsv = useCardExport();
+  const desktop = useIsDesktop();
 
   return (
     <>
       <Stack.Screen options={{ title: tr('reports:dash.accounts.title') }} />
       <Screen bottomInset={40}>
-        <Text variant="small" tone="muted" style={{ marginTop: t.spacing.md }}>
+        {/* On a desktop the page title sits right above: the subtitle follows it closely, as on the other hubs. */}
+        <Text variant="small" tone="muted" style={{ marginTop: desktop ? 0 : t.spacing.md }}>
           {tr('reports:dash.accounts.subtitle')}
         </Text>
         <PeriodBar />
@@ -61,22 +67,31 @@ export default function AccountsHub() {
             return (
               <>
                 <SectionHeader title={periodTitle(tr, hub.period)} />
+                {/* Every tile the same width, whether it opens something or not. */}
                 <StatGrid>
                   <StatRow>
-                    <StatTile label={tr('reports:dash.accounts.revenue')} value={p.revenue} icon="trending-up" delta={delta(p.revenue, prev?.revenue)} />
-                    <StatTile label={tr('reports:dash.accounts.grossProfit')} value={p.grossProfit} tone={p.grossProfit.minor >= 0 ? 'good' : 'bad'} icon="chart-box-outline" delta={delta(p.grossProfit, prev?.grossProfit)} />
+                    <View style={EQUAL_TILE}>
+                      <StatTile label={tr('reports:dash.accounts.revenue')} value={p.revenue} icon="trending-up" delta={delta(p.revenue, prev?.revenue)} />
+                    </View>
+                    <View style={EQUAL_TILE}>
+                      <StatTile label={tr('reports:dash.accounts.grossProfit')} value={p.grossProfit} tone={p.grossProfit.minor >= 0 ? 'good' : 'bad'} icon="chart-box-outline" delta={delta(p.grossProfit, prev?.grossProfit)} />
+                    </View>
                   </StatRow>
                   <StatRow>
-                    <StatTile
-                      label={tr('reports:dash.accounts.netProfit')}
-                      value={p.netProfit}
-                      tone={p.netProfit.minor >= 0 ? 'good' : 'bad'}
-                      icon="scale-balance"
-                      caption={tr('reports:dash.accounts.margin', { pct: p.margin.toLocaleString(undefined, { maximumFractionDigits: 1 }) })}
-                      delta={delta(p.netProfit, prev?.netProfit)}
-                      onPress={() => router.push('/(app)/reports/profit')}
-                    />
-                    <StatTile label={tr('reports:dash.home.cash')} value={cash.net} tone={cash.net.minor >= 0 ? 'good' : 'bad'} icon="wallet-outline" caption={tr('reports:dash.home.net')} />
+                    <View style={EQUAL_TILE}>
+                      <StatTile
+                        label={tr('reports:dash.accounts.netProfit')}
+                        value={p.netProfit}
+                        tone={p.netProfit.minor >= 0 ? 'good' : 'bad'}
+                        icon="scale-balance"
+                        caption={tr('reports:dash.accounts.margin', { pct: p.margin.toLocaleString(undefined, { maximumFractionDigits: 1 }) })}
+                        delta={delta(p.netProfit, prev?.netProfit)}
+                        onPress={() => router.push('/(app)/reports/profit')}
+                      />
+                    </View>
+                    <View style={EQUAL_TILE}>
+                      <StatTile label={tr('reports:dash.home.cash')} value={cash.net} tone={cash.net.minor >= 0 ? 'good' : 'bad'} icon="wallet-outline" caption={tr('reports:dash.home.net')} />
+                    </View>
                   </StatRow>
                 </StatGrid>
 

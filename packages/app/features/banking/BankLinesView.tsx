@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { ScrollView, View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
+import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { Badge } from '@esmart/ui/components/Badge';
 import { Button } from '@esmart/ui/components/Button';
@@ -46,6 +47,8 @@ export function BankLinesView({ accountId, status, header }: { accountId: string
   const labelOf = useRecordLabel();
   const { run, busy } = useBankAction();
   const [sheet, setSheet] = useState<{ kind: Sheet; line: BankLine } | null>(null);
+  // Unmatching undoes a reconciliation: it is asked first.
+  const [askUnmatch, setAskUnmatch] = useState<BankLine | null>(null);
   const close = () => setSheet(null);
   const open = (kind: Sheet, line: BankLine) => setSheet({ kind, line });
 
@@ -64,7 +67,7 @@ export function BankLinesView({ accountId, status, header }: { accountId: string
     if (status === 'matched') {
       return [
         ...(line.match ? [{ key: 'open', label: tr('banking:lines.openRecord'), icon: 'eye-outline' as const, onPress: () => router.push(routeOf(line.match!) as never) }] : []),
-        { key: 'unmatch', label: tr('banking:lines.unmatch'), icon: 'link-variant-off', onPress: () => unmatch(line) },
+        { key: 'unmatch', label: tr('banking:lines.unmatch'), icon: 'link-variant-off', destructive: true, onPress: () => setAskUnmatch(line) },
       ];
     }
     if (status === 'excluded') return [{ key: 'include', label: tr('banking:lines.include'), icon: 'eye-outline', onPress: () => include(line) }];
@@ -89,6 +92,20 @@ export function BankLinesView({ accountId, status, header }: { accountId: string
       {sheet?.kind === 'expense' ? <RecordExpenseSheet key={sheet.line.id} line={sheet.line} onClose={close} /> : null}
       {sheet?.kind === 'voucher' ? <RecordVoucherSheet key={sheet.line.id} line={sheet.line} onClose={close} /> : null}
       {sheet?.kind === 'exclude' ? <ExcludeSheet key={sheet.line.id} line={sheet.line} onClose={close} /> : null}
+      <ConfirmDialog
+        visible={!!askUnmatch}
+        icon="link-variant-off"
+        title={tr('banking:lines.unmatchAskTitle')}
+        message={tr('banking:lines.unmatchAskBody', { record: askUnmatch?.match ? labelOf(askUnmatch.match) : '' })}
+        confirmLabel={tr('banking:lines.unmatch')}
+        destructive
+        onCancel={() => setAskUnmatch(null)}
+        onConfirm={() => {
+          const l = askUnmatch!;
+          setAskUnmatch(null);
+          unmatch(l);
+        }}
+      />
     </>
   );
 
@@ -191,7 +208,7 @@ export function BankLinesView({ accountId, status, header }: { accountId: string
                   <Text variant="caption" tone="primary" style={{ flex: 1 }} onPress={l.match ? () => router.push(routeOf(l.match!) as never) : undefined} accessibilityRole={l.match ? 'link' : undefined}>
                     {l.match ? labelOf(l.match) : '—'}
                   </Text>
-                  <Button size="sm" variant="ghost" icon="link-variant-off" title={tr('banking:lines.unmatch')} onPress={() => unmatch(l)} loading={busy === `unmatch:${l.id}`} disabled={!canWrite || !!busy} />
+                  <Button size="sm" variant="ghost" icon="link-variant-off" title={tr('banking:lines.unmatch')} onPress={() => setAskUnmatch(l)} loading={busy === `unmatch:${l.id}`} disabled={!canWrite || !!busy} />
                 </View>
               ) : (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>

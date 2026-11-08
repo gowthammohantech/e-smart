@@ -7,11 +7,14 @@ import { Icon, type IconName } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
+import { EmptyState } from '@esmart/ui/components/EmptyState';
+import { ApiError } from '@esmart/api-client';
 import { Button } from '@esmart/ui/components/Button';
 import { Sheet } from '@esmart/ui/components/Sheet';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
+import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { useToast } from '@esmart/ui/components/Toast';
-import { DATE_RANGE_PRESET_KEYS, DateRangePreset, formatDate, formatDateTime, resolveRange } from '@esmart/core/lib/date';
+import { DATE_RANGE_PRESET_KEYS, DateRangePreset, formatDate, formatDateTime, resolveRange, today } from '@esmart/core/lib/date';
 import { dateRangeLabel } from '@esmart/core/labels';
 import { useActiveCompany, useBranches, useParties } from '../../store/selectors';
 import { usePartyRecord, usePartySearch } from '../../remote/queries';
@@ -42,6 +45,8 @@ export function ReportShell({
   exportRows,
   extraExports = [],
   generatedAt,
+  asAt = false,
+  exportPlacement = 'auto',
 }: {
   title: string;
   subtitle?: string;
@@ -57,6 +62,10 @@ export function ReportShell({
    * report and its PDF. Left out, it is when the report was opened or its filters last changed.
    */
   generatedAt?: number;
+  /** A statement "as at" a date (balance sheet): the period chip names the closing date, not a range. */
+  asAt?: boolean;
+  /** `header` puts Export in the page header on a phone too, for a screen whose bottom bar does something else. */
+  exportPlacement?: 'auto' | 'header';
 }) {
   const t = useTheme();
   const { t: tr, i18n } = useTranslation(['common', 'reports']);
@@ -80,9 +89,25 @@ export function ReportShell({
 
   const branch = branches.find((b) => b.id === scope.filters.branchId);
   const party = parties.find((p) => p.id === scope.filters.partyId);
-  const rangeLabel = DATE_RANGE_PRESET_KEYS.includes(scope.preset)
-    ? dateRangeLabel(tr, scope.preset)
-    : tr('common:dateRange.custom');
+  const rangeLabel = asAt
+    ? tr('reports:shell.asAt', { date: formatDate(scope.filters.range.to < today() ? scope.filters.range.to : today()) })
+    : DATE_RANGE_PRESET_KEYS.includes(scope.preset)
+      ? dateRangeLabel(tr, scope.preset)
+      : tr('reports:shell.customLabel', { from: formatDate(scope.filters.range.from), to: formatDate(scope.filters.range.to) });
+
+  // The custom range being picked in the date sheet, applied together.
+  const [customOpen, setCustomOpen] = useState(false);
+  const [customFrom, setCustomFrom] = useState(scope.filters.range.from);
+  const [customTo, setCustomTo] = useState(scope.filters.range.to);
+  const customBad = !customFrom || !customTo || customFrom > customTo;
+  const openRangeSheet = () => {
+    // Start the custom fields from the range on screen, a real one rather than "all time".
+    const r = scope.preset === 'all' ? resolveRange('thisFY', undefined, company?.fiscalYearStartMonth) : scope.filters.range;
+    setCustomFrom(r.from);
+    setCustomTo(r.to);
+    setCustomOpen(scope.preset === 'custom');
+    setFilterOpen(true);
+  };
 
   const setPreset = (preset: DateRangePreset) =>
     changeScope({ preset, filters: { ...scope.filters, range: resolveRange(preset, undefined, company?.fiscalYearStartMonth) } });
@@ -124,44 +149,59 @@ export function ReportShell({
     { format: 'csv', icon: 'file-delimited-outline', label: tr('reports:shell.exportCsv') },
   ];
 
+  // Chips are a full 40pt tall; a set filter's clear button is its own target beside the label.
   const chip = (label: string, active: boolean, onPress: () => void, onClear?: () => void) => (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityState={{ selected: active }}
+    <View
       style={{
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 5,
-        paddingHorizontal: t.spacing.md,
-        paddingVertical: 7,
+        minHeight: 40,
         borderRadius: t.radius.pill,
         backgroundColor: active ? t.c.chip : t.c.card,
         borderWidth: 1,
         borderColor: active ? t.c.primary : t.c.line,
       }}
     >
-      <Text variant="caption" weight="600" tone={active ? 'primary' : 'muted'}>
-        {label}
-      </Text>
+      <Pressable
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityState={{ selected: active }}
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 5,
+          minHeight: 40,
+          paddingLeft: t.spacing.md,
+          paddingRight: active && onClear ? t.spacing.xs : t.spacing.md,
+        }}
+      >
+        <Text variant="caption" weight="600" tone={active ? 'primary' : 'muted'}>
+          {label}
+        </Text>
+        {active && onClear ? null : <Icon name="chevron-down" size={16} color={active ? t.c.primary : t.c.muted} />}
+      </Pressable>
       {active && onClear ? (
-        <Pressable onPress={onClear} hitSlop={6} accessibilityRole="button" accessibilityLabel={tr('reports:shell.clearFilter', { label })}>
-          <Icon name="close-circle" size={13} color={t.c.primary} />
+        <Pressable
+          onPress={onClear}
+          hitSlop={4}
+          accessibilityRole="button"
+          accessibilityLabel={tr('reports:shell.clearFilter', { label })}
+          style={{ minHeight: 40, minWidth: 36, alignItems: 'center', justifyContent: 'center', paddingRight: t.spacing.xs }}
+        >
+          <Icon name="close-circle" size={18} color={t.c.primary} />
         </Pressable>
-      ) : (
-        <Icon name="chevron-down" size={13} color={active ? t.c.primary : t.c.muted} />
-      )}
-    </Pressable>
+      ) : null}
+    </View>
   );
 
   return (
     <View style={{ flex: 1 }}>
-      {desktop && exportRows ? (
+      {(desktop || exportPlacement === 'header') && exportRows ? (
         // A desktop puts Export with the page title, top right, instead of a bar at the bottom.
         <Stack.Screen
           options={{
             headerRight: () => (
-              <Button title={tr('reports:shell.export')} icon="file-export-outline" variant="secondary" onPress={() => setExportOpen(true)} />
+              <Button title={tr('reports:shell.export')} icon="file-export-outline" variant={desktop ? 'secondary' : 'ghost'} size={desktop ? undefined : 'sm'} onPress={() => setExportOpen(true)} />
             ),
           }}
         />
@@ -175,7 +215,7 @@ export function ReportShell({
         }
       >
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: t.spacing.sm, paddingRight: t.spacing.lg }}>
-          {chip(rangeLabel, true, () => setFilterOpen(true))}
+          {chip(rangeLabel, true, openRangeSheet)}
           {branches.length > 1
             ? chip(branch?.name ?? tr('common:component.allBranches'), !!branch, () => setBranchOpen(true), () =>
                 changeScope({ ...scope, filters: { ...scope.filters, branchId: null } }),
@@ -212,7 +252,7 @@ export function ReportShell({
         {children}
       </ScrollView>
 
-      {exportRows && !desktop ? (
+      {exportRows && !desktop && exportPlacement === 'auto' ? (
         <View
           style={{
             position: 'absolute',
@@ -288,6 +328,44 @@ export function ReportShell({
             {scope.preset === p ? <Icon name="check" size={19} color={t.c.primary} /> : null}
           </Pressable>
         ))}
+        <Pressable
+          onPress={() => setCustomOpen((o) => !o)}
+          accessibilityRole="button"
+          accessibilityState={{ selected: scope.preset === 'custom', expanded: customOpen }}
+          style={({ pressed }) => ({
+            flexDirection: 'row',
+            alignItems: 'center',
+            paddingVertical: t.spacing.md,
+            paddingHorizontal: t.spacing.lg,
+            backgroundColor: pressed ? t.c.card2 : 'transparent',
+          })}
+        >
+          <Text variant="body" style={{ flex: 1 }} weight={scope.preset === 'custom' ? '600' : '400'}>
+            {tr('reports:shell.customRange')}
+          </Text>
+          <Icon name={customOpen ? 'chevron-up' : 'chevron-down'} size={19} color={scope.preset === 'custom' ? t.c.primary : t.c.muted} />
+        </Pressable>
+        {customOpen ? (
+          <View style={{ paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.md, gap: t.spacing.md }}>
+            <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
+              <View style={{ flex: 1 }}>
+                <DateField label={tr('reports:shell.from')} value={customFrom} onChange={setCustomFrom} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <DateField label={tr('reports:shell.to')} value={customTo} onChange={setCustomTo} error={customFrom && customTo && customFrom > customTo ? tr('reports:shell.toBeforeFrom') : undefined} />
+              </View>
+            </View>
+            <Button
+              title={tr('reports:shell.applyRange')}
+              disabled={customBad}
+              onPress={() => {
+                changeScope({ preset: 'custom', filters: { ...scope.filters, range: { from: customFrom, to: customTo } } });
+                setFilterOpen(false);
+              }}
+              fullWidth
+            />
+          </View>
+        ) : null}
       </Sheet>
 
       <SelectSheet
@@ -326,16 +404,24 @@ export function useReportScope(initial: DateRangePreset = 'thisFY') {
   // "This FY" is the company's own financial year, which needn't start in April.
   const fyStartMonth = useActiveCompany()?.fiscalYearStartMonth;
   const scope = useMemo<ReportScope>(() => {
-    const preset = presetParam(params.range, initial);
+    // A custom range travels as `?range=custom&from=…&to=…`; a broken one falls back to the default.
+    const iso = /^\d{4}-\d{2}-\d{2}$/;
+    const custom =
+      params.range === 'custom' && params.from && params.to && iso.test(params.from) && iso.test(params.to) && params.from <= params.to
+        ? { from: params.from, to: params.to }
+        : undefined;
+    const preset: DateRangePreset = custom ? 'custom' : presetParam(params.range, initial);
     return {
       preset,
-      filters: { range: resolveRange(preset, undefined, fyStartMonth), branchId: params.branch ?? null, partyId: params.party ?? null, currency: params.currency ?? null },
+      filters: { range: resolveRange(preset, custom, fyStartMonth), branchId: params.branch ?? null, partyId: params.party ?? null, currency: params.currency ?? null },
     };
   }, [params, initial, fyStartMonth]);
   const setScope = useCallback(
     (s: ReportScope) =>
       setParams({
         range: s.preset === initial ? undefined : s.preset,
+        from: s.preset === 'custom' ? s.filters.range.from : undefined,
+        to: s.preset === 'custom' ? s.filters.range.to : undefined,
         branch: s.filters.branchId ?? undefined,
         party: s.filters.partyId ?? undefined,
         currency: s.filters.currency ?? undefined,
@@ -361,6 +447,7 @@ export function ReportLoading({
   onScopeChange,
   showPartyFilter,
   skeleton,
+  asAt,
 }: {
   title: string;
   subtitle?: string;
@@ -368,13 +455,76 @@ export function ReportLoading({
   onScopeChange: (s: ReportScope) => void;
   showPartyFilter?: boolean;
   skeleton?: React.ComponentProps<typeof ReportSkeleton>;
+  asAt?: boolean;
 }) {
   return (
     <>
       <Stack.Screen options={{ title }} />
-      <ReportShell title={title} subtitle={subtitle} scope={scope} onScopeChange={onScopeChange} showPartyFilter={showPartyFilter}>
+      <ReportShell title={title} subtitle={subtitle} scope={scope} onScopeChange={onScopeChange} showPartyFilter={showPartyFilter} asAt={asAt}>
         <ReportSkeleton {...skeleton} />
       </ReportShell>
     </>
   );
 }
+
+/**
+ * A report whose figures didn't come: the shell stays (so the period can still be changed) and
+ * says so, with Retry, instead of a spinner that never ends or zeros that look real.
+ */
+export function ReportError({
+  title,
+  subtitle,
+  scope,
+  onScopeChange,
+  showPartyFilter,
+  onRetry,
+  asAt,
+  error,
+}: {
+  title: string;
+  subtitle?: string;
+  scope: ReportScope;
+  onScopeChange: (s: ReportScope) => void;
+  showPartyFilter?: boolean;
+  onRetry: () => unknown;
+  asAt?: boolean;
+  /** The query's error: a refusal for someone limited to some branches says so instead. */
+  error?: unknown;
+}) {
+  return (
+    <>
+      <Stack.Screen options={{ title }} />
+      <ReportShell title={title} subtitle={subtitle} scope={scope} onScopeChange={onScopeChange} showPartyFilter={showPartyFilter} asAt={asAt}>
+        <ReportFailed onRetry={onRetry} error={error} />
+      </ReportShell>
+    </>
+  );
+}
+
+/** The failed-to-load card on its own, for a section of a screen. */
+export function ReportFailed({ onRetry, error }: { onRetry: () => unknown; error?: unknown }) {
+  const { t: tr } = useTranslation(['reports']);
+  // Books for the whole business are kept from someone who works in only some branches.
+  if (error instanceof ApiError && error.code === 'BOOKS_ALL_BRANCHES') {
+    return (
+      <Card>
+        <EmptyState icon="lock-outline" title={tr('reports:shell.branchLimitedTitle')} message={tr('reports:dash.accounts.booksAllBranches')} />
+      </Card>
+    );
+  }
+  return (
+    <Card>
+      <EmptyState
+        icon="cloud-off-outline"
+        title={tr('reports:dash.state.failedTitle')}
+        message={tr('reports:dash.state.failedBody')}
+        actionLabel={tr('reports:dash.state.retry')}
+        onAction={() => void onRetry()}
+      />
+    </Card>
+  );
+}
+
+/** A query's figures are missing or belong to another period, and the fetch failed. */
+export const failedQuery = (q: { data: unknown; isError: boolean; isPlaceholderData?: boolean }) =>
+  q.isError && (q.data === undefined || !!q.isPlaceholderData);

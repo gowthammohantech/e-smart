@@ -9,7 +9,9 @@ import { BarChart } from '@esmart/ui/components/charts/BarChart';
 import { accountFor } from '@esmart/core/domain/ledger/accounts';
 import { ledgerStatement, type BalancePoint } from '@esmart/core/domain/ledger/reports';
 import { formatDate } from '@esmart/core/lib/date';
-import { ReportShell, reportTable, useReportScope, ReportLoading } from '../../../../features/reports/ReportShell';
+import { formatMoney } from '@esmart/core/lib/format';
+import { money } from '@esmart/core/lib/money';
+import { ReportShell, reportTable, useReportScope, ReportLoading, ReportError, failedQuery } from '../../../../features/reports/ReportShell';
 import { DataTable, KeyFigures, ReportSection } from '../../../../features/reports/reportParts';
 import { useBooksView, useServerBook } from '../../../../remote/queries';
 import { useBaseCurrency, usePaymentAccounts } from '../../../../store/selectors';
@@ -29,9 +31,14 @@ export default function AccountStatement() {
   // A bank account's ledger leads to matching its statements.
   const bank = usePaymentAccounts().find((a) => a.type === 'bank' && key === `pay:${a.id}`);
   const account = accountFor(key, book) ?? (key.startsWith('sys:tdsPayable:') ? { key, name: key, group: 'dutiesTaxes' as const, kind: 'system' as const } : undefined);
-  const s = useBooksView<ReturnType<typeof ledgerStatement> & { trend?: BalancePoint[] }>('ledger', { ...scope.filters.range, account: key }).data;
+  const query = useBooksView<ReturnType<typeof ledgerStatement> & { trend?: BalancePoint[] }>('ledger', { ...scope.filters.range, account: key });
+  const s = query.data;
+  if (failedQuery(query)) return <ReportError title={account ? nameOf(account) : key} scope={scope} onScopeChange={setScope} onRetry={query.refetch} error={query.error} />;
   if (!s) return <ReportLoading title={account ? nameOf(account) : key} scope={scope} onScopeChange={setScope} skeleton={{ cols: 5 }} />;
   const title = account ? nameOf(account) : key;
+  const m = (minor: number) => (minor ? formatMoney(money(minor, baseCurrency)) : '');
+  const totalDebit = s.rows.reduce((a, r) => a + r.debit, 0);
+  const totalCredit = s.rows.reduce((a, r) => a + r.credit, 0);
   // Cash and bank: how the balance moved, month end by month end.
   const showTrend = (account?.group === 'cashInHand' || account?.group === 'bankAccounts') && (s.trend?.length ?? 0) > 1;
   const trend = (s.trend ?? []).map((p) => ({ label: formatDate(`${p.month}-01`, 'MMM'), value: { minor: p.balance, currency: baseCurrency } }));
@@ -69,8 +76,11 @@ export default function AccountStatement() {
           <ReportSection title={title}>
             <DataTable
               headers={[tr('common:table.date'), tr('common:table.number'), tr('books:vouchers.debit'), tr('books:vouchers.credit'), tr('books:accounts.balance')]}
-              rows={s.rows.map((r) => [formatDate(r.date, 'dd MMM'), r.source.number, r.debit ? (r.debit / 100).toFixed(2) : '', r.credit ? (r.credit / 100).toFixed(2) : '', drCr(r.balance, baseCurrency)])}
+              rows={s.rows.map((r) => [formatDate(r.date, 'dd MMM'), r.source.number, m(r.debit), m(r.credit), drCr(r.balance, baseCurrency)])}
               widths={[0.9, 1.4, 1, 1, 1.3]}
+              kinds={['text', 'text', 'num', 'num', 'num']}
+              total={[tr('books:tb.total'), '', m(totalDebit), m(totalCredit), drCr(s.closing, baseCurrency)]}
+              paged
             />
           </ReportSection>
         ) : (

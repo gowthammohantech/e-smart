@@ -26,6 +26,8 @@ import { useActiveCompany, useBaseCurrency, useBranches } from '../../../store/s
 import { periodLabel, recentPeriods } from '../../../features/compliance/periods';
 import { DataTable, KeyFigures } from '../../../features/reports/reportParts';
 import { useAccountName } from '../../../features/books/names';
+import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
+import { ReportFailed } from '../../../features/reports/ReportShell';
 import { ReportSkeleton } from '../../../components/ScreenSkeleton';
 
 type UtilView = Schema<'GstUtilizationView'>;
@@ -69,9 +71,15 @@ export default function GstUtilizationScreen() {
   // A new GSTIN or period starts from the prefill again; a new date only reads the cash ledger again.
   const scope = `${g}|${period}`;
   const [inputsScope, setInputsScope] = useState(scope);
+  // Whether the last fetch failed, so a failure isn't left as an empty screen.
+  const [failed, setFailed] = useState(false);
+  // Reversing deletes the set-off journal: it is asked first.
+  const [askReverse, setAskReverse] = useState<Schema<'Voucher'> | null>(null);
   if (inputsScope !== scope) {
     setInputsScope(scope);
     setInputs(null);
+    // The last period's figures aren't this one's.
+    setView(null);
   }
 
   const toInputs = (s: SetOff): Inputs => {
@@ -83,15 +91,13 @@ export default function GstUtilizationScreen() {
   const load = useCallback(async () => {
     if (!g) return;
     setLoading(true);
+    setFailed(false);
     try {
-      const { data, error } = await api.GET('/companies/{companyId}/gst/utilization', { params: { path: { companyId: company.id }, query: { gstin: g, period, date } } });
-      if (error) toast.show(describeError(error, tr), 'error');
-      else {
-        setView(data ?? null);
-        if (data) setInputs((cur) => cur ?? toInputs(data.prefill as SetOff));
-      }
-    } catch (err) {
-      toast.show(describeError(err, tr), 'error');
+      const { data } = await api.GET('/companies/{companyId}/gst/utilization', { params: { path: { companyId: company.id }, query: { gstin: g, period, date } } });
+      setView(data ?? null);
+      if (data) setInputs((cur) => cur ?? toInputs(data.prefill as SetOff));
+    } catch {
+      setFailed(true);
     } finally {
       setLoading(false);
     }
@@ -138,6 +144,8 @@ export default function GstUtilizationScreen() {
         toast.show(tr('compliance:utilization.posted'), 'success', { icon: 'check-all' });
         await load();
       }
+    } catch (err) {
+      toast.show(describeError(err, tr), 'error');
     } finally {
       setBusy(false);
     }
@@ -153,6 +161,8 @@ export default function GstUtilizationScreen() {
         setInputs(null);
         await load();
       }
+    } catch (err) {
+      toast.show(describeError(err, tr), 'error');
     } finally {
       setBusy(false);
     }
@@ -164,8 +174,8 @@ export default function GstUtilizationScreen() {
     router.push(`/(app)/gst/challan?back=1&${q}` as never);
   };
 
-  const field = (value: string, onChange: (v: string) => void, label: string) => (
-    <View style={{ flexGrow: 1, flexBasis: 120 }}>
+  const field = (key: string, value: string, onChange: (v: string) => void, label: string) => (
+    <View key={key} style={{ flexGrow: 1, flexBasis: 120 }}>
       <AmountField label={label} value={value} onChangeValue={onChange} currency={baseCurrency} align="right" />
     </View>
   );
@@ -201,7 +211,7 @@ export default function GstUtilizationScreen() {
             </View>
           </View>
 
-          {loading && !view ? <ReportSkeleton figures={4} /> : null}
+          {failed && !view ? <ReportFailed onRetry={load} /> : loading && !view ? <ReportSkeleton figures={4} /> : null}
           {view ? (
             <>
               {!view.outputCheck.ok ? (
@@ -249,7 +259,7 @@ export default function GstUtilizationScreen() {
                         />
                       ))}
                       <View style={{ padding: t.spacing.md, flexDirection: 'row', gap: t.spacing.sm }}>
-                        <Button title={tr('compliance:utilization.reverse')} icon="undo" variant="secondary" size="sm" loading={busy} onPress={() => void reverse(v)} />
+                        <Button title={tr('compliance:utilization.reverse')} icon="undo" variant="secondary" size="sm" loading={busy} onPress={() => setAskReverse(v)} />
                       </View>
                     </Card>
                   ))}
@@ -267,7 +277,7 @@ export default function GstUtilizationScreen() {
                         </Text>
                         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.md }}>
                           {HEADS.filter((to) => creditMayPay(from, to)).map((to) =>
-                            field(inputs.credit[from][to], (v) => setInputs((x) => x && { ...x, credit: { ...x.credit, [from]: { ...x.credit[from], [to]: v } } }), tr('compliance:utilization.toHead', { head: headLabel(to) })),
+                            field(to, inputs.credit[from][to], (v) => setInputs((x) => x && { ...x, credit: { ...x.credit, [from]: { ...x.credit[from], [to]: v } } }), tr('compliance:utilization.toHead', { head: headLabel(to) })),
                           )}
                         </View>
                       </View>
@@ -280,7 +290,7 @@ export default function GstUtilizationScreen() {
                           {tr(`compliance:utilization.row.${r}`)}
                         </Text>
                         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.md }}>
-                          {HEADS.map((h) => field(inputs.cash[r][h], (v) => setInputs((x) => x && { ...x, cash: { ...x.cash, [r]: { ...x.cash[r], [h]: v } } }), headLabel(h)))}
+                          {HEADS.map((h) => field(h, inputs.cash[r][h], (v) => setInputs((x) => x && { ...x, cash: { ...x.cash, [r]: { ...x.cash[r], [h]: v } } }), headLabel(h)))}
                         </View>
                       </View>
                     ))}
@@ -328,6 +338,20 @@ export default function GstUtilizationScreen() {
           </FormActions>
         ) : null}
       </FormContainer>
+      <ConfirmDialog
+        visible={!!askReverse}
+        icon="undo"
+        title={tr('compliance:utilization.reverseAskTitle', { number: askReverse?.number ?? '' })}
+        message={tr('compliance:utilization.reverseAskBody')}
+        confirmLabel={tr('compliance:utilization.reverse')}
+        destructive
+        onCancel={() => setAskReverse(null)}
+        onConfirm={() => {
+          const v = askReverse!;
+          setAskReverse(null);
+          return reverse(v);
+        }}
+      />
       <SelectSheet visible={open === 'gstin'} onClose={() => setOpen(null)} title="GSTIN" options={gstins.map((x) => ({ value: x, label: x }))} value={g} onSelect={setGstin} />
       <SelectSheet visible={open === 'period'} onClose={() => setOpen(null)} title={tr('compliance:gstr2b.period')} options={periods.map((p) => ({ value: p, label: periodLabel(p) }))} value={period} onSelect={setPeriod} />
     </View>

@@ -21,7 +21,10 @@ import { useActiveCompany, useBranches } from '../../../store/selectors';
 import { CAN_PICK_FILES, pickFile } from '../../../features/import/pickFile';
 import { DataTable, KeyFigures, ReportSection } from '../../../features/reports/reportParts';
 import { deliverFile } from '../../../features/reports/exportFiles';
-import { toCsv } from '../../../features/reports/reportTable';
+import { XLSX_MIME, toCsv, xlsxBytes } from '../../../features/reports/reportTable';
+import { ReportFailed } from '../../../features/reports/ReportShell';
+import { ReportSkeleton } from '../../../components/ScreenSkeleton';
+import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { useDocumentPages, usePartySearch } from '../../../remote/queries';
 import { periodLabel, recentPeriods } from '../../../features/compliance/periods';
 
@@ -83,6 +86,11 @@ export function Gstr2bView({ mode }: { mode: 'download' | 'reconcile' }) {
   const [open, setOpen] = useState<'gstin' | 'period' | null>(null);
   const [filter, setFilter] = useState<Filter>('all');
   const [linking, setLinking] = useState<Row | null>(null);
+  // Until the GSTINs are known, "no GSTIN" isn't said; until a period's 2B comes, the last one's isn't shown.
+  const [gstinsLoaded, setGstinsLoaded] = useState(false);
+  const [loadState, setLoadState] = useState<'loading' | 'failed' | 'done'>('loading');
+  // Claiming books the credit for the period: it is asked first.
+  const [askClaim, setAskClaim] = useState(false);
 
   useEffect(() => {
     // Every GSTIN of the business, connected to the portal or not: a 2B file can be uploaded for any.
@@ -92,6 +100,7 @@ export function Gstr2bView({ mode }: { mode: 'download' | 'reconcile' }) {
       setGstins(list);
       setConnectedTo(sessions.filter((x) => x.connected).map((x) => x.gstin!));
       setGstin((g) => g ?? list[0] ?? null);
+      setGstinsLoaded(true);
     };
     api
       .GET('/companies/{companyId}/gst/portal-sessions', { params: { path } })
@@ -102,13 +111,19 @@ export function Gstr2bView({ mode }: { mode: 'download' | 'reconcile' }) {
 
   const load = useCallback(() => {
     if (!gstin) return Promise.resolve();
-    return api.GET('/companies/{companyId}/gst/gstr2b', { params: { path, query: { gstin, period } } }).then(({ data, error }) => {
-      if (error) toast.show(describeError(error, tr), 'error');
-      else setRec(data ?? null);
-    });
+    return api
+      .GET('/companies/{companyId}/gst/gstr2b', { params: { path, query: { gstin, period } } })
+      .then(({ data }) => {
+        setRec(data ?? null);
+        setLoadState('done');
+      })
+      .catch(() => setLoadState('failed'));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gstin, period, company.id]);
   useEffect(() => {
+    // Another period or GSTIN: what was on screen belongs to the last one.
+    setRec(null);
+    setLoadState('loading');
     void load();
   }, [load]);
 
@@ -156,7 +171,7 @@ export function Gstr2bView({ mode }: { mode: 'download' | 'reconcile' }) {
     router.push(`/(app)/purchases/bills/new?${q.toString()}` as never);
   };
   /** Every line of 2B with what it matched in the books and why it differs, for the CA's working file. */
-  const exportCsv = () => {
+  const exportFile = (format: 'csv' | 'xlsx') => {
     const amount = (m?: { minor?: number }) => (m?.minor ?? 0) / 100;
     const table = {
       headers: ['Supplier GSTIN', 'Supplier', 'Type', 'Number', 'Date', 'Taxable (2B)', 'Tax (2B)', 'ITC available', 'Status', 'Differs in', 'Your bill', 'Supplier number (books)', 'Date (books)', 'Taxable (books)', 'Tax (books)'],
@@ -181,7 +196,9 @@ export function Gstr2bView({ mode }: { mode: 'download' | 'reconcile' }) {
         ...(rec?.missingIn2b ?? []).map((b) => ['', '', b.kind ?? '', '', '', '', '', '', filterLabel('missingIn2b'), '', b.number ?? '', b.supplierNumber ?? '', b.date ?? '', amount(b.taxable), amount(b.tax)]),
       ],
     };
-    void deliverFile(`gstr2b-${gstin}-${period}.csv`, new TextEncoder().encode(toCsv(table)), 'text/csv');
+    void (format === 'xlsx'
+      ? deliverFile(`gstr2b-${gstin}-${period}.xlsx`, xlsxBytes('GSTR-2B', table), XLSX_MIME)
+      : deliverFile(`gstr2b-${gstin}-${period}.csv`, new TextEncoder().encode(toCsv(table)), 'text/csv'));
   };
   const chase = () => {
     const bills = rec?.missingIn2b ?? [];
@@ -213,7 +230,9 @@ export function Gstr2bView({ mode }: { mode: 'download' | 'reconcile' }) {
     <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: mode === 'reconcile' ? tr('nav:title.gstr2bReconciliation') : tr('nav:title.gstr2b') }} />
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40, gap: t.spacing.lg }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
-        {!gstins.length ? (
+        {!gstinsLoaded ? (
+          <ReportSkeleton />
+        ) : !gstins.length ? (
           <EmptyState icon="card-account-details-outline" title={tr('compliance:returns.noGstin')} message={tr('compliance:gstr2b.noGstinBody')} actionLabel={tr('compliance:returns.addGstin')} onAction={() => router.push('/(app)/settings/company')} />
         ) : (
           <>
@@ -227,7 +246,17 @@ export function Gstr2bView({ mode }: { mode: 'download' | 'reconcile' }) {
                 <PickerField label={tr('compliance:gstr2b.period')} value={periodLabel(period)} onPress={() => setOpen('period')} icon="calendar-month-outline" />
               </View>
             </View>
-            {mode === 'download' ? (
+            {loadState === 'failed' ? (
+              <ReportFailed
+                onRetry={() => {
+                  setLoadState('loading');
+                  return load();
+                }}
+              />
+            ) : loadState === 'loading' ? (
+              <ReportSkeleton figures={4} />
+            ) : null}
+            {loadState !== 'done' ? null : mode === 'download' ? (
               <>
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm }}>
                   <Button
@@ -273,10 +302,8 @@ export function Gstr2bView({ mode }: { mode: 'download' | 'reconcile' }) {
                   <DataTable
                     headers={[tr('compliance:gstr2b.head.status'), tr('compliance:gstr2b.head.count'), tr('compliance:returns.head.taxable'), tr('compliance:returns.head.tax')]}
                     widths={[1.8, 0.6, 1.2, 1.1]}
-                    rows={[
-                      ...totals.map((x) => [filterLabel(x.key), String(x.count), formatMoney(x.taxable), formatMoney(x.tax)]),
-                      [tr('compliance:gstr2b.totalIn2b'), String(in2b.count), formatMoney(in2b.taxable), formatMoney(in2b.tax)],
-                    ]}
+                    rows={totals.map((x) => [filterLabel(x.key), String(x.count), formatMoney(x.taxable), formatMoney(x.tax)])}
+                    total={[tr('compliance:gstr2b.totalIn2b'), String(in2b.count), formatMoney(in2b.taxable), formatMoney(in2b.tax)]}
                   />
                   <Text variant="caption" tone="muted" style={{ marginTop: t.spacing.sm, lineHeight: 18 }}>
                     {tr('compliance:gstr2b.totalsNote')}
@@ -290,13 +317,15 @@ export function Gstr2bView({ mode }: { mode: 'download' | 'reconcile' }) {
                       onPress={() => router.push(`/(app)/gst/gstr2b-reconciliation?gstin=${gstin ?? ''}&period=${period}` as never)}
                       style={{ flexGrow: 1 }}
                     />
-                    <Button title={tr('compliance:gstr2b.exportCsv')} icon="file-delimited-outline" variant="secondary" onPress={exportCsv} disabled={!all.length} />
+                    <Button title={tr('compliance:gstr2b.exportExcel')} icon="file-excel-box" variant="secondary" onPress={() => exportFile('xlsx')} disabled={!all.length} />
+                    <Button title={tr('compliance:gstr2b.exportCsv')} icon="file-delimited-outline" variant="secondary" onPress={() => exportFile('csv')} disabled={!all.length} />
                   </View>
                 ) : (
                   <>
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm }}>
-                      <Button title={tr('compliance:gstr2b.claim')} icon="check-all" onPress={() => void claim()} disabled={busy || !matchedTotal} style={{ flexGrow: 1 }} />
-                      <Button title={tr('compliance:gstr2b.exportCsv')} icon="file-delimited-outline" variant="secondary" onPress={exportCsv} disabled={!all.length} />
+                      <Button title={tr('compliance:gstr2b.claim')} icon="check-all" onPress={() => setAskClaim(true)} loading={busy} disabled={busy || !matchedTotal} style={{ flexGrow: 1 }} />
+                      <Button title={tr('compliance:gstr2b.exportExcel')} icon="file-excel-box" variant="secondary" onPress={() => exportFile('xlsx')} disabled={!all.length} />
+                      <Button title={tr('compliance:gstr2b.exportCsv')} icon="file-delimited-outline" variant="secondary" onPress={() => exportFile('csv')} disabled={!all.length} />
                     </View>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: t.spacing.sm }}>
                       {(['all', ...ORDER, 'missingIn2b'] as Filter[])
@@ -401,6 +430,18 @@ export function Gstr2bView({ mode }: { mode: 'download' | 'reconcile' }) {
           </>
         )}
       </ScrollView>
+      <ConfirmDialog
+        visible={askClaim}
+        icon="check-all"
+        title={tr('compliance:gstr2b.claimAskTitle', { period: periodLabel(period) })}
+        message={tr('compliance:gstr2b.claimAskBody', { amount: s?.claimableTax ? formatMoney(s.claimableTax) : '' })}
+        confirmLabel={tr('compliance:gstr2b.claim')}
+        onCancel={() => setAskClaim(false)}
+        onConfirm={() => {
+          setAskClaim(false);
+          return claim();
+        }}
+      />
       <SelectSheet visible={open === 'gstin'} onClose={() => setOpen(null)} title="GSTIN" options={gstins.map((g) => ({ value: g, label: g }))} value={gstin} onSelect={setGstin} searchable={false} />
       <SelectSheet
         visible={!!linking}

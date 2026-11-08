@@ -25,7 +25,7 @@ import { useServerSave } from '../../../../components/useServerSave';
 import { useAppStore } from '../../../../store/appStore';
 import { useLedgerAccounts } from '../../../../store/books';
 import { useBooksView, useServerBook } from '../../../../remote/queries';
-import { ReportShell, reportTable, useReportScope } from '../../../../features/reports/ReportShell';
+import { ReportShell, reportTable, useReportScope, ReportFailed, failedQuery } from '../../../../features/reports/ReportShell';
 import { useActiveCompany, useBaseCurrency } from '../../../../store/selectors';
 import { useAccountName, useDrCr, useGroupName } from '../../../../features/books/names';
 import { Skeleton, SkeletonGroup } from '@esmart/ui/components/Skeleton';
@@ -197,19 +197,20 @@ export default function ChartOfAccounts() {
     trailing?: React.ReactNode;
     isGroup?: boolean;
   }) => (
+    // The edit button sits beside the row, not inside it, so each is its own full-size target.
+    <View key={o.key} style={{ flexDirection: 'row', alignItems: 'stretch', borderBottomWidth: 0.5, borderBottomColor: t.c.line, backgroundColor: o.depth === 0 ? t.c.chip : 'transparent' }}>
     <Pressable
-      key={o.key}
       onPress={o.onPress}
       onLongPress={o.onLongPress}
       accessibilityRole="button"
       accessibilityState={o.isGroup ? { expanded: o.open } : undefined}
       style={({ pressed }) => ({
+        flex: 1,
         paddingVertical: t.spacing.md,
         paddingHorizontal: t.spacing.lg,
+        paddingRight: o.trailing ? 0 : t.spacing.lg,
         paddingLeft: t.spacing.lg + o.depth * 14,
-        borderBottomWidth: 0.5,
-        borderBottomColor: t.c.line,
-        backgroundColor: pressed ? t.c.card2 : o.depth === 0 ? t.c.chip : 'transparent',
+        backgroundColor: pressed ? t.c.card2 : 'transparent',
         gap: 2,
       })}
     >
@@ -221,7 +222,6 @@ export default function ChartOfAccounts() {
         <Text variant="small" weight={o.strong ? '700' : '600'} style={{ fontVariant: ['tabular-nums'] }}>
           {drCr(o.f.closing, baseCurrency)}
         </Text>
-        {o.trailing}
         {o.isGroup ? null : <Icon name="chevron-right" size={16} color={t.c.muted} />}
       </View>
       {o.subtitle ? (
@@ -235,6 +235,8 @@ export default function ChartOfAccounts() {
         </Text>
       ) : null}
     </Pressable>
+    {o.trailing}
+    </View>
   );
   const row = desktop ? tableRow : phoneRow;
 
@@ -255,8 +257,13 @@ export default function ChartOfAccounts() {
         .filter(Boolean)
         .join(' · '),
       trailing: own ? (
-        <Pressable onPress={() => open(own)} accessibilityRole="button" accessibilityLabel={tr('books:accounts.edit')} hitSlop={8}>
-          <Icon name="pencil-outline" size={18} color={t.c.muted} />
+        <Pressable
+          onPress={() => open(own)}
+          accessibilityRole="button"
+          accessibilityLabel={tr('books:accounts.edit')}
+          style={({ pressed }) => ({ width: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: t.radius.md, backgroundColor: pressed ? t.c.card2 : 'transparent' })}
+        >
+          <Icon name="pencil-outline" size={20} color={t.c.muted} />
         </Pressable>
       ) : undefined,
     });
@@ -287,8 +294,9 @@ export default function ChartOfAccounts() {
         subtitle={tr('books:tb.basis')}
         scope={scope}
         onScopeChange={setScope}
-        // A phone keeps its bottom bar for adding an account.
-        exportRows={desktop ? exportRows : undefined}
+        // A phone keeps its bottom bar for adding an account; its export is in the header.
+        exportRows={exportRows}
+        exportPlacement="header"
         generatedAt={tbQuery.dataUpdatedAt}
       >
         <View style={{ gap: t.spacing.md }}>
@@ -304,6 +312,8 @@ export default function ChartOfAccounts() {
           </View>
 
           {/* The chart is here already; a thin shimmer while its balances arrive. */}
+          {/* Balances that didn't come aren't shown as nothing moved. */}
+          {failedQuery(tbQuery) ? <ReportFailed onRetry={tbQuery.refetch} error={tbQuery.error} /> : null}
           {!tb && tbQuery.isLoading ? (
             <SkeletonGroup>
               <Skeleton height={4} radius={2} />

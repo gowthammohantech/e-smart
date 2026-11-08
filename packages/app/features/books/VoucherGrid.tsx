@@ -60,6 +60,12 @@ export function VoucherGrid({
   // A column of its own only once the business has cost centres (or a line already carries one).
   const centres = useCostCentres().length > 0 || lines.some((l) => l.costCentreId);
   const fmt = (minor: number) => formatMoney(money(minor, currency));
+  const differenceText =
+    debit === credit
+      ? tr('books:vouchers.balancedLine')
+      : debit > credit
+        ? tr('books:vouchers.creditShort', { amount: fmt(debit - credit) })
+        : tr('books:vouchers.debitShort', { amount: fmt(credit - debit) });
 
   // The same box as the inputs beside it: height, radius and border.
   const height = t.script === 'tamil' ? (desktop ? 46 : 52) : desktop ? 40 : 48;
@@ -179,24 +185,62 @@ export function VoucherGrid({
               {amount}
               <View style={{ width: COL.remove }} />
             </View>
+            {/* The line's own note, as on a desktop. */}
+            <TextField
+              value={l.narration ?? ''}
+              onChangeText={(narration) => onPatch(l.id, { narration })}
+              placeholder={tr('books:vouchers.lineNarrationPlaceholder')}
+              accessibilityLabel={tr('books:vouchers.lineNarration')}
+            />
             <CostCentreField compact value={l.costCentreId} onChange={(costCentreId) => onPatch(l.id, { costCentreId })} />
           </View>
         );
       })}
 
+      {desktop ? (
+        // The totals sit under their own columns, and the difference names the side that is short.
+        <View style={{ flexDirection: 'row', gap: t.spacing.sm, paddingHorizontal: t.spacing.md, paddingVertical: t.spacing.sm, borderTopWidth: 1, borderTopColor: t.c.line, backgroundColor: t.c.card2, alignItems: 'center' }}>
+          <View style={{ width: COL.side }} />
+          <Text variant="caption" weight="700" style={{ flex: COL.account }}>
+            {tr('books:vouchers.totals')}
+          </Text>
+          <Text variant="small" weight="700" style={{ flex: COL.amount, textAlign: 'right', paddingRight: t.spacing.md, fontVariant: ['tabular-nums'] }}>
+            {fmt(debit)}
+          </Text>
+          <Text variant="small" weight="700" style={{ flex: COL.amount, textAlign: 'right', paddingRight: t.spacing.md, fontVariant: ['tabular-nums'] }}>
+            {fmt(credit)}
+          </Text>
+          <Text variant="caption" weight="600" tone={debit === credit ? 'good' : 'bad'} style={{ flex: COL.narration + (centres ? COL.centre : 0) }}>
+            {differenceText}
+          </Text>
+          <View style={{ width: COL.remove }} />
+        </View>
+      ) : null}
       <View style={{ borderTopWidth: 1, borderTopColor: t.c.line, padding: t.spacing.md, gap: t.spacing.sm }}>
         <Button title={tr('books:vouchers.addLine')} icon="plus" variant="secondary" size="sm" onPress={onAdd} />
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', flexWrap: 'wrap', gap: t.spacing.md }}>
-          <Text variant="caption" weight="600">
-            {tr('books:vouchers.totalDebit')} {fmt(debit)}
-          </Text>
-          <Text variant="caption" weight="600">
-            {tr('books:vouchers.totalCredit')} {fmt(credit)}
-          </Text>
-          <Text variant="caption" weight="600" tone={debit === credit ? 'good' : 'bad'}>
-            {tr('books:vouchers.difference')} {fmt(Math.abs(debit - credit))}
-          </Text>
-        </View>
+        {desktop ? null : (
+          <View style={{ gap: 4 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+              <Text variant="caption" tone="muted">
+                {tr('books:vouchers.totalDebit')}
+              </Text>
+              <Text variant="caption" weight="600" style={{ fontVariant: ['tabular-nums'] }}>
+                {fmt(debit)}
+              </Text>
+            </View>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+              <Text variant="caption" tone="muted">
+                {tr('books:vouchers.totalCredit')}
+              </Text>
+              <Text variant="caption" weight="600" style={{ fontVariant: ['tabular-nums'] }}>
+                {fmt(credit)}
+              </Text>
+            </View>
+            <Text variant="caption" weight="600" tone={debit === credit ? 'good' : 'bad'}>
+              {differenceText}
+            </Text>
+          </View>
+        )}
       </View>
     </Card>
   );

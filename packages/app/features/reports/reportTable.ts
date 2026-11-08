@@ -93,6 +93,11 @@ export function toCsv(table: ReportTable): string {
 /** The report as a printable page: title, the basis line, and the table. */
 export function tableHtml(title: string, basis: string, table: ReportTable, language = 'en'): string {
   const num = (v: string | number) => typeof v === 'number';
+  // A column of amounts has its heading over the figures, on the right; blank cells don't decide it.
+  const numericColumn = table.headers.map((_, j) => {
+    const cells = table.rows.map((r) => r[j]).filter((v) => v !== '' && v !== undefined && v !== null);
+    return cells.length > 0 && cells.every(num);
+  });
   // The Tamil faces follow the Latin ones, as on the invoice, and Tamil gets
   // the extra leading its vowel signs need.
   return `<!doctype html><html lang="${language}"><head><meta charset="utf-8"><style>
@@ -103,10 +108,10 @@ export function tableHtml(title: string, basis: string, table: ReportTable, lang
     table { width: 100%; border-collapse: collapse; }
     th, td { padding: 6px 8px; border-bottom: 1px solid #e5e5e5; text-align: left; vertical-align: top; }
     th { background: #f5f5f5; font-weight: 600; }
-    td.n { text-align: right; font-variant-numeric: tabular-nums; }
+    td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
   </style></head><body>
     <h1>${xml(title)}</h1><p>${xml(basis)}</p>
-    <table><thead><tr>${table.headers.map((h) => `<th>${xml(h)}</th>`).join('')}</tr></thead>
+    <table><thead><tr>${table.headers.map((h, j) => `<th${numericColumn[j] ? ' class="n"' : ''}>${xml(h)}</th>`).join('')}</tr></thead>
     <tbody>${table.rows.map((r) => `<tr>${r.map((v) => `<td${num(v) ? ' class="n"' : ''}>${xml(String(v ?? ''))}</td>`).join('')}</tr>`).join('')}</tbody></table>
   </body></html>`;
 }

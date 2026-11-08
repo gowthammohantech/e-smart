@@ -37,6 +37,8 @@ export default function CloseBooks() {
   const [asking, setAsking] = useState<'on' | 'off' | null>(null);
   const costing = company.stockCosting ?? 'average';
   const [askCosting, setAskCosting] = useState<'average' | 'fifo' | null>(null);
+  // Closing or reopening the books is asked first: one stops every change on or before the date, the other opens them all again.
+  const [askLock, setAskLock] = useState<'close' | 'reopen' | null>(null);
   const setCosting = (stockCosting: 'average' | 'fifo') =>
     serverSave(() => saveCompany({ ...company, stockCosting }), tr(`books:close.costingSaved.${stockCosting}`), { icon: 'package-variant-closed' });
 
@@ -67,13 +69,13 @@ export default function CloseBooks() {
         {owner ? (
           <>
             <DateField label={tr('books:close.through')} value={date} onChange={setDate} maximumDate={new Date()} hint={tr('books:close.throughHint')} />
-            <Button title={tr('books:close.close')} icon="lock-outline" onPress={() => void save(date)} loading={saving} disabled={blocked || date === company.lockedThroughDate} />
+            <Button title={tr('books:close.close')} icon="lock-outline" onPress={() => setAskLock('close')} loading={saving} disabled={blocked || date === company.lockedThroughDate} />
             {company.lockedThroughDate ? (
               <View style={{ gap: t.spacing.sm }}>
                 <Text variant="caption" tone="muted">
                   {tr('books:close.reopenHint')}
                 </Text>
-                <Button title={tr('books:close.reopen')} icon="lock-open-variant-outline" variant="secondary" onPress={() => void save(null)} disabled={blocked || saving} />
+                <Button title={tr('books:close.reopen')} icon="lock-open-variant-outline" variant="secondary" onPress={() => setAskLock('reopen')} disabled={blocked || saving} />
               </View>
             ) : null}
           </>
@@ -123,6 +125,20 @@ export default function CloseBooks() {
           ) : null}
         </Card>
       </ScrollView>
+      <ConfirmDialog
+        visible={!!askLock}
+        icon={askLock === 'reopen' ? 'lock-open-variant-outline' : 'lock-outline'}
+        title={askLock === 'reopen' ? tr('books:close.reopenAskTitle') : tr('books:close.closeAskTitle', { date: formatDate(date) })}
+        message={askLock === 'reopen' ? tr('books:close.reopenAskBody', { date: company.lockedThroughDate ? formatDate(company.lockedThroughDate) : '' }) : tr('books:close.closeAskBody', { date: formatDate(date) })}
+        confirmLabel={askLock === 'reopen' ? tr('books:close.reopen') : tr('books:close.close')}
+        destructive={askLock === 'reopen'}
+        onCancel={() => setAskLock(null)}
+        onConfirm={() => {
+          const which = askLock;
+          setAskLock(null);
+          return save(which === 'reopen' ? null : date);
+        }}
+      />
       <ConfirmDialog
         visible={!!askCosting}
         icon="package-variant-closed"

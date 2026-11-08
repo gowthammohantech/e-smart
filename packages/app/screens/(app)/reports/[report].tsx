@@ -12,7 +12,7 @@ import { AgingBars } from '@esmart/ui/components/charts/AgingBars';
 import { seriesColor } from '@esmart/ui/theme/chartColors';
 import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
 
-import { ReportShell, reportTable, useReportScope, ReportLoading } from '../../../features/reports/ReportShell';
+import { ReportShell, reportTable, useReportScope, ReportLoading, ReportError, failedQuery } from '../../../features/reports/ReportShell';
 import type { ReportTable } from '../../../features/reports/reportTable';
 import { DataTable, HeroFigure, KeyFigures, ReportSection } from '../../../features/reports/reportParts';
 import { ReportDesktop } from '../../../features/reports/ReportDesktop';
@@ -131,6 +131,20 @@ export default function Report() {
         scope={scope}
         onScopeChange={setScope}
         showPartyFilter={['sales-summary', 'purchase-summary', 'payments', 'advances'].includes(key)}
+      />
+    );
+
+  // Figures that didn't come aren't shown as a report of zeros.
+  if (meta && serverKey && failedQuery(remote))
+    return (
+      <ReportError
+        title={meta.title}
+        subtitle={meta.subtitle}
+        scope={scope}
+        onScopeChange={setScope}
+        showPartyFilter={['sales-summary', 'purchase-summary', 'payments', 'advances'].includes(key)}
+        onRetry={remote.refetch}
+        error={remote.error}
       />
     );
 
@@ -275,6 +289,8 @@ export default function Report() {
               .sort((a, b) => b.daysOverdue - a.daysOverdue)
               .map((o) => [o.document.number, o.daysOverdue > 0 ? tr('reports:cell.daysLate', { count: o.daysOverdue }) : tr('reports:cell.current'), formatMoney(o.outstanding)])}
             widths={[1.6, 1, 1.3]}
+            kinds={['text', 'text', 'num']}
+            paged
           />
         </ReportSection>
       </>
@@ -469,6 +485,8 @@ export default function Report() {
               formatMoney(r.unallocated, { symbol: false }),
             ])}
             widths={[1, 1.6, 1, 1.2]}
+            kinds={['text', 'text', 'text', 'num']}
+            paged
           />
         </ReportSection>
       </>
@@ -492,6 +510,8 @@ export default function Report() {
             headers={[tr('reports:column.quarter'), tr('reports:column.section'), tr('reports:shell.contact'), tr('reports:column.tds')]}
             rows={tdsRows.map((r) => [r.quarter.replace('FY ', ''), r.sectionLabel, r.partyName, formatMoney(money(r.tdsMinor, baseCurrency), { symbol: false })])}
             widths={[1.2, 0.9, 1.6, 1.1]}
+            kinds={['text', 'text', 'text', 'num']}
+            paged
           />
         </ReportSection>
       </>
@@ -527,6 +547,7 @@ export default function Report() {
             headers={[tr('reports:column.month'), tr('reports:column.section'), tr('reports:tds.deducted'), tr('reports:tds.deposited'), tr('reports:tds.balance'), tr('reports:tds.dueBy')]}
             rows={tdsPayable.map((r) => [monthLabel(r.month), sectionName(r.section), amount(r.deductedMinor), amount(r.depositedMinor), amount(r.balanceMinor), `${formatDate(r.dueDate)}${r.overdue ? ' ⚠' : ''}`])}
             widths={[1, 0.8, 1, 1, 1, 1.1]}
+            kinds={['text', 'text', 'num', 'num', 'num', 'text']}
           />
         </ReportSection>
       </>
@@ -557,6 +578,8 @@ export default function Report() {
               headers={[tr('reports:column.quarter'), tr('reports:column.section'), tr('reports:shell.contact'), 'PAN', tr('reports:column.tds')]}
               rows={tdsIn.map((r) => [r.quarter.replace('FY ', ''), sectionName(r.section), r.partyName, r.pan ?? '—', amount(r.tdsMinor)])}
               widths={[1.1, 0.8, 1.5, 1.1, 1]}
+              kinds={['text', 'text', 'text', 'text', 'num']}
+              paged
             />
           </ReportSection>
         ) : null}
@@ -569,6 +592,8 @@ export default function Report() {
               headers={[tr('reports:column.quarter'), tr('reports:shell.contact'), tr('reports:tds.tanOrPan'), tr('reports:tds.expected'), tr('reports:tds.recorded'), tr('reports:tds.difference')]}
               rows={tdsMatch.map((r) => [r.quarter.replace('FY ', ''), r.partyName, r.tan ?? r.pan ?? '—', amount(r.expectedMinor), amount(r.recordedMinor), `${amount(r.differenceMinor)}${r.differenceMinor ? ' ⚠' : ''}`])}
               widths={[1, 1.4, 1.1, 1, 1, 1]}
+              kinds={['text', 'text', 'text', 'num', 'num', 'num']}
+              paged
             />
           </ReportSection>
         ) : null}
@@ -605,6 +630,8 @@ export default function Report() {
             headers={[tr('common:table.date'), tr('common:table.number'), tr('reports:shell.contact'), 'PAN', tr('reports:column.section'), tr('reports:tcs.base'), tr('reports:tcs.rate'), tr('reports:tcs.tcs')]}
             rows={tcsRows.map((r) => [formatDate(r.date), r.number, r.partyName, r.pan ?? '⚠', r.sectionLabel, amount(r.baseMinor), formatPercent(r.rate), amount(r.tcsMinor)])}
             widths={[0.9, 1.1, 1.4, 1, 1.2, 1, 0.6, 0.9]}
+            kinds={['text', 'text', 'text', 'text', 'text', 'num', 'num', 'num']}
+            paged
           />
         </ReportSection>
       </>
@@ -638,6 +665,7 @@ export default function Report() {
             headers={[tr('reports:column.month'), tr('reports:column.section'), tr('reports:tcs.collected'), tr('reports:tds.deposited'), tr('reports:tds.balance'), tr('reports:tds.dueBy')]}
             rows={months.map((r) => [monthLabel(r.month), tcsSectionName(r.section), amount(r.collectedMinor), amount(r.depositedMinor), amount(r.balanceMinor), `${formatDate(r.dueDate)}${r.overdue ? ' ⚠' : ''}`])}
             widths={[1, 1.2, 1, 1, 1, 1.1]}
+            kinds={['text', 'text', 'num', 'num', 'num', 'text']}
           />
         </ReportSection>
         {tcsPayable.quarters.length ? (
@@ -646,6 +674,7 @@ export default function Report() {
               headers={[tr('reports:column.quarter'), tr('reports:column.section'), tr('reports:tcs.collectees'), tr('reports:column.documents'), tr('reports:tcs.base'), tr('reports:tcs.tcs')]}
               rows={tcsPayable.quarters.map((r) => [r.quarter.replace('FY ', ''), r.sectionLabel, String(r.collectees), String(r.documents), amount(r.baseMinor), amount(r.tcsMinor)])}
               widths={[1, 1.3, 0.8, 0.8, 1, 1]}
+              kinds={['text', 'text', 'num', 'num', 'num', 'num']}
             />
           </ReportSection>
         ) : null}
@@ -678,6 +707,8 @@ export default function Report() {
             headers={[tr('common:table.date'), tr('reports:shell.contact'), tr('reports:column.section'), tr('reports:column.tdsBase'), tr('reports:column.tds'), tr('reports:tds.challan')]}
             rows={rows.map((r) => [formatDate(r.date), `${r.partyName}${r.pan ? '' : ' ⚠'}`, r.section, amount(r.amountMinor), amount(r.tdsMinor), r.challan?.number ?? '—'])}
             widths={[1, 1.5, 0.8, 1.1, 0.9, 1]}
+            kinds={['text', 'text', 'text', 'num', 'num', 'text']}
+            paged
           />
         </ReportSection>
       </>
@@ -702,6 +733,8 @@ export default function Report() {
             headers={[tr('reports:tds.depositedOn'), tr('common:table.number'), tr('reports:tds.bsr'), tr('reports:tds.serial'), tr('reports:column.section'), tr('common:table.amount'), tr('reports:column.documents')]}
             rows={rows.map((r) => [formatDate(r.depositedOn ?? r.date), r.number, r.bsrCode ?? '—', r.serial ?? '—', r.sections.map((x) => sectionName(x.section)).join(', '), amount(r.totalMinor), String(r.deductions)])}
             widths={[1, 1, 0.9, 0.7, 0.9, 1, 0.6]}
+            kinds={['text', 'text', 'text', 'text', 'text', 'num', 'num']}
+            paged
           />
         </ReportSection>
       </>
@@ -735,6 +768,8 @@ export default function Report() {
             headers={[tr('common:table.number'), tr('reports:shell.contact'), tr('reports:msme.due'), tr('common:table.amount'), tr('reports:msme.interest')]}
             rows={rows.map((r) => [r.number, nameOf(r.partyId), `${formatDate(r.dueDate)} · ${when(r.daysLeft)}`, formatMoney(money(r.outstandingMinor, r.currency), { symbol: false }), formatMoney(money(r.interestMinor, r.currency), { symbol: false })])}
             widths={[1, 1.4, 1.6, 1, 0.9]}
+            kinds={['text', 'text', 'text', 'num', 'num']}
+            paged
           />
           <Text variant="caption" tone="muted">
             {tr('reports:msme.interestBasis', { rate: formatPercent((company.msmeBankRate ?? BANK_RATE_PERCENT) * 3) })}
@@ -746,6 +781,7 @@ export default function Report() {
               headers={[tr('common:table.number'), tr('reports:shell.contact'), tr('reports:msme.due'), tr('common:table.amount')]}
               rows={late.map((r) => [r.number, nameOf(r.partyId), formatDate(r.dueDate), formatMoney(money(r.notPaidInTimeMinor, r.currency), { symbol: false })])}
               widths={[1, 1.4, 1, 1]}
+              kinds={['text', 'text', 'text', 'num']}
             />
             <Text variant="caption" tone="muted">
               {tr('reports:msme.notInTimeBasis')}
@@ -781,9 +817,10 @@ export default function Report() {
           <KeyFigures
             rows={[
               { label: tr('reports:figure.revenueTaxable'), value: formatMoney(profit.revenue) },
-              { label: tr('reports:figure.costOfGoodsSold'), value: `− ${formatMoney(profit.costOfGoods)}` },
+              // One minus sign throughout, the one amounts carry: −₹ and -₹ side by side read as two things.
+              { label: tr('reports:figure.costOfGoodsSold'), value: formatMoney({ ...profit.costOfGoods, minor: -profit.costOfGoods.minor }) },
               { label: tr('reports:figure.grossProfit'), value: formatMoney(profit.grossProfit), tone: 'good' },
-              { label: tr('reports:figure.operatingExpenses'), value: `− ${formatMoney(profit.expenses)}`, tone: 'warn' },
+              { label: tr('reports:figure.operatingExpenses'), value: formatMoney({ ...profit.expenses, minor: -profit.expenses.minor }), tone: 'warn' },
               { label: tr('reports:detail.netProfit'), value: formatMoney(profit.netProfit), tone: profit.netProfit.minor >= 0 ? 'good' : 'bad' },
             ]}
           />

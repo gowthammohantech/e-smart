@@ -116,51 +116,97 @@ export function ReportSection({ title, children }: { title: string; children: Re
   );
 }
 
-/** Simple aligned table used by the tax and stock reports. */
+/** How a report column reads: text sits left in the body face, a number right in tabular figures. */
+export type ColumnKind = 'text' | 'num';
+
+/**
+ * Simple aligned table used by the tax and stock reports.
+ *
+ * By default the first column is text and the rest are numbers; `kinds`
+ * overrides that per column (a contact, PAN or document number is text).
+ * `total` is the totals row: a footer on a desktop (outside any paging), a
+ * bold, shaded last row on a phone. `strong` marks rows inside the body
+ * (subtotals, headings) as bold. A desktop table shows every row unless the
+ * report opts into `paged` (long lists, not statements).
+ */
 export function DataTable({
   headers,
   rows,
   widths,
   minWidth,
+  kinds,
+  total,
+  strong,
+  paged = false,
+  tone,
 }: {
   headers: string[];
   rows: (string | number)[][];
   widths?: number[];
-  /** On a phone, the narrowest the table may be: a wider one (a column per tax head) scrolls sideways. */
+  /**
+   * On a phone, the narrowest the table may be: a wider one scrolls sideways.
+   * Left out, a table of three or more columns gets about 110pt per number
+   * column, so amounts are never cut short.
+   */
   minWidth?: number;
+  kinds?: readonly ColumnKind[];
+  total?: (string | number)[];
+  strong?: number[];
+  paged?: boolean;
+  /** A body cell's colour: a favourable variance green, an overrun red. */
+  tone?: (row: number, column: number) => 'good' | 'bad' | 'warn' | undefined;
 }) {
   const t = useTheme();
   const desktop = useIsDesktop();
   const flexOf = (i: number) => widths?.[i] ?? 1;
+  const kindOf = (i: number): ColumnKind => kinds?.[i] ?? (i === 0 ? 'text' : 'num');
+  const isNum = (i: number) => kindOf(i) === 'num';
+  const strongSet = new Set(strong ?? []);
 
   // A desktop gets the same table as the app's lists, rows highlighted on hover.
   if (desktop) {
     return (
       <UiDataTable
         scroll={false}
-        pageSize={TABLE_PAGE_SIZE}
+        pageSize={paged ? TABLE_PAGE_SIZE : undefined}
         columns={headers.map((h, i) => ({
           key: String(i),
           header: h,
           flex: flexOf(i),
-          align: i === 0 ? ('left' as const) : ('right' as const),
-          render: (row: { cells: (string | number)[] }) => (
-            <Cell weight={i === 0 ? '600' : undefined} mono={i > 0}>
+          align: isNum(i) ? ('right' as const) : ('left' as const),
+          render: (row: { cells: (string | number)[]; index: number }) => (
+            <Cell weight={strongSet.has(row.index) ? '700' : i === 0 ? '600' : undefined} mono={isNum(i)} tone={tone?.(row.index, i)}>
               {row.cells[i]}
             </Cell>
           ),
         }))}
         rows={rows.map((cells, index) => ({ cells, index }))}
         rowKey={(row) => String(row.index)}
+        footer={
+          total
+            ? Object.fromEntries(
+                total.map((v, i) => [
+                  String(i),
+                  <Cell key={i} weight="700" mono={isNum(i)}>
+                    {v}
+                  </Cell>,
+                ]),
+              )
+            : undefined
+        }
       />
     );
   }
 
+  const numCols = headers.filter((_, i) => isNum(i)).length;
+  const width = minWidth ?? (headers.length >= 3 ? 150 + 110 * numCols + 120 * (headers.length - 1 - numCols) : undefined);
+  const bodyRows = total ? [...rows, total] : rows;
   const table = (
-    <View style={minWidth ? { minWidth } : undefined}>
+    <View style={width ? { minWidth: width } : undefined}>
       <View
         style={{
           flexDirection: 'row',
+          gap: t.spacing.sm,
           paddingHorizontal: t.spacing.lg,
           paddingVertical: t.spacing.md,
           borderBottomWidth: 1,
@@ -170,46 +216,57 @@ export function DataTable({
       >
         {headers.map((h, i) => (
           <Text
-            key={h}
+            key={`${i}-${h}`}
             variant="micro"
             tone="muted"
             weight="700"
-            style={{ flex: flexOf(i), textAlign: i === 0 ? 'left' : 'right', textTransform: 'uppercase', letterSpacing: 0.5 }}
-            numberOfLines={1}
+            style={{ flex: flexOf(i), textAlign: isNum(i) ? 'right' : 'left', textTransform: 'uppercase', letterSpacing: 0.5 }}
+            numberOfLines={width ? 2 : 1}
           >
             {h}
           </Text>
         ))}
       </View>
-      {rows.map((row, ri) => (
-        <View
-          key={ri}
-          style={{
-            flexDirection: 'row',
-            paddingHorizontal: t.spacing.lg,
-            paddingVertical: t.spacing.md,
-            borderBottomWidth: ri < rows.length - 1 ? 0.5 : 0,
-            borderBottomColor: t.c.line,
-          }}
-        >
-          {row.map((cell, ci) => (
-            <Text
-              key={ci}
-              variant="caption"
-              weight={ci === 0 ? '600' : '500'}
-              style={{ flex: flexOf(ci), textAlign: ci === 0 ? 'left' : 'right', fontVariant: ['tabular-nums'] }}
-              numberOfLines={1}
-            >
-              {cell}
-            </Text>
-          ))}
-        </View>
-      ))}
+      {bodyRows.map((row, ri) => {
+        const isTotal = !!total && ri === bodyRows.length - 1;
+        const bold = isTotal || strongSet.has(ri);
+        return (
+          <View
+            key={ri}
+            style={{
+              flexDirection: 'row',
+              gap: t.spacing.sm,
+              paddingHorizontal: t.spacing.lg,
+              paddingVertical: t.spacing.md,
+              borderBottomWidth: ri < bodyRows.length - 1 && !(total && ri === bodyRows.length - 2) ? 0.5 : 0,
+              borderBottomColor: t.c.line,
+              ...(isTotal ? { borderTopWidth: 1, borderTopColor: t.c.line, backgroundColor: t.c.card2 } : null),
+            }}
+          >
+            {row.map((cell, ci) => (
+              <Text
+                key={ci}
+                variant="caption"
+                weight={bold ? '700' : ci === 0 ? '600' : '500'}
+                tone={isTotal ? undefined : tone?.(ri, ci)}
+                style={{
+                  flex: flexOf(ci),
+                  textAlign: isNum(ci) ? 'right' : 'left',
+                  fontVariant: isNum(ci) ? ['tabular-nums'] : undefined,
+                }}
+                numberOfLines={1}
+              >
+                {cell}
+              </Text>
+            ))}
+          </View>
+        );
+      })}
     </View>
   );
   return (
     <Card padded={false}>
-      {minWidth ? (
+      {width ? (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1 }}>
           {table}
         </ScrollView>
