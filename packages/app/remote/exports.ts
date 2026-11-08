@@ -40,9 +40,10 @@ export async function saveBackupSettings(companyId: string, settings: BackupSett
 }
 
 /** GSTR-1 for a month (`MMYYYY`) in the JSON the GST portal's offline tool imports, as bytes. */
-export async function gstr1Json(companyId: string, period: string): Promise<Uint8Array> {
+/** `gstin`: the registration whose return it is (a branch's own); the company's when left out. */
+export async function gstr1Json(companyId: string, period: string, gstin?: string): Promise<Uint8Array> {
   const { data } = await api.GET('/companies/{companyId}/gst/gstr1/export', {
-    params: { path: { companyId }, query: { period, format: 'gstn-json' } },
+    params: { path: { companyId }, query: { period, format: 'gstn-json', ...(gstin && { gstin }) } },
     parseAs: 'arrayBuffer',
   });
   if (!data) throw new RemoteError('exportFailed', 'The server returned no file');

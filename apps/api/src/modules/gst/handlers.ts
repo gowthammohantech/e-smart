@@ -1,5 +1,5 @@
 import ExcelJS from 'exceljs';
-import { and, eq, gte, inArray, lte, ne } from 'drizzle-orm';
+import { and, eq, gte, inArray, lte, notInArray } from 'drizzle-orm';
 import { gstr1Summary, GSTR1_KINDS, GSTR1_TABLES, GSTR1_TABLE_LABELS, NIL_SUPPLY_LABELS, type Gstr1Row, type Gstr1Summary } from '@esmart/core/domain/gstr1';
 import { gstr1Amendments, type Gstr1Amendments, type ReportedRow } from '@esmart/core/domain/gstr1Amend';
 import type { Item } from '@esmart/core/types';
@@ -36,9 +36,10 @@ export function periodRange(period: string): { from: string; to: string } {
  * With `gstin`, only that registration's return: the branches filing under it, supplying from its
  * state. Without it, the whole company, as the GSTR-1 screen shows it.
  */
-export async function buildGstr1(db: DbOrTx, company: CompanyRow, period: string, now: Date, gstin?: string): Promise<Gstr1Summary> {
-  const summary = await gstr1ForRange(db, company, periodRange(period), now, { gstin });
-  if (!gstin) return summary;
+export async function buildGstr1(db: DbOrTx, company: CompanyRow, period: string, now: Date, gstin?: string, branchIds?: string[]): Promise<Gstr1Summary> {
+  const summary = await gstr1ForRange(db, company, periodRange(period), now, { gstin, branchIds, restrict: !!branchIds?.length });
+  // Amendments cover a whole registration's filed returns: not for someone who sees only some branches.
+  if (!gstin || branchIds?.length) return summary;
   const amendments = await amendmentsFor(db, company, gstin, period, now);
   return amendments ? { ...summary, amendments } : summary;
 }
@@ -98,16 +99,24 @@ export function reportedRows(summary: Gstr1Summary): Gstr1Row[] {
  * GSTR-1 over any date range, for one GSTIN's branches or a list of branches (the app's GSTR-1
  * screen picks a range and a branch), as `@esmart/core` gstr1Summary works it out.
  */
-export async function gstr1ForRange(db: DbOrTx, company: CompanyRow, range: { from: string; to: string }, now: Date, opts: { gstin?: string; branchIds?: string[]; documentIds?: string[] } = {}): Promise<Gstr1Summary> {
+export async function gstr1ForRange(
+  db: DbOrTx,
+  company: CompanyRow,
+  range: { from: string; to: string },
+  now: Date,
+  /** `restrict`: with `gstin`, only those of its branches that are also in `branchIds` (a user limited to some). */
+  opts: { gstin?: string; branchIds?: string[]; documentIds?: string[]; restrict?: boolean } = {},
+): Promise<Gstr1Summary> {
   const { gstin } = opts;
-  const branchIds = gstin ? await branchesOf(db, company, gstin) : opts.branchIds?.length ? opts.branchIds : undefined;
+  const ofGstin = gstin ? await branchesOf(db, company, gstin) : undefined;
+  const branchIds = ofGstin ? (opts.restrict ? ofGstin.filter((id) => opts.branchIds!.includes(id)) : ofGstin) : opts.branchIds?.length ? opts.branchIds : undefined;
   const rows =
     branchIds && !branchIds.length
       ? []
       : await db
           .select()
           .from(D)
-          .where(and(eq(D.companyId, company.id), inArray(D.kind, GSTR1_KINDS), ne(D.status, 'draft'), gte(D.date, range.from), lte(D.date, range.to), branchIds ? inArray(D.branchId, branchIds) : undefined, opts.documentIds ? inArray(D.id, opts.documentIds) : undefined))
+          .where(and(eq(D.companyId, company.id), inArray(D.kind, GSTR1_KINDS), notInArray(D.status, ['draft', 'requested', 'rejected']), gte(D.date, range.from), lte(D.date, range.to), branchIds ? inArray(D.branchId, branchIds) : undefined, opts.documentIds ? inArray(D.id, opts.documentIds) : undefined))
           .orderBy(D.date, D.number);
   // A note's invoice may be from an earlier period; its value decides the note's table.
   const sourceIds = [...new Set(rows.map((r) => r.sourceDocumentId).filter((id): id is string => !!id && !rows.some((x) => x.id === id)))];
@@ -120,8 +129,15 @@ export async function gstr1ForRange(db: DbOrTx, company: CompanyRow, range: { fr
   const core = companyCore(company);
   // A branch registered in another state supplies from there.
   const home = gstin ? { ...core, taxRegistration: core.taxRegistration && { ...core.taxRegistration, placeOfSupplyStateCode: gstin.slice(0, 2) } } : core;
+  // Across registrations (the screen), each document is read from its own branch's state.
+  const branchState = new Map<string, string>();
+  if (!gstin) {
+    const branches = await db.select({ id: schema.branches.id, gstin: schema.branches.gstin }).from(schema.branches).where(eq(schema.branches.companyId, company.id));
+    for (const b of branches) if (b.gstin && b.gstin.trim().length === 15) branchState.set(b.id, b.gstin.trim().slice(0, 2));
+  }
   return gstr1Summary({
     company: home,
+    homeStateOf: branchState.size ? (doc) => branchState.get(doc.branchId) : undefined,
     documents,
     parties: parties.map(partyCore),
     items: items.map((i) => ({ id: i.id, name: i.name, type: i.type, unit: i.unit, hsnCode: i.hsnCode ?? undefined }) as Item),
@@ -192,7 +208,7 @@ async function workbook(summary: Gstr1Summary, company: CompanyRow, period: stri
   for (const n of summary.nil) nil.addRow([NIL_SUPPLY_LABELS[n.supplyType], major(n.nilRated), major(n.exempt), major(n.nonGst)]);
   const docs = wb.addWorksheet('DOCS');
   docs.addRow(['Nature of document', 'From', 'To', 'Total number', 'Cancelled', 'Net issued']).font = { bold: true };
-  for (const d of summary.docs) docs.addRow([d.nature === 'invoice' ? 'Invoices for outward supply' : 'Credit Note', d.from, d.to, d.total, d.cancelled, d.total - d.cancelled]);
+  for (const d of summary.docs) docs.addRow([d.nature === 'invoice' ? 'Invoices for outward supply' : d.nature === 'debitNote' ? 'Debit Note' : 'Credit Note', d.from, d.to, d.total, d.cancelled, d.total - d.cancelled]);
   // Table 11: tax on advances received (11A, the offline tool's AT sheet) and adjusted (11B, ATADJ).
   for (const [name, list] of [['AT', summary.advances.received], ['ATADJ', summary.advances.adjusted]] as const) {
     const ws = wb.addWorksheet(name);
@@ -207,7 +223,8 @@ const XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 /** GST: getGstr1, exportGstr1. */
 export const gstHandlers = defineHandlers({
   async getGstr1(ctx) {
-    const summary = await buildGstr1(ctx.db, ctx.company, ctx.query.period, ctx.now);
+    // A user limited to some branches sees only theirs.
+    const summary = await buildGstr1(ctx.db, ctx.company, ctx.query.period, ctx.now, undefined, ctx.user.branchIds);
     const base = ctx.company.baseCurrency.trim();
     const rows = (list: Gstr1Summary['advances']['received']) => list.map((r) => ({ ...r, taxable: money(r.taxable, base), igst: money(r.igst, base), cgst: money(r.cgst, base), sgst: money(r.sgst, base), cess: money(r.cess, base) }));
     return compact({ period: ctx.query.period, ...summary, advances: { received: rows(summary.advances.received), adjusted: rows(summary.advances.adjusted) } }) as Schema<'Gstr1Summary'>;
@@ -217,11 +234,13 @@ export const gstHandlers = defineHandlers({
   async exportGstr1(ctx) {
     const { period } = ctx.query;
     const format = ctx.query.format ?? 'gstn-json';
-    // The GSTN file is one registration's return: the company's own GSTIN, not its branches' others.
-    const summary = await buildGstr1(ctx.db, ctx.company, period, ctx.now, format === 'gstn-json' && ctx.company.taxIdentifier ? ctx.company.taxIdentifier : undefined);
-    const name = `GSTR1_${ctx.company.taxIdentifier ?? ctx.company.id}_${period}`;
+    // The GSTN file is one registration's return: the GSTIN asked for (a branch's own), else the company's.
+    const gstin = ctx.query.gstin?.trim().toUpperCase() || ctx.company.taxIdentifier || undefined;
+    if (ctx.query.gstin && !(await branchesOf(ctx.db, ctx.company, gstin!)).length) throw invalid('gstin', 'No branch of this business files under this GSTIN');
+    const summary = await buildGstr1(ctx.db, ctx.company, period, ctx.now, format === 'gstn-json' ? gstin : undefined, ctx.user.branchIds);
+    const name = `GSTR1_${(format === 'gstn-json' ? gstin : ctx.company.taxIdentifier) ?? ctx.company.id}_${period}`;
     if (format === 'csv') return new RawBody(toCsv(ROW_COLUMNS, flatRows(summary)), 'text/csv; charset=utf-8', `${name}.csv`);
     if (format === 'xlsx') return new RawBody(await workbook(summary, ctx.company, period), XLSX, `${name}.xlsx`);
-    return new RawBody(JSON.stringify(gstnJson(summary, ctx.company.taxIdentifier ?? '', period)), 'application/json', `${name}.json`);
+    return new RawBody(JSON.stringify(gstnJson(summary, gstin ?? '', period)), 'application/json', `${name}.json`);
   },
 });

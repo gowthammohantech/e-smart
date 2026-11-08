@@ -22,7 +22,7 @@ import {
 } from '@esmart/core/domain/gstr1';
 import type { AmendTable } from '@esmart/core/domain/gstr1Amend';
 import { periodLabel } from '../../../features/compliance/periods';
-import { useActiveCompany, useBaseCurrency } from '../../../store/selectors';
+import { useActiveCompany, useBaseCurrency, useBranches } from '../../../store/selectors';
 import { useReportData } from '../../../remote/queries';
 import { formatMoney, formatPercent, formatQty } from '@esmart/core/lib/format';
 import { money, toMajor } from '@esmart/core/lib/money';
@@ -247,11 +247,20 @@ export default function Gstr1Report() {
     );
   };
 
-  // The portal's file is a month's return, so the month the range starts in.
+  // The portal's file is one registration's return for one month. It is offered only when it holds what
+  // the screen shows: the range is a whole month, and the branch picked (or, with none, every branch)
+  // files under one GSTIN.
+  const branches = useBranches();
+  const { from, to } = scope.filters.range;
+  const [y, mo] = from.split('-');
+  const period = `${mo}${y}`;
+  const wholeMonth = from.endsWith('-01') && to === new Date(Date.UTC(Number(y), Number(mo), 0)).toISOString().slice(0, 10);
+  const companyGstin = company.taxRegistration?.identifier;
+  const picked = scope.filters.branchId ? branches.find((b) => b.id === scope.filters.branchId) : undefined;
+  const gstins = new Set((picked ? [picked] : branches).map((b) => b.gstin || companyGstin).filter(Boolean));
+  const jsonGstin = gstins.size === 1 ? [...gstins][0] : undefined;
   const exportJson = async () => {
-    const [y, mo] = scope.filters.range.from.split('-');
-    const period = `${mo}${y}`;
-    await deliverFile(`GSTR1_${company.taxRegistration?.identifier ?? company.id}_${period}.json`, await gstr1Json(company.id, period), 'application/json');
+    await deliverFile(`GSTR1_${jsonGstin ?? company.id}_${period}.json`, await gstr1Json(company.id, period, jsonGstin), 'application/json');
   };
 
   const count =
@@ -266,7 +275,7 @@ export default function Gstr1Report() {
         scope={scope}
         onScopeChange={setScope}
         exportRows={exportRows}
-        extraExports={[{ key: 'gstn-json', icon: 'code-json', label: tr('compliance:gstr1.exportJson'), run: exportJson }]}
+        extraExports={wholeMonth && jsonGstin ? [{ key: 'gstn-json', icon: 'code-json', label: tr('compliance:gstr1.exportJson'), run: exportJson }] : []}
       >
         <KeyFigures
           rows={[

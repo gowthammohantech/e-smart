@@ -84,7 +84,7 @@ export function ReportShell({
     : tr('common:dateRange.custom');
 
   const setPreset = (preset: DateRangePreset) =>
-    changeScope({ preset, filters: { ...scope.filters, range: resolveRange(preset) } });
+    changeScope({ preset, filters: { ...scope.filters, range: resolveRange(preset, undefined, company?.fiscalYearStartMonth) } });
 
   const basisParams = {
     company: company?.name ?? '',
@@ -322,13 +322,15 @@ export function ReportShell({
 /** The report's filters, kept in the URL (`?range=lastMonth&branch=…&party=…&currency=…`). */
 export function useReportScope(initial: DateRangePreset = 'thisFY') {
   const [params, setParams] = useQueryParams();
+  // "This FY" is the company's own financial year, which needn't start in April.
+  const fyStartMonth = useActiveCompany()?.fiscalYearStartMonth;
   const scope = useMemo<ReportScope>(() => {
     const preset = presetParam(params.range, initial);
     return {
       preset,
-      filters: { range: resolveRange(preset), branchId: params.branch ?? null, partyId: params.party ?? null, currency: params.currency ?? null },
+      filters: { range: resolveRange(preset, undefined, fyStartMonth), branchId: params.branch ?? null, partyId: params.party ?? null, currency: params.currency ?? null },
     };
-  }, [params, initial]);
+  }, [params, initial, fyStartMonth]);
   const setScope = useCallback(
     (s: ReportScope) =>
       setParams({

@@ -11,7 +11,7 @@ import { Text } from '@esmart/ui/components/Text';
 import { StatRow, StatTile } from '@esmart/ui/components/StatTile';
 import { StatGrid } from '@esmart/ui/components/Layout';
 import { BarChart } from '@esmart/ui/components/charts/BarChart';
-import { useBaseCurrency, useCanOpen, useModuleSet } from '../../../store/selectors';
+import { useActiveCompany, useBaseCurrency, useCanOpen, useModuleSet } from '../../../store/selectors';
 import { profitSnapshot, type ProfitSnapshot, type StockReport } from '@esmart/core/domain/reports';
 import { useReportData } from '../../../remote/queries';
 import { lastNMonths, monthLabelNarrow, resolveRange } from '@esmart/core/lib/date';
@@ -76,7 +76,7 @@ export default function ReportsTab() {
     { title: tr('reports:hub.allReports'), reports: open.filter((r) => !r.tax).map(linkOf) },
     { title: tr('reports:hub.tdsTcs'), reports: open.filter((r) => r.tax).map(linkOf) },
   ].filter((g) => g.reports.length);
-  const range = resolveRange('thisFY');
+  const range = resolveRange('thisFY', undefined, useActiveCompany()?.fiscalYearStartMonth);
   // Always 'phone' in the native apps, so the desktop layouts below only ever reach a browser.
   const bp = useBreakpoint();
   const desktop = bp !== 'phone';

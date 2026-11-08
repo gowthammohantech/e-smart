@@ -39,8 +39,10 @@ function byKey<T>(items: T[], key: (t: T) => string): Map<string, T[]> {
 export function gstnJson(summary: Gstr1Summary, gstin: string, period: string) {
   const homeState = gstin.slice(0, 2);
   const rchrg = (rows: Gstr1Row[]) => (rows.some((r) => r.reverseCharge) ? 'Y' : 'N');
-  const invoice = (rows: Gstr1Row[]) => ({ inum: rows[0].number, idt: dmy(rows[0].date), val: r2(rows[0].invoiceValue.minor), pos: rows[0].placeOfSupply, rchrg: rchrg(rows), inv_typ: 'R', itms: itemsOf(rows) });
-  const note = (rows: Gstr1Row[]) => ({ ntty: rows[0].noteType ?? 'C', nt_num: rows[0].number, nt_dt: dmy(rows[0].date), val: r2(rows[0].invoiceValue.minor), pos: rows[0].placeOfSupply, rchrg: rchrg(rows), inv_typ: 'R', itms: itemsOf(rows) });
+  // A supply to an SEZ is reported as one with payment of tax (SEWP) or without, under LUT or bond (SEWOP).
+  const invTyp = (rows: Gstr1Row[]) => (!rows[0].sez ? 'R' : rows.some((r) => r.igst.minor > 0) ? 'SEWP' : 'SEWOP');
+  const invoice = (rows: Gstr1Row[]) => ({ inum: rows[0].number, idt: dmy(rows[0].date), val: r2(rows[0].invoiceValue.minor), pos: rows[0].placeOfSupply, rchrg: rchrg(rows), inv_typ: invTyp(rows), itms: itemsOf(rows) });
+  const note = (rows: Gstr1Row[]) => ({ ntty: rows[0].noteType ?? 'C', nt_num: rows[0].number, nt_dt: dmy(rows[0].date), val: r2(rows[0].invoiceValue.minor), pos: rows[0].placeOfSupply, rchrg: rchrg(rows), inv_typ: invTyp(rows), itms: itemsOf(rows) });
 
   const b2b = [...byKey(byDocument(summary.b2b), (d) => d[0].gstin ?? '').entries()].map(([ctin, docs]) => ({ ctin, inv: docs.map(invoice) }));
   const b2cl = [...byKey(byDocument(summary.b2cl), (d) => d[0].placeOfSupply).entries()].map(([pos, docs]) => ({

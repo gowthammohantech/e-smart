@@ -52,6 +52,10 @@ export type Gstr1Row = {
   invoiceValue: Money;
   /** Set on an export, or a credit note against one. */
   exported?: boolean;
+  /** Set on a supply to an SEZ unit or developer: zero-rated, reported as SEZ with or without payment. */
+  sez?: boolean;
+  /** Whether the supply crossed a state line, from the supplying branch's own state. */
+  interState?: boolean;
   /** The buyer pays this tax under reverse charge; the seller reports it but doesn't pay it. */
   reverseCharge?: boolean;
   /** Set on a note: C (credit, lowers the supply) or D (debit, adds to it). */
@@ -172,6 +176,9 @@ function isExport(party: Party, placeOfSupply: string): boolean {
   return placeOfSupply === EXPORT_STATE_CODE || party.gstRegistrationType === 'overseas';
 }
 
+/** Never issued, so in no table at all; a cancelled document still counts in table 13. */
+const NOT_ISSUED: BusinessDocument['status'][] = ['draft', 'requested', 'rejected'];
+
 /** The sales documents GSTR-1 reports: invoices, and the credit and debit notes against them. */
 export const GSTR1_KINDS: BusinessDocument['kind'][] = ['invoice', 'salesReturn', 'creditNote', 'debitNote'];
 
@@ -222,14 +229,16 @@ export type B2csLine = {
 export function consolidateB2cs(rows: Gstr1Row[], homeState: string | undefined, currency: string): B2csLine[] {
   const out = new Map<string, B2csLine>();
   for (const r of rows) {
-    const key = `${r.placeOfSupply}|${r.rate}`;
+    // A row says which side of a state line it fell on (its branch's state); an older one is read against `homeState`.
+    const supplyType = (r.interState ?? r.placeOfSupply !== homeState) ? 'INTER' : 'INTRA';
+    const key = `${r.placeOfSupply}|${r.rate}|${supplyType}`;
     const line =
       out.get(key) ??
       {
         placeOfSupply: r.placeOfSupply,
         placeOfSupplyName: r.placeOfSupplyName,
         rate: r.rate,
-        supplyType: r.placeOfSupply === homeState ? 'INTRA' : 'INTER',
+        supplyType,
         taxableValue: zero(currency),
         cgst: zero(currency),
         sgst: zero(currency),
@@ -257,9 +266,11 @@ export function gstr1Summary(args: {
   period: DateRange;
   /** Tax on the period's advances for services, from advanceTaxEvents. */
   advances?: AdvanceEvent[];
+  /** The state a document was supplied from, when its branch is registered apart from the company. */
+  homeStateOf?: (doc: BusinessDocument) => string | undefined;
 }): Gstr1Summary {
   const { company, documents, parties, items, baseCurrency, period } = args;
-  const homeState = company.taxRegistration?.placeOfSupplyStateCode ?? company.address.stateCode ?? '';
+  const companyHome = company.taxRegistration?.placeOfSupplyStateCode ?? company.address.stateCode ?? '';
   const toBase = (m: Money, rate: number) => money(Math.round(m.minor * (rate || 1)), baseCurrency);
 
   const rows: Gstr1Row[] = [];
@@ -269,13 +280,15 @@ export function gstr1Summary(args: {
   let tax = 0;
   let value = 0;
 
-  // A financial note without GST is no supply (RULES 6.24): it is in no table.
+  // A financial note without GST is no supply (RULES 6.24): it is in no table. A return still
+  // awaiting approval (or turned down) was never issued: the books and GSTR-3B leave it out too.
   const issued = documents.filter(
-    (d) => GSTR1_KINDS.includes(d.kind) && d.status !== 'draft' && d.noteGst !== 'noGst' && inRange(d.date, period),
+    (d) => GSTR1_KINDS.includes(d.kind) && !NOT_ISSUED.includes(d.status) && d.noteGst !== 'noGst' && inRange(d.date, period),
   );
   const reportable = issued.filter((d) => !isCancelled(d.status));
 
   reportable.forEach((doc) => {
+    const homeState = args.homeStateOf?.(doc) || companyHome;
     const party =
       parties.find((p) => p.id === doc.partyId) ?? walkInParty(doc.partyId, doc.placeOfSupplyStateCode ?? homeState);
     const noteType = noteTypeOf(doc.kind);
@@ -292,6 +305,7 @@ export function gstr1Summary(args: {
     const source = noteType && doc.sourceDocumentId ? documents.find((d) => d.id === doc.sourceDocumentId) : undefined;
     const originalValue = source ? toBase(source.totals.grandTotal, source.currency === baseCurrency ? 1 : source.exchangeRate) : invoiceValue;
     const table = tableFor(doc, party, placeOfSupply, interState, originalValue);
+    const sez = party.gstRegistrationType === 'sez';
     const original = source ? { number: source.number, date: source.date } : { number: doc.originalNumber, date: doc.originalDate };
     // The buyer as registered when the document was issued.
     const gstin = isRegistered(party) ? (doc.partyGstin ?? party.taxId) : undefined;
@@ -316,7 +330,8 @@ export function gstr1Summary(args: {
         : []),
     ];
     slabs.forEach((slab) => {
-      if (slab.rate === 0 && !slab.components.length && doc.kind === 'invoice' && table !== 'exp') {
+      // An SEZ supply without tax went under LUT or bond: it is zero-rated (SEZWOP), not nil-rated.
+      if (slab.rate === 0 && !slab.components.length && doc.kind === 'invoice' && table !== 'exp' && !sez) {
         const supplyType = `${interState ? 'INTR' : 'INTRA'}${isRegistered(party) ? 'B2B' : 'B2C'}` as NilSupplyType;
         const nil = nilMap.get(supplyType) ?? { supplyType, nilRated: zero(baseCurrency), exempt: zero(baseCurrency), nonGst: zero(baseCurrency) };
         const add = (m: Money, minor: number) => money(m.minor + toBase(money(minor, doc.currency), rate).minor, baseCurrency);
@@ -348,6 +363,8 @@ export function gstr1Summary(args: {
         cess: part('CESS'),
         invoiceValue,
         ...(isExport(party, placeOfSupply) && { exported: true }),
+        ...(sez && { sez: true }),
+        interState,
         ...(reverseCharge && { reverseCharge: true }),
         ...(noteType && { noteType }),
         ...(noteType && original.number && { originalNumber: original.number }),

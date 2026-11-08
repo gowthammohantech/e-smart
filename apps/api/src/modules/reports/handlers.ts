@@ -1,7 +1,7 @@
 import { inArray } from 'drizzle-orm';
 import type { Schema } from '@esmart/api-contract';
 import { PAYMENT_METHODS } from '@esmart/core/data/masters';
-import { isCancelled } from '@esmart/core/domain/documentStates';
+import { PAYABLE_KINDS, RECEIVABLE_KINDS, isCancelled } from '@esmart/core/domain/documentStates';
 import { FULL_PLAN, hasModule, moduleForReport } from '@esmart/core/domain/plan';
 import { tdsRegister } from '@esmart/core/domain/tds';
 import type { BusinessDocument } from '@esmart/core/types';
@@ -23,6 +23,7 @@ import { coreMovements } from '../inventory/ledger';
 import { ledgerHandlers } from '../ledger/handlers';
 import { msmeReport } from '../ledger/msme';
 import { companyCore } from '../documents/engine';
+import { branchScope } from '../dashboard/period';
 import { accountNames, branchNames, loadDocuments, loadExpenseCategories, loadExpenses, loadItems, loadParties, loadPayments, type Scope } from './data';
 import { tableCsv, tableHtml, tableOf, type ReportBody, type ReportKey } from './table';
 
@@ -30,6 +31,11 @@ type Query = { branchId?: string; partyId?: string; currency?: string };
 type AgingCtx = Pick<Ctx<'getReceivables'>, 'company' | 'user' | 'db' | 'now'>;
 
 /** English names for the payment methods (the app translates its own). */
+/** Bought documents that give TDS back, counted against their bill's section. */
+const TDS_BACK = new Set<string>(['supplierCreditNote', 'purchaseReturn']);
+/** In the TDS register: not cancelled, and a return only once it has gone through (not drafted, requested or rejected). */
+const tdsLive = (d: BusinessDocument) => !isCancelled(d.status) && (d.kind !== 'purchaseReturn' || !['draft', 'requested', 'rejected'].includes(d.status));
+
 const METHOD_LABELS: Record<string, string> = Object.fromEntries(
   PAYMENT_METHODS.map((m) => [m, { cash: 'Cash', bank: 'Bank transfer', upi: 'UPI', card: 'Card', cheque: 'Cheque', wallet: 'Wallet', other: 'Other' }[m]]),
 );
@@ -115,8 +121,9 @@ export async function buildReport(s: Scope, key: ReportKey, q: Query): Promise<R
     case 'msme-payables':
       return msmeReport(s.db, s.company, s.to, s.user.branchIds);
     case 'tds-register': {
-      const { docs } = await loadDocuments(s, ['purchaseBill', 'supplierDebitNote', 'supplierCreditNote']);
-      const live = docs.filter((d) => !isCancelled(d.status) && (!q.partyId || d.partyId === q.partyId));
+      // A purchase return gives back TDS at its bill's rate, as a credit note does.
+      const { docs } = await loadDocuments(s, ['purchaseBill', 'supplierDebitNote', 'supplierCreditNote', 'purchaseReturn']);
+      const live = docs.filter((d) => tdsLive(d) && (!q.partyId || d.partyId === q.partyId));
       const partyIds = [...new Set(live.map((d) => d.partyId))];
       const parties = partyIds.length ? await s.db.select({ id: schema.parties.id, name: schema.parties.name, pan: schema.parties.pan }).from(schema.parties).where(inArray(schema.parties.id, partyIds)) : [];
       const toBase = (minor: number, d: BusinessDocument) => Math.round(minor * (d.currency === base ? 1 : d.exchangeRate));
@@ -126,7 +133,7 @@ export async function buildReport(s: Scope, key: ReportKey, q: Query): Promise<R
           date: d.date,
           tds: d.tds ? { section: d.tds.section, amount: { minor: toBase(d.tds.amount.minor, d) } } : undefined,
           baseMinor: toBase(d.totals.taxableAmount.minor, d),
-          sign: d.kind === 'supplierCreditNote' ? -1 : 1,
+          sign: TDS_BACK.has(d.kind) ? -1 : 1,
         })),
         parties.map((p) => ({ id: p.id, name: p.name, pan: p.pan ?? undefined })),
         { from: s.from, to: s.to },
@@ -187,7 +194,7 @@ export const reportsHandlers = defineHandlers({
         return { ...r, partyNames: names } as never;
       }
       case 'stock': {
-        const branchIds = branchId ? [branchId] : ctx.user.branchIds;
+        const branchIds = branchScope(ctx.user, branchId);
         const movements = await coreMovements(ctx.db, ctx.company.id, { branchIds, to });
         return summarizeStock(await loadItems(all), movements, base, branchId ?? null, ctx.company.stockCosting as 'average' | 'fifo') as never;
       }
@@ -200,16 +207,19 @@ export const reportsHandlers = defineHandlers({
       case 'receivables':
       case 'payables': {
         const sales = key === 'receivables';
-        const { docs } = await loadDocuments(all, sales ? [...SALES_SIDE] : [...BUY_SIDE]);
+        // What is owed is what the ledger screen, the dashboard and the export count: debit notes and
+        // opening invoices (or bills) too, aged as of the report's last day.
+        const owedKinds = sales ? RECEIVABLE_KINDS : PAYABLE_KINDS.filter((k) => !RECEIVABLE_KINDS.includes(k));
+        const { docs } = await loadDocuments(all, [...new Set([...(sales ? SALES_SIDE : BUY_SIDE), ...owedKinds])]);
         const { payments } = await loadPayments(all);
-        const owed = inScope(docs.filter((d) => d.kind === (sales ? 'invoice' : 'purchaseBill')));
-        const outstanding = buildOutstanding(owed, payments.filter((p) => p.direction === (sales ? 'received' : 'paid')), undefined, docs);
+        const owed = inScope(docs.filter((d) => owedKinds.includes(d.kind)));
+        const outstanding = buildOutstanding(owed, payments.filter((p) => p.direction === (sales ? 'received' : 'paid')), to, docs);
         const partyNames = Object.fromEntries((await partiesOf(outstanding.map((o) => o.document))).map((p) => [p.id, p.name]));
         return { outstanding, summary: summarizeAging(outstanding, base), partyNames } as never;
       }
       case 'tds-register': {
         const { docs } = await loadDocuments(all, [...BUY_SIDE]);
-        const live = inScope(docs.filter((d) => d.kind !== 'purchaseReturn' && !isCancelled(d.status)));
+        const live = inScope(docs.filter(tdsLive));
         const rate = (d: BusinessDocument) => (d.currency === base ? 1 : d.exchangeRate);
         const rows = tdsRegister(
           live.map((d) => ({
@@ -217,7 +227,7 @@ export const reportsHandlers = defineHandlers({
             date: d.date,
             tds: d.tds ? { section: d.tds.section, amount: { minor: Math.round(d.tds.amount.minor * rate(d)) } } : undefined,
             baseMinor: Math.round(d.totals.taxableAmount.minor * rate(d)),
-            sign: d.kind === 'supplierCreditNote' ? -1 : 1,
+            sign: TDS_BACK.has(d.kind) ? -1 : 1,
           })),
           await partiesOf(live),
           range,
@@ -255,10 +265,11 @@ export const reportsHandlers = defineHandlers({
       }
       case 'gstr1': {
         // The screen's range and branch, within the branches the user may see.
-        const branchIds = branchId ? [branchId] : ctx.user.branchIds;
+        const branchIds = branchScope(ctx.user, branchId);
         const summary = await gstr1ForRange(ctx.db, ctx.company, range, ctx.now, { branchIds });
-        // A month's screen shows what its return amends of earlier filed ones.
-        const amendments = await amendmentsForScreen(ctx.db, ctx.company, range, ctx.now, branchIds);
+        // A month's screen shows what its return amends of earlier filed ones: a whole registration's,
+        // so not to someone who sees only some branches.
+        const amendments = ctx.user.branchIds.length ? undefined : await amendmentsForScreen(ctx.db, ctx.company, range, ctx.now, branchIds);
         return (amendments ? { ...summary, amendments } : summary) as never;
       }
       case 'msme-payables': {

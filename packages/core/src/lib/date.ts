@@ -127,7 +127,8 @@ export function financialYearOf(iso: string, startMonth = 4): { start: string; e
   };
 }
 
-export function resolveRange(preset: DateRangePreset, custom?: DateRange): DateRange {
+/** `fyStartMonth`: the company's financial year start (1–12), for the FY presets; April when left out. */
+export function resolveRange(preset: DateRangePreset, custom?: DateRange, fyStartMonth = 4): DateRange {
   const now = new Date();
   switch (preset) {
     case 'today':
@@ -149,11 +150,11 @@ export function resolveRange(preset: DateRangePreset, custom?: DateRange): DateR
       return { from: toISODate(startOfMonth(lm)), to: toISODate(endOfMonth(lm)) };
     }
     case 'thisFY': {
-      const fy = financialYearOf(toISODate(now));
+      const fy = financialYearOf(toISODate(now), fyStartMonth);
       return { from: fy.start, to: fy.end };
     }
     case 'lastFY': {
-      const fy = financialYearOf(toISODate(subMonths(now, 12)));
+      const fy = financialYearOf(toISODate(subMonths(now, 12)), fyStartMonth);
       return { from: fy.start, to: fy.end };
     }
     case 'all':

@@ -1,4 +1,4 @@
-import { B2CL_THRESHOLD_MINOR, gstr1Summary } from '../gstr1';
+import { B2CL_THRESHOLD_MINOR, consolidateB2cs, gstr1Summary } from '../gstr1';
 import { creditNoteDeadline } from '../../lib/date';
 import { calculateDocument } from '../lineCalc';
 import { fromMajor, zero } from '../../lib/money';
@@ -229,6 +229,42 @@ describe('GSTR-1', () => {
     const s = summarize([usd]);
     expect(s.exp[0].taxableValue).toEqual(fromMajor('8300', 'INR'));
     expect(s.hsn[0].taxableValue).toEqual(fromMajor('8300', 'INR'));
+  });
+});
+
+describe('GSTR-1 status, SEZ and branch state', () => {
+  it('leaves a return awaiting approval out of every table and table 13, as the books and 3B do', () => {
+    const sale = doc('registered');
+    const pending = doc('registered', { kind: 'salesReturn', number: 'CRN-1', status: 'requested', lines: [line({ quantity: 2 })] });
+    const s = summarize([sale, pending]);
+    expect(s.cdnr).toHaveLength(0);
+    expect(s.totals.taxableValue.minor).toBe(10_000_00);
+    expect(s.docs.map((d) => d.nature)).toEqual(['invoice']);
+  });
+
+  it('flags a sale to an SEZ and keeps one without tax out of table 8', () => {
+    const sez = party('sez', { taxId: '29AACFS1234P1ZH', gstRegistrationType: 'sez' });
+    const s = gstr1Summary({
+      company: COMPANY,
+      documents: [doc('registered', { id: 'z', partyId: 'sez', placeOfSupplyStateCode: '29', lines: [line({ taxRate: 0 })] })],
+      parties: [...PARTIES, sez],
+      items: [],
+      baseCurrency: 'INR',
+      period: PERIOD,
+    });
+    expect(s.nil).toHaveLength(0);
+    expect(s.b2b).toHaveLength(1);
+    expect(s.b2b[0]).toMatchObject({ sez: true, rate: 0 });
+  });
+
+  it('reads each sale from its own branch’s state', () => {
+    // A Karnataka branch selling inside Karnataka, in a Maharashtra company.
+    const ka = doc('consumer_ka', { branchId: 'brn_ka', lines: [line({ quantity: 100 })] });
+    const s = gstr1Summary({ company: COMPANY, documents: [ka], parties: PARTIES, items: [], baseCurrency: 'INR', period: PERIOD, homeStateOf: (d) => (d.branchId === 'brn_ka' ? '29' : undefined) });
+    expect(s.b2cl).toHaveLength(0);
+    expect(s.b2cs).toHaveLength(1);
+    expect(s.b2cs[0].interState).toBe(false);
+    expect(consolidateB2cs(s.b2cs, '27', 'INR')[0].supplyType).toBe('INTRA');
   });
 });
 
