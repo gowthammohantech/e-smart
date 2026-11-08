@@ -178,6 +178,7 @@
     "taxableValue": "வரி விதிக்கத்தக்க மதிப்பு",
     "discountOnTotal": "மொத்தத்தில் தள்ளுபடி",
     "otherCharges": "பிற கட்டணங்கள்",
+    "chargesTaxed": "சரக்கு மற்றும் பிற கட்டணங்கள் (வரிக்குட்பட்டது)",
     "tdsLabel": "TDS {{section}}, {{rate}}",
     "payableToSupplier": "விற்பனையாளருக்குச் செலுத்த வேண்டியது",
     "reimbursements": "அடக்க விலையில் திருப்பிச் செலுத்துதல்",

@@ -2,6 +2,7 @@ import { businessDate } from '@esmart/core/lib/date';
 import { and, eq, inArray } from 'drizzle-orm';
 import type { Schema } from '@esmart/api-contract';
 import { isPayableDocument } from '@esmart/core/domain/documentStates';
+import { taxedCharges } from '@esmart/core/domain/lineCalc';
 import type { BusinessDocument } from '@esmart/core/types';
 import { schema } from '@esmart/db';
 import type { DbOrTx } from '../../lib/audit';
@@ -94,6 +95,17 @@ export async function documentsToWire(db: DbOrTx, rows: DocRow[], now: Date, bas
   return rows.map((row) => {
     const currency = row.currency.trim();
     const m = (minor: number) => money(minor, currency);
+    // Charges taxed with the lines (RULES 1.10) are in the taxable value: the totals carry only what is left after tax.
+    const taxed = taxedCharges({
+      date: row.date,
+      currency,
+      charges: m(row.chargesMinor),
+      lines: lines.filter((l) => l.documentId === row.id).map((l) => ({
+        id: l.id, name: l.name, quantity: Number(l.quantity), unit: l.unit, unitPrice: m(l.unitPriceMinor), discountMode: l.discountMode,
+        discountValue: Number(l.discountValue), taxCategoryId: l.taxCategoryId, taxRate: Number(l.taxRate), taxInclusive: l.taxInclusive, gst: gstFlagsFrom(l),
+      })),
+    }).minor;
+    const untaxedCharges = row.chargesMinor - taxed;
     const doc = compact({
       id: row.id,
       companyId: row.companyId,
@@ -188,9 +200,10 @@ export async function documentsToWire(db: DbOrTx, rows: DocRow[], now: Date, bas
         totalTax: m(row.totalTaxMinor),
         reverseChargeTax: m(row.reverseChargeTaxMinor),
         // What the grand total holds beyond the goods, tax, charges and rounding is the TCS collected.
-        ...(row.tcsRate && { tcs: m(row.grandTotalMinor - row.roundOffMinor - (row.taxableAmountMinor + row.totalTaxMinor - row.documentDiscountMinor + row.reimbursementsMinor + row.chargesMinor)) }),
+        ...(row.tcsRate && { tcs: m(row.grandTotalMinor - row.roundOffMinor - (row.taxableAmountMinor + row.totalTaxMinor - row.documentDiscountMinor + row.reimbursementsMinor + untaxedCharges)) }),
         reimbursements: m(row.reimbursementsMinor),
-        charges: m(row.chargesMinor),
+        charges: m(untaxedCharges),
+        ...(taxed && { chargesTaxed: m(taxed) }),
         roundOff: m(row.roundOffMinor),
         grandTotal: m(row.grandTotalMinor),
         grandTotalBase: money(row.grandTotalBaseMinor, baseCurrency),

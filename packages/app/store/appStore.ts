@@ -191,7 +191,8 @@ type Actions = {
   /* documents */
   nextNumberFor: (kind: NumberingSeries['kind']) => string;
   createDocument: (draft: NewDocumentInput) => string;
-  updateDocument: (id: string, patch: Partial<BusinessDocument>) => void;
+  /** `overrideCreditLimit`: an issued invoice's edit accepted over the customer's credit limit (rides along to the server). */
+  updateDocument: (id: string, patch: Partial<BusinessDocument>, opts?: { overrideCreditLimit?: boolean }) => void;
   recalculateDocument: (id: string) => void;
   /** `overrideCreditLimit` rides along to the server once the user has accepted the credit-limit warning. */
   setDocumentStatus: (id: string, status: DocStatus, opts?: { overrideCreditLimit?: boolean }) => void;
@@ -382,6 +383,7 @@ export const useAppStore = create<AppState>()(
           charges: doc.charges,
           applyRoundOff: doc.applyRoundOff,
           roundOffManual: doc.roundOffManual,
+          date: doc.date,
           taxCategories: s.taxCategories.filter((t) => t.companyId === doc.companyId),
           taxContext: buildTaxContext(company, {
             placeOfSupply: doc.placeOfSupplyStateCode,

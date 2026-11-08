@@ -33,6 +33,39 @@ describe('perpetual stock', () => {
     expect(report.body.costOfGoods.minor).toBe(240000);
   });
 
+  it('puts GST whose credit is ineligible into what the goods cost (AS 2), so Purchases keep none of it', async () => {
+    const m = await moneySetup(t);
+    await t.deps.db.update(schema.companies).set({ perpetualStockFrom: '2026-04-01' }).where(eq(schema.companies.id, m.companyId));
+    const itemId = await m.item();
+    const bill = await t.post(
+      `${m.c}/documents`,
+      {
+        kind: 'purchaseBill',
+        partyId: m.supplier!.id,
+        date: '2026-09-01',
+        currency: 'INR',
+        supplierDocNumber: 'KS/2',
+        lines: [line(m.gst(18), { itemId, quantity: 10, unitPrice: { minor: 60000, currency: 'INR' }, gst: { itcEligibility: 'ineligible' } })],
+        status: 'issued',
+      },
+      { token: m.token },
+    );
+    expect(bill.status).toBe(201);
+    const [receipt] = await t.deps.db.select().from(schema.stockMovements).where(eq(schema.stockMovements.referenceId, bill.body.id));
+    // ₹600 plus the ₹108 of GST that can't be claimed back.
+    expect(Number(receipt.unitCostMinor)).toBe(70800);
+
+    const sale = await t.post(`${m.c}/documents`, { kind: 'invoice', partyId: m.mumbai.id, date: '2026-09-29', currency: 'INR', lines: [line(m.gst(18), { itemId, quantity: 4 })], status: 'issued' }, { token: m.token });
+    expect(sale.status).toBe(201);
+    const range = { from: '2026-04-01', to: '2026-09-30' };
+    const pl = await t.get(`${m.c}/books/profit-loss`, { token: m.token, query: range });
+    const expense = pl.body.trading.expense as { account: { key: string }; amount: number }[];
+    expect(expense.find((l) => l.account.key === 'sys:cogs')?.amount).toBe(4 * 70800);
+    expect(expense.find((l) => l.account.key === 'sys:purchases')).toBeUndefined();
+    const bs = await t.get(`${m.c}/books/balance-sheet`, { token: m.token, query: range });
+    expect(bs.body.totalAssets).toBe(bs.body.totalLiabilities);
+  });
+
   it('starts a new business perpetual, from its first financial year', async () => {
     const m = await moneySetup(t);
     const company = (await t.get(m.c, { token: m.token })).body;

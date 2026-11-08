@@ -5,7 +5,7 @@ import { advanceTaxEvents } from '../advanceTax';
 import { CREDIT_KINDS } from '../documentStates';
 import { expenseCost, claimableTax, expenseTaxComponents } from '../expenseTax';
 import { ItcBuckets, TaxSplit, itcOfDocument } from '../itc';
-import { calculateLine } from '../lineCalc';
+import { calculateLine, linesWithCharges, taxedCharges } from '../lineCalc';
 import { homeStateCode } from '../taxEngine';
 import { addDaysISO } from '../../lib/date';
 import type { PerpetualStock } from '../stockLedger';
@@ -116,17 +116,20 @@ export function postDocument(doc: BusinessDocument, baseCurrency: string): Posti
   // A financial or commercial note without GST (RULES 6.24) is a discount after the sale, not a
   // return: its value goes to discount allowed (received), not sales (purchases). It carries no tax.
   const discountNote = doc.noteGst === 'noGst' && !doc.sourceDocumentId;
+  // The part of the charges inside the taxable value; zero before CHARGES_TAXED_FROM.
+  const taxed = taxedCharges(doc).minor;
 
   if (sales) {
     const tax = chargedTax(doc, false);
     entries.push(
       [party, b(t.grandTotal.minor)],
-      [discountNote ? 'sys:discountAllowed' : 'sys:sales', -b(t.taxableAmount.minor)],
+      // Charges taxed with the lines (RULES 1.10) are inside the taxable value but still recovered as charges.
+      [discountNote ? 'sys:discountAllowed' : 'sys:sales', -b(t.taxableAmount.minor - taxed)],
       ...TAX_KINDS.map((k): Entry => [`sys:output${k}`, -b(tax[k])]),
       ['sys:discountAllowed', b(t.documentDiscount.minor)],
       // Recovering a billable expense clears what it put in Reimbursements recoverable: none of it is income.
       ['sys:reimbursementsRecoverable', -b(t.reimbursements?.minor ?? 0)],
-      ['sys:chargesRecovered', -b(t.charges.minor)],
+      ['sys:chargesRecovered', -b(t.charges.minor + taxed)],
       ['sys:roundOff', -b(t.roundOff.minor)],
     );
     // TCS collected with the price is the government's, not income: owed under its section (RULES 6.13).
@@ -139,10 +142,12 @@ export function postDocument(doc: BusinessDocument, baseCurrency: string): Posti
     const lost = splitTotal(abs(itc.blocked)) + splitTotal(abs(itc.ineligible));
     const rcm = chargedTax(doc, true);
     // Capital goods go to fixed assets, everything else to purchases; credit that can't be claimed adds to the cost.
-    const capital = doc.lines
-      .filter((l) => l.gst?.capitalGoods && !l.gst?.reimbursement)
-      .reduce((a, l) => a + calculateLine(l, doc.currency, { regime: 'GST', registered: false }).taxable.minor, 0);
-    const cost = b(t.taxableAmount.minor - capital + (t.reimbursements?.minor ?? 0)) + lost;
+    // Charges taxed with the lines (RULES 1.10): a capital line's share is part of the asset's cost, the
+    // rest stays freight inward, as charges did before.
+    const capitalLines = linesWithCharges(doc).filter((l) => l.gst?.capitalGoods && !l.gst?.reimbursement);
+    const capital = capitalLines.reduce((a, l) => a + calculateLine(l, doc.currency, { regime: 'GST', registered: false }).taxable.minor, 0);
+    const freight = taxed - capitalLines.reduce((a, l) => a + (l.chargeShare?.minor ?? 0), 0);
+    const cost = b(t.taxableAmount.minor - capital - freight + (t.reimbursements?.minor ?? 0)) + lost;
     entries.push(
       [party, -b(t.grandTotal.minor)],
       ...(discountNote ? [['sys:discountReceived', cost] as Entry] : purchasesByCentre(doc, cost)),
@@ -150,7 +155,7 @@ export function postDocument(doc: BusinessDocument, baseCurrency: string): Posti
       ...TAX_KINDS.map((k): Entry => [`sys:input${k}`, claimable[SPLIT_KEY[k]]]),
       ...TAX_KINDS.map((k): Entry => [rcmAccount(k, doc.date), -b(rcm[k])]),
       ['sys:discountReceived', -b(t.documentDiscount.minor)],
-      ['sys:freightInward', b(t.charges.minor)],
+      ['sys:freightInward', b(t.charges.minor + freight)],
       ['sys:roundOff', b(t.roundOff.minor)],
     );
     // TDS kept back: the supplier is owed that much less, the government that much more.

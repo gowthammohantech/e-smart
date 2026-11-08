@@ -303,6 +303,8 @@ export function useDocumentDraft(options: {
         charges: draft.charges,
         applyRoundOff: draft.applyRoundOff,
         roundOffManual: draft.roundOffManual,
+        // From CHARGES_TAXED_FROM the charges are taxed with the lines, as the server works it out.
+        date: draft.date,
         taxCategories,
         taxContext:
           typeof taxContext === 'function'

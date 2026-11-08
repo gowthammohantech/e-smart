@@ -35,7 +35,63 @@ export type LineCalcInput = {
   taxContext: TaxContext;
   /** TCS collected from the buyer (s.206C), percent of the sale value with GST; added before rounding. */
   tcsRate?: number;
+  /** The document's date: from CHARGES_TAXED_FROM its charges are part of the taxable value. */
+  date?: string;
 };
+
+/**
+ * From this date a document's charges (freight, packing, insurance, handling billed on it) are part
+ * of the value of supply (CGST s.15(2)(c); s.8 for a composite supply): spread over the lines in
+ * proportion to their taxable value and taxed with each line (RULES 1.10). Documents dated before it
+ * keep their charges after tax, untaxed, exactly as they were issued.
+ */
+export const CHARGES_TAXED_FROM = '2026-12-01';
+
+type ChargedDoc = { date?: string; lines: DocumentLine[]; charges: Money; currency: string };
+
+/** What a line is worth before tax, for spreading the charges: after its discount, tax in an inclusive price taken out. */
+function chargeWeight(line: DocumentLine, currency: string): number {
+  if (line.gst?.reimbursement) return 0;
+  const gross = multiply(money(line.unitPrice.minor, currency), line.quantity);
+  const net = subtract(gross, discountOf(gross, line.discountMode, line.discountValue));
+  const combined = (line.taxRate || 0) + (line.gst?.cessRate ?? 0);
+  const value = line.taxInclusive && combined > 0 && !line.gst?.reverseCharge ? subtract(net, inclusiveTax(net, combined)) : net;
+  return Math.max(value.minor, 0);
+}
+
+/**
+ * Each line's share of the charges, in minor units, or null when the charges stay outside the taxable
+ * value (an older document, no charges, or nothing to spread them over). Largest remainder, so the
+ * shares add up to the charges to the paisa; ties go to the earlier line.
+ */
+export function chargeShares(doc: ChargedDoc): number[] | null {
+  const total = doc.charges?.minor ?? 0;
+  if (!total || !doc.date || doc.date < CHARGES_TAXED_FROM) return null;
+  const weights = doc.lines.map((l) => chargeWeight(l, doc.currency));
+  const weightSum = weights.reduce((a, w) => a + w, 0);
+  if (weightSum <= 0) return null;
+  const sign = total < 0 ? -1 : 1;
+  const abs = Math.abs(total);
+  const raw = weights.map((w) => (abs * w) / weightSum);
+  const shares = raw.map(Math.floor);
+  let left = abs - shares.reduce((a, x) => a + x, 0);
+  const order = raw.map((r, i) => ({ i, frac: r - Math.floor(r) })).filter((x) => weights[x.i] > 0).sort((a, b) => b.frac - a.frac || a.i - b.i);
+  for (let k = 0; left > 0 && order.length; k = (k + 1) % order.length, left--) shares[order[k].i] += 1;
+  return shares.map((x) => sign * x);
+}
+
+/** The document's lines, each carrying its share of the charges when they are taxed (see CHARGES_TAXED_FROM). */
+export function linesWithCharges(doc: ChargedDoc): DocumentLine[] {
+  const shares = chargeShares(doc);
+  if (!shares) return doc.lines;
+  return doc.lines.map((l, i) => (shares[i] ? { ...l, chargeShare: money(shares[i], doc.currency) } : l));
+}
+
+/** The part of the document's charges that is inside its taxable value; zero on older documents. */
+export function taxedCharges(doc: ChargedDoc): Money {
+  const shares = chargeShares(doc);
+  return money(shares ? shares.reduce((a, x) => a + x, 0) : 0, doc.currency);
+}
 
 export type LineBreakdown = {
   lineId: string;
@@ -111,6 +167,13 @@ export function calculateLine(line: DocumentLine, currency: string, ctx: TaxCont
     taxAmount = add(percent(net, t.rate), percent(net, t.cessRate));
   }
 
+  // The line's share of the document's charges is taxed with it, on top of its own value.
+  if (line.chargeShare?.minor) {
+    const share = money(line.chargeShare.minor, currency);
+    taxable = add(taxable, share);
+    taxAmount = add(taxAmount, add(percent(share, t.rate), percent(share, t.cessRate)));
+  }
+
   return {
     lineId: line.id,
     gross,
@@ -134,7 +197,6 @@ export function calculateLine(line: DocumentLine, currency: string, ctx: TaxCont
  */
 export function calculateDocument(input: LineCalcInput): DocumentTotals {
   const {
-    lines,
     currency,
     baseCurrency,
     exchangeRate,
@@ -146,6 +208,10 @@ export function calculateDocument(input: LineCalcInput): DocumentTotals {
     taxContext,
   } = input;
 
+  // From CHARGES_TAXED_FROM the charges ride on the lines, taxed with them; only what can't be spread stays after tax.
+  const charged = linesWithCharges({ date: input.date, lines: input.lines, charges, currency });
+  const lines = charged;
+  const taxedChargeMinor = charged === input.lines ? 0 : charged.reduce((a, l) => a + (l.chargeShare?.minor ?? 0), 0);
   const breakdowns = lines.map((l) => calculateLine(l, currency, taxContext));
   // Reimbursements are recovered at cost, after tax: outside the subtotal, discounts and taxable value.
   const supplies = breakdowns.filter((b) => !b.reimbursement);
@@ -191,9 +257,13 @@ export function calculateDocument(input: LineCalcInput): DocumentTotals {
   const reverseChargeTax = sum(taxLines.filter((t) => t.reverseCharge).map((t) => t.totalTax), currency);
 
   const afterTax = add(taxableAmount, totalTax);
-  const documentDiscount = discountOf(afterTax, documentDiscountMode, documentDiscountValue);
+  // The document discount is on the goods and their tax, as before the charges were taxed.
+  const plain = taxedChargeMinor ? calculateDocument({ ...input, charges: zero(currency), date: undefined, tcsRate: undefined, applyRoundOff: false, roundOffManual: undefined }) : undefined;
+  const goodsAfterTax = plain ? add(plain.taxableAmount, plain.totalTax) : afterTax;
+  const documentDiscount = discountOf(goodsAfterTax, documentDiscountMode, documentDiscountValue);
 
-  const chargesInCurrency = money(charges.minor, currency);
+  // What is left of the charges after tax: all of them on an older document, none once they are taxed.
+  const chargesInCurrency = money(charges.minor - taxedChargeMinor, currency);
   // TCS on what the buyer pays for the goods, GST included, not on pure-agent recoveries; to the rupee.
   const tcsBase = add(subtract(afterTax, documentDiscount), chargesInCurrency);
   const tcs = input.tcsRate && input.tcsRate > 0 ? money(Math.round((tcsBase.minor * input.tcsRate) / 100 / 100) * 100, currency) : undefined;
@@ -221,6 +291,7 @@ export function calculateDocument(input: LineCalcInput): DocumentTotals {
     reverseChargeTax,
     reimbursements,
     charges: chargesInCurrency,
+    ...(taxedChargeMinor && { chargesTaxed: money(taxedChargeMinor, currency) }),
     ...(tcs && { tcs }),
     roundOff: adjustment,
     grandTotal: rounded,

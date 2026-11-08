@@ -5813,7 +5813,10 @@ export interface components {
             tcs?: components["schemas"]["Money"];
             /** @description Pure-agent reimbursements, added after tax */
             reimbursements?: components["schemas"]["Money"];
+            /** @description Charges left after tax, untaxed (all of them on a document dated before 2026-12-01) */
             charges?: components["schemas"]["Money"];
+            /** @description Charges spread over the lines and taxed with them (RULES 1.10), inside taxableAmount; absent when none */
+            chargesTaxed?: components["schemas"]["Money"];
             roundOff?: components["schemas"]["Money"];
             grandTotal?: components["schemas"]["Money"];
             grandTotalBase?: components["schemas"]["Money"];
@@ -9636,6 +9639,8 @@ export interface operations {
                     rows: components["schemas"]["Item"][];
                     /** @default false */
                     dryRun?: boolean;
+                    /** @description Ids of the item custom fields the sheet has a column for. A required field is enforced on every row only when its column is here; one without a column comes back in `warnings`. */
+                    customFieldColumns?: string[];
                 };
             };
         };
@@ -9650,6 +9655,8 @@ export interface operations {
                         created?: number;
                         skipped?: number;
                         invalid?: number;
+                        /** @description Required custom fields the sheet has no column for; the items are created without them. */
+                        warnings?: string[];
                         results?: {
                             index?: number;
                             /** @enum {string} */

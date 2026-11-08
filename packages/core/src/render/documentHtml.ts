@@ -1,6 +1,6 @@
 import { BankDetails, Branch, BusinessDocument, Company, DocumentKind, EwayBill, Party } from '../types';
 import { documentKindLabel, type Translate } from '../labels';
-import { flattenTaxComponents } from '../domain/lineCalc';
+import { flattenTaxComponents, taxedCharges } from '../domain/lineCalc';
 import { formatMoney, formatPercent, formatQty } from '../lib/format';
 import { formatDate } from '../lib/date';
 import { money } from '../lib/money';
@@ -164,6 +164,7 @@ export function buildDocumentHtml({
   const sellerTaxId = branch?.gstin ?? company?.taxRegistration?.identifier;
   const branchLabel = branchName ?? branch?.name;
   const components = flattenTaxComponents(doc.totals.taxLines, doc.currency);
+  const chargesTaxed = doc.totals.chargesTaxed ?? taxedCharges(doc);
   const pos = INDIAN_STATES.find((s) => s.code === doc.placeOfSupplyStateCode)?.name;
 
   // Pure-agent reimbursements sit outside the taxable value (Rule 33), so they get their own
@@ -224,6 +225,8 @@ export function buildDocumentHtml({
   const totalRows = [
     totalRow(bi('sales:pdf.subtotal'), formatMoney(doc.totals.subtotal)),
     doc.totals.lineDiscount.minor > 0 ? totalRow(esc('Line discounts'), `− ${formatMoney(doc.totals.lineDiscount)}`) : '',
+    // Charges taxed with the items (RULES 1.10): part of the taxable value, so shown above it.
+    chargesTaxed.minor ? totalRow(esc('Freight and other charges'), formatMoney(chargesTaxed)) : '',
     totalRow(bi('sales:pdf.taxableValue'), formatMoney(doc.totals.taxableAmount)),
     ...components.map((c) => totalRow(esc(c.label), formatMoney(c.amount))),
     doc.totals.documentDiscount.minor > 0 ? totalRow(esc('Discount on total'), `− ${formatMoney(doc.totals.documentDiscount)}`) : '',

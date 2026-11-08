@@ -20,7 +20,7 @@ import { BusinessDocument, Company, Item, Party } from '../types';
 import { AdvanceEvent, AdvanceRow, advancesForPeriod } from './advanceTax';
 import type { Gstr1Amendments } from './gstr1Amend';
 import { NOTE_KINDS, isCancelled } from './documentStates';
-import { calculateLine, lineTreatment } from './lineCalc';
+import { calculateLine, lineTreatment, linesWithCharges } from './lineCalc';
 import { EXPORT_STATE_CODE } from './eInvoice';
 import { stateNameOf } from './stateCodes';
 
@@ -311,8 +311,10 @@ export function gstr1Summary(args: {
     const gstin = isRegistered(party) ? (doc.partyGstin ?? party.taxId) : undefined;
 
     // Exempt and non-GST lines are reported apart from nil-rated ones. Reimbursements are no supply at all.
+    // Charges taxed with the lines (RULES 1.10) follow each line's treatment here and in the HSN summary.
+    const charged = linesWithCharges(doc);
     const apart = { exempt: 0, nonGst: 0 };
-    doc.lines.forEach((line) => {
+    charged.forEach((line) => {
       const type = line.gst?.supplyType;
       if (line.gst?.reimbursement || (type !== 'exempt' && type !== 'nonGst')) return;
       apart[type] += calculateLine(line, doc.currency, { regime: 'GST', registered: false }).taxable.minor;
@@ -380,12 +382,12 @@ export function gstr1Summary(args: {
     // HSN: each line's own taxable value (after its discount) and tax, split
     // the way this document was split.
     const igstDoc = doc.totals.taxLines.some((l) => l.components.some((c) => c.type === 'IGST'));
-    const charged = doc.totals.totalTax.minor + (doc.totals.reverseChargeTax?.minor ?? 0) > 0;
-    doc.lines.forEach((line) => {
+    const taxedDoc = doc.totals.totalTax.minor + (doc.totals.reverseChargeTax?.minor ?? 0) > 0;
+    charged.forEach((line) => {
       if (line.gst?.reimbursement) return;
       const item = items.find((i) => i.id === line.itemId);
       const hsnCode = line.hsnCode ?? item?.hsnCode ?? 'Unclassified';
-      const ctx = { regime: 'GST' as const, registered: charged, reverseCharge: doc.reverseCharge };
+      const ctx = { regime: 'GST' as const, registered: taxedDoc, reverseCharge: doc.reverseCharge };
       const b = calculateLine(line, doc.currency, ctx);
       const { rate: gstRate, cessRate } = lineTreatment(line, ctx);
       const lineTaxable = sign * toBase(b.taxable, rate).minor;

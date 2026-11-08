@@ -6,6 +6,7 @@ import {
   ComplianceIssue,
   ComplianceSettings,
   DocumentKind,
+  DocumentLine,
   EInvoiceDocType,
   EInvoiceSupplyType,
   Item,
@@ -15,6 +16,7 @@ import {
   TaxLine,
 } from '../types';
 import { toMajor } from '../lib/money';
+import { linesWithCharges } from './lineCalc';
 import { isValidGstin } from './gstin';
 import { financialYearOf, parseDate } from '../lib/date';
 import { base64UrlDecode, base64UrlEncode, sha256Hex } from '../lib/hash';
@@ -434,6 +436,11 @@ export function irnForDocument(ctx: EInvoiceContext): string | null {
   return computeIrn(gstin, docType, ctx.document.number, fiscalYearCode(ctx.document.date));
 }
 
+/** How many items the IRP payload lists: the supplies, and an item for each line's taxed charges (RULES 1.10). */
+export function irpItemCount(doc: BusinessDocument): number {
+  return linesWithCharges(doc).filter((l) => !l.gst?.reimbursement).reduce((n, l) => n + (l.chargeShare?.minor ? 2 : 1), 0);
+}
+
 /** HSN of the highest-value line, which is what the portal asks for. */
 export function mainHsnCodeOf(doc: BusinessDocument): string | undefined {
   let best: { hsn?: string; value: number } = { value: -1 };
@@ -545,13 +552,20 @@ export function buildIrpPayload(ctx: EInvoiceContext): IrpInvoicePayload {
   // Pure-agent reimbursements are not a supply (Rule 33): they stay out of the item list and
   // travel in OthChrg, so AssVal + tax + OthChrg still adds up to TotInvVal.
   const reimbursements = toMajor(doc.totals.reimbursements ?? { minor: 0, currency });
-  const itemList: IrpItem[] = doc.lines.filter((l) => !l.gst?.reimbursement).map((line, i) => {
-    const gross = line.quantity * toMajor(line.unitPrice);
-    const discount =
-      line.discountMode === 'percent'
+  // Charges taxed with the lines (RULES 1.10) travel as an item of their own after the line they ride
+  // on, at its HSN and rate: the portal checks AssAmt = TotAmt - Discount on each item, so they can't be
+  // folded into the line's own amounts.
+  const rows: { line: DocumentLine; charge: boolean }[] = linesWithCharges(doc)
+    .filter((l) => !l.gst?.reimbursement)
+    .flatMap((line) => [{ line, charge: false }, ...(line.chargeShare?.minor ? [{ line, charge: true }] : [])]);
+  const itemList: IrpItem[] = rows.map(({ line, charge }, i) => {
+    const gross = charge ? toMajor(line.chargeShare!) : line.quantity * toMajor(line.unitPrice);
+    const discount = charge
+      ? 0
+      : line.discountMode === 'percent'
         ? (gross * Math.min(line.discountValue, 100)) / 100
         : line.discountValue;
-    const assessable = Math.max(0, gross - discount);
+    const assessable = charge ? gross : Math.max(0, gross - discount);
     // Tax is computed per rate, not per line, so split each rate's tax across
     // the lines charged at it in proportion to their assessable value.
     const cessRate = line.gst?.cessRate ?? 0;
@@ -581,13 +595,13 @@ export function buildIrpPayload(ctx: EInvoiceContext): IrpInvoicePayload {
 
     return {
       SlNo: String(i + 1),
-      PrdDesc: line.name,
+      PrdDesc: charge ? `Freight and other charges on ${line.name}`.slice(0, 300) : line.name,
       // A SAC code (chapter 99) is a service whether or not the line came from an item.
       IsServc: itemType.get(line.itemId ?? '') === 'service' || !!line.hsnCode?.startsWith('99') ? 'Y' : 'N',
       HsnCd: line.hsnCode ?? '',
-      Qty: line.quantity,
-      Unit: uqcFor(line.unit),
-      UnitPrice: round2(toMajor(line.unitPrice)),
+      Qty: charge ? 1 : line.quantity,
+      Unit: charge ? 'OTH' : uqcFor(line.unit),
+      UnitPrice: round2(charge ? gross : toMajor(line.unitPrice)),
       TotAmt: round2(gross),
       Discount: round2(discount),
       AssAmt: round2(assessable),
@@ -725,7 +739,7 @@ export function claimsFor(
     DocTyp: eInvoiceDocTypeFor(doc.kind) ?? 'INV',
     DocDt: portalDate(doc.date),
     TotInvVal: round2(toMajor(doc.totals.grandTotal)),
-    ItemCnt: doc.lines.filter((l) => !l.gst?.reimbursement).length,
+    ItemCnt: irpItemCount(doc),
     MainHsnCode: mainHsnCodeOf(doc),
     Irn: irn,
     IrnDt: portalDateTime(irnDate),

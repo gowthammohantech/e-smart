@@ -39,6 +39,7 @@
     "inclusive": "Incl.",
     "otherCharges": "Other charges",
     "otherChargesHint": "Freight, packing or installation added to the total.",
+    "otherChargesTaxedHint": "Freight, packing or installation. Spread over the items and taxed at their GST rates.",
     "roundOff": "Round off the total",
     "roundOffHint": "Rounds the grand total to the nearest whole unit and shows the adjustment.",
     "reverseCharge": "Reverse charge",

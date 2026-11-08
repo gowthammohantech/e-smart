@@ -1,5 +1,5 @@
 import { BusinessDocument, Expense } from '../types';
-import { calculateLine, lineTreatment } from './lineCalc';
+import { calculateLine, lineTreatment, linesWithCharges } from './lineCalc';
 import { CREDIT_KINDS } from './documentStates';
 
 /** GST split the way the returns report it, in base-currency paise. */
@@ -39,7 +39,8 @@ export function itcOfDocument(doc: BusinessDocument, baseCurrency: string): ItcB
   // The tax context the document was calculated in, as far as lines need it: whether any tax was charged or self-assessed.
   const taxed = doc.totals.totalTax.minor + (doc.totals.reverseChargeTax?.minor ?? 0) > 0;
   const ctx = { regime: 'GST' as const, registered: taxed, reverseCharge: doc.reverseCharge };
-  for (const line of doc.lines) {
+  // Charges taxed with the lines carry their credit with them (RULES 1.10).
+  for (const line of linesWithCharges(doc)) {
     const t = lineTreatment(line, ctx);
     if (t.rate + t.cessRate <= 0) continue;
     const b = calculateLine(line, doc.currency, ctx);

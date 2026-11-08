@@ -395,6 +395,11 @@ export type DocumentLine = {
   expenseId?: string;
   /** On a purchase: this non-stock line's own cost centre; absent takes the document's. */
   costCentreId?: string;
+  /**
+   * This line's share of the document's charges, taxed with it (RULES 1.10). Never stored or sent:
+   * worked out from the document by `linesWithCharges`.
+   */
+  chargeShare?: Money;
 };
 
 export type DocumentTotals = {
@@ -409,7 +414,10 @@ export type DocumentTotals = {
   reverseChargeTax?: Money;
   /** Pure-agent reimbursements, added after tax and outside the taxable value. Absent on older documents. */
   reimbursements?: Money;
+  /** Charges left after tax, untaxed: all of them on a document dated before CHARGES_TAXED_FROM. */
   charges: Money;
+  /** Charges spread over the lines and taxed with them (RULES 1.10), inside `taxableAmount`. Absent when none. */
+  chargesTaxed?: Money;
   /** TCS collected from the buyer (s.206C), inside the grand total. Absent when none. */
   tcs?: Money;
   roundOff: Money;

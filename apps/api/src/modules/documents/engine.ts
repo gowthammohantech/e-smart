@@ -558,6 +558,8 @@ export async function prepareDocument(
     roundOffManual: f.roundOffManualMinor !== null ? { minor: f.roundOffManualMinor, currency: f.currency } : undefined,
     taxCategories: categories,
     taxContext,
+    // From CHARGES_TAXED_FROM the charges are part of the taxable value (RULES 1.10).
+    date: f.date,
   };
   let totals = calculateDocument(calcInput);
   // TCS the seller collects on an invoice under its section (s.206C), worked on the price with GST.

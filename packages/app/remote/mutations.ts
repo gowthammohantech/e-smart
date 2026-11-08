@@ -82,12 +82,14 @@ function documentSave(updateMethod?: 'PATCH'): Builder {
     const id = typeof result === 'string' && result ? result : (args[0] as string);
     const doc = byId(after.documents, id);
     if (!doc) return;
+    // An edit the user accepted over the credit limit says so; it isn't kept on the document.
+    const override = updateMethod && (args[2] as { overrideCreditLimit?: boolean } | undefined)?.overrideCreditLimit ? { overrideCreditLimit: true } : {};
     outbox.upsert({
       entityType: 'document',
       id,
       collectionPath: `${c(doc.companyId)}/documents`,
       itemPath: `${c(doc.companyId)}/documents/${id}`,
-      body: documentBody(doc),
+      body: { ...documentBody(doc), ...override },
       label: doc.number,
       updateMethod,
     });

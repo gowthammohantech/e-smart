@@ -1,7 +1,7 @@
 import { AdvanceEvent, advancesForPeriod } from './advanceTax';
 import { BusinessDocument, Company, Expense, Party } from '../types';
 import { CREDIT_KINDS } from './documentStates';
-import { calculateLine, lineTreatment } from './lineCalc';
+import { calculateLine, lineTreatment, linesWithCharges } from './lineCalc';
 import { ItcBuckets, TaxSplit, itcOfDocument } from './itc';
 
 /**
@@ -121,7 +121,7 @@ export function gstr3b(input: Input): Gstr3b {
     if (SALES.includes(doc.kind) && inPeriod(doc.date, period)) {
       const ctx = { regime: 'GST' as const, registered: doc.totals.totalTax.minor + (doc.totals.reverseChargeTax?.minor ?? 0) > 0, reverseCharge: doc.reverseCharge };
       const exported = party?.gstRegistrationType === 'overseas' || party?.gstRegistrationType === 'sez' || doc.placeOfSupplyStateCode === '96';
-      for (const line of doc.lines) {
+      for (const line of linesWithCharges(doc)) {
         if (line.gst?.reimbursement) continue;
         const t = lineTreatment(line, ctx);
         const c = calculateLine(line, doc.currency, ctx);
@@ -174,7 +174,7 @@ export function gstr3b(input: Input): Gstr3b {
         }
         // 5: exempt, nil and non-GST supplies received.
         const inter = (doc.partyGstin ?? party?.taxId)?.slice(0, 2) !== home;
-        for (const line of doc.lines) {
+        for (const line of linesWithCharges(doc)) {
           const supply = line.gst?.supplyType ?? 'taxable';
           if (supply === 'taxable') continue;
           const v = sign * b(calculateLine(line, doc.currency, { regime: 'GST', registered: false }).taxable.minor);

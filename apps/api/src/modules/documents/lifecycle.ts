@@ -4,7 +4,7 @@ import { INVOICE_LIMITS, nextInvoicePlan } from '@esmart/core/domain/plan';
 import { CREDIT_KINDS, NOTE_KINDS, NOTE_SOURCE, PAYABLE_KINDS, isFinalized, isPayableDocument } from '@esmart/core/domain/documentStates';
 import { statusForOutstanding } from '@esmart/core/domain/receivables';
 import { MOVEMENT_SIGN, signedQuantity, stockMapOn } from '@esmart/core/domain/stockLedger';
-import { calculateLine } from '@esmart/core/domain/lineCalc';
+import { calculateLine, lineTreatment } from '@esmart/core/domain/lineCalc';
 import type { BusinessDocument, DocStatus, DocumentKind, DocumentLine, StockMovement, StockMovementType } from '@esmart/core/types';
 import { schema } from '@esmart/db';
 import type { AuthUser, CompanyRow } from '../../context';
@@ -160,7 +160,9 @@ async function movedUpstream(tx: DbOrTx, row: DocRow): Promise<boolean> {
 /**
  * What one unit on a bought line cost, in the document's currency: its taxable value (after the line's
  * discount, GST inside a tax-inclusive price taken out) over its quantity, the figure the bill puts in
- * Purchases. The document's discount after tax is posted to Discount received on its own.
+ * Purchases. GST whose credit is blocked (s.17(5)) or ineligible can't be recovered, so it is part of
+ * what the goods cost (AS 2 para 10, 11): it is added, as the bill adds it to Purchases (`itcOfDocument`).
+ * The document's discount after tax is posted to Discount received on its own.
  */
 function receiptUnitCost(row: DocRow, l: typeof schema.documentLines.$inferSelect): number {
   const quantity = Number(l.quantity);
@@ -181,8 +183,12 @@ function receiptUnitCost(row: DocRow, l: typeof schema.documentLines.$inferSelec
   };
   // Tax comes out of an inclusive price only when the document charged some.
   const charged = row.totalTaxMinor > 0 || row.reverseChargeTaxMinor > 0;
-  const { taxable } = calculateLine(line, currency, { regime: 'GST', registered: charged, reverseCharge: row.reverseCharge });
-  return taxable.minor / quantity;
+  const ctx = { regime: 'GST' as const, registered: charged, reverseCharge: row.reverseCharge };
+  const { taxable, taxAmount } = calculateLine(line, currency, ctx);
+  const eligibility = line.gst?.itcEligibility ?? 'eligible';
+  const t = lineTreatment(line, ctx);
+  const lost = (eligibility === 'blocked' || eligibility === 'ineligible') && t.rate + t.cessRate > 0 ? taxAmount.minor : 0;
+  return (taxable.minor + lost) / quantity;
 }
 
 export async function postStock(tx: DbOrTx, company: CompanyRow, row: DocRow, actorId: string): Promise<number> {

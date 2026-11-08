@@ -16,6 +16,21 @@ const read = async (m: Money, id: string) => (await t.get(`${m.c}/documents/${id
 const edit = (m: Money, id: string, over: Record<string, unknown> = {}) => t.patch(`${m.c}/documents/${id}`, invoiceBody(m, over), { token: m.token });
 
 describe('editing the latest invoice (RULES 6.23)', () => {
+  it('holds an edit that raises what the customer owes to their credit limit, unless the user accepts going over', async () => {
+    const m = await moneySetup(t);
+    await m.allowNegativeStock();
+    const inv = await issueInvoice(t, m);
+    const party = (await read(m, inv.id)).partyId as string;
+    // 2 × 1,000 + 18% = 2,360 owed; a ₹3,000 limit.
+    await t.deps.db.update(schema.parties).set({ creditLimitMinor: 300000 }).where(eq(schema.parties.id, party));
+    const over = await edit(m, inv.id, { partyId: party, lines: [line(m.gst(18), { quantity: 3 })] });
+    expect(over.status).toBe(422);
+    expect(over.body.code).toBe('CREDIT_LIMIT_EXCEEDED');
+    const accepted = await edit(m, inv.id, { partyId: party, lines: [line(m.gst(18), { quantity: 3 })], overrideCreditLimit: true });
+    expect(accepted.status).toBe(200);
+    expect(accepted.body.totals.grandTotal.minor).toBe(354000);
+  });
+
   it('edits the latest invoice in full: same number, totals, stock and ledger posted again, before and after audited', async () => {
     const m = await moneySetup(t);
     await m.allowNegativeStock();

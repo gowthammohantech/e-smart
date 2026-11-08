@@ -76,6 +76,10 @@ export function TotalsPanel({
         <Row label={tr('common:totals.lineDiscounts')} value={`− ${formatMoney(totals.lineDiscount)}`} tone="good" />
       ) : null}
 
+      {totals.chargesTaxed && !isZero(totals.chargesTaxed) ? (
+        <Row label={tr('common:totals.chargesTaxed')} value={formatMoney(totals.chargesTaxed)} />
+      ) : null}
+
       <Row label={tr('common:totals.taxableValue')} value={formatMoney(totals.taxableAmount)} />
 
       {components.map((c) => (

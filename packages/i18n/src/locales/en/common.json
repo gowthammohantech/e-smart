@@ -178,6 +178,7 @@
     "taxableValue": "Taxable value",
     "discountOnTotal": "Discount on total",
     "otherCharges": "Other charges",
+    "chargesTaxed": "Freight and other charges (taxable)",
     "tdsLabel": "TDS {{section}} at {{rate}}",
     "payableToSupplier": "Payable to supplier",
     "reimbursements": "Reimbursements at cost",

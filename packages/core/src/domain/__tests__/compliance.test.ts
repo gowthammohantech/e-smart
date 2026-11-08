@@ -56,6 +56,7 @@ import {
   Party,
 } from '../../types';
 import { fromMajor, zero } from '../../lib/money';
+import { calculateDocument } from '../lineCalc';
 import { sha256Hex } from '../../lib/hash';
 
 /* ------------------------------------------------------------------ */
@@ -1213,5 +1214,43 @@ describe('e-way bill Part-A (FRD 16)', () => {
 
   it('demands a known state code at both ends', () => {
     expect(partA({ from: place({ stateCode: '99' }) })).toContain('from.stateCode');
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* Charges taxed with the lines (RULES 1.10)                           */
+/* ------------------------------------------------------------------ */
+
+describe('e-invoice with charges taxed with the lines (RULES 1.10)', () => {
+  const lines = [line({ id: 'a' }), line({ id: 'b', itemId: 'itm_service', name: 'Installation', hsnCode: '995461', taxCategoryId: 'tax_5', taxRate: 5, unitPrice: fromMajor('1000', 'INR'), quantity: 10 })];
+  const charged = (date: string) => {
+    const charges = fromMajor('200', 'INR');
+    const totals = calculateDocument({
+      lines, currency: 'INR', baseCurrency: 'INR', exchangeRate: 1, documentDiscountMode: 'percent', documentDiscountValue: 0, charges,
+      applyRoundOff: false, taxCategories: [], taxContext: { regime: 'GST', registered: true, homeStateCode: '27', placeOfSupplyStateCode: '29' }, date,
+    });
+    return invoice({ date, lines, charges, totals });
+  };
+
+  it("sends each line's charges as an item after it, at its HSN and rate, with nothing left in OthChrg", () => {
+    const p = buildIrpPayload(ctx({ document: charged('2026-12-05'), now: '2026-12-06T10:00:00.000Z' }));
+    expect(p.ItemList.map((i) => [i.HsnCd, i.AssAmt, i.GstRt])).toEqual([
+      ['39211900', 10000, 18],
+      ['39211900', 100, 18],
+      ['995461', 10000, 5],
+      ['995461', 100, 5],
+    ]);
+    expect(p.ItemList[1]).toMatchObject({ Qty: 1, Unit: 'OTH', TotAmt: 100, Discount: 0, IgstAmt: 18 });
+    expect(p.ValDtls.OthChrg).toBe(0);
+    const assessable = p.ItemList.reduce((a, i) => a + i.AssAmt, 0);
+    expect(p.ValDtls.AssVal).toBeCloseTo(assessable, 2);
+    expect(claimsFor(ctx({ document: charged('2026-12-05') }), 'irn', '2026-12-06T10:00:00.000Z').ItemCnt).toBe(4);
+    expect(validateEInvoice(ctx({ document: charged('2026-12-05'), now: '2026-12-06T10:00:00.000Z' })).filter((i) => i.code === '2182')).toEqual([]);
+  });
+
+  it('keeps an invoice dated before the cut-over as it was: charges in OthChrg, one item per line', () => {
+    const p = buildIrpPayload(ctx({ document: charged('2026-11-20') }));
+    expect(p.ItemList).toHaveLength(2);
+    expect(p.ValDtls.OthChrg).toBe(200);
   });
 });

@@ -36,7 +36,7 @@ import { uid } from '@esmart/core/lib/id';
 import { factorOf, fromMajor, money, subtract, toMajor, zero, type Money } from '@esmart/core/lib/money';
 import { INDIAN_STATES, unitDecimals, unitShortName } from '@esmart/core/data/masters';
 import { OUTBOUND_KINDS, isLowStock, shortfallsAgainst } from '@esmart/core/domain/stockLedger';
-import { calculateLine } from '@esmart/core/domain/lineCalc';
+import { CHARGES_TAXED_FROM, calculateLine } from '@esmart/core/domain/lineCalc';
 import { hsnMandatory, validHsn } from '@esmart/core/lib/validators';
 
 import { useAppStore } from '../../store/appStore';
@@ -122,7 +122,7 @@ export function DocumentEditor(props: EditorProps) {
   const party = usePartyRecord(props.prefill?.partyId);
   const item = useItemRecord(props.prefill?.itemId);
   const source = useDocumentRecord(props.initialDraft?.sourceDocumentId);
-  if (party.isLoading || item.isLoading || source.isLoading) return <LoadingView variant="items-form" />;
+  if (party.isLoading || item.isLoading || source.isLoading) return <LoadingView variant="items-form" keepTitle />;
   return <DocumentEditorForm {...props} />;
 }
 
@@ -359,6 +359,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   const [creditWarning, setCreditWarning] = useState<string | null>(null);
   // Set once the user accepts the credit-limit warning, so the server lets the invoice through.
   const [creditOverride, setCreditOverride] = useState(false);
+  // The warning came from saving an issued invoice's edit (RULES 6.23), not from finalising: accepting it saves again.
+  const [creditOnEdit, setCreditOnEdit] = useState(false);
   const [chargesText, setChargesText] = useState(String(toMajor(draft.charges) || ''));
   const [discountText, setDiscountText] = useState(String(draft.documentDiscountValue || ''));
   const [roundOffText, setRoundOffText] = useState(
@@ -572,7 +574,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
     else setConfirmFinalize(true);
   };
 
-  const save = async (finalize: boolean) => {
+  const save = async (finalize: boolean, opts?: { overrideCreditLimit?: boolean }) => {
     if (!draft.partyId) return;
     if (roundOffError) {
       toast.show(roundOffError, 'error');
@@ -628,7 +630,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
     const res = await saveOnline(
       () => {
         let saved = documentId;
-        if (documentId) updateDocument(documentId, payload);
+        if (documentId) updateDocument(documentId, payload, opts?.overrideCreditLimit ? { overrideCreditLimit: true } : undefined);
         else saved = createDocument({ ...payload, status: 'draft' });
         if (saved && finalize) finalizeLocal(saved);
         return saved;
@@ -647,6 +649,13 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       return;
     }
     if (res.outcome === 'refused') {
+      // An issued invoice's edit that takes the customer past their limit: the same warning finalising gives,
+      // and accepting it saves the edit again with the override.
+      if (res.errorCode === 'CREDIT_LIMIT_EXCEEDED' && editingIssued && !opts?.overrideCreditLimit) {
+        setCreditOnEdit(true);
+        setCreditWarning(creditLimitWarning() ?? res.error ?? '');
+        return;
+      }
       toast.show(tr('common:save.refused', { reason: res.error }), 'error');
       return;
     }
@@ -1259,7 +1268,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           patch({ charges: fromMajor(v || '0', draft.currency) });
         }}
         currency={draft.currency}
-        hint={tr('sales:editor.otherChargesHint')}
+        // From CHARGES_TAXED_FROM the charges are part of the taxable value (RULES 1.10).
+        hint={tr(draft.date >= CHARGES_TAXED_FROM ? 'sales:editor.otherChargesTaxedHint' : 'sales:editor.otherChargesHint')}
         allowNegative
       />
 
@@ -1732,10 +1742,16 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           icon="alert-outline"
           onCancel={() => {
             setCreditWarning(null);
+            setCreditOnEdit(false);
             setSendAfter(false);
           }}
           onConfirm={() => {
             setCreditWarning(null);
+            if (creditOnEdit) {
+              setCreditOnEdit(false);
+              void save(false, { overrideCreditLimit: true });
+              return;
+            }
             setCreditOverride(true);
             setConfirmFinalize(true);
           }}
