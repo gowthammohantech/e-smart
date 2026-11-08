@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { schema } from '@esmart/db';
 import { materializeRecurringExpenses } from '../src/modules/expenses/handlers';
 import { ownerWithCompany, setupApi } from './helpers';
-import { moneySetup, type Money } from './money-fixtures';
+import { line, moneySetup, type Money } from './money-fixtures';
 import { joinTeam } from './team-helpers';
 
 const t = setupApi();
@@ -153,6 +153,36 @@ describe('expenses', () => {
 
     expect((await t.del(`${m.c}/expenses/${a.id}`, { token: m.token })).status).toBe(204);
     expect((await t.get(`${m.c}/expenses/${a.id}`, { token: m.token })).status).toBe(404);
+  });
+
+  it('keeps an expense billed on a live invoice as it was billed', async () => {
+    const m = await moneySetup(t);
+    const [cat] = await categories(m);
+    const exp = (await t.post(`${m.c}/expenses`, expense(m, cat.id, { amount: { minor: 250_000, currency: 'INR' }, billable: true, customerId: m.mumbai.id }), { token: m.token })).body;
+    const inv = await t.post(
+      `${m.c}/documents`,
+      { kind: 'invoice', partyId: m.mumbai.id, date: '2026-09-29', currency: 'INR', status: 'issued', lines: [line(m.gst(18)), line(m.gst(18), { name: 'Port charges', quantity: 1, unitPrice: { minor: 250_000, currency: 'INR' }, gst: { reimbursement: true }, expenseId: exp.id })] },
+      { token: m.token },
+    );
+    expect(inv.status).toBe(201);
+    const ifMatch = { 'if-match': '"v1"' };
+    const body = { ...expense(m, cat.id, { amount: { minor: 250_000, currency: 'INR' }, billable: true, customerId: m.mumbai.id }) };
+
+    const deleted = await t.del(`${m.c}/expenses/${exp.id}`, { token: m.token, headers: ifMatch });
+    expect(deleted.status).toBe(409);
+    expect(deleted.body.code).toBe('EXPENSE_RECOVERED');
+    const bigger = await t.put(`${m.c}/expenses/${exp.id}`, { ...body, amount: { minor: 300_000, currency: 'INR' } }, { token: m.token, headers: ifMatch });
+    expect(bigger.status).toBe(409);
+    expect((await t.put(`${m.c}/expenses/${exp.id}`, { ...body, billable: false, customerId: undefined }, { token: m.token, headers: ifMatch })).status).toBe(409);
+    // Notes still change.
+    const noted = await t.put(`${m.c}/expenses/${exp.id}`, { ...body, notes: 'Port of Mumbai' }, { token: m.token, headers: ifMatch });
+    expect(noted.body.notes).toBe('Port of Mumbai');
+    expect(noted.status).toBe(200);
+
+    // Once the invoice is cancelled the expense is free again.
+    const cancel = await t.post(`${m.c}/documents/${inv.body.id}/status`, { status: 'cancelled', reason: 'Raised in error' }, { token: m.token });
+    expect(cancel.status).toBe(200);
+    expect((await t.del(`${m.c}/expenses/${exp.id}`, { token: m.token })).status).toBe(204);
   });
 
   it('links attachments through the attachments table', async () => {

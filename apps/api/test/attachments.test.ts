@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { schema } from '@esmart/db';
 import { MemoryStorage } from '../src/providers';
 import { idem, ownerWithCompany, setupApi } from './helpers';
+import { moneySetup } from './money-fixtures';
 
 const t = setupApi();
 
@@ -73,6 +74,21 @@ describe('attachments', () => {
     const filtered = await t.get(`${c}/attachments`, { token, query: { entityType: 'party', entityId: party.body.id } });
     expect(filtered.body.data.map((a: { name: string }) => a.name)).toEqual(['kyc.png']);
     expect((await t.get(`${other.c}/attachments/${linked.body.attachment.id}`, { token: other.token })).status).toBe(404);
+  });
+
+  it('links a slip to a voucher already on the server', async () => {
+    const m = await moneySetup(t);
+    const inr = (minor: number) => ({ minor, currency: 'INR' });
+    const jv = await t.post(
+      `${m.c}/vouchers`,
+      { kind: 'journal', date: '2026-09-29', lines: [{ account: 'sys:roundOff', debit: inr(1_000), credit: inr(0) }, { account: 'sys:otherIncome', debit: inr(0), credit: inr(1_000) }] },
+      { token: m.token },
+    );
+    expect(jv.status).toBe(201);
+    const slip = await t.post(`${m.c}/attachments`, { name: 'slip.png', mimeType: 'image/png', size: 10, entityType: 'voucher', entityId: jv.body.id }, { token: m.token });
+    expect(slip.status).toBe(201);
+    const stranger = await ownerWithCompany(t);
+    expect((await t.post(`${stranger.c}/attachments`, { name: 'x.png', mimeType: 'image/png', size: 10, entityType: 'voucher', entityId: jv.body.id }, { token: stranger.token })).status).toBe(422);
   });
 
   it('refuses oversize files and other types', async () => {

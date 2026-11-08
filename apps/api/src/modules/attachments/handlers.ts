@@ -24,6 +24,8 @@ const ENTITY_TABLES: Record<string, string> = {
   expense: 'expenses',
   party: 'parties',
   item: 'items',
+  // Receipt and journal vouchers keep their slips (books links them as entity_type 'voucher').
+  voucher: 'vouchers',
 };
 
 export async function attachmentToWire(deps: Deps, row: AttachmentRow): Promise<Schema<'Attachment'>> {

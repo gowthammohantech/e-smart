@@ -104,5 +104,13 @@ describe('payment approvals (RULES 6.14)', () => {
     expect((await t.get(`${m.c}/payment-requests`, { token: m.token })).body.data).toEqual([]);
     expect((await t.get(`${m.c}/payment-requests`, { token: m.token, query: { status: 'rejected' } })).body.data).toHaveLength(1);
     expect((await t.get(`${m.c}/payments`, { token: m.token, query: { direction: 'paid' } })).body.data.length).toBe(before + 1);
+
+    // A foreign-currency payment sent without its rate can't be read against a rupee limit: it waits.
+    const usd = (minor: number, extra: object = {}) => pay(minor, clerk.token, { amount: { minor, currency: 'USD' }, currency: 'USD', ...extra });
+    const noRate = await usd(1_000);
+    expect(noRate.status).toBe(409);
+    expect(noRate.body.code).toBe('PAYMENT_HELD');
+    // With its rate it is judged at that rate ($10 at 85 = ₹850, under the rule).
+    expect((await usd(1_000, { exchangeRate: 85 })).body.code).not.toBe('PAYMENT_HELD');
   });
 });

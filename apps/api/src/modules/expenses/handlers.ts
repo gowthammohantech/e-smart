@@ -8,7 +8,7 @@ import { money } from '@esmart/core/lib/money';
 import { schema } from '@esmart/db';
 import { defineHandlers, type Ctx } from '../../context';
 import { checkIfMatch, setEtag } from '../../http/etag';
-import { notFound, planUpgradeRequired, preconditionFailed, unprocessable, type Issue } from '../../http/errors';
+import { conflict, notFound, planUpgradeRequired, preconditionFailed, unprocessable, type Issue } from '../../http/errors';
 import { keyset } from '../../http/pagination';
 import { recordChange, type DbOrTx } from '../../lib/audit';
 import { newId } from '../../lib/ids';
@@ -29,6 +29,36 @@ async function findExpense(ctx: AnyCtx, db: DbOrTx, id: string): Promise<Expense
   const [row] = await db.select().from(E).where(and(eq(E.companyId, ctx.company.id), eq(E.id, id)));
   if (!row || (ctx.user.branchIds.length && !ctx.user.branchIds.includes(row.branchId))) throw notFound('Expense');
   return row;
+}
+
+/** The number of a live invoice that bills this expense on to its customer, if one does. */
+async function recoveringInvoice(db: DbOrTx, expenseId: string): Promise<string | undefined> {
+  const L = schema.documentLines;
+  const D = schema.documents;
+  const [hit] = await db
+    .select({ number: D.number })
+    .from(L)
+    .innerJoin(D, eq(D.id, L.documentId))
+    .where(and(eq(L.expenseId, expenseId), notInArray(D.status, ['draft', 'cancelled', 'rejected'])))
+    .limit(1);
+  return hit ? (hit.number?.trim() || 'an invoice') : undefined;
+}
+
+/**
+ * An expense billed on to a customer stays as it was billed: the invoice credits
+ * Reimbursements recoverable with this amount, so deleting it, or changing what
+ * was recovered, would leave that account short and the invoice line pointing at nothing.
+ */
+async function assertNotRecovered(db: DbOrTx, current: ExpenseRow, next?: { amountMinor: number; currency: string; billable: boolean; customerId: string | null }) {
+  if (next && next.amountMinor === current.amountMinor && next.currency === current.currency.trim() && next.billable === current.billable && next.customerId === current.customerId) return;
+  const invoice = await recoveringInvoice(db, current.id);
+  if (!invoice) return;
+  throw conflict(
+    'EXPENSE_RECOVERED',
+    next
+      ? `This expense is billed on invoice ${invoice}; cancel that invoice before changing its amount, currency, customer or billable flag`
+      : `This expense is billed on invoice ${invoice}; cancel that invoice before deleting it`,
+  );
 }
 
 async function toWire(db: DbOrTx, row: ExpenseRow) {
@@ -253,6 +283,7 @@ export const expensesHandlers = defineHandlers({
     assertPeriodOpen(ctx.company, ctx.body.date);
     const cols = await prepare(ctx, ctx.db, ctx.body, current);
     const row = await ctx.db.transaction(async (tx) => {
+      await assertNotRecovered(tx, current, cols);
       const before = await toWire(tx, current);
       const [updated] = await tx
         .update(E)
@@ -286,6 +317,7 @@ export const expensesHandlers = defineHandlers({
     checkIfMatch(ctx.req, current.version);
     assertPeriodOpen(ctx.company, current.date);
     await ctx.db.transaction(async (tx) => {
+      await assertNotRecovered(tx, current);
       const before = await toWire(tx, current);
       await linkExpenseAttachments(tx, ctx.company.id, current.id, []);
       await tx.update(E).set({ recurringParentId: null }).where(and(eq(E.companyId, ctx.company.id), eq(E.recurringParentId, current.id)));

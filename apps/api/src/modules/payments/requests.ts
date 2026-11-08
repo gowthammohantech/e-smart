@@ -13,6 +13,7 @@ import { newId } from "../../lib/ids";
 import { notify } from "../../lib/notify";
 import { money } from "../../lib/wire";
 import { APPROVERS, type ApprovalRule } from "../documents/approvals";
+import { rateToBase } from "../documents/engine";
 import {
   linkPaymentAttachments,
   writePayment,
@@ -33,7 +34,7 @@ type PaymentBody = Schema<"Payment">;
 export function paymentLimit(
   company: CompanyRow,
   user: AuthUser,
-  body: Pick<PaymentBody, "direction" | "refundOf">,
+  body: Pick<PaymentBody, "direction" | "refundOf" | "currency" | "exchangeRate">,
 ): number | null {
   if (
     APPROVERS.includes(user.role) ||
@@ -45,13 +46,25 @@ export function paymentLimit(
     (company.approvalRules as
       (ApprovalRule | { kind: "payment"; overMinor: number })[] | null) ?? []
   ).find((r) => r.kind === "payment");
-  return rule ? rule.overMinor : null;
+  if (!rule) return null;
+  // A foreign-currency payment sent without its rate can't be measured against a limit in base
+  // currency (its minor units would be read as rupees), so it always waits for an approver.
+  if (body.currency !== company.baseCurrency.trim() && !body.exchangeRate) return 0;
+  return rule.overMinor;
 }
 
 /** In base currency: the amount at the rate given, or as it is when no rate is given. */
 export const amountInBase = (
   body: Pick<PaymentBody, "amount" | "exchangeRate">,
 ) => Math.round(body.amount.minor * (body.exchangeRate ?? 1));
+
+/** What a held request is worth in base currency: at the rate sent, else the day's rate on file. */
+async function requestAmountInBase(tx: DbOrTx, company: CompanyRow, body: PaymentBody): Promise<number> {
+  const base = company.baseCurrency.trim();
+  if (body.currency === base || body.exchangeRate) return amountInBase(body);
+  const rate = await rateToBase(tx, company.id, body.currency, base, body.date);
+  return Math.round(body.amount.minor * (rate ?? 1));
+}
 
 /** Keeps the payment as a request and tells the approvers; the caller answers 409 PAYMENT_HELD. */
 export async function holdPayment(
@@ -70,7 +83,7 @@ export async function holdPayment(
       body,
       partyId: body.partyId,
       direction: body.direction,
-      amountBaseMinor: amountInBase(body),
+      amountBaseMinor: await requestAmountInBase(tx, company, body),
       requestedBy: user.id,
       createdAt: now,
       updatedAt: now,
