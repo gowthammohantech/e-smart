@@ -90,7 +90,16 @@ export const useStartup = create<{ state: 'loading' | 'ready' | 'offline' }>(() 
  * server before the first screen. The first launch after the update also sends what an
  * offline-first build left unsent, then forgets its copy of the book.
  */
-export async function startUp(): Promise<void> {
+export function startUp(): Promise<void> {
+  // One at a time: a second call while one runs (the layout loads twice on the web) joins it.
+  starting ??= start().finally(() => {
+    starting = null;
+  });
+  return starting;
+}
+let starting: Promise<void> | null = null;
+
+async function start(): Promise<void> {
   useStartup.setState({ state: 'loading' });
   const legacy = await takeLegacyBookOnce();
   try {
