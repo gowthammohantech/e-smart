@@ -5,7 +5,7 @@ import type { BusinessDocument, Party, Payment } from '@esmart/core/types';
 import { schema } from '@esmart/db';
 import type { CompanyRow, Deps } from '../../context';
 import type { DbOrTx } from '../../lib/audit';
-import { notify } from '../../lib/notify';
+import { notify, noteDate, noteMoney } from '../../lib/notify';
 import { money } from '../../lib/wire';
 import { today } from '../documents/lifecycle';
 
@@ -101,18 +101,20 @@ export async function remindMsmeDue(deps: Deps): Promise<number> {
     for (const r of msmePayables(asOf, bills, parties, payments)) {
       if (r.daysLeft > MSME_WARN_DAYS) continue;
       const overdue = r.daysLeft < 0;
-      const title = overdue ? `${r.number} to ${names.get(r.partyId)} is past the MSME limit` : `${r.number} to ${names.get(r.partyId)} is due by ${r.dueDate}`;
+      const title = overdue ? `${r.number} to ${names.get(r.partyId)} is past the MSME limit` : `${r.number} to ${names.get(r.partyId)} is due by ${noteDate(r.dueDate)}`;
+      // Titles written before dates were formatted ("due by 2026-11-12") still count as already said.
+      const legacyTitle = overdue ? title : `${r.number} to ${names.get(r.partyId)} is due by ${r.dueDate}`;
       const N = schema.notifications;
-      const [already] = await deps.db.select({ id: N.id }).from(N).where(and(eq(N.companyId, companyId), eq(N.entityType, 'document'), eq(N.entityId, r.documentId), eq(N.title, title.slice(0, 200)))).limit(1);
+      const [already] = await deps.db.select({ id: N.id }).from(N).where(and(eq(N.companyId, companyId), eq(N.entityType, 'document'), eq(N.entityId, r.documentId), inArray(N.title, [title.slice(0, 200), legacyTitle.slice(0, 200)]))).limit(1);
       if (already) continue;
-      const owed = `${r.currency} ${(r.outstandingMinor / 100).toFixed(2)}`;
+      const owed = noteMoney(r.outstandingMinor, r.currency);
       await notify(deps.db, deps, {
         companyId,
         kind: 'compliance',
         title,
         body: overdue
-          ? `${owed} was due ${r.dueDate}. Interest runs at three times the bank rate, and an unpaid bill can't be deducted this year.`
-          : `${owed} to a ${r.msmeType} enterprise; pay by ${r.dueDate} to stay within the 45 days the MSMED Act allows.`,
+          ? `${owed} was due ${noteDate(r.dueDate)}. Interest runs at three times the bank rate, and an unpaid bill can't be deducted this year.`
+          : `${owed} to a ${r.msmeType} enterprise; pay by ${noteDate(r.dueDate)} to stay within the 45 days the MSMED Act allows.`,
         entityType: 'document',
         entityId: r.documentId,
       });

@@ -156,6 +156,6 @@ describe('paying micro and small suppliers on time', () => {
     t.setNow('2026-10-04T10:00:00Z');
     expect(await remindMsmeDue(t.deps)).toBe(1);
     const notes = await t.deps.db.select().from(schema.notifications).where(and(eq(schema.notifications.companyId, m.companyId), eq(schema.notifications.kind, 'compliance')));
-    expect(notes.map((n) => n.title)).toEqual([`${late.body.number} to Konkan Steel is past the MSME limit`, `${soon.body.number} to Konkan Steel is due by 2026-10-10`]);
+    expect(notes.map((n) => n.title)).toEqual([`${late.body.number} to Konkan Steel is past the MSME limit`, `${soon.body.number} to Konkan Steel is due by 10 Oct 2026`]);
   });
 });

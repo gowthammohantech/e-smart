@@ -183,6 +183,9 @@
   },
   "gstr1": {
     "outwardSupplies": "Outward supplies",
+    "month": "Return month",
+    "pickMonth": "Pick a month",
+    "notWholeMonth": "The range above isn't one whole month. A return is filed for a month.",
     "exportJson": "GSTN JSON (for the portal)",
     "emptyTable": "Nothing in this table",
     "emptyTableBody": "No document in the selected period falls into it.",
@@ -281,6 +284,9 @@
     "link": "Link to a bill",
     "linkTitle": "Which bill is it?",
     "linkEmpty": "No unclaimed bills from this supplier",
+    "exportExcel": "Export Excel",
+    "claimAskTitle": "Claim the credit for {{period}}?",
+    "claimAskBody": "The matched bills' input tax credit ({{amount}}) is booked for this period. Lines still to review aren't claimed.",
     "exportCsv": "Export CSV",
     "upload": "Upload 2B file",
     "uploaded": "GSTR-2B file read and matched",
@@ -387,6 +393,9 @@
       "sheet": "Detailed sheet"
     },
     "exportExcel": "Export Excel",
+    "exportPdf": "Export PDF",
+    "fileAskTitle": "File {{name}} for {{period}}?",
+    "fileAskBody": "Filing with the EVC code is final: a filed return can't be changed or withdrawn. Check the figures before you file.",
     "exportCsv": "Export CSV",
     "sheet": {
       "title31": "Outward and reverse-charge inward supplies (3.1, 3.1.1)",
@@ -641,6 +650,8 @@
     "existingHint": "A period is set off once. Reverse this entry to record it again.",
     "reverse": "Reverse",
     "reversed": "Set-off reversed",
+    "reverseAskTitle": "Reverse set-off {{number}}?",
+    "reverseAskBody": "The GST journal for this set-off is deleted, and the credit and cash it used are free again. You can post the set-off afresh.",
     "posted": "Set-off posted",
     "credit": "Paid from credit",
     "creditFrom": "{{head}} credit ({{amount}} available)",

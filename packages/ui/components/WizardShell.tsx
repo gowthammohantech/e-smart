@@ -1,4 +1,4 @@
-import React, { useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Animated, KeyboardAvoidingView, NativeScrollEvent, NativeSyntheticEvent, Platform, Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -11,6 +11,7 @@ import { Stepper } from './Stepper';
 import { SHOW_SCROLLBAR, useIsDesktop } from '../theme/breakpoints';
 import { ScrollKeepContext, type ScrollKeep } from './ScrollKeep';
 import { Illustration } from './Illustration';
+import { ConfirmDialog } from './ConfirmDialog';
 import { PageBackdrop } from './PageBackdrop';
 import { isIllustrationName } from '../illustrations/registry';
 import { useEntrance } from '../illustrations/motion';
@@ -24,7 +25,7 @@ export function WizardShell({
   steps,
   currentStep,
   children,
-  primaryLabel = 'Continue',
+  primaryLabel,
   onPrimary,
   primaryDisabled,
   secondaryLabel,
@@ -52,7 +53,17 @@ export function WizardShell({
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const desktop = useIsDesktop();
-  const stepKey = steps && currentStep !== undefined ? steps[currentStep] : undefined;
+  // A step outside the plan's list (country, branches) shows no "Step 0 of N" progress.
+  const hasSteps = !!steps && currentStep !== undefined && currentStep >= 0 && currentStep < steps.length;
+  const stepKey = hasSteps ? steps[currentStep] : undefined;
+  const primary = primaryLabel ?? tr('common:component.continue');
+  const [signOutOpen, setSignOutOpen] = useState(false);
+
+  // The browser tab names the step, not whichever page was open before.
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !title || typeof document === 'undefined') return;
+    document.title = `${title} · Elixir Books`;
+  }, [title]);
   const scene = stepKey ? `onboarding-${stepKey}` : undefined;
   const art = scene && isIllustrationName(scene) ? scene : undefined;
   const enter = useEntrance({ key: stepKey, rise: 10, duration: 300 });
@@ -88,12 +99,12 @@ export function WizardShell({
           <Animated.View style={[{ width: '100%', maxWidth: WIZARD_CONTENT_WIDTH, gap: t.spacing.xl }, enter]}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.xl }}>
             <View style={{ gap: t.spacing.sm, flex: 1 }}>
-              {steps && currentStep !== undefined ? (
+              {hasSteps ? (
                 <Text variant="caption" tone="primary" weight="700" style={{ textTransform: 'uppercase', letterSpacing: 0.8 }}>
                   {tr('onboarding:stepProgress', {
                     current: currentStep + 1,
-                    total: steps.length,
-                    step: tr(`onboarding:step.${steps[currentStep]}` as 'onboarding:step.tax'),
+                    total: steps!.length,
+                    step: tr(`onboarding:step.${steps![currentStep!]}` as 'onboarding:step.tax'),
                   })}
                 </Text>
               ) : null}
@@ -127,7 +138,7 @@ export function WizardShell({
             <View style={{ flex: 1 }} />
             {onSkip ? <Button title={tr('common:component.skip')} variant="secondary" onPress={onSkip} /> : null}
             {secondaryLabel && onSecondary ? <Button title={secondaryLabel} variant="ghost" onPress={onSecondary} /> : null}
-            <Button title={primaryLabel} onPress={onPrimary} disabled={primaryDisabled} iconRight="arrow-right" />
+            <Button title={primary} onPress={onPrimary} disabled={primaryDisabled} iconRight="arrow-right" />
           </View>
         </View>
       </View>
@@ -169,8 +180,15 @@ export function WizardShell({
               <Icon name="arrow-left" size={19} color={t.c.text} />
             </Pressable>
           ) : onSignOut ? (
-            <Pressable onPress={onSignOut} hitSlop={8} accessibilityRole="button" accessibilityLabel={tr('common:component.signOut')}>
-              <Text variant="small" tone="primary" weight="600">{tr('common:component.signOut')}</Text>
+            <Pressable
+              onPress={() => setSignOutOpen(true)}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel={tr('common:component.signOut')}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 36 }}
+            >
+              <Icon name="logout" size={16} color={t.c.muted} />
+              <Text variant="small" tone="muted" weight="600">{tr('common:component.signOut')}</Text>
             </Pressable>
           ) : (
             <View style={{ width: 36 }} />
@@ -182,19 +200,7 @@ export function WizardShell({
           ) : null}
         </View>
 
-        {steps && currentStep !== undefined ? <Stepper steps={steps.map((k) => tr(`onboarding:step.${k}` as 'onboarding:step.tax'))} current={currentStep} /> : null}
-
-        <Animated.View style={[{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }, enter]}>
-          <View style={{ gap: 6, flex: 1 }}>
-            <Text variant="h2">{title}</Text>
-            {subtitle ? (
-              <Text variant="small" tone="muted" style={{ lineHeight: 20 }}>
-                {subtitle}
-              </Text>
-            ) : null}
-          </View>
-          {art ? <Illustration name={art} height={76} /> : null}
-        </Animated.View>
+        {hasSteps ? <Stepper steps={steps!.map((k) => tr(`onboarding:step.${k}` as 'onboarding:step.tax'))} current={currentStep!} /> : null}
       </View>
 
       <ScrollView
@@ -209,6 +215,18 @@ export function WizardShell({
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={SHOW_SCROLLBAR}
       >
+        {/* The title scrolls with the form, so a short phone with the keyboard up keeps room for the fields. */}
+        <Animated.View style={[{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md, paddingTop: t.spacing.xs }, enter]}>
+          <View style={{ gap: 6, flex: 1 }}>
+            <Text variant="h2">{title}</Text>
+            {subtitle ? (
+              <Text variant="small" tone="muted" style={{ lineHeight: 20 }}>
+                {subtitle}
+              </Text>
+            ) : null}
+          </View>
+          {art ? <Illustration name={art} height={76} /> : null}
+        </Animated.View>
         {children}
       </ScrollView>
 
@@ -223,11 +241,25 @@ export function WizardShell({
           gap: t.spacing.sm,
         }}
       >
-        <Button title={primaryLabel} onPress={onPrimary} disabled={primaryDisabled} fullWidth />
+        <Button title={primary} onPress={onPrimary} disabled={primaryDisabled} fullWidth />
         {secondaryLabel && onSecondary ? (
           <Button title={secondaryLabel} variant="ghost" onPress={onSecondary} fullWidth />
         ) : null}
       </View>
+      {onSignOut ? (
+        <ConfirmDialog
+          visible={signOutOpen}
+          title={tr('common:component.signOutConfirmTitle')}
+          message={tr('common:component.signOutConfirmBody')}
+          confirmLabel={tr('common:component.signOut')}
+          icon="logout"
+          onConfirm={() => {
+            setSignOutOpen(false);
+            onSignOut();
+          }}
+          onCancel={() => setSignOutOpen(false)}
+        />
+      ) : null}
     </KeyboardAvoidingView>
     </ScrollKeepContext.Provider>
   );

@@ -1,7 +1,7 @@
 import { and, eq, gt, gte, inArray, isNotNull, isNull, lt, lte, sql } from 'drizzle-orm';
 import { schema } from '@esmart/db';
 import type { Deps } from '../../context';
-import { notify } from '../../lib/notify';
+import { notify, noteMoney } from '../../lib/notify';
 import { today } from './lifecycle';
 
 const D = schema.documents;
@@ -45,7 +45,7 @@ export async function reverseUnpaidItc(deps: Pick<Deps, 'db' | 'now'> & Deps): P
       companyId: bill.companyId,
       kind: 'compliance',
       title: `Input tax credit on ${bill.supplierDocNumber ?? bill.number} reversed`,
-      body: `Unpaid 180 days after its date: ${bill.currency.trim()} ${(bill.tax / 100).toFixed(2)} of credit goes back in this month's GSTR-3B until the bill is paid.`,
+      body: `Unpaid 180 days after its date: ${noteMoney(bill.tax, bill.currency)} of credit goes back in this month's GSTR-3B until the bill is paid.`,
       entityType: 'document',
       entityId: bill.id,
     });

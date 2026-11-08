@@ -57,13 +57,19 @@
     "receiptAttached": "Receipt attached",
     "withReceipt": "Receipt attached",
     "attachAReceipt": "Attach a receipt",
-    "tapToReplace": "Tap to replace",
+    "tapToReplace": "A new photo replaces it",
     "receiptHint": "Photo or scan of the bill",
     "recordExpense": "Record expense",
     "inputTaxRate": "Input tax ({{rate}})",
     "totalPaid": "Total paid",
     "expenseUpdated": "Expense updated",
-    "expenseRecorded": "Expense recorded"
+    "expenseRecorded": "Expense recorded",
+    "takePhoto": "Take photo",
+    "choosePhoto": "Choose photo",
+    "removeReceipt": "Remove receipt",
+    "receiptsOnFile_one": "{{count}} receipt attached",
+    "receiptsOnFile_other": "{{count}} receipts attached",
+    "cameraDenied": "Allow camera access to take a photo"
   },
   "tds": {
     "section": "TDS section",
@@ -107,7 +113,12 @@
     "nextDue": "Next due",
     "recorded": "Recorded",
     "attachmentCount_one": "{{count}} attachment",
-    "attachmentCount_other": "{{count}} attachments"
+    "attachmentCount_other": "{{count}} attachments",
+    "rcmTax": "GST under reverse charge ({{rate}})",
+    "paidToSupplier": "Paid to supplier",
+    "openAttachment": "Open attachment {{index}}",
+    "attachmentLabel": "Attachment {{index}}",
+    "attachmentFailed": "Couldn’t open the attachment"
   },
   "recurrence": {
     "none": "Does not repeat",
@@ -140,7 +151,15 @@
     "colRate": "Rate",
     "colSure": "Sure",
     "createExpense": "Create expense",
-    "createBill": "Create bill"
+    "createBill": "Create bill",
+    "dateFormat": "Type the date as YYYY-MM-DD (for example 2026-11-09), or it won’t carry into the form.",
+    "looksRight": "Looks right",
+    "looksRightA11y": "{{field}} looks right",
+    "uncheckedTitle_one": "{{count}} field hasn’t been checked",
+    "uncheckedTitle_other": "{{count}} fields haven’t been checked",
+    "uncheckedBody": "They may have been misread. You can still correct everything in the form before saving.",
+    "keepChecking": "Check them",
+    "viewPhoto": "View the bill full screen"
   },
   "boe": {
     "hint": "Imported goods: the bill of entry customs assessed. The IGST paid there is your input credit (3B 4A(1)), matched to 2B on this number.",

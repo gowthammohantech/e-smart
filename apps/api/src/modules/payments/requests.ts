@@ -10,7 +10,7 @@ import {
 import { conflict, notFound } from "../../http/errors";
 import { recordChange, type DbOrTx } from "../../lib/audit";
 import { newId } from "../../lib/ids";
-import { notify } from "../../lib/notify";
+import { notify, noteMoney } from "../../lib/notify";
 import { money } from "../../lib/wire";
 import { APPROVERS, type ApprovalRule } from "../documents/approvals";
 import { rateToBase } from "../documents/engine";
@@ -101,7 +101,7 @@ export async function holdPayment(
     companyId: company.id,
     kind: "system",
     title: "A payment is waiting for your approval",
-    body: `${user.name} asked to pay ${(row.amountBaseMinor / 100).toFixed(2)} ${company.baseCurrency.trim()}.`,
+    body: `${user.name} asked to pay ${noteMoney(row.amountBaseMinor, company.baseCurrency)}.`,
     entityType: "payment_request",
     entityId: row.id,
   });

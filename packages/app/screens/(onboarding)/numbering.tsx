@@ -9,11 +9,11 @@ import { Card } from '@esmart/ui/components/Card';
 import { Text } from '@esmart/ui/components/Text';
 import { nextStepRoute, onboardingSteps, stepIndex, useOnboardingStore } from '../../store/onboardingStore';
 import { financialYearOf, today } from '@esmart/core/lib/date';
-import { sanitizePrefix } from '@esmart/core/lib/validators';
+import { E_INVOICE_DOC_NUMBER_MAX, sanitizePrefix } from '@esmart/core/lib/validators';
 
 export default function NumberingStep() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['onboarding']);
+  const { t: tr } = useTranslation(['onboarding', 'settings']);
   const router = useRouter();
   const { draft, set } = useOnboardingStore();
 
@@ -22,6 +22,7 @@ export default function NumberingStep() {
   const preview = [draft.invoicePrefix.replace(/\/+$/, '') || 'INV', draft.includeFiscalYear ? fy.label.replace('FY ', '') : null, seq]
     .filter(Boolean)
     .join('/');
+  const tooLong = preview.length > E_INVOICE_DOC_NUMBER_MAX;
 
   return (
     <WizardShell
@@ -34,9 +35,15 @@ export default function NumberingStep() {
     >
       <Card style={{ alignItems: 'center', gap: 6, paddingVertical: t.spacing.xl }}>
         <Text variant="caption" tone="muted">{tr('onboarding:numbering.nextWillBe')}</Text>
-        <Text variant="h2" weight="700" style={{ color: t.c.primary, fontVariant: ['tabular-nums'] }}>
+        {/* A long prefix wraps rather than running off the card. */}
+        <Text variant="h2" weight="700" center style={{ color: t.c.primary, fontVariant: ['tabular-nums'], maxWidth: '100%' }}>
           {preview}
         </Text>
+        {tooLong ? (
+          <Text variant="caption" tone="warn" center accessibilityRole="alert">
+            {tr('settings:numbering.tooLongForEInvoice', { count: E_INVOICE_DOC_NUMBER_MAX })}
+          </Text>
+        ) : null}
       </Card>
 
       <View style={{ flexDirection: 'row', gap: t.spacing.md }}>

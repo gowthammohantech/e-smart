@@ -130,7 +130,25 @@
       "originalBill": "அசல் பில் எண்",
       "originalDate": "அசல் தேதி"
     },
-    "saveChanges": "மாற்றங்களைச் சேமி"
+    "saveChanges": "மாற்றங்களைச் சேமி",
+    "finaliseAction": {
+      "invoice": "விலைப்பட்டியலை வழங்கு",
+      "quote": "அனுப்பியதாகக் குறி",
+      "proforma": "அனுப்பியதாகக் குறி",
+      "salesOrder": "ஆர்டரை உறுதிசெய்",
+      "delivery": "டெலிவரி ஆனதாகக் குறி",
+      "salesReturn": "திருப்பத்தை அங்கீகரி",
+      "purchaseOrder": "ஆர்டரை உறுதிசெய்",
+      "goodsReceipt": "பெறப்பட்டதாகக் குறி",
+      "purchaseBill": "பில்லைப் பதிவுசெய்",
+      "purchaseReturn": "திருப்பத்தை அங்கீகரி",
+      "creditNote": "கிரெடிட் நோட்டை வழங்கு",
+      "debitNote": "டெபிட் நோட்டை வழங்கு",
+      "supplierCreditNote": "கிரெடிட் நோட்டைப் பதிவுசெய்",
+      "supplierDebitNote": "டெபிட் நோட்டைப் பதிவுசெய்",
+      "openingInvoice": "இறுதிசெய்",
+      "openingBill": "இறுதிசெய்"
+    }
   },
   "reimburse": {
     "title": "திரும்பப் பெற வேண்டிய {{count}} செலவுகள்",
@@ -231,7 +249,8 @@
       "undo": "செயல்தவிர்",
       "undoing": "சரிசெய்தல் செயல்தவிர்க்கப்படுகிறது…",
       "undone": "{{label}} உடனான சரிசெய்தல் செயல்தவிர்க்கப்பட்டது"
-    }
+    },
+    "editIssuedKind": "வழங்கப்பட்ட {{kind}} மாற்ற முடியாது. மீண்டும் தொடங்க நகலெடுக்கவும், அல்லது ரத்துசெய்யவும்."
   },
   "line": {
     "editLine": "வரிசையைத் திருத்து",
@@ -260,7 +279,12 @@
     "sacCode": "SAC குறியீடு",
     "taxWithRate": "வரி ({{rate}})",
     "costCentre": "செலவு மையம்",
-    "costCentreBill": "பில்லின் மையம்"
+    "costCentreBill": "பில்லின் மையம்",
+    "removeTitle": "இந்த வரிசையை நீக்கவா?",
+    "removeMessage": "{{name}} ஆவணத்திலிருந்து அதன் அளவு, விலை, தள்ளுபடியுடன் நீக்கப்படும்.",
+    "grossAmount": "விலை × அளவு",
+    "totalWithTax": "வரியுடன் வரிசை மொத்தம்",
+    "discountValue": "தள்ளுபடி ({{unit}})"
   },
   "payment": {
     "selectContact": "தொடர்பைத் தேர்வுசெய்",
@@ -338,8 +362,8 @@
     "fxLoss": "அந்நியச் செலாவணி நட்டம்",
     "fxGainSettlement": "தீர்வில் அந்நியச் செலாவணி லாபம்",
     "fxLossSettlement": "தீர்வில் அந்நியச் செலாவணி நட்டம்",
-    "recordPaymentMade": "செலுத்திய கட்டணத்தைப் பதிவு செய்",
-    "makePayment": "கட்டணம் செலுத்து",
+    "recordPaymentMade": "கட்டணத்தைப் பதிவு செய்",
+    "makePayment": "சப்ளையருக்குச் செலுத்து",
     "receivedFrom": "இவரிடமிருந்து பெறப்பட்டது: {{name}}",
     "paidTo": "இவருக்குச் செலுத்தப்பட்டது: {{name}}",
     "depositedInto": "வரவு வைக்கப்பட்ட கணக்கு",
@@ -359,7 +383,19 @@
     "advanceGoods": "அது பொருள்: பொருட்களுக்கான முன்பணத்தில் GST இல்லை",
     "advanceCess": "செஸ் %",
     "advanceCessIs": "செஸ் {{cess}}",
-    "advanceTaxable": "மதிப்பு {{value}}"
+    "advanceTaxable": "மதிப்பு {{value}}",
+    "deleteMessagePaid": "இது ஒதுக்கப்பட்ட பில்கள் மீண்டும் நிலுவைக்குச் செல்லும். இதைத் திரும்பப் பெற முடியாது.",
+    "settleAll": "அனைத்தையும் தீர்",
+    "sharePdf": "PDF பகிர்",
+    "downloadPdf": "PDF பதிவிறக்கு",
+    "editHint": "தொகையும் அது தீர்க்கும் ஆவணங்களும் பதிவு செய்தபடியே இருக்கும். அவற்றை மாற்ற, இந்தக் கட்டணத்தை நீக்கி மீண்டும் பதிவு செய்யவும்.",
+    "updated": "கட்டணம் புதுப்பிக்கப்பட்டது",
+    "openFailed": "நிலுவை ஆவணங்களை ஏற்ற முடியவில்லை",
+    "tdsSectionRequired": "சேமிக்க TDS பிரிவைத் தேர்ந்தெடுக்கவும்",
+    "applyingTo": "{{number}} க்குப் பயன்படுத்துகிறது",
+    "adjustmentOn": "{{number}} இல் {{label}}",
+    "noDueDate": "கெடு தேதி இல்லை",
+    "supplierRef": "சப்ளையர் எண் {{number}}"
   },
   "aging": {
     "overdue": "தாமதம்",

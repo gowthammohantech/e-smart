@@ -22,7 +22,7 @@ import {
   TaxCategory,
 } from '@esmart/core/types';
 import { Money, fromMajor, money, zero } from '@esmart/core/lib/money';
-import { addDaysISO, nowISO, today } from '@esmart/core/lib/date';
+import { addDaysISO, formatDate, nowISO, today } from '@esmart/core/lib/date';
 import { calculateDocument } from '@esmart/core/domain/lineCalc';
 import { formatNumber } from '@esmart/core/domain/numbering';
 import {
@@ -624,7 +624,7 @@ export function seedNotifications(
       companyId: d.companyId,
       kind: 'invoiceOverdue',
       title: `${d.number} is overdue`,
-      body: `Payment was due on ${d.dueDate}. Send a reminder to keep the follow-up moving.`,
+      body: `Payment was due on ${d.dueDate ? formatDate(d.dueDate) : 'an earlier date'}. Send a reminder to keep the follow-up moving.`,
       entityType: 'invoice',
       entityId: d.id,
       read: i > 1,
@@ -692,12 +692,16 @@ export function seedNotifications(
     .filter((b) => b.status === 'active')
     .sort((a, b) => a.validUpto.localeCompare(b.validUpto))[0];
   if (expiring) {
+    // A bill whose validity has already run out says so, rather than "expiring soon".
+    const expired = expiring.validUpto.slice(0, 10) < today();
     out.push({
       id: uid('ntf'),
       companyId: expiring.companyId,
       kind: 'compliance',
-      title: 'E-way bill expiring soon',
-      body: `${expiring.ewayBillNumber} for ${expiring.documentNumber} runs out on ${expiring.validUpto.slice(0, 10)}.`,
+      title: expired ? 'E-way bill expired' : 'E-way bill expiring soon',
+      body: expired
+        ? `${expiring.ewayBillNumber} for ${expiring.documentNumber} ran out on ${formatDate(expiring.validUpto.slice(0, 10))}.`
+        : `${expiring.ewayBillNumber} for ${expiring.documentNumber} runs out on ${formatDate(expiring.validUpto.slice(0, 10))}.`,
       entityType: 'ewayBill',
       entityId: expiring.id,
       read: false,

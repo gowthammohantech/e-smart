@@ -7,6 +7,8 @@ type OcrState = {
   result: OcrResult | null;
   setResult: (r: OcrResult | null) => void;
   updateField: (key: string, value: string) => void;
+  /** The person checked the value and it is right as read. */
+  confirmField: (key: string) => void;
 };
 
 export const useOcrStore = create<OcrState>((set, get) => ({
@@ -22,5 +24,10 @@ export const useOcrStore = create<OcrState>((set, get) => ({
         fields: r.fields.map((f) => (f.key === key ? { ...f, value, confidence: 1 } : f)),
       },
     });
+  },
+  confirmField: (key) => {
+    const r = get().result;
+    if (!r) return;
+    set({ result: { ...r, fields: r.fields.map((f) => (f.key === key ? { ...f, confidence: 1 } : f)) } });
   },
 }));

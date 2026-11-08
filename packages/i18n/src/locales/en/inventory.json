@@ -23,7 +23,8 @@
     "emptyFilter": "No items match this filter.",
     "a11yStock": "{{name}}, {{qty}} in stock",
     "a11yService": "{{name}}, service",
-    "setOpeningStock": "Set opening stock"
+    "setOpeningStock": "Set opening stock",
+    "itemCountMore": "{{count}}+ items"
   },
   "form": {
     "name": "Name",
@@ -167,7 +168,9 @@
     "branchNow": "{{branch}} now",
     "branchAfter": "{{branch}} after",
     "exceedsSource": "This is more than the source branch holds.",
-    "afterEmpty": "The stock at both branches, before and after, appears here once you choose an item."
+    "afterEmpty": "The stock at both branches, before and after, appears here once you choose an item.",
+    "sameBranch": "From and To are the same branch. Pick a different branch to move stock to.",
+    "checking": "Checking the stock at the source branch…"
   },
   "adjust": {
     "item": "Item",
@@ -215,7 +218,8 @@
     "a11yUse": "Use barcode for {{name}}",
     "lookUp": "Look up a code",
     "lookUpHint": "Type or paste it, or use a scanner that types for you",
-    "samplesHint": "Sample barcodes from your items"
+    "samplesHint": "Sample barcodes from your items",
+    "yourBarcodes": "Items with a barcode"
   },
   "lowStock": {
     "needAttention": "Need attention",
@@ -243,7 +247,9 @@
     "current": "Current",
     "openingQty": "Opening quantity",
     "branchHint": "Applies to the branch you are in",
-    "itemsEntered": "Items entered"
+    "itemsEntered": "Items entered",
+    "forBranch": "For {{branch}}",
+    "qtyFor": "Opening quantity for {{name}}"
   },
   "movements": {
     "search": "Search by item or reference",
@@ -253,7 +259,8 @@
     "count_one": "{{count}} movement",
     "count_other": "{{count}} movements",
     "unknownItem": "Unknown item",
-    "a11yRow": "{{name}}, {{type}}, {{qty}}"
+    "a11yRow": "{{name}}, {{type}}, {{qty}}",
+    "countMore": "{{count}}+ movements"
   },
   "ocr": {
     "nothingScanned": "Nothing scanned yet",
@@ -275,7 +282,9 @@
     "cameraDenied": "Allow camera access in Settings to scan a bill.",
     "galleryDenied": "Allow photo access in Settings to pick a bill.",
     "reading": "Reading the bill…",
-    "read": "Bill read. Check the details"
+    "read": "Bill read. Check the details",
+    "uploadPhoto": "Upload a photo of the bill",
+    "webNote": "Choose a clear photo or scan of the bill. If it can’t be read here, scan it with the Elixir Books app on your phone."
   },
   "catalog": {
     "search": "Search by name, SKU or HSN",

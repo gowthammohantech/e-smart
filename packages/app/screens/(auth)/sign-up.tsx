@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Linking, View } from 'react-native';
+import { Linking, Pressable, TextInput, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ApiError } from '@esmart/api-client';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
@@ -27,7 +27,9 @@ export default function SignUp() {
   const phone = usePhoneInput(verified ? verifiedPhone : undefined);
   const [password, setPassword] = useState('');
   const [accepted, setAccepted] = useState(false);
-  const [errors, setErrors] = useState<Errors<'name' | 'email' | 'phone' | 'password' | 'terms'>>({});
+  const [errors, setErrors] = useState<Errors<'name' | 'email' | 'phone' | 'password' | 'terms' | 'form'>>({});
+  const emailRef = useRef<TextInput>(null);
+  const passwordRef = useRef<TextInput>(null);
   const [busy, setBusy] = useState(false);
   // Read at once: Enter or a second tap can land before `busy` re-renders.
   const sending = useRef(false);
@@ -59,22 +61,47 @@ export default function SignUp() {
       .catch((err: unknown) => {
         sending.current = false;
         setBusy(false);
-        // A number someone else has already verified is a phone problem, not an email one.
+        // Each refusal goes beside the field it is about; anything else (no connection, a server fault) above the button.
         const message = describeError(err, tr);
-        setErrors(err instanceof ApiError && err.code === 'PHONE_TAKEN' ? { phone: message } : { email: message });
+        const code = err instanceof ApiError ? err.code : undefined;
+        if (code === 'EMAIL_TAKEN') setErrors({ email: message });
+        else if (code === 'PHONE_TAKEN' || code === 'OTP_INVALID') setErrors({ phone: message });
+        else setErrors({ form: message });
       });
   };
 
   return (
     <AuthShell title={tr('auth:signUp.title')} subtitle={tr('auth:signUp.subtitle')}>
-      <TextField label={tr('auth:signUp.name')} value={name} onChangeText={setName} placeholder={tr('auth:signUp.namePlaceholder')} icon="account-outline" error={errors.name} required />
       <TextField
+        label={tr('auth:signUp.name')}
+        value={name}
+        onChangeText={setName}
+        placeholder={tr('auth:signUp.namePlaceholder')}
+        icon="account-outline"
+        error={errors.name}
+        required
+        autoCapitalize="words"
+        autoComplete="name"
+        textContentType="name"
+        returnKeyType="next"
+        submitBehavior="submit"
+        onSubmitEditing={() => emailRef.current?.focus()}
+      />
+      <TextField
+        // React 19 hands `ref` to TextField, which passes it on to its input.
+        {...({ ref: emailRef } as object)}
         label={tr('auth:signUp.email')}
         value={email}
         onChangeText={setEmail}
         placeholder={tr('auth:signUp.emailPlaceholder')}
         keyboardType="email-address"
         autoCapitalize="none"
+        autoCorrect={false}
+        autoComplete="email"
+        textContentType="emailAddress"
+        returnKeyType="next"
+        submitBehavior="submit"
+        onSubmitEditing={() => passwordRef.current?.focus()}
         icon="email-outline"
         error={errors.email}
         required
@@ -89,11 +116,16 @@ export default function SignUp() {
         hint={verified ? tr('auth:signUp.mobileVerified') : tr('auth:signUp.mobileHint')}
       />
       <TextField
+        // React 19 hands `ref` to TextField, which passes it on to its input.
+        {...({ ref: passwordRef } as object)}
         label={tr('auth:signUp.password')}
         value={password}
         onChangeText={setPassword}
         placeholder={tr('auth:signUp.passwordHint')}
         secureTextEntry
+        autoComplete="new-password"
+        textContentType="newPassword"
+        returnKeyType="go"
         icon="lock-outline"
         error={errors.password}
         required
@@ -107,9 +139,9 @@ export default function SignUp() {
           onValueChange={setAccepted}
         />
         <Text variant="caption" tone="muted">
-          <Text variant="caption" tone="primary" onPress={() => void Linking.openURL(LEGAL.terms)}>{tr('auth:signUp.readTerms')}</Text>
+          <Text variant="caption" tone="primary" accessibilityRole="link" onPress={() => void Linking.openURL(LEGAL.terms)}>{tr('auth:signUp.readTerms')}</Text>
           {' · '}
-          <Text variant="caption" tone="primary" onPress={() => void Linking.openURL(LEGAL.privacy)}>{tr('auth:signUp.readPrivacy')}</Text>
+          <Text variant="caption" tone="primary" accessibilityRole="link" onPress={() => void Linking.openURL(LEGAL.privacy)}>{tr('auth:signUp.readPrivacy')}</Text>
         </Text>
         {errors.terms ? (
           <Text variant="caption" tone="bad">
@@ -118,11 +150,18 @@ export default function SignUp() {
         ) : null}
       </View>
 
+      {errors.form ? (
+        <Text variant="small" tone="bad" accessibilityRole="alert" accessibilityLiveRegion="polite">
+          {errors.form}
+        </Text>
+      ) : null}
       <Button title={tr('auth:signUp.submit')} onPress={submit} loading={busy} fullWidth />
 
-      <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 5, marginTop: t.spacing.sm }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 5, marginTop: t.spacing.sm }}>
         <Text variant="small" tone="muted">{tr('auth:signUp.haveAccount')}</Text>
-        <Text variant="small" tone="primary" weight="600" onPress={() => router.dismissTo('/(auth)/sign-in')}>{tr('auth:signUp.signIn')}</Text>
+        <Pressable onPress={() => router.dismissTo('/(auth)/sign-in')} hitSlop={12} accessibilityRole="link" style={{ paddingVertical: t.spacing.sm }}>
+          <Text variant="small" tone="primary" weight="600">{tr('auth:signUp.signIn')}</Text>
+        </Pressable>
       </View>
     </AuthShell>
   );

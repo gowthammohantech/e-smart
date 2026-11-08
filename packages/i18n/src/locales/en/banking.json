@@ -96,6 +96,8 @@
     "excludedToast": "Line excluded",
     "unmatch": "Unmatch",
     "unmatchedToast": "Match undone; the line is back in To explain",
+    "unmatchAskTitle": "Undo this match?",
+    "unmatchAskBody": "The line goes back to To explain and is no longer reconciled with {{record}}. The record itself stays in the books.",
     "include": "Include",
     "includedToast": "Line back in To explain",
     "openRecord": "Open record",

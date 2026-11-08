@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Animated, KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -40,6 +40,12 @@ export function AuthShell({
   const insets = useSafeAreaInsets();
   const breakpoint = useBreakpoint();
   const enter = useEntrance({ rise: 12, duration: 320 });
+
+  // The browser tab names this page, not whichever page was open before.
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !title || typeof document === 'undefined') return;
+    document.title = `${title} · Elixir Books`;
+  }, [title]);
 
   // A desktop browser shows this beside the brand panel: a centred form
   // column with a text back link, and no phone safe-area padding. The logo is

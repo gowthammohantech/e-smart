@@ -57,13 +57,19 @@
     "receiptAttached": "ரசீது இணைக்கப்பட்டது",
     "withReceipt": "ரசீதுடன்",
     "attachAReceipt": "ஒரு ரசீதை இணை",
-    "tapToReplace": "மாற்ற தட்டவும்",
+    "tapToReplace": "புதிய புகைப்படம் இதை மாற்றும்",
     "receiptHint": "பில்லின் புகைப்படம் அல்லது ஸ்கேன்",
     "recordExpense": "செலவைப் பதிவுசெய்",
     "inputTaxRate": "உள்ளீட்டு வரி ({{rate}})",
     "totalPaid": "மொத்தம் செலுத்தியது",
     "expenseUpdated": "செலவு புதுப்பிக்கப்பட்டது",
-    "expenseRecorded": "செலவு பதிவுசெய்யப்பட்டது"
+    "expenseRecorded": "செலவு பதிவுசெய்யப்பட்டது",
+    "takePhoto": "புகைப்படம் எடு",
+    "choosePhoto": "புகைப்படம் தேர்ந்தெடு",
+    "removeReceipt": "ரசீதை நீக்கு",
+    "receiptsOnFile_one": "{{count}} ரசீது இணைக்கப்பட்டுள்ளது",
+    "receiptsOnFile_other": "{{count}} ரசீதுகள் இணைக்கப்பட்டுள்ளன",
+    "cameraDenied": "புகைப்படம் எடுக்க கேமரா அனுமதி தேவை"
   },
   "tds": {
     "section": "TDS பிரிவு",
@@ -107,7 +113,12 @@
     "nextDue": "அடுத்த தவணை",
     "recorded": "பதிவுசெய்தது",
     "attachmentCount_one": "{{count}} இணைப்பு",
-    "attachmentCount_other": "{{count}} இணைப்புகள்"
+    "attachmentCount_other": "{{count}} இணைப்புகள்",
+    "rcmTax": "தலைகீழ் வரி GST ({{rate}})",
+    "paidToSupplier": "சப்ளையருக்குச் செலுத்தியது",
+    "openAttachment": "இணைப்பு {{index}} ஐத் திற",
+    "attachmentLabel": "இணைப்பு {{index}}",
+    "attachmentFailed": "இணைப்பைத் திறக்க முடியவில்லை"
   },
   "recurrence": {
     "none": "மீண்டும் வராது",
@@ -140,7 +151,15 @@
     "colRate": "விலை",
     "colSure": "உறுதி",
     "createExpense": "செலவை உருவாக்கு",
-    "createBill": "பில்லை உருவாக்கு"
+    "createBill": "பில்லை உருவாக்கு",
+    "dateFormat": "தேதியை ஆண்டு-மாதம்-நாள் வடிவில் உள்ளிடவும் (எ.கா. 2026-11-09); இல்லையெனில் படிவத்துக்குச் செல்லாது.",
+    "looksRight": "சரியாக உள்ளது",
+    "looksRightA11y": "{{field}} சரியாக உள்ளது",
+    "uncheckedTitle_one": "{{count}} புலம் சரிபார்க்கப்படவில்லை",
+    "uncheckedTitle_other": "{{count}} புலங்கள் சரிபார்க்கப்படவில்லை",
+    "uncheckedBody": "அவை தவறாகப் படிக்கப்பட்டிருக்கலாம். சேமிக்கும் முன் படிவத்தில் எல்லாவற்றையும் திருத்தலாம்.",
+    "keepChecking": "சரிபார்",
+    "viewPhoto": "பில்லை முழுத் திரையில் பார்"
   },
   "boe": {
     "hint": "இறக்குமதிப் பொருட்கள்: சுங்கம் மதிப்பிட்ட நுழைவுச் சீட்டு. அங்கு செலுத்திய IGST உங்கள் உள்ளீட்டு வரவு (3B 4A(1)); இந்த எண்ணின்படி 2B உடன் பொருத்தப்படும்.",

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View } from 'react-native';
+import { Platform, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ApiError } from '@esmart/api-client';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
@@ -49,13 +49,18 @@ export function DeleteAccountSheet({ visible, onClose }: { visible: boolean; onC
     onClose();
   };
 
+  // Sending: a second tap while the first request is out would send a second SMS.
+  const [sending, setSending] = useState(false);
   const sendCode = async () => {
-    if (!user?.phone) return;
+    if (!user?.phone || sending) return;
+    setSending(true);
     setError(null);
     try {
       setOtp(await remoteSession.requestOtp(user.phone));
     } catch (err) {
       setError(describeError(err, tr));
+    } finally {
+      setSending(false);
     }
   };
 
@@ -132,9 +137,18 @@ export function DeleteAccountSheet({ visible, onClose }: { visible: boolean; onC
 
         {byPhone ? (
           otp ? (
-            <TextField label={tr('settings:deleteAccount.code')} value={code} onChangeText={setCode} keyboardType="number-pad" maxLength={6} icon="message-processing-outline" />
+            <TextField
+              label={tr('settings:deleteAccount.code')}
+              value={code}
+              onChangeText={(v) => setCode(v.replace(/[^0-9]/g, ''))}
+              keyboardType="number-pad"
+              maxLength={6}
+              textContentType="oneTimeCode"
+              autoComplete={Platform.OS === 'web' ? 'one-time-code' : 'sms-otp'}
+              icon="message-processing-outline"
+            />
           ) : (
-            <Button title={tr('settings:deleteAccount.sendCode', { phone: user?.phone ?? '' })} variant="secondary" onPress={() => void sendCode()} disabled={!online} />
+            <Button title={tr('settings:deleteAccount.sendCode', { phone: user?.phone ?? '' })} variant="secondary" onPress={() => void sendCode()} loading={sending} disabled={!online || sending} />
           )
         ) : (
           <TextField label={tr('settings:deleteAccount.password')} value={password} onChangeText={setPassword} secureTextEntry autoCapitalize="none" icon="lock-outline" />

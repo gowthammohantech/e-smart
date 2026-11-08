@@ -31,7 +31,16 @@
       "advanceCaption": "Paid ahead, not yet applied",
       "overdueCaption": "Past the due date"
     },
-    "tabOther": "Other"
+    "tabOther": "Other",
+    "otherCount_one": "{{count}} contact",
+    "otherCount_other": "{{count}} contacts",
+    "noOther": "No other contacts yet",
+    "searchOther": "Search contacts",
+    "advanceAmount": "{{amount}} advance",
+    "inAdvance": "in advance",
+    "newCustomer": "New customer",
+    "newSupplier": "New supplier",
+    "newContact": "New contact"
   },
   "form": {
     "businessName": "Business name",
@@ -138,7 +147,7 @@
     "noneYet": "None yet",
     "notRegistered": "Not registered",
     "added": "Added",
-    "pay": "Pay",
+    "pay": "Pay supplier",
     "tabOpen": "Open",
     "tabDocuments": "Documents",
     "tabPayments": "Payments",

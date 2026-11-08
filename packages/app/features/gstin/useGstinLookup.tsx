@@ -34,7 +34,8 @@ export function useGstinLookup({ gstin, opened, enabled = true, fill }: { gstin:
   });
 
   const clean = normalizeGstin(gstin);
-  const ready = enabled && clean.length === 15 && isValidGstin(clean) && clean !== normalizeGstin(opened ?? '');
+  const valid = enabled && clean.length === 15 && isValidGstin(clean);
+  const ready = valid && clean !== normalizeGstin(opened ?? '');
 
   useEffect(() => {
     if (!ready) return;
@@ -54,7 +55,9 @@ export function useGstinLookup({ gstin, opened, enabled = true, fill }: { gstin:
     };
   }, [ready, clean]);
 
-  if (!ready) return {};
+  // A form that records the filled GSTIN as its `opened` one keeps the tick it just earned.
+  const justFilled = valid && outcome?.gstin === clean && outcome.kind === 'found';
+  if (!ready && !justFilled) return {};
   if (outcome?.gstin !== clean) return { hint: tr('common:gstinLookup.fetching'), suffix: <ActivityIndicator size="small" color={t.c.primary} /> };
   if (outcome.kind === 'notFound') return { hint: tr('common:gstinLookup.notFound') };
   if (outcome.kind === 'failed') return { hint: tr('common:gstinLookup.failed') };

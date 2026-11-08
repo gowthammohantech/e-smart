@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useRouter } from 'expo-router';
 import { AuthShell } from '@esmart/ui/components/AuthShell';
@@ -15,16 +15,26 @@ export default function ForgotPassword() {
   const [email, setEmail] = useState('');
   const [errors, setErrors] = useState<Errors<'email'>>({});
   const [sent, setSent] = useState(false);
+  const [busy, setBusy] = useState(false);
+  // Read at once: a second tap or Enter can land before `busy` re-renders, and would send a second email.
+  const sending = useRef(false);
 
   const submit = () => {
+    if (sending.current) return;
     const next = { email: required(email, tr('errors:field.email')) ?? validEmail(email) };
     setErrors(next);
     if (hasErrors(next)) return;
+    sending.current = true;
+    setBusy(true);
     // The server answers the same whether or not the email is registered.
     remoteSession
       .forgotPassword(email)
       .then(() => setSent(true))
-      .catch((err: unknown) => setErrors({ email: describeError(err, tr) }));
+      .catch((err: unknown) => setErrors({ email: describeError(err, tr) }))
+      .finally(() => {
+        sending.current = false;
+        setBusy(false);
+      });
   };
 
   if (sent) {
@@ -42,7 +52,7 @@ export default function ForgotPassword() {
   }
 
   return (
-    <AuthShell title={tr('auth:forgot.title')} subtitle={tr('auth:forgot.subtitle')}>
+    <AuthShell title={tr('auth:forgot.title')} subtitle={tr('auth:forgot.subtitle')} locked={busy}>
       <TextField
         label={tr('auth:forgot.email')}
         value={email}
@@ -50,11 +60,16 @@ export default function ForgotPassword() {
         placeholder={tr('auth:forgot.emailPlaceholder')}
         keyboardType="email-address"
         autoCapitalize="none"
+        autoCorrect={false}
+        autoComplete="email"
+        textContentType="emailAddress"
+        returnKeyType="send"
+        onSubmitEditing={submit}
         icon="email-outline"
         error={errors.email}
         required
       />
-      <Button title={tr('auth:forgot.submit')} onPress={submit} fullWidth />
+      <Button title={tr('auth:forgot.submit')} onPress={submit} loading={busy} fullWidth />
     </AuthShell>
   );
 }

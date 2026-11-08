@@ -4,7 +4,10 @@ import {
   AccessibilityInfo,
   Animated,
   Easing,
+  Keyboard,
   KeyboardAvoidingView,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
   Platform,
   Pressable,
   ScrollView,
@@ -14,6 +17,7 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
+import { ApiError } from '@esmart/api-client';
 import { Icon, type IconName } from '@esmart/ui/components/Icon';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
@@ -32,7 +36,8 @@ import { useHomeHub } from '../../remote/queries';
 import { hasModule } from '@esmart/core/domain/plan';
 import { useGoBack } from '../../navigation/useGoBack';
 
-type Message = { id: string; from: 'me' | 'lixi'; reply: LixiReply };
+/** `pending`: a write this reply prepared, still to confirm; it can be reopened after a Cancel. */
+type Message = { id: string; from: 'me' | 'lixi'; reply: LixiReply; pending?: PendingLixiAction };
 
 type LixiChatProps = {
   /** Set when the chat sits in the web desktop's side panel instead of being a screen. */
@@ -63,11 +68,41 @@ export default function LixiChat({ onClose, initialAsk }: LixiChatProps = {}) {
   /** Only a browser shows the composer focused; the phone keeps its look. */
   const [composerFocused, setComposerFocused] = useState(false);
   const [thinking, setThinking] = useState(false);
-  const [soundOn, setSoundOn] = useState(false);
   const [pending, setPending] = useState<Extract<LixiAction, { type: 'route' }> | null>(null);
   // A write the server's Lixi prepared; nothing happens until it is confirmed.
   const [action, setAction] = useState<PendingLixiAction | null>(null);
   const scroll = useRef<ScrollView>(null);
+  // Each chat has its own number: an answer that arrives after "New chat" belongs to the old one and is dropped.
+  const chat = useRef(0);
+  // Follows new messages only while the person is at the bottom; reading back up isn't yanked down.
+  const atBottom = useRef(true);
+  const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+    atBottom.current = contentOffset.y + layoutMeasurement.height >= contentSize.height - 80;
+  };
+  // With the keyboard up, the composer sits on it, not above the home-indicator inset.
+  const [keyboardUp, setKeyboardUp] = useState(false);
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    const show = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', () => setKeyboardUp(true));
+    const hide = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', () => setKeyboardUp(false));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+
+  const newChat = () => {
+    if (thinking) return;
+    chat.current += 1;
+    setMessages([]);
+    setAction(null);
+    setPending(null);
+  };
+
+  /** Another go at a question, unless asking again can't help (the month's allowance is used, or asking too fast). */
+  const retryFor = (err: unknown, question: string): LixiAction[] | undefined =>
+    err instanceof ApiError && (err.status === 429 || err.status === 403) ? undefined : [{ type: 'ask', label: tr('lixi:ui.tryAgain'), question }];
 
   const send = (raw: string) => {
     const text = raw.trim();
@@ -75,39 +110,61 @@ export default function LixiChat({ onClose, initialAsk }: LixiChatProps = {}) {
     if (Platform.OS !== 'web') Haptics.selectionAsync().catch(() => {});
     setDraft('');
     setMessages((m) => [...m, { id: `${Date.now()}-me`, from: 'me', reply: { text } }]);
+    // A question of their own brings the view down to the answer.
+    atBottom.current = true;
     if (!remote) {
-      // No company open yet: nothing to answer from.
-      say({ text: tr('lixi:ui.unavailable') });
+      // No company open yet: nothing to answer from, and it isn't the connection.
+      say({ text: tr('lixi:ui.noCompany') });
       return;
     }
     setThinking(true);
+    const asking = chat.current;
     const turns = [...messages, { from: 'me' as const, reply: { text } }].map((m) => ({
       role: m.from === 'me' ? ('user' as const) : ('assistant' as const),
       text: m.reply.text,
     }));
     askRemote(turns, i18n.language)
       .then((res) => {
+        if (asking !== chat.current) return;
         // Offline or the model is down: say so, and offer to ask again.
-        say(res?.reply ?? { text: tr('lixi:ui.unavailable'), actions: [{ type: 'ask', label: tr('lixi:ui.tryAgain'), question: text }] });
+        say(res?.reply ?? { text: tr('lixi:ui.unavailable'), actions: [{ type: 'ask', label: tr('lixi:ui.tryAgain'), question: text }] }, res?.pendingAction);
         if (res?.pendingAction) setAction(res.pendingAction);
       })
-      .catch((err) => say({ text: describeError(err, tr) }));
+      .catch((err) => {
+        if (asking !== chat.current) return;
+        say({ text: describeError(err, tr), actions: retryFor(err, text) });
+      });
   };
 
-  const say = (reply: LixiReply) => {
-    setMessages((m) => [...m, { id: `${Date.now()}-lixi`, from: 'lixi', reply }]);
+  const say = (reply: LixiReply, pendingAction?: PendingLixiAction) => {
+    setMessages((m) => [...m, { id: `${Date.now()}-lixi`, from: 'lixi', reply, ...(pendingAction ? { pending: pendingAction } : {}) }]);
     setThinking(false);
     AccessibilityInfo.announceForAccessibility(reply.text);
   };
 
   const confirmAction = (a: PendingLixiAction) => {
     setAction(null);
+    // Confirmed once: its bubble no longer offers it.
+    setMessages((m) => m.map((x) => (x.pending?.token === a.token ? { ...x, pending: undefined } : x)));
     setThinking(true);
+    const asking = chat.current;
     confirmRemote(a)
-      .then((res) =>
-        say(res.ok ? res.reply : { text: res.expired ? tr('lixi:ui.actionExpired') : tr('lixi:ui.actionFailed', { reason: res.reason }) }),
-      )
-      .catch((err) => say({ text: describeError(err, tr) }));
+      .then((res) => {
+        if (asking !== chat.current) return;
+        if (res.ok) return say(res.reply);
+        const text = res.expired
+          ? tr('lixi:ui.actionExpired')
+          : res.offline
+            ? tr('lixi:ui.unavailable')
+            : res.reason
+              ? tr('lixi:ui.actionFailed', { reason: res.reason })
+              : tr('lixi:ui.actionFailedGeneric');
+        say({ text });
+      })
+      .catch((err) => {
+        if (asking !== chat.current) return;
+        say({ text: describeError(err, tr) });
+      });
   };
 
   const act = (a: LixiAction) => {
@@ -164,28 +221,20 @@ export default function LixiChat({ onClose, initialAsk }: LixiChatProps = {}) {
               {thinking ? tr('lixi:ui.reading') : tr('lixi:ui.subtitleRemote')}
             </Text>
           </View>
+          {/* Not while an answer is on its way: it would land in the new chat, or ask to confirm something no longer shown. */}
           {messages.length ? (
             <Pressable
-              onPress={() => setMessages([])}
+              onPress={newChat}
+              disabled={thinking}
               hitSlop={8}
               accessibilityRole="button"
               accessibilityLabel={tr('lixi:ui.newChat')}
-              style={{ padding: 6 }}
+              accessibilityState={{ disabled: thinking }}
+              style={{ padding: 6, opacity: thinking ? 0.4 : 1 }}
             >
               <Icon name="broom" size={20} color={t.c.muted} />
             </Pressable>
           ) : null}
-          {/* Only the switch for now; it doesn't change anything yet. */}
-          <Pressable
-            onPress={() => setSoundOn((on) => !on)}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel={soundOn ? tr('lixi:ui.mute') : tr('lixi:ui.unmute')}
-            accessibilityState={{ selected: soundOn }}
-            style={{ padding: 6 }}
-          >
-            <Feather name={soundOn ? 'volume-2' : 'volume-x'} size={20} color={t.c.muted} />
-          </Pressable>
           <Pressable
             onPress={onClose}
             hitSlop={8}
@@ -231,10 +280,13 @@ export default function LixiChat({ onClose, initialAsk }: LixiChatProps = {}) {
         </View>
         {messages.length ? (
           <Pressable
-            onPress={() => setMessages([])}
+            onPress={newChat}
+            disabled={thinking}
             hitSlop={10}
             accessibilityRole="button"
             accessibilityLabel={tr('lixi:ui.newChat')}
+            accessibilityState={{ disabled: thinking }}
+            style={{ opacity: thinking ? 0.4 : 1 }}
           >
             <Icon name="broom" size={22} color={t.c.muted} />
           </Pressable>
@@ -249,7 +301,11 @@ export default function LixiChat({ onClose, initialAsk }: LixiChatProps = {}) {
         style={{ flex: 1 }}
         contentContainerStyle={{ padding: t.spacing.lg, gap: t.spacing.md, flexGrow: 1 }}
         keyboardShouldPersistTaps="handled"
-        onContentSizeChange={() => scroll.current?.scrollToEnd({ animated: true })}
+        onScroll={onScroll}
+        scrollEventThrottle={64}
+        onContentSizeChange={() => {
+          if (atBottom.current) scroll.current?.scrollToEnd({ animated: true });
+        }}
       >
         {messages.length === 0 ? (
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: t.spacing.lg, paddingVertical: t.spacing.xxl }}>
@@ -265,7 +321,19 @@ export default function LixiChat({ onClose, initialAsk }: LixiChatProps = {}) {
             </View>
           </View>
         ) : (
-          messages.map((m) => (m.from === 'me' ? <MyBubble key={m.id} text={m.reply.text} /> : <LixiBubble key={m.id} reply={m.reply} onAction={act} />))
+          messages.map((m) =>
+            m.from === 'me' ? (
+              <MyBubble key={m.id} text={m.reply.text} />
+            ) : (
+              <LixiBubble
+                key={m.id}
+                reply={m.reply}
+                onAction={act}
+                // A prepared write that was cancelled can be looked at again.
+                onReview={m.pending && !thinking && !action ? () => setAction(m.pending!) : undefined}
+              />
+            ),
+          )
         )}
         {thinking ? <TypingDots /> : null}
       </ScrollView>
@@ -278,7 +346,7 @@ export default function LixiChat({ onClose, initialAsk }: LixiChatProps = {}) {
           gap: t.spacing.sm,
           paddingHorizontal: t.spacing.lg,
           paddingTop: t.spacing.sm,
-          paddingBottom: insets.bottom + t.spacing.sm,
+          paddingBottom: (keyboardUp ? 0 : insets.bottom) + t.spacing.sm,
           borderTopWidth: 0.5,
           borderTopColor: t.c.line,
           backgroundColor: t.c.bg,
@@ -408,8 +476,9 @@ function MyBubble({ text }: { text: string }) {
   );
 }
 
-function LixiBubble({ reply, onAction }: { reply: LixiReply; onAction: (a: LixiAction) => void }) {
+function LixiBubble({ reply, onAction, onReview }: { reply: LixiReply; onAction: (a: LixiAction) => void; onReview?: () => void }) {
   const t = useTheme();
+  const { t: tr } = useTranslation(['lixi']);
   const desktop = useIsDesktop();
   const toneColor = { good: t.c.good, warn: t.c.warn, bad: t.c.bad } as const;
   return (
@@ -455,9 +524,10 @@ function LixiBubble({ reply, onAction }: { reply: LixiReply; onAction: (a: LixiA
             </View>
           ) : null}
         </View>
-        {reply.actions?.length ? (
+        {reply.actions?.length || onReview ? (
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm }}>
-            {reply.actions.map((a) => (
+            {onReview ? <Chip label={tr('lixi:ui.review')} icon="check-circle-outline" onPress={onReview} /> : null}
+            {(reply.actions ?? []).map((a) => (
               <Chip
                 key={a.label}
                 label={a.label}

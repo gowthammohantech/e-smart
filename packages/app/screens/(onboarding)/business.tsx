@@ -7,7 +7,8 @@ import { CompanyLogo } from '@esmart/ui/components/CompanyLogo';
 import { pickLogo } from '../../features/company/pickLogo';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { WizardShell } from '@esmart/ui/components/WizardShell';
-import { TextField, PickerField, PhoneField } from '@esmart/ui/components/Field';
+import { TextField, PickerField, PhoneField, focusFirstInvalid } from '@esmart/ui/components/Field';
+import { useToast } from '@esmart/ui/components/Toast';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { CityField } from '@esmart/ui/components/pickers/CityField';
 import { Text } from '@esmart/ui/components/Text';
@@ -16,8 +17,7 @@ import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { nextStepRoute, onboardingSteps, stepIndex, useOnboardingStore } from '../../store/onboardingStore';
 import { BUSINESS_TYPES, INDIAN_STATES } from '@esmart/core/data/masters';
 import { citiesForState } from '@esmart/core/data/cities';
-import { PLANS, moduleSetFor, planInfo } from '@esmart/core/domain/plan';
-import type { PlanTier } from '@esmart/core/types';
+import { moduleSetFor, planInfo } from '@esmart/core/domain/plan';
 import { Errors, hasErrors, required, validEmail, validPostalCode } from '@esmart/core/lib/validators';
 import { validPhoneParts } from '@esmart/core/lib/phone';
 
@@ -27,11 +27,14 @@ export default function BusinessStep() {
   const router = useRouter();
   const { draft, set, setAddress } = useOnboardingStore();
   const desktop = useIsDesktop();
+  const toast = useToast();
 
   const [typeOpen, setTypeOpen] = useState(false);
-  const [planOpen, setPlanOpen] = useState(false);
   const [stateOpen, setStateOpen] = useState(false);
-  const [errors, setErrors] = useState<Errors<'name' | 'city' | 'state' | 'email' | 'phone' | 'postalCode'>>({});
+  type Key = 'name' | 'city' | 'state' | 'email' | 'phone' | 'postalCode';
+  const [errors, setErrors] = useState<Errors<Key>>({});
+  // A field's error goes as soon as it is edited, so the form doesn't keep saying what's already fixed.
+  const clear = (key: Key) => setErrors((e) => (e[key] ? { ...e, [key]: undefined } : e));
 
   const [logoError, setLogoError] = useState<string | undefined>();
 
@@ -56,7 +59,13 @@ export default function BusinessStep() {
       postalCode: validPostalCode(draft.address.postalCode, draft.address.country, draft.address.stateCode),
     };
     setErrors(nextErrors);
-    if (hasErrors(nextErrors)) return;
+    if (hasErrors(nextErrors)) {
+      // The field may be off screen on a phone: say what's wrong and go to it.
+      const first = Object.values(nextErrors).find(Boolean);
+      if (first) toast.show(first, 'error');
+      focusFirstInvalid();
+      return;
+    }
     router.push(nextStepRoute('business', draft.plan));
   };
 
@@ -103,21 +112,24 @@ export default function BusinessStep() {
           </Text>
           {draft.logoUri ? (
             <View style={{ flexDirection: 'row', gap: t.spacing.lg, marginTop: 2 }}>
-              <Text variant="small" tone="primary" weight="600" accessibilityRole="button" onPress={chooseLogo}>
-                {tr('onboarding:business.logoChange')}
-              </Text>
-              <Text
-                variant="small"
-                tone="muted"
-                weight="600"
+              <Pressable onPress={chooseLogo} accessibilityRole="button" hitSlop={12} style={{ paddingVertical: t.spacing.xs }}>
+                <Text variant="small" tone="primary" weight="600">
+                  {tr('onboarding:business.logoChange')}
+                </Text>
+              </Pressable>
+              <Pressable
                 accessibilityRole="button"
+                hitSlop={12}
+                style={{ paddingVertical: t.spacing.xs }}
                 onPress={() => {
                   setLogoError(undefined);
                   set({ logoUri: undefined });
                 }}
               >
-                {tr('onboarding:business.logoRemove')}
-              </Text>
+                <Text variant="small" tone="muted" weight="600">
+                  {tr('onboarding:business.logoRemove')}
+                </Text>
+              </Pressable>
             </View>
           ) : null}
         </View>
@@ -127,7 +139,11 @@ export default function BusinessStep() {
       <TextField
         label={tr('onboarding:business.name')}
         value={draft.name}
-        onChangeText={(v) => set({ name: v })}
+        onChangeText={(v) => {
+          set({ name: v });
+          clear('name');
+        }}
+        autoCapitalize="words"
         placeholder={tr('onboarding:business.namePlaceholder')}
         error={errors.name}
         required
@@ -141,16 +157,13 @@ export default function BusinessStep() {
       </FieldRow>
       <FieldRow>
       <PickerField label={tr('onboarding:business.type')} value={tr(`onboarding:businessType.${draft.businessType}` as 'onboarding:businessType.other')} onPress={() => setTypeOpen(true)} icon="storefront-outline" />
-      <PickerField
+      {/* Every business starts on Free, so there is nothing to pick: the plan is shown, and changed later in Settings. */}
+      <TextField
         label={tr('onboarding:business.plan')}
-        value={planInfo(draft.plan).name}
-        onPress={() => setPlanOpen(true)}
+        value={planInfo('free').name}
+        editable={false}
         icon="star-circle-outline"
-        hint={
-          moduleSetFor(draft.plan) === 'full'
-            ? tr('onboarding:business.planHintFull')
-            : tr('onboarding:business.planHintSales')
-        }
+        hint={moduleSetFor('free') === 'full' ? tr('onboarding:business.planHintFull') : tr('onboarding:business.planHintSales')}
       />
       </FieldRow>
 
@@ -177,7 +190,10 @@ export default function BusinessStep() {
         <CityField
           label={tr('onboarding:business.city')}
           value={draft.address.city}
-          onChange={(v) => setAddress({ city: v })}
+          onChange={(v) => {
+            setAddress({ city: v });
+            clear('city');
+          }}
           stateCode={draft.address.stateCode}
           containerStyle={{ flex: 1 }}
           error={errors.city}
@@ -186,9 +202,14 @@ export default function BusinessStep() {
         <TextField
           label={tr('onboarding:business.pinCode')}
           value={draft.address.postalCode}
-          onChangeText={(v) => setAddress({ postalCode: v })}
+          onChangeText={(v) => {
+            setAddress({ postalCode: draft.address.country === 'IN' ? v.replace(/[^0-9]/g, '') : v });
+            clear('postalCode');
+          }}
           placeholder="400001"
           keyboardType="number-pad"
+          autoComplete="postal-code"
+          textContentType="postalCode"
           maxLength={draft.address.country === 'IN' ? 6 : undefined}
           error={errors.postalCode}
           containerStyle={{ flex: 1 }}
@@ -200,7 +221,13 @@ export default function BusinessStep() {
       <TextField
         label={tr('onboarding:business.email')}
         value={draft.email}
-        onChangeText={(v) => set({ email: v })}
+        onChangeText={(v) => {
+          set({ email: v });
+          clear('email');
+        }}
+        autoComplete="email"
+        textContentType="emailAddress"
+        autoCorrect={false}
         placeholder={tr('onboarding:business.emailPlaceholder')}
         keyboardType="email-address"
         autoCapitalize="none"
@@ -211,7 +238,10 @@ export default function BusinessStep() {
         label={tr('onboarding:business.phone')}
         dialCode={draft.phoneDialCode}
         value={draft.phone}
-        onChangeText={(v) => set({ phone: v })}
+        onChangeText={(v) => {
+          set({ phone: v });
+          clear('phone');
+        }}
         placeholder="98765 43210"
         error={errors.phone}
       />
@@ -226,21 +256,6 @@ export default function BusinessStep() {
         onSelect={(v) => set({ businessType: v })}
       />
       <SelectSheet
-        visible={planOpen}
-        onClose={() => setPlanOpen(false)}
-        title={tr('onboarding:business.planSheetTitle')}
-        subtitle={tr('onboarding:business.changeLater')}
-        options={PLANS.map((p) => ({
-          value: p.key,
-          label: p.name,
-          // Only the free plan can be chosen at sign-up; the rest are shown, greyed out.
-          disabled: p.key !== 'free',
-          trailing: moduleSetFor(p.key) === 'full' ? tr('onboarding:business.planTrailingFull') : tr('onboarding:business.planTrailingSales'),
-        }))}
-        value={draft.plan}
-        onSelect={(v) => set({ plan: v as PlanTier })}
-      />
-      <SelectSheet
         visible={stateOpen}
         onClose={() => setStateOpen(false)}
         title={tr('onboarding:business.stateSheetTitle')}
@@ -253,6 +268,7 @@ export default function BusinessStep() {
           // A city picked for the previous state no longer belongs.
           const keepCity = !city || citiesForState(code).includes(city);
           setAddress({ stateCode: code, state: s?.name ?? '', ...(keepCity ? {} : { city: '' }) });
+          clear('state');
         }}
       />
     </WizardShell>

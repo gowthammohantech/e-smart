@@ -7,7 +7,7 @@ import type { AuthUser, Deps } from '../../context';
 import { unprocessable } from '../../http/errors';
 import { recordChange, type DbOrTx } from '../../lib/audit';
 import { newId } from '../../lib/ids';
-import { notify } from '../../lib/notify';
+import { notify, noteDate } from '../../lib/notify';
 import { assignNumber } from '../../lib/numbering';
 import { accountBalanceMinor } from '../payments/engine';
 import { expenseToWire, type ExpenseRow } from './wire';
@@ -144,7 +144,7 @@ export async function materializeRecurringExpenses(deps: Pick<Deps, 'db'> & Part
             userId: template.createdBy,
             kind: 'system',
             title: `Recurring expense ${template.number.trim()} not recorded`,
-            body: `${short.name} doesn't hold enough to pay the ${next} occurrence. Add money to the account; it is recorded on the next run.`,
+            body: `${short.name} doesn't hold enough to pay the ${noteDate(next)} occurrence. Add money to the account; it is recorded on the next run.`,
             entityType: 'expense',
             entityId: template.id,
           });

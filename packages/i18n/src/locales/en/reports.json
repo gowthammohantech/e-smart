@@ -111,7 +111,15 @@
     "basisLine": "{{company}} · {{from}} to {{to}} · {{branch}} · {{currency}}",
     "basisFull": "{{company}} · {{from}} to {{to}} · {{branch}} · presented in {{currency}}, foreign-currency documents converted at the rate stored on each document.",
     "exportTitle": "{{title}} export",
-    "generatedAt": "Generated {{at}}"
+    "generatedAt": "Generated {{at}}",
+    "asAt": "As at {{date}}",
+    "customRange": "Custom range",
+    "customLabel": "{{from}} – {{to}}",
+    "from": "From",
+    "to": "To",
+    "toBeforeFrom": "Ends before it starts",
+    "applyRange": "Show this range",
+    "branchLimitedTitle": "Limited to some branches"
   },
   "detail": {
     "openAdvances": "Open advances",

@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Modal, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Platform, View } from 'react-native';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Button } from '@esmart/ui/components/Button';
 import { Card } from '@esmart/ui/components/Card';
@@ -30,8 +30,12 @@ export function MfaGate() {
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Read at once: Enter and the button share this guard, so a code is never sent twice or short.
+  const sending = useRef(false);
 
   const submit = async () => {
+    if (sending.current || code.trim().length < 6) return;
+    sending.current = true;
     setBusy(true);
     setError(null);
     try {
@@ -44,13 +48,17 @@ export function MfaGate() {
     } catch (err) {
       setError(describeError(err, tr));
     } finally {
+      sending.current = false;
       setBusy(false);
     }
   };
 
   return (
     <Modal visible={required} transparent animationType="fade" onRequestClose={() => {}}>
-      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', padding: t.spacing.lg }}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', padding: t.spacing.lg }}
+      >
         <Card style={{ gap: t.spacing.md, maxWidth: 420, width: '100%', alignSelf: 'center' }}>
           <Text variant="title" weight="700">
             {tr('settings:security.gateTitle')}
@@ -61,8 +69,11 @@ export function MfaGate() {
           <TextField
             label={tr('settings:security.code')}
             value={code}
-            onChangeText={setCode}
+            onChangeText={(v) => setCode(v.replace(/[^0-9]/g, ''))}
             keyboardType="number-pad"
+            maxLength={6}
+            textContentType="oneTimeCode"
+            autoComplete="one-time-code"
             autoFocus
             error={error ?? undefined}
             onSubmitEditing={() => void submit()}
@@ -76,7 +87,7 @@ export function MfaGate() {
               if (authenticated) signOut();
             }} />
         </Card>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

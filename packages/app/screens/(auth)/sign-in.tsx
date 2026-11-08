@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View } from 'react-native';
+import { Pressable, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
@@ -27,6 +27,7 @@ export default function SignIn() {
   const [email, setEmail] = useState(DEMO_LOGIN.email);
   const [password, setPassword] = useState(DEMO_LOGIN.password);
   const phone = usePhoneInput();
+  const passwordRef = useRef<TextInput>(null);
   const [errors, setErrors] = useState<Errors<'email' | 'password' | 'phone'>>({});
   const [busy, setBusy] = useState(false);
   // While signing in, the links and tabs do nothing, so the attempt isn't left behind.
@@ -85,15 +86,26 @@ export default function SignIn() {
             placeholder={tr('auth:signIn.emailPlaceholder')}
             keyboardType="email-address"
             autoCapitalize="none"
+            autoCorrect={false}
+            autoComplete="email"
+            textContentType="username"
+            returnKeyType="next"
+            submitBehavior="submit"
+            onSubmitEditing={() => passwordRef.current?.focus()}
             icon="email-outline"
             error={errors.email}
           />
           <TextField
+            // React 19 hands `ref` to TextField, which passes it on to its input.
+            {...({ ref: passwordRef } as object)}
             label={tr('auth:signIn.password')}
             value={password}
             onChangeText={setPassword}
             placeholder={tr('auth:signIn.passwordPlaceholder')}
             secureTextEntry
+            autoComplete="current-password"
+            textContentType="password"
+            returnKeyType="go"
             icon="lock-outline"
             error={errors.password}
             onSubmitEditing={submitEmail}
@@ -130,9 +142,11 @@ export default function SignIn() {
         </View>
       )}
 
-      <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 5, marginTop: t.spacing.lg }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 5, marginTop: t.spacing.lg }}>
         <Text variant="small" tone="muted">{tr('auth:signIn.newHere')}</Text>
-        <Text variant="small" tone="primary" weight="600" onPress={unlessBusy(() => router.push('/(auth)/sign-up'))}>{tr('auth:signIn.createAccount')}</Text>
+        <Pressable onPress={unlessBusy(() => router.push('/(auth)/sign-up'))} hitSlop={12} accessibilityRole="link" style={{ paddingVertical: t.spacing.sm }}>
+          <Text variant="small" tone="primary" weight="600">{tr('auth:signIn.createAccount')}</Text>
+        </Pressable>
       </View>
     </AuthShell>
   );

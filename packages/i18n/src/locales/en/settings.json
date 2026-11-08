@@ -82,7 +82,14 @@
     "signaturePreviewHint": "This is how it prints at the foot of your documents. If it looks faint or cropped, pick a clearer photo.",
     "signatureFor": "For {{name}}",
     "signatureConfirm": "Use this signature",
-    "signatureView": "View signature full size"
+    "signatureView": "View signature full size",
+    "signatureRemoving": "Removing the signature…",
+    "msmeBankRateInvalid": "Enter a rate from 0 to 50%",
+    "gstr2bToleranceInvalid": "Enter a whole number of days from 0 to 30",
+    "logoRemoveTitle": "Remove the logo?",
+    "logoRemoveBody": "It comes off your invoices and other documents straight away. You can add one again any time.",
+    "signatureRemoveTitle": "Remove the signature?",
+    "signatureRemoveBody": "Documents print without it from now on. You can add one again any time."
   },
   "gstPortal": {
     "howTitle": "Before you connect",
@@ -98,7 +105,10 @@
     "otpSent": "OTP sent to the registered phone",
     "connect": "Connect",
     "connected": "Connected to the GST portal",
-    "disconnect": "Disconnect"
+    "disconnect": "Disconnect",
+    "disconnected": "Disconnected from the GST portal",
+    "disconnectTitle": "Disconnect {{gstin}}?",
+    "disconnectBody": "GSTR-2B downloads and filing for this GSTIN stop until you connect again with a new OTP."
   },
   "accounts": {
     "default": "Default",
@@ -161,7 +171,9 @@
     "addressTaken": "Another branch ({{name}}) is already at this address.",
     "oneOnPlan": "Your plan includes one branch. You can rename it here; its address, GSTIN and phone follow Business profile.",
     "upgradeToAdd": "Your plan includes one branch. Upgrade to add more branches.",
-    "onlyName": "On your plan only the branch name can be changed here. The address, GSTIN and phone come from Business profile and update with it."
+    "onlyName": "On your plan only the branch name can be changed here. The address, GSTIN and phone come from Business profile and update with it.",
+    "docCount_one": "{{count}} document",
+    "docCount_other": "{{count}} documents"
   },
   "taxes": {
     "none": "No tax rates",
@@ -265,7 +277,9 @@
     "editTitle": "Edit rate",
     "rateLabel": "Rate (1 {{from}} → {{to}})",
     "sourceProvider": "Provider",
-    "sourceManual": "Manual"
+    "sourceManual": "Manual",
+    "deleteTitle": "Delete the {{code}} rate from {{date}}?",
+    "deleteMessage": "Documents already saved keep the rate they used. New ones on or after this date use the rate before it."
   },
   "transporters": {
     "none": "No transporters yet",
@@ -309,7 +323,8 @@
     "updated": "{{series}} numbering updated",
     "intro": "Each document type has its own series. A number is assigned only when a document is finalised, and a finalised number is never reused — drafts stay unnumbered so you can delete them freely.",
     "nextBadge": "Next {{number}}",
-    "digitsHint": "0001 uses four digits."
+    "digitsHint": "0001 uses four digits.",
+    "belowIssued": "Numbers below {{number}} may already be issued; start at {{number}} or above"
   },
   "users": {
     "invited": "Invited",
@@ -475,7 +490,10 @@
     "disconnectedNamed": "{{name}} disconnected"
   },
   "eInvoicing": {
-    "daysSuffix": "days"
+    "daysSuffix": "days",
+    "noTransporter": "None",
+    "transporterHint": "Filled into Part-B of new e-way bills; change it on any bill.",
+    "noTransportersHint": "Add your transporters under Settings › Transporters to pick a default."
   },
   "deleteAccount": {
     "row": "Delete account",
@@ -562,7 +580,9 @@
     "turnedOff": "Authenticator turned off",
     "gateTitle": "Enter your code",
     "gateBody": "Your account uses an authenticator app. Enter the 6-digit code from it, or a recovery code, to continue.",
-    "verify": "Continue"
+    "verify": "Continue",
+    "copyCodes": "Copy codes",
+    "codesCopied": "Recovery codes copied"
   },
   "modules": {
     "title": "Modules",
@@ -582,7 +602,10 @@
       "payables": "What you owe suppliers, TDS and MSME dues.",
       "books": "Chart of accounts, vouchers, bank reconciliation and the statements.",
       "pos": "SKU, barcode, category and brand on items. Off, items are just a name, unit and price; a SKU is still given to each."
-    }
+    },
+    "offTitle": "Switch off {{module}}?",
+    "offBody": "It disappears from the app for everyone in this business, and its work is refused. Its records are kept and come back when you switch it on again.",
+    "offConfirm": "Switch off"
   },
   "customFields": {
     "title": "Custom fields",
@@ -621,7 +644,14 @@
     "deleteMessage": "Records stop showing what they held for it. To keep that, mark it unused instead.",
     "deleted": "Field deleted",
     "choose": "Choose",
-    "none": "None"
+    "none": "None",
+    "errors": {
+      "required": "{{label}} is required",
+      "number": "{{label}} must be a number",
+      "date": "{{label}} must be a date",
+      "select": "Choose one of the listed values for {{label}}",
+      "text": "{{label}} is at most 500 characters"
+    }
   },
   "approvals": {
     "title": "Approvals",
@@ -647,7 +677,15 @@
     "footerHint": "For example: Thank you for your business.",
     "save": "Save",
     "saved": "Invoice design saved",
-    "noInvoice": "Issue an invoice to see a preview here."
+    "noInvoice": "Issue an invoice to see a preview here.",
+    "colour": {
+      "blue": "Blue",
+      "green": "Green",
+      "red": "Red",
+      "purple": "Purple",
+      "orange": "Orange",
+      "charcoal": "Charcoal"
+    }
   },
   "vehicles": {
     "title": "Vehicles",

@@ -1,6 +1,6 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
@@ -12,8 +12,10 @@ import { Badge } from '@esmart/ui/components/Badge';
 import { Button } from '@esmart/ui/components/Button';
 import { TextField } from '@esmart/ui/components/Field';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
+import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { useToast } from '@esmart/ui/components/Toast';
-import { useOcrStore } from '../../../features/ocr/ocrStore';
+import { useOcrStore, type OcrField } from '../../../features/ocr/ocrStore';
+import { isoOrUndefined } from '../../../features/ocr/matchParty';
 import { formatMoney, formatPercent, formatQty } from '@esmart/core/lib/format';
 import { fromMajor, money } from '@esmart/core/lib/money';
 import { useBaseCurrency } from '../../../store/selectors';
@@ -26,9 +28,65 @@ function confidenceTone(c: number): 'success' | 'warning' | 'danger' {
   return 'danger';
 }
 
+/** Below this a field shows amber or red, and counts as needing a check: the banner and the badges agree. */
+const SURE = 0.9;
+const MONEY_KEYS = new Set(['amount', 'tax']);
+
+/** A date the form can take, or nothing typed; anything else would be dropped on the way. */
+const dateProblem = (f: OcrField) => f.key === 'date' && !!f.value.trim() && !isoOrUndefined(f.value.trim());
+
+/**
+ * One extracted field: its name, how sure the reading is, the value to correct,
+ * and "Looks right" to confirm a value that needs no change.
+ */
+function ReviewField({ f }: { f: OcrField }) {
+  const t = useTheme();
+  const { t: tr } = useTranslation(['purchases']);
+  const updateField = useOcrStore((s) => s.updateField);
+  const confirmField = useOcrStore((s) => s.confirmField);
+  const money = MONEY_KEYS.has(f.key);
+  return (
+    <View style={{ gap: 6 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: t.spacing.sm }}>
+        <Text variant="caption" tone="muted" weight="600" numberOfLines={1} style={{ flexShrink: 1 }}>
+          {f.label}
+        </Text>
+        <Badge
+          label={f.confidence >= 1 ? tr('purchases:ocr.confirmed') : tr('purchases:ocr.percentSure', { percent: Math.round(f.confidence * 100) })}
+          tone={f.confidence >= 1 ? 'info' : confidenceTone(f.confidence)}
+          size="sm"
+        />
+      </View>
+      <TextField
+        value={f.value}
+        // Amounts take digits and a point: "₹1,234" would otherwise read as nothing.
+        onChangeText={(v) => updateField(f.key, money ? v.replace(/[^0-9.]/g, '') : v)}
+        keyboardType={money ? 'decimal-pad' : 'default'}
+        accessibilityLabel={f.label}
+        placeholder={f.key === 'date' ? 'YYYY-MM-DD' : undefined}
+        error={dateProblem(f) ? tr('purchases:ocr.dateFormat') : undefined}
+      />
+      {f.confidence < SURE && f.value.trim() && !dateProblem(f) ? (
+        <Pressable
+          onPress={() => confirmField(f.key)}
+          accessibilityRole="button"
+          accessibilityLabel={tr('purchases:ocr.looksRightA11y', { field: f.label })}
+          hitSlop={8}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', paddingVertical: 4 }}
+        >
+          <Icon name="check" size={16} color={t.c.primary} />
+          <Text variant="small" tone="primary" weight="600">
+            {tr('purchases:ocr.looksRight')}
+          </Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
 export default function OcrReview() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['inventory', 'nav', 'purchases']);
+  const { t: tr } = useTranslation(['inventory', 'nav', 'purchases', 'common']);
   const router = useRouter();
   const toast = useToast();
   const insets = useSafeAreaInsets();
@@ -38,12 +96,15 @@ export default function OcrReview() {
 
   const baseCurrency = useBaseCurrency();
   const result = useOcrStore((s) => s.result);
-  const updateField = useOcrStore((s) => s.updateField);
+  const [confirmCreate, setConfirmCreate] = useState(false);
+  const [zoom, setZoom] = useState(false);
 
+  // Every field shown amber or red, not only the red ones, so the banner never says "all confident" over an amber badge.
   const lowConfidence = useMemo(
-    () => (result ? result.fields.filter((f) => f.confidence < 0.75).length : 0),
+    () => (result ? result.fields.filter((f) => f.confidence < SURE).length : 0),
     [result],
   );
+  const badDate = !!result?.fields.some(dateProblem);
 
   if (!result) {
     return (
@@ -65,10 +126,47 @@ export default function OcrReview() {
   const total = amountField ? fromMajor(amountField.value || '0', baseCurrency) : money(0, baseCurrency);
   const isExpense = result.kind === 'expense';
   const rescan = () => router.replace('/(app)/ocr/capture');
-  const create = () => {
+  const go = () => {
+    setConfirmCreate(false);
     toast.show(tr('inventory:ocr.carriedFields'), 'success', { icon: 'text-box-check-outline' });
     router.replace(isExpense ? '/(app)/expenses/new?fromScan=1' : '/(app)/purchases/bills/new?fromScan=1');
   };
+  // Fields still to check are confirmed once more before they are carried over.
+  const create = () => {
+    if (badDate) return;
+    if (lowConfidence > 0) setConfirmCreate(true);
+    else go();
+  };
+  const createLabel = isExpense ? tr('purchases:ocr.createExpense') : tr('purchases:ocr.createBill');
+  const dialogs = (
+    <>
+      <ConfirmDialog
+        visible={confirmCreate}
+        title={tr('purchases:ocr.uncheckedTitle', { count: lowConfidence })}
+        message={tr('purchases:ocr.uncheckedBody')}
+        confirmLabel={createLabel}
+        cancelLabel={tr('purchases:ocr.keepChecking')}
+        onConfirm={go}
+        onCancel={() => setConfirmCreate(false)}
+      />
+      {result.imageUri ? (
+        <Modal visible={zoom} transparent animationType="fade" onRequestClose={() => setZoom(false)} statusBarTranslucent>
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', paddingTop: insets.top, paddingBottom: insets.bottom }}>
+            <Pressable
+              onPress={() => setZoom(false)}
+              accessibilityRole="button"
+              accessibilityLabel={tr('common:component.close')}
+              hitSlop={10}
+              style={{ alignSelf: 'flex-end', margin: t.spacing.lg, width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.16)', alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Icon name="close" size={22} color="#fff" />
+            </Pressable>
+            <Image source={{ uri: result.imageUri }} style={{ flex: 1 }} contentFit="contain" />
+          </View>
+        </Modal>
+      ) : null}
+    </>
+  );
 
   if (desktop) {
     const fieldPairs: (typeof result.fields)[] = [];
@@ -102,19 +200,7 @@ export default function OcrReview() {
           {fieldPairs.map((pair) => (
             <FieldRow key={pair.map((f) => f.key).join('-')}>
               {pair.map((f) => (
-                <View key={f.key} style={{ gap: 6 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: t.spacing.sm }}>
-                    <Text variant="caption" tone="muted" weight="600" numberOfLines={1}>
-                      {f.label}
-                    </Text>
-                    <Badge
-                      label={f.confidence >= 1 ? tr('purchases:ocr.confirmed') : tr('purchases:ocr.percentSure', { percent: Math.round(f.confidence * 100) })}
-                      tone={f.confidence >= 1 ? 'info' : confidenceTone(f.confidence)}
-                      size="sm"
-                    />
-                  </View>
-                  <TextField value={f.value} onChangeText={(v) => updateField(f.key, v)} />
-                </View>
+                <ReviewField key={f.key} f={f} />
               ))}
               {/* Holds the column when the last row has one field, so it keeps its width. */}
               {pair.length === 1 ? <View /> : null}
@@ -172,9 +258,11 @@ export default function OcrReview() {
         </Card>
 
         {result.imageUri ? (
-          <Card padded={false} style={{ height: 240, overflow: 'hidden' }}>
-            <Image source={{ uri: result.imageUri }} style={{ width: '100%', height: '100%' }} contentFit="contain" />
-          </Card>
+          <Pressable onPress={() => setZoom(true)} accessibilityRole="imagebutton" accessibilityLabel={tr('purchases:ocr.viewPhoto')}>
+            <Card padded={false} style={{ height: 240, overflow: 'hidden' }}>
+              <Image source={{ uri: result.imageUri }} style={{ width: '100%', height: '100%' }} contentFit="contain" />
+            </Card>
+          </Pressable>
         ) : null}
 
         <Card variant="flat" style={{ flexDirection: 'row', gap: t.spacing.md }}>
@@ -193,7 +281,7 @@ export default function OcrReview() {
             headerRight: () => (
               <View style={{ flexDirection: 'row', gap: t.spacing.sm }}>
                 <Button title={tr('inventory:ocr.rescan')} variant="ghost" icon="camera-retake-outline" onPress={rescan} />
-                <Button title={isExpense ? tr('purchases:ocr.createExpense') : tr('purchases:ocr.createBill')} icon="arrow-right" onPress={create} />
+                <Button title={createLabel} icon="arrow-right" onPress={create} disabled={badDate} />
               </View>
             ),
           }}
@@ -213,19 +301,27 @@ export default function OcrReview() {
             <SplitPane main={main} side={side} sideWidth={340} />
           )}
         </ScrollView>
+        {dialogs}
       </View>
     );
   }
 
   return (
-    <View style={{ flex: 1 }}>
+    // The footer sits under the form rather than over it, so the keyboard pushes both up together.
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Stack.Screen options={{ title: tr('nav:title.reviewExtraction') }} />
 
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 140, gap: t.spacing.lg }} keyboardShouldPersistTaps="handled">
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: t.spacing.xxl, gap: t.spacing.lg }} keyboardShouldPersistTaps="handled">
         {result.imageUri ? (
-          <Card padded={false} style={{ height: 180 }}>
-            <Image source={{ uri: result.imageUri }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
-          </Card>
+          // The whole bill shows, and a tap opens it full screen to read the small print.
+          <Pressable onPress={() => setZoom(true)} accessibilityRole="imagebutton" accessibilityLabel={tr('purchases:ocr.viewPhoto')}>
+            <Card padded={false} style={{ height: 200, overflow: 'hidden' }}>
+              <Image source={{ uri: result.imageUri }} style={{ width: '100%', height: '100%' }} contentFit="contain" />
+              <View style={{ position: 'absolute', right: t.spacing.sm, bottom: t.spacing.sm, width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center' }}>
+                <Icon name="magnify" size={18} color="#fff" />
+              </View>
+            </Card>
+          </Pressable>
         ) : null}
 
         <Card
@@ -250,19 +346,7 @@ export default function OcrReview() {
         <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('inventory:ocr.extractedFields')}</Text>
 
         {result.fields.map((f) => (
-          <View key={f.key} style={{ gap: 6 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-              <Text variant="caption" tone="muted" weight="600">
-                {f.label}
-              </Text>
-              <Badge
-                label={f.confidence >= 1 ? tr('purchases:ocr.confirmed') : tr('purchases:ocr.percentSure', { percent: Math.round(f.confidence * 100) })}
-                tone={f.confidence >= 1 ? 'info' : confidenceTone(f.confidence)}
-                size="sm"
-              />
-            </View>
-            <TextField value={f.value} onChangeText={(v) => updateField(f.key, v)} />
-          </View>
+          <ReviewField key={f.key} f={f} />
         ))}
 
         {result.lines.length > 0 ? (
@@ -309,10 +393,6 @@ export default function OcrReview() {
 
       <View
         style={{
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          bottom: 0,
           padding: t.spacing.lg,
           paddingBottom: insets.bottom + t.spacing.md,
           borderTopWidth: 1,
@@ -329,13 +409,10 @@ export default function OcrReview() {
         </View>
         <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
           <Button title={tr('inventory:ocr.rescan')} variant="ghost" onPress={() => router.replace('/(app)/ocr/capture')} style={{ flex: 1 }} />
-          <Button
-            title={isExpense ? tr('purchases:ocr.createExpense') : tr('purchases:ocr.createBill')}
-            onPress={create}
-            style={{ flex: 2 }}
-          />
+          <Button title={createLabel} onPress={create} disabled={badDate} style={{ flex: 2 }} />
         </View>
       </View>
-    </View>
+      {dialogs}
+    </KeyboardAvoidingView>
   );
 }

@@ -1,7 +1,7 @@
 import { and, eq, gte, inArray, isNull, lt, sql } from 'drizzle-orm';
 import { schema } from '@esmart/db';
 import type { Deps } from '../../context';
-import { notify } from '../../lib/notify';
+import { notify, noteDate, noteMoney } from '../../lib/notify';
 import { today } from './lifecycle';
 
 const D = schema.documents;
@@ -42,7 +42,7 @@ export async function notifyOverdueInvoices(deps: Pick<Deps, 'db' | 'now'> & Dep
       companyId: inv.companyId,
       kind: 'invoiceOverdue',
       title: `${inv.number} is overdue`,
-      body: `${party?.name ?? 'A customer'} · ${inv.currency.trim()} ${(Number(inv.owed) / 100).toFixed(2)} was due ${inv.dueDate}`,
+      body: `${party?.name ?? 'A customer'} · ${noteMoney(Number(inv.owed), inv.currency)} was due ${inv.dueDate ? noteDate(inv.dueDate) : 'earlier'}`,
       entityType: 'document',
       entityId: inv.id,
     });

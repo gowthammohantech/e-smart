@@ -108,15 +108,17 @@ export default function OcrCapture() {
           />
         </View>
 
+        {/* A browser has no camera to hand: the tile picks a photo or scan of the bill from the computer. */}
         <Pressable
-          onPress={() => pick(true)}
+          onPress={() => pick(false)}
           accessibilityRole="button"
-          accessibilityLabel={tr('inventory:ocr.takePhoto')}
+          accessibilityLabel={tr('inventory:ocr.uploadPhoto')}
           disabled={busy}
           style={(state) => {
             const { hovered, focused } = state as WebPressState;
             return [
               {
+                opacity: busy ? 0.6 : 1,
                 alignItems: 'center',
                 gap: t.spacing.sm,
                 paddingVertical: t.spacing.xxl,
@@ -133,22 +135,18 @@ export default function OcrCapture() {
         >
           <Illustration name="scanning" size="full" />
           <Text variant="title" weight="600">
-            {busy ? tr('purchases:ocr.reading') : tr('inventory:ocr.takePhoto')}
+            {busy ? tr('purchases:ocr.reading') : tr('inventory:ocr.uploadPhoto')}
           </Text>
           <Text variant="small" tone="muted" center style={{ maxWidth: 360, lineHeight: 20 }}>
             {busy ? tr('purchases:ocr.readingBody') : tr('purchases:ocr.photoHint')}
           </Text>
         </Pressable>
 
-        <View style={{ flexDirection: 'row', justifyContent: 'center', gap: t.spacing.md }}>
-          <Button title={tr('inventory:ocr.fromGallery')} variant="secondary" icon="image-outline" onPress={() => pick(false)} loading={busy} />
-        </View>
-
-        {/* Reading a bill needs the phone app; say so before the person tries it here. */}
+        {/* The phone app reads bills on the device; here it depends on the server's reader. */}
         <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: t.spacing.sm, padding: t.spacing.md, borderRadius: t.radius.md, backgroundColor: t.c.chip }}>
           <Icon name="information-outline" size={18} color={t.c.primary} />
           <Text variant="small" tone="muted" style={{ flex: 1, lineHeight: 20 }}>
-            {tr('inventory:ocr.ocrUnavailable')}
+            {tr('inventory:ocr.webNote')}
           </Text>
         </View>
       </Card>
@@ -212,7 +210,15 @@ export default function OcrCapture() {
           onChange={(v) => setKind(v as 'expense' | 'purchaseBill')}
         />
 
-        <Pressable onPress={() => pick(true)} accessibilityRole="button" accessibilityLabel={tr('inventory:ocr.takePhoto')} disabled={busy}>
+        <Pressable
+          onPress={() => pick(true)}
+          accessibilityRole="button"
+          accessibilityLabel={tr('inventory:ocr.takePhoto')}
+          accessibilityState={{ disabled: busy, busy }}
+          disabled={busy}
+          // Dimmed while a bill is being read: it can't be tapped again.
+          style={{ opacity: busy ? 0.6 : 1 }}
+        >
           <Card
             variant="flat"
             style={{

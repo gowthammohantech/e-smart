@@ -22,7 +22,7 @@ export default function GlobalSearch() {
 
   const [query, setQuery] = useState('');
 
-  const { results, grouped, isFetching } = useGlobalSearch(query);
+  const { results, grouped, pending, isError, refetch } = useGlobalSearch(query);
   // Screens match too, so "invoices" can open the Invoices list itself.
   const pages = matchPages(useAppPages(), query);
 
@@ -43,9 +43,18 @@ export default function GlobalSearch() {
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         {query.trim().length < 2 ? (
           <EmptyState illustration="search-idle" icon="magnify" title={tr('common:search.title')} message={tr('common:search.subtitleFull')} />
-        ) : results.length === 0 && pages.length === 0 && isFetching ? (
-          // Still asking the server: shapes, not "no matches".
+        ) : results.length === 0 && pages.length === 0 && pending ? (
+          // Still asking the server (or waiting for typing to pause): shapes, not "no matches".
           <ListSkeleton rows={4} kind="list" />
+        ) : isError && results.length === 0 ? (
+          <EmptyState
+            illustration="error"
+            icon="cloud-off-outline"
+            title={tr('common:search.failedTitle')}
+            message={tr('common:search.failedMessage')}
+            actionLabel={tr('common:search.retry')}
+            onAction={refetch}
+          />
         ) : results.length === 0 && pages.length === 0 ? (
           <EmptyState illustration="search-empty" icon="magnify-close" title={tr('common:search.noMatches')} message={tr('nav:shell.noMatchesInBusiness', { query })} />
         ) : (
@@ -64,7 +73,7 @@ export default function GlobalSearch() {
                     key={p.key}
                     onPress={() => router.push(p.route as never)}
                     accessibilityRole="button"
-                    accessibilityLabel={p.title}
+                    accessibilityLabel={[p.title, p.subtitle].filter(Boolean).join(', ')}
                     style={({ pressed }) => ({
                       flexDirection: 'row',
                       alignItems: 'center',
@@ -101,18 +110,19 @@ export default function GlobalSearch() {
                 <Badge label={String(rows.length)} tone="neutral" size="sm" />
               </View>
               <Card padded={false}>
-                {rows.slice(0, 8).map((r, i) => (
+                {/* Every row the badge counts is listed: the server already caps each kind. */}
+                {rows.map((r, i) => (
                   <Pressable
                     key={`${r.group}-${r.id}`}
                     onPress={() => router.push(r.route as never)}
                     accessibilityRole="button"
-                    accessibilityLabel={r.title}
+                    accessibilityLabel={[r.title, r.subtitle, r.trailing].filter(Boolean).join(', ')}
                     style={({ pressed }) => ({
                       flexDirection: 'row',
                       alignItems: 'center',
                       gap: t.spacing.md,
                       padding: t.spacing.lg,
-                      borderBottomWidth: i < Math.min(rows.length, 8) - 1 ? 0.5 : 0,
+                      borderBottomWidth: i < rows.length - 1 ? 0.5 : 0,
                       borderBottomColor: t.c.line,
                       backgroundColor: pressed ? t.c.card2 : 'transparent',
                     })}
@@ -122,15 +132,18 @@ export default function GlobalSearch() {
                       <Text variant="body" weight="600" numberOfLines={1}>
                         {r.title}
                       </Text>
-                      <Text variant="caption" tone="muted" numberOfLines={1}>
-                        {r.subtitle}
-                      </Text>
+                      {r.subtitle ? (
+                        <Text variant="caption" tone="muted" numberOfLines={1}>
+                          {r.subtitle}
+                        </Text>
+                      ) : null}
                     </View>
                     {r.trailing ? (
                       <Text variant="caption" weight="600">
                         {r.trailing}
                       </Text>
                     ) : null}
+                    <Icon name="chevron-right" size={18} color={t.c.muted} />
                   </Pressable>
                 ))}
               </Card>

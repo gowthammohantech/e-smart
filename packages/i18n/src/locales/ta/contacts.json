@@ -31,7 +31,16 @@
       "advanceCaption": "முன்கூட்டியே செலுத்தியது, இன்னும் ஒதுக்கப்படவில்லை",
       "overdueCaption": "நிலுவைத் தேதி கடந்தது"
     },
-    "tabOther": "மற்றவை"
+    "tabOther": "மற்றவை",
+    "otherCount_one": "{{count}} தொடர்பு",
+    "otherCount_other": "{{count}} தொடர்புகள்",
+    "noOther": "வேறு தொடர்புகள் இன்னும் இல்லை",
+    "searchOther": "தொடர்புகளைத் தேடு",
+    "advanceAmount": "{{amount}} முன்பணம்",
+    "inAdvance": "முன்பணமாக",
+    "newCustomer": "புதிய வாடிக்கையாளர்",
+    "newSupplier": "புதிய சப்ளையர்",
+    "newContact": "புதிய தொடர்பு"
   },
   "form": {
     "businessName": "வணிகப் பெயர்",
@@ -138,7 +147,7 @@
     "noneYet": "இதுவரை எதுவும் இல்லை",
     "notRegistered": "பதிவு செய்யப்படவில்லை",
     "added": "சேர்க்கப்பட்டது",
-    "pay": "செலுத்து",
+    "pay": "சப்ளையருக்குச் செலுத்து",
     "tabOpen": "நிலுவை",
     "tabDocuments": "ஆவணங்கள்",
     "tabPayments": "கட்டணங்கள்",

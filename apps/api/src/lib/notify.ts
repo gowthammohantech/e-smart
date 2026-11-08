@@ -4,6 +4,20 @@ import type { Deps } from '../context';
 import type { DbOrTx } from './audit';
 import { newId } from './ids';
 import { enqueue } from '../jobs/queue';
+import { formatMoney } from '@esmart/core/lib/format';
+import { formatDate } from '@esmart/core/lib/date';
+import type { Money } from '@esmart/core/lib/money';
+
+/** An amount as a notification shows it: "₹9,293.00", not "INR 9293.00". */
+export function noteMoney(minor: number, currency: string): string {
+  return formatMoney({ minor: Math.round(Number(minor)), currency: currency.trim() } as Money);
+}
+
+/** A date as a notification shows it: "12 Nov 2026", not "2026-11-12". */
+export function noteDate(iso: string | Date): string {
+  const s = typeof iso === 'string' ? iso : iso.toISOString();
+  return formatDate(s.slice(0, 10));
+}
 
 type Kind = (typeof schema.notifications.$inferInsert)['kind'];
 

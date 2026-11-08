@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon, type IconName } from '@esmart/ui/components/Icon';
@@ -84,9 +84,10 @@ export default function Done() {
         fiscalYearStartMonth: draft.fiscalYearStartMonth,
         taxRegistration: {
           regime: country?.regime ?? 'NONE',
-          identifier: draft.taxIdentifier || undefined,
+          identifier: (draft.taxRegistered && draft.taxIdentifier.trim()) || undefined,
           identifierLabel: country?.taxIdLabel ?? tr('onboarding:done.defaultTaxLabel'),
-          registered: draft.taxRegistered,
+          // Registered needs the number to go with it; a draft left switched on without one isn't.
+          registered: draft.taxRegistered && !!draft.taxIdentifier.trim(),
           compositionScheme: draft.compositionScheme,
           placeOfSupplyStateCode: draft.address.stateCode,
         },
@@ -128,11 +129,12 @@ export default function Done() {
   };
 
   return (
-    <View
-      style={{
-        flex: 1,
-        backgroundColor: t.c.bg,
-        paddingTop: insets.top + t.spacing.xxxl,
+    // Scrolls, so a short phone (iPhone SE) still reaches the buttons.
+    <ScrollView
+      style={{ flex: 1, backgroundColor: t.c.bg }}
+      contentContainerStyle={{
+        flexGrow: 1,
+        paddingTop: insets.top + (desktop ? t.spacing.xxxl : t.spacing.md),
         paddingHorizontal: t.spacing.xl,
         paddingBottom: insets.bottom + t.spacing.xl,
         // A desktop centres the page at a readable width instead of pinning
@@ -140,7 +142,28 @@ export default function Done() {
         ...(desktop ? { alignItems: 'center', justifyContent: 'center' } : null),
       }}
     >
-      <View style={desktop ? { width: '100%', maxWidth: 640, gap: t.spacing.xxl } : { flex: 1, gap: t.spacing.xxl }}>
+      {!desktop && router.canGoBack() ? (
+        <Pressable
+          onPress={() => router.back()}
+          disabled={busy}
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel={tr('common:component.goBack')}
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: 18,
+            backgroundColor: t.c.card2,
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginBottom: t.spacing.md,
+            opacity: busy ? 0.5 : 1,
+          }}
+        >
+          <Icon name="arrow-left" size={19} color={t.c.text} />
+        </Pressable>
+      ) : null}
+      <View style={desktop ? { width: '100%', maxWidth: 640, gap: t.spacing.xxl } : { flex: 1, gap: t.spacing.xxl, marginBottom: t.spacing.xxl }}>
         <View style={{ alignItems: 'center', gap: t.spacing.lg }}>
           <Illustration name="setup-complete" size="hero" />
           <View style={{ gap: 6 }}>
@@ -198,6 +221,6 @@ export default function Done() {
           </>
         )}
       </View>
-    </View>
+    </ScrollView>
   );
 }

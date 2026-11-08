@@ -8,7 +8,6 @@ import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { useToast } from '@esmart/ui/components/Toast';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
-import { Badge } from '@esmart/ui/components/Badge';
 import { Button } from '@esmart/ui/components/Button';
 import { Segmented } from '@esmart/ui/components/Field';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
@@ -105,7 +104,7 @@ export default function Notifications() {
           <Card padded={false}>
             <EmptyState
               illustration="no-notifications" icon="bell-check-outline"
-              title={filter === 'unread' ? 'Nothing unread' : 'No notifications'}
+              title={filter === 'unread' ? tr('common:notifications.emptyUnread') : tr('common:notifications.emptyAll')}
               message={tr('common:notifications.emptyBody')}
               compact
             />
@@ -123,7 +122,14 @@ export default function Notifications() {
                     if (route) router.push(route as never);
                   }}
                   accessibilityRole="button"
-                  accessibilityLabel={n.title}
+                  accessibilityLabel={[
+                    n.read ? null : tr('common:notifications.unreadLabel'),
+                    n.title,
+                    n.body,
+                    formatRelative(n.createdAt.slice(0, 10)),
+                  ]
+                    .filter(Boolean)
+                    .join(', ')}
                   style={(state) => {
                     const { pressed, hovered, focused } = state as WebPressState;
                     return {
@@ -150,7 +156,9 @@ export default function Notifications() {
                             ? t.c.goodSoft
                             : meta.tone === 'warning'
                               ? t.c.warnSoft
-                              : t.c.mutedSoft,
+                              : meta.tone === 'info'
+                                ? t.c.chip
+                                : t.c.mutedSoft,
                       alignItems: 'center',
                       justifyContent: 'center',
                     }}
@@ -165,7 +173,9 @@ export default function Notifications() {
                             ? t.c.good
                             : meta.tone === 'warning'
                               ? t.c.warn
-                              : t.c.muted
+                              : meta.tone === 'info'
+                                ? t.c.info
+                                : t.c.muted
                       }
                     />
                   </View>
@@ -194,7 +204,13 @@ export default function Notifications() {
         )}
 
         <View style={{ height: t.spacing.lg }} />
-        <Badge label={tr('common:notifications.deliveryNote')} tone="neutral" />
+        {/* A sentence, so it wraps: a one-line badge cut it off on a phone. */}
+        <View style={{ flexDirection: 'row', gap: t.spacing.sm, alignItems: 'flex-start', paddingHorizontal: t.spacing.xs }}>
+          <Icon name="information-outline" size={16} color={t.c.muted} style={{ marginTop: 1 }} />
+          <Text variant="caption" tone="muted" style={{ flex: 1, lineHeight: 18 }}>
+            {tr('common:notifications.deliveryNote')}
+          </Text>
+        </View>
       </ScrollView>
 
       {/* On a desktop, Clear all sits in the header instead. */}

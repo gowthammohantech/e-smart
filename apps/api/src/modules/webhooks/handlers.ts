@@ -9,7 +9,7 @@ import { recordChange, type DbOrTx } from '../../lib/audit';
 import { safeEqual, sha256 } from '../../lib/crypto';
 import { newId } from '../../lib/ids';
 import { today } from '../documents/lifecycle';
-import { notify } from '../../lib/notify';
+import { notify, noteMoney } from '../../lib/notify';
 import { deletePayment, writePayment } from '../payments/engine';
 
 type Json = Record<string, unknown>;
@@ -237,7 +237,7 @@ async function refundProcessed(ctx: WebhookCtx, tx: DbOrTx, payload: Json): Prom
       return { documentId: a.documentId, amountMinor: a.amountMinor - cut, tdsMinor: a.tdsMinor, discountMinor: a.discountMinor, writeOffMinor: a.writeOffMinor };
     })
     .filter((a) => a.amountMinor + a.tdsMinor + a.discountMinor + a.writeOffMinor > 0);
-  const refunded = `${payment.currency.trim()} ${(amount / 100).toFixed(2)}`;
+  const refunded = noteMoney(amount, payment.currency);
   await writePayment(
     tx,
     ctx.deps,
@@ -259,7 +259,7 @@ async function refundProcessed(ctx: WebhookCtx, tx: DbOrTx, payload: Json): Prom
     },
     { now: ctx.now, existing: payment },
   );
-  await notify(tx, ctx.deps, { companyId: payment.companyId, kind: 'paymentReceived', title: 'Partial refund recorded', body: `${payment.number}: ${refunded} was refunded online, so the payment is now ${payment.currency.trim()} ${(remaining / 100).toFixed(2)}.`, entityType: 'payment', entityId: payment.id });
+  await notify(tx, ctx.deps, { companyId: payment.companyId, kind: 'paymentReceived', title: 'Partial refund recorded', body: `${payment.number}: ${refunded} was refunded online, so the payment is now ${noteMoney(remaining, payment.currency)}.`, entityType: 'payment', entityId: payment.id });
 }
 
 /** `subscription.cancelled` (and `.completed`, `.halted`): back to Free; no records are lost. */

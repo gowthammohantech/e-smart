@@ -61,7 +61,7 @@
     "payment": "Payment",
     "paymentAccounts": "Payment accounts",
     "paymentsMade": "Payments made",
-    "paymentsReceived": "Income received",
+    "paymentsReceived": "Payments received",
     "preview": "Preview",
     "purchaseBill": "Purchase bill",
     "purchaseBills": "Purchase bills",
@@ -197,6 +197,7 @@
     "pages": "Pages",
     "typeToSearch": "Type at least two characters to search pages and your records.",
     "noMatches": "No matches for “{{query}}”",
+    "searching": "Searching…",
     "paletteHint": "↑↓ to move · Enter to open · Esc to close",
     "allSettings": "All settings",
     "group": {

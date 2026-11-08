@@ -986,7 +986,17 @@ export function useServerSearch(query: string, withExpenses: boolean) {
     },
     placeholderData: keepPreviousData,
   });
-  return { found: enabled ? found.data : undefined, expenses: enabled && withExpenses ? (expenses.data ?? []) : [], isFetching: found.isFetching || expenses.isFetching };
+  return {
+    found: enabled ? found.data : undefined,
+    expenses: enabled && withExpenses ? (expenses.data ?? []) : [],
+    isFetching: found.isFetching || expenses.isFetching,
+    // The search itself failing is not "no matches".
+    isError: enabled && found.isError,
+    refetch: () => {
+      void found.refetch();
+      if (withExpenses) void expenses.refetch();
+    },
+  };
 }
 
 /** Record counts and what the setup is used by, for the settings screens. Refreshed on every visit. */

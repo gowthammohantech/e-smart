@@ -86,6 +86,7 @@ export default function Otp() {
   const code = digits.join('');
 
   const verify = () => {
+    if (busy) return;
     if (code.length < LENGTH) {
       setError(tr('auth:otp.enterAllDigits'));
       return;
@@ -129,6 +130,9 @@ export default function Otp() {
             onBlur={() => setFocusedBox((f) => (f === i ? null : f))}
             keyboardType="number-pad"
             textContentType="oneTimeCode"
+            // The first box takes the code the phone or browser offers from the SMS; a whole code spreads across the boxes.
+            autoComplete={i === 0 ? (Platform.OS === 'web' ? 'one-time-code' : 'sms-otp') : 'off'}
+            autoFocus={i === 0}
             accessibilityLabel={tr('auth:otp.digit', { n: i + 1 })}
             style={{
               flex: 1,
@@ -170,6 +174,8 @@ export default function Otp() {
               request(true);
             }}
             accessibilityRole="button"
+            hitSlop={12}
+            style={{ paddingVertical: t.spacing.sm, paddingHorizontal: t.spacing.md }}
           >
             <Text variant="small" tone="primary" weight="600">{tr('auth:otp.resend')}</Text>
           </Pressable>

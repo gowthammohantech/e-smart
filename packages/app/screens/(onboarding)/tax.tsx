@@ -69,7 +69,15 @@ export default function TaxStep() {
       steps={onboardingSteps(draft.plan)}
       currentStep={stepIndex('tax', draft.plan)}
       onPrimary={next}
-      onSkip={() => router.push(nextStepRoute('tax', draft.plan))}
+      onSkip={() => {
+        // Skipping leaves no half-made registration behind: a business marked GST-registered needs a valid GSTIN.
+        const india = isGst && draft.country === 'IN';
+        if (draft.taxRegistered && (!draft.taxIdentifier.trim() || (india && validGstin(draft.taxIdentifier)))) {
+          set({ taxRegistered: false, taxIdentifier: '', compositionScheme: false, prefilledFromGstin: '' });
+        }
+        setError(undefined);
+        router.push(nextStepRoute('tax', draft.plan));
+      }}
       onSignOut={signOut}
     >
       <SwitchField
@@ -85,9 +93,14 @@ export default function TaxStep() {
             label={country?.taxIdLabel ?? tr('onboarding:tax.numberLabel')}
             value={draft.taxIdentifier}
             onChangeText={(v) => {
-              set({ taxIdentifier: v.toUpperCase() });
+              // A GSTIN is 15 letters and digits; spaces and dashes from a pasted copy go.
+              set({ taxIdentifier: draft.country === 'IN' ? v.toUpperCase().replace(/[^0-9A-Z]/g, '').slice(0, 15) : v.toUpperCase() });
               setError(undefined);
             }}
+            maxLength={draft.country === 'IN' ? 15 : undefined}
+            autoCorrect={false}
+            autoComplete="off"
+            spellCheck={false}
             placeholder={draft.country === 'IN' ? '27AABCV1234F1ZO' : tr('onboarding:tax.numberPlaceholder')}
             autoCapitalize="characters"
             icon="card-account-details-outline"

@@ -29,7 +29,12 @@ export type SearchResult = {
 export function useGlobalSearch(query: string) {
   const { t: tr } = useTranslation(['common', 'domain', 'nav']);
   const canOpen = useCanOpen();
-  const { found, expenses, isFetching } = useServerSearch(useDebounced(query), canOpen('/(app)/expenses'));
+  const settled = useDebounced(query);
+  const { found, expenses, isFetching, isError, refetch } = useServerSearch(settled, canOpen('/(app)/expenses'));
+  // Typed but not yet asked (the search waits for typing to pause) counts as still looking, so "No matches" doesn't flash.
+  const pending = query.trim().length >= 2 && (isFetching || settled !== query);
+  /** The parts that are there, joined: no leading or doubled " · " when one is missing. */
+  const join = (...parts: (string | undefined | null | false)[]) => parts.filter(Boolean).join(' · ');
 
   const results = useMemo<SearchResult[]>(() => {
     if (query.trim().length < 2 || !found) return [];
@@ -38,9 +43,9 @@ export function useGlobalSearch(query: string) {
     (found.parties ?? []).forEach((p) => {
       out.push({
         id: p.id!,
-        group: p.kind !== 'supplier' ? 'Customers' : 'Suppliers',
+        group: p.kind !== 'supplier' ? tr('common:search.group.customers') : tr('common:search.group.suppliers'),
         title: p.name!,
-        subtitle: `${p.code ?? ''}${p.phone ? ` · ${p.phone}` : ''}`,
+        subtitle: join(p.code, p.phone),
         icon: p.kind !== 'supplier' ? 'account-outline' : 'truck-outline',
         route: p.kind !== 'supplier' ? `/(app)/contacts/customers/${p.id}` : `/(app)/contacts/suppliers/${p.id}`,
       });
@@ -49,10 +54,10 @@ export function useGlobalSearch(query: string) {
     (found.items ?? []).forEach((i) => {
       out.push({
         id: i.id!,
-        group: 'Items',
+        group: tr('common:search.group.items'),
         title: i.name!,
-        subtitle: `${i.sku ?? ''} · ${formatMoney(i.salePrice as Money)}`,
-        trailing: i.trackInventory ? `${formatQty(i.stockOnHand ?? 0)} ${i.unit ?? ''}` : 'Service',
+        subtitle: join(i.sku, i.salePrice != null && formatMoney(i.salePrice as Money)),
+        trailing: i.trackInventory ? `${formatQty(i.stockOnHand ?? 0)} ${i.unit ?? ''}`.trim() : tr('common:search.service'),
         icon: i.trackInventory ? 'package-variant-closed' : 'hammer-wrench',
         route: `/(app)/catalog/items/${i.id}`,
       });
@@ -63,7 +68,7 @@ export function useGlobalSearch(query: string) {
         id: d.id!,
         group: documentKindLabel(tr, d.kind as DocumentKind, 2),
         title: d.number!,
-        subtitle: `${d.partyName ?? ''} · ${formatDate(d.date!, 'dd MMM')}`,
+        subtitle: join(d.partyName, d.date && formatDate(d.date, 'dd MMM')),
         trailing: d.grandTotal ? formatMoney(d.grandTotal as Money) : undefined,
         icon: 'file-document-outline',
         route: detailRouteFor(d.kind as DocumentKind, d.id!),
@@ -73,9 +78,9 @@ export function useGlobalSearch(query: string) {
     (found.payments ?? []).forEach((p) => {
       out.push({
         id: p.id!,
-        group: 'Payments',
+        group: tr('common:search.group.payments'),
         title: p.number!,
-        subtitle: `${(p as { partyName?: string }).partyName ?? ''} · ${formatDate(p.date!, 'dd MMM')}`,
+        subtitle: join((p as { partyName?: string }).partyName, p.date && formatDate(p.date, 'dd MMM')),
         trailing: formatMoney(p.amount as Money),
         icon: p.direction === 'received' ? 'cash-plus' : 'cash-minus',
         route: `/(app)/payments/${p.id}`,
@@ -85,9 +90,9 @@ export function useGlobalSearch(query: string) {
     expenses.forEach((e) => {
       out.push({
         id: e.id!,
-        group: 'Expenses',
+        group: tr('common:search.group.expenses'),
         title: e.number!,
-        subtitle: `${e.notes ?? 'Expense'} · ${formatDate(e.date!, 'dd MMM')}`,
+        subtitle: join(e.notes || tr('common:search.expense'), e.date && formatDate(e.date, 'dd MMM')),
         trailing: formatMoney(e.amount as Money),
         icon: 'receipt-text-outline',
         route: `/(app)/expenses/${e.id}`,
@@ -103,5 +108,5 @@ export function useGlobalSearch(query: string) {
     return Array.from(map.entries());
   }, [results]);
 
-  return { results, grouped, isFetching };
+  return { results, grouped, isFetching, pending, isError: isError && !pending, refetch };
 }

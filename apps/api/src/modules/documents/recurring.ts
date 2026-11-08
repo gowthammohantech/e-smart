@@ -3,7 +3,7 @@ import { addDaysISO, businessDate } from '@esmart/core/lib/date';
 import { schema } from '@esmart/db';
 import type { AuthUser, CompanyRow, Deps } from '../../context';
 import { recordChange, type DbOrTx } from '../../lib/audit';
-import { notify } from '../../lib/notify';
+import { notify, noteDate } from '../../lib/notify';
 import { nextRecurrence, schedulerActor } from '../expenses/engine';
 import { fieldsFromRow, linesFromRows, type DocFields } from './engine';
 import { documentsHandlers, insertDocument, type AnyCtx } from './handlers';
@@ -101,7 +101,7 @@ export async function issueRecurringInvoices(deps: Deps, today: string | Date): 
               companyId: template.companyId,
               kind: 'system',
               title: `Recurring invoice ${template.number} not issued`,
-              body: `The copy for ${date} could not be issued: ${err instanceof Error ? err.message : String(err)}. It will be tried again tomorrow.`,
+              body: `The copy for ${noteDate(date)} could not be issued: ${err instanceof Error ? err.message : String(err)}. It will be tried again tomorrow.`,
               entityType: 'document',
               entityId: template.id,
             });

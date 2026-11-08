@@ -26,7 +26,7 @@ import { isUnanswered } from '../../providers/compliance';
 import { keyset } from '../../http/pagination';
 import { recordChange, type DbOrTx } from '../../lib/audit';
 import { newId } from '../../lib/ids';
-import { notify } from '../../lib/notify';
+import { notify, noteDate } from '../../lib/notify';
 import { compact, iso, money } from '../../lib/wire';
 import {
   branchVisible,
@@ -470,7 +470,7 @@ export async function generateEway(ctx: GenerateCtx, input: GenerateInput, opts:
     });
     await recordChange(tx, ctx.user, { companyId: bill.companyId, action: 'generated e-way bill', entityType: 'eway_bill', entityId: bill.id, entityLabel: bill.ewayBillNumber, version: bill.version, after: { documentNumber: doc.number } });
     await touchDocument(tx, ctx.user, doc, ctx.now, { currentEwayBillId: bill.id }, { action: 'generated e-way bill', after: bill.ewayBillNumber });
-    await notify(tx, ctx.deps, { companyId: bill.companyId, kind: 'compliance', title: `E-way bill ${bill.ewayBillNumber}`, body: `${doc.number} · valid until ${response.validUpto.slice(0, 10)}`, entityType: 'eway_bill', entityId: bill.id });
+    await notify(tx, ctx.deps, { companyId: bill.companyId, kind: 'compliance', title: `E-way bill ${bill.ewayBillNumber}`, body: `${doc.number} · valid until ${noteDate(response.validUpto)}`, entityType: 'eway_bill', entityId: bill.id });
     if (attemptId) await tx.update(CA).set({ status: 'settled', settledAt: ctx.now }).where(eq(CA.id, attemptId));
     return { issues, row: bill };
   });
@@ -617,7 +617,7 @@ export const ewayHandlers = defineHandlers({
         .returning();
       await recordChange(tx, ctx.user, { companyId: bill.companyId, action: 'extended e-way bill', entityType: 'eway_bill', entityId: bill.id, entityLabel: bill.ewayBillNumber.trim(), version: next.version, before: bill.validUpto.toISOString(), after: response.newValidUpto });
       await touchBillDocument(ctx, tx, next, {}, 'extended e-way bill');
-      await notify(tx, ctx.deps, { companyId: bill.companyId, kind: 'compliance', title: 'E-way bill extended', body: `${bill.ewayBillNumber.trim()} now runs to ${response.newValidUpto.slice(0, 10)}`, entityType: 'eway_bill', entityId: bill.id });
+      await notify(tx, ctx.deps, { companyId: bill.companyId, kind: 'compliance', title: 'E-way bill extended', body: `${bill.ewayBillNumber.trim()} now runs to ${noteDate(response.newValidUpto)}`, entityType: 'eway_bill', entityId: bill.id });
       return next;
     });
     return { ok: true, issues: [], ewayBill: await toWire(ctx, ctx.db, updated) };

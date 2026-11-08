@@ -12,7 +12,7 @@ import { conflict, planUpgradeRequired, preconditionFailed, unprocessable, type 
 import { recordChange, type DbOrTx } from '../../lib/audit';
 import { newId } from '../../lib/ids';
 import { assignNumber } from '../../lib/numbering';
-import { notify } from '../../lib/notify';
+import { notify, noteMoney } from '../../lib/notify';
 import { rateToBase } from '../documents/engine';
 import { assertPeriodOpen, syncPaymentState } from '../documents/lifecycle';
 import type { PaymentRow } from './wire';
@@ -373,7 +373,7 @@ export async function writePayment(
     after: { amountMinor: row.amountMinor, allocations: input.allocations },
   });
   if (!existing && input.direction === 'received' && (opts.notifyReceived ?? true)) {
-    const amount = `${row.currency.trim()} ${(row.amountMinor / 100).toFixed(2)}`;
+    const amount = noteMoney(row.amountMinor, row.currency);
     await notify(tx, deps, {
       companyId: company.id,
       kind: 'paymentReceived',

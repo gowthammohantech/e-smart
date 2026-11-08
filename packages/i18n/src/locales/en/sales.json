@@ -130,7 +130,25 @@
       "originalBill": "Original bill number",
       "originalDate": "Original date"
     },
-    "saveChanges": "Save changes"
+    "saveChanges": "Save changes",
+    "finaliseAction": {
+      "invoice": "Issue invoice",
+      "quote": "Mark as sent",
+      "proforma": "Mark as sent",
+      "salesOrder": "Confirm order",
+      "delivery": "Mark delivered",
+      "salesReturn": "Approve return",
+      "purchaseOrder": "Confirm order",
+      "goodsReceipt": "Mark received",
+      "purchaseBill": "Record bill",
+      "purchaseReturn": "Approve return",
+      "creditNote": "Issue credit note",
+      "debitNote": "Issue debit note",
+      "supplierCreditNote": "Record credit note",
+      "supplierDebitNote": "Record debit note",
+      "openingInvoice": "Finalise",
+      "openingBill": "Finalise"
+    }
   },
   "reimburse": {
     "title": "{{count}} billable expenses to recover",
@@ -231,7 +249,8 @@
       "undo": "Undo",
       "undoing": "Undoing the adjustment…",
       "undone": "Adjustment with {{label}} undone"
-    }
+    },
+    "editIssuedKind": "An issued {{kind, lowercase}} can't be changed. Duplicate it to start again, or cancel it."
   },
   "line": {
     "editLine": "Edit line",
@@ -260,7 +279,12 @@
     "sacCode": "SAC code",
     "taxWithRate": "Tax ({{rate}})",
     "costCentre": "Cost centre",
-    "costCentreBill": "The bill's"
+    "costCentreBill": "The bill's",
+    "removeTitle": "Remove this line?",
+    "removeMessage": "{{name}} comes off the document, with its quantity, rate and discount.",
+    "grossAmount": "Rate × quantity",
+    "totalWithTax": "Line total with tax",
+    "discountValue": "Discount ({{unit}})"
   },
   "payment": {
     "selectContact": "Select contact",
@@ -338,8 +362,8 @@
     "fxLoss": "FX loss",
     "fxGainSettlement": "FX gain on settlement",
     "fxLossSettlement": "FX loss on settlement",
-    "recordPaymentMade": "Record payment made",
-    "makePayment": "Make payment",
+    "recordPaymentMade": "Record payment",
+    "makePayment": "Pay supplier",
     "receivedFrom": "Received from {{name}}",
     "paidTo": "Paid to {{name}}",
     "depositedInto": "Deposited into",
@@ -359,7 +383,19 @@
     "advanceGoods": "That is goods: an advance for goods carries no GST",
     "advanceCess": "Cess %",
     "advanceCessIs": "cess {{cess}}",
-    "advanceTaxable": "value {{value}}"
+    "advanceTaxable": "value {{value}}",
+    "deleteMessagePaid": "Any bill it was applied to will go back to being outstanding. This cannot be undone.",
+    "settleAll": "Settle all",
+    "sharePdf": "Share PDF",
+    "downloadPdf": "Download PDF",
+    "editHint": "The amount and what it settles stay as recorded. To change them, delete this payment and record it again.",
+    "updated": "Payment updated",
+    "openFailed": "Couldn’t load the open documents",
+    "tdsSectionRequired": "Pick the TDS section to save",
+    "applyingTo": "Applying to {{number}}",
+    "adjustmentOn": "{{label}} on {{number}}",
+    "noDueDate": "No due date",
+    "supplierRef": "Supplier no. {{number}}"
   },
   "aging": {
     "overdue": "Overdue",

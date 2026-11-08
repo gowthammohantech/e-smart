@@ -153,6 +153,10 @@
     "removeLine": "Remove line",
     "totalDebit": "Total debits",
     "totalCredit": "Total credits",
+    "totals": "Totals",
+    "balancedLine": "Debits equal credits",
+    "creditShort": "Credits short by {{amount}}",
+    "debitShort": "Debits short by {{amount}}",
     "difference": "Difference",
     "save": "Save voucher",
     "saved": "Voucher saved",
@@ -279,6 +283,10 @@
     "reopen": "Reopen the books",
     "reopened": "Books reopened",
     "reopenHint": "Reopening lets the closed period change again. Anything changed there may no longer match what was filed or audited.",
+    "closeAskTitle": "Close the books through {{date}}?",
+    "closeAskBody": "Nothing dated on or before {{date}} can be added, changed or removed until an owner reopens the books.",
+    "reopenAskTitle": "Reopen the books?",
+    "reopenAskBody": "Everything through {{date}} can be changed again. Anything changed there may no longer match what was filed or audited.",
     "ownerOnly": "Only an owner can close or reopen the books.",
     "stockTitle": "Stock in the books",
     "periodic": "Periodic: closing stock is valued from the stock ledger at the end of each period, as in Tally.",
@@ -638,7 +646,8 @@
     "applyAllHint": "Or pick an advance above to choose where it goes.",
     "done": "{{amount}} adjusted",
     "nothing": "Nothing to adjust",
-    "back": "Back to the document"
+    "back": "Back to the document",
+    "amountFor": "Apply to {{number}}"
   },
   "transfer": {
     "title": "Transfer",

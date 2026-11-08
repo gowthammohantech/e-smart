@@ -3,7 +3,7 @@ import type { DocumentKind } from '@esmart/core/types';
 import { schema } from '@esmart/db';
 import type { AuthUser, CompanyRow, Deps } from '../../context';
 import { recordChange, type DbOrTx } from '../../lib/audit';
-import { notify } from '../../lib/notify';
+import { notify, noteMoney } from '../../lib/notify';
 import { conflict } from '../../http/errors';
 
 const D = schema.documents;
@@ -36,7 +36,7 @@ export async function sendForApproval(tx: DbOrTx, deps: Deps, user: AuthUser, ro
     companyId: row.companyId,
     kind: 'system',
     title: 'A document is waiting for your approval',
-    body: `${user.name} sent a ${row.kind} for ${(row.grandTotalBaseMinor / 100).toFixed(2)} for approval.`,
+    body: `${user.name} sent ${row.number || 'a draft'} for ${noteMoney(row.grandTotalMinor, row.currency)} for approval.`,
     entityType: 'document',
     entityId: row.id,
   });

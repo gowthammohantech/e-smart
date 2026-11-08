@@ -200,7 +200,10 @@
     "keepPulling": "Keep pulling",
     "askWithNudge_one": "Ask Lixi, {{count}} thing to look at",
     "askWithNudge_other": "Ask Lixi, {{count}} things to look at",
-    "dragHint": "Drag to move it"
+    "dragHint": "Drag to move it",
+    "noCompany": "Open or set up a business first, and I’ll answer from its books.",
+    "actionFailedGeneric": "That didn’t go through. Ask me again and I’ll prepare it afresh.",
+    "review": "Review and confirm"
   },
   "hint": {
     "swipeTabs": "Swipe left or right to switch tabs",

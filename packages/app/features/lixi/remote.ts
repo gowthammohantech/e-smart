@@ -64,7 +64,8 @@ export async function askRemote(history: LixiTurn[], locale?: string): Promise<R
   }
 }
 
-export type ConfirmOutcome = { ok: true; reply: LixiReply } | { ok: false; expired: boolean; reason: string };
+/** `offline`: the server couldn't be reached; `reason` is the server's own words, empty when it gave none. */
+export type ConfirmOutcome = { ok: true; reply: LixiReply } | { ok: false; expired: boolean; offline?: boolean; reason: string };
 
 /** Runs an action the user confirmed. */
 export async function confirmRemote(action: PendingLixiAction): Promise<ConfirmOutcome> {
@@ -74,7 +75,7 @@ export async function confirmRemote(action: PendingLixiAction): Promise<ConfirmO
     return { ok: true, reply: toReply(data.reply) };
   } catch (err) {
     if (err instanceof ApiError) return { ok: false, expired: err.code === 'LIXI_ACTION_EXPIRED', reason: err.message };
-    if (isNetworkError(err)) return { ok: false, expired: false, reason: 'offline' };
+    if (isNetworkError(err)) return { ok: false, expired: false, offline: true, reason: '' };
     throw err;
   }
 }

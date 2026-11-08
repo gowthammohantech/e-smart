@@ -78,7 +78,15 @@
     "loadMore": "Load more",
     "waiting": "Waiting to sync",
     "tileCount_one": "{{count}} document",
-    "tileCount_other": "{{count}} documents"
+    "tileCount_other": "{{count}} documents",
+    "searchShort": "Search {{kind, lowercase}}",
+    "loadFailedBody": "Check your connection and try again.",
+    "customerFilter": "Customer: {{name}}",
+    "supplierFilter": "Supplier: {{name}}",
+    "clearPartyNamed": "Show everyone, not only {{name}}",
+    "owing": "{{amount}} due",
+    "owingBy": "{{amount}} due {{date}}",
+    "draftNumber": "Draft"
   },
   "documentEditor": {
     "finalised": "{{kind}} finalised",
@@ -137,6 +145,7 @@
     "notifications": "Notifications",
     "business": "Business",
     "allBranches": "All branches",
+    "primaryBranch": "Primary",
     "switchBranch": "Switch branch. Current: {{branch}}",
     "clear": "Clear",
     "done": "Done",
@@ -170,7 +179,11 @@
     "noSearchMatch": "Nothing matches that search.",
     "loadingBooks": "Loading your books…",
     "required": "required",
-    "switchBusiness": "Switch business. Current: {{name}}"
+    "switchBusiness": "Switch business. Current: {{name}}",
+    "continue": "Continue",
+    "signOutConfirmTitle": "Sign out?",
+    "signOutConfirmBody": "Setup isn’t finished, and what you’ve entered so far will be cleared. You can set up the business after signing in again.",
+    "yes": "Yes"
   },
   "totals": {
     "subtotal": "Subtotal",
@@ -179,6 +192,7 @@
     "discountOnTotal": "Discount on total",
     "otherCharges": "Other charges",
     "chargesTaxed": "Freight and other charges (taxable)",
+    "tcs": "TCS collected",
     "tdsLabel": "TDS {{section}} at {{rate}}",
     "payableToSupplier": "Payable to supplier",
     "reimbursements": "Reimbursements at cost",
@@ -227,14 +241,29 @@
     "allRead": "All caught up",
     "cleared": "Notifications cleared",
     "filterAll": "All ({{n}})",
-    "filterUnread": "Unread ({{n}})"
+    "filterUnread": "Unread ({{n}})",
+    "emptyUnread": "Nothing unread",
+    "emptyAll": "No notifications",
+    "unreadLabel": "Unread"
   },
   "search": {
     "placeholder": "Invoices, contacts, items, payments…",
     "title": "Search everything",
     "subtitle": "Find an invoice number, a customer, an item",
     "noMatches": "No matches",
-    "subtitleFull": "Find an invoice number, a customer, an item's SKU, a payment reference or an expense — results respect the business you're in."
+    "subtitleFull": "Find an invoice number, a customer, an item's SKU, a payment reference or an expense — results respect the business you're in.",
+    "group": {
+      "customers": "Customers",
+      "suppliers": "Suppliers",
+      "items": "Items",
+      "payments": "Payments",
+      "expenses": "Expenses"
+    },
+    "service": "Service",
+    "expense": "Expense",
+    "failedTitle": "Search didn’t go through",
+    "failedMessage": "We couldn’t reach the server to search. Check the connection and try again.",
+    "retry": "Try again"
   },
   "filters": {
     "title": "Filters",
