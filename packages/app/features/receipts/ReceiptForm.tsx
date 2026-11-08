@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
+import { Image, KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Button } from '@esmart/ui/components/Button';
@@ -21,6 +21,9 @@ import { nowISO, today } from '@esmart/core/lib/date';
 import { uid } from '@esmart/core/lib/id';
 import type { LedgerGroup, Voucher } from '@esmart/core/types';
 import { useServerSave } from '../../components/useServerSave';
+import { useLeaveGuard } from '../../components/useLeaveGuard';
+import { useSaveShortcut } from '../../components/useSaveShortcut';
+import { useGoBack } from '../../navigation/useGoBack';
 import { useDebounced } from '../../components/useDebounced';
 import { useAppStore } from '../../store/appStore';
 import { usePartyRecord, usePartySearch, useServerBook } from '../../remote/queries';
@@ -47,6 +50,7 @@ export function ReceiptForm({ voucher, onSaved }: { voucher?: Voucher; onSaved: 
   const desktop = useIsDesktop();
   const { t: tr } = useTranslation(['books', 'common', 'purchases']);
   const toast = useToast();
+  const goBack = useGoBack();
   const { run: serverSave, saving, blocked } = useServerSave();
   const company = useActiveCompany();
   const baseCurrency = useBaseCurrency();
@@ -69,6 +73,8 @@ export function ReceiptForm({ voucher, onSaved }: { voucher?: Voucher; onSaved: 
   const [reference, setReference] = useState(voucher?.reference ?? '');
   const [narration, setNarration] = useState(voucher?.narration ?? '');
   const [slipUri, setSlipUri] = useState<string | undefined>();
+  /** The files already on a saved receipt, kept unless removed or replaced. */
+  const [keptIds, setKeptIds] = useState<string[]>(voucher?.attachmentIds ?? []);
   const [uploading, setUploading] = useState(false);
   const [picking, setPicking] = useState<'into' | 'source' | 'party' | null>(null);
   const [partyQuery, setPartyQuery] = useState('');
@@ -90,7 +96,11 @@ export function ReceiptForm({ voucher, onSaved }: { voucher?: Voucher; onSaved: 
 
   const minor = fromMajor(amount || '0', baseCurrency).minor;
   const ready = minor > 0 && !!into && !!source;
-  const attached = voucher?.attachmentIds?.length ?? 0;
+  const attached = keptIds.length;
+  // What the person has picked or typed, to tell an untouched form from one with changes to lose.
+  const entered = JSON.stringify([amount, date, into, source, costCentreId, partyId, from, reference, narration, slipUri, keptIds]);
+  const [untouched] = useState(entered);
+  const leaveGuard = useLeaveGuard(entered !== untouched);
 
   const addIncome = async (name: string) => {
     const id = uid('lac');
@@ -102,15 +112,26 @@ export function ReceiptForm({ voucher, onSaved }: { voucher?: Voucher; onSaved: 
     if (res) setSource(`acc:${res.id ?? id}`);
   };
 
-  const attachSlip = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.6 });
+  // A photo taken or picked here replaces any file already on the receipt.
+  const attachSlip = async (from: 'camera' | 'library') => {
+    if (from === 'camera') {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        toast.show(tr('purchases:form.cameraDenied'), 'warning', { icon: 'camera-outline' });
+        return;
+      }
+    }
+    const result =
+      from === 'camera'
+        ? await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.6 })
+        : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.6 });
     if (!result.canceled && result.assets[0]) setSlipUri(result.assets[0].uri);
   };
 
   const save = async () => {
     if (!ready) return;
     // A photo picked here goes up first; a new voucher isn't on the server yet, so it links through attachmentIds.
-    const attachmentIds = [...(voucher?.attachmentIds ?? [])];
+    const attachmentIds = slipUri ? [] : [...keptIds];
     if (slipUri) {
       setUploading(true);
       try {
@@ -145,8 +166,11 @@ export function ReceiptForm({ voucher, onSaved }: { voucher?: Voucher; onSaved: 
       ],
     };
     const res = await serverSave(() => saveVoucher(record), tr('books:receipts.saved'), { icon: 'cash-plus' });
-    if (res) onSaved(res.id ?? record.id);
+    if (!res) return;
+    await leaveGuard.release();
+    onSaved(res.id ?? record.id);
   };
+  useSaveShortcut(() => void save(), !saving && !uploading && ready);
 
   const options = (list: Account[]) => list.map((a) => ({ value: a.key, label: nameOf(a), description: groupName(a.group) }));
 
@@ -159,7 +183,8 @@ export function ReceiptForm({ voucher, onSaved }: { voucher?: Voucher; onSaved: 
             <PickerField label={tr('books:receipts.source')} value={label(source)} placeholder={tr('books:receipts.pickSource')} onPress={() => setPicking('source')} icon="tag-outline" required hint={tr('books:receipts.sourceHint')} />
             <PickerField label={tr('books:receipts.into')} value={label(into)} placeholder={tr('books:receipts.pickInto')} onPress={() => setPicking('into')} icon="bank-outline" required />
           </FieldRow>
-          <DateField label={tr('books:vouchers.date')} value={date} onChange={setDate} maximumDate={new Date()} />
+          {/* A post-dated cheque or a receipt booked ahead is allowed, as on a payment. */}
+          <DateField label={tr('books:vouchers.date')} value={date} onChange={setDate} />
           <PickerField
             label={tr('books:receipts.party')}
             value={party?.name}
@@ -175,9 +200,13 @@ export function ReceiptForm({ voucher, onSaved }: { voucher?: Voucher; onSaved: 
             <TextField label={tr('books:vouchers.reference')} value={reference} onChangeText={setReference} placeholder={tr('books:receipts.referencePlaceholder')} icon="pound" />
           </FieldRow>
           <TextField label={tr('books:vouchers.narration')} value={narration} onChangeText={setNarration} placeholder={tr('books:vouchers.narrationPlaceholder')} multiline />
-          <Pressable onPress={() => void attachSlip()} accessibilityRole="button" accessibilityLabel={tr('books:receipts.attach')}>
-            <Card variant="flat" style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
-              <Icon name={slipUri || attached ? 'check-circle' : 'paperclip'} size={20} color={slipUri || attached ? t.c.good : t.c.primary} />
+          <Card variant="flat" style={{ gap: t.spacing.md }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
+              {slipUri ? (
+                <Image source={{ uri: slipUri }} style={{ width: 48, height: 48, borderRadius: t.radius.sm, backgroundColor: t.c.card2 }} accessibilityIgnoresInvertColors />
+              ) : (
+                <Icon name={attached ? 'check-circle' : 'paperclip'} size={20} color={attached ? t.c.good : t.c.primary} />
+              )}
               <View style={{ flex: 1 }}>
                 <Text variant="body" weight="600">
                   {slipUri ? tr('books:receipts.attachReady') : attached ? tr('books:receipts.attached', { count: attached }) : tr('books:receipts.attach')}
@@ -186,12 +215,30 @@ export function ReceiptForm({ voucher, onSaved }: { voucher?: Voucher; onSaved: 
                   {tr('books:receipts.attachHint')}
                 </Text>
               </View>
-              <Icon name="chevron-right" size={18} color={t.c.muted} />
-            </Card>
-          </Pressable>
+            </View>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm }}>
+              {Platform.OS !== 'web' ? (
+                <Button title={tr('purchases:form.takePhoto')} icon="camera-outline" size="sm" variant="secondary" onPress={() => void attachSlip('camera')} />
+              ) : null}
+              <Button title={tr('purchases:form.choosePhoto')} icon="image-outline" size="sm" variant="secondary" onPress={() => void attachSlip('library')} />
+              {slipUri || attached ? (
+                <Button
+                  title={tr('purchases:form.removeReceipt')}
+                  icon="trash-can-outline"
+                  size="sm"
+                  variant="ghost"
+                  onPress={() => {
+                    setSlipUri(undefined);
+                    setKeptIds([]);
+                  }}
+                />
+              ) : null}
+            </View>
+          </Card>
         </ScrollView>
         <FormActions>
-          <Button title={tr('books:receipts.save')} onPress={() => void save()} loading={saving || uploading} disabled={blocked || uploading || !ready} fullWidth shortcut="S" />
+          {desktop ? <Button title={tr('common:action.cancel')} variant="ghost" onPress={() => goBack(voucher ? `/(app)/receipts/${voucher.id}` : '/(app)/receipts')} /> : null}
+          <Button title={tr('books:receipts.save')} onPress={() => void save()} loading={saving || uploading} disabled={blocked || uploading || !ready} fullWidth={!desktop} shortcut="S" />
         </FormActions>
       </FormContainer>
 
@@ -216,6 +263,7 @@ export function ReceiptForm({ voucher, onSaved }: { voucher?: Voucher; onSaved: 
         value={partyId}
         onSelect={setPartyId}
       />
+      {leaveGuard.dialog}
     </KeyboardAvoidingView>
   );
 }

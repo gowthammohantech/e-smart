@@ -8,14 +8,15 @@ import { Button } from '@esmart/ui/components/Button';
 import { Sheet } from '@esmart/ui/components/Sheet';
 import { AmountField } from '@esmart/ui/components/Field';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
-import { fromMajor } from '@esmart/core/lib/money';
+import { fromMajor, money } from '@esmart/core/lib/money';
 import { formatMoney, toAmountInput } from '@esmart/core/lib/format';
 import { today } from '@esmart/core/lib/date';
 import { uid } from '@esmart/core/lib/id';
 import type { Payment, PaymentMethod } from '@esmart/core/types';
 import { useServerSave } from '../../components/useServerSave';
 import { useAppStore } from '../../store/appStore';
-import { usePaymentAccounts } from '../../store/selectors';
+import { useBaseCurrency, usePaymentAccounts } from '../../store/selectors';
+import { useServerAccountBalances } from '../../remote/queries';
 
 const METHOD_FOR: Record<'cash' | 'bank' | 'wallet', PaymentMethod> = { cash: 'cash', bank: 'bank', wallet: 'wallet' };
 
@@ -41,7 +42,12 @@ export function RefundAdvanceSheet({ receipt, visible, onClose, onSaved }: { rec
   const tooMuch = amount.minor > left.minor;
   const early = date < receipt.date;
   const account = accounts.find((a) => a.id === accountId);
-  const canSave = amount.minor > 0 && !tooMuch && !early && !!account;
+  // Money going out can't exceed what the account holds, as the server checks.
+  const baseCurrency = useBaseCurrency();
+  const balances = useServerAccountBalances();
+  const balance = account ? balances?.[account.id] : undefined;
+  const short = balance !== undefined && Math.round(amount.minor * (receipt.exchangeRate || 1)) > balance;
+  const canSave = amount.minor > 0 && !tooMuch && !early && !!account && !short;
 
   const save = async () => {
     if (!canSave || !account) return;
@@ -89,10 +95,15 @@ export function RefundAdvanceSheet({ receipt, visible, onClose, onSaved }: { rec
           currency={receipt.currency}
           error={tooMuch ? tr('sales:refund.tooMuch', { amount: formatMoney(left) }) : undefined}
         />
-        <DateField label={tr('common:table.date')} value={date} onChange={setDate} hint={early ? tr('sales:refund.beforeReceipt') : undefined} />
+        <DateField label={tr('common:table.date')} value={date} onChange={setDate} error={early ? tr('sales:refund.beforeReceipt') : undefined} />
         <Text variant="caption" tone="muted" weight="600">
           {tr('sales:refund.paidFrom')}
         </Text>
+        {short && account ? (
+          <Text variant="caption" tone="bad">
+            {tr('sales:payment.insufficientInAccount', { account: account.name, balance: formatMoney(money(Math.max(balance ?? 0, 0), baseCurrency)) })}
+          </Text>
+        ) : null}
         {accounts.map((a) => {
           const selected = a.id === accountId;
           return (

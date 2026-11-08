@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { CostCentreField } from '../books/CostCentreField';
 import { VehicleField } from '../vehicles/VehicleField';
 import { useTranslation } from 'react-i18next';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
+import { Image, KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { Icon } from '@esmart/ui/components/Icon';
@@ -119,6 +119,8 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
   const [costCentreId, setCostCentreId] = useState<string | undefined>(expense?.costCentreId);
   const [vehicleId, setVehicleId] = useState<string | undefined>(expense?.vehicleId);
   const [receiptUri, setReceiptUri] = useState<string | undefined>(initial?.receiptUri);
+  /** The receipts already on a saved expense, kept unless removed or replaced. */
+  const [keptIds, setKeptIds] = useState<string[]>(expense?.attachmentIds ?? []);
   const [uploading, setUploading] = useState(false);
 
   const [categoryOpen, setCategoryOpen] = useState(false);
@@ -138,7 +140,7 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
   const [newCategoryName, setNewCategoryName] = useState('');
   const [categoryError, setCategoryError] = useState<string | undefined>();
   // What the person has picked or typed, to tell an untouched form from one with changes to lose.
-  const entered = JSON.stringify([categoryId, amountText, date, method, pickedAccountId, supplierId, taxCategoryId, taxInclusive, reference, notes, recurrence, billable, receiptUri]);
+  const entered = JSON.stringify([categoryId, amountText, date, method, pickedAccountId, supplierId, taxCategoryId, taxInclusive, reference, notes, recurrence, billable, receiptUri, keptIds]);
   const [untouched] = useState(entered);
   const leaveGuard = useLeaveGuard(entered !== untouched);
 
@@ -174,9 +176,24 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
   const shortMessage = () =>
     tr(account?.type === 'cash' ? 'purchases:form.cashShort' : 'purchases:form.accountShort', { balance: formatMoney(money(Math.max(cashBalance ?? 0, 0), baseCurrency)), account: account?.name ?? '' });
 
-  const attachReceipt = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.6 });
+  // A photo taken or picked here replaces any receipt already on the expense.
+  const attachReceipt = async (from: 'camera' | 'library') => {
+    if (from === 'camera') {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        toast.show(tr('purchases:form.cameraDenied'), 'warning', { icon: 'camera-outline' });
+        return;
+      }
+    }
+    const result =
+      from === 'camera'
+        ? await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.6 })
+        : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.6 });
     if (!result.canceled && result.assets[0]) setReceiptUri(result.assets[0].uri);
+  };
+  const removeReceipt = () => {
+    setReceiptUri(undefined);
+    setKeptIds([]);
   };
 
   const save = async () => {
@@ -194,7 +211,8 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
       return;
     }
 
-    const attachmentIds = [...(expense?.attachmentIds ?? [])];
+    // A new photo takes the place of what was there; otherwise what's kept stays.
+    const attachmentIds = receiptUri ? [] : [...keptIds];
     if (receiptUri) {
       // The scan already uploaded its image; a photo picked here goes up now. Uploads need a connection.
       if (receiptUri === initial?.receiptUri && initial.receiptAttachmentId) {
@@ -368,21 +386,37 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
       <VehicleField value={vehicleId} onChange={setVehicleId} />
     </>
   );
+  const hasReceipt = !!receiptUri || keptIds.length > 0;
   const receiptCard = (
-    <Pressable onPress={attachReceipt} accessibilityRole="button" accessibilityLabel={tr('purchases:form.attachReceipt')}>
-      <Card variant="flat" style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
-        <Icon name={receiptUri ? 'check-circle' : 'paperclip'} size={20} color={receiptUri ? t.c.good : t.c.primary} />
+    <Card variant="flat" style={{ gap: t.spacing.md }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
+        {receiptUri ? (
+          <Image source={{ uri: receiptUri }} style={{ width: 48, height: 48, borderRadius: t.radius.sm, backgroundColor: t.c.card2 }} accessibilityIgnoresInvertColors />
+        ) : (
+          <Icon name={hasReceipt ? 'check-circle' : 'paperclip'} size={20} color={hasReceipt ? t.c.good : t.c.primary} />
+        )}
         <View style={{ flex: 1 }}>
           <Text variant="body" weight="600">
-            {receiptUri ? tr('purchases:form.receiptAttached') : tr('purchases:form.attachAReceipt')}
+            {receiptUri
+              ? tr('purchases:form.receiptAttached')
+              : keptIds.length
+                ? tr('purchases:form.receiptsOnFile', { count: keptIds.length })
+                : tr('purchases:form.attachAReceipt')}
           </Text>
           <Text variant="caption" tone="muted">
-            {receiptUri ? tr('purchases:form.tapToReplace') : tr('purchases:form.receiptHint')}
+            {hasReceipt ? tr('purchases:form.tapToReplace') : tr('purchases:form.receiptHint')}
           </Text>
         </View>
-        <Icon name="chevron-right" size={18} color={t.c.muted} />
-      </Card>
-    </Pressable>
+      </View>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm }}>
+        {/* A browser has no camera to hand; the file picker covers it. */}
+        {Platform.OS !== 'web' ? (
+          <Button title={tr('purchases:form.takePhoto')} icon="camera-outline" size="sm" variant="secondary" onPress={() => void attachReceipt('camera')} />
+        ) : null}
+        <Button title={tr('purchases:form.choosePhoto')} icon="image-outline" size="sm" variant="secondary" onPress={() => void attachReceipt('library')} />
+        {hasReceipt ? <Button title={tr('purchases:form.removeReceipt')} icon="trash-can-outline" size="sm" variant="ghost" onPress={removeReceipt} /> : null}
+      </View>
+    </Card>
   );
   const scanButton = (
     <Button

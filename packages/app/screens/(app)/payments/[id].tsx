@@ -1,26 +1,24 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, ScrollView, View } from 'react-native';
+import { Platform, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
-import { Badge } from '@esmart/ui/components/Badge';
 import { Button } from '@esmart/ui/components/Button';
 import { Avatar } from '@esmart/ui/components/Avatar';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
-import { useToast } from '@esmart/ui/components/Toast';
 import { useServerSave } from '../../../components/useServerSave';
 import { useAppStore } from '../../../store/appStore';
-import { useBaseCurrency, useDocuments, useParty, usePayment, usePaymentAccounts } from '../../../store/selectors';
-import { adjustAdvancesFor, usePaymentRecord } from '../../../remote/queries';
-import { describeError } from '../../../remote/errors';
+import { useBaseCurrency, useCurrentUser, useDocuments, useParty, usePayment, usePaymentAccounts } from '../../../store/selectors';
+import { usePaymentRecord } from '../../../remote/queries';
 import { LoadingView } from '../../../components/LoadingView';
 import { detailRouteFor } from '../../../features/documents/DocumentEditor';
 import { RefundAdvanceSheet } from '../../../features/payments/RefundAdvanceSheet';
+import { usePaymentActions } from '../../../features/payments/paymentActions';
 import { paymentMethodLabel } from '@esmart/core/labels';
 import { formatMoney } from '@esmart/core/lib/format';
 import { INDIAN_STATES } from '@esmart/core/data/masters';
@@ -34,8 +32,11 @@ export default function PaymentDetail() {
   const { t: tr } = useTranslation(['common', 'domain', 'nav', 'sales', 'purchases']);
   const router = useRouter();
   const goBack = useGoBack();
-  const toast = useToast();
   const { run: serverSave } = useServerSave();
+  // The server lets these roles change a payment, and only an owner or admin delete one.
+  const role = useCurrentUser()?.role ?? '';
+  const canEdit = ['owner', 'admin', 'accountant'].includes(role);
+  const canDelete = ['owner', 'admin'].includes(role);
 
   const { id } = useLocalSearchParams<{ id: string }>();
   const documents = useDocuments();
@@ -51,6 +52,7 @@ export default function PaymentDetail() {
   const [refunding, setRefunding] = useState(false);
   // A refund names the receipt it paid back; fetched so its number shows.
   const refundOf = usePaymentRecord(payment?.refundOf).data;
+  const { sharePdf, adjustAdvance, pdfBusy, adjusting } = usePaymentActions(payment);
 
   if (!payment && remote.isLoading) return <LoadingView />;
   if (!payment) {
@@ -69,27 +71,27 @@ export default function PaymentDetail() {
     <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: payment.number }} />
 
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 + insets.bottom }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
+      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 140 + insets.bottom }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <Card style={{ alignItems: 'center', gap: t.spacing.sm, paddingVertical: t.spacing.xxl }}>
           <View
             style={{
               width: 56,
               height: 56,
               borderRadius: 28,
-              backgroundColor: isIn ? t.c.goodSoft : t.c.badSoft,
+              // Money paid out is the business doing what it meant to, not an error: neutral, not red.
+              backgroundColor: isIn ? t.c.goodSoft : t.c.chip,
               alignItems: 'center',
               justifyContent: 'center',
             }}
           >
-            <Icon name={isIn ? 'arrow-down' : 'arrow-up'} size={27} color={isIn ? t.c.good : t.c.bad} />
+            <Icon name={isIn ? 'arrow-down' : 'arrow-up'} size={27} color={isIn ? t.c.good : t.c.primary} />
           </View>
-          <Text variant="h1" weight="700" tone={isIn ? 'good' : 'bad'}>
+          <Text variant="h1" weight="700" tone={isIn ? 'good' : undefined}>
             {formatMoney(payment.amount)}
           </Text>
           <Text variant="small" tone="muted">
             {tr(isIn ? 'sales:payment.receivedFrom' : 'sales:payment.paidTo', { name: party?.name ?? tr('common:placeholder.unknown') })}
           </Text>
-          <Badge label={payment.number} tone="neutral" />
         </Card>
 
         <Card style={{ marginTop: t.spacing.md, gap: t.spacing.md }}>
@@ -195,31 +197,18 @@ export default function PaymentDetail() {
         </Card>
 
         {payment.unallocated.minor > 0 ? (
-          <Card variant="flat" style={{ marginTop: t.spacing.md, flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
-            <Icon name="wallet-outline" size={20} color={t.c.warn} />
-            <Text variant="small" style={{ flex: 1 }}>
-              {tr('sales:payment.unallocatedNote', { amount: formatMoney(payment.unallocated) })}
-            </Text>
-            {isIn ? <Button title={tr('sales:refund.action')} size="sm" variant="ghost" icon="cash-refund" onPress={() => setRefunding(true)} /> : null}
-            <Button
-              title={tr('sales:payment.adjustAdvance')}
-              size="sm"
-              variant="secondary"
-              onPress={async () => {
-                // On the server: notes too, and a service advance's GST.
-                try {
-                  const applied = await adjustAdvancesFor(payment.partyId, payment.direction, undefined);
-                  toast.show(
-                    applied.length
-                      ? tr('sales:payment.advanceAdjusted', { amount: applied.map((m) => formatMoney(m)).join(', ') })
-                      : tr('sales:payment.advanceNothingToAdjust'),
-                    applied.length ? 'success' : 'info',
-                  );
-                } catch (err) {
-                  toast.show(describeError(err, tr), 'error');
-                }
-              }}
-            />
+          // The note on its own line and the actions under it, so neither is squeezed on a phone.
+          <Card variant="flat" style={{ marginTop: t.spacing.md, gap: t.spacing.md }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
+              <Icon name="wallet-outline" size={20} color={t.c.warn} />
+              <Text variant="small" style={{ flex: 1 }}>
+                {tr('sales:payment.unallocatedNote', { amount: formatMoney(payment.unallocated) })}
+              </Text>
+            </View>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', gap: t.spacing.sm }}>
+              {isIn ? <Button title={tr('sales:refund.action')} size="sm" variant="ghost" icon="cash-refund" onPress={() => setRefunding(true)} /> : null}
+              <Button title={tr('sales:payment.adjustAdvance')} size="sm" variant="secondary" loading={adjusting} disabled={adjusting} onPress={() => void adjustAdvance()} />
+            </View>
           </Card>
         ) : null}
 
@@ -251,7 +240,7 @@ export default function PaymentDetail() {
                 <Text variant="small" weight="600" style={{ flex: 1 }}>
                   {`${r.number ?? ''} · ${formatDate(r.date)}`}
                 </Text>
-                <Text variant="small" weight="700" tone="bad">
+                <Text variant="small" weight="700">
                   {formatMoney(r.amount)}
                 </Text>
                 <Icon name="chevron-right" size={18} color={t.c.muted} />
@@ -292,15 +281,24 @@ export default function PaymentDetail() {
           borderTopWidth: 1,
           borderTopColor: t.c.line,
           backgroundColor: t.c.paper,
+          flexDirection: 'row',
+          gap: t.spacing.sm,
         }}
       >
+        {/* The same order as an expense or receipt: the PDF, then edit, then delete. */}
         <Button
-          title={tr('sales:payment.deletePayment')}
-          variant="danger"
-          icon="trash-can-outline"
-          onPress={() => setConfirmDelete(true)}
-          fullWidth
+          title={tr(Platform.OS === 'web' ? 'sales:payment.downloadPdf' : 'sales:payment.sharePdf')}
+          variant="secondary"
+          icon="file-pdf-box"
+          onPress={() => void sharePdf()}
+          loading={pdfBusy}
+          disabled={pdfBusy}
+          style={{ flex: 1 }}
         />
+        {canEdit ? <Button title={tr('common:action.edit')} icon="pencil-outline" onPress={() => router.push(`/(app)/payments/edit/${payment.id}` as never)} style={{ flex: 1 }} /> : null}
+        {canDelete ? (
+          <Button title={tr('sales:payment.delete')} variant="danger" icon="trash-can-outline" onPress={() => setConfirmDelete(true)} style={{ flex: 1 }} />
+        ) : null}
       </View>
 
       {isIn && refunding ? <RefundAdvanceSheet receipt={payment} visible onClose={() => setRefunding(false)} onSaved={(rid) => router.push(`/(app)/payments/${rid}`)} /> : null}
@@ -308,7 +306,7 @@ export default function PaymentDetail() {
       <ConfirmDialog
         visible={confirmDelete}
         title={tr('sales:payment.deleteTitle')}
-        message={tr('sales:payment.deleteMessage')}
+        message={tr(isIn ? 'sales:payment.deleteMessage' : 'sales:payment.deleteMessagePaid')}
         confirmLabel={tr('sales:payment.delete')}
         destructive
         onCancel={() => setConfirmDelete(false)}

@@ -57,6 +57,12 @@ export function PaymentListView({ direction }: { direction: PaymentDirection }) 
   // Nothing recorded at all, as against nothing matching the search or range.
   const noneAtAll = range === 'all' && !search && summary.data?.count === 0 && !filtered.length;
   const loading = (pages.isLoading || summary.isLoading) && !filtered.length;
+  // Didn't load: said so with a retry, never "no payments" or a ₹0 total.
+  const failed = pages.isError && !filtered.length;
+  const retry = () => {
+    void pages.refetch();
+    void summary.refetch();
+  };
   const loadMore = () => {
     if (pages.hasNextPage && !pages.isFetchingNextPage) void pages.fetchNextPage();
   };
@@ -116,6 +122,8 @@ export function PaymentListView({ direction }: { direction: PaymentDirection }) 
                 onPress={() => setRange(p)}
                 accessibilityRole="button"
                 accessibilityState={{ selected: active }}
+                // The chip stays slim; the target reaches a finger's height.
+                hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
                 style={{
                   paddingHorizontal: t.spacing.md,
                   paddingVertical: 6,
@@ -134,8 +142,8 @@ export function PaymentListView({ direction }: { direction: PaymentDirection }) 
         </ScrollView>
         )}
         {desktop ? (
-          // How many match and what they add up to, at the right end of the filter row.
-          <View style={{ marginLeft: 'auto', flexDirection: 'row', alignItems: 'baseline', gap: t.spacing.md }}>
+          // How many match and what they add up to, at the right end of the filter row (not ₹0 when it didn't load).
+          summary.isError ? null : <View style={{ marginLeft: 'auto', flexDirection: 'row', alignItems: 'baseline', gap: t.spacing.md }}>
             <Text variant="small" tone="muted">
               {tr('sales:list.count', { count })}
             </Text>
@@ -143,12 +151,13 @@ export function PaymentListView({ direction }: { direction: PaymentDirection }) 
               {formatMoney(total)}
             </Text>
           </View>
-        ) : (
+        ) : failed || summary.isError ? null : (
         <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
           <Text variant="caption" tone="muted">
             {tr('sales:list.count', { count })}
           </Text>
-          <Text variant="caption" weight="700" tone={direction === 'received' ? 'good' : 'bad'}>
+          {/* Money paid out is neutral, not an error red. */}
+          <Text variant="caption" weight="700" tone={direction === 'received' ? 'good' : undefined}>
             {formatMoney(total)}
           </Text>
         </View>
@@ -191,7 +200,7 @@ export function PaymentListView({ direction }: { direction: PaymentDirection }) 
                 width: 150,
                 align: 'right',
                 render: (p) => (
-                  <Cell weight="700" tone={direction === 'received' ? 'good' : 'bad'} mono>
+                  <Cell weight="700" tone={direction === 'received' ? 'good' : undefined} mono>
                     {formatMoney(p.amount)}
                   </Cell>
                 ),
@@ -227,6 +236,15 @@ export function PaymentListView({ direction }: { direction: PaymentDirection }) 
         <Card padded={false}>
           {loading ? (
             <CardRowsSkeleton />
+          ) : failed ? (
+            <EmptyState
+              icon="cloud-off-outline"
+              title={tr('common:table.loadFailed')}
+              message={tr('common:documentList.loadFailedBody')}
+              actionLabel={tr('common:action.retry')}
+              onAction={retry}
+              compact
+            />
           ) : filtered.length === 0 ? (
             <EmptyState
               illustration="no-payments"
@@ -264,7 +282,7 @@ export function PaymentListView({ direction }: { direction: PaymentDirection }) 
                   </Text>
                 </View>
                 <View style={{ alignItems: 'flex-end', gap: 4 }}>
-                  <Text variant="body" weight="700" tone={direction === 'received' ? 'good' : 'bad'}>
+                  <Text variant="body" weight="700" tone={direction === 'received' ? 'good' : undefined}>
                     {formatMoney(p.amount)}
                   </Text>
                   {p.unallocated.minor > 0 ? (

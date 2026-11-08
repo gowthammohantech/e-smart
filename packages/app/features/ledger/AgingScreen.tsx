@@ -17,6 +17,7 @@ import { AgingBars } from '@esmart/ui/components/charts/AgingBars';
 import { AgingBucketKey, summarizeAging, type OutstandingDoc } from '@esmart/core/domain/receivables';
 import type { Party } from '@esmart/core/types';
 import { formatMoney } from '@esmart/core/lib/format';
+import { documentKindLabel } from '@esmart/core/labels';
 import { formatDate, today } from '@esmart/core/lib/date';
 import { Money, money, sum, zero } from '@esmart/core/lib/money';
 import { StatGrid, SplitPane } from '@esmart/ui/components/Layout';
@@ -26,12 +27,13 @@ import { LoadingView } from '../../components/LoadingView';
 import { SHOW_SCROLLBAR, useBreakpoint } from '@esmart/ui/theme/breakpoints';
 import { focusRing, type WebPressState } from '@esmart/ui/theme/interaction';
 import { PaymentReminderSheet } from './PaymentReminderSheet';
+import { detailRouteFor } from '../documents/DocumentEditor';
 
 type Mode = 'all' | 'overdue' | 'dueSoon';
 
 export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
   const t = useTheme();
-  const { t: tr } = useTranslation(['sales', 'common', 'reports', 'contacts']);
+  const { t: tr } = useTranslation(['sales', 'common', 'reports', 'contacts', 'domain']);
   const router = useRouter();
   // Always 'phone' in the native apps, so the desktop layout only ever reaches a browser.
   const bp = useBreakpoint();
@@ -47,6 +49,15 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
   const [reminderFor, setReminderFor] = useState<string | null>(null);
 
   const nameOf = (id: string) => data.partyNames[id] ?? tr('common:placeholder.unknown');
+  /** What the document is, the supplier's own number for a bill, and when it falls due (if it does). */
+  const docMeta = (o: Outstanding) =>
+    [
+      documentKindLabel(tr, o.document.kind, 1),
+      o.document.supplierDocNumber,
+      o.document.dueDate ? tr('sales:detail.dueOn', { date: formatDate(o.document.dueDate, 'dd MMM') }) : tr('sales:payment.noDueDate'),
+    ]
+      .filter(Boolean)
+      .join(' · ');
 
   const rows = useMemo(() => {
     let list = data.outstanding;
@@ -124,14 +135,29 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
     </Card>
   );
 
-  const openDocument = (id: string) =>
-    router.push(isReceivable ? `/(app)/sales/invoices/${id}` : `/(app)/purchases/bills/${id}`);
+  // A debit note or an opening balance opens as itself, not as an invoice or bill.
+  const openDocument = (doc: Outstanding['document']) =>
+    router.push((doc.kind ? detailRouteFor(doc.kind, doc.id) : isReceivable ? `/(app)/sales/invoices/${doc.id}` : `/(app)/purchases/bills/${doc.id}`) as never);
   const recordPayment = (partyId: string) =>
     router.push(`/(app)/payments/new?direction=${isReceivable ? 'received' : 'paid'}&partyId=${partyId}`);
 
   const reminderSheet = <PaymentReminderSheet party={reminderParty} rows={reminderRows} onClose={() => setReminderFor(null)} />;
 
   if (!remote.data && remote.isLoading) return <LoadingView variant="report" keepTitle />;
+  // Not "all paid up": the figures didn't load, so nothing can be said about them.
+  if (!remote.data && remote.isError) {
+    return (
+      <View style={{ flex: 1 }}>
+        <EmptyState
+          icon="cloud-off-outline"
+          title={tr('common:table.loadFailed')}
+          message={tr('common:documentList.loadFailedBody')}
+          actionLabel={tr('common:action.retry')}
+          onAction={() => void remote.refetch()}
+        />
+      </View>
+    );
+  }
 
   if (desktop) {
     const overdueCount = data.outstanding.filter((o) => o.daysOverdue > 0).length;
@@ -215,7 +241,13 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
             icon="scale-balance"
             caption={tr('sales:payment.openDocuments', { count: data.outstanding.length })}
           />
-          <StatTile label={tr('sales:aging.overdue')} value={data.summary.overdue} tone="bad" icon="alert-circle-outline" caption={tr('sales:aging.dueSoonAmount', { amount: formatMoney(data.summary.dueSoon) })} />
+          <StatTile
+            label={tr('sales:aging.overdue')}
+            value={data.summary.overdue}
+            tone="bad"
+            icon="alert-circle-outline"
+            caption={tr('sales:aging.overdueOfTotal', { overdue: data.outstanding.filter((o) => o.daysOverdue > 0).length, total: data.outstanding.length })}
+          />
         </StatRow>
 
         {agingCard}
@@ -262,11 +294,7 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
                   {groupRows.map((o) => (
                     <Pressable
                       key={o.document.id}
-                      onPress={() =>
-                        router.push(
-                          isReceivable ? `/(app)/sales/invoices/${o.document.id}` : `/(app)/purchases/bills/${o.document.id}`,
-                        )
-                      }
+                      onPress={() => openDocument(o.document)}
                       accessibilityRole="button"
                       accessibilityLabel={tr('sales:aging.rowLabel', { number: o.document.number, amount: formatMoney(o.outstanding) })}
                       style={({ pressed }) => ({
@@ -275,6 +303,7 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
                         gap: t.spacing.md,
                         paddingHorizontal: t.spacing.lg,
                         paddingVertical: t.spacing.sm,
+                        minHeight: 48,
                         backgroundColor: pressed ? t.c.card2 : 'transparent',
                       })}
                     >
@@ -282,8 +311,8 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
                         <Text variant="small" weight="600">
                           {o.document.number}
                         </Text>
-                        <Text variant="micro" tone="muted">
-                          {tr('sales:detail.dueOn', { date: formatDate(o.document.dueDate ?? o.document.date, 'dd MMM') })}
+                        <Text variant="micro" tone="muted" numberOfLines={1}>
+                          {docMeta(o)}
                         </Text>
                       </View>
                       {o.daysOverdue > 0 ? <Badge label={tr('sales:aging.daysShort', { days: o.daysOverdue })} tone="danger" size="sm" /> : null}
@@ -300,7 +329,7 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
                     <Button title={tr('sales:aging.remind')} variant="ghost" icon="bell-ring-outline" size="sm" onPress={() => setReminderFor(group.id)} style={{ flex: 1 }} />
                   ) : null}
                   <Button
-                    title={isReceivable ? tr('common:action.recordPayment') : tr('contacts:detail.pay')}
+                    title={isReceivable ? tr('common:action.recordPayment') : tr('sales:payment.makePayment')}
                     size="sm"
                     icon={isReceivable ? 'cash-plus' : 'cash-minus'}
                     onPress={() => router.push(`/(app)/payments/new?direction=${isReceivable ? 'received' : 'paid'}&partyId=${group.id}`)}
@@ -340,7 +369,7 @@ function DesktopPartyGroup({
   total: Money;
   rows: Outstanding[];
   isReceivable: boolean;
-  onOpen: (documentId: string) => void;
+  onOpen: (doc: Outstanding['document']) => void;
   onRemind: () => void;
   onRecord: () => void;
 }) {
@@ -376,7 +405,7 @@ function DesktopPartyGroup({
           {isReceivable ? (
             <Button title={tr('sales:aging.remind')} variant="secondary" icon="bell-ring-outline" size="sm" onPress={onRemind} />
           ) : null}
-          <Button title={isReceivable ? tr('common:action.recordPayment') : tr('contacts:detail.pay')} size="sm" icon={isReceivable ? 'cash-plus' : 'cash-minus'} onPress={onRecord} />
+          <Button title={isReceivable ? tr('common:action.recordPayment') : tr('sales:payment.makePayment')} size="sm" icon={isReceivable ? 'cash-plus' : 'cash-minus'} onPress={onRecord} />
         </View>
       </View>
 
@@ -402,7 +431,7 @@ function DesktopPartyGroup({
       {rows.map((o) => (
         <Pressable
           key={o.document.id}
-          onPress={() => onOpen(o.document.id)}
+          onPress={() => onOpen(o.document)}
           accessibilityRole="link"
           accessibilityLabel={tr('sales:aging.rowLabel', { number: o.document.number, amount: formatMoney(o.outstanding) })}
           style={(state) => {
@@ -422,11 +451,16 @@ function DesktopPartyGroup({
             ];
           }}
         >
-          <Text variant="small" weight="600" numberOfLines={1} style={{ flex: 1 }}>
-            {o.document.number}
-          </Text>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text variant="small" weight="600" numberOfLines={1}>
+              {o.document.number}
+            </Text>
+            <Text variant="micro" tone="muted" numberOfLines={1}>
+              {[documentKindLabel(tr, o.document.kind, 1), o.document.supplierDocNumber].filter(Boolean).join(' · ')}
+            </Text>
+          </View>
           <Text variant="small" tone="muted" numberOfLines={1} style={{ width: 130 }}>
-            {formatDate(o.document.dueDate ?? o.document.date, 'dd MMM yyyy')}
+            {o.document.dueDate ? formatDate(o.document.dueDate, 'dd MMM yyyy') : '—'}
           </Text>
           <View style={{ width: 100, alignItems: 'flex-start' }}>
             {o.daysOverdue > 0 ? <Badge label={tr('sales:aging.daysShort', { days: o.daysOverdue })} tone="danger" size="sm" /> : <Text variant="small" tone="muted">—</Text>}

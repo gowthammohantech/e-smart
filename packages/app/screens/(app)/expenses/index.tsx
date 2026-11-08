@@ -72,6 +72,22 @@ export default function ExpensesList() {
   // Nothing recorded at all, as against nothing matching the filters.
   const noneAtAll = range === 'all' && !search && !categoryId && summary.data?.count === 0 && !filtered.length;
   const loading = (pages.isLoading || summary.isLoading) && !filtered.length;
+  // Didn't load: said so with a retry, never "no expenses" or a ₹0 total.
+  const failed = pages.isError && !filtered.length;
+  const retry = () => {
+    void pages.refetch();
+    void summary.refetch();
+  };
+  const failedState = (
+    <EmptyState
+      icon="cloud-off-outline"
+      title={tr('common:table.loadFailed')}
+      message={tr('common:documentList.loadFailedBody')}
+      actionLabel={tr('common:action.retry')}
+      onAction={retry}
+      compact
+    />
+  );
   const loadMore = () => {
     if (pages.hasNextPage && !pages.isFetchingNextPage) void pages.fetchNextPage();
   };
@@ -105,6 +121,8 @@ export default function ExpensesList() {
         onPress={() => setRange(p)}
         accessibilityRole="button"
         accessibilityState={{ selected: active }}
+        // The chip stays slim; the target reaches a finger's height.
+        hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
         style={{
           paddingHorizontal: t.spacing.md,
           paddingVertical: 6,
@@ -126,6 +144,8 @@ export default function ExpensesList() {
       <Pressable
         onPress={() => setCategoryId(null)}
         accessibilityRole="button"
+        accessibilityState={{ selected: !categoryId }}
+        hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
         style={{
           paddingHorizontal: t.spacing.md,
           paddingVertical: 6,
@@ -145,6 +165,7 @@ export default function ExpensesList() {
             onPress={() => setCategoryId(active ? null : c.id)}
             accessibilityRole="button"
             accessibilityState={{ selected: active }}
+            hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
             style={{
               paddingHorizontal: t.spacing.md,
               paddingVertical: 6,
@@ -190,17 +211,17 @@ export default function ExpensesList() {
             onChange={(v) => setCategoryId(v === 'all' ? null : v)}
           />
           {/* How many match and what they add up to, at the right end of the filter row. */}
-          <View style={{ marginLeft: 'auto', flexDirection: 'row', alignItems: 'baseline', gap: t.spacing.md }}>
+          {summary.isError ? null : <View style={{ marginLeft: 'auto', flexDirection: 'row', alignItems: 'baseline', gap: t.spacing.md }}>
             <Text variant="small" tone="muted">
               {tr('purchases:expense.entriesWithTax', { count, tax: formatMoney(taxTotal) })}
             </Text>
             <Text variant="title" weight="700" style={{ fontVariant: ['tabular-nums'] }}>
               {formatMoney(total)}
             </Text>
-          </View>
+          </View>}
         </View>
         <SplitPane
-          sideWidth={300}
+          sideWidth={320}
           main={
             <View style={{ flex: 1 }}>
               <DataTable
@@ -255,13 +276,16 @@ export default function ExpensesList() {
             </View>
           }
           side={
-            narrow ? null : (
+            narrow ? null : summary.isError ? (
+              <Card padded={false}>{failedState}</Card>
+            ) : (
             <>
               <StatTile label={tr('purchases:expense.totalSpent')} value={total} tone="warn" icon="receipt-text-outline" caption={tr('purchases:expense.entries', { count })} loading={!summary.data && summary.isLoading} />
               <StatTile label={tr('purchases:expense.inputTax')} value={taxTotal} icon="percent-outline" caption={tr('purchases:expense.claimable')} loading={!summary.data && summary.isLoading} />
               {slices.length > 0 ? (
                 <Card>
-                  <DonutChart slices={slices} centerLabel={tr('purchases:expense.total')} />
+                  {/* A smaller ring in the narrow side column leaves the legend room for whole names. */}
+                  <DonutChart slices={slices} centerLabel={tr('purchases:expense.total')} size={112} thickness={18} />
                 </Card>
               ) : null}
             </>
@@ -293,10 +317,14 @@ export default function ExpensesList() {
         }}
         scrollEventThrottle={200}
       >
-        <StatRow>
-          <StatTile label={tr('purchases:expense.totalSpent')} value={total} tone="warn" icon="receipt-text-outline" caption={tr('purchases:expense.entries', { count })} loading={!summary.data && summary.isLoading} />
-          <StatTile label={tr('purchases:expense.inputTax')} value={taxTotal} icon="percent-outline" caption={tr('purchases:expense.claimable')} loading={!summary.data && summary.isLoading} />
-        </StatRow>
+        {summary.isError ? (
+          failed ? null : <Card padded={false}>{failedState}</Card>
+        ) : (
+          <StatRow>
+            <StatTile label={tr('purchases:expense.totalSpent')} value={total} tone="warn" icon="receipt-text-outline" caption={tr('purchases:expense.entries', { count })} loading={!summary.data && summary.isLoading} />
+            <StatTile label={tr('purchases:expense.inputTax')} value={taxTotal} icon="percent-outline" caption={tr('purchases:expense.claimable')} loading={!summary.data && summary.isLoading} />
+          </StatRow>
+        )}
 
         {slices.length > 0 ? (
           <Card style={{ marginTop: t.spacing.md }}>
@@ -311,6 +339,8 @@ export default function ExpensesList() {
         <Card padded={false}>
           {loading ? (
             <CardRowsSkeleton kind="list" />
+          ) : failed ? (
+            failedState
           ) : filtered.length === 0 ? (
             <EmptyState
               illustration="no-expenses"

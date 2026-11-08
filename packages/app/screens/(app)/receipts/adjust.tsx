@@ -104,16 +104,17 @@ export default function AdjustAdvances() {
     chosen && void apply(typed.map((x) => ({ sourceType: chosen.sourceType, sourceId: chosen.id, documentId: x.documentId, amount: money(x.minor, baseCurrency) })));
 
   const kindLabel = (kind: DocumentKind) => documentKindLabel(tr, kind, 1);
+  // The row is the tap target; a field under it sits outside it, so typing in the field never
+  // re-fills it with the most it can take.
   const row = (key: string, title: string, subtitle: string, right: React.ReactNode, opts: { selected?: boolean; onPress?: () => void; warn?: string; extra?: React.ReactNode }) => (
-    <Pressable
-      key={key}
-      onPress={opts.onPress}
-      disabled={!opts.onPress}
-      accessibilityRole={opts.onPress ? 'button' : undefined}
-      accessibilityState={opts.onPress ? { selected: !!opts.selected } : undefined}
-      style={{ padding: t.spacing.md, gap: t.spacing.xs, borderBottomWidth: 0.5, borderBottomColor: t.c.line, backgroundColor: opts.selected ? t.c.card2 : 'transparent' }}
-    >
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
+    <View key={key} style={{ borderBottomWidth: 0.5, borderBottomColor: t.c.line, backgroundColor: opts.selected ? t.c.card2 : 'transparent' }}>
+      <Pressable
+        onPress={opts.onPress}
+        disabled={!opts.onPress}
+        accessibilityRole={opts.onPress ? 'button' : undefined}
+        accessibilityState={opts.onPress ? { selected: !!opts.selected } : undefined}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md, padding: t.spacing.md, minHeight: 48 }}
+      >
         {opts.onPress ? <Icon name={opts.selected ? 'radiobox-marked' : 'radiobox-blank'} size={18} color={opts.selected ? t.c.primary : t.c.muted} /> : null}
         <View style={{ flex: 1, gap: 2 }}>
           <Text variant="body" weight="600" numberOfLines={1}>
@@ -124,14 +125,18 @@ export default function AdjustAdvances() {
           </Text>
         </View>
         {right}
-      </View>
-      {opts.extra}
-      {opts.warn ? (
-        <Text variant="caption" tone="warn">
-          {opts.warn}
-        </Text>
+      </Pressable>
+      {opts.extra || opts.warn ? (
+        <View style={{ paddingHorizontal: t.spacing.md, paddingBottom: t.spacing.md, gap: t.spacing.xs }}>
+          {opts.extra}
+          {opts.warn ? (
+            <Text variant="caption" tone="warn">
+              {opts.warn}
+            </Text>
+          ) : null}
+        </View>
       ) : null}
-    </Pressable>
+    </View>
   );
 
   return (
@@ -160,6 +165,16 @@ export default function AdjustAdvances() {
 
           {!partyId ? null : data.isLoading ? (
             <ListSkeleton kind="list" rows={4} />
+          ) : data.isError ? (
+            // Not "nothing to adjust": what the party holds and owes didn't load.
+            <EmptyState
+              icon="cloud-off-outline"
+              title={tr('common:table.loadFailed')}
+              message={tr('common:documentList.loadFailedBody')}
+              actionLabel={tr('common:action.retry')}
+              onAction={() => void data.refetch()}
+              compact
+            />
           ) : !credits.length || !open.length ? (
             <EmptyState icon="swap-horizontal" title={!credits.length ? tr('books:adjust.noCredit') : tr('books:adjust.noOpen')} message={tr('books:adjust.emptyHint')} compact />
           ) : (
@@ -194,11 +209,12 @@ export default function AdjustAdvances() {
                           `${kindLabel(o.kind)} · ${formatDate(o.date)}`,
                           <Text variant="small" weight="700">{formatMoney(o.outstanding as Money)}</Text>,
                           {
-                            onPress: chosen ? () => fill(o.documentId) : undefined,
+                            // A tap fills a document not yet given an amount; one already typed is left as it is.
+                            onPress: chosen ? () => (amounts[o.documentId] ? undefined : fill(o.documentId)) : undefined,
                             selected: !!amounts[o.documentId],
                             warn: serviceAdvance(chosen) && goodsOnly(o.documentId) ? tr('books:adjust.notService') : undefined,
                             extra: chosen ? (
-                              <AmountField label={tr('books:adjust.amount')} value={amounts[o.documentId] ?? ''} onChangeValue={(v) => setAmounts((a) => ({ ...a, [o.documentId]: v }))} currency={baseCurrency} />
+                              <AmountField label={tr('books:adjust.amountFor', { number: o.number })} value={amounts[o.documentId] ?? ''} onChangeValue={(v) => setAmounts((a) => ({ ...a, [o.documentId]: v }))} currency={baseCurrency} />
                             ) : null,
                           },
                         ),

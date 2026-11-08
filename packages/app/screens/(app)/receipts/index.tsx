@@ -73,6 +73,21 @@ export default function ReceiptsList() {
   const byAccount = summary.data?.byAccount ?? [];
   const noneAtAll = range === 'all' && !search && summary.data?.count === 0;
   const loading = (pages.isLoading || summary.isLoading) && !receipts.length;
+  // Didn't load: said so with a retry, never "no receipts" or a ₹0 total.
+  const failed = pages.isError && !receipts.length;
+  const failedState = (
+    <EmptyState
+      icon="cloud-off-outline"
+      title={tr('common:table.loadFailed')}
+      message={tr('common:documentList.loadFailedBody')}
+      actionLabel={tr('common:action.retry')}
+      onAction={() => {
+        void pages.refetch();
+        void summary.refetch();
+      }}
+      compact
+    />
+  );
   const loadMore = () => {
     if (pages.hasNextPage && !pages.isFetchingNextPage) void pages.fetchNextPage();
   };
@@ -128,14 +143,16 @@ export default function ReceiptsList() {
             onChange={setRange}
           />
           {adjustButton}
-          <View style={{ marginLeft: 'auto', flexDirection: 'row', alignItems: 'baseline', gap: t.spacing.md }}>
-            <Text variant="small" tone="muted">
-              {tr('books:receipts.count', { count })}
-            </Text>
-            <Text variant="title" weight="700" style={{ fontVariant: ['tabular-nums'] }}>
-              {formatMoney(total)}
-            </Text>
-          </View>
+          {summary.isError ? null : (
+            <View style={{ marginLeft: 'auto', flexDirection: 'row', alignItems: 'baseline', gap: t.spacing.md }}>
+              <Text variant="small" tone="muted">
+                {tr('books:receipts.count', { count })}
+              </Text>
+              <Text variant="title" weight="700" style={{ fontVariant: ['tabular-nums'] }}>
+                {formatMoney(total)}
+              </Text>
+            </View>
+          )}
         </View>
         <SplitPane
           sideWidth={300}
@@ -170,7 +187,9 @@ export default function ReceiptsList() {
             </View>
           }
           side={
-            narrow ? null : (
+            narrow ? null : summary.isError ? (
+              <Card padded={false}>{failedState}</Card>
+            ) : (
               <>
                 <StatTile label={tr('books:receipts.total')} value={total} tone="good" icon="cash-plus" caption={tr('books:receipts.count', { count })} loading={!summary.data && summary.isLoading} />
                 {splitCard}
@@ -197,6 +216,8 @@ export default function ReceiptsList() {
                 onPress={() => setRange(p)}
                 accessibilityRole="button"
                 accessibilityState={{ selected: active }}
+                // The chip stays slim; the target reaches a finger's height.
+                hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
                 style={{ paddingHorizontal: t.spacing.md, paddingVertical: 6, borderRadius: t.radius.pill, backgroundColor: active ? t.c.primary : t.c.card, borderWidth: active ? 0 : 1, borderColor: t.c.line }}
               >
                 <Text variant="caption" weight="600" style={{ color: active ? t.c.onPrimary : t.c.muted }}>
@@ -215,14 +236,20 @@ export default function ReceiptsList() {
         }}
         scrollEventThrottle={200}
       >
-        <StatRow>
-          <StatTile label={tr('books:receipts.total')} value={total} tone="good" icon="cash-plus" caption={tr('books:receipts.count', { count })} loading={!summary.data && summary.isLoading} />
-        </StatRow>
+        {summary.isError ? (
+          failed ? null : <Card padded={false}>{failedState}</Card>
+        ) : (
+          <StatRow>
+            <StatTile label={tr('books:receipts.total')} value={total} tone="good" icon="cash-plus" caption={tr('books:receipts.count', { count })} loading={!summary.data && summary.isLoading} />
+          </StatRow>
+        )}
         {splitCard}
         <View style={{ alignItems: 'flex-start' }}>{adjustButton}</View>
         <Card padded={false}>
           {loading ? (
             <CardRowsSkeleton />
+          ) : failed ? (
+            failedState
           ) : receipts.length ? (
             receipts.map((v, i) => (
               <ListRow

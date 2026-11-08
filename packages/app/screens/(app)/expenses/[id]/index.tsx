@@ -26,11 +26,12 @@ import { focusRing, type WebPressState } from '@esmart/ui/theme/interaction';
 import { Avatar } from '@esmart/ui/components/Avatar';
 import { FormSection, SplitPane } from '@esmart/ui/components/Layout';
 import { useGoBack } from '../../../../navigation/useGoBack';
+import { AttachmentLinks } from '../../../../features/expenses/AttachmentLinks';
 
 export default function ExpenseDetail() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
-  const { t: tr } = useTranslation(['common', 'domain', 'nav', 'purchases']);
+  const { t: tr } = useTranslation(['common', 'domain', 'nav', 'purchases', 'inventory']);
   const router = useRouter();
   const goBack = useGoBack();
   const { run: serverSave } = useServerSave();
@@ -74,6 +75,19 @@ export default function ExpenseDetail() {
   const category = categories.find((c) => c.id === expense.categoryId);
   const account = accounts.find((a) => a.id === expense.accountId);
   const taxCategory = taxCategories.find((c) => c.id === expense.taxCategoryId);
+  // Under reverse charge the supplier was paid the price alone; the GST is the business's to pay the
+  // government, so it is not inside the amount. Otherwise the tax is part of what was paid.
+  const taxLines = taxCategory
+    ? [
+        expense.reverseCharge
+          ? { label: tr('purchases:expense.paidToSupplier'), value: formatMoney(expense.amount) }
+          : { label: tr('common:totals.netAmount'), value: formatMoney(subtract(expense.amount, expense.taxAmount)) },
+        expense.reverseCharge
+          ? { label: tr('purchases:expense.rcmTax', { rate: formatPercent(taxCategory.rate) }), value: formatMoney(expense.taxAmount) }
+          : { label: tr('purchases:form.inputTaxRate', { rate: formatPercent(taxCategory.rate) }), value: formatMoney(expense.taxAmount) },
+        { label: tr('inventory:gst.itc'), value: tr(`inventory:gst.itcOption.${expense.itcEligibility ?? 'eligible'}`) },
+      ]
+    : [];
 
   const deleteDialog = (
     <ConfirmDialog
@@ -165,9 +179,8 @@ export default function ExpenseDetail() {
       <>
         <FormSection title={tr('purchases:expense.amount')}>
           <View style={{ gap: t.spacing.md }}>
-            {taxCategory ? amountRow(tr('common:totals.netAmount'), formatMoney(subtract(expense.amount, expense.taxAmount))) : null}
-            {taxCategory ? amountRow(tr('purchases:form.inputTaxRate', { rate: formatPercent(taxCategory.rate) }), formatMoney(expense.taxAmount)) : null}
-            {taxCategory ? <View style={{ height: 1, backgroundColor: t.c.line }} /> : null}
+            {taxLines.map((l) => amountRow(l.label, l.value))}
+            {taxLines.length ? <View style={{ height: 1, backgroundColor: t.c.line }} /> : null}
             {amountRow(tr('purchases:expense.total'), formatMoney(expense.amount), true)}
           </View>
         </FormSection>
@@ -202,12 +215,7 @@ export default function ExpenseDetail() {
 
         {expense.attachmentIds.length > 0 ? (
           <FormSection title={tr('purchases:expense.attachments')}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
-              <Icon name="paperclip" size={19} color={t.c.primary} />
-              <Text variant="small">
-                {tr('purchases:expense.attachmentCount', { count: expense.attachmentIds.length })}
-              </Text>
-            </View>
+            <AttachmentLinks ids={expense.attachmentIds} />
           </FormSection>
         ) : null}
       </>
@@ -273,8 +281,8 @@ export default function ExpenseDetail() {
           <Text variant="small" tone="muted">
             {category?.name ?? tr('purchases:expense.uncategorised')}
           </Text>
-          <View style={{ flexDirection: 'row', gap: 6 }}>
-            <Badge label={expense.number} tone="neutral" />
+          {/* Wraps on a phone rather than running off the card. */}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 6 }}>
             {expense.recurrence !== 'none' ? <Badge label={tr(`purchases:recurrence.${expense.recurrence}`)} tone="info" /> : null}
             {expense.billable ? <Badge label={tr('purchases:expense.billable')} tone="warning" /> : null}
             {extraBadges}
@@ -288,12 +296,7 @@ export default function ExpenseDetail() {
             { label: tr('purchases:form.paidFrom'), value: account?.name ?? '—' },
             ...(supplier ? [{ label: tr('purchases:form.supplier'), value: supplier.name }] : []),
             ...(expense.reference ? [{ label: tr('purchases:form.reference'), value: expense.reference }] : []),
-            ...(taxCategory
-              ? [
-                  { label: tr('common:totals.netAmount'), value: formatMoney(subtract(expense.amount, expense.taxAmount)) },
-                  { label: tr('purchases:form.inputTaxRate', { rate: formatPercent(taxCategory.rate) }), value: formatMoney(expense.taxAmount) },
-                ]
-              : []),
+            ...taxLines,
             ...(expense.nextRecurrenceDate ? [{ label: tr('purchases:expense.nextDue'), value: formatDate(expense.nextRecurrenceDate) }] : []),
             { label: tr('purchases:expense.recorded'), value: formatDateTime(expense.createdAt) },
           ].map((r) => (
@@ -318,11 +321,9 @@ export default function ExpenseDetail() {
         ) : null}
 
         {expense.attachmentIds.length > 0 ? (
-          <Card variant="flat" style={{ marginTop: t.spacing.md, flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
-            <Icon name="paperclip" size={19} color={t.c.primary} />
-            <Text variant="small" style={{ flex: 1 }}>
-              {tr('purchases:expense.attachmentCount', { count: expense.attachmentIds.length })}
-            </Text>
+          <Card style={{ marginTop: t.spacing.md, gap: 4 }}>
+            <Text variant="caption" tone="muted" weight="600">{tr('purchases:expense.attachments')}</Text>
+            <AttachmentLinks ids={expense.attachmentIds} />
           </Card>
         ) : null}
       </ScrollView>
