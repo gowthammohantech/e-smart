@@ -6,9 +6,22 @@
     <meta name="robots" content="noindex, nofollow" />
     <link rel="icon" type="image/png" href="/favicon.png" />
     <title>Elixir Books Admin</title>
+    <style>
+      /* The console's shape before the script runs; React replaces it on its first render. */
+      .boot { --b: #f4f6fa; --c: #fff; --k: #edf1f7; --l: #e2e8f1; display: grid; grid-template-columns: 228px 1fr; min-height: 100vh; background: var(--b); }
+      body { margin: 0; }
+      @media (prefers-color-scheme: dark) { .boot { --b: #0e121a; --c: #1d2331; --k: #151a24; --l: #1d273b; } }
+      .boot aside { background: var(--c); border-right: 1px solid var(--l); padding: 20px 16px; display: flex; flex-direction: column; gap: 14px; }
+      .boot main { padding: 28px 32px; display: flex; flex-direction: column; gap: 16px; }
+      .boot i { display: block; height: 12px; border-radius: 8px; background: linear-gradient(90deg, var(--k) 30%, var(--l) 50%, var(--k) 70%); background-size: 200% 100%; animation: boot 1.4s linear infinite; }
+      .boot .card { background: var(--c); border: 1px solid var(--l); border-radius: 12px; padding: 18px 16px; display: flex; flex-direction: column; gap: 12px; }
+      @keyframes boot { from { background-position: 150% 0; } to { background-position: -50% 0; } }
+      @media (prefers-reduced-motion: reduce) { .boot i { animation: none; } }
+      @media (max-width: 760px) { .boot { grid-template-columns: 1fr; } .boot aside { display: none; } .boot main { padding: 20px 16px; } }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root"><div class="boot" role="status" aria-label="Loading"><aside aria-hidden="true"><i style="width: 70%; height: 20px"></i><i></i><i style="width: 80%"></i><i style="width: 60%"></i><i style="width: 75%"></i></aside><main aria-hidden="true"><i style="width: 220px; height: 24px"></i><i style="width: 340px"></i><div class="card"><i></i><i style="width: 72%"></i><i style="width: 48%"></i><i></i><i style="width: 72%"></i><i style="width: 48%"></i></div></main></div></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

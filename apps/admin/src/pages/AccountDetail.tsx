@@ -5,7 +5,7 @@ import { AuditList } from '../components/AuditList';
 import { AccountStatusBadge, PlanBadge, RoleBadge, SubscriptionBadge, UserStatusBadge } from '../components/Badges';
 import { Can } from '../components/Can';
 import { ReasonDialog } from '../components/ReasonDialog';
-import { PageHeader, QueryState, RowLink, EmptyState } from '../components/ui';
+import { PageHeader, QueryState, RowLink, EmptyState, DetailSkeleton } from '../components/ui';
 import { UserActions } from '../components/UserActions';
 import { api, need, type Schema } from '../lib/api';
 import { fmtDate, fmtDateTime } from '../lib/format';
@@ -49,7 +49,7 @@ export function AccountDetail() {
   });
 
   return (
-    <QueryState isPending={query.isPending} error={query.error}>
+    <QueryState isPending={query.isPending} error={query.error} fallback={<DetailSkeleton crumbs={[{ to: '/accounts', label: 'Accounts' }]} />}>
       {() => {
         const { account, companies, users } = query.data!;
         return (

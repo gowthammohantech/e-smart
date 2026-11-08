@@ -2,7 +2,7 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { AccountStatusBadge, PlanBadge } from '../components/Badges';
-import { PageHeader, Pager, QueryState, RowLink, SearchInput, EmptyState } from '../components/ui';
+import { PageHeader, Pager, QueryState, RowLink, SearchInput, EmptyState, TableSkeleton, RefreshBar } from '../components/ui';
 import { api, need, type Schema } from '../lib/api';
 import { fmtDate, fmtInt, PLAN_LABELS, PLANS } from '../lib/format';
 import { useCursorPager } from '../lib/useCursorPager';
@@ -58,7 +58,8 @@ export function Accounts() {
             ))}
           </select>
         </div>
-        <QueryState isPending={query.isPending} error={query.error}>
+        <RefreshBar active={query.isFetching && query.isPlaceholderData} />
+        <QueryState isPending={query.isPending} error={query.error} fallback={<TableSkeleton headers={[{ label: 'Account' }, { label: 'Status' }, { label: 'Plans' }, { label: 'Companies', right: true }, { label: 'Users', right: true }, { label: 'Last active' }, { label: 'Created' }]} />}>
           {() =>
             query.data!.data!.length === 0 ? (
               <EmptyState art="search-empty" title="No accounts match" />

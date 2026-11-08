@@ -5,7 +5,7 @@ import { AuditList } from '../components/AuditList';
 import { PlanBadge, SubscriptionBadge } from '../components/Badges';
 import { Can } from '../components/Can';
 import { ReasonDialog } from '../components/ReasonDialog';
-import { PageHeader, QueryState, EmptyState } from '../components/ui';
+import { PageHeader, QueryState, EmptyState, DetailSkeleton } from '../components/ui';
 import { api, need, type Schema } from '../lib/api';
 import { fmtDate, fmtDateTime, fmtInt, PLAN_LABELS, PLANS } from '../lib/format';
 
@@ -113,7 +113,7 @@ export function CompanyDetail() {
   });
 
   return (
-    <QueryState isPending={query.isPending} error={query.error}>
+    <QueryState isPending={query.isPending} error={query.error} fallback={<DetailSkeleton crumbs={[{ to: '/accounts', label: 'Accounts' }]} tables={3} />}>
       {() => {
         const { company, accountName, accountSuspended, subscription, planHistory, documentCounts, userCount, aiCost = [] } = query.data!;
         const aiTotal = aiCost.reduce((s, r) => s + r.costUsd, 0);

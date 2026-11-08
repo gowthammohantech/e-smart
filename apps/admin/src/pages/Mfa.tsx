@@ -3,7 +3,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { useAuth } from '../auth/AuthProvider';
 import { api, errorMessage, need, type Schema } from '../lib/api';
 import { Art } from '../components/Art';
-import { Skeleton } from '../components/ui';
+import { Bar } from '../components/ui';
 
 /**
  * The second step of signing in. With no authenticator yet: scan, confirm a code, keep the recovery
@@ -122,7 +122,7 @@ function Enroll() {
         <p style={{ margin: 0 }}>
           <strong>Save these recovery codes.</strong> Each one signs you in once if you lose your phone. They won’t be shown again.
         </p>
-        <pre className="mono" data-testid="recovery-codes" style={{ margin: 0, padding: 12, background: 'var(--surface-2, #f4f4f5)', borderRadius: 8, columns: 2 }}>
+        <pre className="mono" data-testid="recovery-codes" style={{ margin: 0, padding: 12, background: 'var(--card2)', borderRadius: 8, columns: 2 }}>
           {codes.join('\n')}
         </pre>
         <button className="btn" type="button" onClick={() => void navigator.clipboard?.writeText(codes.join('\n'))}>
@@ -151,7 +151,7 @@ function Enroll() {
       ) : null}
       {enrollment ? (
         <>
-          {qr ? <img src={qr} alt="QR code for your authenticator app" width={200} height={200} style={{ alignSelf: 'center' }} /> : null}
+          {qr ? <img src={qr} alt="QR code for your authenticator app" width={200} height={200} style={{ alignSelf: 'center' }} /> : <Bar width={200} height={200} className="sk-qr" />}
           <details>
             <summary className="muted">Can’t scan? Enter this key instead</summary>
             <code className="mono" style={{ wordBreak: 'break-all' }}>
@@ -166,7 +166,13 @@ function Enroll() {
           />
         </>
       ) : error ? null : (
-        <Skeleton rows={3} />
+        // The code and the form, in shape, while the enrolment is set up.
+        <div className="stack" role="status" aria-label="Loading" aria-busy>
+          <Bar width={200} height={200} className="sk-qr" />
+          <Bar width="40%" height={12} />
+          <Bar width="100%" height={40} />
+          <Bar width={120} height={36} />
+        </div>
       )}
     </>
   );

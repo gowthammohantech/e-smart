@@ -2,7 +2,7 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect } from 'react';
 import { useSearchParams } from 'react-router';
 import { RoleBadge, UserStatusBadge } from '../components/Badges';
-import { PageHeader, Pager, QueryState, RowLink, SearchInput, EmptyState } from '../components/ui';
+import { PageHeader, Pager, QueryState, RowLink, SearchInput, EmptyState, TableSkeleton, RefreshBar } from '../components/ui';
 import { UserActions } from '../components/UserActions';
 import { api, need, type Schema } from '../lib/api';
 import { fmtDate, fmtDateTime } from '../lib/format';
@@ -48,7 +48,8 @@ export function Users() {
             <option value="disabled">Disabled</option>
           </select>
         </div>
-        <QueryState isPending={query.isPending} error={query.error}>
+        <RefreshBar active={query.isFetching && query.isPlaceholderData} />
+        <QueryState isPending={query.isPending} error={query.error} fallback={<TableSkeleton headers={[{ label: 'User' }, { label: 'Account' }, { label: 'Role' }, { label: 'Status' }, { label: 'Last active' }, { label: 'Joined' }]} />}>
           {() =>
             query.data!.data!.length === 0 ? (
               <EmptyState art="search-empty" title="No users match" />

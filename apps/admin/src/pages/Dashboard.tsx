@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Bar, BarChart, CartesianGrid, LabelList, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, type TooltipContentProps } from 'recharts';
-import { PageHeader, QueryState } from '../components/ui';
+import { PageHeader, QueryState, StatsSkeleton, ChartSkeleton } from '../components/ui';
 import { api, need, type Schema } from '../lib/api';
 import { fmtDate, fmtDay, fmtInt, PLAN_LABELS } from '../lib/format';
 
@@ -199,7 +199,7 @@ export function Dashboard() {
           </div>
         }
       />
-      <QueryState isPending={query.isPending} error={query.error}>
+      <QueryState isPending={query.isPending} error={query.error} fallback={<div className="stack" role="status" aria-label="Loading" aria-busy><StatsSkeleton count={5} /><ChartSkeleton /><ChartSkeleton /><ChartSkeleton /></div>}>
         {() => <Charts data={query.data!} />}
       </QueryState>
     </div>

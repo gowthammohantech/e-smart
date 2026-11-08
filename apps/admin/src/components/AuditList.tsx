@@ -4,7 +4,7 @@ import { Link } from 'react-router';
 import { api, need, type Schema } from '../lib/api';
 import { actionLabel, fmtDateTime } from '../lib/format';
 import { useCursorPager } from '../lib/useCursorPager';
-import { Pager, QueryState, EmptyState } from './ui';
+import { Pager, QueryState, EmptyState, TableSkeleton, RefreshBar } from './ui';
 
 type Filters = { targetType?: Schema<'PlatformAuditEvent'>['targetType']; targetId?: string; actorId?: string; from?: string; to?: string };
 
@@ -30,7 +30,9 @@ export function AuditList({ filters, limit = 25, compact = false }: { filters: F
     placeholderData: keepPreviousData,
   });
   return (
-    <QueryState isPending={query.isPending} error={query.error}>
+    <>
+    <RefreshBar active={query.isFetching && query.isPlaceholderData} />
+    <QueryState isPending={query.isPending} error={query.error} fallback={<TableSkeleton headers={[{ label: 'When' }, { label: 'Action' }, ...(compact ? [] : [{ label: 'Target' }]), { label: 'Reason' }, { label: 'By' }]} rows={compact ? 4 : 8} />}>
       {() =>
         query.data!.data!.length === 0 ? (
           <EmptyState title={`No operator actions recorded${compact ? ' here yet' : ''}`} />
@@ -99,5 +101,6 @@ export function AuditList({ filters, limit = 25, compact = false }: { filters: F
         )
       }
     </QueryState>
+    </>
   );
 }
