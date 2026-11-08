@@ -726,10 +726,13 @@ notification may reference an entity, and is read or unread.
 **FR-20.3** **Attachments.** Company-scoped, with mime type, size, URI and an
 optional entity reference.
 
-**FR-20.4** **Sync.** A queue entry carries a label, entity, action, status
-(`synced`, `pending`, `failed`, `offline`), attempt count and last error. Writes
-replay with an idempotency key; a client-generated id is mapped to the server id
-on first success.
+**FR-20.4** **Saving.** Every write goes straight to its REST route; there is no
+queue. The server's answer decides: if it refuses the write, or there is no
+connection, the change is undone on screen and a toast says why. A stale write
+(`412`) is refused and the screen shows the server's copy. With no connection,
+save actions are disabled and the header says *No internet connection*.
+*(Replaces the earlier sync queue, whose entries carried a status of `synced`,
+`pending`, `failed` or `offline` and replayed later.)*
 
 **FR-20.5** **Integrations.** Five categories: payments, compliance, messaging,
 accounting, storage. Each is connected or not, with an optional configuration
@@ -822,8 +825,13 @@ finalisation, atomically. A number is never reused.
 **FR-23.5** Optimistic concurrency on every write via `version` + `If-Match`. A
 stale write returns `412`.
 
-**FR-23.6** Every `POST` accepts an `Idempotency-Key`, making offline-queue
-retries safe.
+**FR-23.6** Every `POST` accepts an `Idempotency-Key`, so a retried save never
+creates a second record.
+
+**FR-23.6a** Native apps send `X-App-Version`. With `MIN_APP_VERSION` set, an
+older build gets `426 APP_UPDATE_REQUIRED` and shows *Update required*. The
+legacy `/sync/push` and `/sync/pull` routes remain only for builds before 1.0.5
+and are to be removed.
 
 **FR-23.7** Errors are Problem+JSON with a stable `code`. Validation and portal
 rejections carry `issues[]` in the same shape as `ComplianceIssue`.

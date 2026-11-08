@@ -355,7 +355,6 @@ Nineteen screens, grouped as the More tab groups them.
 | Integrations | `settings/integrations` |
 | Backup & export | `settings/backup` |
 | Audit trail | `settings/audit` |
-| Sync status | `settings/sync` |
 
 **Account**
 
@@ -453,7 +452,7 @@ prices and gating only, never a sentence.
 | Portals | In-process adapter with deterministic responses | GSP/ASP integration behind the same adapter interface |
 | OCR | Fixed extraction | Document AI / Textract / vision model |
 | Assistant | Rule-based over local store | Claude through `lixiChat` and MCP; writes only through a confirmed, signed pending action (built) |
-| Sync | Simulated states | Real queue with idempotency keys and id mapping |
+| Sync | Simulated states | Removed: the app is online only, and every save goes straight to its REST route (Nov 2026) |
 | Google sign-in | Straight into the demo account | Real OAuth |
 | Illustrations | Placeholders in the Storyset Rafiki style | The real downloads, same filenames |
 | QR signature | Derived from the signing input, marked as such | The portal's own signature |

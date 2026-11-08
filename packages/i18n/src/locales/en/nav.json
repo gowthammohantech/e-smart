@@ -177,7 +177,7 @@
     "signOut": {
       "row": "Sign out",
       "title": "Sign out?",
-      "message": "You can sign back in at any time. Changes not yet synced stay on this device until you do.",
+      "message": "You can sign back in at any time. Your books stay safe on the server.",
       "confirm": "Sign out"
     },
     "build": "Elixir Books Smart · version {{version}}"

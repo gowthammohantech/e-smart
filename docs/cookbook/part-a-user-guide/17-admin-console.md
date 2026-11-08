@@ -111,7 +111,7 @@ The landing page. Pick a range: **30 days**, **90 days** or **12 months**.
 
 **What happens**
 - The plan changes immediately. It shows in **Plan history** as **Changed by an operator**.
-- The company's devices pick up the change on their next sync.
+- The company's devices pick up the change the next time they load from the server.
 
 **Rules & gotchas**
 - **Billing can undo it.** If the company has a paid subscription, the next billing event may set the plan back. When that applies, the console shows a warning; it appears only **after** you confirm, so check **Subscription** first.

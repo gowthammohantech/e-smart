@@ -123,7 +123,7 @@ If uploads are blocked, `STORAGE_ORIGIN` on `web` is missing or wrong.
 
 ## Load test baseline
 
-Run `tools/load/api.js` against staging (k6; see the header of the file) after any change to sync, documents or PDFs. Record results here.
+Run `tools/load/api.js` against staging (k6; see the header of the file) after any change to documents or PDFs. Record results here. (The script still drives `/sync/pull` and `/sync/push`, which only builds before 1.0.5 use; move it to the REST routes before those endpoints are removed.)
 
 | Date | Build | pull p95 | push p95 | finalize p95 | pdf p95 | Errors |
 |---|---|---|---|---|---|---|

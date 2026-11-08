@@ -2,7 +2,7 @@
 
 Tests for the reports hub, the nine reports, their filters, basis lines, exports and plan gating. Setup and demo data are in [00 — Test setup](00-test-setup.md).
 
-Reports are computed on the device from the local copy of the books, so they also work offline.
+Reports are worked out in the app from the records the server sends when the report opens. Without a connection, a report already on screen stays readable but doesn't refresh.
 
 ### Hub
 
@@ -30,7 +30,7 @@ Reports are computed on the device from the local copy of the books, so they als
 | RPT-020 | Contact filter | | | Contact = Kumar Electronics | Only their documents | happy |
 | RPT-021 | Foreign currency converted | | AED invoice | Sales summary | Converted at the rate stored on the document; basis "…foreign-currency documents converted at the rate stored on each document" | edge |
 | RPT-022 | Drafts and cancelled left out | | One draft and one cancelled invoice in range | Sales summary | Neither counted | edge |
-| RPT-023 | Offline | | Network off | Open any report | Renders from the local copy | offline |
+| RPT-023 | Offline | | Report open; then network off | Change a filter | "You're offline. These figures are from your last visit."; the figures on screen stay readable | offline |
 
 ### Export
 

@@ -28,7 +28,8 @@ every endpoint:
 | Server is authoritative | The server recomputes totals, tax splits, stock, outstanding amounts and derived statuses (`paid`, `partiallyPaid`, `overdue`) with `packages/core/src/domain/*`, the same code the apps run for instant previews. |
 | Server assigns numbers | Documents, payments and expenses get their number when finalised, and a number is never reused. |
 | `version` + `If-Match` | Optimistic concurrency on every write. A stale write gets `412`. |
-| `Idempotency-Key` on POST | Makes offline-queue retries safe. |
+| `Idempotency-Key` on POST | Makes a retried save safe: the same key never creates a second record. |
+| Minimum app version | Native apps send `X-App-Version` (the web app sends `web`). With `MIN_APP_VERSION` set, an older version gets `426 APP_UPDATE_REQUIRED` and the app shows "Update required". The offline-first builds sent no version, so a signed-in `/v1` request without one is refused too; a script that calls the API with a token must send the header. Requests without a session, routes outside `/v1` (MCP, share pages, webhooks) and `/sync/push` pass, so an old build can still send what it kept. Unset means no gate. |
 | Problem+JSON errors | Each error has a stable `code`. Validation and portal rejections also carry `issues[]` in the same shape as `ComplianceIssue`. |
 | Plan gating | A module outside the plan returns `403 PLAN_UPGRADE_REQUIRED`, which follows `packages/core/src/domain/plan.ts`. Operations carry `x-plan-module`. |
 | Roles | Operations carry `x-roles` (owner, admin, accountant, sales, viewer). |
@@ -70,13 +71,16 @@ For ACS email, `EMAIL_FROM` must be a verified sender address. A `Name <addr>` f
 
 ## How the apps use it
 
-The apps stay local-first. Store actions still update the local store at once
-and queue the matching operation in `syncQueue`. It drains through
-`/sync/push`, and `/sync/pull` brings back what the server decided.
-Compliance calls (IRP, e-way bill), attachment uploads, OCR, document PDFs,
+The apps are online only. Every save goes straight to its REST route and the
+server's answer decides: if it refuses (a stale `version` gets `412`), or there
+is no connection, the change is undone on screen and a toast says why. Nothing
+is queued to send later. Signing in, or opening the app, loads the open
+business's setup through each entity's list route; other screens load as they
+open. Compliance calls (IRP, e-way bill), attachment uploads, OCR, document PDFs,
 share and payment links, sending, exports and Lixi go straight to the API.
-There is no local demo build: the store starts empty and fills from the API
-on sign-in. Tokens live in `expo-secure-store`.
+There is no local demo build: the store starts empty, fills from the API
+on sign-in and lives in memory only. Tokens live in `expo-secure-store`; only
+those and small preferences (the open business and branch, theme) stay on the device.
 
 ## Environment
 
@@ -428,7 +432,9 @@ destructive, so clients ask the person first.
 | GET | `…/backup-settings` | getBackupSettings |
 | PUT | `…/backup-settings` | saveBackupSettings |
 
-### Sync
+### Sync (legacy)
+
+Only native builds before 1.0.5 use these; new apps don't. They are scheduled for removal.
 
 | Method | Path | Operation |
 |---|---|---|

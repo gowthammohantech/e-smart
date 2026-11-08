@@ -7,7 +7,7 @@ Where to find them:
   - **Money**: receivables, payables, payments, expenses
   - **Tools**: scan, Lixi, search, notifications
   - **Business setup**: profile, branches, users, taxes, currencies, numbering, accounts, expense categories
-  - **Data & compliance**: GST, GSTR-1, e-invoicing, transporters, integrations, backup, audit, sync
+  - **Data & compliance**: GST, GSTR-1, e-invoicing, transporters, integrations, backup, audit
   - **Account**: devices, plan, appearance, about
 - 🖥 the account menu › **All settings**, which opens Settings with its own side menu.
 
@@ -52,6 +52,7 @@ Tap your name card at the top of **More**. 🖥 Account menu › **Profile**.
 **Logo**
 - **Add logo**, **Change logo** or **Remove**. PNG or JPEG, up to 5 MB. Owner or admin only, and you need a connection.
 - Offline, you see **You're offline. Connect to the internet to change your logo.**
+- The logo uploads as soon as you pick it. If the upload fails, your old logo comes back and you see **The logo you added couldn't be uploaded…**.
 
 **Rules & gotchas**
 - **Locks after the first posted entry.** Once entries exist, the **legal name, state, financial year and GST registration** are locked. You see: *"Entries have been posted, so … are locked."* An unregistered business can still register for GST.
@@ -126,7 +127,7 @@ Each document type has its own series: INV, QT, SO, DN, CRN, PO, GRN, BILL, DRN,
 **Rules & gotchas**
 - Drafts have **no number**. A number is assigned only when a document is finalised, and a finalised number is **never reused**. That is why drafts can be deleted freely.
 - **Watch for "Longer than 16 characters — the e-invoice portal will reject this number."** For example, `INV/MUM/2026-27/0042` is 20 characters, too long for e-invoicing. Turn off the branch code or shorten the prefix ([11](11-gst-compliance.md#generate-an-irn)).
-- Numbers are assigned by the server. A document finalised offline shows a **Provisional number** until it syncs ([15](15-offline-and-sync.md)).
+- Numbers are assigned by the server when you finalise. Finalising needs a connection.
 
 ---
 
@@ -216,12 +217,6 @@ Use **Connect 〈name〉** or **Disconnect 〈name〉**. You see **〈name〉 co
 
 ---
 
-### Sync status
-
-**More › Data & compliance › Sync status.** See [15 — Working offline & sync](15-offline-and-sync.md).
-
----
-
 ### Devices & sessions
 
 **More › Account › Devices & sessions**
@@ -261,4 +256,4 @@ Use **Connect 〈name〉** or **Disconnect 〈name〉**. You see **〈name〉 co
 
 ---
 
-**Related:** [02 Onboarding](02-onboarding.md) · [11 GST compliance](11-gst-compliance.md) · [14 Team, roles & plans](14-team-roles-plans.md) · [15 Offline & sync](15-offline-and-sync.md)
+**Related:** [02 Onboarding](02-onboarding.md) · [11 GST compliance](11-gst-compliance.md) · [14 Team, roles & plans](14-team-roles-plans.md)

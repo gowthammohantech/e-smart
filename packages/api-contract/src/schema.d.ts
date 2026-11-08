@@ -7326,7 +7326,7 @@ export interface components {
         CompanyId: string;
         Id: string;
         IdempotencyKey: string;
-        /** @description The native app's version; older than the server's minimum gets 426 */
+        /** @description The app's version (`web` from the web app); older than the server's minimum gets 426 */
         AppVersion: string;
         /** @description ETag from the last read */
         IfMatch: string;

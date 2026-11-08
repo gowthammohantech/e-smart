@@ -45,7 +45,7 @@
 **Rules & gotchas**
 - **Sales** counts finalised invoices only. Drafts and cancelled documents never count toward any total.
 - Amounts in other currencies are converted at the rate saved on each document.
-- The dashboard is worked out on your device from your synced books. Offline, it shows your local copy.
+- The dashboard is loaded from the server when you open it. Without a connection, what is already on screen stays readable but doesn't refresh.
 
 ---
 

@@ -19,8 +19,8 @@ Default: owner or accountant, **Vertex Traders** (Pro).
 | EXP-009 | Billable | | | Turn on **Billable to a customer** and pick a customer | "Billable" badge on the expense | happy |
 | EXP-010 | Supplier | | | Supplier Urban Logistics | Shown on the detail | happy |
 | EXP-011 | Receipt online | | | **Attach a receipt** → photo → save | "Receipt attached"; "1 attachment" on the detail; file in MinIO | happy |
-| EXP-012 | Receipt offline | | Network off | Attach a receipt → save | "Receipt will upload when you are back online. Expense saved." | offline |
-| EXP-013 | Receipt upload fails | | Upload refused | Save | "The receipt couldn't be uploaded: … Remove it to save without it, or try again when you're online." | edge |
+| EXP-012 | Receipt offline | | Network off | Attach a receipt → save | Save is disabled; no expense is saved and nothing waits to upload | offline |
+| EXP-013 | Receipt upload fails | | Upload refused | Save | "The receipt couldn't be uploaded: … Remove it to save without it, or try again when you're online."; the expense is not saved | edge |
 | EXP-014 | File limits | | | Attach an 11 MB PDF, or a GIF | Refused (limit 10 MB; JPEG, PNG, HEIC or PDF) | validation |
 | EXP-015 | List | | Demo expenses | Open the list | "Total spent", "Input tax", filter "All categories", search | happy |
 | EXP-016 | Filter by category | | | Pick Rent | Only rent, e.g. "Godown rent — Bhosari" ₹55,000 | happy |

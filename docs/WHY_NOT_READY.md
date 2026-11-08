@@ -2,6 +2,8 @@
 
 _Audit date: 13 Oct 2026, branch `claude/monorepo` @ `31ffef3`. Read-only review, one agent per app. Items marked *(inferred)* were not reproduced._
 
+_Updated 8 Nov 2026: the app is now online only (commits `6d29e26`, `f65d035`). Every save goes straight to its REST route and the server's answer decides; nothing is queued, and nothing but session tokens and small preferences is kept on the device. Offline mode, the outbox, the sync queue, the conflict screen and on-device storage of the books are gone, so the offline, conflict and local-storage items of this audit are removed below. Old native builds (before 1.0.5) are told to update once `MIN_APP_VERSION` is set (426 `APP_UPDATE_REQUIRED`); `/sync/push` and `/sync/pull` stay on the server only for them, and are to be removed._
+
 _Updated 31 Oct 2026: the offline sync and data-loss items from this audit are fixed and removed below (commits `ac0a843` to `f971288`). Fixes were verified by automated tests only; no device run has been done. The GSP adapters are built but unverified: see `PRODUCTION_READINESS.md` §1. The rest of this audit still stands as of its date._
 
 _Updated 2 Nov 2026 (Phase 1 launch blockers, not yet committed). Fixed, with tests:_
@@ -47,8 +49,8 @@ _Updated 3 Nov 2026 (Phase 2, not yet committed):_
 - _Lists aren't capped at 4,000 rows._
 - _Two tabs refresh tokens once._
 - _Push notifications are built end to end, needing an Expo project._
-- _Phones keep the book in encrypted SQLite; the web uses IndexedDB, and a full disk is reported._
-- _CI runs the web offline scenarios, the migration rule and a dependency audit; CodeQL and Dependabot are on._
+- _Phones keep the book in encrypted SQLite; the web uses IndexedDB, and a full disk is reported._ _(Superseded 8 Nov: nothing is kept on the device.)_
+- _CI runs the web e2e scenarios (online-only since 8 Nov), the migration rule and a dependency audit; CodeQL and Dependabot are on._
 - _`docs/RUNBOOK.md` covers backups, restore, rotation and the job queue._
 
 _Updated 4 Nov 2026 (Phase 3, accounting, not yet committed):_
@@ -64,7 +66,7 @@ _Updated 4 Nov 2026 (Phase 3, accounting, not yet committed):_
 - _GST on advances for services (GSTR-1 table 11), recovering billable expenses, and MSME 45-day tracking with reminders and the s.43B(h) list._
 - _Still open: CA sign-off of `docs/accounting/RULES.md` and the GSP returns sandbox run. `GST_FILING_ENABLED` stays off until both are done (`PRODUCTION_READINESS.md` §9)._
 
-_Still open from this audit: error tracking vendor, the purge job for closed accounts, encrypted local storage, httpOnly cookies on the web, the job scheduler, backups and PITR, e2e and load tests, the security review, device testing of offline sync, push notifications, and camera barcode scanning._
+_Still open from this audit: error tracking vendor, the purge job for closed accounts, httpOnly cookies on the web, the job scheduler, backups and PITR, e2e and load tests, the security review, push notifications, and camera barcode scanning._
 
 ## Summary
 
@@ -122,7 +124,6 @@ All four apps build and pass their static checks. They are blocked by missing in
 - **No coverage reporting**, no e2e tests and no load tests.
 
 ### Low
-- `rewriteIds` replaces offline IDs that appear inside free-text fields.
 - Webhook deliveries with an invalid signature are stored with no size cap or retention limit.
 - Upload completion trusts the MIME type the client declares.
 - `/health` checks only the database.
@@ -143,23 +144,19 @@ All four apps build and pass their static checks. They are blocked by missing in
 
 ### High: data loss risks
 
-### High: offline gaps still open
-- **No device test of offline sync.** Airplane mode, kill mid-push and two-device conflicts are untested on iOS and Android.
-- **Conflicts have no merge view.** The user can only send theirs or discard it, without seeing both versions.
-- **Queued payment, then an edit of its invoice, can still conflict with itself.** Only writes to the same record update the queued version.
-- **A finalise carries no version.** It can run on another device's newer edit if this device has no failed edit queued.
+### High: gaps still open
+- **No device test of the online-only app.** No connection, a dropped connection mid-save, "You're offline" at launch and "Update required" are untested on iOS and Android.
+- **The first 1.0.5 launch sends what an old build left unsent, then deletes the old copy.** This hand-over is untested on a device.
 - **A lost e-way bill response has no recovery.** The retry is refused by the portal and no lookup path exists yet. A timed-out IRN cancel is also not reconciled.
 - **A partial online refund is left for a person to record.** The owner is notified; a full refund deletes the payment.
 
 ### High: other
 - **No crash reporting and no error boundary.**
-- **The whole store is persisted as a single AsyncStorage key.** It is re-serialised on every `setState`. *(inferred)* Large books may exceed Android's roughly 2 MB per-row read limit and break rehydration.
 - **Unused permissions will draw review questions.** `RECORD_AUDIO`, `SYSTEM_ALERT_WINDOW` and a generic microphone string come from the default `expo-camera` config.
 - **No push notification client.** `expo-notifications` isn't installed and the app never registers a push token.
 
 ### Medium
 - **The iOS privacy manifest declares no collected data**, and the App Store privacy labels and Play data-safety form are not done.
-- **Financial data is stored unencrypted in AsyncStorage** with `android:allowBackup="true"`.
 - **Android release signing can fall back to the debug key**, and the keystore password is weak.
 - **Version numbers disagree.**
   - The About screen shows "1.0.0 (1)".
@@ -167,7 +164,7 @@ All four apps build and pass their static checks. They are blocked by missing in
   - The iOS project says 1.0 (1).
 - **The root config conflicts with the app's bundle ID.** The root `app.json` and the untracked `ios/esmart.xcodeproj` use bundle ID `com.gowtham.mohan.e-smart`, while the app uses `com.elixir.bookssmart`.
 - **Barcode scanning by camera isn't built.** The screen only accepts a typed code, yet it says "point camera".
-- **Reports and the dashboard are computed on the device** rather than the server, so the numbers aren't authoritative.
+- **Reports and the dashboard are computed in the app** from the records the server sends, rather than by the server, so the numbers aren't authoritative.
 - **The expenses list isn't virtualised.**
 - **Possible sign-in flash on launch.** The app forces `hydrated=true` after 400 ms. *(inferred)*
 - **The OTP screen can dead-end** when `requestId` is null.
@@ -176,12 +173,11 @@ All four apps build and pass their static checks. They are blocked by missing in
 - **CI never builds iOS or Android.**
 
 ### Low
-- Tamil: on-screen text now comes from the catalogues (`react/jsx-no-literals` fails lint on new JSX text). Still English: data stored in English (seeded notifications and audit entries in `appStore.ts`, outbox labels shown on the Sync screen), messages the server returns (compliance issues, cancel/extend reasons), and the server-rendered report, receipt and e-way bill PDFs, whose labels are hardcoded in `apps/api`. The API image now installs `fonts-noto-core` so Tamil names print, but this has not been checked on a deployed build.
+- Tamil: on-screen text now comes from the catalogues (`react/jsx-no-literals` fails lint on new JSX text). Still English: data stored in English (seeded notifications and audit entries in `appStore.ts`), messages the server returns (compliance issues, cancel/extend reasons), and the server-rendered report, receipt and e-way bill PDFs, whose labels are hardcoded in `apps/api`. The API image now installs `fonts-noto-core` so Tamil names print, but this has not been checked on a deployed build.
 - `.catch(() => {})` swallows errors silently.
 - Dev-client `Info.plist` entries are still present, and `ITSAppUsesNonExemptEncryption` is unset.
 - iPad support adds review work: iPad screenshots and layout QA.
 - The UUID fallback uses `Math.random`.
-- Sync lists are cut off at 4,000 rows without warning.
 
 ---
 
@@ -196,8 +192,7 @@ All four apps build and pass their static checks. They are blocked by missing in
 ### High
 - **Tokens, including the refresh token, are stored in `localStorage`** (`packages/app/remote/tokens.ts:18-30`).
 - **No CSP and no other security headers.** `apps/web/serve.mjs` sets none of CSP, frame-ancestors, HSTS, Referrer-Policy or nosniff, and doesn't compress responses.
-- **The whole synced store goes into one localStorage key** (`ebs.remote.v1`). *(inferred)* It will hit the roughly 5 MB limit for larger companies and fail to save.
-- **No coordination between tabs.** *(inferred)* Two tabs can overwrite each other's `syncQueue`, and signing out doesn't propagate to other tabs.
+- **No coordination between tabs.** *(inferred)* Signing out doesn't propagate to other tabs.
 - **Share links, `/pay/:id` and the OAuth callback pages are missing.**
 - **OCR is shipped but doesn't work.** The browser path returns null, and server-side OCR is disabled in production.
 - **The legal links are placeholders**, and there is no DPDP flow.
@@ -260,7 +255,7 @@ The console's features are complete: role guards, superadmin-only writes, audit 
 
 1. Provision the vendors and fix `APP_URL` and the client API URLs, so the API boots and links work.
 2. Fix the rate-limit key and `trustProxy`, add a sign-in lockout, and add MFA for operators.
-3. Fix the ordering of the sync cursor and the client-side outbox loss on sign-out and refresh failure.
+3. Remove `/sync/push` and `/sync/pull` once no build before 1.0.5 is in use.
 4. Add Sentry and error boundaries to all apps.
 5. Mobile store requirements: account deletion, a decision on IAP vs. external payments, `eas.json`, privacy manifest and labels, real legal URLs.
 6. Build the missing `/share`, `/pay` and OAuth callback pages.

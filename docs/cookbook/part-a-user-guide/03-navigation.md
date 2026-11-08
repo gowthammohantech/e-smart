@@ -39,7 +39,7 @@ The tab bar depends on your plan.
 | **Money** | Receivables, Payables, Payments received, Payments made, Expenses |
 | **Tools** | Scan a bill or receipt, Ask Lixi, Global search, Notifications |
 | **Business setup** | Business profile, Branches, Users & roles, Taxes, Currencies & rates, Document numbering, Payment accounts, Expense categories |
-| **Data & compliance** | GST compliance, GSTR-1, E-invoicing & e-way bill, Transporters, Integrations, Backup & export, Audit trail, Sync status |
+| **Data & compliance** | GST compliance, GSTR-1, E-invoicing & e-way bill, Transporters, Integrations, Backup & export, Audit trail |
 | **Account** | Devices & sessions, Plan & billing, Appearance & language, About, **Sign out** |
 
 Entries your plan can't open are hidden. For example, Payables, Payments made and Expenses don't appear on a sales plan. Your name card at the top of **More** opens your profile.
@@ -117,7 +117,7 @@ Then, as needed:
 
 **Top bar**
 - Search box (⌘K).
-- **Offline** and **N failed** badges, when they apply.
+- **No internet connection**, when the server can't be reached. Save buttons are disabled until it can.
 - **Ask Lixi**, which opens a panel on the right.
 - Notifications.
 - Account menu: **Profile**, **Plan**, **Appearance**, **All settings**, **Sign out**.

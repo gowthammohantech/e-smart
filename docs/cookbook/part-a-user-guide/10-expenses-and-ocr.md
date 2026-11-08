@@ -45,8 +45,7 @@ Where to find them: 📱 **More › Money › Expenses**, or **Buy › Expenses*
 **Rules & gotchas**
 - **Category** and **Paid from** are required. Without them you see **Pick a category for this expense** or **Choose the account this was paid from**.
 - Paying from **Cash in hand** is blocked if it would take cash below zero: **Cash in hand has only ₹…**.
-- **Receipts offline:** a receipt attached offline uploads later. You see **Receipt will upload when you are back online. Expense saved.**
-  - If the upload later fails, you see **The receipt couldn't be uploaded…**. Remove it to save without it, or try again online.
+- **Receipts upload when you save.** You need a connection. If the upload fails, the expense is not saved and you see **The receipt couldn't be uploaded…**. Remove it to save without it, or try again.
 - Receipts can be JPEG, PNG, HEIC or PDF, up to 10 MB.
 
 **Example:** Vertex Traders pays "Godown rent — Bhosari" of ₹55,000.

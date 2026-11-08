@@ -20,21 +20,27 @@ export function compareVersions(a: string, b: string): number {
   return 0;
 }
 
+/** What the web app sends: it is always the build just deployed. */
+export const WEB_CLIENT = 'web';
+
 /**
  * Refuses apps older than MIN_APP_VERSION with 426 APP_UPDATE_REQUIRED, so a phone still running the
  * offline-first build can't keep writing through an API that no longer works the way it expects.
- * Requests without the header (the web app, scripts, webhooks) pass, and so does `/sync/push` while it
- * still exists, so an old build can send what it kept on the phone before the person updates.
+ * The offline-first builds sent no version at all, so a signed-in request without one counts as one
+ * of them. Requests with no session (sign-in, webhooks, public pages) pass, and so does `/sync/push`
+ * while it still exists, so an old build can send what it kept on the phone before the person updates.
  */
 export function registerAppVersionGate(app: FastifyInstance, minVersion: string | undefined) {
   if (!minVersion) return;
   app.addHook('onRequest', async (req) => {
     const raw = req.headers[APP_VERSION_HEADER];
     const version = Array.isArray(raw) ? raw[0] : raw;
-    if (!version) return;
-    if (req.url.startsWith('/v1/sync/push')) return;
-    if (compareVersions(version, minVersion) >= 0) return;
-    throw new ApiError(426, 'APP_UPDATE_REQUIRED', `This version of the app (${version}) is no longer supported. Update to ${minVersion} or later.`, {
+    // Only the app's API: MCP, share pages, health and webhooks have callers of their own.
+    if (!req.url.startsWith('/v1/') || req.url.startsWith('/v1/sync/push')) return;
+    if (version === WEB_CLIENT) return;
+    if (!version && !req.headers.authorization?.startsWith('Bearer ')) return;
+    if (version && compareVersions(version, minVersion) >= 0) return;
+    throw new ApiError(426, 'APP_UPDATE_REQUIRED', `This version of the app${version ? ` (${version})` : ''} is no longer supported. Update to ${minVersion} or later.`, {
       minVersion,
     });
   });

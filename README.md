@@ -5,9 +5,8 @@ bills, payments, stock, expenses and reports — as a monorepo with a
 React Native app for phones, the same app for the web, and the API behind
 both.
 
-The apps are an offline-first client of the API: every screen reads and
-writes the books on the server, and keeps working on a local copy when the
-connection drops. The calculations — tax splits, document totals, receivables
+The apps are an online client of the API: every screen reads and writes the
+books on the server, and nothing is kept on the device. The calculations — tax splits, document totals, receivables
 aging, stock balances, FX settlement — are real implementations of the rules
 in the FRD, shared by the apps and the server from one package. A demo
 account lives in the database, seeded on demand; nothing demo ships in the
@@ -154,8 +153,10 @@ operation lacks a handler).
   use for previews.
 - **Safe writes.** `Idempotency-Key` on every POST (a retry replays the
   stored response), `If-Match` / `ETag` on updates (a stale write gets 412),
-  problem+json errors with stable codes and `issues[]`, an audit trail and a
-  change log for `/sync/pull`.
+  problem+json errors with stable codes and `issues[]`, and an audit trail.
+- **Minimum app version.** Native builds send `X-App-Version`; with
+  `MIN_APP_VERSION` set, an older build gets `426 APP_UPDATE_REQUIRED` and the
+  app asks the person to update.
 - **Providers.** SMS, email, WhatsApp, push, object storage, PDF rendering,
   the GST portals (IRP and e-way bill), GSTIN lookup, OCR, FX rates and
   Razorpay all sit behind interfaces. Each has an in-process stand-in (an
@@ -170,32 +171,34 @@ The database is `packages/db`: the baseline migration is the original SQL
 schema (Drizzle can't express its deferrable foreign keys), `src/schema.ts`
 mirrors it, and later migrations are generated from diffs of that file.
 
-## Offline first
+## Online only
 
-The apps are an offline-first client of the API (`packages/app/remote/`). It
-is the outbox pattern, one code path whether or not there is a network:
+The apps work only against the API (`packages/app/remote/`); the device keeps
+the session's tokens and a few preferences, never the books.
 
-1. Every action still updates the local store at once, so the app is instant
-   and keeps working offline.
-2. A wrapper queues what the action means to the API (`POST` a new party,
-   `PUT` an edit against the version you had, `POST …/status`…) into the
-   store's `syncQueue`, in the contract's `SyncMutation` shape. Edits to
-   something the server hasn't seen yet fold into its pending create.
-3. The sync engine sends the queue through `POST /sync/push` straight away
-   when online, again when the connection returns or the app comes to the
-   foreground, and every minute; after a failed attempt it retries with
-   backoff. The queue entry's id is the idempotency key, so a resend never
-   applies twice.
-4. It then pulls `GET /sync/pull` for what the server decided — numbers,
-   totals, statuses, IRNs — and other devices' changes, and refreshes
-   notifications, the audit trail, stock movements, devices and users.
-5. Ids minted offline are swapped for the server's everywhere once the create
-   syncs. A change that lost a race (412) stays in **Settings → Sync** with the
-   server's copy shown, to send again or discard.
+1. A store action still updates the in-memory store at once, so the screen
+   reacts immediately, and describes what it means to the API (`POST` a new
+   party, `PUT` an edit against the version you had, `POST …/status`…).
+2. That request goes straight to its own route (`send.ts`), one save at a
+   time in the order they were made, with an `Idempotency-Key` on every POST
+   and `If-Match` on updates. A save counts once the server answers: a
+   refusal, a stale version (412) or no connection undoes the change and
+   says why. Nothing waits to be sent later.
+3. Signing in, opening the app and switching business load the open
+   business's setup (branches, tax rates, numbering, accounts…) through each
+   entity's own list (`refresh.ts`); screens read everything else from the
+   server as they open (`queries.ts`). It refreshes when the connection
+   returns, when the app comes to the foreground and every few minutes.
+4. With no connection the header says so and save buttons are off; what is
+   already on screen stays readable. Opening the app with no connection shows
+   a "You're offline" screen until it can reach the server.
+
+Builds before 1.0.5 were offline-first and kept the books in SQLite or
+IndexedDB. The first launch of 1.0.5 reads that copy once
+(`store/legacyBook.ts`), sends whatever was never sent, and deletes it.
 
 E-invoicing and e-way bills, attachments and OCR, PDFs, share and payment
-links, sending documents, exports and Lixi go straight to the API instead of
-the queue, because they need the server (or the GST portal) to answer. Tokens
+links, sending documents, exports and Lixi call their own endpoints directly. Tokens
 are kept in the Keychain / Keystore (`expo-secure-store`), or localStorage on
 the web.
 
@@ -303,9 +306,8 @@ n = 1 only); Hindi's does not — it counts zero as singular — so the
 ### Data and state in the apps
 
 `packages/app/store/appStore.ts` holds the signed-in account's entities in a
-Zustand store persisted to AsyncStorage (`ebs.remote.v1`), so the app opens
-instantly and works offline. It starts empty and is filled from the API on
-sign-in; nothing is bundled. Fields
+Zustand store kept in memory only. It starts empty and is filled from the API
+on sign-in and at launch; nothing is bundled or saved on the device. Fields
 that a person picks from a fixed list store a stable slug rather than the
 English label they saw — `Company.businessType` learned this the hard way, and
 a migration maps the labels that shipped. Seeded master data the user can then
@@ -318,8 +320,8 @@ that is how company isolation is enforced here.
 Writes also append an audit event and, where the PRD calls for it, raise a
 notification.
 
-The store is the local half of the offline-first client; see
-[Offline first](#offline-first) above.
+The store is the in-memory half of the online client; see
+[Online only](#online-only) above.
 
 ### Charts
 
@@ -362,7 +364,7 @@ nine reports with filters and CSV export · invoice PDF preview and share ·
 global search · notifications · OCR capture and review · an assistant that
 reads the books but confirms before acting · settings for company, branches,
 users and roles, taxes, currencies, numbering, accounts, categories,
-integrations, backup and export, audit trail, sync, devices, appearance,
+integrations, backup and export, audit trail, devices, appearance,
 language and plan · the whole interface in English and Tamil, including
 printed invoices and the assistant.
 

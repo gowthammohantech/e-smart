@@ -27,7 +27,6 @@ The cookbook describes the app as it is built today, using the words that appear
 | 12 | [Reports](part-a-user-guide/12-reports.md) | The nine reports, filters, exports |
 | 13 | [Settings](part-a-user-guide/13-settings.md) | Business profile, branches, taxes, numbering, accounts, integrations, backup, audit, appearance |
 | 14 | [Team, roles & plans](part-a-user-guide/14-team-roles-plans.md) | Inviting people, roles, plan limits, upgrading |
-| 15 | [Working offline & sync](part-a-user-guide/15-offline-and-sync.md) | What works offline, provisional numbers, conflicts |
 | 16 | [Lixi assistant](part-a-user-guide/16-lixi-assistant.md) | Asking Lixi about your books, confirming the actions it proposes |
 | 17 | [Admin console (operators)](part-a-user-guide/17-admin-console.md) | Platform operators: accounts, plan overrides, users, audit |
 | 18 | [Troubleshooting & FAQ](part-a-user-guide/18-troubleshooting-faq.md) | Error messages, limits, features not available yet |
@@ -49,7 +48,6 @@ The cookbook describes the app as it is built today, using the words that appear
 | 07 | [GST: e-invoice, e-way bill, GSTR-1](part-b-test-scenarios/07-gst-einvoice-eway.md) | `EIN-`, `EWB-`, `GST-` |
 | 08 | [Reports](part-b-test-scenarios/08-reports.md) | `RPT-` |
 | 09 | [Settings, team & plans](part-b-test-scenarios/09-settings-team-plans.md) | `SET-`, `TEAM-`, `PLAN-`, `ROLE-` |
-| 10 | [Offline & sync](part-b-test-scenarios/10-offline-sync.md) | `OFF-` |
 | 11 | [Language & theme](part-b-test-scenarios/11-localisation-theme.md) | `L10N-` |
 | 12 | [Web desktop](part-b-test-scenarios/12-web-desktop.md) | `WEB-` |
 | 13 | [Admin console](part-b-test-scenarios/13-admin-console.md) | `ADM-` |
@@ -110,7 +108,6 @@ The server enforces roles on every action; the app does not hide every button by
 | **LUT** | Letter of Undertaking. With one on file, exports and SEZ supplies are zero-rated without paying IGST. |
 | **GSTR-1** | Monthly or quarterly return of outward supplies. The app prepares it; filing is done on the GST portal. |
 | **Finalise** | Turn a draft into a permanent document. The number is assigned and the document can't be edited afterwards. |
-| **Provisional number** | A number shown on a document finalised offline, until the server confirms it. |
 | **Advance** | The part of a payment not applied to any document. It is held against the contact. |
 | **Aging** | Outstanding amounts grouped by how late they are: current, 1–30, 31–60, 61–90 and 90+ days. |
 | **Lixi** | The in-app assistant that answers questions from your books. |

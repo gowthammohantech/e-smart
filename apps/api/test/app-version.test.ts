@@ -19,11 +19,17 @@ describe('minimum app version', () => {
     expect(res.body.minVersion).toBe('1.0.5');
   });
 
-  it('serves the current build, a newer one and requests that send no version', async () => {
-    const cases: Record<string, string>[] = [{ 'x-app-version': '1.0.5' }, { 'x-app-version': '2.0.0' }, {}];
+  it('serves the current build, a newer one, the web app and requests with no session', async () => {
+    const cases: Record<string, string>[] = [{ 'x-app-version': '1.0.5' }, { 'x-app-version': '2.0.0' }, { 'x-app-version': 'web' }, {}];
     for (const headers of cases) {
       expect((await t.get('/plans', { headers })).status).toBe(200);
     }
+  });
+
+  it('takes a signed-in request with no version for an offline-first build, which never sent one', async () => {
+    const res = await t.get('/me', { headers: { authorization: 'Bearer anything' } });
+    expect(res.status).toBe(426);
+    expect(res.body.code).toBe('APP_UPDATE_REQUIRED');
   });
 
   it('still lets an old build reach /sync/push, so it can send what it kept', async () => {

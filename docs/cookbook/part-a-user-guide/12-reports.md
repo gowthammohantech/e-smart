@@ -61,7 +61,7 @@ Below the snapshot, **All reports** lists every report your plan includes. Tap o
 **Rules & gotchas**
 - Drafts and cancelled documents are never counted.
 - Foreign-currency documents are converted at the rate **saved on each document**, so past totals never shift when rates change.
-- Reports are worked out on your device from the synced books. If a device has been offline, sync it first (**More › Data & compliance › Sync status › Sync now**) so the numbers are current.
+- Reports are loaded from the server when you open them, so they are current. Without a connection you see *You're offline. These figures are from your last visit.*
 
 ---
 

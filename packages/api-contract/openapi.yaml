@@ -33,10 +33,11 @@ info:
       from the offline queue are then safe. Keys are kept for 24 hours.
     - **Pagination** is by cursor: `?limit=50&cursor=...` returns
       `{ data, nextCursor }`.
-    - **App version**: the native apps send `X-App-Version` (e.g. `1.0.5`).
-      When the server's `MIN_APP_VERSION` is newer, any request answers `426`
-      with code `APP_UPDATE_REQUIRED` and `minVersion`. Requests without the
-      header are served.
+    - **App version**: the native apps send `X-App-Version` (e.g. `1.0.5`), the
+      web app `web`. When the server's `MIN_APP_VERSION` is set, an older
+      version, or a signed-in request with no version (the offline-first builds
+      sent none), answers `426` with code `APP_UPDATE_REQUIRED` and
+      `minVersion`. Requests without a session are served.
     - **Errors** use `application/problem+json` with a stable `code`. Validation
       failures and compliance rejections also carry `issues[]`, which has the
       same shape as `ComplianceIssue`.
@@ -6520,7 +6521,7 @@ components:
     CompanyId: { name: companyId, in: path, required: true, schema: { type: string, example: cmp_vertex } }
     Id: { name: id, in: path, required: true, schema: { type: string } }
     IdempotencyKey: { name: Idempotency-Key, in: header, required: false, schema: { type: string, format: uuid } }
-    AppVersion: { name: X-App-Version, in: header, required: false, description: The native app's version; older than the server's minimum gets 426, schema: { type: string, example: 1.0.5 } }
+    AppVersion: { name: X-App-Version, in: header, required: false, description: The app's version (`web` from the web app); older than the server's minimum gets 426, schema: { type: string, example: 1.0.5 } }
     IfMatch: { name: If-Match, in: header, required: false, description: ETag from the last read, schema: { type: string } }
     Q: { name: q, in: query, description: Free-text search, schema: { type: string } }
     Limit: { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }

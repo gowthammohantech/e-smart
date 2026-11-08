@@ -286,7 +286,7 @@ against. Exact arithmetic and state rules are in the FRD; this section defines
 |---|---|
 | **Performance** | Cold start to interactive ≤ 2.5 s on a mid-range Android. List scroll ≥ 55 fps at 500 rows. Document totals recompute ≤ 16 ms. |
 | **Correctness** | No binary float touches a monetary value. All money is integer minor units with an explicit currency. Every calculation engine is unit-tested. |
-| **Offline** | Every read works offline against local state. Writes queue and replay with an idempotency key. The UI states offline explicitly rather than failing silently. |
+| **Connectivity** | Online only. Every write goes straight to the server, which decides; a refused or unsent write is undone on screen with a message saying why, and nothing is queued to send later. With no connection the UI says so explicitly ("No internet connection") and disables saving, while what is already on screen stays readable; opening the app offline shows a "You're offline" screen with **Try again**. Nothing but session tokens and small preferences is stored on the device. Builds older than the server's `MIN_APP_VERSION` are told to update (`426`). *(Replaces the earlier offline-first requirement: reads from local state, queued writes replayed with an idempotency key.)* |
 | **Concurrency** | Optimistic concurrency on every server write (`version` + `If-Match`); a stale write returns `412`. |
 | **Security** | Company-scoped authorisation on every read and write. Role checks on every operation. Portal credentials held in a KMS, never returned in the clear. No PII in logs. |
 | **Accessibility** | Minimum touch target 44 dp. Text contrast meets WCAG AA in both schemes. Status is never carried by colour alone — every status badge carries a word. Dynamic type respected. |
@@ -298,7 +298,7 @@ against. Exact arithmetic and state rules are in the FRD; this section defines
 ## 7. Platform
 
 - **Client:** React Native on Expo, `expo-router` file-based routing. iOS and Android phones. Tablet layouts are explicitly not supported in v1.
-- **State:** Zustand, persisted to AsyncStorage; reads through company-scoped selectors.
+- **State:** Zustand, in memory only and filled from the server; reads through company-scoped selectors. (Earlier persisted to AsyncStorage, then encrypted SQLite; dropped with offline mode.)
 - **Domain:** pure TypeScript in `src/domain`, no React, fully testable without rendering.
 - **Charts:** hand-drawn `react-native-svg`. No chart library.
 - **Server (to build):** contract already defined in `packages/api-contract/openapi.yaml` — 111 paths, 152 operations, 2 webhooks; schema in `packages/db/migrations/0000_baseline.sql` (63 tables).
@@ -312,7 +312,7 @@ against. Exact arithmetic and state rules are in the FRD; this section defines
 | **M2 — Comply** | E-invoicing, e-way bills, compliance hub, GSTR-1, transporters | 90% first-attempt IRN success on a live sandbox |
 | **M3 — Buy** | Purchases, goods receipts, bills, returns, payables, payments made, inventory, expenses, OCR | Pro tier saleable |
 | **M4 — Run** | Nine reports, branches, users and roles, audit, backup, integrations, multi-currency | Business tier saleable |
-| **M5 — Scale** | Server, real portal connectivity, real OCR, sync, push, assistant on a model | Prototype boundaries removed |
+| **M5 — Scale** | Server, real portal connectivity, real OCR, server-backed saves (built as offline sync, now online only), push, assistant on a model | Prototype boundaries removed |
 
 ## 9. Open questions
 

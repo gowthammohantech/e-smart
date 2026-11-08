@@ -26,7 +26,7 @@ Run in Chrome, Safari and Firefox. "Desktop" means a window 768 px or wider.
 | WEB-011 | Jump to a record | | | Type "Kumar" → Enter | Opens Kumar Electronics | happy |
 | WEB-012 | Quick action | | | Type "new invoice" → Enter | New invoice editor | happy |
 | WEB-013 | "/" while typing | | Focus in a text field | Type "/" | Typed as a character; palette doesn't open | edge |
-| WEB-014 | Status badges | | Offline / failed | Top bar | **Offline** and "N failed" badges | offline |
+| WEB-014 | Connection badge | | Network off | Top bar | "No internet connection"; save buttons disabled; turning the network on clears it | offline |
 | WEB-015 | Ask Lixi panel | | | **Ask Lixi** | Right-hand panel; the page stays usable | happy |
 | WEB-016 | Notifications | | | Bell | Notifications list; mark one or all as read | happy |
 | WEB-017 | Account menu | | | Avatar | Profile, Plan, Appearance, All settings, Sign out | happy |
@@ -38,7 +38,7 @@ Run in Chrome, Safari and Firefox. "Desktop" means a window 768 px or wider.
 | WEB-020 | Sortable tables | | | Invoices list → sort by date, amount, **Balance due** | Rows sort; the sort indicator shows | happy |
 | WEB-021 | One-page editor | | | New invoice | All sections on one page; Ctrl/⌘+Enter finalises (with confirmation) | happy |
 | WEB-022 | More as a card grid | | | Open More | Grid of cards grouped Money, Tools, Business setup, Data & compliance, Account | happy |
-| WEB-023 | Desktop variants | Owner / Pro | | Open payment detail, e-way bill detail, plan, sync, transporters, item new/edit, stock adjust, transfer, opening stock, movements, scan | Each uses the wide two-column layout | happy |
+| WEB-023 | Desktop variants | Owner / Pro | | Open payment detail, e-way bill detail, plan, transporters, item new/edit, stock adjust, transfer, opening stock, movements, scan | Each uses the wide two-column layout | happy |
 | WEB-024 | Copy link | | Issued invoice | **Copy link** | Copied to the clipboard; "Link copied" | happy |
 | WEB-025 | Email and WhatsApp on the web | | | **Send by email** / **Send on WhatsApp** | Opens your mail app / `wa.me`; nothing sent by the server | edge |
 | WEB-026 | OCR unavailable | | | **Scan with OCR instead** | "Bill scanning works in the installed Elixir Books app…" | edge |

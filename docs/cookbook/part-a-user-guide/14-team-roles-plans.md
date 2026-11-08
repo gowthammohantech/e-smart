@@ -117,7 +117,7 @@ The top of the screen shows your current plan and usage: **Businesses**, **Invoi
 **Steps**
 1. On **Plan & billing**, find the plan you want and tap **Choose this plan**. On a lower plan the button reads **Downgrade**.
 2. A secure checkout page opens. Complete the payment there.
-3. Return to the app. **The plan changes once the payment is confirmed**, usually within a minute. It syncs to every device.
+3. Return to the app. **The plan changes once the payment is confirmed**, usually within a minute. Every device sees it the next time it loads from the server.
 
 **What happens on a downgrade**
 - Moving from Pro or Business to Free or Basic hides purchases, stock and expenses. **Nothing is deleted**: *"purchases, stock and expenses are hidden, not deleted"*.

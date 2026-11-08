@@ -35,6 +35,8 @@ Tests for sign-up, sign-in (email and phone OTP), password reset, invitations, d
 | AUTH-025 | Suspended account | | Operator suspended the demo account (ADM-020) | Sign in as owner | Refused with "This account has been suspended. Contact support." | permission |
 | AUTH-026 | Server unreachable | | API stopped | **Sign in** | "Can't reach the server. Check your connection and try again." | offline |
 | AUTH-027 | Prefill on demo builds | | `EXPO_PUBLIC_DEMO_LOGIN_*` set | Open sign-in | Email and password fields come prefilled; with the variables unset they are empty | edge |
+| AUTH-028 | App opened offline | Owner | Signed in; network off | Close and reopen the app | "You're offline" screen with **Try again**; turn the network on → **Try again** → Home loads | offline |
+| AUTH-029 | Old build | Owner | Server `MIN_APP_VERSION` set above the installed build (a native build before 1.0.5) | Open the app | "Update required" (HTTP 426 `APP_UPDATE_REQUIRED`) with **Update the app**; nothing else can be used | edge |
 
 ### Sign in — phone OTP
 
@@ -82,7 +84,6 @@ Tests for sign-up, sign-in (email and phone OTP), password reset, invitations, d
 |---|---|---|---|---|---|---|
 | AUTH-070 | List devices | Owner | Signed in on 2 devices | **More › Settings › Devices** | Both listed; the current one is marked "This device" | happy |
 | AUTH-071 | Sign out another device | Owner | | Pick the other device → **Sign out** → confirm | "Device signed out"; that device's next request is refused and it returns to sign-in | happy |
-| AUTH-072 | Sign out with unsynced changes | Owner | Offline edit queued | **Sign out** | Warning that unsynced changes stay on this device | offline |
 
 ### Onboarding
 
@@ -108,5 +109,5 @@ Tests for sign-up, sign-in (email and phone OTP), password reset, invitations, d
 | ONB-018 | Done screen | | Finished | — | "<Business> is ready"; **Create my first invoice** opens a new invoice; **Go to dashboard** opens Home | happy |
 | ONB-019 | Defaults created | | ONB-018 | Check Settings | 11 numbering series, default tax slabs, expense categories, a payment account | happy |
 | ONB-020 | Resume after kill | | Mid-wizard | Kill and reopen the app | Returns to onboarding, not Home | edge |
-| ONB-021 | Onboard offline | New owner | Network off | Complete the wizard | The business is created on the device and sent first when the network returns (OFF-040) | offline |
+| ONB-021 | Onboard offline | New owner | Network off | Complete the wizard | Header shows "No internet connection" and **Finish setup** is disabled; no business is created | offline |
 | ONB-022 | Second business from inside the app | Owner | Onboarded | Look for "Add business" | **Blocked**: no in-app way to create a second business | edge |

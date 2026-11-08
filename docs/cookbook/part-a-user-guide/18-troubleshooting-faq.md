@@ -65,16 +65,20 @@ Messages are grouped by where you meet them. A short code, for example `PLAN_LIM
 | *The 24-hour cancellation window has closed; issue a credit note instead* | Too late to cancel the IRN | Issue a sales return ([05](05-sales.md)) |
 | *Longer than 16 characters — the e-invoice portal will reject this number.* | The numbering series is too long | Shorten the prefix or drop the branch code ([13](13-settings.md#document-numbering)) |
 
-### Files, sync and connection
+### Files and connection
 
 | You see | Why | What to do |
 |---|---|---|
 | *That image is over 5 MB…* / *The logo must be 5 MB or smaller* (`FILE_TOO_LARGE`) | Logo too large | Use a smaller PNG or JPEG |
-| *The upload failed (〈status〉). Try again.* | Upload interrupted | Try again online |
+| *The upload failed (〈status〉). Try again.* | Upload interrupted; nothing was saved | Try again online |
 | *The server did not return the PDF* / *a link* | PDF or link service hiccup | Try again |
 | *The export is taking longer than expected…* | A large export | Try again shortly |
-| **N failed** badge, **Changed on another device**, **The server refused this change** | A queued change couldn't be applied | See [15 › Fix a failed change](15-offline-and-sync.md#fix-a-failed-change) |
-| *The server returned an incomplete session. Sign in again.* | Session problem | Sign out and back in. Unsynced changes stay on the device. |
+| **No internet connection** in the header, save buttons greyed out | The server can't be reached | Reconnect. What's on screen stays readable; nothing is saved until you're back online. |
+| **You're offline** screen when opening the app | No connection at launch | Reconnect, then tap **Try again** |
+| A toast saying the server refused the change, and the screen goes back | The server refused the save, or the connection dropped mid-save. The change was undone; nothing waits to be sent later. | Read the reason, fix it and save again |
+| The record changed elsewhere and your edit was refused | Someone else saved it first | The screen now shows the server's copy. Make your change again on it. |
+| **Update required** | This version of the app is no longer supported | Tap **Update the app** and install the latest version |
+| *The server returned an incomplete session. Sign in again.* | Session problem | Sign out and back in. Your books are on the server, so nothing is lost. |
 | *GSTIN should look like 27AABCV1234F1ZO* / *…fails its check digit — look for a typo* | Mistyped GSTIN | Re-check all 15 characters |
 | *PIN code 〈pin〉 is in 〈state〉, not 〈state〉* | PIN and state don't match | Fix one of them |
 | *An unregistered or overseas party has no GSTIN* | A GSTIN entered for an unregistered or overseas contact | Change the registration type, or clear the GSTIN |
@@ -98,7 +102,7 @@ The place of supply is in a different state from your business, or from the bran
 **Paid**, **Partly paid** and **Overdue** are worked out from the payments allocated to the document; you can't set them by hand. Record the payment and allocate it to the invoice ([07](07-payments.md)).
 
 **My dashboard and reports don't match a colleague's.**
-They're computed on each device from its synced copy. Both of you should open **Sync status › Sync now**. If a device still looks wrong, use **Reload everything from the server**.
+They're worked out from what the server sends when each screen opens. Check that you're both on the same business, branch and period, then reopen the screen (or reload the page on the web) to fetch the latest.
 
 **Can I create a second business from inside the app?**
 Not yet. New businesses come from onboarding on a new account, or are added on the server. Switching between businesses you already have is in the header ([03](03-navigation.md)).
@@ -146,7 +150,6 @@ These features are planned or partly built. They are **not working today**, and 
 | **Delete my account** in the app | Not built (app stores require it) | Contact support |
 | **Push notifications** | The phone app doesn't register for push yet | Check **Notifications** in the app |
 | **"3 of 6 users" on Plan & billing** | Shows plain counts only | Count against the plan table ([14](14-team-roles-plans.md#compare-plans-and-see-usage)) |
-| **Merge view for sync conflicts** | You can keep yours or theirs, not combine them | Re-enter the field you need after choosing |
 | **In-app purchase** on iPhone | Plans are bought through a web checkout | — |
 | **Bank feeds or reconciliation; CSV/Excel import** | Not in the product | Record payments by hand |
 
@@ -168,12 +171,12 @@ The production server won't start until each of these is set up. In demo and dev
 
 ### Known limitations
 
-- **Offline sync** has passed automated tests but hasn't yet been tested on physical phones: airplane mode, killing the app mid-sync, two devices.
-- **Dashboard, search, aging, reports and GSTR-1 are computed on the device**, not the server. They're accurate to the device's last sync.
+- **The app is online only.** Nothing can be saved without a connection; what's on screen stays readable.
+- **Dashboard, search, aging, reports and GSTR-1 are worked out in the app** from the records the server sends, not by the server. They're as current as the last time the screen loaded.
 - **Legal links** (privacy, terms, support) in **About** are placeholders.
 - **Tamil:** some server text and PDFs are still English.
 - **Very large businesses** may be slow to load on the web, which downloads the whole app on first visit, and very old phones may struggle.
 
 ---
 
-**Related:** [README](../README.md) · [15 Offline & sync](15-offline-and-sync.md) · [14 Team, roles & plans](14-team-roles-plans.md)
+**Related:** [README](../README.md) · [14 Team, roles & plans](14-team-roles-plans.md)

@@ -72,7 +72,8 @@ Reference line: **BRG-6203 Steel Ball Bearing, qty 10 × ₹180, 18% GST** = tax
 | SAL-063 | Number never reused | | Invoice 0040 cancelled | Finalise a new invoice | Gets 0041, not 0040 | edge |
 | SAL-064 | Finalised can't be edited | | Issued invoice | Look for **Edit** | No edit; only status, convert, share and cancel actions | edge |
 | SAL-065 | Free plan: 20 invoices a month | Owner / Free | Operator set Aurora to Free (ADM-011); 20 invoices finalised this month | Finalise the 21st | Refused with `PLAN_LIMIT_REACHED`, naming Smart Basic | plan |
-| SAL-066 | Finalised offline | | Network off | Finalise | "Saved on this device…"; a **Provisional number** badge until synced (OFF-010) | offline |
+| SAL-066 | Finalise with no connection | | Draft open; network off | Try **Finalise** | Header shows "No internet connection"; save and **Finalise** are disabled; the draft on screen stays readable; nothing is saved and no number is used | offline |
+| SAL-068 | Edited elsewhere | | Same draft open in two sessions | Save in session A, then save a different change in session B | B's save is refused with a toast; B's screen shows the server's copy (A's change) | edge |
 | SAL-067 | Locked period | Owner | `lockedThroughDate` set through the API | Edit a document dated on or before the lock | 409 `PERIOD_LOCKED` "The books are closed through …". **Blocked** in the UI (no lock screen) | edge |
 
 ### Lifecycles

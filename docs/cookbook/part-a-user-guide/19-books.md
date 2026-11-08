@@ -1,6 +1,6 @@
 # 19 — Books: accounts, vouchers, statements
 
-The app keeps a double-entry ledger worked out from everything you record. Every invoice, bill, note, payment, expense and voucher posts to accounts. The trial balance, profit and loss, balance sheet and day book are read from those postings. The postings are not stored: the app and the server work them out with the same code, so they agree once synced, and the books work offline.
+The app keeps a double-entry ledger worked out from everything you record. Every invoice, bill, note, payment, expense and voucher posts to accounts. The trial balance, profit and loss, balance sheet and day book are read from those postings. The postings are not stored: the app and the server work them out with the same code, so they always agree.
 
 - **Plan:** full plans (Pro and Business).
 - **Roles:**

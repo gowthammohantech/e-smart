@@ -142,4 +142,4 @@ Each module file has a table with these columns:
 - **Blocked** means the feature isn't built yet; the scenario is kept so the gap stays visible. Record a Blocked scenario as "Blocked", not "Fail".
 - When a scenario fails, record the platform (iOS, Android, web desktop, web narrow), the build number and the steps to reproduce.
 
-Use **two sessions** wherever a scenario needs two people or devices: two browsers, or a browser and a phone. Offline scenarios need a way to cut the network: airplane mode, or DevTools › Network › Offline.
+Use **two sessions** wherever a scenario needs two people or devices: two browsers, or a browser and a phone. Offline scenarios check that the app, which is online only, blocks saves cleanly without a connection; they need a way to cut the network: airplane mode, or DevTools › Network › Offline.

@@ -74,5 +74,4 @@ Default: owner, **Vertex Traders**. Accounts: Cash in hand, HDFC Current — 884
 | PAY-064 | Remind on WhatsApp or email | Owner | Customer with overdue invoices | **Remind** | Prefilled: "Hi <name>, a gentle reminder that invoices … totalling ₹… are still open…"; you send it yourself | happy |
 | PAY-065 | Record from aging | | | **Record payment** on a row | Payment form for that contact | happy |
 | PAY-066 | Payables aging | Owner / Pro | | **More › Payables** | Same buckets for supplier bills; **Pay** | happy |
-| PAY-067 | Aging is device-side | | Offline | Open Receivables | Still renders from the local copy (computed on the device) | offline |
-| PAY-068 | Payment offline | | Network off | Record a payment | "Saved on this device…"; synced later; the invoice status updates when synced | offline |
+| PAY-068 | Payment with no connection | | Network off | Record a payment | Save is disabled; no payment is recorded and the invoice status is unchanged | offline |

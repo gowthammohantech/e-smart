@@ -71,7 +71,7 @@ hand**, and nothing on the market does that well in this segment.
 - **Spend**: expenses with categories, recurrence and receipts; receipt capture by camera.
 - **Reporting**: nine standard reports with filters and CSV export.
 - **Business setup**: company, branches, users and roles, tax categories, currencies and rates, document numbering, payment accounts, expense categories.
-- **Platform**: multi-company under one account, multi-branch, multi-currency, English and Tamil, light and dark, offline-tolerant.
+- **Platform**: multi-company under one account, multi-branch, multi-currency, English and Tamil, light and dark, online only (needs a connection to save; tolerant of a dropped connection).
 
 ### 5.2 Out of scope for v1
 
@@ -159,7 +159,7 @@ chose to have. Each is specified precisely in the FRD.
 
 - The business has, or can obtain, IRP and e-way bill API credentials through a GSP. The product never asks a user for a portal password in the clear; credentials are held server-side and shown masked.
 - One person in the business can read enough English to complete initial setup, even where daily operation happens in another language.
-- Connectivity is intermittent but not absent: a document can be created offline and reported when a connection returns.
+- Connectivity is intermittent but not absent. The product is online only: a save needs a connection, and when there is none the product says so, blocks the save and loses nothing already saved. (Earlier drafts assumed a document could be created offline and reported later; offline mode was dropped in Nov 2026.)
 - Businesses will accept that a finalised document cannot be edited, provided the product gives them a lawful correction path (credit note, cancellation inside the window).
 
 ## 11. Constraints

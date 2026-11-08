@@ -75,7 +75,8 @@ nothing behind them yet.
 
 ## 5. Client-computed views to move server-side
 
-The apps compute these from the synced store. The API already has endpoints
+The apps compute these from the records they load from the server (nothing
+is kept on the device; the app is online only). The API already has endpoints
 for each; switching the screens to them keeps the numbers authoritative and
 the devices light as books grow.
 
@@ -135,7 +136,7 @@ API will not start until the provider rows are real.
 - [ ] `EXPO_PUBLIC_API_URL` / `VITE_API_URL`
 - [ ] `EXPO_PUBLIC_DEMO_LOGIN_*` / `VITE_DEMO_LOGIN_*` unset (they are compiled into the bundle)
 
-### Before deploying the offline sync work
+### Before deploying the server changes
 
 - [ ] Check production for duplicate issued document numbers: migration `0008` fails if any exist
 - [ ] Postgres 13 or newer (`change_log.tx_id` is `xid8`)
@@ -146,7 +147,9 @@ API will not start until the provider rows are real.
 
 | Item | Owner | Status |
 |---|---|---|
-| End-to-end tests of the API-backed flow on web and mobile. The web offline-first scenarios (online, offline and reload, killed tab, slow network, failing refresh, two tabs, two devices) run in CI (`e2e` job); sign-up, invoice to payment, OCR, the GSP sandbox and mobile (Maestro) are still to add | QA | 🟨 Partly |
+| End-to-end tests of the API-backed flow on web and mobile. The web online-only scenarios (a save reaches the server and nothing is kept in the browser; with the API unreachable the app says so, saving is off and nothing waits to be sent) run in CI (`e2e` job); sign-up, invoice to payment, OCR, the GSP sandbox and mobile (Maestro) are still to add | QA | 🟨 Partly |
+| Online-only release: once 1.0.5 is in the stores, set `MIN_APP_VERSION` on the API so older native builds see "Update required" (426 `APP_UPDATE_REQUIRED`); the first 1.0.5 launch sends what an old build left unsent, then deletes its on-device copy. Not yet checked on a device | Mobile/Web, Ops | ⬜ Todo |
+| Remove `/sync/push` and `/sync/pull` from the API once no build before 1.0.5 is in use; new apps don't call them | Backend | ⬜ Todo |
 | Security review: auth and refresh tokens, tenant isolation, upload validation, webhook signatures, secrets handling, dependency audit | Backend, external | ⬜ Todo |
 | App store builds: profiles, signing and the privacy manifest are done (`apps/mobile/eas.json`, `app.json`); store listings, labels and submission follow `docs/STORE_SUBMISSION.md` | Mobile/Web | 🟨 Partly |
 | Legal pages: drafts at `/privacy`, `/terms`, `/refund`, `/delete-account`, `/support` on the site (`apps/site/content/legal.ts`); a lawyer must review them and a grievance officer be named | Product | 🟨 Drafted |
@@ -164,6 +167,6 @@ three rows below are done; preparing and saving returns works without it.
 | A worked month on a test company, checked to the paisa by the CA: TDS over the threshold, GTA reverse charge, a blocked credit, capital goods, a credit and a debit note, an advance for services, a reimbursement, an MSME bill. Expected GSTR-1 JSON, 3B tables and set-off | QA, CA | ⬜ Todo |
 | The returns routes confirmed on the GSP sandbox, and one return filed end to end on a test GSTIN (`docs/RUNBOOK.md`, GST returns) | Backend | ⏸ Blocked: needs GSP taxpayer-API access |
 | Tally Prime (education mode) imports the Tally XML export, and its trial balance equals the app's | QA | ⬜ Todo |
-| Offline on a phone: a journal and a contra saved offline, synced, and the trial balance matches the server's | QA | ⬜ Todo |
+| On a phone: a journal and a contra saved, and the trial balance matches the server's | QA | ⬜ Todo |
 | Turn on `GST_FILING_ENABLED` in production | Ops | ⏸ Blocked on the rows above |
 | Known gaps, documented in the FAQ: DSC filing, imports of goods and ISD in 3B, GSTR-1 amendment tables, a document split across cost centres | Product | Decision needed |

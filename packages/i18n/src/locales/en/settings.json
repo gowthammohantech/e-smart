@@ -207,9 +207,9 @@
     "appName": "Elixir Books Smart",
     "pitch": "Everyday business management from a phone — invoices, payments, purchases and stock, without ERP complexity.",
     "sdk": "Expo SDK 57",
-    "syncedData": "Synced with the server",
+    "syncedData": "Kept on the server",
     "noteHeading": "About your data",
-    "note": "Your books live on the server. This device keeps a working copy, so you can carry on offline; changes are queued and sent when you are back online, and the server validates every finalised record before it counts."
+    "note": "Your books live on the server, and nothing is kept on this device. Every change is saved straight to the server, which checks it before it counts, so the app needs an internet connection to make changes."
   },
   "backup": {
     "json": "Machine-readable JSON",

@@ -49,7 +49,7 @@ When you open the app you land on one of three screens:
 
 **Rules & gotchas**
 - A wrong email or password shows *Email or password is incorrect.*
-- Without a connection you see *Can't reach the server. Check your connection and try again.* The first sign-in on a device always needs the internet. After that, the app works offline (see [15 — Working offline & sync](15-offline-and-sync.md)).
+- Without a connection you see *Can't reach the server. Check your connection and try again.* The app is online only: signing in, and every save afterwards, needs the internet. See [18 — Troubleshooting & FAQ](18-troubleshooting-faq.md#files-and-connection) for what you see without a connection.
 
 ---
 
@@ -151,7 +151,7 @@ When you open the app you land on one of three screens:
 2. Confirm in **Sign out?**
 
 **Rules & gotchas**
-- *Changes not yet synced stay on this device until you do.* Check **More › Sync status** before signing out of a device you won't use again (see [15 — Working offline & sync](15-offline-and-sync.md)).
+- Nothing is waiting on the device: every change was saved to the server when you made it. Signing out removes the sign-in from this device; your books stay on the server.
 
 ---
 
