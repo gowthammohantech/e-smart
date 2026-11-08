@@ -17,8 +17,8 @@ import { type Theme, useTheme } from '../theme/ThemeProvider';
 import { useIsDesktop } from '../theme/breakpoints';
 import { focusRing, type WebPressState } from '../theme/interaction';
 import { Text } from './Text';
-import { currencySymbol } from '@esmart/core/lib/currencies';
-import { sanitizeAmountInput } from '@esmart/core/lib/format';
+import { currencyMeta, currencySymbol } from '@esmart/core/lib/currencies';
+import { formatNumber, sanitizeAmountInput } from '@esmart/core/lib/format';
 import {
   joinPhone,
   maxNationalDigits,
@@ -360,6 +360,14 @@ export function usePhoneInput(stored?: string) {
 /* Amount input                                                        */
 /* ------------------------------------------------------------------ */
 
+/** Adds the currency's digit grouping to a typed amount, keeping its sign and decimals as typed. */
+export function groupAmountText(value: string, currency: string): string {
+  const m = /^(-?)(\d+)(\.\d*)?$/.exec(value);
+  if (!m) return value;
+  const [, sign, int, dec = ''] = m;
+  return `${sign}${formatNumber(Number(int), 0, currencyMeta(currency).grouping)}${dec}`;
+}
+
 export function AmountField({
   label,
   value,
@@ -421,7 +429,8 @@ export function AmountField({
           {currencySymbol(currency)}
         </Text>
         <TextInput
-          value={value}
+          // Grouped (₹9,374.51) while at rest; the raw figure while typing.
+          value={focused ? value : groupAmountText(value, currency)}
           onChangeText={(v) => onChangeValue(sanitizeAmountInput(v, currency, { allowNegative }))}
           // Neither decimal pad has a minus key: iOS needs the punctuation
           // keyboard, Android's numeric keyboard carries the sign.
