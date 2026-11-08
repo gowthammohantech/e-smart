@@ -22,12 +22,17 @@ const ALT: Record<ScreenName, string> = {
   lixi: 'Lixi, the AI assistant, with suggested questions about the books',
 };
 
-/** Both theme captures of one screen, as a pair of <img>; `className` sizes them. */
+/**
+ * Both theme captures of one screen, as a pair of <img>; `className` sizes them. A phone
+ * screen states its size, so its box is there before the file is; until the file lands
+ * the box shimmers.
+ */
 export function ScreenImage({ name, file = name, alt = ALT[name as ScreenName] ?? '', className = '' }: { name: string; file?: string; alt?: string; className?: string }) {
+  const size = (SCREENS as readonly string[]).includes(name) ? { width: SCREEN_W, height: SCREEN_H } : {};
   return (
     <>
-      <img src={`/screens/light/${file}.webp`} alt={alt} className={`dark:hidden ${className}`} loading="lazy" decoding="async" />
-      <img src={`/screens/dark/${file}.webp`} alt={alt} className={`hidden dark:block ${className}`} loading="lazy" decoding="async" />
+      <img src={`/screens/light/${file}.webp`} alt={alt} {...size} className={`shimmer-bg dark:hidden ${className}`} loading="lazy" decoding="async" />
+      <img src={`/screens/dark/${file}.webp`} alt={alt} {...size} className={`shimmer-bg hidden dark:block ${className}`} loading="lazy" decoding="async" />
     </>
   );
 }

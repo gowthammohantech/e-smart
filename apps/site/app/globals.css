@@ -210,6 +210,22 @@
   animation: float 6s ease-in-out infinite;
 }
 
+/* A placeholder's shimmer: images and media show it until they paint over it. */
+@keyframes shimmer {
+  from {
+    background-position: 150% 0;
+  }
+  to {
+    background-position: -50% 0;
+  }
+}
+.shimmer-bg {
+  background-color: var(--surface-2);
+  background-image: linear-gradient(90deg, transparent 30%, var(--line) 50%, transparent 70%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+
 /* The glow wash shown when WebGL is unavailable. */
 .css-glow {
   background:
@@ -222,7 +238,8 @@
 @media (prefers-reduced-motion: reduce) {
   .animate-marquee,
   .animate-spin-slow,
-  .animate-float {
+  .animate-float,
+  .shimmer-bg {
     animation: none;
   }
   html {

@@ -83,7 +83,7 @@ function VideoModal({ onClose }: { onClose: () => void }) {
         onClick={(e) => e.stopPropagation()}
       >
         {hasVideo ? (
-          <video src={howItWorks.demo.videoUrl} className="size-full" controls autoPlay />
+          <video src={howItWorks.demo.videoUrl} className="shimmer-bg size-full" controls autoPlay />
         ) : (
           <DemoPitch onClose={onClose} />
         )}

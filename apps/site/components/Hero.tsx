@@ -11,7 +11,15 @@ import { Reveal } from './ui/Reveal';
 import { Avatar } from './ui/Avatar';
 import { StoreBadge } from './ui/StoreBadge';
 
-const HeroPhone = dynamic(() => import('./three/HeroPhone'), { ssr: false });
+// While the 3D phone's code and model load, a shimmering phone stands where it will be.
+const HeroPhone = dynamic(() => import('./three/HeroPhone'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-full items-start justify-center pt-4" role="status" aria-label="Loading">
+      <div className="shimmer-bg aspect-[390/844] w-[260px] rounded-[44px] border border-line" />
+    </div>
+  ),
+});
 
 const chipTone = { good: 'bg-good', warn: 'bg-warn', primary: 'bg-primary' } as const;
 
