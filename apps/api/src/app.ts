@@ -74,7 +74,7 @@ export async function buildApp(deps: Deps, opts: BuildOptions = {}): Promise<Fas
 
   await app.register(cors, {
     origin: deps.config.CORS_ORIGINS === '*' ? true : deps.config.CORS_ORIGINS.split(',').map((s) => s.trim()),
-    exposedHeaders: ['ETag', 'Idempotent-Replayed', 'Content-Disposition', 'Server-Timing'],
+    exposedHeaders: ['ETag', 'Idempotent-Replayed', 'Content-Disposition', 'Server-Timing', 'Retry-After'],
     allowedHeaders: ['Authorization', 'Content-Type', 'If-Match', 'Idempotency-Key', 'X-App-Version'],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   });

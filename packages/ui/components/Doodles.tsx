@@ -88,7 +88,8 @@ export function DoodleScatter() {
 
   return (
     <View
-      style={StyleSheet.absoluteFill}
+      // Clipped: a doodle turned at the right edge pokes a few pixels past it, which on the web widens the page.
+      style={[StyleSheet.absoluteFill, { overflow: 'hidden' }]}
       pointerEvents="none"
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"

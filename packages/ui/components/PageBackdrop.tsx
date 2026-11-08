@@ -32,7 +32,8 @@ export function PageBackdrop({ surface }: { surface?: string }) {
 
   return (
     <View
-      style={StyleSheet.absoluteFill}
+      // Clipped: the glows drift past the edges, and unclipped they widen the page (a sideways scroll on the web).
+      style={[StyleSheet.absoluteFill, { overflow: 'hidden' }]}
       pointerEvents="none"
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"

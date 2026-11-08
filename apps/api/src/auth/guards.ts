@@ -1,4 +1,4 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { schema } from '@esmart/db';
 import { FULL_PLAN, hasModule, moduleEnabled, type Module } from '@esmart/core/domain/plan';
@@ -116,11 +116,11 @@ export function registerGuards(app: FastifyInstance, deps: Deps) {
       if (here) user.role = here;
       // Branch limits are per business: limits from another business mean nothing here (none here = all branches).
       if (user.branchIds.length) {
-        const own = await deps.db
-          .select({ id: schema.branches.id })
-          .from(schema.branches)
-          .where(and(eq(schema.branches.companyId, companyId), inArray(schema.branches.id, user.branchIds)));
-        user.branchIds = own.map((b) => b.id);
+        const here = await deps.db.select({ id: schema.branches.id }).from(schema.branches).where(eq(schema.branches.companyId, companyId));
+        const own = here.filter((b) => user.branchIds.includes(b.id));
+        // Listed against every branch is no limit at all: the books, TDS/TCS and the balance sheet
+        // open to them as to someone with no branch limits.
+        user.branchIds = own.length === here.length ? [] : own.map((b) => b.id);
       }
       // An archived business keeps its books as they were: they can be read and exported, nothing more.
       if (req.company.archivedAt && op.method !== 'GET' && !op.archivedAllowed) {

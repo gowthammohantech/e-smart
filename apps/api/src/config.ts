@@ -46,7 +46,11 @@ const Env = z.object({
     .string()
     .default('')
     .transform((v) => v.split(',').map((p) => p.replace(/\D/g, '').slice(-10)).filter(Boolean)),
-  RATE_LIMIT_PER_MINUTE: z.coerce.number().int().default(300),
+  /**
+   * Requests per minute per signed-in user (per IP before sign-in). Opening one screen sends about 20,
+   * and a person may have the web app open in two or three tabs, so 300 was hit in normal use.
+   */
+  RATE_LIMIT_PER_MINUTE: z.coerce.number().int().default(1200),
   /**
    * Where background jobs run. `inline`: in the API process (one service is enough). `only`: this
    * process runs jobs and serves no HTTP (the Railway `worker` service). `off`: HTTP only, jobs are

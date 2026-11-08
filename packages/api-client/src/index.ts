@@ -38,7 +38,31 @@ export type ApiClientOptions = {
   headers?: Record<string, string>;
   /** Told how long every answered request took, e.g. for a speed readout. Not called for one that never got an answer. */
   onTiming?: (timing: RequestTiming) => void;
+  /** Waits before a retry. Defaults to a timer; tests pass one that doesn't wait. */
+  sleep?: (ms: number) => Promise<void>;
 };
+
+/** Retries after a 429 or a gateway error, at most. */
+const MAX_RETRIES = 2;
+/** A Retry-After longer than this isn't waited for: the request fails and the screen offers Retry. */
+const MAX_WAIT_MS = 10_000;
+
+/**
+ * How long to wait before trying again, or undefined when the answer shouldn't be retried. A 429
+ * (the rate limit; the request never ran) is retried for any signed-in call, a 502/503/504 (a
+ * deploy, a restart) only for a GET. The server's Retry-After wins; otherwise 0.5s, then 1s.
+ */
+export function retryDelay(method: string, status: number, retryAfter: string | null, attempt: number): number | undefined {
+  if (attempt >= MAX_RETRIES) return undefined;
+  const transient = status === 429 || (method === 'GET' && [502, 503, 504].includes(status));
+  if (!transient) return undefined;
+  const fallback = 500 * 2 ** attempt + Math.floor(Math.random() * 250);
+  if (!retryAfter) return fallback;
+  const seconds = Number(retryAfter);
+  const ms = Number.isFinite(seconds) ? seconds * 1000 : Date.parse(retryAfter) - Date.now();
+  if (!Number.isFinite(ms)) return fallback;
+  return ms > MAX_WAIT_MS ? undefined : Math.max(0, ms);
+}
 
 /** One answered request: from sending it to its headers arriving, and the part the server says it spent. */
 export type RequestTiming = {
@@ -129,6 +153,7 @@ export function createApiClient(options: ApiClientOptions) {
     }
   }) as typeof fetch;
   const newKey = options.idempotencyKey ?? (() => crypto.randomUUID());
+  const sleep = options.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
   let refreshing: Promise<Tokens | null> | null = null;
   // A sent request's body is spent, so keep an unsent copy for the one retry.
   const unsent = new WeakMap<Request, Request>();
@@ -180,21 +205,33 @@ export function createApiClient(options: ApiClientOptions) {
       if (!isPublic(request.url, options.baseUrl)) {
         const tokens = await options.getTokens();
         if (tokens) request.headers.set('Authorization', `Bearer ${tokens.accessToken}`);
-        unsent.set(request, request.clone());
       }
+      unsent.set(request, request.clone());
       return request;
     },
     async onResponse({ request, response }) {
       let retried: Response | undefined;
-      if (response.status === 401 && !isPublic(request.url, options.baseUrl)) {
+      const copy = unsent.get(request);
+      // A 429 or a gateway error says nothing about the request or the session: wait and send it
+      // again (a POST keeps its Idempotency-Key), and never treat it as being signed out.
+      const isPub = isPublic(request.url, options.baseUrl);
+      for (let attempt = 0; copy; attempt++) {
+        const current = retried ?? response;
+        if (current.status === 429 && isPub) break;
+        const wait = retryDelay(request.method, current.status, current.headers.get('retry-after'), attempt);
+        if (wait === undefined) break;
+        await sleep(wait);
+        retried = await fetchImpl(copy.clone());
+      }
+      if ((retried ?? response).status === 401 && !isPub) {
         refreshing ??= refresh(request.headers.get('Authorization')?.replace(/^Bearer /, '')).finally(() => {
           refreshing = null;
         });
         const tokens = await refreshing;
-        const copy = unsent.get(request);
         if (tokens && copy) {
-          copy.headers.set('Authorization', `Bearer ${tokens.accessToken}`);
-          retried = await fetchImpl(copy);
+          const again = copy.clone();
+          again.headers.set('Authorization', `Bearer ${tokens.accessToken}`);
+          retried = await fetchImpl(again);
         }
       }
       const final = retried ?? response;

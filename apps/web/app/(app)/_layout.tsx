@@ -11,6 +11,7 @@ import { SettingsNav } from '../../src/shell/SettingsNav';
 import { MAIN_ID, SkipLink } from '../../src/shell/SkipLink';
 import { CONTENT_MAX_WIDTH, useBreakpoint, useIsDesktop } from '../../src/layout';
 import { PageSurface } from '@esmart/ui/components/Doodles';
+import { hubBackOptions } from '@esmart/app/navigation/HubBackButton';
 
 /**
  * The signed-in shell for the browser. On a desktop: the sidebar on the
@@ -37,7 +38,7 @@ export default function WebAppLayout() {
         // The tabs draw a surface per tab themselves.
         route.name === '(tabs)' ? children : <PageSurface>{children}</PageSurface>
       }
-      screenOptions={{
+      screenOptions={({ route, navigation }) => ({
         headerShown: true,
         headerStyle: { backgroundColor: t.c.bg },
         headerTintColor: t.c.text,
@@ -58,8 +59,10 @@ export default function WebAppLayout() {
                 />
               ),
             }
-          : null),
-      }}
+          : // A phone-width page opened by its URL (a refresh, a shared link) has nothing beneath it:
+            // back goes to its list or hub. The desktop has the sidebar for that.
+            hubBackOptions(route, navigation)),
+      })}
     >
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="lixi" options={{ headerShown: false, presentation: 'modal' }} />

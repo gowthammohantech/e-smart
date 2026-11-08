@@ -191,3 +191,52 @@ describe('two tabs sharing one session', () => {
     vi.unstubAllGlobals();
   });
 });
+
+describe('transient answers', () => {
+  function client(handler: (req: Request, n: number) => Response) {
+    let tokens: Tokens | null = { accessToken: 'old', refreshToken: 'r1' };
+    const waits: number[] = [];
+    let n = 0;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => handler(input instanceof Request ? input : new Request(input, init), ++n));
+    const api = createApiClient({
+      baseUrl: BASE,
+      getTokens: () => tokens,
+      setTokens: (t) => void (tokens = t),
+      fetch: fetchMock as typeof fetch,
+      sleep: async (ms) => void waits.push(ms),
+    });
+    return { api, waits, calls: () => n, getTokens: () => tokens };
+  }
+  const limited = (after = '2') => new Response(JSON.stringify({ code: 'RATE_LIMITED' }), { status: 429, headers: { 'content-type': 'application/json', 'retry-after': after } });
+
+  it('waits out a 429 as Retry-After says and keeps the session', async () => {
+    const { api, waits, getTokens } = client((_req, n) => (n === 1 ? limited('2') : json(200, { user: { id: 'usr_1' } })));
+    const { data } = await api.GET('/me');
+    expect(data).toEqual({ user: { id: 'usr_1' } });
+    expect(waits).toEqual([2000]);
+    expect(getTokens()).not.toBeNull();
+  });
+
+  it('gives up after two retries with a 429, still signed in', async () => {
+    const { api, calls, getTokens } = client(() => limited('1'));
+    await expect(api.GET('/me')).rejects.toMatchObject({ status: 429 });
+    expect(calls()).toBe(3);
+    expect(getTokens()).not.toBeNull();
+  });
+
+  it('does not wait a long Retry-After', async () => {
+    const { api, calls } = client(() => limited('45'));
+    await expect(api.GET('/me')).rejects.toMatchObject({ status: 429 });
+    expect(calls()).toBe(1);
+  });
+
+  it('retries a GET after a 503 but not a POST', async () => {
+    const down = () => json(503, { status: 503 });
+    const get = client((_req, n) => (n === 1 ? down() : json(200, [])));
+    await get.api.GET('/companies/{companyId}/parties', { params: { path: { companyId: 'cmp_1' } } });
+    expect(get.calls()).toBe(2);
+    const post = client(() => down());
+    await expect(post.api.POST('/me/delete', { body: {} as never })).rejects.toMatchObject({ status: 503 });
+    expect(post.calls()).toBe(1);
+  });
+});

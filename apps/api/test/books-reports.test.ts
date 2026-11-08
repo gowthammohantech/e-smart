@@ -79,6 +79,16 @@ describe('books and branches', () => {
     expect((await view(one.token)).body.code).toBe('BOOKS_ALL_BRANCHES');
     expect((await view(all.token)).status).toBe(200);
   });
+
+  it('opens TDS payable to someone listed against every branch', async () => {
+    const m = await moneySetup(t);
+    const blr = await t.post(`${m.c}/branches`, { name: 'Bengaluru', code: 'blr', address: BENGALURU }, { token: m.token });
+    const one = await joinTeam(t, m.token, { role: 'accountant', companyIds: [m.companyId], branchIds: [m.branch.id] });
+    const all = await joinTeam(t, m.token, { role: 'accountant', companyIds: [m.companyId], branchIds: [m.branch.id, blr.body.id] });
+    const tds = (token: string) => t.get(`${m.c}/report-data/tds-payable`, { token, query: { from: '2026-04-01', to: '2027-03-31' } });
+    expect((await tds(one.token)).body.code).toBe('BOOKS_ALL_BRANCHES');
+    expect((await tds(all.token)).status).toBe(200);
+  });
 });
 
 describe('contacts import with custom fields', () => {

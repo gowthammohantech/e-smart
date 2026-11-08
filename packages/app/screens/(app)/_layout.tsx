@@ -7,6 +7,7 @@ import { usePlanGuard } from '../../navigation/usePlanGuard';
 import { useIntentEntitySync } from '../../features/intents/useIntentEntitySync';
 import { useIntentHandoff } from '../../features/intents/useIntentHandoff';
 import { PageSurface } from '@esmart/ui/components/Doodles';
+import { hubBackOptions } from '../../navigation/HubBackButton';
 
 /** A crash inside the signed-in app keeps the way home. */
 export function ErrorBoundary(props: ErrorBoundaryProps) {
@@ -36,7 +37,7 @@ function AppStack() {
         // The tabs draw a surface per tab themselves.
         route.name === '(tabs)' ? children : <PageSurface>{children}</PageSurface>
       }
-      screenOptions={{
+      screenOptions={({ route, navigation }) => ({
         headerShown: true,
         headerStyle: { backgroundColor: t.c.bg },
         headerTintColor: t.c.text,
@@ -45,7 +46,9 @@ function AppStack() {
         headerBackButtonDisplayMode: 'minimal',
         contentStyle: { backgroundColor: t.c.bg },
         animation: 'slide_from_right',
-      }}
+        // Opened by a link or a notification with nothing beneath it: back goes to its list or hub.
+        ...hubBackOptions(route, navigation),
+      })}
     >
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen
