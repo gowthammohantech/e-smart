@@ -18,11 +18,13 @@ import { partyStatement, statementHtml } from './statement';
 import { partyColumns, partyToWire, partyWithBalance } from './wire';
 import { money } from '../../lib/wire';
 import { rateToBase } from '../documents/engine';
+import { assertOpeningOpen, ledgerKeyUse } from '../books/usage';
+import { businessDate } from '@esmart/core/lib/date';
 
 const P = schema.parties;
 type PartyRow = typeof P.$inferSelect;
 
-const today = (d: Date) => d.toISOString().slice(0, 10);
+const today = (d: Date) => businessDate(d);
 
 async function findParty(db: DbOrTx, companyId: string, id: string): Promise<PartyRow> {
   const [row] = await db.select().from(P).where(and(eq(P.companyId, companyId), eq(P.id, id)));
@@ -83,19 +85,28 @@ async function withBalance(ctx: Ctx<'getParty'>, row: PartyRow) {
   return partyWithBalance(row, balances.get(row.id), payable);
 }
 
-/** Documents, payments, expenses or e-way bills that point at the party. */
+/** Documents, payments, expenses, e-way bills or vouchers that point at the party. */
 async function usage(db: DbOrTx, companyId: string, partyId: string): Promise<string | null> {
   const checks: [string, SQL][] = [
     ['documents', sql`select 1 from documents where company_id = ${companyId} and party_id = ${partyId} limit 1`],
     ['payments', sql`select 1 from payments where company_id = ${companyId} and party_id = ${partyId} limit 1`],
     ['expenses', sql`select 1 from expenses where company_id = ${companyId} and supplier_id = ${partyId} limit 1`],
     ['e-way bills', sql`select 1 from eway_bills where company_id = ${companyId} and party_id = ${partyId} limit 1`],
+    ['vouchers', sql`select 1 from vouchers where company_id = ${companyId} and party_id = ${partyId} limit 1`],
   ];
   for (const [what, q] of checks) {
     const res = await db.execute(q);
     if (res.rows.length) return what;
   }
-  return null;
+  // A journal names the party on its lines by key, with no foreign key.
+  const named = await ledgerKeyUse(db, companyId, `party:${partyId}`, ['voucher']);
+  return named ? `a ${named}` : null;
+}
+
+/** Opening invoices or bills (RULES 6.12) not cancelled: they are the party's opening balance. */
+async function hasOpeningDocuments(db: DbOrTx, companyId: string, partyId: string): Promise<boolean> {
+  const res = await db.execute(sql`select 1 from documents where company_id = ${companyId} and party_id = ${partyId} and kind in ('openingInvoice', 'openingBill') and status <> 'cancelled' limit 1`);
+  return res.rows.length > 0;
 }
 
 /**
@@ -148,7 +159,8 @@ export const partiesHandlers = defineHandlers({
 
   async createParty(ctx) {
     assertKindAllowed(ctx, ctx.body.kind);
-    await validate(ctx.db, ctx.body, ctx.now.toISOString().slice(0, 10));
+    await validate(ctx.db, ctx.body, today(ctx.now));
+    if (ctx.body.openingBalance.minor) assertOpeningOpen(ctx.company, ctx.body.openingBalanceDate);
     const customFields = await cleanCustomValues(ctx.db, ctx.company.id, 'party', ctx.body.customFields as CustomValues | undefined);
     const row = await ctx.db.transaction(async (tx) => {
       const code = ctx.body.code?.trim() || (await nextCode(tx, ctx.company.id, ctx.body.kind));
@@ -169,9 +181,11 @@ export const partiesHandlers = defineHandlers({
     const { rows, dryRun } = ctx.body;
     const day = today(ctx.now);
     // What is already there, to tell duplicates by GSTIN or by name in any case.
-    const existing = await ctx.db.select({ taxId: P.taxId, name: P.name }).from(P).where(eq(P.companyId, ctx.company.id));
+    const existing = await ctx.db.select({ taxId: P.taxId, name: P.name, code: P.code }).from(P).where(eq(P.companyId, ctx.company.id));
     const gstins = new Set(existing.map((e) => e.taxId).filter(Boolean));
     const names = new Set(existing.map((e) => e.name.trim().toLowerCase()));
+    // Codes taken, by the business or by earlier rows: a row naming one would fail the whole import.
+    const codes = new Set(existing.map((e) => e.code.trim().toLowerCase()));
     type Result = { index: number; status: 'created' | 'duplicate' | 'invalid'; id?: string; issues?: Issue[] };
     const results: Result[] = [];
     const good: { index: number; body: Schema<'Party'> }[] = [];
@@ -191,6 +205,12 @@ export const partiesHandlers = defineHandlers({
         results.push({ index, status: 'duplicate' });
         continue;
       }
+      const code = body.code?.trim().toLowerCase();
+      if (code && codes.has(code)) {
+        results.push({ index, status: 'invalid', issues: [{ field: 'code', message: `Another party already uses the code ${body.code!.trim()}`, severity: 'blocking' }] });
+        continue;
+      }
+      if (code) codes.add(code);
       if (body.taxId) gstins.add(body.taxId);
       names.add(name);
       good.push({ index, body: { ...body, customFields } });
@@ -202,7 +222,9 @@ export const partiesHandlers = defineHandlers({
         for (const { index, body } of good) {
           let code = body.code?.trim();
           if (!code) {
-            const n = next.get(body.kind) ?? Number((await nextCode(tx, ctx.company.id, body.kind)).replace(/\D/g, ''));
+            // Past any code a row in the sheet named itself.
+            let n = next.get(body.kind) ?? Number((await nextCode(tx, ctx.company.id, body.kind)).replace(/\D/g, ''));
+            while (codes.has(`${CODE_PREFIX[body.kind]}${String(n).padStart(3, '0')}`.toLowerCase())) n += 1;
             code = `${CODE_PREFIX[body.kind]}${String(n).padStart(3, '0')}`;
             next.set(body.kind, n + 1);
           }
@@ -227,9 +249,22 @@ export const partiesHandlers = defineHandlers({
     const current = await findParty(ctx.db, ctx.company.id, ctx.params.id);
     checkIfMatch(ctx.req, current.version);
     assertKindAllowed(ctx, ctx.body.kind);
-    await validate(ctx.db, ctx.body, ctx.now.toISOString().slice(0, 10));
-    if (ctx.body.kind !== current.kind && (await usage(ctx.db, ctx.company.id, current.id))) {
-      throw conflict('PARTY_KIND_LOCKED', 'A party with transactions cannot switch between customer and supplier');
+    await validate(ctx.db, ctx.body, today(ctx.now));
+    // A customer or supplier who starts trading the other way too becomes both and keeps its one ledger (RULES 6.11).
+    const widening = ctx.body.kind === 'both' && (current.kind === 'customer' || current.kind === 'supplier');
+    if (ctx.body.kind !== current.kind && !widening && (await usage(ctx.db, ctx.company.id, current.id))) {
+      throw conflict('PARTY_KIND_LOCKED', 'A party with transactions cannot switch between customer and supplier; make it both instead');
+    }
+    const opening = ctx.body.openingBalance.minor;
+    const openingChanged = opening !== current.openingBalanceMinor || (ctx.body.openingBalanceDate ?? null) !== current.openingBalanceDate || (ctx.body.openingBalanceSide ?? null) !== current.openingBalanceSide;
+    if (openingChanged) {
+      // An opening is in the books from the day before its date: a closed period holds it, before and after.
+      if (current.openingBalanceMinor) assertOpeningOpen(ctx.company, current.openingBalanceDate);
+      if (opening) assertOpeningOpen(ctx.company, ctx.body.openingBalanceDate);
+      // Opening invoices or bills already are its opening balance; both would count the debt twice.
+      if (opening && (await hasOpeningDocuments(ctx.db, ctx.company.id, current.id))) {
+        throw unprocessable([{ field: 'openingBalance', message: 'This party’s opening balance comes from its opening invoices or bills; cancel those, or leave this at zero', severity: 'blocking' }], 'OPENING_DOCUMENTS_EXIST');
+      }
     }
     const code = ctx.body.code?.trim() || current.code;
     const row = await ctx.db.transaction(async (tx) => {
@@ -262,7 +297,7 @@ export const partiesHandlers = defineHandlers({
   async removeParty(ctx) {
     const current = await findParty(ctx.db, ctx.company.id, ctx.params.id);
     checkIfMatch(ctx.req, current.version);
-    const used = await usage(ctx.db, ctx.company.id, current.id);
+    const used = (await usage(ctx.db, ctx.company.id, current.id)) ?? (current.openingBalanceMinor ? 'an opening balance' : null);
     if (used) throw conflict('PARTY_IN_USE', `This party has ${used}; mark it inactive instead`);
     await ctx.db.transaction(async (tx) => {
       await tx.delete(P).where(eq(P.id, current.id));

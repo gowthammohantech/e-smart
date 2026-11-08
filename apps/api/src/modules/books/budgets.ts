@@ -113,7 +113,7 @@ export const budgetHandlers = defineHandlers({
     await ctx.db.transaction(async (tx) => {
       const deleted = await tx.delete(B).where(and(eq(B.id, current.id), eq(B.version, current.version))).returning({ id: B.id });
       if (!deleted.length) throw preconditionFailed();
-      await recordChange(tx, ctx.user, { companyId: ctx.company.id, action: 'deleted', entityType: 'budget', entityId: current.id, entityLabel: current.name, version: current.version + 1, deleted: true });
+      await recordChange(tx, ctx.user, { companyId: ctx.company.id, action: 'deleted', entityType: 'budget', entityId: current.id, entityLabel: current.name, version: current.version + 1, deleted: true, before: toWire(current) });
     });
     return undefined;
   },

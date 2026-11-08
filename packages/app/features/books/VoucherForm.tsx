@@ -26,6 +26,9 @@ import { useActiveCompany, useBaseCurrency, useDefaultBranchId } from '../../sto
 import { useAccountName, useGroupName } from './names';
 import { VoucherGrid, gridLine, type GridLine } from './VoucherGrid';
 
+/** Kept in step with VOUCHER_BLOCKED_KEYS in the API's books handlers. */
+const BOOKS_ONLY = ['sys:openingStock', 'sys:accumulatedDepreciation', 'sys:goodsReceivedNotBilled'];
+
 const KINDS: VoucherKind[] = ['journal', 'contra', 'gstJournal', 'tdsChallan'];
 
 /** A `?kind=` a menu opens the form on, when it is one this form makes. */
@@ -82,7 +85,8 @@ export function VoucherForm({ voucher, onSaved, initialKind }: { voucher?: Vouch
   const accounts = useMemo(() => {
     const tdsPayable: Account[] = TDS_SECTIONS.map((s) => accountFor(`sys:tdsPayable:${s.code}`, book)!);
     const tcsPayable: Account[] = TCS_SECTIONS.map((s) => accountFor(`sys:tcsPayable:${s.code}`, book)!);
-    const all = [...chartOfAccounts(book).filter((a) => a.key !== 'sys:openingStock'), ...tdsPayable, ...tcsPayable];
+    // Accounts only the books post to (stock, the asset register, goods receipts); the server refuses them too.
+    const all = [...chartOfAccounts(book).filter((a) => !BOOKS_ONLY.includes(a.key)), ...tdsPayable, ...tcsPayable];
     const cash = (a: Account) => a.group === 'cashInHand' || a.group === 'bankAccounts';
     if (kind === 'contra') return all.filter(cash);
     // The same challan deposits TCS collected, so TCS payable may be cleared too.

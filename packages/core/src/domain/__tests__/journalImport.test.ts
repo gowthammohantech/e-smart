@@ -32,6 +32,24 @@ describe('journals from a CSV', () => {
     expect(out[2].problems).toContain('Line 6: no account called "Nowhere"');
   });
 
+  it('runs rows without a reference into one journal only while they are next to each other', () => {
+    const rows = parseCsv(
+      [
+        'Date,Voucher No,Ledger,Debit,Credit',
+        '31/03/2026,,Rent,100,',
+        '31/03/2026,,Cash,,100',
+        '31/03/2026,JV9,Depreciation,50,',
+        '31/03/2026,JV9,Fixed Assets,,50',
+        '31/03/2026,,Rent,70,',
+        '31/03/2026,,Cash,,70',
+      ].join('\n'),
+    );
+    const out = journalsFromCsv(rows, guessJournalColumns(rows[0]), accounts, 'INR');
+    expect(out).toHaveLength(3);
+    expect(out.map((j) => j.lines.length)).toEqual([2, 2, 2]);
+    expect(out.every((j) => j.problems.length === 0)).toBe(true);
+  });
+
   it('reads the dates people type', () => {
     expect(isoDate('5/4/2026')).toBe('2026-04-05');
     expect(isoDate('2026-04-05')).toBe('2026-04-05');

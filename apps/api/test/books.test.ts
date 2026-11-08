@@ -283,3 +283,66 @@ describe('books: journal import and templates', () => {
     expect((await t.del(`${m.c}/voucher-templates/${tpl.body.id}`, { token: m.token, headers: { 'if-match': `"v${tpl.body.version}"` } })).status).toBe(204);
   });
 });
+
+describe('books: keeping the ledger whole', () => {
+  it('refuses to delete a cash account or expense category a journal still names', async () => {
+    const m = await moneySetup(t);
+    const hdfc = await bank(m);
+    await t.deps.db.update(schema.paymentAccounts).set({ openingBalanceMinor: 1_000_000 }).where(eq(schema.paymentAccounts.id, m.cash.id));
+    const contra = await t.post(`${m.c}/vouchers`, voucher('contra', [[`pay:${hdfc}`, 500_000, 0], [`pay:${m.cash.id}`, 0, 500_000]]), { token: m.token });
+    expect(contra.status).toBe(201);
+    const del = await t.del(`${m.c}/payment-accounts/${hdfc}`, { token: m.token });
+    expect(del.status).toBe(409);
+    expect(del.body.code).toBe('PAYMENT_ACCOUNT_IN_USE');
+
+    const cat = await t.post(`${m.c}/expense-categories`, { name: 'Courier' }, { token: m.token });
+    expect(cat.status).toBe(201);
+    const jv = await t.post(`${m.c}/vouchers`, voucher('journal', [[`exp:${cat.body.id}`, 1_000, 0], [`pay:${m.cash.id}`, 0, 1_000]]), { token: m.token });
+    expect(jv.status).toBe(201);
+    const delCat = await t.del(`${m.c}/expense-categories/${cat.body.id}`, { token: m.token });
+    expect(delCat.status).toBe(409);
+  });
+
+  it('refuses a books-only account, an inactive account, and a group change once used', async () => {
+    const m = await moneySetup(t);
+    const stock = await t.post(`${m.c}/vouchers`, voucher('journal', [['sys:openingStock', 1_000, 0], ['sys:otherIncome', 0, 1_000]]), { token: m.token });
+    expect(stock.status).toBe(422);
+    const acc = await t.post(`${m.c}/ledger-accounts`, { name: 'Office repairs', group: 'indirectExpenses', openingBalance: nil }, { token: m.token });
+    const jv = await t.post(`${m.c}/vouchers`, voucher('journal', [[`acc:${acc.body.id}`, 1_000, 0], ['sys:otherIncome', 0, 1_000]]), { token: m.token });
+    expect(jv.status).toBe(201);
+    const moved = await t.put(`${m.c}/ledger-accounts/${acc.body.id}`, { name: 'Office repairs', group: 'fixedAssets', openingBalance: nil }, { token: m.token, headers: { 'if-match': '"v1"' } });
+    expect(moved.status).toBe(409);
+    expect(moved.body.code).toBe('ACCOUNT_GROUP_LOCKED');
+    const off = await t.put(`${m.c}/ledger-accounts/${acc.body.id}`, { name: 'Office repairs', group: 'indirectExpenses', openingBalance: nil, status: 'inactive' }, { token: m.token, headers: { 'if-match': '"v1"' } });
+    expect(off.status).toBe(200);
+    const again = await t.post(`${m.c}/vouchers`, voucher('journal', [[`acc:${acc.body.id}`, 1_000, 0], ['sys:otherIncome', 0, 1_000]]), { token: m.token });
+    expect(again.status).toBe(422);
+  });
+
+  it('holds an opening dated the day after the close, keeps a voucher in its year, and audits a delete in full', async () => {
+    const m = await moneySetup(t);
+    await t.deps.db.update(schema.companies).set({ lockedThroughDate: '2026-03-31' }).where(eq(schema.companies.id, m.companyId));
+    const onClose = await t.post(`${m.c}/ledger-accounts`, { name: 'Deposit', group: 'loansAdvances', openingBalance: inr(1_000), openingBalanceDate: '2026-04-01' }, { token: m.token });
+    expect(onClose.body.code).toBe('PERIOD_LOCKED');
+    const undated = await t.post(`${m.c}/ledger-accounts`, { name: 'Deposit', group: 'loansAdvances', openingBalance: inr(1_000) }, { token: m.token });
+    expect(undated.body.code).toBe('PERIOD_LOCKED');
+    const after = await t.post(`${m.c}/ledger-accounts`, { name: 'Deposit', group: 'loansAdvances', openingBalance: inr(1_000), openingBalanceDate: '2026-04-02' }, { token: m.token });
+    expect(after.status).toBe(201);
+
+    const jv = await t.post(`${m.c}/vouchers`, voucher('journal', [['sys:roundOff', 1_000, 0], ['sys:otherIncome', 0, 1_000]]), { token: m.token });
+    const lastYear = await t.put(`${m.c}/vouchers/${jv.body.id}`, voucher('journal', [['sys:roundOff', 1_000, 0], ['sys:otherIncome', 0, 1_000]], { date: '2027-04-02' }), { token: m.token, headers: { 'if-match': '"v1"' } });
+    expect(lastYear.status).toBe(422);
+    expect(lastYear.body.code).toBe('VOUCHER_YEAR_LOCKED');
+    expect((await t.del(`${m.c}/vouchers/${jv.body.id}`, { token: m.token })).status).toBe(204);
+    const [event] = await t.deps.db.select().from(schema.auditEvents).where(eq(schema.auditEvents.entityId, jv.body.id)).then((r) => r.filter((e) => e.action === 'deleted'));
+    expect(JSON.stringify(event.before)).toContain('sys:roundOff');
+  });
+
+  it('does not let two journals in one sheet spend the same bank balance', async () => {
+    const m = await moneySetup(t);
+    await t.deps.db.update(schema.paymentAccounts).set({ openingBalanceMinor: 10_000 }).where(eq(schema.paymentAccounts.id, m.cash.id));
+    const take = (ref: string) => ({ date: '2026-09-29', reference: ref, narration: ref, lines: voucher('journal', [['sys:roundOff', 8_000, 0], [`pay:${m.cash.id}`, 0, 8_000]]).lines });
+    const res = await t.post(`${m.c}/vouchers/import`, { vouchers: [take('A'), take('B')], dryRun: true }, { token: m.token });
+    expect(res.body.results.map((r: { status: string }) => r.status)).toEqual(['created', 'invalid']);
+  });
+});

@@ -10,6 +10,7 @@ import { conflict, notFound, preconditionFailed, unprocessable, type Issue } fro
 import type { DbOrTx } from '../../lib/audit';
 import { newId } from '../../lib/ids';
 import { audit, firstUse } from './shared';
+import { ledgerKeyUse } from '../books/usage';
 import { paymentAccountToWire } from './wire';
 
 const A = schema.paymentAccounts;
@@ -184,6 +185,9 @@ export const accountHandlers = defineHandlers({
       ['bank statements', sql`select 1 from bank_statements where account_id = ${current.id} limit 1`],
     ]);
     if (used) throw conflict('PAYMENT_ACCOUNT_IN_USE', `This account has ${used}; it can't be deleted`);
+    // Contras and journals name it by key with no foreign key; deleting it would leave their lines posting to nothing.
+    const named = (await ledgerKeyUse(ctx.db, ctx.company.id, `pay:${current.id}`)) ?? (current.openingBalanceMinor ? 'an opening balance' : null);
+    if (named) throw conflict('PAYMENT_ACCOUNT_IN_USE', `This account is on ${named}; it can't be deleted`);
     await ctx.db.transaction(async (tx) => {
       await tx.delete(A).where(eq(A.id, current.id));
       await audit(tx, ctx.user, ctx.company.id, 'payment_account', 'deleted', current, current.name, { before: paymentAccountToWire(current, current.openingBalanceMinor) });

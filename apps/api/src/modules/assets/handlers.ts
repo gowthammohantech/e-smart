@@ -104,7 +104,8 @@ async function find(db: DbOrTx, companyId: string, id: string) {
 /** The first day on which what an asset posts differs between two versions of it (either may be absent). */
 function firstChange(before: FixedAsset | undefined, after: FixedAsset | undefined, fy: number): string | undefined {
   const far = '2199-12-31';
-  const key = (a?: FixedAsset) => (a ? assetEntries(a, far, fy).map((e) => ({ date: e.date, k: JSON.stringify(e.entries) })) : []);
+  // Its branch and cost centre are on every entry it posts too, for the branch and cost-centre reports.
+  const key = (a?: FixedAsset) => (a ? assetEntries(a, far, fy).map((e) => ({ date: e.date, k: JSON.stringify([e.entries, a.branchId ?? null, a.costCentreId ?? null]) })) : []);
   const x = key(before);
   const y = key(after);
   for (let i = 0; i < Math.max(x.length, y.length); i++) {
@@ -263,7 +264,7 @@ export const fixedAssetHandlers = defineHandlers({
     await ctx.db.transaction(async (tx) => {
       const deleted = await tx.delete(FA).where(and(eq(FA.id, current.id), eq(FA.version, current.version))).returning({ id: FA.id });
       if (!deleted.length) throw preconditionFailed();
-      await recordChange(tx, ctx.user, { companyId: ctx.company.id, action: 'deleted', entityType: 'fixed_asset', entityId: current.id, entityLabel: current.name, version: current.version + 1, deleted: true });
+      await recordChange(tx, ctx.user, { companyId: ctx.company.id, action: 'deleted', entityType: 'fixed_asset', entityId: current.id, entityLabel: current.name, version: current.version + 1, deleted: true, before: audit(current) });
     });
     return undefined;
   },

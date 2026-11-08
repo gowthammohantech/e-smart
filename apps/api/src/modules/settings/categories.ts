@@ -8,6 +8,7 @@ import type { DbOrTx } from '../../lib/audit';
 import { newId } from '../../lib/ids';
 import { ensureHsn } from '../catalog/hsn';
 import { audit, firstUse } from './shared';
+import { ledgerKeyUse } from '../books/usage';
 import { expenseCategoryToWire, taxCategoryToWire } from './wire';
 
 const T = schema.taxCategories;
@@ -168,6 +169,9 @@ export const categoryHandlers = defineHandlers({
     checkIfMatch(ctx.req, current.version);
     const used = await firstUse(ctx.db, [['expenses', sql`select 1 from expenses where category_id = ${current.id} limit 1`]]);
     if (used) throw conflict('EXPENSE_CATEGORY_IN_USE', 'Expenses are filed under this category');
+    // Journals and budgets name it by key with no foreign key; deleting it would leave their lines posting to nothing.
+    const named = await ledgerKeyUse(ctx.db, ctx.company.id, `exp:${current.id}`);
+    if (named) throw conflict('EXPENSE_CATEGORY_IN_USE', `This category is on ${named}; it can't be deleted`);
     await ctx.db.transaction(async (tx) => {
       await tx.delete(E).where(eq(E.id, current.id));
       await audit(tx, ctx.user, ctx.company.id, 'expense_category', 'deleted', current, current.name, { before: expenseCategoryToWire(current) });

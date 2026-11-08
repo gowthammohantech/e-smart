@@ -21,6 +21,8 @@ import { postVoucher } from '@esmart/core/domain/ledger/postings';
 import { comparisonPeriod, profitAndLossColumns, balanceSheetColumns, splitPeriods } from '@esmart/core/domain/ledger/comparative';
 import { integrityChecks, type IntegrityInput } from '@esmart/core/domain/ledger/integrity';
 import { partyStatement } from '../parties/statement';
+import { businessDate, financialYearOf } from '@esmart/core/lib/date';
+import { assertOpeningOpen, ledgerKeyUse } from './usage';
 
 /**
  * The sub-ledgers the integrity check holds the ledger against: each base-currency party's own statement
@@ -53,6 +55,13 @@ type AccountRow = typeof LA.$inferSelect;
 type VoucherRow = typeof V.$inferSelect;
 type StoredLine = { account: string; debitMinor: number; creditMinor: number; narration?: string; costCentreId?: string };
 type AnyCtx = Pick<Ctx<'getVoucher'>, 'company' | 'user' | 'db' | 'now'>;
+
+/**
+ * System accounts only the books themselves post to: opening stock comes from the stock ledger,
+ * accumulated depreciation from the asset register, goods received not billed from goods receipts.
+ * A journal into one would quietly undo what its source works out (RULES 6.10, 6.15).
+ */
+export const VOUCHER_BLOCKED_KEYS = ['sys:openingStock', 'sys:accumulatedDepreciation', 'sys:goodsReceivedNotBilled'];
 
 const blocking = (issues: Issue[]) => (field: string, message: string) => issues.push({ field, message, severity: 'blocking' });
 
@@ -149,9 +158,10 @@ async function findAccount(ctx: AnyCtx, db: DbOrTx, id: string) {
   return row;
 }
 
-async function accountColumns(db: DbOrTx, companyId: string, body: Schema<'LedgerAccount'>, today: string, exceptId?: string) {
+async function accountColumns(db: DbOrTx, companyId: string, body: Schema<'LedgerAccount'>, today: string, base: string, exceptId?: string) {
   const issues: Issue[] = [];
   const block = blocking(issues);
+  if (body.openingBalance.currency !== base) block('openingBalance.currency', `The books are kept in ${base}`);
   const name = body.name.trim();
   if (!name) block('name', 'Give the account a name');
   if (!USER_GROUPS.includes(body.group as LedgerGroup)) block('group', 'Debtors, creditors and stock come from parties and the stock ledger, not an account of your own');
@@ -173,7 +183,7 @@ async function accountColumns(db: DbOrTx, companyId: string, body: Schema<'Ledge
  * unbalanced, have one line, break its kind's rules or sit in a closed period, since nothing of it
  * reaches the books. All of that is checked when it is posted.
  */
-export async function voucherColumns(ctx: AnyCtx, db: DbOrTx, body: Schema<'Voucher'>, exceptId?: string, draft = false) {
+export async function voucherColumns(ctx: AnyCtx, db: DbOrTx, body: Schema<'Voucher'>, exceptId?: string, draft = false, pending?: Map<string, number>) {
   const issues: Issue[] = [];
   const block = blocking(issues);
   const base = ctx.company.baseCurrency.trim();
@@ -187,6 +197,19 @@ export async function voucherColumns(ctx: AnyCtx, db: DbOrTx, body: Schema<'Vouc
     if (l.debitMinor < 0 || l.creditMinor < 0) block(field, 'Amounts cannot be negative');
     if ((l.debitMinor > 0) === (l.creditMinor > 0)) block(field, 'Each line is a debit or a credit');
     if (!accountFor(l.account, book)) block(`${field}.account`, `No account ${l.account} in this company`);
+    if (VOUCHER_BLOCKED_KEYS.includes(l.account)) block(`${field}.account`, `${accountFor(l.account, book)?.name ?? l.account} is worked out by the books; a voucher cannot post to it`);
+  });
+  // An inactive account takes no new entries; lines already on this voucher may stay.
+  const kept = exceptId ? new Set(((await db.select({ lines: V.lines }).from(V).where(eq(V.id, exceptId)))[0]?.lines as StoredLine[] | undefined)?.map((l) => l.account) ?? []) : new Set<string>();
+  const fresh = (prefix: string) => [...new Set(lines.map((l) => l.account).filter((k) => k.startsWith(`${prefix}:`) && !kept.has(k)).map((k) => k.slice(prefix.length + 1)))];
+  const inactive = new Set<string>();
+  if (fresh('acc').length) for (const r of await db.select({ id: LA.id }).from(LA).where(and(eq(LA.companyId, ctx.company.id), inArray(LA.id, fresh('acc')), eq(LA.status, 'inactive')))) inactive.add(`acc:${r.id}`);
+  if (fresh('party').length) {
+    const P = schema.parties;
+    for (const r of await db.select({ id: P.id }).from(P).where(and(eq(P.companyId, ctx.company.id), inArray(P.id, fresh('party')), eq(P.status, 'inactive')))) inactive.add(`party:${r.id}`);
+  }
+  lines.forEach((l, i) => {
+    if (inactive.has(l.account)) block(`lines[${i}].account`, `${accountFor(l.account, book)?.name ?? l.account} is inactive; make it active to post to it`);
   });
   if (!lines.length) block('lines', 'A voucher needs at least one line');
   if (!draft && lines.length < 2) block('lines', 'A voucher needs at least two lines');
@@ -226,7 +249,7 @@ export async function voucherColumns(ctx: AnyCtx, db: DbOrTx, body: Schema<'Vouc
   }
   if (body.challan && body.kind !== 'tdsChallan') block('challan', 'Only a TDS challan has challan details');
   if (body.gstChallan && body.kind !== 'gstChallan') block('gstChallan', 'Only a GST challan has GST challan details');
-  if (body.gstChallan && body.gstChallan.depositedOn > ctx.now.toISOString().slice(0, 10)) block('gstChallan.depositedOn', 'The deposit date cannot be in the future');
+  if (body.gstChallan && body.gstChallan.depositedOn > businessDate(ctx.now)) block('gstChallan.depositedOn', 'The deposit date cannot be in the future');
   const partyId = body.partyId?.trim() || null;
   if (partyId) {
     const [p] = await db.select({ id: schema.parties.id }).from(schema.parties).where(and(eq(schema.parties.companyId, ctx.company.id), eq(schema.parties.id, partyId)));
@@ -238,7 +261,7 @@ export async function voucherColumns(ctx: AnyCtx, db: DbOrTx, body: Schema<'Vouc
     const missing = body.attachmentIds.filter((id) => !found.some((f) => f.id === id));
     if (missing.length) block('attachmentIds', `No such attachment in this company: ${missing.join(', ')}`);
   }
-  if (body.challan && body.challan.depositedOn > ctx.now.toISOString().slice(0, 10)) block('challan.depositedOn', 'The deposit date cannot be in the future');
+  if (body.challan && body.challan.depositedOn > businessDate(ctx.now)) block('challan.depositedOn', 'The deposit date cannot be in the future');
 
   let branchId = body.branchId ?? null;
   if (branchId) {
@@ -261,11 +284,13 @@ export async function voucherColumns(ctx: AnyCtx, db: DbOrTx, body: Schema<'Vouc
     const out = l.creditMinor - l.debitMinor;
     if (out <= 0 || !l.account.startsWith('pay:')) continue;
     const [account] = await db.select().from(A).where(and(eq(A.companyId, ctx.company.id), eq(A.id, l.account.slice(4)))).for('update');
-    const balance = await accountBalanceMinor(db, account, undefined, exceptId);
+    // Taken by earlier vouchers in the same import, not yet in the books.
+    const balance = (await accountBalanceMinor(db, account, undefined, exceptId)) - (pending?.get(l.account) ?? 0);
     if (out > balance) {
       throw unprocessable([{ field: `lines[${i}]`, message: `${account.name} holds ${base} ${(Math.max(balance, 0) / 100).toFixed(2)}; this voucher takes ${base} ${(out / 100).toFixed(2)}`, severity: 'blocking' }], 'INSUFFICIENT_BALANCE');
     }
   }
+  if (pending) for (const l of lines) if (l.account.startsWith('pay:')) pending.set(l.account, (pending.get(l.account) ?? 0) + l.creditMinor - l.debitMinor);
   return columns;
 }
 
@@ -366,8 +391,8 @@ export const booksHandlers = defineHandlers({
   },
 
   async createLedgerAccount(ctx) {
-    const cols = await accountColumns(ctx.db, ctx.company.id, ctx.body, ctx.now.toISOString().slice(0, 10));
-    if (cols.openingBalanceMinor && cols.openingBalanceDate) assertPeriodOpen(ctx.company, cols.openingBalanceDate);
+    const cols = await accountColumns(ctx.db, ctx.company.id, ctx.body, businessDate(ctx.now), ctx.company.baseCurrency.trim());
+    if (cols.openingBalanceMinor) assertOpeningOpen(ctx.company, cols.openingBalanceDate);
     const row = await ctx.db.transaction(async (tx) => {
       const [created] = await tx.insert(LA).values({ id: newId('lac'), companyId: ctx.company.id, ...cols, createdAt: ctx.now, updatedAt: ctx.now }).returning();
       await recordChange(tx, ctx.user, { companyId: ctx.company.id, action: 'created', entityType: 'ledger_account', entityId: created.id, entityLabel: created.name, version: created.version });
@@ -386,10 +411,16 @@ export const booksHandlers = defineHandlers({
   async saveLedgerAccount(ctx) {
     const current = await findAccount(ctx, ctx.db, ctx.params.id);
     checkIfMatch(ctx.req, current.version);
-    const cols = await accountColumns(ctx.db, ctx.company.id, ctx.body, ctx.now.toISOString().slice(0, 10), current.id);
-    // A dated opening is part of that day's books: closing the period closes it too, before and after the change.
+    const cols = await accountColumns(ctx.db, ctx.company.id, ctx.body, businessDate(ctx.now), ctx.company.baseCurrency.trim(), current.id);
+    // An opening is part of the books from the day before its date (the start of the books when undated):
+    // closing that period closes it too, before and after the change.
     if (cols.openingBalanceMinor !== current.openingBalanceMinor || cols.openingBalanceDate !== current.openingBalanceDate) {
-      for (const date of [current.openingBalanceDate, cols.openingBalanceDate]) if (date) assertPeriodOpen(ctx.company, date);
+      for (const [minor, date] of [[current.openingBalanceMinor, current.openingBalanceDate], [cols.openingBalanceMinor, cols.openingBalanceDate]] as const) if (minor) assertOpeningOpen(ctx.company, date);
+    }
+    // Its group places every entry on it in the reports: a used account keeps it, or closed years would move.
+    if (cols.group !== current.group) {
+      const used = (await ledgerKeyUse(ctx.db, ctx.company.id, `acc:${current.id}`, ['voucher', 'fixed asset'])) ?? (current.openingBalanceMinor ? 'an opening balance' : null);
+      if (used) throw conflict('ACCOUNT_GROUP_LOCKED', `${current.name} has ${used}; its group can't change. Make a new account in the group you want and move the balance with a journal`);
     }
     const row = await ctx.db.transaction(async (tx) => {
       const [updated] = await tx.update(LA).set({ ...cols, version: current.version + 1, updatedAt: ctx.now }).where(and(eq(LA.id, current.id), eq(LA.version, current.version))).returning();
@@ -404,17 +435,12 @@ export const booksHandlers = defineHandlers({
   async removeLedgerAccount(ctx) {
     const current = await findAccount(ctx, ctx.db, ctx.params.id);
     checkIfMatch(ctx.req, current.version);
-    const key = `acc:${current.id}`;
-    const [used] = await ctx.db
-      .select({ number: V.number })
-      .from(V)
-      .where(and(eq(V.companyId, ctx.company.id), sql`${V.lines} @> ${JSON.stringify([{ account: key }])}::jsonb`))
-      .limit(1);
-    if (used) throw conflict('ACCOUNT_IN_USE', `${current.name} is on voucher ${used.number}; mark it inactive instead`);
+    const used = (await ledgerKeyUse(ctx.db, ctx.company.id, `acc:${current.id}`)) ?? (current.openingBalanceMinor ? 'an opening balance' : null);
+    if (used) throw conflict('ACCOUNT_IN_USE', `${current.name} is on ${used}; mark it inactive instead`);
     await ctx.db.transaction(async (tx) => {
       const deleted = await tx.delete(LA).where(and(eq(LA.id, current.id), eq(LA.version, current.version))).returning({ id: LA.id });
       if (!deleted.length) throw preconditionFailed();
-      await recordChange(tx, ctx.user, { companyId: ctx.company.id, action: 'deleted', entityType: 'ledger_account', entityId: current.id, entityLabel: current.name, version: current.version + 1, deleted: true });
+      await recordChange(tx, ctx.user, { companyId: ctx.company.id, action: 'deleted', entityType: 'ledger_account', entityId: current.id, entityLabel: current.name, version: current.version + 1, deleted: true, before: accountToWire(current, ctx.company.baseCurrency.trim()) });
     });
     return undefined;
   },
@@ -453,8 +479,9 @@ export const booksHandlers = defineHandlers({
 
   async createVoucher(ctx) {
     const draft = ctx.body.status === 'draft';
-    const cols = await voucherColumns(ctx, ctx.db, ctx.body, undefined, draft);
+    // Checked inside the transaction, so the balance check's row lock holds until the voucher is in.
     const row = await ctx.db.transaction(async (tx) => {
+      const cols = await voucherColumns(ctx, tx, ctx.body, undefined, draft);
       const created = await insertVoucher(ctx, tx, cols, draft);
       await linkVoucherAttachments(tx, ctx.company.id, created.id, ctx.body.attachmentIds);
       return created;
@@ -471,10 +498,12 @@ export const booksHandlers = defineHandlers({
     type Result = { index: number; status: 'created' | 'invalid'; id?: string; number?: string; issues?: Issue[] };
     const results: Result[] = [];
     const good: { index: number; cols: Awaited<ReturnType<typeof voucherColumns>> }[] = [];
+    // What earlier journals in the sheet take from each cash or bank account, so two can't spend the same balance.
+    const pending = new Map<string, number>();
     for (const [index, v] of vouchers.entries()) {
       const body = { kind: v.kind ?? 'journal', date: v.date, narration: v.narration, reference: v.reference, lines: v.lines, status: asDrafts ? 'draft' : 'posted' } as Schema<'Voucher'>;
       try {
-        good.push({ index, cols: await voucherColumns(ctx, ctx.db, body, undefined, !!asDrafts) });
+        good.push({ index, cols: await voucherColumns(ctx, ctx.db, body, undefined, !!asDrafts, pending) });
       } catch (err) {
         const issues = err instanceof ApiError ? ((err.extra.issues as Issue[] | undefined) ?? [{ field: '', message: err.message, severity: 'blocking' as const }]) : [{ field: '', message: String(err), severity: 'blocking' as const }];
         results.push({ index, status: 'invalid', issues });
@@ -571,8 +600,15 @@ export const booksHandlers = defineHandlers({
     if (!wasDraft) assertPeriodOpen(ctx.company, current.date);
     if (ctx.body.kind !== current.kind) throw unprocessable([{ field: 'kind', message: 'A voucher keeps its kind; delete it and make another', severity: 'blocking' }]);
     if (current.gstPeriod) throw unprocessable([{ field: 'lines', message: 'A GST set-off is changed by reversing it and posting it again from Utilization', severity: 'blocking' }], 'SET_OFF_LOCKED');
-    const cols = await voucherColumns(ctx, ctx.db, ctx.body, current.id, draft);
+    // A posted voucher's number belongs to its financial year's series (JV/26-27/…).
+    if (!wasDraft) {
+      const fy = ctx.company.fiscalYearStartMonth;
+      if (financialYearOf(ctx.body.date, fy).start !== financialYearOf(current.date, fy).start) {
+        throw unprocessable([{ field: 'date', message: `${current.number} is numbered in ${financialYearOf(current.date, fy).label}; to move it to another financial year, delete it and post it again there`, severity: 'blocking' }], 'VOUCHER_YEAR_LOCKED');
+      }
+    }
     const row = await ctx.db.transaction(async (tx) => {
+      const cols = await voucherColumns(ctx, tx, ctx.body, current.id, draft);
       // Posting a draft: it takes its number now, on the date it is posted with.
       const posting = wasDraft && !draft;
       const number = posting ? await assignNumber(tx, { companyId: ctx.company.id, kind: cols.kind, branchId: cols.branchId, date: cols.date }) : current.number;
@@ -604,7 +640,7 @@ export const booksHandlers = defineHandlers({
       await linkVoucherAttachments(tx, ctx.company.id, current.id, []);
       const deleted = await tx.delete(V).where(and(eq(V.id, current.id), eq(V.version, current.version))).returning({ id: V.id });
       if (!deleted.length) throw preconditionFailed();
-      await recordChange(tx, ctx.user, { companyId: ctx.company.id, action: 'deleted', entityType: 'voucher', entityId: current.id, entityLabel: current.number, version: current.version + 1, deleted: true });
+      await recordChange(tx, ctx.user, { companyId: ctx.company.id, action: 'deleted', entityType: 'voucher', entityId: current.id, entityLabel: current.number, version: current.version + 1, deleted: true, before: voucherToWire(current, ctx.company.baseCurrency.trim()) });
     });
     return undefined;
   },

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { setupApi } from './helpers';
+import { MUMBAI, setupApi } from './helpers';
 import { moneySetup } from './money-fixtures';
 
 const t = setupApi();
@@ -100,5 +100,39 @@ describe('opening documents with the rest of the books', () => {
     expect(supplier.body.closingBalance.minor).toBe(80_000);
     const integrity = await t.get(`${m.c}/books/integrity`, { token: m.token, query: { to: '2026-09-30' } });
     expect(integrity.body.checks.filter((c: { ok: boolean }) => !c.ok)).toEqual([]);
+  });
+});
+
+describe('party masters and their ledger', () => {
+  it('refuses an opening balance on a party whose opening invoices already carry it', async () => {
+    const m = await moneySetup(t);
+    t.setNow('2026-09-29T10:00:00Z');
+    await t.post(`${m.c}/documents/openings/import`, { rows: [{ kind: 'openingInvoice', party: 'Sunrise Retail', number: 'OLD/1', date: '2026-03-10', amount: inr(50_000) }] }, { token: m.token });
+    const party = (await t.get(`${m.c}/parties/${m.mumbai.id}`, { token: m.token })).body;
+    const res = await t.put(`${m.c}/parties/${party.id}`, { ...party, openingBalance: inr(50_000) }, { token: m.token, headers: { 'if-match': `"v${party.version}"` } });
+    expect(res.status).toBe(422);
+    expect(res.body.code).toBe('OPENING_DOCUMENTS_EXIST');
+  });
+
+  it('lets a customer with sales become both, but not a supplier', async () => {
+    const m = await moneySetup(t);
+    t.setNow('2026-09-29T10:00:00Z');
+    await t.post(`${m.c}/documents/openings/import`, { rows: [{ kind: 'openingInvoice', party: 'Sunrise Retail', number: 'OLD/1', date: '2026-03-10', amount: inr(50_000) }] }, { token: m.token });
+    const party = (await t.get(`${m.c}/parties/${m.mumbai.id}`, { token: m.token })).body;
+    const save = (kind: string, version: number) => t.put(`${m.c}/parties/${party.id}`, { ...party, kind }, { token: m.token, headers: { 'if-match': `"v${version}"` } });
+    expect((await save('supplier', party.version)).body.code).toBe('PARTY_KIND_LOCKED');
+    expect((await save('both', party.version)).status).toBe(200);
+  });
+
+  it('flags a party code already taken in the dry run instead of failing the import', async () => {
+    const m = await moneySetup(t);
+    const taken = (await t.get(`${m.c}/parties/${m.mumbai.id}`, { token: m.token })).body.code;
+    const row = (name: string, code?: string) => ({ kind: 'customer', name, currency: 'INR', billingAddress: MUMBAI, openingBalance: inr(0), paymentTermsDays: 0, ...(code && { code }) });
+    const rows = [row('New One', taken), row('New Two', 'Z-1'), row('New Three', 'z-1'), row('New Four')];
+    const dry = await t.post(`${m.c}/parties/import`, { rows, dryRun: true }, { token: m.token });
+    expect(dry.body.results.map((r: { status: string }) => r.status)).toEqual(['invalid', 'created', 'invalid', 'created']);
+    const done = await t.post(`${m.c}/parties/import`, { rows }, { token: m.token });
+    expect(done.status).toBe(200);
+    expect(done.body.created).toBe(2);
   });
 });

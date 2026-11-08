@@ -48,10 +48,18 @@ export function journalsFromCsv(rows: string[][], columns: Partial<Record<Journa
   const byName = new Map(accounts.map((a) => [squashHeader(a.name), a.key]));
   const keys = new Set(accounts.map((a) => a.key));
   const groups = new Map<string, ImportedJournal>();
+  // Rows without a reference: the journal they run on in, and the date it runs on with.
+  let run = 0;
+  let runDate: string | null = null;
   rows.slice(1).forEach((r, i) => {
     const get = (f: JournalField) => (columns[f] !== undefined ? (r[columns[f]!] ?? '').trim() : '');
-    // Without a reference, a journal runs on until the date changes.
-    const reference = get('reference') || `#${get('date')}`;
+    // Without a reference, a journal runs on until the date changes or a referenced row comes between.
+    if (get('reference')) runDate = null;
+    else if (runDate !== get('date')) {
+      run += 1;
+      runDate = get('date');
+    }
+    const reference = get('reference') || `#${run}`;
     const j = groups.get(reference) ?? { line: i + 2, reference: get('reference'), date: '', lines: [], problems: [] };
     groups.set(reference, j);
     const date = isoDate(get('date'));
