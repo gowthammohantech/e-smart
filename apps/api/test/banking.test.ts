@@ -357,6 +357,65 @@ describe('banking: matching', () => {
     const [row] = await t.deps.db.select().from(schema.bankStatementLines);
     expect(row).toMatchObject({ status: 'unmatched', matchId: null });
   });
+
+  it('matches a contra between two banks on both statements', async () => {
+    const m = await moneySetup(t);
+    const hdfc = await bank(m, 1_000_000, 'HDFC current');
+    const icici = await bank(m, 0, 'ICICI current');
+    const v = await t.post(
+      `${m.c}/vouchers`,
+      { kind: 'contra', date: '2026-09-28', lines: [{ account: `pay:${icici}`, debit: inr(500_000), credit: inr(0) }, { account: `pay:${hdfc}`, debit: inr(0), credit: inr(500_000) }] },
+      { token: m.token },
+    );
+    expect(v.status, v.raw).toBe(201);
+    expect((await importLines(m, hdfc, [ln('2026-09-28', 'NEFT TO ICICI', -500_000)])).body.autoMatched).toBe(1);
+    expect((await importLines(m, icici, [ln('2026-09-28', 'NEFT FROM HDFC', 500_000)])).body.autoMatched).toBe(1);
+    expect((await lines(m, icici))[0].match).toMatchObject({ type: 'voucher', id: v.body.id, amount: inr(500_000) });
+    expect((await lines(m, hdfc))[0].match).toMatchObject({ type: 'voucher', id: v.body.id, amount: inr(-500_000) });
+    const rec = await t.get(`${m.c}/payment-accounts/${icici}/reconciliation`, { token: m.token, query: { asOf: '2026-09-30' } });
+    expect(rec.status).toBe(200);
+    expect(rec.body.unclearedPayments.deposits).toEqual([]);
+  });
+
+  it('puts a line back to unmatched when its payment is edited to another amount', async () => {
+    const m = await moneySetup(t);
+    const acct = await bank(m);
+    const p = await pay(m, acct, 99_900);
+    await importLines(m, acct, [ln('2026-09-28', 'UPI IN', 99_900)]);
+    expect((await lines(m, acct))[0].status).toBe('matched');
+    const cur = await t.get(`${m.c}/payments/${p.id}`, { token: m.token });
+    const edited = await t.put(`${m.c}/payments/${p.id}`, { ...cur.body, amount: inr(90_000) }, { token: m.token });
+    expect(edited.status, edited.raw).toBe(200);
+    const [line] = await lines(m, acct);
+    expect(line.status).toBe('unmatched');
+  });
+
+  it('refuses to undo an import a later overlapping import relies on', async () => {
+    const m = await moneySetup(t);
+    const acct = await bank(m);
+    await importLines(m, acct, [ln('2026-09-01', 'A1', 1_000), ln('2026-09-20', 'A2', 2_000)], { fileName: 'a.csv' });
+    t.setNow('2026-09-29T11:00:00Z');
+    await importLines(m, acct, [ln('2026-09-20', 'A2', 2_000), ln('2026-09-25', 'B1', 3_000)], { fileName: 'b.csv' });
+    const list = (await t.get(`${m.c}/payment-accounts/${acct}/bank-statements`, { token: m.token })).body.data as any[];
+    const a = list.find((s) => s.fileName === 'a.csv');
+    const b = list.find((s) => s.fileName === 'b.csv');
+    const refused = await t.del(`${m.c}/bank-statements/${a.id}`, { token: m.token });
+    expect(refused.status).toBe(409);
+    expect(refused.body.code).toBe('LATER_IMPORT_OVERLAPS');
+    expect((await t.del(`${m.c}/bank-statements/${b.id}`, { token: m.token })).status).toBe(204);
+    expect((await t.del(`${m.c}/bank-statements/${a.id}`, { token: m.token })).status).toBe(204);
+  });
+
+  it('refuses to record a payment from a line changed since it was read', async () => {
+    const m = await moneySetup(t);
+    const acct = await bank(m);
+    await importLines(m, acct, [ln('2026-09-28', 'UPI IN', 99_900)]);
+    const [line] = await lines(m, acct);
+    const ex = await t.post(`${m.c}/bank-lines/${line.id}/exclude`, {}, { token: m.token, headers: { 'if-match': `"v${line.version}"` } });
+    expect(ex.status).toBe(200);
+    const res = await t.post(`${m.c}/bank-lines/${line.id}/payment`, { partyId: m.mumbai.id }, { token: m.token, headers: { 'if-match': `"v${line.version}"` } });
+    expect(res.status).toBe(412);
+  });
 });
 
 describe('banking: reconciliation', () => {

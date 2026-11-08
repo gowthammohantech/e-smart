@@ -2747,7 +2747,7 @@ export const bankStatementLines = pgTable("bank_statement_lines", {
 	uniqueIndex("bank_statement_lines_account_id_line_key_idx").using("btree", table.accountId.asc().nullsLast(), table.lineKey.asc().nullsLast()),
 	index("bank_statement_lines_company_id_account_id_status_date_idx").using("btree", table.companyId.asc().nullsLast(), table.accountId.asc().nullsLast(), table.status.asc().nullsLast(), table.date.asc().nullsLast()),
 	index("bank_statement_lines_statement_id_idx").using("btree", table.statementId.asc().nullsLast()),
-	uniqueIndex("bank_statement_lines_match_idx").using("btree", table.companyId.asc().nullsLast(), table.matchType.asc().nullsLast(), table.matchId.asc().nullsLast()).where(sql`${table.matchId} IS NOT NULL`),
+	uniqueIndex("bank_statement_lines_match_idx").using("btree", table.companyId.asc().nullsLast(), table.accountId.asc().nullsLast(), table.matchType.asc().nullsLast(), table.matchId.asc().nullsLast()).where(sql`${table.matchId} IS NOT NULL`),
 	foreignKey({
 			columns: [table.companyId],
 			foreignColumns: [companies.id],

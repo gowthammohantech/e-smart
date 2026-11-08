@@ -2244,6 +2244,7 @@ export interface paths {
         /**
          * Undo an import
          * @description Takes the statement and all its lines away. Whatever its lines were matched to stays in the books, free to match again; payments, expenses and vouchers recorded from its lines are not removed.
+         *     A statement imported later over some of the same days skipped the lines this one had, so it is undone first (409 `LATER_IMPORT_OVERLAPS`).
          */
         delete: operations["removeBankStatement"];
         options?: never;
@@ -2478,6 +2479,7 @@ export interface paths {
          * @description Money in is a payment received, money out a payment made, on the line's date, for its
          *     amount, through its account, with its reference. Same checks as
          *     `createPayment` (open period, party kind, allocations; money paid needs the payables module).
+         *     With If-Match, a line changed since it was read is refused (412).
          */
         post: operations["createPaymentFromBankLine"];
         delete?: never;
@@ -11839,6 +11841,7 @@ export interface operations {
                 content?: never;
             };
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     parseBankStatement: {
@@ -12173,6 +12176,8 @@ export interface operations {
             query?: never;
             header?: {
                 "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+                /** @description ETag from the last read */
+                "If-Match"?: components["parameters"]["IfMatch"];
             };
             path: {
                 companyId: components["parameters"]["CompanyId"];
@@ -14543,6 +14548,8 @@ export interface operations {
             query: {
                 period: string;
                 format?: "gstn-json" | "csv" | "xlsx";
+                /** @description The registration whose return the JSON is (a branch's own GSTIN); the company's when left out */
+                gstin?: string;
             };
             header?: never;
             path: {

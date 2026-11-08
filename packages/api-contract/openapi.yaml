@@ -245,6 +245,8 @@ paths:
       tags: [Auth]
       operationId: signOut
       summary: Revoke the current device session
+      # Cancelling at the authenticator prompt signs out; that must not need the authenticator.
+      x-mfa-exempt: true
       responses:
         '204': { description: Signed out }
 
@@ -3134,12 +3136,15 @@ paths:
       tags: [Banking]
       operationId: removeBankStatement
       summary: Undo an import
-      description: Takes the statement and all its lines away. Whatever its lines were matched to stays in the books, free to match again; payments, expenses and vouchers recorded from its lines are not removed.
+      description: |
+        Takes the statement and all its lines away. Whatever its lines were matched to stays in the books, free to match again; payments, expenses and vouchers recorded from its lines are not removed.
+        A statement imported later over some of the same days skipped the lines this one had, so it is undone first (409 `LATER_IMPORT_OVERLAPS`).
       x-roles: [owner, admin, accountant]
       x-plan-module: books
       responses:
         '204': { description: Removed }
         '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
   /companies/{companyId}/bank-statements/parse:
     parameters: [{ $ref: '#/components/parameters/CompanyId' }]
     post:
@@ -3417,9 +3422,10 @@ paths:
         Money in is a payment received, money out a payment made, on the line's date, for its
         amount, through its account, with its reference. Same checks as
         `createPayment` (open period, party kind, allocations; money paid needs the payables module).
+        With If-Match, a line changed since it was read is refused (412).
       x-roles: [owner, admin, accountant]
       x-plan-module: books
-      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/IfMatch' }]
       requestBody:
         required: true
         content:
@@ -5156,6 +5162,7 @@ paths:
       parameters:
         - { name: period, in: query, required: true, schema: { type: string } }
         - { name: format, in: query, schema: { type: string, enum: [gstn-json, csv, xlsx], default: gstn-json } }
+        - { name: gstin, in: query, description: "The registration whose return the JSON is (a branch's own GSTIN); the company's when left out", schema: { type: string, pattern: '^[0-9]{2}[0-9A-Z]{13}$' } }
       responses:
         '200':
           description: File

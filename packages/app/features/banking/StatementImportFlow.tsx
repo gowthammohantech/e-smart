@@ -7,7 +7,7 @@ import { formatMoney } from '@esmart/core/lib/format';
 import { money } from '@esmart/core/lib/money';
 import { importBankStatement, parseBankStatement, type StatementImport as ImportBody } from '../../remote/banking';
 import { ImportFlow, type ColumnMapping, type ImportColumn } from '../import/ImportFlow';
-import { amountProblem, detectStatement, statementFields, toStatementLines } from './statementImport';
+import { amountProblem, chunkByDate, detectStatement, statementFields, toStatementLines } from './statementImport';
 import { signedMoney } from './parts';
 
 const ACCEPT = ['.csv', '.xlsx'];
@@ -53,6 +53,21 @@ export function StatementImport({ account, onDone }: { account: { id: string; na
     })),
   });
 
+  /** One request per part of a big statement (cut where the date changes), the counts added up. */
+  const send = async (lines: StatementLine[], fileName: string, dryRun: boolean) => {
+    const parts = chunkByDate(lines);
+    const total = { imported: 0, duplicates: 0, autoMatched: 0, flags: [] as boolean[] };
+    for (const [i, part] of parts.entries()) {
+      const name = parts.length > 1 ? `${fileName.slice(0, 180)} (${i + 1}/${parts.length})` : fileName;
+      const res = await importBankStatement(account.id, body(part, name, dryRun));
+      total.imported += res.imported;
+      total.duplicates += res.duplicates;
+      total.autoMatched += res.autoMatched;
+      total.flags.push(...res.lines.map((l) => !!l.duplicate));
+    }
+    return total;
+  };
+
   return (
     <ImportFlow<StatementLine>
       title={tr('banking:import.title', { account: account.name })}
@@ -65,14 +80,14 @@ export function StatementImport({ account, onDone }: { account: { id: string; na
       toRecords={toRecords}
       columns={columns}
       onDryRun={async (lines, fileName) => {
-        const res = await importBankStatement(account.id, body(lines, fileName, true));
+        const res = await send(lines, fileName, true);
         return {
           summary: tr('banking:import.dryRun', { imported: res.imported, duplicates: res.duplicates, autoMatched: res.autoMatched }),
-          rowFlags: res.lines.map((l) => (l.duplicate ? tr('banking:import.duplicate') : undefined)),
+          rowFlags: res.flags.map((duplicate) => (duplicate ? tr('banking:import.duplicate') : undefined)),
         };
       }}
       onConfirm={async (lines, fileName) => {
-        const res = await importBankStatement(account.id, body(lines, fileName, false));
+        const res = await send(lines, fileName, false);
         toast.show(tr('banking:import.done', { count: res.imported }), 'success', { icon: 'bank-check', detail: tr('banking:import.doneDetail', { duplicates: res.duplicates, autoMatched: res.autoMatched }) });
         onDone();
       }}

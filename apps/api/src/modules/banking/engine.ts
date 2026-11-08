@@ -52,7 +52,7 @@ export async function bookRecords(db: DbOrTx, account: AccountRow, q: RecordQuer
   const companyId = account.companyId;
   if (q.ids && !q.ids.length) return [];
   const free = (type: MatchType, id: typeof PAY.id | typeof E.id) =>
-    q.unmatched ? notExists(db.select({ one: sql`1` }).from(L).where(and(eq(L.companyId, companyId), eq(L.matchType, type), sql`${L.matchId} = ${id}`, q.unmatched.asOf ? lte(L.date, q.unmatched.asOf) : undefined))) : undefined;
+    q.unmatched ? notExists(db.select({ one: sql`1` }).from(L).where(and(eq(L.companyId, companyId), eq(L.accountId, account.id), eq(L.matchType, type), sql`${L.matchId} = ${id}`, q.unmatched.asOf ? lte(L.date, q.unmatched.asOf) : undefined))) : undefined;
   const out: Candidate[] = [];
 
   if (!q.type || q.type === 'payment') {
@@ -82,7 +82,7 @@ export async function bookRecords(db: DbOrTx, account: AccountRow, q: RecordQuer
     if (q.ids) conds.push(sql`v.id in (${sql.join(q.ids.map((i) => sql`${i}`), sql`, `)})`);
     if (q.unmatched) {
       conds.push(
-        sql`not exists (select 1 from ${L} m where m.company_id = v.company_id and m.match_type = 'voucher' and m.match_id = v.id ${q.unmatched.asOf ? sql`and m.date <= ${q.unmatched.asOf}` : sql``})`,
+        sql`not exists (select 1 from ${L} m where m.company_id = v.company_id and m.account_id = ${account.id} and m.match_type = 'voucher' and m.match_id = v.id ${q.unmatched.asOf ? sql`and m.date <= ${q.unmatched.asOf}` : sql``})`,
       );
     }
     const res = await db.execute<{ id: string; number: string; date: string; reference: string | null; amount: string }>(sql`
@@ -105,7 +105,8 @@ export async function bookRecord(db: DbOrTx, account: AccountRow, type: MatchTyp
 
 /**
  * Lines whose matched record is gone (deleted, or moved to another
- * account, or a voucher sent back to draft) go back to waiting.
+ * account, or a voucher sent back to draft) or no longer the line's amount
+ * (edited since) go back to waiting.
  */
 export async function releaseOrphans(db: DbOrTx, account: AccountRow, now: Date): Promise<number> {
   // Qualified by hand: an UPDATE may print its columns bare, and a bare account_id inside the
@@ -119,11 +120,15 @@ export async function releaseOrphans(db: DbOrTx, account: AccountRow, now: Date)
         eq(L.companyId, account.companyId),
         eq(L.accountId, account.id),
         eq(L.status, 'matched'),
+        // Signed as bookRecords signs them (+ money in), so an edited amount reads as a different record.
         sql`not (
-          (${col('match_type')} = 'payment' and exists (select 1 from ${PAY} p where p.id = ${col('match_id')} and p.account_id = ${col('account_id')}))
-          or (${col('match_type')} = 'expense' and exists (select 1 from ${E} e where e.id = ${col('match_id')} and e.account_id = ${col('account_id')}))
+          (${col('match_type')} = 'payment' and exists (select 1 from ${PAY} p where p.id = ${col('match_id')} and p.account_id = ${col('account_id')}
+                and (case when p.direction = 'received' then p.amount_minor else -p.amount_minor end) = ${col('amount_minor')}))
+          or (${col('match_type')} = 'expense' and exists (select 1 from ${E} e where e.id = ${col('match_id')} and e.account_id = ${col('account_id')}
+                and -e.amount_minor = ${col('amount_minor')}))
           or (${col('match_type')} = 'voucher' and exists (select 1 from ${V} v where v.id = ${col('match_id')} and v.status = 'posted'
-                and exists (select 1 from jsonb_array_elements(v.lines) vl where vl->>'account' = 'pay:' || ${col('account_id')})))
+                and (select coalesce(sum((vl->>'debitMinor')::bigint - (vl->>'creditMinor')::bigint), 0) from jsonb_array_elements(v.lines) vl
+                     where vl->>'account' = 'pay:' || ${col('account_id')}) = ${col('amount_minor')}))
         )`,
       ),
     )

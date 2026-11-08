@@ -1,4 +1,4 @@
-import { amountProblem, detectStatement, statementFields, toStatementLines } from '../statementImport';
+import { amountProblem, chunkByDate, detectStatement, statementFields, toStatementLines } from '../statementImport';
 
 const messages = { badAmount: (v: string) => `bad ${v}`, noColumns: 'no columns' };
 
@@ -60,5 +60,24 @@ describe('bank statement import', () => {
     expect(amountProblem({ date: 0, description: 1 })).toBe('noAmount');
     expect(amountProblem({ date: 0, description: 1, credit: 3 })).toBeUndefined();
     expect(toStatementLines(hdfc, 3, { date: 0, description: 1 }, messages).errors).toEqual([{ row: 4, message: 'no columns' }]);
+  });
+});
+
+describe('chunkByDate', () => {
+  const day = (date: string, n: number) => Array.from({ length: n }, (_, i) => ({ date, i }));
+  it('keeps a small statement whole', () => {
+    const lines = day('2025-04-01', 3);
+    expect(chunkByDate(lines, 5)).toEqual([lines]);
+  });
+  it('cuts only where the date changes, never splitting a day', () => {
+    const lines = [...day('2025-04-01', 3), ...day('2025-04-02', 3), ...day('2025-04-03', 2)];
+    const parts = chunkByDate(lines, 5);
+    expect(parts.map((p) => p.length)).toEqual([3, 5]);
+    expect(parts.flat()).toEqual(lines);
+    for (const p of parts) expect(p.length).toBeLessThanOrEqual(5);
+  });
+  it('keeps a day bigger than a part whole', () => {
+    const lines = [...day('2025-04-01', 2), ...day('2025-04-02', 7), ...day('2025-04-03', 1)];
+    expect(chunkByDate(lines, 5).map((p) => p.length)).toEqual([2, 7, 1]);
   });
 });

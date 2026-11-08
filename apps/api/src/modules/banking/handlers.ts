@@ -93,7 +93,10 @@ async function setLine(
   return updated;
 }
 
-/** Matches a line to a record of its account, after the checks every way of matching shares. */
+/**
+ * Matches a line to a record of its account, after the checks every way of matching shares.
+ * A record is matched once per account: a contra between two banks has a line on each.
+ */
 async function matchTo(tx: DbOrTx, ctx: AnyCtx, line: LineRow, account: AccountRow, type: MatchType, id: string, action = 'matched'): Promise<{ line: LineRow; record: Candidate }> {
   const record = await bookRecord(tx, account, type, id);
   if (!record) throw invalid('id', `No such ${type} on ${account.name}`);
@@ -105,7 +108,7 @@ async function matchTo(tx: DbOrTx, ctx: AnyCtx, line: LineRow, account: AccountR
   const [other] = await tx
     .select({ id: L.id, date: L.date })
     .from(L)
-    .where(and(eq(L.companyId, ctx.company.id), eq(L.matchType, type), eq(L.matchId, id), ne(L.id, line.id)));
+    .where(and(eq(L.companyId, ctx.company.id), eq(L.accountId, line.accountId), eq(L.matchType, type), eq(L.matchId, id), ne(L.id, line.id)));
   if (other) throw conflict('ALREADY_MATCHED', `${record.number ?? 'That record'} is already matched to the bank line of ${other.date}`);
   const updated = await setLine(tx, ctx, line, action, { status: 'matched', matchType: type, matchId: id, excludedReason: null });
   return { line: updated, record };
@@ -177,6 +180,15 @@ export const bankingHandlers = defineHandlers({
     if (!row) throw notFound('Bank statement');
     await bankAccount(ctx.db, ctx.company, row.accountId);
     await ctx.db.transaction(async (tx) => {
+      // A later import over the same days skipped the lines this one already had; taking this one away
+      // would leave those days with no lines at all. The later one goes first.
+      const [later] = await tx
+        .select({ fileName: S.fileName, from: S.fromDate, to: S.toDate })
+        .from(S)
+        .where(and(eq(S.companyId, ctx.company.id), eq(S.accountId, row.accountId), ne(S.id, row.id), sql`(${S.createdAt}, ${S.id}) > (${row.createdAt}, ${row.id})`, lte(S.fromDate, row.toDate), gte(S.toDate, row.fromDate)))
+        .orderBy(desc(S.createdAt))
+        .limit(1);
+      if (later) throw conflict('LATER_IMPORT_OVERLAPS', `${later.fileName} (${later.from} to ${later.to}) was imported after this one over some of the same days; undo it first`);
       await tx.delete(L).where(and(eq(L.companyId, ctx.company.id), eq(L.statementId, row.id)));
       await tx.delete(S).where(eq(S.id, row.id));
       await recordChange(tx, ctx.user, { companyId: ctx.company.id, action: 'deleted', entityType: 'bank_statement', entityId: row.id, entityLabel: row.fileName ?? row.id, version: 1, deleted: true });
@@ -415,6 +427,7 @@ export const bankingHandlers = defineHandlers({
     assertDirectionAllowed(ctx.company, direction);
     const out = await ctx.db.transaction(async (tx) => {
       const line = await findLine(ctx, tx, ctx.params.id, true);
+      checkIfMatch(ctx.req, line.version);
       if (line.status === 'matched') throw conflict('ALREADY_MATCHED', 'This bank line is already matched; unmatch it first');
       const account = await bankAccount(tx, ctx.company, line.accountId);
       const P = schema.parties;
@@ -516,11 +529,12 @@ export const bankingHandlers = defineHandlers({
         { account: contra, debit: into ? nil : amount, credit: into ? amount : nil },
       ],
     } as Schema<'Voucher'>;
-    const cols = await voucherColumns(ctx, ctx.db, body);
     return ctx.db.transaction(async (tx) => {
       const line = await findLine(ctx, tx, ctx.params.id, true);
       if (line.version !== peek.version) throw preconditionFailed();
       if (line.status === 'matched') throw conflict('ALREADY_MATCHED', 'This bank line is already matched; unmatch it first');
+      // Inside the transaction, so the balance check's row lock holds until the voucher is in.
+      const cols = await voucherColumns(ctx, tx, body);
       const V = schema.vouchers;
       const number = await assignNumber(tx, { companyId: ctx.company.id, kind: cols.kind, branchId: cols.branchId, date: cols.date });
       const [created] = await tx

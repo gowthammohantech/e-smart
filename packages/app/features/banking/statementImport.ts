@@ -56,3 +56,32 @@ export function toStatementLines(rows: string[][], headerRow: number, mapping: C
   });
   return { records, errors };
 }
+
+/** The most lines one import request carries; a bigger statement goes in parts (the server takes up to 10,000, the body 5 MB). */
+export const IMPORT_CHUNK = 5000;
+
+/**
+ * A statement's lines in parts of at most `max`, cut only where the date changes. Identical lines
+ * of one day are told apart by their place among their twins within a request, so a day split
+ * across two parts would read its second twin as a duplicate of the first. A single day with more
+ * than `max` lines stays whole.
+ */
+export function chunkByDate<T extends { date: string }>(lines: T[], max = IMPORT_CHUNK): T[][] {
+  if (lines.length <= max) return [lines];
+  const out: T[][] = [];
+  let cur: T[] = [];
+  let i = 0;
+  while (i < lines.length) {
+    let j = i;
+    while (j < lines.length && lines[j].date === lines[i].date) j++;
+    const day = lines.slice(i, j);
+    if (cur.length && cur.length + day.length > max) {
+      out.push(cur);
+      cur = [];
+    }
+    cur = cur.concat(day);
+    i = j;
+  }
+  if (cur.length) out.push(cur);
+  return out;
+}

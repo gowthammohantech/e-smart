@@ -393,6 +393,13 @@
       "when": 1794035395471,
       "tag": "0055_company_archive",
       "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1794154173061,
+      "tag": "0056_bank_match_per_account",
+      "breakpoints": true
     }
   ]
 }

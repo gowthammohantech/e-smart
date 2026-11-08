@@ -64,7 +64,7 @@ export type PaymentFromLine = { partyId: string; method?: Schema<'PaymentMethod'
 /** Money in becomes a payment received, money out a payment made, matched to the line. */
 export async function createPaymentFromBankLine(line: BankLine, body: PaymentFromLine) {
   const { data } = await api.POST('/companies/{companyId}/bank-lines/{id}/payment', {
-    params: { path: { companyId: companyId(), id: line.id } },
+    params: { path: { companyId: companyId(), id: line.id }, header: ifMatch(line) },
     body: {
       partyId: body.partyId,
       method: body.method,
