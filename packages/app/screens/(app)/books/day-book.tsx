@@ -18,7 +18,7 @@ export default function DayBookScreen() {
   const { book } = useServerBook();
   const nameOf = useAccountName();
   const entries = useBooksView<{ entries: ReturnType<typeof dayBook> }>('day-book', scope.filters.range).data?.entries;
-  if (!entries) return <LoadingView />;
+  if (!entries) return <LoadingView variant="report" />;
   const label = (key: string) => {
     const a = accountFor(key, book);
     return a ? nameOf(a) : nameOf({ key, name: key, kind: 'system' });

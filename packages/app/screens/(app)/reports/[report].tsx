@@ -124,7 +124,7 @@ export default function Report() {
   const tdsReturn = pick<ReturnType<typeof tdsReturnRows>>(key === 'tds-challans' ? 'tds-challans' : 'tds-26q', { deductees: [], challans: [] });
   const msme = pick<{ rows: ReturnType<typeof msmePayables>; late: ReturnType<typeof sec43bh> }>('msme-payables', { rows: [], late: [] });
 
-  if (meta && serverKey && !data && remote.isLoading) return <LoadingView title={meta.title} />;
+  if (meta && serverKey && !data && remote.isLoading) return <LoadingView variant="report" title={meta.title} />;
 
   if (!meta) {
     return (

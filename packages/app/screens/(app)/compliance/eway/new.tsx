@@ -13,7 +13,7 @@ export default function NewEwayBill() {
   const { documentId } = useLocalSearchParams<{ documentId?: string }>();
   const document = useDocument(documentId);
   const remote = useDocumentRecord(documentId);
-  if (!document && remote.isLoading) return <LoadingView />;
+  if (!document && remote.isLoading) return <LoadingView variant="form" />;
 
   return (
     <View style={{ flex: 1 }}>

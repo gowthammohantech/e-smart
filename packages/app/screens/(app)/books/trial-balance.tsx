@@ -18,7 +18,7 @@ export default function TrialBalanceScreen() {
   const nameOf = useAccountName();
   const drCr = useDrCr();
   const tb = useBooksView<ReturnType<typeof trialBalance>>('trial-balance', scope.filters.range).data;
-  if (!tb) return <LoadingView />;
+  if (!tb) return <LoadingView variant="report" />;
   const off = tb.totals.closingDebit - tb.totals.closingCredit;
   const m = (minor: number) => formatMoney(money(minor, baseCurrency));
 

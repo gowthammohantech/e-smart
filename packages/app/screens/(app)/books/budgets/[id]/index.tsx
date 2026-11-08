@@ -25,7 +25,7 @@ export default function BudgetVarianceScreen() {
   const now = today();
   const query = useBudgetVariance(id, { from: scope.filters.range.from, to: scope.filters.range.to > now ? now : scope.filters.range.to });
   const v = query.data;
-  if (!budget || !v) return <LoadingView />;
+  if (!budget || !v) return <LoadingView variant="report" />;
   const m = (minor: number) => formatMoney(money(minor, currency));
   const pct = (actual: number, plan: number) => (plan ? `${Math.round((actual / plan) * 100)}%` : '—');
   const signed = (n: number) => (n > 0 ? `+${m(n)}` : n < 0 ? `−${m(-n)}` : m(0));

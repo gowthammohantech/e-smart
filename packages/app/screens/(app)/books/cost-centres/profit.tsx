@@ -21,7 +21,7 @@ export default function CostCentreProfitScreen() {
   const centres = useCostCentres(true);
   const nameOf = useAccountName();
   const rows = useBooksView<{ rows: ReturnType<typeof costCentreProfit> }>('cost-centres', scope.filters.range).data?.rows;
-  if (!rows) return <LoadingView />;
+  if (!rows) return <LoadingView variant="report" />;
   const m = (minor: number) => formatMoney(money(minor, baseCurrency));
   const centreName = (id?: string) => (id ? (centres.find((c) => c.id === id)?.name ?? id) : tr('books:costCentres.none'));
 

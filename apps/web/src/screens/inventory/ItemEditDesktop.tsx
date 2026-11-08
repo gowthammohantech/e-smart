@@ -16,7 +16,7 @@ export function ItemEditDesktop() {
   // Fetched on opening, so it shows even when the book on the device doesn't hold it.
   const remote = useItemRecord(id);
 
-  if (!item && remote.isLoading) return <LoadingView />;
+  if (!item && remote.isLoading) return <LoadingView variant="form" />;
   if (!item) {
     return (
       <View style={{ flex: 1 }}>

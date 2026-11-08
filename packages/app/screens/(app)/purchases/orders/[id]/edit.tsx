@@ -18,7 +18,7 @@ export default function EditPurchaseOrder() {
   // Fetched on opening, so it shows even when the book on the device doesn't hold it.
   const remote = useDocumentRecord(id);
 
-  if (!document && remote.isLoading) return <LoadingView />;
+  if (!document && remote.isLoading) return <LoadingView variant="items-form" />;
   if (!document) {
     return (
       <View style={{ flex: 1 }}>

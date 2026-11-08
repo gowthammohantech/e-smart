@@ -31,7 +31,7 @@ export default function AccountStatement() {
   const bank = usePaymentAccounts().find((a) => a.type === 'bank' && key === `pay:${a.id}`);
   const account = accountFor(key, book) ?? (key.startsWith('sys:tdsPayable:') ? { key, name: key, group: 'dutiesTaxes' as const, kind: 'system' as const } : undefined);
   const s = useBooksView<ReturnType<typeof ledgerStatement> & { trend?: BalancePoint[] }>('ledger', { ...scope.filters.range, account: key }).data;
-  if (!s) return <LoadingView />;
+  if (!s) return <LoadingView variant="report" />;
   const title = account ? nameOf(account) : key;
   // Cash and bank: how the balance moved, month end by month end.
   const showTrend = (account?.group === 'cashInHand' || account?.group === 'bankAccounts') && (s.trend?.length ?? 0) > 1;

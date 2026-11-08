@@ -67,7 +67,7 @@ export default function DocumentPreview() {
     [doc, company, party, branches, ewayBill, source, customFields, tr, language],
   );
 
-  if (!doc && remote.isLoading) return <LoadingView title={tr('nav:title.preview')} />;
+  if (!doc && remote.isLoading) return <LoadingView variant="page" title={tr('nav:title.preview')} />;
   if (!doc) {
     return (
       <View style={{ flex: 1 }}>

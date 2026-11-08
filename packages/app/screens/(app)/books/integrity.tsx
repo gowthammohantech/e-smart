@@ -35,7 +35,7 @@ export default function IntegrityScreen() {
   const { scope, setScope } = useReportScope('thisFY');
   const baseCurrency = useBaseCurrency();
   const res = useBooksView<{ asOf: string; checks: IntegrityCheck[] }>('integrity', { to: scope.filters.range.to }).data;
-  if (!res) return <LoadingView />;
+  if (!res) return <LoadingView variant="report" />;
   const m = (minor: number) => formatMoney(money(minor, baseCurrency));
   const failed = res.checks.filter((c) => !c.ok);
   const itemRow = (c: IntegrityCheck, i: IntegrityItem, last: boolean) => {

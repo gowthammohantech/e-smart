@@ -15,7 +15,7 @@ export default function EditCustomer() {
   // Fetched on opening, so it shows even when the book on the device doesn't hold it.
   const remote = usePartyRecord(id);
 
-  if (!party && remote.isLoading) return <LoadingView />;
+  if (!party && remote.isLoading) return <LoadingView variant="form" />;
   if (!party) {
     return (
       <View style={{ flex: 1 }}>

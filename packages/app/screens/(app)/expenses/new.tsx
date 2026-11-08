@@ -37,7 +37,7 @@ export default function NewExpense() {
     };
   }
 
-  if (supplier.loading) return <LoadingView />;
+  if (supplier.loading) return <LoadingView variant="form" />;
   return (
     <>
       <Stack.Screen options={{ title: tr('nav:title.addExpense') }} />

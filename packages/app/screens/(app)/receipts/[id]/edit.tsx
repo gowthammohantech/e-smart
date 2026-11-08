@@ -17,7 +17,7 @@ export default function EditReceipt() {
   const remote = useVoucherRecord(id);
   const voucher = stored ?? (remote.data as typeof stored);
 
-  if (!voucher && remote.isLoading) return <LoadingView />;
+  if (!voucher && remote.isLoading) return <LoadingView variant="form" />;
   if (!voucher || voucher.kind !== 'receipt') {
     return (
       <View style={{ flex: 1 }}>

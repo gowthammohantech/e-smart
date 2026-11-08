@@ -4,7 +4,8 @@ import { View } from 'react-native';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { Card } from '@esmart/ui/components/Card';
-import { EmptyState, Skeleton } from '@esmart/ui/components/EmptyState';
+import { EmptyState } from '@esmart/ui/components/EmptyState';
+import { SkeletonChart, SkeletonGroup, SkeletonStatGrid } from '@esmart/ui/components/Skeleton';
 
 type HubQuery<T> = { data: T | undefined; isError: boolean; refetch: () => unknown };
 
@@ -32,33 +33,19 @@ export function HubState<T>({ query, children, tiles = 4 }: { query: HubQuery<T>
   return <HubSkeleton tiles={tiles} />;
 }
 
-/** Grey shapes where the tiles and cards will be. */
+/** Shimmering shapes where the tiles and cards will be. */
 export function HubSkeleton({ tiles = 4, cards = 2 }: { tiles?: number; cards?: number }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['reports']);
   const desktop = useIsDesktop();
-  const tile = (i: number) => (
-    <View key={i} style={{ flex: 1, minHeight: 96, padding: t.spacing.lg, gap: t.spacing.md, borderRadius: t.radius.lg, backgroundColor: t.c.card }}>
-      <Skeleton height={11} width="55%" />
-      <Skeleton height={22} width="70%" />
-      <Skeleton height={9} width="40%" />
-    </View>
-  );
-  const rows = desktop ? [Array.from({ length: tiles }, (_, i) => i)] : Array.from({ length: Math.ceil(tiles / 2) }, (_, r) => [r * 2, r * 2 + 1].filter((i) => i < tiles));
   return (
-    <View accessibilityLabel={tr('reports:dash.state.loading')} style={{ gap: t.spacing.md, paddingTop: t.spacing.lg }}>
-      {rows.map((r, i) => (
-        <View key={i} style={{ flexDirection: 'row', gap: t.spacing.md }}>
-          {r.map(tile)}
-        </View>
-      ))}
+    <SkeletonGroup label={tr('reports:dash.state.loading')} style={{ gap: t.spacing.md, paddingTop: t.spacing.lg }}>
+      <SkeletonStatGrid tiles={tiles} across={desktop} />
       {Array.from({ length: cards }, (_, i) => (
-        <View key={`c${i}`} style={{ marginTop: t.spacing.lg, padding: t.spacing.lg, gap: t.spacing.md, borderRadius: t.radius.lg, backgroundColor: t.c.card }}>
-          <Skeleton height={13} width="35%" />
-          <Skeleton height={110} radius={10} />
+        <View key={`c${i}`} style={{ marginTop: t.spacing.lg }}>
+          <SkeletonChart />
         </View>
       ))}
-    </View>
+    </SkeletonGroup>
   );
 }
-

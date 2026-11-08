@@ -33,7 +33,7 @@ export default function NewPurchaseBill() {
           attachmentIds: scan.attachmentId ? [scan.attachmentId] : undefined,
         }
       : undefined;
-  if (supplier.loading) return <LoadingView />;
+  if (supplier.loading) return <LoadingView variant="items-form" />;
   return (
     <>
       <Stack.Screen options={{ title: tr('nav:title.newPurchaseBill') }} />

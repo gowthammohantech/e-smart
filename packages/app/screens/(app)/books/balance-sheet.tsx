@@ -21,7 +21,7 @@ export default function BalanceSheetScreen() {
   const [view, setView] = useState<StatementView>('single');
   const columns = useColumnsTables('balance-sheet', scope.filters.range, view);
   const bs = useBooksView<ReturnType<typeof balanceSheet>>('balance-sheet', { to: scope.filters.range.to }).data;
-  if (!bs) return <LoadingView />;
+  if (!bs) return <LoadingView variant="report" />;
   const m = (minor: number) => formatMoney(money(minor, baseCurrency));
   const rows = (side: BalanceSheetSide) => side.flatMap((s) => [[tr(`books:bs.heading.${s.heading}`).toUpperCase(), m(s.total)], ...s.lines.map((l) => [`   ${nameOf(l.account)}`, m(l.amount)])]);
   const off = bs.totalAssets - bs.totalLiabilities;

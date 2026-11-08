@@ -15,7 +15,7 @@ export default function EditExpense() {
   // Fetched on opening, so it shows even when the book on the device doesn't hold it.
   const remote = useExpenseRecord(id);
 
-  if (!expense && remote.isLoading) return <LoadingView />;
+  if (!expense && remote.isLoading) return <LoadingView variant="form" />;
   if (!expense) {
     return (
       <View style={{ flex: 1 }}>

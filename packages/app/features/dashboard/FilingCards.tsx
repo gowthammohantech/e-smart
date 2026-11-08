@@ -8,7 +8,7 @@ import { Text } from '@esmart/ui/components/Text';
 import { Badge } from '@esmart/ui/components/Badge';
 import { Icon } from '@esmart/ui/components/Icon';
 import { SectionHeader } from '@esmart/ui/components/Screen';
-import { Skeleton } from '@esmart/ui/components/EmptyState';
+import { Skeleton, SkeletonGroup } from '@esmart/ui/components/Skeleton';
 import { businessDate, formatDate } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
 import { useFilingsHub } from '../../remote/queries';
@@ -36,11 +36,13 @@ export function FilingCards({ branchId, limit = 5 }: { branchId?: string; limit?
     return (
       <>
         <SectionHeader title={tr('reports:dash.filings.title')} />
-        <Card style={{ gap: t.spacing.md }}>
-          <Skeleton height={14} width="60%" />
-          <Skeleton height={14} width="45%" />
-          <Skeleton height={14} width="55%" />
-        </Card>
+        <SkeletonGroup>
+          <Card style={{ gap: t.spacing.md }}>
+            <Skeleton height={14} width="60%" />
+            <Skeleton height={14} width="45%" />
+            <Skeleton height={14} width="55%" />
+          </Card>
+        </SkeletonGroup>
       </>
     );
   }

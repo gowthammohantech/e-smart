@@ -122,7 +122,7 @@ export function DocumentEditor(props: EditorProps) {
   const party = usePartyRecord(props.prefill?.partyId);
   const item = useItemRecord(props.prefill?.itemId);
   const source = useDocumentRecord(props.initialDraft?.sourceDocumentId);
-  if (party.isLoading || item.isLoading || source.isLoading) return <LoadingView />;
+  if (party.isLoading || item.isLoading || source.isLoading) return <LoadingView variant="items-form" />;
   return <DocumentEditorForm {...props} />;
 }
 

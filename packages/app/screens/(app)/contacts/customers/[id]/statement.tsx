@@ -13,7 +13,7 @@ export default function CustomerStatement() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const party = useParty(id);
   const remote = usePartyRecord(id);
-  if (!party && remote.isLoading) return <LoadingView />;
+  if (!party && remote.isLoading) return <LoadingView variant="report" />;
   if (!party) {
     return (
       <View style={{ flex: 1 }}>

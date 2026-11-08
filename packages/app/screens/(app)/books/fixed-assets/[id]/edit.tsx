@@ -12,7 +12,7 @@ export default function EditFixedAsset() {
   return (
     <>
       <Stack.Screen options={{ title: tr('books:assets.editTitle') }} />
-      {asset ? <FixedAssetForm key={`${asset.id}:${asset.version}`} asset={asset} /> : <LoadingView />}
+      {asset ? <FixedAssetForm key={`${asset.id}:${asset.version}`} asset={asset} /> : <LoadingView variant="form" />}
     </>
   );
 }

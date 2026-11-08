@@ -21,7 +21,7 @@ export default function ProfitAndLossScreen() {
   const [view, setView] = useState<StatementView>('single');
   const columns = useColumnsTables('profit-loss', scope.filters.range, view);
   const pl = useBooksView<ReturnType<typeof profitAndLoss>>('profit-loss', scope.filters.range).data;
-  if (!pl) return <LoadingView />;
+  if (!pl) return <LoadingView variant="report" />;
   const m = (minor: number) => formatMoney(money(minor, baseCurrency));
   const rows = (lines: StatementLine[]) => lines.map((l) => [nameOf(l.account), m(l.amount)]);
 

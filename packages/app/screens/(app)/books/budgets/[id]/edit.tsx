@@ -12,7 +12,7 @@ export default function EditBudget() {
   return (
     <>
       <Stack.Screen options={{ title: tr('books:budgets.editTitle') }} />
-      {budget ? <BudgetForm key={`${budget.id}:${budget.version}`} budget={budget} /> : <LoadingView />}
+      {budget ? <BudgetForm key={`${budget.id}:${budget.version}`} budget={budget} /> : <LoadingView variant="form" />}
     </>
   );
 }

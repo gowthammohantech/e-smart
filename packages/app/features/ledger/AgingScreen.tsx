@@ -131,7 +131,7 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
 
   const reminderSheet = <PaymentReminderSheet party={reminderParty} rows={reminderRows} onClose={() => setReminderFor(null)} />;
 
-  if (!remote.data && remote.isLoading) return <LoadingView />;
+  if (!remote.data && remote.isLoading) return <LoadingView variant="report" />;
 
   if (desktop) {
     const overdueCount = data.outstanding.filter((o) => o.daysOverdue > 0).length;

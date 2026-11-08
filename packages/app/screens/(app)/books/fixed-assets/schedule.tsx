@@ -24,7 +24,7 @@ export default function FixedAssetScheduleScreen() {
     <>
       <Stack.Screen options={{ title: tr('books:assets.schedule') }} />
       {!s ? (
-        <LoadingView />
+        <LoadingView variant="report" />
       ) : (
         <ReportShell
           title={tr('books:assets.schedule')}
