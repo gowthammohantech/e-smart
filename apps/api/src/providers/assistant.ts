@@ -36,6 +36,12 @@ class UsageTotal {
   on(reply: AssistantReply): AssistantReply {
     return this.total ? { ...reply, usage: this.total } : reply;
   }
+
+  /** A failure with what the rounds before it used, so the caller can still record what it cost. */
+  onError(err: unknown): unknown {
+    if (err instanceof AssistantUnavailable && this.total && !err.usage) err.usage = this.total;
+    return err;
+  }
 }
 
 export type AssistantRequest = {
@@ -57,6 +63,9 @@ export interface AssistantProvider {
 
 /** The model couldn't be reached or refused the call: timeouts, 429, 5xx, bad key. The app shows "Lixi is unavailable". */
 export class AssistantUnavailable extends Error {
+  /** Tokens spent by earlier rounds of the same reply before this failure, when there were any. */
+  usage?: AssistantUsage;
+
   constructor(
     message: string,
     readonly status?: number,
@@ -302,6 +311,14 @@ export class OpenAICompatibleAssistant implements AssistantProvider {
       ...req.history.map((turn): OaiMessage => ({ role: turn.role, content: turn.text })),
     ];
     const usage = new UsageTotal();
+    try {
+      return await this.rounds(req, tools, messages, usage);
+    } catch (err) {
+      throw usage.onError(err);
+    }
+  }
+
+  private async rounds(req: AssistantRequest, tools: unknown[], messages: OaiMessage[], usage: UsageTotal): Promise<AssistantReply> {
     // Once the primary has failed in this reply, the rest of it stays on the secondary.
     let current = 0;
 
@@ -394,7 +411,13 @@ export class OpenAICompatibleAssistant implements AssistantProvider {
         throw new AssistantUnavailable(`Model server unreachable: ${(err as Error).message}`);
       }
       if (res.ok) {
-        const data = (await res.json()) as OaiCompletion;
+        let data: OaiCompletion;
+        try {
+          data = (await res.json()) as OaiCompletion;
+        } catch (err) {
+          // A proxy's HTML page or a cut-off body: the model didn't answer, the same as a 5xx.
+          throw new AssistantUnavailable(`Model server returned a body that isn't JSON: ${(err as Error).message}`, res.status);
+        }
         const choice = data.choices?.[0];
         if (!choice?.message) throw new AssistantUnavailable('Model server returned no choices');
         return { choice, model: data.model ?? requested, ...(data.usage ? { usage: data.usage } : {}) };

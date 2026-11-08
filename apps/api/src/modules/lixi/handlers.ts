@@ -133,6 +133,10 @@ export const lixiHandlers = defineHandlers({
     } catch (err) {
       if (err instanceof Anthropic.APIError || err instanceof AssistantUnavailable) {
         ctx.req.log.warn({ err }, 'lixi model call failed');
+        // Earlier rounds of the reply were still paid for.
+        if (err instanceof AssistantUnavailable && err.usage) {
+          await recordAiCost(ctx.db, ctx.company.id, ctx.now, 'lixi', err.usage).catch((e: unknown) => ctx.req.log.warn({ err: e }, 'lixi usage not recorded'));
+        }
         await giveBack();
         throw upstream('LIXI_UNAVAILABLE', 'Lixi is unavailable right now');
       }

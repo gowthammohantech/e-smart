@@ -3,6 +3,7 @@ import { useAppStore } from '../store/appStore';
 import { api, isNetworkError } from './api';
 import { applyEntity, purgeLocalDefaults, remapIds, unwrap } from './apply';
 import { useRemoteMeta } from './meta';
+import { reportError } from '../lib/reporter';
 import * as outbox from './outbox';
 
 /** What became of one change sent to the server. */
@@ -124,8 +125,14 @@ async function sendOne(entry: outbox.Entry): Promise<Outcome> {
   if (entry.clientEntityId && serverId && serverId !== entry.clientEntityId) {
     remapIds({ [entry.clientEntityId]: serverId });
     if (entry.path === '/companies') {
-      await adoptCompanyDefaults(serverId);
-      purgeLocalDefaults(serverId);
+      // The server took the company; failing to fetch its defaults now must not turn that into a failure.
+      // The local defaults stay until the next pull replaces them.
+      try {
+        await adoptCompanyDefaults(serverId);
+        purgeLocalDefaults(serverId);
+      } catch (err) {
+        reportError(err, { source: 'adoptCompanyDefaults' });
+      }
     }
   }
   outbox.drop(entry.id);
@@ -136,7 +143,10 @@ async function sendOne(entry: outbox.Entry): Promise<Outcome> {
     outbox.rebase(entityId, version);
   }
   if (entity && entry.method !== 'DELETE' && !outbox.hasQueuedAfter(entityId)) applyEntity(entry.entityType, entity);
-  if (entry.entityType === 'payment' && entry.method !== 'DELETE') await rebaseAllocatedDocuments(entry, entity);
+  if (entry.entityType === 'payment' && entry.method !== 'DELETE') {
+    // Saved already: a failed refresh of the documents it settles is caught up by the next pull.
+    await rebaseAllocatedDocuments(entry, entity).catch((err: unknown) => reportError(err, { source: 'rebaseAllocatedDocuments' }));
+  }
   return { kind: 'applied', serverId };
 }
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { compareVersions } from '../src/http/appVersion';
+import { INTERNAL_HEADER, INTERNAL_TOKEN } from '../src/lib/internal';
 import { setupApi } from './helpers';
 
 const t = setupApi({ MIN_APP_VERSION: '1.0.5' });
@@ -35,5 +36,15 @@ describe('minimum app version', () => {
   it('still lets an old build reach /sync/push, so it can send what it kept', async () => {
     const res = await t.post('/sync/push', { mutations: [] }, { headers: { 'x-app-version': '1.0.4' } });
     expect(res.status).not.toBe(426);
+  });
+
+  it('lets the server call itself (Lixi tools, MCP, sync replays) without a version', async () => {
+    const res = await t.get('/plans', { headers: { authorization: 'Bearer anything', [INTERNAL_HEADER]: INTERNAL_TOKEN } });
+    expect(res.status).not.toBe(426);
+  });
+
+  it('does not let a forged internal header past the gate', async () => {
+    const res = await t.get('/me', { headers: { authorization: 'Bearer anything', [INTERNAL_HEADER]: 'forged' } });
+    expect(res.status).toBe(426);
   });
 });

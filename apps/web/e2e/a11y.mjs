@@ -4,7 +4,7 @@
 // they are worked down. Also checks the keyboard path the scan can't see:
 // the skip link is the first Tab stop and lands on the main region.
 //
-// Needs the same setup as offline.mjs (API on 4100, web build on 8190, the
+// Needs the same setup as online.mjs (API on 4100, web build on 8190, the
 // e2e demo account), then:
 //   npm run e2e:a11y -w @esmart/web
 //

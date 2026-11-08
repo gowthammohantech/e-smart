@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { INTERNAL_HEADER, INTERNAL_TOKEN } from '../lib/internal';
 import { ApiError } from './errors';
 
 /** The header the native apps send with their version, e.g. `1.0.5`. */
@@ -37,6 +38,8 @@ export function registerAppVersionGate(app: FastifyInstance, minVersion: string 
     const version = Array.isArray(raw) ? raw[0] : raw;
     // Only the app's API: MCP, share pages, health and webhooks have callers of their own.
     if (!req.url.startsWith('/v1/') || req.url.startsWith('/v1/sync/push')) return;
+    // The server's own in-process calls (Lixi tools, MCP, sync replays) already passed the gate once.
+    if (req.headers[INTERNAL_HEADER] === INTERNAL_TOKEN) return;
     if (version === WEB_CLIENT) return;
     if (!version && !req.headers.authorization?.startsWith('Bearer ')) return;
     if (version && compareVersions(version, minVersion) >= 0) return;

@@ -12,9 +12,6 @@ import { reportError } from '../lib/reporter';
 
 let installed = false;
 
-/** Marking notifications read is the person's own view, not the books: it may queue whatever the connection. */
-const ANYWHERE = new Set(['markNotificationRead', 'markAllNotificationsRead', 'clearNotifications']);
-
 /**
  * Turns the store into a cache of the server's books. Every action still
  * updates the store at once and describes what it means to the API; that is
@@ -34,11 +31,10 @@ export function installRemote() {
 
   for (const [name, build] of Object.entries(MUTATIONS)) {
     const fn = original[name as keyof AppState] as (...args: unknown[]) => unknown;
-    const anywhere = ANYWHERE.has(name);
     (patch as Record<string, unknown>)[name] = (...args: unknown[]) => {
       const outer = depth === 0;
       // No connection: nothing changes until it is back.
-      if (outer && !anywhere && !canWrite()) return undefined;
+      if (outer && !canWrite()) return undefined;
       const before = store.getState();
       depth++;
       let result: unknown;
@@ -51,12 +47,15 @@ export function installRemote() {
         const after = store.getState();
         const known = new Set(before.syncQueue.map((e) => e.id));
         build!({ args, result, before, after });
-        // Online, a change made outside saveOnline (a toggle, a delete) still has to reach the server, or it's undone.
-        if (!anywhere && !savingOnline()) {
+        // Online, a change made outside saveOnline (a toggle, a delete, marking a notification read) still
+        // has to reach the server straight away, or it's undone.
+        if (!savingOnline()) {
           const fresh = outbox.entries().filter((e) => !known.has(e.id));
-          void confirm(result, before, after, fresh).then((r) => {
-            if (r.outcome === 'refused' || r.outcome === 'unreachable') onUnconfirmed.forEach((l) => l(r));
-          });
+          void confirm(result, before, after, fresh)
+            .then((r) => {
+              if (r.outcome === 'refused' || r.outcome === 'unreachable') onUnconfirmed.forEach((l) => l(r));
+            })
+            .catch((err: unknown) => reportError(err, { source: 'confirm', action: name }));
         }
       }
       return result;

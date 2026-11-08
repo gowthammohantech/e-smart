@@ -37,9 +37,13 @@ export function remoteLixiAvailable(): boolean {
 
 const companyPath = () => ({ companyId: useAppStore.getState().activeCompanyId });
 
-/** A failure the chat reports as "Lixi can't be reached": offline, or the model is down. */
+/**
+ * A failure the chat reports as "Lixi can't be reached": offline, or the model is down. A 429 is not
+ * one: the month's AI allowance is used up (AI_LIMIT_REACHED) or the person is asking too fast, and
+ * trying again won't help, so the server's own message is shown instead.
+ */
 function unavailable(err: unknown): boolean {
-  return isNetworkError(err) || (err instanceof ApiError && (err.status >= 500 || err.status === 429));
+  return isNetworkError(err) || (err instanceof ApiError && err.status >= 500);
 }
 
 /**
