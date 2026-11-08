@@ -13,10 +13,27 @@ import { Marked, Renderer, type Tokens } from 'marked';
 // `next build` and `next dev` run from apps/site.
 const ROOT = join(process.cwd(), '../../docs/cookbook');
 
-export const PARTS = [
-  { dir: 'part-a-user-guide', title: 'Part A — User guide' },
-  { dir: 'part-b-test-scenarios', title: 'Part B — Test scenarios' },
-] as const;
+/**
+ * The parts published on the site. Part B (part-b-test-scenarios) is the internal QA/UAT script:
+ * it stays in the repo but is never built, listed or linked here.
+ */
+export const PARTS = [{ dir: 'part-a-user-guide', title: 'Part A — User guide' }] as const;
+
+const INTERNAL_DIR = 'part-b-test-scenarios';
+
+/** Links into internal pages, resolved to a site route; these render as plain text. */
+const isInternal = (href: string) => href.startsWith(`/docs/${INTERNAL_DIR}`) || href === '#part-b--test-scenarios';
+
+/** Drops the internal part's section and its pointers from a page before rendering. */
+function stripInternal(markdown: string): string {
+  return (
+    markdown
+      // The "## Part B …" section, up to the next rule or second-level heading.
+      .replace(/^## Part B[^\n]*\n[\s\S]*?(?=^---\s*$|^## )/m, '')
+      // Bullets that only point at Part B.
+      .replace(/^- \*\*\[Part B[^\n]*\n/m, '')
+  );
+}
 
 export type CookbookPage = { slug: string; title: string; html: string };
 
@@ -49,6 +66,10 @@ function render(markdown: string, slug: string): string {
   renderer.table = function (token: Tokens.Table) {
     return `<div class="table-wrap">${Renderer.prototype.table.call(this, token)}</div>`;
   };
+  // Links into the internal part read as plain text.
+  renderer.link = function (token: Tokens.Link) {
+    return isInternal(token.href) ? this.parser.parseInline(token.tokens) : Renderer.prototype.link.call(this, token);
+  };
 
   const marked = new Marked({
     gfm: true,
@@ -57,7 +78,7 @@ function render(markdown: string, slug: string): string {
       if (token.type === 'link') token.href = siteHref(token.href, slug);
     },
   });
-  return marked.parse(markdown, { async: false });
+  return marked.parse(stripInternal(markdown), { async: false });
 }
 
 function read(slug: string): CookbookPage {

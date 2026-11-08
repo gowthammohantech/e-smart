@@ -7,8 +7,20 @@ import en from '@esmart/i18n/locales/en';
  * site can't drift from what the app sells.
  *
  * Anything marked `placeholder: true` is stand-in social proof or contact
- * detail. Replace it before launch: `grep -n "placeholder: true" content/site.ts`.
+ * detail. It is hidden on the live page (see `live`); replace it and drop the
+ * flag to show it: `grep -n "placeholder: true" content/site.ts`.
  */
+
+/**
+ * Stand-in content stays in this file so it's easy to swap for the real thing,
+ * but never renders: components show only what `live` lets through.
+ */
+export function live<T extends { placeholder?: boolean }>(item: T): T | null;
+export function live<T extends { placeholder?: boolean }>(items: readonly T[]): T[];
+export function live<T extends { placeholder?: boolean }>(x: T | readonly T[]): T | T[] | null {
+  if (Array.isArray(x)) return (x as readonly T[]).filter((i) => !i.placeholder);
+  return (x as T).placeholder ? null : (x as T);
+}
 
 /**
  * Where the site sends people. NEXT_PUBLIC_* is inlined at build time (see
@@ -41,7 +53,7 @@ export const hero = {
   reviews: { label: '10k+ reviews from Indian businesses', placeholder: true },
   title: ['Invoices, GST', 'and stock.', 'Without the ERP.'],
   sub: 'Bill, file e-invoices and e-way bills, chase payments and keep stock — from your phone, in English or Tamil.',
-  side: "Your books, online and offline. Lixi, your AI assistant, keeps an eye on what's overdue, what's low and what's about to expire, and drafts the next step for you to confirm.",
+  side: "Your books, on every device. Lixi, your AI assistant, keeps an eye on what's overdue, what's low and what's about to expire, and drafts the next step for you to confirm.",
   downloadLabel: 'Download the app:',
   stores: [
     { store: 'apple', top: 'Download on the', name: 'App Store', href: links.appStore },
@@ -119,7 +131,7 @@ export const features = {
   body: 'Tax is worked out for you — CGST and SGST, or IGST, from the place of supply — and every compliance step shows its working, so nothing is filed blind.',
   items: [
     { title: 'GST compliance on every plan', body: 'E-invoice and e-way bill are included even on Free. Compliance is never a paywall.' },
-    { title: 'Works offline, syncs itself', body: 'Changes save on the phone first and sync when you are back online, with conflicts you can resolve.' },
+    { title: 'Your books, on every device', body: 'Always in sync — your data lives safely in the cloud, so phone, tablet and web show the same books.' },
     { title: 'Lixi drafts, you confirm', body: 'Ask about dues, sales or stock. Lixi drafts invoices, payments and reminders, and saves nothing until you say so.' },
   ],
 };
@@ -244,7 +256,7 @@ export const faq = {
     },
     {
       q: 'Does it work without internet?',
-      a: 'Yes. Everything you create is saved on the device first and syncs when you are back online, with automatic retries. If two people edit the same record, Settings → Sync lets you choose which version to keep.',
+      a: 'No — Elixir Books needs an internet connection. Your books live safely in the cloud, so every phone, tablet and browser you sign in on shows the same, up-to-date data.',
     },
     {
       q: 'How do you connect to the GST portals?',

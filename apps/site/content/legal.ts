@@ -174,7 +174,6 @@ export const deleteAccount: LegalDoc = {
       list: [
         'Open Settings → Your profile, then Delete account.',
         'Enter your password (or a code sent to your phone), type DELETE, and confirm.',
-        'You need to be online, and anything not yet synced must be sent first, or it would be lost.',
       ],
     },
     {

@@ -60,7 +60,19 @@ export function ReasonDialog({ open, title, description, confirmLabel, danger, c
   }
 
   return (
-    <dialog ref={ref} className="modal" aria-labelledby="reason-title" onClose={onClose} onCancel={onClose}>
+    <dialog
+      ref={ref}
+      className="modal"
+      aria-labelledby="reason-title"
+      onClose={() => {
+        if (!busy) onClose();
+      }}
+      onCancel={(e) => {
+        // Escape mid-request would hide the dialog and lose the result or its error.
+        e.preventDefault();
+        if (!busy) onClose();
+      }}
+    >
       <form onSubmit={submit}>
         <h2 id="reason-title">{title}</h2>
         <div className="muted">{description}</div>

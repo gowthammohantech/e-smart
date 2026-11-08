@@ -1,4 +1,4 @@
-import { marquee } from '@/content/site';
+import { live, marquee } from '@/content/site';
 
 import { Sunburst } from './ui/Sparkle';
 
@@ -16,6 +16,7 @@ function Row() {
 }
 
 export function MarqueePanel() {
+  const usedBy = live(marquee.usedBy);
   return (
     <section className="container-site relative z-10 mt-4 lg:mt-0" aria-label="What Elixir Books Smart covers">
       <div className="card-glass relative overflow-hidden rounded-media pt-10 pb-10 lg:pt-[230px]">
@@ -25,8 +26,8 @@ export function MarqueePanel() {
             <Row />
           </div>
         </div>
-        <p className="mt-10 px-4 text-center text-fg">{marquee.usedBy.label}</p>
-        <div className="mt-6 flex flex-wrap items-center justify-center gap-x-10 gap-y-4 px-4">
+        {usedBy ? <p className="mt-10 px-4 text-center text-fg">{usedBy.label}</p> : null}
+        <div className={`${usedBy ? 'mt-6' : 'mt-10'} flex flex-wrap items-center justify-center gap-x-10 gap-y-4 px-4`}>
           <span className="text-xs tracking-wider text-dim uppercase">{marquee.worksWithLabel}</span>
           {marquee.worksWith.map((name) => (
             <span key={name} className="font-display text-lg font-medium tracking-tight text-muted/70">

@@ -3,7 +3,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { useAuth } from '../auth/AuthProvider';
 import { api, errorMessage, need, type Schema } from '../lib/api';
 import { Art } from '../components/Art';
-import { Bar } from '../components/ui';
+import { Bar, useDocumentTitle } from '../components/ui';
 
 /**
  * The second step of signing in. With no authenticator yet: scan, confirm a code, keep the recovery
@@ -11,6 +11,7 @@ import { Bar } from '../components/ui';
  */
 export function MfaGate({ enrolled }: { enrolled: boolean }) {
   const { signOut } = useAuth();
+  useDocumentTitle('Two-step verification');
   return (
     <div className="auth backdrop">
       <div className="card">
@@ -97,6 +98,7 @@ function Enroll() {
   const [qr, setQr] = useState<string | null>(null);
   const [codes, setCodes] = useState<string[] | null>(null);
   const [saved, setSaved] = useState(false);
+  const [copied, setCopied] = useState<'yes' | 'no' | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -125,9 +127,23 @@ function Enroll() {
         <pre className="mono" data-testid="recovery-codes" style={{ margin: 0, padding: 12, background: 'var(--card2)', borderRadius: 8, columns: 2 }}>
           {codes.join('\n')}
         </pre>
-        <button className="btn" type="button" onClick={() => void navigator.clipboard?.writeText(codes.join('\n'))}>
-          Copy codes
+        <button
+          className="btn"
+          type="button"
+          onClick={() => {
+            const write = navigator.clipboard?.writeText(codes.join('\n'));
+            if (!write) return setCopied('no');
+            write.then(
+              () => setCopied('yes'),
+              () => setCopied('no'),
+            );
+          }}
+        >
+          {copied === 'yes' ? 'Copied' : 'Copy codes'}
         </button>
+        <span className="muted" role="status" aria-live="polite">
+          {copied === 'yes' ? 'Recovery codes copied to the clipboard.' : copied === 'no' ? 'Couldn’t copy. Select the codes and copy them by hand.' : ''}
+        </span>
         <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <input type="checkbox" checked={saved} onChange={(e) => setSaved(e.target.checked)} />
           I’ve saved them somewhere safe

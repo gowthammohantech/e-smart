@@ -10,12 +10,23 @@ import './globals.css';
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'swap' });
 const instrument = Instrument_Sans({ subsets: ['latin'], variable: '--font-instrument', display: 'swap' });
 
+/** The public address, for absolute OG and canonical URLs. Same default as the apps' EXPO_PUBLIC_SITE_URL. */
+const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL?.trim() || 'https://elixirbooks.smart').replace(/\/+$/, '');
+
 export const metadata: Metadata = {
-  title: `${brand.name} — Invoicing, GST and stock for Indian businesses`,
+  metadataBase: new URL(SITE_URL),
+  // Every other page names itself and gets "· Elixir Books Smart" after it.
+  title: { default: `${brand.name} — Invoicing, GST and stock for Indian businesses`, template: `%s · ${brand.name}` },
   description:
-    'Bill, file e-invoices and e-way bills, chase payments and keep stock from your phone. GST compliance on every plan, works offline, with Lixi, your AI assistant.',
+    'Bill, file e-invoices and e-way bills, chase payments and keep stock from your phone. GST compliance on every plan, your books in sync on every device, with Lixi, your AI assistant.',
   icons: { icon: '/brand/elixir-mark-dark.png' },
-  openGraph: { title: brand.name, description: brand.tagline, type: 'website' },
+  openGraph: {
+    title: brand.name,
+    description: brand.tagline,
+    type: 'website',
+    siteName: brand.name,
+    images: [{ url: '/brand/elixir-books.png', width: 784, height: 378, alt: brand.name }],
+  },
 };
 
 export const viewport: Viewport = {

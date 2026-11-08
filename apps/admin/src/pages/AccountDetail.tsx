@@ -32,7 +32,7 @@ function SuspendAction({ account }: { account: Schema<'PlatformAccount'> }) {
         onClose={() => setOpen(false)}
         onConfirm={async (reason) => {
           const path = suspended ? '/admin/accounts/{accountId}/reactivate' : '/admin/accounts/{accountId}/suspend';
-          await api.POST(path, { params: { path: { accountId: account.id } }, body: { reason } });
+          need(await api.POST(path, { params: { path: { accountId: account.id } }, body: { reason } }));
           await queryClient.invalidateQueries();
         }}
       />
@@ -49,7 +49,12 @@ export function AccountDetail() {
   });
 
   return (
-    <QueryState isPending={query.isPending} error={query.error} fallback={<DetailSkeleton crumbs={[{ to: '/accounts', label: 'Accounts' }]} />}>
+    <QueryState
+      isPending={query.isPending}
+      error={query.error}
+      fallback={<DetailSkeleton crumbs={[{ to: '/accounts', label: 'Accounts' }]} />}
+      header={<PageHeader crumbs={[{ to: '/accounts', label: 'Accounts' }]} title="Account" />}
+    >
       {() => {
         const { account, companies, users } = query.data!;
         return (
@@ -61,6 +66,7 @@ export function AccountDetail() {
                   {account.name} <AccountStatusBadge status={account.status} />
                 </span>
               }
+              docTitle={account.name}
               sub={<span className="mono">{account.id}</span>}
               actions={<SuspendAction account={account} />}
             />
@@ -146,42 +152,46 @@ export function AccountDetail() {
               <div className="card-head">
                 <h2>Users</h2>
               </div>
-              <div className="table-wrap">
-                <table className="data">
-                  <thead>
-                    <tr>
-                      <th>User</th>
-                      <th>Role</th>
-                      <th>Status</th>
-                      <th>Last active</th>
-                      <th />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {users.map((u) => (
-                      <tr key={u.id}>
-                        <td>
-                          {u.name}
-                          <div className="cell-sub">
-                            {u.email}
-                            {u.phone ? ` · ${u.phone}` : ''}
-                          </div>
-                        </td>
-                        <td>
-                          <span style={{ textTransform: 'capitalize' }}>{u.role}</span> {u.platformRole ? <RoleBadge role={u.platformRole} /> : null}
-                        </td>
-                        <td>
-                          <UserStatusBadge status={u.status} />
-                        </td>
-                        <td>{fmtDateTime(u.lastActiveAt)}</td>
-                        <td className="right">
-                          <UserActions user={u} />
-                        </td>
+              {users.length === 0 ? (
+                <EmptyState title="No users">Nobody is on this account yet.</EmptyState>
+              ) : (
+                <div className="table-wrap">
+                  <table className="data">
+                    <thead>
+                      <tr>
+                        <th>User</th>
+                        <th>Role</th>
+                        <th>Status</th>
+                        <th>Last active</th>
+                        <th />
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {users.map((u) => (
+                        <tr key={u.id}>
+                          <td>
+                            {u.name}
+                            <div className="cell-sub">
+                              {u.email}
+                              {u.phone ? ` · ${u.phone}` : ''}
+                            </div>
+                          </td>
+                          <td>
+                            <span style={{ textTransform: 'capitalize' }}>{u.role}</span> {u.platformRole ? <RoleBadge role={u.platformRole} /> : null}
+                          </td>
+                          <td>
+                            <UserStatusBadge status={u.status} />
+                          </td>
+                          <td>{fmtDateTime(u.lastActiveAt)}</td>
+                          <td className="right">
+                            <UserActions user={u} />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </section>
 
             <section className="card">

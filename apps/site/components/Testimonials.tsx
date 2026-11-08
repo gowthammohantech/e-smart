@@ -1,4 +1,4 @@
-import { testimonials } from '@/content/site';
+import { live, testimonials } from '@/content/site';
 
 import { Avatar } from './ui/Avatar';
 import { Card } from './ui/Card';
@@ -28,13 +28,16 @@ function Stars() {
 }
 
 export function Testimonials() {
+  // Stand-in quotes never ship; with none real yet, the section isn't shown.
+  const items = live(testimonials.items);
+  if (items.length === 0) return null;
   return (
     <section id="testimonials" className="section-y">
       <div className="container-site">
         <SectionHeading eyebrow={testimonials.eyebrow} title={testimonials.title} />
         {/* A swipe row on phones, a grid from tablet up. */}
         <ul className="-mx-4 mt-12 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-2 [scrollbar-width:none] md:mx-0 md:grid md:grid-cols-3 md:gap-6 md:overflow-visible md:px-0">
-          {testimonials.items.map((t, i) => (
+          {items.map((t, i) => (
             <Reveal as="li" key={t.name} index={i} className="w-[85%] shrink-0 snap-center md:w-auto">
               <Card className="flex h-full flex-col">
                 <Quote />

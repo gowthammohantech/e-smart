@@ -3,6 +3,7 @@ import { Navigate, useLocation } from 'react-router';
 import { useAuth } from '../auth/AuthProvider';
 import { errorMessage } from '../lib/api';
 import { Art } from '../components/Art';
+import { useDocumentTitle } from '../components/ui';
 
 /**
  * Prefill for the form, from VITE_DEMO_LOGIN_EMAIL / VITE_DEMO_LOGIN_PASSWORD.
@@ -19,6 +20,7 @@ export function SignIn() {
   const [password, setPassword] = useState(DEMO_PASSWORD);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  useDocumentTitle('Sign in');
 
   if (state.status === 'signedIn' || state.status === 'mfa') {
     const from = (location.state as { from?: string } | null)?.from;

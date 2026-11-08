@@ -52,19 +52,37 @@ export function Footer() {
           ))}
         </ul>
         <hr className="my-10 border-line" />
-        <div className="flex flex-col items-center justify-between gap-3 text-sm text-muted sm:flex-row">
-          <p>{footer.copyright}</p>
-          <p className="flex gap-3">
-            {footer.legal.map((l, i) => (
-              <span key={l.label} className="flex gap-3">
-                {i > 0 ? <span aria-hidden>|</span> : null}
-                <a href={l.href} className="hover:text-fg">
-                  {l.label}
-                </a>
-              </span>
-            ))}
-          </p>
-        </div>
+        <FooterBar />
+      </div>
+    </footer>
+  );
+}
+
+/** Copyright and the legal links; wraps onto more lines on a phone rather than clipping. */
+function FooterBar() {
+  return (
+    <div className="flex flex-col items-center justify-between gap-3 text-center text-sm text-muted sm:flex-row sm:text-left">
+      <p>{footer.copyright}</p>
+      <p className="flex flex-wrap justify-center gap-x-3 gap-y-2">
+        {footer.legal.map((l, i) => (
+          <span key={l.label} className="flex gap-3 whitespace-nowrap">
+            {i > 0 ? <span aria-hidden>|</span> : null}
+            <a href={l.href} className="hover:text-fg">
+              {l.label}
+            </a>
+          </span>
+        ))}
+      </p>
+    </div>
+  );
+}
+
+/** The quiet footer for the reading pages (legal, support, cookbook). */
+export function SlimFooter({ className = '' }: { className?: string }) {
+  return (
+    <footer className={`border-t border-line ${className}`}>
+      <div className="mx-auto max-w-[1400px] px-4 py-8 sm:px-6">
+        <FooterBar />
       </div>
     </footer>
   );

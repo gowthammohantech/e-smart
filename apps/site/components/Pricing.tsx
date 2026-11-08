@@ -1,5 +1,6 @@
 'use client';
 
+import { Check, X } from 'lucide-react';
 import { animate, useReducedMotion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
 
@@ -111,14 +112,16 @@ export function Pricing({ copy }: { copy: Copy }) {
                   <ul className="mt-3 space-y-2.5 text-sm">
                     {plan.features.map((f) => (
                       <li key={f} className="flex items-start gap-2.5 text-fg/90">
-                        <span className="mt-2 size-1.5 shrink-0 rounded-full bg-primary" />
+                        <Check className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
+                        <span className="sr-only">Included: </span>
                         {f}
                       </li>
                     ))}
                     {plan.missing.map((f) => (
-                      <li key={f} className="flex items-start gap-2.5 text-dim line-through decoration-dim/50">
-                        <span className="mt-2 size-1.5 shrink-0 rounded-full bg-dim" />
-                        {f}
+                      <li key={f} className="flex items-start gap-2.5 text-dim">
+                        <X className="mt-0.5 size-4 shrink-0" aria-hidden />
+                        <span className="sr-only">Not included: </span>
+                        <span className="line-through decoration-dim/50">{f}</span>
                       </li>
                     ))}
                   </ul>

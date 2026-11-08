@@ -62,7 +62,13 @@ export function Accounts() {
         <QueryState isPending={query.isPending} error={query.error} fallback={<TableSkeleton headers={[{ label: 'Account' }, { label: 'Status' }, { label: 'Plans' }, { label: 'Companies', right: true }, { label: 'Users', right: true }, { label: 'Last active' }, { label: 'Created' }]} />}>
           {() =>
             query.data!.data!.length === 0 ? (
-              <EmptyState art="search-empty" title="No accounts match" />
+              q || status || plan ? (
+                <EmptyState art="search-empty" title="No accounts match">
+                  Try a different search, status or plan.
+                </EmptyState>
+              ) : (
+                <EmptyState title="No accounts yet">Accounts appear here once someone signs up.</EmptyState>
+              )
             ) : (
               <>
                 <div className="table-wrap">

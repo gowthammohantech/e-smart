@@ -43,7 +43,8 @@ export const THEMES: Record<ThemeKey, Theme> = {
       'glow-b': 'rgba(12,120,150,0.28)',
       text: dark.text,
       'text-muted': dark.muted,
-      'text-dim': '#566074',
+      // ≥4.5:1 on canvas, surfaces and footer (WCAG AA), still a step below muted.
+      'text-dim': '#808A9E',
       star: dark.good,
       good: dark.good,
       warn: dark.warn,
@@ -83,7 +84,8 @@ export const THEMES: Record<ThemeKey, Theme> = {
       'glow-b': 'rgba(77,163,255,0.12)',
       text: light.text,
       'text-muted': light.muted,
-      'text-dim': '#8A93A6',
+      // ≥4.5:1 on bg, card and card2 (WCAG AA), still a step below muted.
+      'text-dim': '#646D80',
       star: '#12A06B',
       good: light.good,
       warn: light.warn,

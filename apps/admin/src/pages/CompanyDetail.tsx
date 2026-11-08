@@ -30,13 +30,12 @@ const EVENT_LABELS: Record<string, string> = {
   'cancel.requested': 'Cancellation requested',
 };
 
-function PlanOverride({ company, billedBy }: { company: Schema<'PlatformCompany'>; billedBy: string | null }) {
+function PlanOverride({ company, billedBy, onWarning }: { company: Schema<'PlatformCompany'>; billedBy: string | null; onWarning: (w: string | null) => void }) {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [plan, setPlan] = useState<Schema<'PlanTier'>>(company.plan);
   const [status, setStatus] = useState<'active' | 'trialing'>('active');
   const [until, setUntil] = useState('');
-  const [warning, setWarning] = useState<string | null>(null);
   const [tomorrow] = useState(() => new Date(Date.now() + 86_400_000).toISOString().slice(0, 10));
 
   return (
@@ -48,13 +47,12 @@ function PlanOverride({ company, billedBy }: { company: Schema<'PlatformCompany'
           setPlan(company.plan);
           setStatus('active');
           setUntil('');
-          setWarning(null);
+          onWarning(null);
           setOpen(true);
         }}
       >
         Change plan
       </button>
-      {warning ? <div className="alert warn">{warning}</div> : null}
       <ReasonDialog
         open={open}
         title={`Change plan for ${company.name}`}
@@ -68,7 +66,7 @@ function PlanOverride({ company, billedBy }: { company: Schema<'PlatformCompany'
               body: { plan, status, reason, currentPeriodEnd: until ? `${until}T23:59:59Z` : null },
             }),
           );
-          setWarning(res.warning ?? null);
+          onWarning(res.warning ?? null);
           await queryClient.invalidateQueries();
         }}
       >
@@ -111,9 +109,17 @@ export function CompanyDetail() {
     queryKey: ['company', companyId],
     queryFn: async () => need(await api.GET('/admin/companies/{companyId}', { params: { path: { companyId } } })),
   });
+  // A plan change's warning (e.g. billed elsewhere) sits under the header until dismissed or the page changes.
+  const [planWarning, setPlanWarning] = useState<{ companyId: string; text: string } | null>(null);
+  const warning = planWarning?.companyId === companyId ? planWarning.text : null;
 
   return (
-    <QueryState isPending={query.isPending} error={query.error} fallback={<DetailSkeleton crumbs={[{ to: '/accounts', label: 'Accounts' }]} tables={3} />}>
+    <QueryState
+      isPending={query.isPending}
+      error={query.error}
+      fallback={<DetailSkeleton crumbs={[{ to: '/accounts', label: 'Accounts' }]} tables={3} />}
+      header={<PageHeader crumbs={[{ to: '/accounts', label: 'Accounts' }]} title="Company" />}
+    >
       {() => {
         const { company, accountName, accountSuspended, subscription, planHistory, documentCounts, userCount, aiCost = [] } = query.data!;
         const aiTotal = aiCost.reduce((s, r) => s + r.costUsd, 0);
@@ -127,8 +133,16 @@ export function CompanyDetail() {
               ]}
               title={company.name}
               sub={<span className="mono">{company.id}</span>}
-              actions={<PlanOverride company={company} billedBy={subscription?.provider ?? null} />}
+              actions={<PlanOverride company={company} billedBy={subscription?.provider ?? null} onWarning={(w) => setPlanWarning(w ? { companyId, text: w } : null)} />}
             />
+            {warning ? (
+              <div className="alert warn row" role="status" style={{ justifyContent: 'space-between' }}>
+                <span>{warning}</span>
+                <button className="btn small ghost" type="button" onClick={() => setPlanWarning(null)}>
+                  Dismiss
+                </button>
+              </div>
+            ) : null}
             {accountSuspended ? <div className="alert bad">This company’s account is suspended. Nobody on it can sign in.</div> : null}
 
             <section className="card card-body">

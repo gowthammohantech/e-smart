@@ -35,7 +35,13 @@ export function AuditList({ filters, limit = 25, compact = false }: { filters: F
     <QueryState isPending={query.isPending} error={query.error} fallback={<TableSkeleton headers={[{ label: 'When' }, { label: 'Action' }, ...(compact ? [] : [{ label: 'Target' }]), { label: 'Reason' }, { label: 'By' }]} rows={compact ? 4 : 8} />}>
       {() =>
         query.data!.data!.length === 0 ? (
-          <EmptyState title={`No operator actions recorded${compact ? ' here yet' : ''}`} />
+          !compact && (filters.targetType || filters.actorId || filters.from || filters.to) ? (
+            <EmptyState art="search-empty" title="No operator actions match these filters">
+              Try a wider date range or clear a filter.
+            </EmptyState>
+          ) : (
+            <EmptyState title={`No operator actions recorded${compact ? ' here yet' : ''}`} />
+          )
         ) : (
           <>
             <div className="table-wrap">

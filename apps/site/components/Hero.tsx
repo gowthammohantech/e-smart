@@ -3,7 +3,7 @@
 import dynamic from 'next/dynamic';
 import { useRef } from 'react';
 
-import { hero } from '@/content/site';
+import { hero, live } from '@/content/site';
 import { useWebGL } from '@/lib/hooks';
 
 import { PhoneFrame } from './mockups/Screens';
@@ -47,20 +47,23 @@ function Chips() {
 export function Hero() {
   const section = useRef<HTMLElement>(null);
   const webgl = useWebGL();
+  const reviews = live(hero.reviews);
 
   return (
     <section ref={section} id="top" className="relative pt-[112px] lg:pt-[132px]">
       <div className="container-site grid items-start gap-10 lg:grid-cols-[1.15fr_1fr_1.15fr] lg:gap-6">
         <Reveal className="text-center lg:pt-10 lg:text-left">
-          <span className="inline-flex items-center gap-2.5 rounded-full border border-line bg-primary-tint py-1 pr-3 pl-1 text-xs text-fg">
-            <span className="flex -space-x-2">
-              {[1, 2, 3, 4].map((seed) => (
-                <Avatar key={seed} seed={seed} size={22} className="ring-2 ring-bg" />
-              ))}
+          {reviews ? (
+            <span className="mb-6 inline-flex items-center gap-2.5 rounded-full border border-line bg-primary-tint py-1 pr-3 pl-1 text-xs text-fg">
+              <span className="flex -space-x-2">
+                {[1, 2, 3, 4].map((seed) => (
+                  <Avatar key={seed} seed={seed} size={22} className="ring-2 ring-bg" />
+                ))}
+              </span>
+              {reviews.label}
             </span>
-            {hero.reviews.label}
-          </span>
-          <h1 className="mt-6 text-[40px] leading-[1.05] tracking-[-0.03em] text-fg sm:text-5xl lg:text-[58px]">
+          ) : null}
+          <h1 className="text-[40px] leading-[1.05] tracking-[-0.03em] text-fg sm:text-5xl lg:text-[58px]">
             {hero.title.map((line) => (
               <span key={line} className="block">
                 {line}

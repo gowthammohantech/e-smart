@@ -3,7 +3,34 @@ import { Link } from 'react-router';
 import { errorMessage } from '../lib/api';
 import { Art, type ArtName } from './Art';
 
-export function PageHeader({ title, sub, crumbs, actions }: { title: ReactNode; sub?: ReactNode; crumbs?: { to: string; label: string }[]; actions?: ReactNode }) {
+const APP_TITLE = 'Elixir Books Admin';
+
+/** Names the browser tab after the page, so history and tabs tell routes apart. */
+export function useDocumentTitle(title: string | undefined) {
+  useEffect(() => {
+    if (!title) return;
+    document.title = `${title} · ${APP_TITLE}`;
+    return () => {
+      document.title = APP_TITLE;
+    };
+  }, [title]);
+}
+
+export function PageHeader({
+  title,
+  sub,
+  crumbs,
+  actions,
+  docTitle,
+}: {
+  title: ReactNode;
+  sub?: ReactNode;
+  crumbs?: { to: string; label: string }[];
+  actions?: ReactNode;
+  /** The tab title; defaults to `title` when that is plain text. */
+  docTitle?: string;
+}) {
+  useDocumentTitle(docTitle ?? (typeof title === 'string' ? title : undefined));
   return (
     <header className="page-head">
       <div>
@@ -29,12 +56,28 @@ export function PageHeader({ title, sub, crumbs, actions }: { title: ReactNode; 
  * Loading and error states for a query; renders children once data is in. `fallback` is the
  * shape of what's coming (a table, tiles, a record); without one, a few shimmering lines.
  */
-export function QueryState({ isPending, error, children, fallback }: { isPending: boolean; error: unknown; children: () => ReactNode; fallback?: ReactNode }) {
+export function QueryState({
+  isPending,
+  error,
+  children,
+  fallback,
+  header,
+}: {
+  isPending: boolean;
+  error: unknown;
+  children: () => ReactNode;
+  fallback?: ReactNode;
+  /** Shown above the error so a failed record page still has its title and way back. */
+  header?: ReactNode;
+}) {
   if (error)
     return (
-      <div className="state">
-        <Art name="error" height={120} />
-        <div className="alert bad">{errorMessage(error)}</div>
+      <div className="stack">
+        {header}
+        <div className="state">
+          <Art name="error" height={120} />
+          <div className="alert bad">{errorMessage(error)}</div>
+        </div>
       </div>
     );
   if (isPending) return <>{fallback ?? <Skeleton />}</>;

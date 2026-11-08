@@ -52,7 +52,13 @@ export function Users() {
         <QueryState isPending={query.isPending} error={query.error} fallback={<TableSkeleton headers={[{ label: 'User' }, { label: 'Account' }, { label: 'Role' }, { label: 'Status' }, { label: 'Last active' }, { label: 'Joined' }]} />}>
           {() =>
             query.data!.data!.length === 0 ? (
-              <EmptyState art="search-empty" title="No users match" />
+              q || status ? (
+                <EmptyState art="search-empty" title="No users match">
+                  Try a different search or status.
+                </EmptyState>
+              ) : (
+                <EmptyState title="No users yet">People appear here once they sign up.</EmptyState>
+              )
             ) : (
               <>
                 <div className="table-wrap">

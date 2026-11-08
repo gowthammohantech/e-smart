@@ -14,7 +14,8 @@ export function generateStaticParams(): Params[] {
 
 export async function generateMetadata({ params }: { params: Promise<Params> }): Promise<Metadata> {
   const { part, page } = await params;
-  return { title: `${cookbookPage(part, page).title} — ${brand.name} Cookbook` };
+  const doc = cookbookPage(part, page);
+  return { title: `${doc.title} · Cookbook`, description: `${doc.title}: a step-by-step guide from the ${brand.name} cookbook.` };
 }
 
 export default async function CookbookPage({ params }: { params: Promise<Params> }) {

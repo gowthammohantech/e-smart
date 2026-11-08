@@ -1,7 +1,7 @@
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Bar, BarChart, CartesianGrid, LabelList, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, type TooltipContentProps } from 'recharts';
-import { PageHeader, QueryState, StatsSkeleton, ChartSkeleton } from '../components/ui';
+import { PageHeader, QueryState, StatsSkeleton, ChartSkeleton, RefreshBar } from '../components/ui';
 import { api, need, type Schema } from '../lib/api';
 import { fmtDate, fmtDay, fmtInt, PLAN_LABELS } from '../lib/format';
 
@@ -183,6 +183,8 @@ export function Dashboard() {
   const query = useQuery({
     queryKey: ['overview', from, to],
     queryFn: async () => need(await api.GET('/admin/metrics/overview', { params: { query: { from, to } } })),
+    // Keep the last range's charts up while the new one loads.
+    placeholderData: keepPreviousData,
   });
   return (
     <div>
@@ -199,6 +201,7 @@ export function Dashboard() {
           </div>
         }
       />
+      <RefreshBar active={query.isFetching && query.isPlaceholderData} />
       <QueryState isPending={query.isPending} error={query.error} fallback={<div className="stack" role="status" aria-label="Loading" aria-busy><StatsSkeleton count={5} /><ChartSkeleton /><ChartSkeleton /><ChartSkeleton /></div>}>
         {() => <Charts data={query.data!} />}
       </QueryState>

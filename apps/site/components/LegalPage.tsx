@@ -1,4 +1,5 @@
 import type { LegalDoc } from '@/content/legal';
+import { SlimFooter } from '@/components/Footer';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { BrandMark } from '@/components/ui/BrandMark';
 
@@ -20,9 +21,14 @@ export function LegalPage({ doc }: { doc: LegalDoc }) {
         </div>
       </header>
       <main className="mx-auto max-w-[820px] px-4 pb-24 pt-10 sm:px-6">
+        {/* Pages still under review (`draft: true`) get a neutral pointer to support, not a "draft" label. */}
         {doc.draft ? (
           <p role="note" className="mb-8 rounded-lg border border-line px-4 py-3 text-sm text-fg/80">
-            <strong>Draft, under legal review.</strong> This page describes how the service works today and will be finalised before launch.
+            Last updated {doc.updated}. Questions about this page?{' '}
+            <a href="/support" className="text-primary underline underline-offset-2">
+              Contact support
+            </a>
+            .
           </p>
         ) : null}
         <h1 className="text-3xl font-semibold tracking-tight">{doc.title}</h1>
@@ -46,6 +52,7 @@ export function LegalPage({ doc }: { doc: LegalDoc }) {
           </section>
         ))}
       </main>
+      <SlimFooter />
     </div>
   );
 }

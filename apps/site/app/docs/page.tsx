@@ -4,8 +4,8 @@ import { brand } from '@/content/site';
 import { cookbookIndex } from '@/lib/cookbook';
 
 export const metadata: Metadata = {
-  title: `Cookbook — ${brand.name}`,
-  description: 'How to use every feature of Elixir Books Smart, and the scenarios that test it.',
+  title: 'Cookbook',
+  description: `How to use every feature of ${brand.name}, step by step.`,
 };
 
 export default function CookbookIndex() {

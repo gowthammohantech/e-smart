@@ -1,4 +1,5 @@
 import { DocsSidebar } from '@/components/docs/DocsSidebar';
+import { SlimFooter } from '@/components/Footer';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { BrandMark } from '@/components/ui/BrandMark';
 import { cookbookNav } from '@/lib/cookbook';
@@ -31,6 +32,7 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
         <DocsSidebar parts={parts} />
         <main className="min-w-0 pb-24">{children}</main>
       </div>
+      <SlimFooter />
     </div>
   );
 }

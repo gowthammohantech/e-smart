@@ -1,4 +1,4 @@
-import { about } from '@/content/site';
+import { about, live } from '@/content/site';
 
 import { ParallaxPhones } from './ParallaxPhones';
 import { Card } from './ui/Card';
@@ -7,6 +7,7 @@ import { Reveal } from './ui/Reveal';
 import { SectionHeading } from './ui/SectionHeading';
 
 export function About() {
+  const stats = live(about.stats);
   return (
     <section id="about" className="section-y">
       <div className="container-site grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
@@ -16,19 +17,21 @@ export function About() {
           <Reveal index={1}>
             <p className="mx-auto mt-4 max-w-xl text-center text-muted lg:mx-0 lg:text-left">{about.body}</p>
           </Reveal>
-          <ul className="mt-10 grid gap-4 sm:grid-cols-3">
-            {about.stats.map((stat, i) => (
-              <Reveal as="li" key={stat.label} index={i + 2}>
-                <Card className="h-full !p-5">
-                  <span className="grid size-8 place-items-center rounded-btn bg-primary-tint text-primary">
-                    <Icon name={stat.icon} />
-                  </span>
-                  <p className="mt-4 text-sm text-muted">{stat.label}</p>
-                  <p className="mt-1 font-display text-[40px] leading-none font-medium tracking-[-0.02em] text-fg">{stat.value}</p>
-                </Card>
-              </Reveal>
-            ))}
-          </ul>
+          {stats.length > 0 ? (
+            <ul className={`mt-10 grid gap-4 ${stats.length === 1 ? '' : stats.length === 2 ? 'sm:grid-cols-2' : 'sm:grid-cols-3'}`}>
+              {stats.map((stat, i) => (
+                <Reveal as="li" key={stat.label} index={i + 2}>
+                  <Card className="h-full !p-5">
+                    <span className="grid size-8 place-items-center rounded-btn bg-primary-tint text-primary">
+                      <Icon name={stat.icon} />
+                    </span>
+                    <p className="mt-4 text-sm text-muted">{stat.label}</p>
+                    <p className="mt-1 font-display text-[40px] leading-none font-medium tracking-[-0.02em] text-fg">{stat.value}</p>
+                  </Card>
+                </Reveal>
+              ))}
+            </ul>
+          ) : null}
         </div>
       </div>
     </section>

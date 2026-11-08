@@ -77,7 +77,7 @@ export function LixiGuide() {
   const reduced = usePrefersReducedMotion();
   const travel = useSyncExternalStore(subscribeLayout, canTravel, () => false);
   const isHidden = useSyncExternalStore(subscribeHidden, () => hidden, () => false);
-  const [stop, setStop] = useState(0);
+  const [stopId, setStopId] = useState(lixiTour[0].id);
   const [talking, setTalking] = useState(true);
   const orb = useRef<HTMLDivElement>(null);
   /** Hovering Lixi, or tapping it, brings the current line back. */
@@ -86,6 +86,9 @@ export function LixiGuide() {
 
   useEffect(() => {
     if (isHidden) return;
+    // Only sections on the page (one with no real content yet, e.g. testimonials, renders nothing).
+    const tour = lixiTour.filter((s) => document.getElementById(s.id));
+    if (tour.length < 2) return;
     let stopNow = 0;
     let spokenAt = -1;
     let talkUntil = 0;
@@ -100,7 +103,7 @@ export function LixiGuide() {
 
     // Each stop sits at its section's centre, in page coordinates.
     const measure = () => {
-      anchors = lixiTour.map((s) => {
+      anchors = tour.map((s) => {
         const el = document.getElementById(s.id);
         if (!el) return 0;
         const r = el.getBoundingClientRect();
@@ -125,7 +128,7 @@ export function LixiGuide() {
       // Rest at a stop for most of the way; hop across the middle third.
       const t = smoothstep(0.35, 0.65, Math.min(1, Math.max(0, raw)));
       const at = t < 0.5 ? i : i + 1;
-      if (at !== stopNow) setStop((stopNow = at));
+      if (at !== stopNow) setStopId(tour[(stopNow = at)].id);
       // Lixi says its line once it has landed (never mid-hop), then folds the
       // bubble away so it doesn't sit over the page.
       const landed = !travel || t < 0.04 || t > 0.96;
@@ -133,14 +136,17 @@ export function LixiGuide() {
         spokenAt = at;
         talkUntil = now + TALK_MS;
       }
-      say(landed && (hover.current || now < talkUntil || now < pokedAt.current + TALK_MS));
+      // Docked in the phone's corner the bubble covers the page, so after the greeting Lixi only
+      // speaks when tapped.
+      const autoTalk = (travel || at === 0) && now < talkUntil;
+      say(landed && (hover.current || autoTalk || now < pokedAt.current + TALK_MS));
 
       const el = orb.current;
       if (!el || !travel) return;
       const margin = (window.innerWidth - CONTENT_W) / 2;
       const xFor = (side: 'left' | 'right') => (side === 'left' ? margin / 2 : window.innerWidth - margin / 2);
-      const from = xFor(lixiTour[i].side);
-      const to = xFor(lixiTour[i + 1].side);
+      const from = xFor(tour[i].side);
+      const to = xFor(tour[i + 1].side);
       const e = reduced ? Math.round(t) : ease(t);
       const tx = from + (to - from) * e;
       // A hop: rise while crossing, land back on the line.
@@ -164,7 +170,7 @@ export function LixiGuide() {
 
   if (isHidden) return null;
 
-  const current = lixiTour[stop];
+  const current = lixiTour.find((s) => s.id === stopId) ?? lixiTour[0];
   // On the move the bubble opens towards the content; docked, it opens upwards.
   const bubbleSide = travel ? (current.side === 'left' ? 'left-[calc(100%+10px)]' : 'right-[calc(100%+10px)]') : 'right-0 bottom-[calc(100%+10px)]';
 
@@ -201,13 +207,14 @@ export function LixiGuide() {
           ) : null}
         </AnimatePresence>
       </div>
+      {/* 24px to see, 44px to tap: the ::before pad widens the target without moving the badge. */}
       <button
         type="button"
         onClick={hideLixi}
         aria-label="Hide Lixi"
-        className="pointer-events-auto absolute -top-1 -right-1 grid size-5 place-items-center rounded-full border border-line bg-surface text-muted hover:text-fg"
+        className="pointer-events-auto absolute -top-1.5 -right-1.5 grid size-6 place-items-center rounded-full border border-line bg-surface text-muted before:absolute before:-inset-2.5 before:content-[''] hover:text-fg"
       >
-        <X className="size-3" />
+        <X className="size-3.5" />
       </button>
     </div>
   );
