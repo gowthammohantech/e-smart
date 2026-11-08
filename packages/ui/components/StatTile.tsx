@@ -85,7 +85,12 @@ export function StatTile({
       )}
 
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>
-        {caption ? (
+        {loading && caption ? (
+          // A caption is often worked out from the figure ("0% margin"), so it waits with it.
+          <View style={{ flex: 1 }}>
+            <Skeleton height={9} width="50%" radius={4} />
+          </View>
+        ) : caption ? (
           <Text variant="micro" tone="muted" numberOfLines={1} style={{ flex: 1 }}>
             {caption}
           </Text>

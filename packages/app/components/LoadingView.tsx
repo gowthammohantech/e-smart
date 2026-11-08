@@ -12,9 +12,11 @@ export type LoadingVariant = 'detail' | 'form' | 'items-form' | 'report' | 'list
  * what's coming: a record, a form, a report, a list, a printed page. `spinner` is
  * for the odd screen with no fixed shape.
  */
-export function LoadingView({ title, variant = 'detail' }: { title?: string; variant?: LoadingVariant }) {
+export function LoadingView({ title, variant = 'detail', keepTitle }: { title?: string; variant?: LoadingVariant; keepTitle?: boolean }) {
   const t = useTheme();
-  const head = title !== undefined ? <Stack.Screen options={{ title }} /> : null;
+  // Untitled, the header would show the route's file path until the record lands. `keepTitle` is for
+  // a part of a screen (an editor) whose screen has set the title already.
+  const head = keepTitle ? null : <Stack.Screen options={{ title: title ?? '' }} />;
   if (variant === 'spinner') {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }} accessibilityRole="progressbar">

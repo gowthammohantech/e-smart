@@ -37,7 +37,7 @@ import { pagedTableProps, useRowsExport, useTableSelection } from './pagedTable'
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { listParam, presetParam, useQueryParams } from '../navigation/queryParams';
 import { CardRowsSkeleton, MoreRowsSkeleton } from './ScreenSkeleton';
-import { SkeletonGroup, SkeletonStatGrid } from '@esmart/ui/components/Skeleton';
+import { Skeleton, SkeletonGroup, SkeletonStatGrid } from '@esmart/ui/components/Skeleton';
 
 export type DocumentListFilters = {
   query: string;
@@ -352,14 +352,21 @@ export function DocumentListView({
             </Text>
           ) : null}
           {/* How many match and what they add up to, at the right end of the filter row. */}
-          <View style={{ marginLeft: 'auto', flexDirection: 'row', alignItems: 'baseline', gap: t.spacing.md }}>
-            <Text variant="small" tone="muted">
-              {tr('common:documentList.count', { count, kind: documentKindLabel(tr, kind, count) })}
-            </Text>
-            <Text variant="title" weight="700" style={{ fontVariant: ['tabular-nums'] }}>
-              {formatMoney(total)}
-            </Text>
-          </View>
+          {loading ? (
+            <View style={{ marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
+              <Skeleton height={12} width={80} radius={4} />
+              <Skeleton height={18} width={90} radius={4} />
+            </View>
+          ) : (
+            <View style={{ marginLeft: 'auto', flexDirection: 'row', alignItems: 'baseline', gap: t.spacing.md }}>
+              <Text variant="small" tone="muted">
+                {tr('common:documentList.count', { count, kind: documentKindLabel(tr, kind, count) })}
+              </Text>
+              <Text variant="title" weight="700" style={{ fontVariant: ['tabular-nums'] }}>
+                {formatMoney(total)}
+              </Text>
+            </View>
+          )}
         </View>
 
         {headerExtra}
@@ -505,17 +512,25 @@ export function DocumentListView({
 
         {headerExtra}
 
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Text variant="caption" tone="muted">
-            {tr('common:documentList.count', {
-              count,
-              kind: documentKindLabel(tr, kind, count),
-            })}
-          </Text>
-          <Text variant="caption" weight="600">
-            {formatMoney(total)}
-          </Text>
-        </View>
+        {loading ? (
+          // Not "0 invoices · ₹0.00" before the count is in.
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', minHeight: 16 }}>
+            <Skeleton height={10} width={90} radius={4} />
+            <Skeleton height={10} width={60} radius={4} />
+          </View>
+        ) : (
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Text variant="caption" tone="muted">
+              {tr('common:documentList.count', {
+                count,
+                kind: documentKindLabel(tr, kind, count),
+              })}
+            </Text>
+            <Text variant="caption" weight="600">
+              {formatMoney(total)}
+            </Text>
+          </View>
+        )}
       </View>
 
       <ScrollView
