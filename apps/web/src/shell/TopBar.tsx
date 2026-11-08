@@ -242,7 +242,14 @@ export function TopBar() {
         </View>
       </Pressable>
 
-      <View style={{ flex: 1, flexBasis: 0, minWidth: centred || narrow ? 0 : RIGHT_FULL, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: t.spacing.sm }}>
+      <View
+        style={[
+          { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: t.spacing.sm },
+          // When room is short the buttons keep their size and the search box gives way,
+          // so they never spill left over it.
+          narrow ? { flexGrow: 1, flexShrink: 0 } : { flex: 1, flexBasis: 0, minWidth: centred ? 0 : RIGHT_FULL },
+        ]}
+      >
       <ConnectionBadge style={{ alignSelf: 'center' }} />
       {narrow ? null : <LatencyBadge />}
 

@@ -145,6 +145,7 @@ const MAP = {
   'close-circle': 'circle-x',
   'close-octagon-outline': 'octagon-x',
   'cloud-alert': 'cloud-alert',
+  'cloud-outline': 'cloud',
   'cloud-check-outline': 'cloud-check',
   'cloud-download-outline': 'cloud-download',
   'cloud-off-outline': 'cloud-off',
