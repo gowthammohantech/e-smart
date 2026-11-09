@@ -1751,6 +1751,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/{companyId}/documents/{id}/print-layout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Print this document in another layout than the company's
+         * @description How it prints, not what it says: an issued, e-invoiced or filed document can change it, and its PDF, share link and the copies emailed from now on follow. `null` goes back to the company's.
+         */
+        put: operations["setDocumentPrintLayout"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/{companyId}/documents/{id}/pdf": {
         parameters: {
             query?: never;
@@ -4765,13 +4788,30 @@ export interface components {
              */
             readonly signatureUri?: string;
             bankDetails?: components["schemas"]["BankDetails"];
-            /** @description How its documents look. Statutory content always prints; every option defaults to the standard page. */
+            /** @description How its documents look. Statutory content always prints; every option unset takes the layout's own, and no layout is the standard page. */
             invoiceTemplate?: {
+                /**
+                 * @description The ready-made page: standard (the app's own), classic and detailed (boxed, as in an accounting package), modern (cards). A document can override it (setDocumentPrintLayout).
+                 * @enum {string}
+                 */
+                layout?: "standard" | "classic" | "detailed" | "modern";
                 accentColor?: string;
+                /** @enum {string} */
+                logoPosition?: "left" | "right";
                 showDiscountColumn?: boolean;
                 showTaxColumn?: boolean;
                 showHsn?: boolean;
                 showLogo?: boolean;
+                /** @description The HSN/SAC-wise tax table with the tax in words */
+                showHsnSummary?: boolean;
+                showBank?: boolean;
+                showSignature?: boolean;
+                showDeclaration?: boolean;
+                /** @description The consignee (ship to) and dispatch-from blocks */
+                showShipTo?: boolean;
+                showPanTan?: boolean;
+                showCustomerSeal?: boolean;
+                declarationText?: string;
                 footerText?: string;
                 compact?: boolean;
             };
@@ -5981,6 +6021,11 @@ export interface components {
             readonly recurrenceAutoSend?: boolean;
             /** @description On a copy, the recurring invoice it was issued from */
             readonly recurringParentId?: string;
+            /**
+             * @description This document's own printed layout, over the company's invoiceTemplate.layout; unset takes the company's. Set with setDocumentPrintLayout
+             * @enum {string}
+             */
+            readonly printLayout?: "standard" | "classic" | "detailed" | "modern";
             /** @description Set when the document was sent for approval: it stays a draft until an owner or admin approves it (which issues it) or rejects it */
             readonly approval?: {
                 /** @enum {string} */
@@ -10979,11 +11024,47 @@ export interface operations {
             422: components["responses"]["Unprocessable"];
         };
     };
+    setDocumentPrintLayout: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description ETag from the last read */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string|null} */
+                    layout: "standard" | "classic" | "detailed" | "modern" | null;
+                };
+            };
+        };
+        responses: {
+            /** @description Saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BusinessDocument"];
+                };
+            };
+            412: components["responses"]["PreconditionFailed"];
+            422: components["responses"]["Unprocessable"];
+        };
+    };
     getDocumentPdf: {
         parameters: {
             query?: {
                 locale?: "en" | "ta";
-                copy?: "original" | "duplicate" | "triplicate";
+                /** @description Which copy (Rule 48), labelled at the top; `all` prints the original, duplicate and triplicate on separate sheets */
+                copy?: "original" | "duplicate" | "triplicate" | "all";
             };
             header?: never;
             path: {

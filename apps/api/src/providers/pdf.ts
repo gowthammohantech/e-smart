@@ -1,8 +1,14 @@
 import type { Config } from '../config';
 
 /** Renders the same HTML templates the app prints (documentHtml) to PDF. */
+export type PdfOptions = {
+  format?: 'A4' | 'Letter';
+  /** "Page N of M" at the foot of each sheet, when the document runs to more than one. */
+  pageNumbers?: boolean;
+};
+
 export interface PdfProvider {
-  render(html: string, opts?: { format?: 'A4' | 'Letter' }): Promise<Buffer>;
+  render(html: string, opts?: PdfOptions): Promise<Buffer>;
 }
 
 /**
@@ -47,6 +53,9 @@ export class StubPdf implements PdfProvider {
 const PAGE_PX = { A4: { width: 794, height: 1123 }, Letter: { width: 816, height: 1056 } } as const;
 const MAX_ONE_PAGE_STRETCH = 1.5;
 
+/** The page number, in the bottom margin Chromium keeps for it. */
+const PAGE_FOOTER = '<div style="font-size:8px;width:100%;text-align:right;padding:0 10mm;color:#4A5468;font-family:Arial,sans-serif">Page <span class="pageNumber"></span> of <span class="totalPages"></span></div>';
+
 /** Headless Chromium through playwright-core. One browser, reused. */
 export class ChromiumPdf implements PdfProvider {
   private browser: Promise<import('playwright-core').Browser> | null = null;
@@ -59,7 +68,7 @@ export class ChromiumPdf implements PdfProvider {
     return this.browser;
   }
 
-  async render(html: string, opts: { format?: 'A4' | 'Letter' } = {}): Promise<Buffer> {
+  async render(html: string, opts: PdfOptions = {}): Promise<Buffer> {
     const browser = await this.launch();
     const page = await browser.newPage();
     try {
@@ -76,8 +85,10 @@ export class ChromiumPdf implements PdfProvider {
       // No page margins: the document template carries its own body padding, so
       // margins here would double up and push a one-page invoice onto a second page.
       const margin = { top: '0', bottom: '0', left: '0', right: '0' };
-      return oneSheet
-        ? await page.pdf({ width: `${size.width}px`, height: `${contentHeight + 1}px`, printBackground: true, margin })
+      if (oneSheet) return await page.pdf({ width: `${size.width}px`, height: `${contentHeight + 1}px`, printBackground: true, margin });
+      const numbered = !!opts.pageNumbers && contentHeight > size.height;
+      return numbered
+        ? await page.pdf({ format, printBackground: true, margin: { ...margin, bottom: '12mm' }, displayHeaderFooter: true, headerTemplate: '<span></span>', footerTemplate: PAGE_FOOTER })
         : await page.pdf({ format, printBackground: true, margin });
     } finally {
       await page.close();

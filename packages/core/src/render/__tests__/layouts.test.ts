@@ -151,3 +151,11 @@ describe('copies', () => {
     if (layout !== 'standard') expect(html).toContain('ORIGINAL FOR RECIPIENT');
   });
 });
+
+describe('the order an invoice came from', () => {
+  it('prints in the ready-made headers and not on the standard page', () => {
+    const origin = { number: 'SO/2026-27/0011', date: '2026-11-01', kind: 'salesOrder' as const };
+    expect(text(render('classic', { origin }))).toContain('Order / challan SO/2026-27/0011');
+    expect(render('standard', { origin })).toBe(render('standard'));
+  });
+});

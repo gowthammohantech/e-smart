@@ -515,6 +515,8 @@ export type BusinessDocument = {
   recurrenceAutoSend?: boolean;
   /** On a copy, the recurring invoice it was issued from. */
   recurringParentId?: string;
+  /** This document's own printed layout, over the company's template; unset takes the company's. */
+  printLayout?: import('../render/invoiceTemplate').InvoiceLayout;
   /** Sent for approval: a draft until an owner or admin approves (and issues) it or sends it back. */
   approval?: { status: 'pending' | 'approved' | 'rejected'; requestedBy?: string; requestedAt?: string; decidedBy?: string; decidedAt?: string; note?: string };
   totals: DocumentTotals;

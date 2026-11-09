@@ -523,6 +523,33 @@ export const documentsHandlers = defineHandlers({
     return toWire(ctx, row);
   },
 
+  /** How it prints, not what it says, so any document may change it whatever its state. */
+  async setDocumentPrintLayout(ctx) {
+    const { layout } = ctx.body;
+    const row = await ctx.db.transaction(async (tx) => {
+      const current = await findDocument(ctx, tx, ctx.params.id, { lock: true });
+      checkIfMatch(ctx.req, current.version);
+      const [updated] = await tx
+        .update(D)
+        .set({ printLayout: layout ?? null, version: current.version + 1, updatedAt: ctx.now })
+        .where(eq(D.id, current.id))
+        .returning();
+      await recordChange(tx, ctx.user, {
+        companyId: ctx.company.id,
+        action: 'updated',
+        entityType: 'document',
+        entityId: updated.id,
+        entityLabel: updated.number,
+        version: updated.version,
+        before: { printLayout: current.printLayout },
+        after: { printLayout: updated.printLayout },
+      });
+      return updated;
+    });
+    setEtag(ctx.reply, row.version);
+    return toWire(ctx, row);
+  },
+
   async listApprovals(ctx) {
     const rows = await pendingApprovals(ctx.db, ctx.company.id);
     return { data: await documentsToWire(ctx.db, rows.filter((r) => branchVisible(ctx.user, r.branchId)), ctx.now, ctx.company.baseCurrency.trim()) };

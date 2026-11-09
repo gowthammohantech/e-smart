@@ -178,6 +178,7 @@ export async function documentsToWire(db: DbOrTx, rows: DocRow[], now: Date, bas
       recurrenceEndDate: row.recurrenceEndDate,
       recurrenceAutoSend: row.recurrence !== 'none' ? row.recurrenceAutoSend : undefined,
       recurringParentId: row.recurringParentId,
+      printLayout: (row.printLayout as DocumentWire['printLayout']) ?? undefined,
       totals: {
         subtotal: m(row.subtotalMinor),
         lineDiscount: m(row.lineDiscountMinor),

@@ -3,7 +3,8 @@ import { NOTE_SOURCE } from '@esmart/core/domain/documentStates';
 import { i18nInstance as i18n } from '@esmart/i18n';
 import type { LanguageCode } from '@esmart/i18n/config';
 import { buildDocumentHtml } from '@esmart/core/render/documentHtml';
-import type { Branch, EwayBill } from '@esmart/core/types';
+import { resolveTemplate, type InvoiceLayout, type InvoiceTemplate } from '@esmart/core/render/invoiceTemplate';
+import type { Branch, DocumentKind, EwayBill } from '@esmart/core/types';
 import { schema } from '@esmart/db';
 import type { AuthUser, CompanyRow, Deps } from '../../context';
 import { conflict, invalid } from '../../http/errors';
@@ -20,7 +21,7 @@ import { loadCustomFields } from '../settings/customFields';
 export const SHARE_LINK_DAYS = 30;
 const PAYMENT_LINK_DAYS = 30;
 
-const COPY_LABEL = { original: '', duplicate: 'DUPLICATE FOR TRANSPORTER', triplicate: 'TRIPLICATE FOR SUPPLIER' } as const;
+type Copy = 'original' | 'duplicate' | 'triplicate' | 'all';
 
 /** `INV/26-27/0004` → `INV-26-27-0004.pdf`. */
 export const pdfFilename = (number: string) => `${number.replace(/[^A-Za-z0-9._-]+/g, '-')}.pdf`;
@@ -34,9 +35,11 @@ export async function renderDocumentPdf(
   deps: Deps,
   company: CompanyRow,
   row: DocRow,
-  opts: { now: Date; locale?: LanguageCode; copy?: keyof typeof COPY_LABEL },
+  opts: { now: Date; locale?: LanguageCode; copy?: Copy },
 ): Promise<Buffer> {
-  return deps.providers.pdf.render(await renderDocumentHtml(db, deps, company, row, opts));
+  // The ready-made layouts number a long invoice's sheets; three copies in one file are three documents, so not those.
+  const layout = resolveTemplate(company.invoiceTemplate as InvoiceTemplate | null, row.printLayout as InvoiceLayout | null).layout;
+  return deps.providers.pdf.render(await renderDocumentHtml(db, deps, company, row, opts), { pageNumbers: layout !== 'standard' && opts.copy !== 'all' });
 }
 
 /** Returns and notes print the invoice or bill they're against. */
@@ -48,38 +51,41 @@ export async function renderDocumentHtml(
   deps: Deps,
   company: CompanyRow,
   row: DocRow,
-  opts: { now: Date; locale?: LanguageCode; copy?: keyof typeof COPY_LABEL },
+  opts: { now: Date; locale?: LanguageCode; copy?: Copy },
 ): Promise<string> {
   const [doc] = await documentsToWire(db, [row], opts.now, company.baseCurrency.trim());
   const [party] = await db.select().from(schema.parties).where(eq(schema.parties.id, row.partyId));
   const [branch] = await db.select().from(schema.branches).where(eq(schema.branches.id, row.branchId));
   const [source] = row.sourceDocumentId
-    ? await db.select({ number: schema.documents.number, date: schema.documents.date }).from(schema.documents).where(eq(schema.documents.id, row.sourceDocumentId))
+    ? await db.select({ number: schema.documents.number, date: schema.documents.date, kind: schema.documents.kind }).from(schema.documents).where(eq(schema.documents.id, row.sourceDocumentId))
     : [];
   const eway = row.currentEwayBillId ? await db.select().from(schema.ewayBills).where(eq(schema.ewayBills.id, row.currentEwayBillId)) : [];
   const language: LanguageCode = opts.locale ?? 'en';
   const coreBranch: Branch | undefined = branch
     ? { id: branch.id, companyId: branch.companyId, name: branch.name, code: branch.code, address: requiredAddressFrom(branch, 'address'), isPrimary: branch.isPrimary, phone: branch.phone ?? undefined, gstin: branch.gstin ?? undefined }
     : undefined;
-  const ewayBill = eway[0]
-    ? ({ ewayBillNumber: eway[0].ewayBillNumber.trim(), validUpto: eway[0].validUpto.toISOString() } as EwayBill)
+  const e = eway[0];
+  const ewayBill = e
+    ? ({ ewayBillNumber: e.ewayBillNumber.trim(), validUpto: e.validUpto.toISOString(), transportMode: e.transportMode, vehicleNumber: e.vehicleNumber ?? undefined, transporterName: e.transporterName ?? undefined } as EwayBill)
     : undefined;
-  let html = buildDocumentHtml({
+  const against = AGAINST_SOURCE.includes(row.kind);
+  return buildDocumentHtml({
     document: toCoreDocument(doc),
     company: companyCore(company),
     party: party ? partyCore(party) : undefined,
     branch: coreBranch,
     ewayBill,
-    source: AGAINST_SOURCE.includes(row.kind) ? source : undefined,
+    source: against && source ? { number: source.number, date: source.date } : undefined,
+    // The order, challan or quote it was made from: the ready-made layouts print it in their header.
+    origin: !against && source ? { number: source.number, date: source.date, kind: source.kind as DocumentKind } : undefined,
     logoSrc: await companyLogoDataUri(db, deps, company),
     signatureSrc: await companySignatureDataUri(db, deps, company),
     customFields: await loadCustomFields(db, company.id),
+    layout: row.printLayout as InvoiceLayout | null,
+    copy: opts.copy ?? 'original',
     t: i18n.getFixedT(language),
     language,
   });
-  const copy = COPY_LABEL[opts.copy ?? 'original'];
-  if (copy) html = html.replace('<div class="head">', `<div class="muted" style="text-align:right;font-weight:700">${copy}</div><div class="head">`);
-  return html;
 }
 
 /** Renders the PDF into object storage and returns a signed download link to that blob. */

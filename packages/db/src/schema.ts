@@ -667,6 +667,8 @@ export const documents = pgTable("documents", {
 	recurrenceEndDate: date("recurrence_end_date"),
 	recurrenceAutoSend: boolean("recurrence_auto_send").default(false).notNull(),
 	recurringParentId: varchar("recurring_parent_id", { length: 40 }),
+	// This document's own printed layout (core render/invoiceTemplate), over the company's; null takes the company's.
+	printLayout: varchar("print_layout", { length: 16 }),
 	itcReversedOn: date("itc_reversed_on"),
 	itcReclaimedOn: date("itc_reclaimed_on"),
 	subtotalMinor: bigint("subtotal_minor", { mode: "number" }).default(0).notNull(),
@@ -745,6 +747,7 @@ export const documents = pgTable("documents", {
 			foreignColumns: [users.id],
 			name: "documents_created_by_fkey"
 		}),
+	check("documents_print_layout_check", sql`${table.printLayout} IN ('standard', 'classic', 'detailed', 'modern')`),
 ]);
 
 export const documentLines = pgTable("document_lines", {

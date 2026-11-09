@@ -26,6 +26,8 @@ export type DocumentHtmlInput = {
   ewayBill?: EwayBill;
   /** The invoice or bill a note or return is raised against: Rule 53 has the note name it. */
   source?: Pick<BusinessDocument, 'number' | 'date'>;
+  /** The order, challan or quote an invoice was made from: the ready-made layouts print it in their header. */
+  origin?: Pick<BusinessDocument, 'number' | 'date' | 'kind'>;
   /** The business logo, when not `company.logoUri`: the server passes it inline, as a data URI, so a PDF never waits on a link. */
   logoSrc?: string;
   /** The signature, when not `company.signatureUri`: inline from the server, as the logo is. */
@@ -34,7 +36,7 @@ export type DocumentHtmlInput = {
   customFields?: CustomField[];
   /** How the business wants it to look; defaults to `company.invoiceTemplate`, then to the standard page. */
   template?: InvoiceTemplate;
-  /** This document's own layout, over the template's (`documents.print_layout`). */
+  /** This document's own layout, over the template's; unset takes `document.printLayout`. */
   layout?: InvoiceLayout | null;
   /** Which copy, printed top right; `all` prints the three one after another. Unset prints no label. */
   copy?: CopyKind | 'all';
@@ -58,6 +60,7 @@ export type DocView = {
   branch?: Branch;
   ewayBill?: EwayBill;
   source?: Pick<BusinessDocument, 'number' | 'date'>;
+  origin?: Pick<BusinessDocument, 'number' | 'date' | 'kind'>;
   customFields: CustomField[];
   logoSrc?: string;
   signatureSrc?: string;
@@ -101,6 +104,7 @@ export function buildDocView({
   logoSrc,
   signatureSrc,
   source,
+  origin,
   customFields = [],
   template,
   layout,
@@ -145,13 +149,14 @@ export function buildDocView({
     branch,
     ewayBill,
     source,
+    origin,
     customFields,
     logoSrc,
     signatureSrc,
     t,
     language,
     bi,
-    tpl: resolveTemplate(template ?? company?.invoiceTemplate, layout),
+    tpl: resolveTemplate(template ?? company?.invoiceTemplate, layout ?? doc.printLayout),
     billOfSupply,
     label,
     sellerTaxId: branch?.gstin ?? company?.taxRegistration?.identifier,

@@ -1,0 +1,2 @@
+ALTER TABLE "documents" ADD COLUMN "print_layout" varchar(16);--> statement-breakpoint
+ALTER TABLE "documents" ADD CONSTRAINT "documents_print_layout_check" CHECK ("documents"."print_layout" IN ('standard', 'classic', 'detailed', 'modern'));

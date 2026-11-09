@@ -122,7 +122,7 @@ export type Fact = { label: string; value: string; strong?: boolean };
  * Values come escaped.
  */
 export function headerFacts(view: DocView): Fact[] {
-  const { doc, bi, source, ewayBill, pos, party } = view;
+  const { doc, bi, source, origin, ewayBill, pos, party } = view;
   const note = ['creditNote', 'debitNote', 'salesReturn', 'purchaseReturn', 'supplierCreditNote', 'supplierDebitNote'].includes(doc.kind);
   const destination = party?.shippingAddress?.city || party?.billingAddress?.city;
   const transport = ewayBill ? [ewayBill.transportMode ? capital(String(ewayBill.transportMode)) : '', ewayBill.vehicleNumber, ewayBill.transporterName].filter(Boolean).join(' · ') : '';
@@ -134,6 +134,7 @@ export function headerFacts(view: DocView): Fact[] {
     doc.dueDate ? { label: bi('sales:pdf.dueDate'), value: esc(formatDate(doc.dueDate)) } : null,
     doc.validUntil ? { label: bi('sales:pdf.validUntil'), value: esc(formatDate(doc.validUntil)) } : null,
     source ? { label: note ? bi('sales:pdf.againstInvoice') : bi('sales:pdf.orderChallan'), value: `${esc(source.number)} · ${esc(formatDate(source.date))}` } : null,
+    !source && origin ? { label: origin.kind === 'quote' || origin.kind === 'proforma' ? bi('sales:pdf.reference') : bi('sales:pdf.orderChallan'), value: `${esc(origin.number)} · ${esc(formatDate(origin.date))}` } : null,
     !source && doc.originalNumber ? { label: bi('sales:pdf.againstInvoice'), value: `${esc(doc.originalNumber)}${doc.originalDate ? ` · ${esc(formatDate(doc.originalDate))}` : ''}` } : null,
     doc.noteReason ? { label: bi('sales:pdf.reason'), value: esc(NOTE_REASON[doc.noteReason]) } : null,
     pos ? { label: bi('sales:pdf.placeOfSupply'), value: esc(pos) } : null,

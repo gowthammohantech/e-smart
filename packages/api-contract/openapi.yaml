@@ -2515,6 +2515,36 @@ paths:
               schema: { $ref: '#/components/schemas/BusinessDocument' }
         '412': { $ref: '#/components/responses/PreconditionFailed' }
         '422': { $ref: '#/components/responses/Unprocessable' }
+  /companies/{companyId}/documents/{id}/print-layout:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    put:
+      tags: [Documents]
+      operationId: setDocumentPrintLayout
+      summary: Print this document in another layout than the company's
+      description: >-
+        How it prints, not what it says: an issued, e-invoiced or filed document can change it, and its
+        PDF, share link and the copies emailed from now on follow. `null` goes back to the company's.
+      x-roles: [owner, admin, accountant, sales]
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [layout]
+              properties:
+                layout: { type: [string, 'null'], enum: [standard, classic, detailed, modern, null] }
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BusinessDocument' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
   /companies/{companyId}/documents/{id}/pdf:
     parameters:
       - { $ref: '#/components/parameters/CompanyId' }
@@ -2525,7 +2555,7 @@ paths:
       summary: The printed document, with the IRN, signed QR, e-way bill number and UPI QR when present
       parameters:
         - { name: locale, in: query, schema: { type: string, enum: [en, ta] } }
-        - { name: copy, in: query, schema: { type: string, enum: [original, duplicate, triplicate], default: original } }
+        - { name: copy, in: query, description: 'Which copy (Rule 48), labelled at the top; `all` prints the original, duplicate and triplicate on separate sheets', schema: { type: string, enum: [original, duplicate, triplicate, all], default: original } }
       responses:
         '200':
           description: PDF
@@ -6765,13 +6795,23 @@ components:
             bankDetails: { $ref: '#/components/schemas/BankDetails' }
             invoiceTemplate:
               type: object
-              description: How its documents look. Statutory content always prints; every option defaults to the standard page.
+              description: How its documents look. Statutory content always prints; every option unset takes the layout's own, and no layout is the standard page.
               properties:
+                layout: { type: string, enum: [standard, classic, detailed, modern], description: 'The ready-made page: standard (the app''s own), classic and detailed (boxed, as in an accounting package), modern (cards). A document can override it (setDocumentPrintLayout).' }
                 accentColor: { type: string, pattern: '^#[0-9A-Fa-f]{6}$' }
+                logoPosition: { type: string, enum: [left, right] }
                 showDiscountColumn: { type: boolean }
                 showTaxColumn: { type: boolean }
                 showHsn: { type: boolean }
                 showLogo: { type: boolean }
+                showHsnSummary: { type: boolean, description: The HSN/SAC-wise tax table with the tax in words }
+                showBank: { type: boolean }
+                showSignature: { type: boolean }
+                showDeclaration: { type: boolean }
+                showShipTo: { type: boolean, description: The consignee (ship to) and dispatch-from blocks }
+                showPanTan: { type: boolean }
+                showCustomerSeal: { type: boolean }
+                declarationText: { type: string, maxLength: 300 }
                 footerText: { type: string, maxLength: 200 }
                 compact: { type: boolean }
             aiMonthlyLimit: { type: [integer, 'null'], minimum: 0, description: "The owner's monthly AI budget (Lixi messages plus provider bill scans), below the plan's allowance. Null is the plan's." }
@@ -7865,6 +7905,7 @@ components:
             recurrenceEndDate: { type: string, format: date, readOnly: true }
             recurrenceAutoSend: { type: boolean, readOnly: true }
             recurringParentId: { type: string, readOnly: true, description: "On a copy, the recurring invoice it was issued from" }
+            printLayout: { type: string, enum: [standard, classic, detailed, modern], readOnly: true, description: "This document's own printed layout, over the company's invoiceTemplate.layout; unset takes the company's. Set with setDocumentPrintLayout" }
             approval:
               type: object
               readOnly: true

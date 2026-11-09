@@ -192,8 +192,9 @@ export function boxedLayout(view: DocView, variant: 'classic' | 'detailed', copy
   .items tr.grand td { border-top: 1px solid ${line}; border-bottom: 1px solid ${line}; font-weight: 700; font-size: 1.05em; }
   .row { border-bottom: 1px solid ${line}; }
   .pad { padding: 5px 8px; }
-  .words { position: relative; }
-  .eoe { position: absolute; right: 8px; top: 5px; font-style: italic; color: #4A5468; }
+  .words { display: flex; gap: 12px; align-items: baseline; }
+  .words .b { flex: 1; }
+  .eoe { font-style: italic; color: #4A5468; white-space: nowrap; }
   .hsn th { background: ${accent}; color: ${ink}; padding: 4px 5px; border: 1px solid ${line}; font-size: 0.92em; }
   .hsn td { padding: 3px 5px; border: 1px solid ${tint('#5B6475', 0.45)}; }
   .hsn tr.sum td { background: #ECEEF2; }
