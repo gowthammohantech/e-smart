@@ -3,11 +3,15 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, View } from 'react-native';
 import { useTheme } from '../../theme/ThemeProvider';
 import { seriesColor } from '../../theme/chartColors';
+import { useIsDesktop } from '../../theme/breakpoints';
 import { Text } from '../Text';
 import { subtract, type Money } from '@esmart/core/lib/money';
 import { formatMoney } from '@esmart/core/lib/format';
 
 export type PairedDatum = { label: string; inflow: Money; outflow: Money };
+
+/** Each of a pair's bars at its widest on a desktop, so a few periods in a wide card don't turn into slabs. */
+const MAX_PAIR_BAR_WIDTH = 24;
 
 /**
  * Money in and out per period, side by side. The two series have a small legend that doubles as
@@ -31,6 +35,7 @@ export function PairedBars({
   const t = useTheme();
   const { t: tr } = useTranslation(['common']);
   const [selected, setSelected] = useState<number | null>(null);
+  const desktop = useIsDesktop();
   const inColor = seriesColor(t.scheme, 0);
   const outColor = seriesColor(t.scheme, 1);
 
@@ -77,7 +82,7 @@ export function PairedBars({
         {data.map((d, i) => {
           const on = i === active;
           const bar = (m: Money, color: string) => (
-            <View style={{ flex: 1, height: Math.max(2, (m.minor / max) * (plot - 4)), borderTopLeftRadius: 3, borderTopRightRadius: 3, backgroundColor: on ? color : `${color}66` }} />
+            <View style={{ flex: 1, maxWidth: desktop ? MAX_PAIR_BAR_WIDTH : undefined, height: Math.max(2, (m.minor / max) * (plot - 4)), borderTopLeftRadius: 3, borderTopRightRadius: 3, backgroundColor: on ? color : `${color}66` }} />
           );
           return (
             <Pressable
@@ -85,7 +90,7 @@ export function PairedBars({
               onPress={() => setSelected(i === selected ? null : i)}
               accessibilityRole="button"
               accessibilityLabel={`${d.label}: ${inLabel} ${formatMoney(d.inflow)}, ${outLabel} ${formatMoney(d.outflow)}`}
-              style={{ flex: 1, height: plot, flexDirection: 'row', alignItems: 'flex-end', gap: 1 }}
+              style={{ flex: 1, height: plot, flexDirection: 'row', alignItems: 'flex-end', justifyContent: desktop ? 'center' : undefined, gap: 1 }}
             >
               {bar(d.inflow, inColor)}
               {bar(d.outflow, outColor)}

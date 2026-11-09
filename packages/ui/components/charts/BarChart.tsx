@@ -3,11 +3,15 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, View } from 'react-native';
 import Svg, { Line, Rect } from 'react-native-svg';
 import { useTheme } from '../../theme/ThemeProvider';
+import { useIsDesktop } from '../../theme/breakpoints';
 import { Text } from '../Text';
 import { Money } from '@esmart/core/lib/money';
 import { formatCompactMoney, formatMoney } from '@esmart/core/lib/format';
 
 export type BarDatum = { label: string; value: Money; highlight?: boolean };
+
+/** A bar's widest on a desktop: a few months in a wide card stay bars, not slabs. */
+export const MAX_BAR_WIDTH = 48;
 
 /**
  * Single-series magnitude-over-time bars. One series, so no legend box — the
@@ -29,6 +33,7 @@ export function BarChart({
   const t = useTheme();
   const { t: tr } = useTranslation(['common']);
   const [selected, setSelected] = useState<number | null>(null);
+  const desktop = useIsDesktop();
   const barColor = color ?? t.c.primary;
 
   if (data.length === 0) {
@@ -74,6 +79,10 @@ export function BarChart({
       </View>
 
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 2, height: plotHeight }}>
+        {/* On a desktop the bars are narrower than their slot, so the zero line runs under the whole row. */}
+        {desktop && hasNegative ? (
+          <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, top: zeroY, height: 1, backgroundColor: t.c.lineStrong }} />
+        ) : null}
         {data.map((d, i) => {
           const negative = d.value.minor < 0;
           const barHeight = Math.max(3, (Math.abs(d.value.minor) / span) * usable);
@@ -86,20 +95,22 @@ export function BarChart({
               onPress={() => setSelected(i === selected ? null : i)}
               accessibilityRole="button"
               accessibilityLabel={`${d.label}: ${formatMoney(d.value)}`}
-              style={{ flex: 1, height: plotHeight, justifyContent: 'flex-end' }}
+              style={{ flex: 1, height: plotHeight, justifyContent: 'flex-end', alignItems: desktop ? 'center' : undefined }}
             >
-              <Svg width="100%" height={plotHeight}>
-                <Rect
-                  x="0"
-                  y={y}
-                  width="100%"
-                  height={Math.min(barHeight, plotHeight - y)}
-                  rx={4}
-                  ry={4}
-                  fill={isActive ? fill : `${fill}66`}
-                />
-                {hasNegative ? <Line x1="0" x2="100%" y1={zeroY} y2={zeroY} stroke={t.c.lineStrong} strokeWidth={1} /> : null}
-              </Svg>
+              <View style={desktop ? { width: '100%', maxWidth: MAX_BAR_WIDTH } : undefined}>
+                <Svg width="100%" height={plotHeight}>
+                  <Rect
+                    x="0"
+                    y={y}
+                    width="100%"
+                    height={Math.min(barHeight, plotHeight - y)}
+                    rx={4}
+                    ry={4}
+                    fill={isActive ? fill : `${fill}66`}
+                  />
+                  {hasNegative && !desktop ? <Line x1="0" x2="100%" y1={zeroY} y2={zeroY} stroke={t.c.lineStrong} strokeWidth={1} /> : null}
+                </Svg>
+              </View>
             </Pressable>
           );
         })}

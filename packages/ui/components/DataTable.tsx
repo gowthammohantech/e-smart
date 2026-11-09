@@ -109,6 +109,7 @@ export function DataTable<T>({
   onSelectionChange,
   bulkActions,
   rowActions,
+  maxWidth,
 }: {
   columns: Column<T>[];
   rows: T[];
@@ -154,6 +155,11 @@ export function DataTable<T>({
   bulkActions?: (keys: string[]) => React.ReactNode;
   /** The entries of a row's ⋯ menu; none (or an empty list) leaves the row without one. */
   rowActions?: (row: T) => RowAction[];
+  /**
+   * The table's widest: a table of two to four columns reads better at its own width than
+   * spread across the page. Left-aligned; columns still share whatever width it gets.
+   */
+  maxWidth?: number;
 }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['common']);
@@ -589,6 +595,7 @@ export function DataTable<T>({
       style={{
         flex: scroll ? 1 : undefined,
         maxHeight: scroll ? heightCap : undefined,
+        ...(maxWidth ? { maxWidth, width: '100%' as const } : null),
         backgroundColor: t.c.paper,
         borderRadius: t.radius.lg,
         borderWidth: 1,

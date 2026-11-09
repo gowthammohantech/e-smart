@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Modal, Pressable, View } from 'react-native';
 import { Icon, type IconName } from './Icon';
 import { useTheme } from '../theme/ThemeProvider';
+import { DIALOG_WIDTH, useIsDesktop } from '../theme/breakpoints';
 import { Text } from './Text';
 import { Button } from './Button';
 
@@ -34,6 +35,7 @@ export function ConfirmDialog({
 }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['common']);
+  const desktop = useIsDesktop();
   // One confirm per showing: a second tap can land before the dialog closes
   // (it fades out, and the caller's re-render comes later still).
   const fired = useRef(false);
@@ -69,7 +71,8 @@ export function ConfirmDialog({
           style={[
             {
               width: '100%',
-              maxWidth: 380,
+              // A desktop has room for a long message; a phone keeps its narrow card.
+              maxWidth: desktop ? DIALOG_WIDTH.sm + 40 : 380,
               backgroundColor: t.c.paper,
               borderRadius: t.radius.xl,
               borderWidth: t.scheme === 'dark' ? 1 : 0,
@@ -104,13 +107,14 @@ export function ConfirmDialog({
             </Text>
           ) : null}
 
-          <View style={{ flexDirection: 'row', gap: t.spacing.md, marginTop: t.spacing.sm }}>
-            <Button title={cancelLabel ?? tr('common:component.cancel')} variant="ghost" onPress={onCancel} style={{ flex: 1 }} />
+          {/* A desktop puts the buttons at their own width on the right, as its other dialogs do. */}
+          <View style={{ flexDirection: 'row', justifyContent: desktop ? 'flex-end' : undefined, gap: t.spacing.md, marginTop: t.spacing.sm }}>
+            <Button title={cancelLabel ?? tr('common:component.cancel')} variant="ghost" onPress={onCancel} style={desktop ? undefined : { flex: 1 }} />
             <Button
               title={confirmLabel ?? tr('common:component.confirm')}
               variant={destructive ? 'danger' : 'primary'}
               onPress={confirm}
-              style={{ flex: 1 }}
+              style={desktop ? undefined : { flex: 1 }}
             />
           </View>
         </Pressable>

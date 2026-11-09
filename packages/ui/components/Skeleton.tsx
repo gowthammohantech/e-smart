@@ -4,6 +4,7 @@ import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../theme/ThemeProvider';
 import { NATIVE_DRIVER } from '../theme/motion';
+import { useIsDesktop } from '../theme/breakpoints';
 import { useReducedMotion } from '../theme/useReducedMotion';
 
 const WEB = Platform.OS === 'web';
@@ -342,13 +343,18 @@ export function SkeletonChart({ height = 110 }: { height?: number }) {
   );
 }
 
-/** A form field: label over an input. */
-export function SkeletonFormField({ index = 0 }: { index?: number }) {
+/**
+ * A form field: label over an input. On a desktop the input is the real field's height (40, or 46
+ * in Tamil), so the form doesn't jump when it loads; `maxWidth` matches a field capped with `fw()`.
+ */
+export function SkeletonFormField({ index = 0, maxWidth }: { index?: number; maxWidth?: number }) {
   const t = useTheme();
+  const desktop = useIsDesktop();
+  const input = desktop ? (t.script === 'tamil' ? 46 : 40) : 44;
   return (
-    <View style={{ gap: t.spacing.xs }}>
+    <View style={[{ gap: t.spacing.xs }, desktop && maxWidth ? { width: '100%', maxWidth } : null]}>
       <Skeleton height={10} width={skeletonWidth(index, 20, 20)} radius={4} />
-      <Skeleton height={44} radius={t.radius.md} />
+      <Skeleton height={input} radius={t.radius.md} />
     </View>
   );
 }

@@ -2,11 +2,15 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { useTheme } from '../theme/ThemeProvider';
+import { useIsDesktop } from '../theme/breakpoints';
 import { Text } from './Text';
 import { DocumentTotals } from '@esmart/core/types';
 import { formatMoney } from '@esmart/core/lib/format';
 import { flattenTaxComponents } from '@esmart/core/domain/lineCalc';
 import { Money, isZero, subtract } from '@esmart/core/lib/money';
+
+/** The totals' widest on a desktop: labels and amounts stay close enough to read across. */
+export const TOTALS_MAX_WIDTH = 420;
 
 function Row({
   label,
@@ -67,9 +71,11 @@ export function TotalsPanel({
   const { t: tr } = useTranslation(['common']);
   const components = flattenTaxComponents(totals.taxLines, currency);
   const showFx = !!baseCurrency && baseCurrency !== currency;
+  const desktop = useIsDesktop();
 
   return (
-    <View style={{ gap: compact ? 6 : 8 }}>
+    // On a desktop a wide card keeps the totals at its right edge, as on a printed invoice.
+    <View style={[{ gap: compact ? 6 : 8 }, desktop ? { width: '100%', maxWidth: TOTALS_MAX_WIDTH, alignSelf: 'flex-end' } : null]}>
       <Row label={tr('common:totals.subtotal')} value={formatMoney(totals.subtotal)} />
 
       {!isZero(totals.lineDiscount) ? (

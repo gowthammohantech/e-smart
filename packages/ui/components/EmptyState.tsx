@@ -2,6 +2,7 @@ import React from 'react';
 import { Animated, View } from 'react-native';
 import { Icon, type IconName } from './Icon';
 import { useTheme } from '../theme/ThemeProvider';
+import { useIsDesktop } from '../theme/breakpoints';
 import { Text } from './Text';
 import { Button } from './Button';
 import { Illustration } from './Illustration';
@@ -29,6 +30,8 @@ export function EmptyState({
 }) {
   const t = useTheme();
   const enter = useEntrance();
+  // A phone's 280 wraps a desktop message into a narrow column of short lines.
+  const desktop = useIsDesktop();
   return (
     <Animated.View style={[{ alignItems: 'center', paddingVertical: compact ? t.spacing.xxl : t.spacing.xxxl * 1.2, gap: t.spacing.md }, enter]}>
       {illustration ? (
@@ -40,7 +43,7 @@ export function EmptyState({
         {title}
       </Text>
       {message ? (
-        <Text variant="small" tone="muted" center style={{ maxWidth: 280, lineHeight: 20 }}>
+        <Text variant="small" tone="muted" center style={{ maxWidth: desktop ? 440 : 280, lineHeight: 20 }}>
           {message}
         </Text>
       ) : null}
