@@ -23,8 +23,10 @@ export type InvoiceTemplate = {
 export const DEFAULT_ACCENT = '#007AFF';
 const HEX = /^#[0-9A-Fa-f]{6}$/;
 
+export type ResolvedTemplate = Required<Omit<InvoiceTemplate, 'footerText'>> & { footerText?: string };
+
 /** The template with every default filled in, and a bad colour ignored. */
-export function resolveTemplate(t: InvoiceTemplate | null | undefined): Required<Omit<InvoiceTemplate, 'footerText'>> & { footerText?: string } {
+export function resolveTemplate(t: InvoiceTemplate | null | undefined): ResolvedTemplate {
   return {
     accentColor: t?.accentColor && HEX.test(t.accentColor) ? t.accentColor : DEFAULT_ACCENT,
     showDiscountColumn: t?.showDiscountColumn ?? true,
