@@ -199,12 +199,12 @@ export function standardLayout(view: DocView): string {
       ${doc.notes ? `<div class="cap">${bi('sales:pdf.notes')}</div><div>${esc(doc.notes)}</div>` : ''}
       ${doc.terms ? `<div class="cap" style="margin-top:12px">Terms &amp; conditions</div><div class="muted">${esc(doc.terms)}</div>` : ''}
     </div>
-    ${bankBlock(doc, company, bi)}
+    ${tpl.showBank ? bankBlock(doc, company, bi) : ''}
   </div>
 
   <div class="sign">
     <div class="muted">For ${esc(company?.name)}</div>
-    ${signatureTag(signatureSrc ?? company?.signatureUri)}
+    ${tpl.showSignature ? signatureTag(signatureSrc ?? company?.signatureUri) : ''}
     <div class="line muted">${bi('sales:pdf.authorisedSignatory')}</div>
   </div>
 

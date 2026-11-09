@@ -69,7 +69,7 @@ function doc(over: Partial<BusinessDocument> = {}, interState = false): Business
       { id: 'gst12', name: 'GST 12%', rate: 12 } as never,
       { id: 'gst18', name: 'GST 18%', rate: 18 } as never,
     ],
-    taxContext: { regime: 'GST', interState, reverseCharge: base.reverseCharge } as never,
+    taxContext: { regime: 'GST', registered: true, homeStateCode: '33', placeOfSupplyStateCode: interState ? '29' : '33', reverseCharge: base.reverseCharge },
     tcsRate: base.tcs?.rate,
     date: base.date,
   });
