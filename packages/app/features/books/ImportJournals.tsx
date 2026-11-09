@@ -12,6 +12,7 @@ import { Text } from "@esmart/ui/components/Text";
 import { useToast } from "@esmart/ui/components/Toast";
 import { FormContainer } from "@esmart/ui/components/Layout";
 import { SHOW_SCROLLBAR } from "@esmart/ui/theme/breakpoints";
+import { SkeletonCard, SkeletonGroup, SkeletonRows } from "@esmart/ui/components/Skeleton";
 import { parseCsv } from "@esmart/core/lib/csv";
 import {
   guessJournalColumns,
@@ -52,7 +53,7 @@ export function ImportJournals() {
   const { t: tr } = useTranslation(["books", "common"]);
   const companyId = useAppStore((s) => s.activeCompanyId);
   const currency = useBaseCurrency();
-  const { accounts } = useServerBook();
+  const { accounts, loaded } = useServerBook();
   const accountName = useAccountName();
   const [text, setText] = useState("");
   const [asDrafts, setAsDrafts] = useState(false);
@@ -70,7 +71,8 @@ export function ImportJournals() {
   );
   const parsed = useMemo(() => {
     const rows = parseCsv(text);
-    if (rows.length < 2)
+    // Without the chart every account would be flagged unknown: nothing is checked until it's here.
+    if (rows.length < 2 || !loaded)
       return {
         journals: [],
         columns: {} as ReturnType<typeof guessJournalColumns>,
@@ -80,7 +82,7 @@ export function ImportJournals() {
       journals: journalsFromCsv(rows, columns, names, currency),
       columns,
     };
-  }, [text, names, currency]);
+  }, [text, names, currency, loaded]);
   // A draft may be unbalanced; anything else the sheet gets wrong stops the journal.
   const usable = (problems: string[]) =>
     (asDrafts ? problems.filter((p) => !p.startsWith("Debits (")) : problems)
@@ -190,6 +192,13 @@ export function ImportJournals() {
           autoCapitalize="none"
         />
 
+        {!loaded && parseCsv(text).length > 1 ? (
+          <SkeletonGroup>
+            <SkeletonCard title={false} style={{ padding: 0 }}>
+              <SkeletonRows rows={3} kind="list" icon={false} />
+            </SkeletonCard>
+          </SkeletonGroup>
+        ) : null}
         {missing ? (
           <Text variant="caption" tone="bad">
             {tr("books:journalImport.missingColumns")}

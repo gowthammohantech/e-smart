@@ -305,7 +305,7 @@ export function RecordExpenseSheet({ line, onClose }: { line: BankLine | null; o
 export function RecordVoucherSheet({ line, onClose }: { line: BankLine | null; onClose: () => void }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['banking', 'common']);
-  const { book } = useServerBook();
+  const { book, loaded } = useServerBook();
   const nameOf = useAccountName();
   const groupName = useGroupName();
   const [account, setAccount] = useState<string>();
@@ -352,7 +352,9 @@ export function RecordVoucherSheet({ line, onClose }: { line: BankLine | null; o
         visible={picking}
         onClose={() => setPicking(false)}
         title={tr('banking:record.pickAccount')}
-        options={accounts.map((a) => ({ value: a.key, label: nameOf(a), description: groupName(a.group) }))}
+        // The chart is still on its way: shimmer rows, not a short list of system accounts.
+        options={loaded ? accounts.map((a) => ({ value: a.key, label: nameOf(a), description: groupName(a.group) })) : []}
+        loading={!loaded}
         value={account}
         onSelect={(v) => {
           setAccount(v);

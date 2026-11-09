@@ -28,7 +28,7 @@ import { useBooksView, useServerBook } from '../../../../remote/queries';
 import { ReportShell, reportTable, useReportScope, ReportFailed, failedQuery } from '../../../../features/reports/ReportShell';
 import { useActiveCompany, useBaseCurrency } from '../../../../store/selectors';
 import { useAccountName, useDrCr, useGroupName } from '../../../../features/books/names';
-import { Skeleton, SkeletonGroup } from '@esmart/ui/components/Skeleton';
+import { SkeletonGroup, SkeletonRows, SkeletonTable } from '@esmart/ui/components/Skeleton';
 
 type Figures = AccountFigures;
 const NO_FIGURES: Figures = { opening: 0, debit: 0, credit: 0, closing: 0 };
@@ -47,7 +47,7 @@ export default function ChartOfAccounts() {
   const company = useActiveCompany();
   const baseCurrency = useBaseCurrency();
   const desktop = useIsDesktop();
-  const { book, balances: serverBalances } = useServerBook();
+  const { book, balances: serverBalances, loaded } = useServerBook();
   const ledgerAccounts = useLedgerAccounts();
   const saveLedgerAccount = useAppStore((s) => s.saveLedgerAccount);
   const nameOf = useAccountName();
@@ -56,6 +56,8 @@ export default function ChartOfAccounts() {
   const { scope, setScope } = useReportScope('thisFY');
   const tbQuery = useBooksView<ReturnType<typeof trialBalance>>('trial-balance', scope.filters.range);
   const tb = tbQuery.data;
+  // Until the chart and its balances are both here, every row would read nil and the total balanced.
+  const pending = !loaded || (!tb && tbQuery.isLoading);
 
   const [query, setQuery] = useState('');
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
@@ -311,14 +313,8 @@ export default function ChartOfAccounts() {
             </View>
           </View>
 
-          {/* The chart is here already; a thin shimmer while its balances arrive. */}
           {/* Balances that didn't come aren't shown as nothing moved. */}
           {failedQuery(tbQuery) ? <ReportFailed onRetry={tbQuery.refetch} error={tbQuery.error} /> : null}
-          {!tb && tbQuery.isLoading ? (
-            <SkeletonGroup>
-              <Skeleton height={4} radius={2} />
-            </SkeletonGroup>
-          ) : null}
 
           <Card padded={false} style={{ overflow: 'hidden' }}>
             {desktop ? (
@@ -333,7 +329,10 @@ export default function ChartOfAccounts() {
                 ))}
               </View>
             ) : null}
-            {tree.natures.map((n) => {
+            {pending ? (
+              <SkeletonGroup>{desktop ? <SkeletonTable rows={10} cols={5} /> : <SkeletonRows rows={10} kind="list" icon={false} />}</SkeletonGroup>
+            ) : null}
+            {pending ? null : tree.natures.map((n) => {
               const nId = `n:${n.nature}`;
               return (
                 <React.Fragment key={nId}>
@@ -365,7 +364,7 @@ export default function ChartOfAccounts() {
                 </React.Fragment>
               );
             })}
-            {tree.natures.length ? (
+            {!pending && tree.natures.length ? (
               <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: t.spacing.md, paddingHorizontal: t.spacing.lg, gap: t.spacing.sm }}>
                 <Text variant="small" weight="700" style={{ flex: 1, paddingLeft: desktop ? 24 : 0 }}>
                   {tr('books:tb.total')}

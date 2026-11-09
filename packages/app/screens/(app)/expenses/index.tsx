@@ -28,6 +28,7 @@ import { Cell, DataTable } from '@esmart/ui/components/DataTable';
 import { SplitPane } from '@esmart/ui/components/Layout';
 import { FilterMenu } from '@esmart/ui/components/FilterMenu';
 import { presetParam, useQueryParams } from '../../../navigation/queryParams';
+import { Skeleton, SkeletonGroup } from '@esmart/ui/components/Skeleton';
 import { CardRowsSkeleton, MoreRowsSkeleton } from '../../../components/ScreenSkeleton';
 import { BranchFilterMenu, BranchPickerChip, useListBranch } from '../../../components/branchFilter';
 
@@ -217,12 +218,22 @@ export default function ExpensesList() {
           <BranchFilterMenu branch={branch} onChange={setBranch} />
           {/* How many match and what they add up to, at the right end of the filter row. */}
           {summary.isError ? null : <View style={{ marginLeft: 'auto', flexDirection: 'row', alignItems: 'baseline', gap: t.spacing.md }}>
-            <Text variant="small" tone="muted">
-              {tr('purchases:expense.entriesWithTax', { count, tax: formatMoney(taxTotal) })}
-            </Text>
-            <Text variant="title" weight="700" style={{ fontVariant: ['tabular-nums'] }}>
-              {formatMoney(total)}
-            </Text>
+            {/* Not "0 entries · ₹0.00" before the totals have come. */}
+            {!summary.data && summary.isLoading ? (
+              <SkeletonGroup style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
+                <Skeleton width={150} height={12} />
+                <Skeleton width={110} height={22} />
+              </SkeletonGroup>
+            ) : (
+              <>
+                <Text variant="small" tone="muted">
+                  {tr('purchases:expense.entriesWithTax', { count, tax: formatMoney(taxTotal) })}
+                </Text>
+                <Text variant="title" weight="700" style={{ fontVariant: ['tabular-nums'] }}>
+                  {formatMoney(total)}
+                </Text>
+              </>
+            )}
           </View>}
         </View>
         <SplitPane

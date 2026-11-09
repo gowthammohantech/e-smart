@@ -14,7 +14,8 @@ export default function EditVoucher() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const voucher = useVouchers().find((v) => v.id === id);
   const remote = useVoucherRecord(id);
-  if (!voucher && remote.isLoading) return <LoadingView variant="items-form" />;
+  // isPending, not isLoading: a query not yet started isn't "not found".
+  if (!voucher && !!id && remote.isPending) return <LoadingView variant="items-form" />;
   if (!voucher) return <EmptyState illustration="not-found" icon="file-remove-outline" title={tr('common:notFound.title')} />;
   return (
     <>

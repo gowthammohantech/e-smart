@@ -18,6 +18,7 @@ import { formatMoney } from '@esmart/core/lib/format';
 import { fromMajor, money } from '@esmart/core/lib/money';
 import { uid } from '@esmart/core/lib/id';
 import type { Voucher } from '@esmart/core/types';
+import { CardRowsSkeleton } from '../../../components/ScreenSkeleton';
 import { useServerSave } from '../../../components/useServerSave';
 import { useVoucherPages } from '../../../remote/queries';
 import { useAppStore } from '../../../store/appStore';
@@ -29,6 +30,12 @@ import { useActiveCompany, useBaseCurrency, useDefaultBranchId, usePaymentAccoun
  * (apps/api/src/modules/books/handlers.ts): cash and bank only, and never more than the account holds.
  */
 export default function TransferScreen() {
+  // On web the page stays put across a business switch; the picked accounts belong to the old one.
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  return <TransferForm key={companyId} />;
+}
+
+function TransferForm() {
   const t = useTheme();
   const router = useRouter();
   const { t: tr } = useTranslation(['books', 'common']);
@@ -104,7 +111,12 @@ export default function TransferScreen() {
           ) : null}
 
           <FormSection title={tr('books:transfer.recent')} action={<Button title={tr('books:transfer.allContras')} variant="ghost" size="sm" onPress={() => router.push('/(app)/books/vouchers?kind=contra' as never)} />}>
-            {rows.length ? (
+            {/* Not "No transfers yet" while they're on their way. */}
+            {!rows.length && recent.isPending ? (
+              <Card padded={false}>
+                <CardRowsSkeleton rows={3} kind="list" />
+              </Card>
+            ) : rows.length ? (
               <Card padded={false}>
                 {rows.map((v, i) => {
                   const into = v.lines.find((l) => l.debit.minor > 0);

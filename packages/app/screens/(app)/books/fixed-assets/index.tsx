@@ -47,7 +47,8 @@ export default function FixedAssets() {
         <Card padded={false}>
           <ListRow title={tr('books:assets.schedule')} subtitle={tr('books:assets.scheduleHint')} icon="table-large" chevron onPress={() => router.push('/(app)/books/fixed-assets/schedule' as never)} />
         </Card>
-        {list.isPending ? (
+        {/* A tab change keeps the last tab's assets until its own come: never show those as this tab's. */}
+        {list.isPending || list.isPlaceholderData ? (
           <ListSkeleton kind="list" rows={4} />
         ) : assets.length ? (
           <>

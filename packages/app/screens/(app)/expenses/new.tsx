@@ -6,6 +6,7 @@ import { useOcrStore } from '../../../features/ocr/ocrStore';
 import { isoOrUndefined } from '../../../features/ocr/matchParty';
 import { useScannedParty } from '../../../features/ocr/useScannedParty';
 import { useExpenseCategories } from '../../../store/selectors';
+import { useAppStore } from '../../../store/appStore';
 import { LoadingView } from '../../../components/LoadingView';
 
 export default function NewExpense() {
@@ -14,6 +15,8 @@ export default function NewExpense() {
   const { fromScan } = useLocalSearchParams<{ fromScan?: string }>();
   const scan = useOcrStore((s) => s.result);
   const categories = useExpenseCategories();
+  // The form copies business data (the paying account) when it opens; a switch starts it afresh.
+  const companyId = useAppStore((s) => s.activeCompanyId);
   const fromReceipt = !!fromScan && scan?.kind === 'expense';
   const scanField = (key: string) => scan?.fields.find((f) => f.key === key)?.value || undefined;
   // The supplier is looked up on the server before the form opens with it.
@@ -41,7 +44,7 @@ export default function NewExpense() {
   return (
     <>
       <Stack.Screen options={{ title: tr('nav:title.addExpense') }} />
-      <ExpenseForm initial={initial} />
+      <ExpenseForm key={companyId} initial={initial} />
     </>
   );
 }

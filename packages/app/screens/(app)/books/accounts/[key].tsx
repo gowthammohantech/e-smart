@@ -25,7 +25,7 @@ export default function AccountStatement() {
   const key = decodeURIComponent(raw ?? '');
   const { scope, setScope } = useReportScope('thisFY');
   const baseCurrency = useBaseCurrency();
-  const { book } = useServerBook();
+  const { book, loaded } = useServerBook();
   const nameOf = useAccountName();
   const drCr = useDrCr();
   // A bank account's ledger leads to matching its statements.
@@ -33,9 +33,10 @@ export default function AccountStatement() {
   const account = accountFor(key, book) ?? (key.startsWith('sys:tdsPayable:') ? { key, name: key, group: 'dutiesTaxes' as const, kind: 'system' as const } : undefined);
   const query = useBooksView<ReturnType<typeof ledgerStatement> & { trend?: BalancePoint[] }>('ledger', { ...scope.filters.range, account: key });
   const s = query.data;
-  if (failedQuery(query)) return <ReportError title={account ? nameOf(account) : key} scope={scope} onScopeChange={setScope} onRetry={query.refetch} error={query.error} />;
-  if (!s) return <ReportLoading title={account ? nameOf(account) : key} scope={scope} onScopeChange={setScope} skeleton={{ cols: 5 }} />;
-  const title = account ? nameOf(account) : key;
+  // Until the chart is here the account's name isn't known: blank, not its raw key ("lac:…").
+  const title = account ? nameOf(account) : loaded ? key : '';
+  if (failedQuery(query)) return <ReportError title={title} scope={scope} onScopeChange={setScope} onRetry={query.refetch} error={query.error} />;
+  if (!s || !loaded) return <ReportLoading title={title} scope={scope} onScopeChange={setScope} skeleton={{ cols: 5 }} />;
   const m = (minor: number) => (minor ? formatMoney(money(minor, baseCurrency)) : '');
   const totalDebit = s.rows.reduce((a, r) => a + r.debit, 0);
   const totalCredit = s.rows.reduce((a, r) => a + r.credit, 0);

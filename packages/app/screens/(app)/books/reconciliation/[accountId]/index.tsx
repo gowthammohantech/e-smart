@@ -8,6 +8,7 @@ import { Button } from '@esmart/ui/components/Button';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { Segmented } from '@esmart/ui/components/Field';
 import { Text } from '@esmart/ui/components/Text';
+import { Skeleton, SkeletonGroup } from '@esmart/ui/components/Skeleton';
 import { formatDate } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
 import { BankLinesView } from '../../../../../features/banking/BankLinesView';
@@ -33,7 +34,8 @@ export default function BankAccountReconciliation() {
   const { t: tr } = useTranslation(['banking']);
   const { accountId } = useLocalSearchParams<{ accountId: string }>();
   const account = usePaymentAccounts().find((a) => a.id === accountId);
-  const summary = useBankLineSummary(account?.type === 'bank' ? account.id : undefined).data;
+  const summaryQuery = useBankLineSummary(account?.type === 'bank' ? account.id : undefined);
+  const summary = summaryQuery.data;
   const canWrite = useCanWrite();
   const [params, setParams] = useQueryParams();
   const tab: Tab = (TABS as readonly string[]).includes(params.tab ?? '') ? (params.tab as Tab) : 'unmatched';
@@ -73,9 +75,16 @@ export default function BankAccountReconciliation() {
       <Stack.Screen options={{ title: account.name, ...(desktop ? { headerRight: () => importButton } : null) }} />
       <View style={{ paddingHorizontal: t.spacing.lg, paddingTop: desktop ? 0 : t.spacing.md, paddingBottom: t.spacing.md, gap: t.spacing.md }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
-          <Text variant="small" tone="muted" style={{ flex: 1 }}>
-            {status}
-          </Text>
+          {/* A blank line jumps once the statement's dates come: a shimmer holds its place. */}
+          {!summary && summaryQuery.isPending ? (
+            <SkeletonGroup style={{ flex: 1 }}>
+              <Skeleton width={220} height={12} />
+            </SkeletonGroup>
+          ) : (
+            <Text variant="small" tone="muted" style={{ flex: 1 }}>
+              {status}
+            </Text>
+          )}
           {desktop ? null : importButton}
         </View>
         <Segmented<Tab>

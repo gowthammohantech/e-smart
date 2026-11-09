@@ -21,6 +21,7 @@ import { useCanWrite } from '../../remote/connectivity';
 import { describeError } from '../../remote/errors';
 import { removeBudget, saveBudget, type Budget } from '../../remote/budgets';
 import { useServerBook } from '../../remote/queries';
+import { LoadingView } from '../../components/LoadingView';
 import { useActiveCompany, useBaseCurrency } from '../../store/selectors';
 import { useAccountName, useGroupName } from './names';
 
@@ -38,7 +39,7 @@ export function BudgetForm({ budget }: { budget?: Budget }) {
   const company = useActiveCompany();
   const currency = useBaseCurrency();
   const canWrite = useCanWrite();
-  const { book } = useServerBook();
+  const { book, loaded } = useServerBook();
   const nameOf = useAccountName();
   const groupName = useGroupName();
   const fy = financialYearOf(today(), company.fiscalYearStartMonth);
@@ -91,6 +92,8 @@ export function BudgetForm({ budget }: { budget?: Budget }) {
     }
   };
 
+  // The chart names the accounts and lists the picks; without it they'd read as raw keys or "Pick account".
+  if (!loaded) return <LoadingView variant="form" keepTitle />;
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <FormContainer style={{ maxWidth: '100%' }}>

@@ -22,6 +22,7 @@ import { useCanWrite } from '../../remote/connectivity';
 import { describeError } from '../../remote/errors';
 import { removeFixedAsset, saveFixedAsset, type FixedAsset } from '../../remote/fixedAssets';
 import { useServerBook } from '../../remote/queries';
+import { LoadingView } from '../../components/LoadingView';
 import { useActiveCompany, useBaseCurrency } from '../../store/selectors';
 import { useAccountName } from './names';
 
@@ -46,7 +47,7 @@ export function FixedAssetForm({ asset, prefill }: { asset?: FixedAsset; prefill
   const company = useActiveCompany();
   const currency = useBaseCurrency();
   const canWrite = useCanWrite();
-  const { book } = useServerBook();
+  const { book, loaded } = useServerBook();
   const nameOf = useAccountName();
   const major = (m?: { minor: number; currency: string }) => (m && m.minor ? String(toMajor(m)) : '');
 
@@ -134,6 +135,8 @@ export function FixedAssetForm({ asset, prefill }: { asset?: FixedAsset; prefill
     }
   };
 
+  // The chart names the accounts and lists the picks; without it they'd read as raw keys or "Pick account".
+  if (!loaded) return <LoadingView variant="form" keepTitle />;
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <FormContainer wide>

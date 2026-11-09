@@ -22,6 +22,7 @@ import type { Voucher, VoucherKind, VoucherTemplate } from '@esmart/core/types';
 import { useServerSave } from '../../components/useServerSave';
 import { useAppStore } from '../../store/appStore';
 import { useServerBook } from '../../remote/queries';
+import { LoadingView } from '../../components/LoadingView';
 import { useActiveCompany, useBaseCurrency, useCurrentUser, useDefaultBranchId } from '../../store/selectors';
 import { useAccountName, useGroupName } from './names';
 import { VoucherGrid, gridLine, type GridLine } from './VoucherGrid';
@@ -60,7 +61,7 @@ export function VoucherForm({ voucher, onSaved, initialKind }: { voucher?: Vouch
   const [templatesOpen, setTemplatesOpen] = useState(false);
   const [templateName, setTemplateName] = useState<string | null>(null);
   // The chart the server names accounts from, rather than every posting worked out on the device.
-  const { book } = useServerBook();
+  const { book, loaded } = useServerBook();
   const nameOf = useAccountName();
   const groupName = useGroupName();
 
@@ -173,6 +174,8 @@ export function VoucherForm({ voucher, onSaved, initialKind }: { voucher?: Vouch
     if (res) onSaved(res.id ?? record.id);
   };
 
+  // The chart names the accounts and lists the picks; without it they'd read as raw keys or "Pick account".
+  if (!loaded) return <LoadingView variant="items-form" keepTitle />;
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <FormContainer style={{ maxWidth: 1100 }}>

@@ -95,7 +95,10 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
   }, [rows]);
 
   const isReceivable = kind === 'receivable';
-  const reminderParty = usePartyRecord(reminderFor ?? undefined).data as unknown as Party | undefined;
+  const reminderQuery = usePartyRecord(reminderFor ?? undefined);
+  const reminderParty = reminderQuery.data as unknown as Party | undefined;
+  // The sheet opens once the party has come; until then the button that asked for it spins.
+  const reminderLoading = (id: string) => reminderFor === id && !reminderParty && reminderQuery.isPending;
   const reminderRows = reminderFor ? rows.filter((o) => o.document.partyId === reminderFor) : [];
 
   const agingCard = (
@@ -190,6 +193,7 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
                 isReceivable={isReceivable}
                 onOpen={openDocument}
                 onRemind={() => setReminderFor(group.id)}
+                reminding={reminderLoading(group.id)}
                 onRecord={() => recordPayment(group.id)}
               />
             ))}
@@ -326,7 +330,7 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
 
                 <View style={{ flexDirection: 'row', gap: t.spacing.md, padding: t.spacing.lg, paddingTop: t.spacing.sm }}>
                   {isReceivable ? (
-                    <Button title={tr('sales:aging.remind')} variant="ghost" icon="bell-ring-outline" size="sm" onPress={() => setReminderFor(group.id)} style={{ flex: 1 }} />
+                    <Button title={tr('sales:aging.remind')} variant="ghost" icon="bell-ring-outline" size="sm" onPress={() => setReminderFor(group.id)} loading={reminderLoading(group.id)} style={{ flex: 1 }} />
                   ) : null}
                   <Button
                     title={isReceivable ? tr('common:action.recordPayment') : tr('sales:payment.makePayment')}
@@ -362,6 +366,7 @@ function DesktopPartyGroup({
   isReceivable,
   onOpen,
   onRemind,
+  reminding,
   onRecord,
 }: {
   name: string;
@@ -371,6 +376,7 @@ function DesktopPartyGroup({
   isReceivable: boolean;
   onOpen: (doc: Outstanding['document']) => void;
   onRemind: () => void;
+  reminding?: boolean;
   onRecord: () => void;
 }) {
   const t = useTheme();
@@ -403,7 +409,7 @@ function DesktopPartyGroup({
         </View>
         <View style={{ flexDirection: 'row', gap: t.spacing.sm, marginLeft: 'auto' }}>
           {isReceivable ? (
-            <Button title={tr('sales:aging.remind')} variant="secondary" icon="bell-ring-outline" size="sm" onPress={onRemind} />
+            <Button title={tr('sales:aging.remind')} variant="secondary" icon="bell-ring-outline" size="sm" onPress={onRemind} loading={reminding} />
           ) : null}
           <Button title={isReceivable ? tr('common:action.recordPayment') : tr('sales:payment.makePayment')} size="sm" icon={isReceivable ? 'cash-plus' : 'cash-minus'} onPress={onRecord} />
         </View>

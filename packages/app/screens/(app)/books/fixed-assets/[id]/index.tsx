@@ -18,6 +18,7 @@ import { useCanWrite } from '../../../../../remote/connectivity';
 import { useFixedAsset } from '../../../../../remote/fixedAssets';
 import { useServerBook } from '../../../../../remote/queries';
 import { accountFor } from '@esmart/core/domain/ledger/accounts';
+import { Skeleton, SkeletonGroup } from '@esmart/ui/components/Skeleton';
 
 /** One asset: what it cost, what has been written off, and its depreciation year by year. */
 export default function FixedAssetDetail() {
@@ -27,7 +28,7 @@ export default function FixedAssetDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const query = useFixedAsset(id);
   const canWrite = useCanWrite();
-  const { book } = useServerBook();
+  const { book, loaded } = useServerBook();
   const nameOf = useAccountName();
   const a = query.data;
   if (query.isError) return <EmptyState icon="alert-circle-outline" title={tr('books:assets.notFound')} />;
@@ -46,9 +47,16 @@ export default function FixedAssetDetail() {
             </Text>
             <Badge label={tr(`books:assets.status.${a.status ?? 'active'}`)} tone={a.status === 'disposed' ? 'neutral' : 'success'} size="sm" />
           </View>
-          <Text variant="caption" tone="muted">
-            {[a.assetCode, a.category, account ? nameOf(account) : a.account, how].filter(Boolean).join(' · ')}
-          </Text>
+          {/* The account is named from the chart; until it's here, a shimmer rather than its raw key. */}
+          {loaded ? (
+            <Text variant="caption" tone="muted">
+              {[a.assetCode, a.category, account ? nameOf(account) : a.account, how].filter(Boolean).join(' · ')}
+            </Text>
+          ) : (
+            <SkeletonGroup>
+              <Skeleton width={220} height={12} />
+            </SkeletonGroup>
+          )}
           <Text variant="caption" tone="muted">
             {tr('books:assets.dates', { acquired: formatDate(a.acquiredOn), inUse: formatDate(a.inUseFrom) })}
             {a.disposedOn ? ` · ${tr('books:assets.disposedOnShort', { date: formatDate(a.disposedOn) })}` : ''}

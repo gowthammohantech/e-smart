@@ -14,7 +14,8 @@ import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { useServerSave } from '../../../../components/useServerSave';
 import { useAppStore } from '../../../../store/appStore';
 import { useExpense, useExpenseCategories, useParty, usePaymentAccounts, useTaxCategories } from '../../../../store/selectors';
-import { useExpenseRecord } from '../../../../remote/queries';
+import { Skeleton, SkeletonGroup, SkeletonListRow } from '@esmart/ui/components/Skeleton';
+import { useExpenseRecord, usePartyRecord } from '../../../../remote/queries';
 import { LoadingView } from '../../../../components/LoadingView';
 import { useCostCentres } from '../../../../store/books';
 import { paymentMethodLabel } from '@esmart/core/labels';
@@ -58,11 +59,16 @@ export default function ExpenseDetail() {
   const accounts = usePaymentAccounts();
   const taxCategories = useTaxCategories();
   const supplier = useParty(expense?.supplierId);
+  // Neither party need be on the device: fetched (and kept), with a shimmer where it goes until then.
+  const supplierRecord = usePartyRecord(expense?.supplierId);
+  usePartyRecord(expense?.billable ? expense.customerId : undefined);
+  const supplierPending = !!expense?.supplierId && !supplier && supplierRecord.isPending;
   const removeExpense = useAppStore((s) => s.removeExpense);
 
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  if (!expense && remote.isLoading) return <LoadingView />;
+  // isPending, not isLoading: a query not yet started isn't "not found".
+  if (!expense && !!id && remote.isPending) return <LoadingView />;
   if (!expense) {
     return (
       <View style={{ flex: 1 }}>
@@ -185,7 +191,13 @@ export default function ExpenseDetail() {
           </View>
         </FormSection>
 
-        {supplier ? (
+        {supplierPending ? (
+          <FormSection title={tr('purchases:expense.supplier')}>
+            <SkeletonGroup>
+              <SkeletonListRow divider={false} right={false} />
+            </SkeletonGroup>
+          </FormSection>
+        ) : supplier ? (
           <FormSection title={tr('purchases:expense.supplier')}>
             <Pressable
               onPress={() => router.push(`/(app)/contacts/suppliers/${supplier.id}`)}
@@ -294,7 +306,7 @@ export default function ExpenseDetail() {
             { label: tr('purchases:form.date'), value: formatDate(expense.date) },
             { label: tr('purchases:form.paidBy'), value: paymentMethodLabel(tr, expense.method) },
             { label: tr('purchases:form.paidFrom'), value: account?.name ?? '—' },
-            ...(supplier ? [{ label: tr('purchases:form.supplier'), value: supplier.name }] : []),
+            ...(supplier || supplierPending ? [{ label: tr('purchases:form.supplier'), value: supplier?.name }] : []),
             ...(expense.reference ? [{ label: tr('purchases:form.reference'), value: expense.reference }] : []),
             ...taxLines,
             ...(expense.nextRecurrenceDate ? [{ label: tr('purchases:expense.nextDue'), value: formatDate(expense.nextRecurrenceDate) }] : []),
@@ -304,9 +316,15 @@ export default function ExpenseDetail() {
               <Text variant="small" tone="muted">
                 {r.label}
               </Text>
-              <Text variant="small" weight="600" style={{ flexShrink: 1, textAlign: 'right' }}>
-                {r.value}
-              </Text>
+              {r.value === undefined ? (
+                <SkeletonGroup>
+                  <Skeleton width={120} height={14} />
+                </SkeletonGroup>
+              ) : (
+                <Text variant="small" weight="600" style={{ flexShrink: 1, textAlign: 'right' }}>
+                  {r.value}
+                </Text>
+              )}
             </View>
           ))}
         </Card>

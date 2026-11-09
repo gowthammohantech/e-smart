@@ -17,13 +17,14 @@ import { useAccountName } from '../../../features/books/names';
 export default function DayBookScreen() {
   const { t: tr } = useTranslation(['books', 'common']);
   const { scope, setScope } = useReportScope('thisMonth');
-  const { book } = useServerBook();
+  const { book, loaded } = useServerBook();
   const nameOf = useAccountName();
   const baseCurrency = useBaseCurrency();
   const query = useBooksView<{ entries: ReturnType<typeof dayBook> }>('day-book', scope.filters.range);
   const entries = query.data?.entries;
   if (failedQuery(query)) return <ReportError title={tr('books:hub.dayBook')} subtitle={tr('books:dayBook.basis')} scope={scope} onScopeChange={setScope} onRetry={query.refetch} error={query.error} />;
-  if (!entries) return <ReportLoading title={tr('books:hub.dayBook')} subtitle={tr('books:dayBook.basis')} scope={scope} onScopeChange={setScope} skeleton={{ figures: 0, cols: 5 }} />;
+  // The chart names the postings; without it they'd read as raw account keys.
+  if (!entries || !loaded) return <ReportLoading title={tr('books:hub.dayBook')} subtitle={tr('books:dayBook.basis')} scope={scope} onScopeChange={setScope} skeleton={{ figures: 0, cols: 5 }} />;
   const m = (minor: number) => (minor ? formatMoney(money(minor, baseCurrency)) : '');
   const label = (key: string) => {
     const a = accountFor(key, book);

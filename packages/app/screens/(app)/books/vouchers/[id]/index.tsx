@@ -34,14 +34,15 @@ export default function VoucherDetail() {
   // Fetched on opening, so it shows even when the book on the device doesn't hold it.
   const remote = useVoucherRecord(id);
   // The chart the server names accounts from: the device needn't hold every party.
-  const { book } = useServerBook();
+  const { book, loaded } = useServerBook();
   const nameOf = useAccountName();
   const removeVoucher = useAppStore((s) => s.removeVoucher);
   const saveVoucher = useAppStore((s) => s.saveVoucher);
   const [confirm, setConfirm] = useState(false);
   const costCentres = useCostCentres(true);
 
-  if (!voucher && remote.isLoading) return <LoadingView />;
+  // isPending, not isLoading: a query not yet started isn't "not found".
+  if (!voucher && !!id && remote.isPending) return <LoadingView />;
   // Only a voucher the server says isn't there is "not found"; anything else failed to load.
   if (!voucher && remote.isError && !(remote.error instanceof ApiError && (remote.error.status === 404 || remote.error.status === 403))) {
     return (
@@ -57,6 +58,8 @@ export default function VoucherDetail() {
       </View>
     );
   }
+  // Without the chart its lines would read as raw account keys.
+  if (!loaded) return <LoadingView title={voucher.status === 'draft' ? tr('books:vouchers.draftTitle') : voucher.number} />;
   const label = (key: string) => {
     const a = accountFor(key, book);
     return a ? nameOf(a) : nameOf({ key, name: key, kind: 'system' });

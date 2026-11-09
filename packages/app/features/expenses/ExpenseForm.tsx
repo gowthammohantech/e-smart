@@ -12,6 +12,7 @@ import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
 import { Button } from '@esmart/ui/components/Button';
 import { FormActions } from '@esmart/ui/components/ActionBar';
+import { SkeletonFormField, SkeletonGroup } from '@esmart/ui/components/Skeleton';
 import { AmountField, PickerField, SwitchField, TextField } from '@esmart/ui/components/Field';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
@@ -132,8 +133,13 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
   const [customerQuery, setCustomerQuery] = useState('');
   const supplierSearch = usePartySearch('supplier', useDebounced(supplierQuery), supplierOpen);
   const customerSearch = usePartySearch('customer', useDebounced(customerQuery), customerOpen);
-  usePartyRecord(supplierId ?? undefined);
-  usePartyRecord(customerId);
+  const supplierRecord = usePartyRecord(supplierId ?? undefined);
+  const customerRecord = usePartyRecord(customerId);
+  // A saved supplier or customer not in the store yet is on its way: a shimmer, not "Optional" or "Any customer".
+  const supplierName = suppliers.find((s) => s.id === supplierId)?.name ?? supplierRecord.data?.name;
+  const customerName = customers.find((c) => c.id === customerId)?.name ?? customerRecord.data?.name;
+  const supplierPending = !!supplierId && !supplierName && supplierRecord.isPending;
+  const customerPending = !!customerId && !customerName && customerRecord.isPending;
   const [taxOpen, setTaxOpen] = useState(false);
   const [recurrenceOpen, setRecurrenceOpen] = useState(false);
   const [newCategoryOpen, setNewCategoryOpen] = useState(false);
@@ -335,10 +341,14 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
       error={accountError ?? (cashShort ? shortMessage() : undefined)}
     />
   );
-  const supplierField = (
+  const supplierField = supplierPending ? (
+    <SkeletonGroup>
+      <SkeletonFormField />
+    </SkeletonGroup>
+  ) : (
     <PickerField
       label={tr('purchases:form.supplier')}
-      value={suppliers.find((s) => s.id === supplierId)?.name}
+      value={supplierName}
       placeholder={tr('purchases:form.optional')}
       onPress={() => setSupplierOpen(true)}
       icon="truck-outline"
@@ -379,8 +389,12 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
   const billableField = (
     <>
       <SwitchField label={tr('purchases:form.billable')} description={tr('purchases:form.billableHint')} value={billable} onValueChange={setBillable} />
-      {billable ? (
-        <PickerField label={tr('purchases:form.billTo')} value={customers.find((c) => c.id === customerId)?.name ?? tr('purchases:form.billToAny')} onPress={() => setCustomerOpen(true)} icon="account-arrow-right-outline" hint={tr('purchases:form.billToHint')} />
+      {billable && customerPending ? (
+        <SkeletonGroup>
+          <SkeletonFormField />
+        </SkeletonGroup>
+      ) : billable ? (
+        <PickerField label={tr('purchases:form.billTo')} value={customerName ?? tr('purchases:form.billToAny')} onPress={() => setCustomerOpen(true)} icon="account-arrow-right-outline" hint={tr('purchases:form.billToHint')} />
       ) : null}
       <CostCentreField value={costCentreId} onChange={setCostCentreId} />
       <VehicleField value={vehicleId} onChange={setVehicleId} />
