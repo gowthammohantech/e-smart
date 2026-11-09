@@ -26,6 +26,7 @@ import { pagedTableProps, useRowsExport, useTableSelection } from '../../compone
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { presetParam, useQueryParams } from '../../navigation/queryParams';
 import { CardRowsSkeleton, MoreRowsSkeleton } from '../../components/ScreenSkeleton';
+import { BranchFilterMenu, BranchPickerChip, useListBranch } from '../../components/branchFilter';
 
 export function PaymentListView({ direction }: { direction: PaymentDirection }) {
   const t = useTheme();
@@ -40,13 +41,16 @@ export function PaymentListView({ direction }: { direction: PaymentDirection }) 
   const [params, setParams] = useQueryParams();
   const range = presetParam(params.range, 'all');
   const setRange = (r: DateRangePreset) => setParams({ range: r === 'all' ? undefined : r });
+  // The branch the sales and purchases hubs count in (the top bar's) unless another was picked here (`?branch=`).
+  const branch = useListBranch(params);
+  const setBranch = (value: string) => setParams({ branch: branch.paramFor(value) });
   const desktop = useIsDesktop();
 
   // Read from the server 50 at a time; the count and total cover every page.
   const filter = useMemo(() => {
     const r = range === 'all' ? undefined : resolveRange(range);
-    return { direction, from: r?.from, to: r?.to, q: search };
-  }, [direction, range, search]);
+    return { direction, from: r?.from, to: r?.to, q: search, branchId: branch.branchId };
+  }, [direction, range, search, branch.branchId]);
   const pages = usePaymentPages(filter);
   const summary = usePaymentSummary(filter);
 
@@ -55,7 +59,7 @@ export function PaymentListView({ direction }: { direction: PaymentDirection }) 
   const count = summary.data?.count ?? filtered.length;
   const total = (summary.data?.total as Money | undefined) ?? zero(baseCurrency);
   // Nothing recorded at all, as against nothing matching the search or range.
-  const noneAtAll = range === 'all' && !search && summary.data?.count === 0 && !filtered.length;
+  const noneAtAll = range === 'all' && !search && !branch.overridden && summary.data?.count === 0 && !filtered.length;
   const loading = (pages.isLoading || summary.isLoading) && !filtered.length;
   // Didn't load: said so with a retry, never "no payments" or a ₹0 total.
   const failed = pages.isError && !filtered.length;
@@ -109,6 +113,7 @@ export function PaymentListView({ direction }: { direction: PaymentDirection }) 
             onChange={setRange}
           />
         ) : (
+        <>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -140,7 +145,10 @@ export function PaymentListView({ direction }: { direction: PaymentDirection }) 
             );
           })}
         </ScrollView>
+        <BranchPickerChip branch={branch} onChange={setBranch} />
+        </>
         )}
+        {desktop ? <BranchFilterMenu branch={branch} onChange={setBranch} /> : null}
         {desktop ? (
           // How many match and what they add up to, at the right end of the filter row (not ₹0 when it didn't load).
           summary.isError ? null : <View style={{ marginLeft: 'auto', flexDirection: 'row', alignItems: 'baseline', gap: t.spacing.md }}>

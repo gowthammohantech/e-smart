@@ -84,6 +84,8 @@
     "customerFilter": "வாடிக்கையாளர்: {{name}}",
     "supplierFilter": "சப்ளையர்: {{name}}",
     "clearPartyNamed": "{{name}} மட்டுமல்ல, அனைவரையும் காட்டு",
+    "branchFilter": "கிளை: {{name}}",
+    "clearBranchNamed": "{{name}} மட்டுமல்ல, அனைத்துக் கிளைகளையும் காட்டு",
     "owing": "{{amount}} நிலுவை",
     "owingBy": "{{amount}} நிலுவை, {{date}} அன்று",
     "draftNumber": "வரைவு"
@@ -270,6 +272,7 @@
     "reset": "மீட்டமை",
     "apply": "பயன்படுத்து",
     "clearParty": "தரப்பு வடிகட்டியை நீக்கு",
+    "branch": "கிளை",
     "dateRange": "தேதி வரம்பு",
     "status": "நிலை",
     "noMatch": "இந்த வடிகட்டிக்கு எதுவும் பொருந்தவில்லை."

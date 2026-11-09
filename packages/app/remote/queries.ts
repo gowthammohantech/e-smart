@@ -275,12 +275,12 @@ export function useServerAccountBalances() {
   return q.data;
 }
 
-export type PaymentQuery = { direction: 'received' | 'paid'; from?: string; to?: string; q?: string; partyId?: string };
+export type PaymentQuery = { direction: 'received' | 'paid'; from?: string; to?: string; q?: string; partyId?: string; branchId?: string };
 const paymentKeys = {
   all: (companyId: string) => ['payments', companyId] as const,
 };
 function paymentParams(f: PaymentQuery) {
-  return { direction: f.direction, from: f.from || undefined, to: f.to || undefined, q: f.q?.trim() || undefined, partyId: f.partyId || undefined };
+  return { direction: f.direction, from: f.from || undefined, to: f.to || undefined, q: f.q?.trim() || undefined, partyId: f.partyId || undefined, branchId: f.branchId || undefined };
 }
 
 /** Payments one way, newest first, 50 at a time. Each row carries its party's name. */
@@ -337,12 +337,12 @@ export function usePaymentRecord(id: string | undefined) {
   });
 }
 
-export type ExpenseQuery = { from?: string; to?: string; q?: string; categoryId?: string };
+export type ExpenseQuery = { from?: string; to?: string; q?: string; categoryId?: string; branchId?: string };
 const expenseKeys = {
   all: (companyId: string) => ['expenses', companyId] as const,
 };
 function expenseParams(f: ExpenseQuery) {
-  return { from: f.from || undefined, to: f.to || undefined, q: f.q?.trim() || undefined, categoryId: f.categoryId || undefined };
+  return { from: f.from || undefined, to: f.to || undefined, q: f.q?.trim() || undefined, categoryId: f.categoryId || undefined, branchId: f.branchId || undefined };
 }
 
 /** Expenses, newest first, 50 at a time. */

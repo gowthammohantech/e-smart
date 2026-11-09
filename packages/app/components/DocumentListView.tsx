@@ -38,12 +38,15 @@ import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { listParam, presetParam, useQueryParams } from '../navigation/queryParams';
 import { CardRowsSkeleton, MoreRowsSkeleton } from './ScreenSkeleton';
 import { Skeleton, SkeletonGroup, SkeletonStatGrid } from '@esmart/ui/components/Skeleton';
+import { ALL_BRANCHES, BranchChip, BranchFilterMenu, useListBranch } from './branchFilter';
 
 export type DocumentListFilters = {
   query: string;
   statuses: DocStatus[];
   range: DateRangePreset;
   partyId: string | null;
+  /** `?branch=`: a branch, `all`, or null to follow the top bar's branch. */
+  branch: string | null;
 };
 
 const DEFAULT_FILTERS: DocumentListFilters = {
@@ -51,6 +54,7 @@ const DEFAULT_FILTERS: DocumentListFilters = {
   statuses: [],
   range: 'all',
   partyId: null,
+  branch: null,
 };
 
 /** One row of a list: the server's summary of a document. */
@@ -85,9 +89,11 @@ export function DocumentListView({
   const router = useRouter();
   const baseCurrency = useBaseCurrency();
 
-  // Status, date range and party live in the URL (`?status=draft&range=thisMonth&party=…`);
+  // Status, date range, party and branch live in the URL (`?status=draft&range=thisMonth&party=…`);
   // the search box stays local so typing doesn't rewrite the URL on every key.
   const [params, setParams] = useQueryParams();
+  // The branch the hubs count in (the top bar's) unless another was picked here.
+  const branch = useListBranch(params);
   const [query, setQuery] = useState('');
   const search = useDebounced(query);
   const filters = useMemo<DocumentListFilters>(
@@ -96,6 +102,7 @@ export function DocumentListView({
       statuses: listParam.parse<DocStatus>(params.status),
       range: presetParam(params.range, DEFAULT_FILTERS.range),
       partyId: params.party ?? null,
+      branch: params.branch ?? null,
     }),
     [query, params],
   );
@@ -106,17 +113,19 @@ export function DocumentListView({
       status: listParam.format(f.statuses),
       range: f.range === DEFAULT_FILTERS.range ? undefined : f.range,
       party: f.partyId ?? undefined,
+      branch: f.branch ?? undefined,
     };
-    if (url.status !== params.status || url.range !== params.range || url.party !== params.party) setParams(url);
+    if (url.status !== params.status || url.range !== params.range || url.party !== params.party || url.branch !== params.branch) setParams(url);
   };
+  const setBranch = (value: string) => setFilters((f) => ({ ...f, branch: branch.paramFor(value) ?? null }));
   const [filterOpen, setFilterOpen] = useState(false);
   const desktop = useIsDesktop();
   const [sort, setSort] = useState<Sort | null>(null);
 
   const serverQuery = useMemo<DocumentQuery>(() => {
     const range = filters.range === 'all' ? undefined : resolveRange(filters.range);
-    return { kinds: [kind], statuses: filters.statuses, partyId: filters.partyId ?? undefined, from: range?.from, to: range?.to, q: search };
-  }, [kind, filters.statuses, filters.partyId, filters.range, search]);
+    return { kinds: [kind], statuses: filters.statuses, partyId: filters.partyId ?? undefined, branchId: branch.branchId, from: range?.from, to: range?.to, q: search };
+  }, [kind, filters.statuses, filters.partyId, branch.branchId, filters.range, search]);
   const pages = useDocumentPages({ ...serverQuery, sort: sort && SERVER_SORT[sort.key] ? ((sort.dir === 'desc' ? '-' : '') + SERVER_SORT[sort.key]) as DocumentQuery['sort'] : undefined });
   const summary = useDocumentSummary(serverQuery);
   const companyId = useAppStore((s) => s.activeCompanyId);
@@ -134,8 +143,8 @@ export function DocumentListView({
   const filtered = rows;
 
   const activeFilterCount =
-    filters.statuses.length + (filters.partyId ? 1 : 0) + (filters.range !== 'all' ? 1 : 0);
-  // Nothing of this kind at all, as against nothing matching the filters.
+    filters.statuses.length + (filters.partyId ? 1 : 0) + (filters.range !== 'all' ? 1 : 0) + (branch.shown && branch.overridden ? 1 : 0);
+  // Nothing of this kind at all (in the top bar's branch, by default), as against nothing matching the filters.
   const noneAtAll = !activeFilterCount && !search && summary.data?.count === 0;
   const loading = (pages.isLoading || summary.isLoading) && !rows.length;
   // The list couldn't load: say so with a retry, never "Nothing matches" or a ₹0 total.
@@ -197,7 +206,7 @@ export function DocumentListView({
     if (pages.hasNextPage && !pages.isFetchingNextPage) void pages.fetchNextPage();
   };
   // Desktop bulk action: the chosen documents as a CSV.
-  const selection = useTableSelection(`${kind}|${search}|${JSON.stringify(filters)}`);
+  const selection = useTableSelection(`${kind}|${search}|${branch.branchId ?? ''}|${JSON.stringify(filters)}`);
   const exportRows = useRowsExport();
   const exportChosen = (keys: string[]) =>
     exportRows(
@@ -398,6 +407,7 @@ export function DocumentListView({
             options={(['all', ...DATE_RANGE_PRESET_KEYS.filter((k) => k !== 'all')] as DateRangePreset[]).map((p) => ({ value: p, label: dateRangeLabel(tr, p) }))}
             onChange={(range) => setFilters((f) => ({ ...f, range }))}
           />
+          <BranchFilterMenu branch={branch} onChange={setBranch} />
           {availableStatuses.map((st) => {
             const active = filters.statuses.includes(st);
             return (
@@ -576,7 +586,12 @@ export function DocumentListView({
           </ScrollView>
         ) : null}
 
-        {partyChip}
+        {partyChip || (branch.shown && branch.branchId) ? (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm }}>
+            {partyChip}
+            <BranchChip branch={branch} onClear={() => setBranch(ALL_BRANCHES)} />
+          </View>
+        ) : null}
 
         {headerExtra}
 
@@ -706,6 +721,32 @@ export function DocumentListView({
               })}
             </View>
           </View>
+
+          {branch.shown ? (
+            <View style={{ gap: t.spacing.sm }}>
+              <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('common:filters.branch')}</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm }}>
+                {[{ id: ALL_BRANCHES, name: tr('common:component.allBranches') }, ...branch.branches].map((b) => {
+                  const active = (branch.branchId ?? ALL_BRANCHES) === b.id;
+                  return (
+                    <Pressable
+                      key={b.id}
+                      onPress={() => setBranch(b.id)}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: active }}
+                      hitSlop={{ top: 4, bottom: 4 }}
+                      style={[chipStyle(active), { flexDirection: 'row', alignItems: 'center', gap: 6 }]}
+                    >
+                      {active ? <Icon name="check" size={14} color={t.c.primary} /> : null}
+                      <Text variant="caption" weight="600" tone={active ? 'primary' : 'muted'}>
+                        {b.name}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          ) : null}
 
           {filters.partyId ? (
             <Button

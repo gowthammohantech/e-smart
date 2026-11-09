@@ -29,6 +29,7 @@ import { SplitPane } from '@esmart/ui/components/Layout';
 import { FilterMenu } from '@esmart/ui/components/FilterMenu';
 import { presetParam, useQueryParams } from '../../../navigation/queryParams';
 import { CardRowsSkeleton, MoreRowsSkeleton } from '../../../components/ScreenSkeleton';
+import { BranchFilterMenu, BranchPickerChip, useListBranch } from '../../../components/branchFilter';
 
 const DEFAULT_RANGE: DateRangePreset = 'last30';
 
@@ -47,6 +48,9 @@ export default function ExpensesList() {
   const categoryId = params.category ?? null;
   const setRange = (r: DateRangePreset) => setParams({ range: r === DEFAULT_RANGE ? undefined : r });
   const setCategoryId = (id: string | null) => setParams({ category: id ?? undefined });
+  // The branch the purchases hub counts in (the top bar's) unless another was picked here (`?branch=`).
+  const branch = useListBranch(params);
+  const setBranch = (value: string) => setParams({ branch: branch.paramFor(value) });
   const desktop = useIsDesktop();
   // Too narrow for the summary column too; the table footer has the totals.
   const narrow = useBreakpoint() === 'tablet';
@@ -55,8 +59,8 @@ export default function ExpensesList() {
   const search = useDebounced(query);
   const filter = useMemo(() => {
     const r = range === 'all' ? undefined : resolveRange(range);
-    return { from: r?.from, to: r?.to, q: search, categoryId: categoryId ?? undefined };
-  }, [range, search, categoryId]);
+    return { from: r?.from, to: r?.to, q: search, categoryId: categoryId ?? undefined, branchId: branch.branchId };
+  }, [range, search, categoryId, branch.branchId]);
   const pages = useExpensePages(filter);
   const summary = useExpenseSummary(filter);
 
@@ -70,7 +74,7 @@ export default function ExpensesList() {
     value: b.total as Money,
   }));
   // Nothing recorded at all, as against nothing matching the filters.
-  const noneAtAll = range === 'all' && !search && !categoryId && summary.data?.count === 0 && !filtered.length;
+  const noneAtAll = range === 'all' && !search && !categoryId && !branch.overridden && summary.data?.count === 0 && !filtered.length;
   const loading = (pages.isLoading || summary.isLoading) && !filtered.length;
   // Didn't load: said so with a retry, never "no expenses" or a ₹0 total.
   const failed = pages.isError && !filtered.length;
@@ -210,6 +214,7 @@ export default function ExpensesList() {
             options={[{ value: 'all', label: tr('purchases:expense.allCategories') }, ...categories.map((c) => ({ value: c.id, label: c.name }))]}
             onChange={(v) => setCategoryId(v === 'all' ? null : v)}
           />
+          <BranchFilterMenu branch={branch} onChange={setBranch} />
           {/* How many match and what they add up to, at the right end of the filter row. */}
           {summary.isError ? null : <View style={{ marginLeft: 'auto', flexDirection: 'row', alignItems: 'baseline', gap: t.spacing.md }}>
             <Text variant="small" tone="muted">
@@ -306,6 +311,7 @@ export default function ExpensesList() {
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: t.spacing.sm, paddingRight: t.spacing.lg }}>
           {rangeChips}
         </ScrollView>
+        <BranchPickerChip branch={branch} onChange={setBranch} />
       </View>
 
       <ScrollView

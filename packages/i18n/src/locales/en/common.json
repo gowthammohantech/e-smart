@@ -84,6 +84,8 @@
     "customerFilter": "Customer: {{name}}",
     "supplierFilter": "Supplier: {{name}}",
     "clearPartyNamed": "Show everyone, not only {{name}}",
+    "branchFilter": "Branch: {{name}}",
+    "clearBranchNamed": "Show all branches, not only {{name}}",
     "owing": "{{amount}} due",
     "owingBy": "{{amount}} due {{date}}",
     "draftNumber": "Draft"
@@ -270,6 +272,7 @@
     "reset": "Reset",
     "apply": "Apply",
     "clearParty": "Clear party filter",
+    "branch": "Branch",
     "dateRange": "Date range",
     "status": "Status",
     "noMatch": "Nothing matches this filter."
