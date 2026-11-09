@@ -63,7 +63,14 @@
     "cessHead": "செஸ்",
     "gstInterest": "GST மீதான வட்டி",
     "gstLateFee": "GST ரிட்டர்ன் தாமதக் கட்டணம்",
-    "itcReversed": "திரும்பப் பெறப்பட்ட உள்ளீட்டு வரி வரவு"
+    "itcReversed": "திரும்பப் பெறப்பட்ட உள்ளீட்டு வரி வரவு",
+    "accumulatedDepreciation": "திரண்ட தேய்மானம்",
+    "depreciation": "தேய்மானம்",
+    "assetDisposal": "விற்ற சொத்துகளின் லாபம் அல்லது நட்டம்",
+    "goodsReceivedNotBilled": "பெற்ற சரக்கு, பில் வராதது",
+    "reimbursementsRecoverable": "திரும்பப் பெற வேண்டிய செலவுகள்",
+    "tcsPayable": "செலுத்த வேண்டிய TCS",
+    "customsPayable": "செலுத்த வேண்டிய சுங்க IGST"
   },
   "group": {
     "capital": "மூலதனம்",

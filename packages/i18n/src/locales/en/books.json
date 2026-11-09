@@ -63,7 +63,14 @@
     "cessHead": "cess",
     "gstInterest": "Interest on GST",
     "gstLateFee": "Late fee on GST returns",
-    "itcReversed": "Input tax credit reversed"
+    "itcReversed": "Input tax credit reversed",
+    "accumulatedDepreciation": "Accumulated depreciation",
+    "depreciation": "Depreciation",
+    "assetDisposal": "Profit or loss on assets sold",
+    "goodsReceivedNotBilled": "Goods received, not billed",
+    "reimbursementsRecoverable": "Reimbursements recoverable",
+    "tcsPayable": "TCS payable",
+    "customsPayable": "Customs IGST payable"
   },
   "group": {
     "capital": "Capital",
