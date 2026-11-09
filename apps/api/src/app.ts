@@ -13,6 +13,7 @@ import type { Deps, Handlers, WebhookHandlers } from './context';
 import { problemHandler } from './http/errors';
 import { registerIdempotency } from './http/idempotency';
 import { registerAppVersionGate } from './http/appVersion';
+import { registerDocs } from './http/docs';
 import { handlers as defaultHandlers, webhookHandlers as defaultWebhooks } from './modules';
 import { registerRoutes } from './openapi/routes';
 import { loadOperations } from './openapi/spec';
@@ -140,6 +141,8 @@ export async function buildApp(deps: Deps, opts: BuildOptions = {}): Promise<Fas
   registerMcp(app, deps);
   // The pages behind the share links customers are sent.
   registerSharePages(app, deps);
+  // Swagger UI for the contract; behind DOCS_USERNAME / DOCS_PASSWORD, off in production without them.
+  registerDocs(app, deps);
 
   const { operations } = await loadOperations();
   registerRoutes(app, deps, operations, opts.handlers ?? defaultHandlers, opts.webhooks ?? defaultWebhooks);

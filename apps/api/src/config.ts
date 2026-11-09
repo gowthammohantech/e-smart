@@ -81,6 +81,13 @@ const Env = z.object({
     .regex(/^\d+(\.\d+)*$/)
     .optional(),
 
+  /**
+   * The Swagger UI at /docs, behind HTTP Basic with this username and password. Unset: /docs is open in
+   * development and test, and off (404) in production.
+   */
+  DOCS_USERNAME: z.string().min(1).optional(),
+  DOCS_PASSWORD: z.string().min(12).optional(),
+
   SMS_PROVIDER: z.enum(['log', 'msg91', 'pay4sms']).default('log'),
   MSG91_AUTH_KEY: z.string().optional(),
   MSG91_TEMPLATE_ID: z.string().optional(),
