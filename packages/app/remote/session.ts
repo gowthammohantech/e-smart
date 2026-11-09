@@ -83,7 +83,8 @@ async function begin(auth: AuthSession, preferCompanyId?: string) {
 }
 
 /** How opening the app went: still loading, done, or stopped because the server couldn't be reached. */
-export const useStartup = create<{ state: 'loading' | 'ready' | 'offline' }>(() => ({ state: 'loading' }));
+/** `busy`: the server answered but couldn't serve us yet (rate limit, a deploy's 5xx) — not the device's connection. */
+export const useStartup = create<{ state: 'loading' | 'ready' | 'offline' | 'busy' }>(() => ({ state: 'loading' }));
 
 /**
  * At launch: the device keeps only the session's tokens, so a signed-in person's books load from the
@@ -127,7 +128,8 @@ async function start(): Promise<void> {
     if (isNetworkError(err) || !sessionEnded(err)) {
       // Unreachable, or the server is having trouble (a deploy's 502, a 429, a 426 that raises the
       // update gate): the session is still good, so keep it and let them try again.
-      useStartup.setState({ state: 'offline' });
+      const busy = err instanceof ApiError && (err.status === 429 || err.status >= 500);
+      useStartup.setState({ state: busy ? 'busy' : 'offline' });
       return;
     }
     // The server ended the session (the tokens are gone by now) or answered nonsense: sign in again.

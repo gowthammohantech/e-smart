@@ -386,6 +386,8 @@
   },
   "network": {
     "offline": "No internet connection",
+    "busyTitle": "The server is busy",
+    "busyBody": "It couldn't open your books just now. We'll try again in a few seconds.",
     "offlineTitle": "You're offline",
     "offlineBody": "Elixir Books Smart needs an internet connection. Check your connection and try again.",
     "retry": "Try again"

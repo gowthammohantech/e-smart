@@ -73,7 +73,7 @@ function RootNavigator() {
     }
   }, [hydrated, authenticated, onboardingComplete, segments, router]);
 
-  if (!hydrated && startup === 'offline') return <StartOffline />;
+  if (!hydrated && (startup === 'offline' || startup === 'busy')) return <StartOffline busy={startup === 'busy'} />;
   if (!hydrated) {
     return (
       <View style={{ flex: 1, backgroundColor: t.c.bg, alignItems: 'center', justifyContent: 'center' }} accessibilityRole="progressbar">
@@ -106,14 +106,20 @@ function RootNavigator() {
 }
 
 /** Opened with a session but no connection: the books are on the server, so wait for it. */
-function StartOffline() {
+function StartOffline({ busy }: { busy: boolean }) {
   const t = useTheme();
+  // A busy server (rate limit, a deploy) clears by itself: try again on our own rather than wait for a tap.
+  useEffect(() => {
+    if (!busy) return;
+    const timer = setTimeout(() => void startUp(), 15_000);
+    return () => clearTimeout(timer);
+  }, [busy]);
   return (
     <View style={{ flex: 1, backgroundColor: t.c.bg, alignItems: 'center', justifyContent: 'center', padding: t.spacing.xl, gap: t.spacing.lg }}>
       <PageBackdrop />
       <Illustration name="offline" size="full" />
-      <Text style={{ fontSize: 18, fontWeight: '700', color: t.c.text, textAlign: 'center' }}>{i18n.t('common:network.offlineTitle')}</Text>
-      <Text style={{ fontSize: 15, color: t.c.muted, textAlign: 'center', maxWidth: 360, lineHeight: 21 }}>{i18n.t('common:network.offlineBody')}</Text>
+      <Text style={{ fontSize: 18, fontWeight: '700', color: t.c.text, textAlign: 'center' }}>{i18n.t(busy ? 'common:network.busyTitle' : 'common:network.offlineTitle')}</Text>
+      <Text style={{ fontSize: 15, color: t.c.muted, textAlign: 'center', maxWidth: 360, lineHeight: 21 }}>{i18n.t(busy ? 'common:network.busyBody' : 'common:network.offlineBody')}</Text>
       <Button title={i18n.t('common:network.retry')} icon="refresh" onPress={() => void startUp()} />
     </View>
   );
