@@ -14,13 +14,14 @@ import { tabForPath } from '../navigation/tabs';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { useAppStore } from '../store/appStore';
 import { ConnectionBadge } from './ConnectionBadge';
+import { LatencyChip } from './LatencyChip';
 import { useActiveCompany, useBranches, useUnreadCount } from '../store/selectors';
 import { countLabel } from '@esmart/core/lib/format';
 import { inkOn } from '@esmart/ui/theme/contrast';
 
 /**
- * Tab-level header: company/branch switcher on the left, sync state, global
- * search and notifications on the right.
+ * Tab-level header: company/branch switcher on the left, connection state or
+ * server speed, global search and notifications on the right.
  */
 export function AppHeader({ title, subtitle }: { title?: string; subtitle?: string }) {
   const t = useTheme();
@@ -208,6 +209,8 @@ export function AppHeader({ title, subtitle }: { title?: string; subtitle?: stri
 
         {/* On a narrow phone the status badge gives way (shrinks) before the buttons do. */}
         <ConnectionBadge style={{ flexShrink: 1, alignSelf: 'center' }} />
+        {/* Same slot: the server's speed once online and loaded (the two never show together). */}
+        <LatencyChip />
 
         {desktop ? null : (
           <>
