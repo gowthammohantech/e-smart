@@ -5,10 +5,12 @@ import { RemoteError } from './errors';
 
 const path = (companyId: string, id: string) => ({ path: { companyId, id } });
 
-/** The server-rendered PDF (IRN, signed QR, e-way bill number, UPI QR), as bytes. */
-export async function documentPdf(companyId: string, id: string, locale?: 'en' | 'ta'): Promise<Uint8Array> {
+export type PrintCopy = 'original' | 'duplicate' | 'triplicate' | 'all';
+
+/** The server-rendered PDF (IRN, signed QR, e-way bill number, UPI QR), as bytes; `copy` labels it, `all` gives the three. */
+export async function documentPdf(companyId: string, id: string, locale?: 'en' | 'ta', copy?: PrintCopy): Promise<Uint8Array> {
   const { data } = await api.GET('/companies/{companyId}/documents/{id}/pdf', {
-    params: { ...path(companyId, id), query: locale ? { locale } : {} },
+    params: { ...path(companyId, id), query: { ...(locale && { locale }), ...(copy && { copy }) } },
     parseAs: 'arrayBuffer',
   });
   if (!data) throw new RemoteError('noPdf', 'The server returned no PDF');

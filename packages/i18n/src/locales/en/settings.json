@@ -684,8 +684,42 @@
       "red": "Red",
       "purple": "Purple",
       "orange": "Orange",
-      "charcoal": "Charcoal"
-    }
+      "charcoal": "Charcoal",
+      "navy": "Navy",
+      "gold": "Gold"
+    },
+    "layout": "Template",
+    "layoutHint": "Every template prints what GST asks for. Each invoice can also be printed in another one from its preview.",
+    "layouts": {
+      "standard": {
+        "name": "Standard",
+        "description": "Clean and open, with totals on the right."
+      },
+      "classic": {
+        "name": "Classic",
+        "description": "Ruled boxes, taxes under the items and an HSN-wise tax table."
+      },
+      "detailed": {
+        "name": "Detailed",
+        "description": "Classic with ship-to, dispatch-from, PAN/TAN and tax on each line."
+      },
+      "modern": {
+        "name": "Modern",
+        "description": "Soft cards and a filled items table."
+      }
+    },
+    "logoPosition": "Logo",
+    "logoLeft": "Left",
+    "logoRight": "Right",
+    "sections": "What prints",
+    "hsnSummary": "HSN-wise tax table",
+    "bank": "Bank details and UPI QR",
+    "signature": "Signature",
+    "declaration": "Declaration",
+    "declarationText": "Declaration text",
+    "shipTo": "Ship-to and dispatch-from",
+    "panTan": "Company PAN and TAN",
+    "customerSeal": "Customer's seal box"
   },
   "vehicles": {
     "title": "Vehicles",

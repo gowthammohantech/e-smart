@@ -6,10 +6,13 @@ import { Stack, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Button } from '@esmart/ui/components/Button';
+import { PickerField } from '@esmart/ui/components/Field';
+import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { useToast } from '@esmart/ui/components/Toast';
 import { buildDocumentHtml } from '@esmart/core/render/documentHtml';
 import { NOTE_SOURCE } from '@esmart/core/domain/documentStates';
+import { INVOICE_LAYOUTS, isInvoiceLayout, resolveTemplate, type InvoiceLayout } from '@esmart/core/render/invoiceTemplate';
 import { documentKindLabel } from '@esmart/core/labels';
 import {
   useActiveCompany,
@@ -21,7 +24,10 @@ import {
 import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { HtmlPreview, printHtml } from '../../../features/documents/HtmlPreview';
 import { deliverFile } from '../../../features/reports/exportFiles';
-import { documentPdf, pdfFileName } from '../../../remote/documents';
+import { documentPdf, pdfFileName, type PrintCopy } from '../../../remote/documents';
+import { api } from '../../../remote/api';
+import { applyEntity } from '../../../remote/apply';
+import { LayoutThumb } from '../../../features/documents/LayoutThumb';
 import { describeError } from '../../../remote/errors';
 import { useDocumentRecord } from '../../../remote/queries';
 import { LoadingView } from '../../../components/LoadingView';
@@ -29,7 +35,7 @@ import { useAppStore } from '../../../store/appStore';
 
 export default function DocumentPreview() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['common', 'domain', 'nav', 'sales']);
+  const { t: tr } = useTranslation(['common', 'domain', 'nav', 'sales', 'settings']);
   const language = useResolvedLanguage();
   const toast = useToast();
   const insets = useSafeAreaInsets();
@@ -38,15 +44,20 @@ export default function DocumentPreview() {
   const doc = useDocument(id);
   const remote = useDocumentRecord(id);
   const company = useActiveCompany();
-  const sourceId = doc && NOTE_SOURCE[doc.kind] ? doc.sourceDocumentId : undefined;
-  // A note prints the invoice or bill it is against: fetched too, in case the device doesn't hold it.
+  const sourceId = doc?.sourceDocumentId;
+  // A note prints the invoice or bill it is against, an invoice the order or challan it came from:
+  // fetched too, in case the device doesn't hold it.
   useDocumentRecord(sourceId);
   const source = useDocument(sourceId);
+  const against = !!doc && !!NOTE_SOURCE[doc.kind];
   const party = useParty(doc?.partyId);
   const branches = useBranches();
   const ewayBill = useActiveEwayBill(doc?.id);
   const [busy, setBusy] = useState(false);
   const desktop = useIsDesktop();
+  const [copy, setCopy] = useState<PrintCopy>('original');
+  const [picking, setPicking] = useState<'layout' | 'copy' | null>(null);
+  const [savingLayout, setSavingLayout] = useState(false);
 
   const customFields = useAppStore((s) => s.customFields);
   const html = useMemo(
@@ -60,11 +71,13 @@ export default function DocumentPreview() {
             party,
             branch: branches.find((b) => b.id === doc.branchId),
             ewayBill,
-            source,
+            source: against ? source : undefined,
+            origin: !against && source ? { number: source.number, date: source.date, kind: source.kind } : undefined,
             customFields,
+            copy,
           })
         : '',
-    [doc, company, party, branches, ewayBill, source, customFields, tr, language],
+    [doc, company, party, branches, ewayBill, source, against, customFields, copy, tr, language],
   );
 
   if (!doc && remote.isLoading) return <LoadingView variant="page" title={tr('nav:title.preview')} />;
@@ -78,6 +91,31 @@ export default function DocumentPreview() {
   }
 
   const label = documentKindLabel(tr, doc.kind, 1);
+  const layoutName = (l: InvoiceLayout) => tr(`settings:invoiceDesign.layouts.${l}.name`);
+  const companyLayout = resolveTemplate(company.invoiceTemplate).layout;
+  const shownLayout = doc.printLayout ?? companyLayout;
+  const COPIES: PrintCopy[] = ['original', 'duplicate', 'triplicate', 'all'];
+
+  /** This document's own template: saved on the server, so its PDF, link and emails follow. */
+  const chooseLayout = async (value: string) => {
+    setPicking(null);
+    const layout = isInvoiceLayout(value) ? value : null;
+    if (layout === (doc.printLayout ?? null)) return;
+    setSavingLayout(true);
+    try {
+      const { data, error } = await api.PUT('/companies/{companyId}/documents/{id}/print-layout', {
+        params: { path: { companyId: doc.companyId, id: doc.id } },
+        body: { layout },
+      });
+      if (error || !data) throw error ?? new Error('No answer from the server');
+      applyEntity('document', data);
+      toast.show(tr('sales:print.layoutSaved', { kind: label.toLowerCase(), name: layoutName(layout ?? companyLayout) }), 'success', { icon: 'file-document-outline', detail: doc.number });
+    } catch (err) {
+      toast.show(describeError(err, tr), 'error');
+    } finally {
+      setSavingLayout(false);
+    }
+  };
 
   /** The server's PDF, the same one the customer receives: downloaded in a browser, shared on a phone. */
   const share = async () => {
@@ -85,7 +123,7 @@ export default function DocumentPreview() {
     try {
       await toast.promise(
         (async () => {
-          const bytes = await documentPdf(doc.companyId, doc.id, language === 'ta' ? 'ta' : 'en');
+          const bytes = await documentPdf(doc.companyId, doc.id, language === 'ta' ? 'ta' : 'en', copy);
           await deliverFile(pdfFileName(doc.kind, doc.number), bytes, 'application/pdf');
         })(),
         {
@@ -105,6 +143,59 @@ export default function DocumentPreview() {
   return (
     <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
       <Stack.Screen options={{ title: tr('nav:title.documentPreview', { kind: label }) }} />
+
+      {/* How this one prints: its template (saved on it) and which copy (only for this print). */}
+      <View
+        style={{
+          flexDirection: 'row',
+          gap: t.spacing.md,
+          paddingHorizontal: t.spacing.lg,
+          paddingVertical: t.spacing.sm,
+          backgroundColor: t.c.paper,
+          borderBottomWidth: 1,
+          borderBottomColor: t.c.line,
+        }}
+      >
+        <PickerField
+          label={tr('sales:print.template')}
+          value={layoutName(shownLayout)}
+          icon="file-document-edit-outline"
+          onPress={() => setPicking('layout')}
+          disabled={savingLayout}
+          containerStyle={{ flex: 1 }}
+        />
+        <PickerField label={tr('sales:print.copy')} value={tr(`sales:print.copies.${copy}`)} icon="content-copy" onPress={() => setPicking('copy')} containerStyle={{ flex: 1 }} />
+      </View>
+      <SelectSheet
+        visible={picking === 'layout'}
+        onClose={() => setPicking(null)}
+        title={tr('sales:print.template')}
+        subtitle={doc.number}
+        searchable={false}
+        value={doc.printLayout ?? 'default'}
+        onSelect={(v) => void chooseLayout(v)}
+        options={[
+          { value: 'default', label: tr('sales:print.businessDefaultIs', { name: layoutName(companyLayout) }), icon: 'domain' },
+          ...INVOICE_LAYOUTS.map((l) => ({
+            value: l,
+            label: layoutName(l),
+            description: tr(`settings:invoiceDesign.layouts.${l}.description`),
+            leading: <LayoutThumb layout={l} accent={resolveTemplate(company.invoiceTemplate, l).accentColor} width={30} />,
+          })),
+        ]}
+      />
+      <SelectSheet
+        visible={picking === 'copy'}
+        onClose={() => setPicking(null)}
+        title={tr('sales:print.copy')}
+        searchable={false}
+        value={copy}
+        onSelect={(v) => {
+          setCopy(v as PrintCopy);
+          setPicking(null);
+        }}
+        options={COPIES.map((c) => ({ value: c, label: tr(`sales:print.copies.${c}`), icon: c === 'all' ? 'content-copy' : 'file-outline' }))}
+      />
 
       {desktop ? (
         // A desktop shows the page as a sheet of paper on the canvas.

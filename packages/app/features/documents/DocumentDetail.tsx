@@ -198,8 +198,9 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
       party,
       branch,
       ewayBill,
-      // Returns and notes name the invoice or bill they're against.
+      // Returns and notes name the invoice or bill they're against; an invoice the order or challan it came from.
       source: NOTE_SOURCE[doc.kind] ? sourceDoc : undefined,
+      origin: !NOTE_SOURCE[doc.kind] && sourceDoc ? { number: sourceDoc.number, date: sourceDoc.date, kind: sourceDoc.kind } : undefined,
       customFields,
     });
 

@@ -443,7 +443,18 @@
     "sharePdf": "Share PDF",
     "pdfFailed": "Could not generate the PDF on this device",
     "printUnavailable": "Printing is not available here",
-    "savePdf": "Save as PDF"
+    "savePdf": "Save as PDF",
+    "template": "Template",
+    "businessDefault": "Business default",
+    "businessDefaultIs": "Business default ({{name}})",
+    "layoutSaved": "This {{kind}} now prints in {{name}}",
+    "copy": "Copy",
+    "copies": {
+      "original": "Original for recipient",
+      "duplicate": "Duplicate for transporter",
+      "triplicate": "Triplicate for supplier",
+      "all": "All three"
+    }
   },
   "pdf": {
     "billTo": "Bill to",
