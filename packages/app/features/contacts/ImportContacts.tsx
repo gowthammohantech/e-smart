@@ -1,6 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, View } from 'react-native';
+import { Platform, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Badge } from '@esmart/ui/components/Badge';
@@ -12,7 +12,8 @@ import { Text } from '@esmart/ui/components/Text';
 import { useToast } from '@esmart/ui/components/Toast';
 import { FormContainer } from '@esmart/ui/components/Layout';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
-import { guessColumns, parseCsv, partiesFromCsv, type ImportKind, type ImportRow } from '@esmart/core/domain/partyImport';
+import { guessColumns, parseCsv, partiesFromCsv, type ImportedParty, type ImportField, type ImportKind, type ImportRow } from '@esmart/core/domain/partyImport';
+import { formatMoney } from '@esmart/core/lib/format';
 import { api } from '../../remote/api';
 import { describeError } from '../../remote/errors';
 import { refreshSoon } from '../../remote/refresh';
@@ -20,18 +21,113 @@ import { useBaseCurrency } from '../../store/selectors';
 import { useAppStore } from '../../store/appStore';
 import { useCustomFields } from '../customFields/CustomFieldsSection';
 import { CAN_PICK_FILES, pickFile } from '../import/pickFile';
+import { ImportFlow, type ColumnMapping, type ImportColumn } from '../import/ImportFlow';
 
 type Outcome = { index: number; status: 'created' | 'duplicate' | 'invalid'; issues?: { message?: string }[] };
 const KINDS: ImportKind[] = ['customer', 'supplier', 'both', 'general'];
 /** A sample of the sheet: column names as spreadsheets have them, in English in every language. */
 const SAMPLE_CSV = ['Name,GSTIN,Phone,State,Opening Balance', 'Murugan Traders,33AAACM1234A1ZF,9840012345,Tamil Nadu,12500'].join('\n');
 
+const PARTY_FIELDS: ImportField[] = ['name', 'displayName', 'code', 'kind', 'taxId', 'pan', 'email', 'phone', 'line1', 'line2', 'city', 'state', 'postalCode', 'country', 'openingBalance', 'openingSide', 'creditLimit', 'paymentTermsDays', 'notes'];
+type PartyRecord = ImportedParty & { row: number };
+
+/**
+ * On the web: the shared ImportFlow (choose the file, match its columns, check, import), as items
+ * have. Phones keep the paste screen until ImportFlow can pick a file there.
+ */
+export function ImportContacts() {
+  return Platform.OS === 'web' ? <ImportContactsFlow /> : <ImportContactsPaste />;
+}
+
+function ImportContactsFlow() {
+  const t = useTheme();
+  const router = useRouter();
+  const toast = useToast();
+  const { t: tr } = useTranslation(['contacts', 'common']);
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  const currency = useBaseCurrency();
+  const contactFields = useCustomFields('party');
+  const [kind, setKind] = useState<ImportKind>('customer');
+
+  const fields = useMemo(() => PARTY_FIELDS.map((key) => ({ key, label: tr(`contacts:import.field.${key}`), required: key === 'name' })), [tr]);
+  const detect = useCallback((rows: string[][]) => ({ headerRow: 0, mapping: guessColumns(rows[0] ?? []) }), []);
+  const toRecords = useCallback(
+    (rows: string[][], headerRow: number, mapping: ColumnMapping) => {
+      const offset = Math.max(headerRow, 0);
+      // partiesFromCsv reads the row after its first as data, and its first for custom-field headers.
+      const read = partiesFromCsv(rows.slice(offset), mapping as Partial<Record<ImportField, number>>, { kind, currency }, contactFields);
+      return {
+        records: read.filter((r) => r.party).map((r) => ({ ...r.party!, row: r.line + offset })),
+        errors: read.filter((r) => !r.party).map((r) => ({ row: r.line + offset, message: r.problems.join(' · ') })),
+      };
+    },
+    [kind, currency, contactFields],
+  );
+  const columns = useMemo<ImportColumn<PartyRecord>[]>(
+    () => [
+      { key: 'kind', label: tr('contacts:import.field.kind'), render: (p) => tr(`contacts:kind.${p.kind}`) },
+      { key: 'name', label: tr('contacts:import.field.name'), render: (p) => p.name },
+      { key: 'details', label: tr('contacts:import.col.details'), render: (p) => [p.taxId, p.phone, p.billingAddress.state].filter(Boolean).join(' · ') },
+      { key: 'balance', label: tr('contacts:import.col.balance'), align: 'right', render: (p) => (p.openingBalance.minor ? formatMoney(p.openingBalance) : '') },
+    ],
+    [tr],
+  );
+
+  const send = async (records: PartyRecord[], dryRun: boolean) => {
+    const { data, error } = await api.POST('/companies/{companyId}/parties/import', {
+      params: { path: { companyId } },
+      body: { rows: records.map(({ row: _row, ...party }) => party) as never, dryRun },
+    });
+    if (error || !data) throw error ?? new Error('No answer from the server');
+    return data;
+  };
+
+  return (
+    <ImportFlow<PartyRecord>
+      title={tr('contacts:import.title')}
+      hint={tr('contacts:import.fileHint')}
+      accept={['.csv']}
+      fields={fields}
+      detect={detect}
+      toRecords={toRecords}
+      columns={columns}
+      maxRecords={1000}
+      options={
+        <View style={{ gap: t.spacing.xs }}>
+          <Text variant="caption" tone="muted" weight="600">
+            {tr('contacts:import.defaultKind')}
+          </Text>
+          <Segmented options={KINDS.map((k) => ({ value: k, label: tr(`contacts:kind.${k}`) }))} value={kind} onChange={(v) => setKind(v as ImportKind)} />
+        </View>
+      }
+      onDryRun={async (records) => {
+        const res = await send(records, true);
+        const results = (res.results ?? []) as Outcome[];
+        const created = results.filter((r) => r.status === 'created').length;
+        return {
+          summary: tr('contacts:import.summary', { total: records.length, good: created }),
+          rowFlags: results.map((r) =>
+            r.status === 'duplicate' ? tr('contacts:import.status.duplicate') : r.status === 'invalid' ? (r.issues ?? []).map((x) => x.message).join(' · ') : undefined,
+          ),
+        };
+      }}
+      onConfirm={async (records) => {
+        const res = await send(records, false);
+        refreshSoon();
+        toast.show(tr('contacts:import.done', { count: res.created ?? 0 }), 'success', { icon: 'account-check-outline', detail: tr('contacts:import.skipped', { count: records.length - (res.created ?? 0) }) });
+        router.replace('/(app)/(tabs)/contacts');
+      }}
+      confirmLabel={(count) => tr('contacts:import.import', { count })}
+    />
+  );
+}
+
 /**
  * Contacts from a spreadsheet: read on the device (core/domain/partyImport), checked by the server
  * without saving (a dry run), then created in one go. Rows the sheet gets wrong, and contacts already
  * in the book, are shown and left out.
  */
-export function ImportContacts() {
+function ImportContactsPaste() {
   const t = useTheme();
   const router = useRouter();
   const toast = useToast();

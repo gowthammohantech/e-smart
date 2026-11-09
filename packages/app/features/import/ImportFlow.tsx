@@ -32,6 +32,8 @@
  * - `confirmLabel?(count)`: the import button's text for `count` records.
  * - `maxRecords?`: more than this and the file must be split (default 10 000).
  * - `maxBytes?`: the largest file taken (default 5 MB).
+ * - `options?`: choices that shape how rows are read (e.g. the contact type for rows that
+ *   don't say), shown above the file button on the first step.
  *
  * The phone apps can't pick files yet (no document picker in the store build),
  * so there the flow only says to import from a computer, on the web.
@@ -84,6 +86,7 @@ export type ImportFlowProps<T> = {
   confirmLabel?: (count: number) => string;
   maxRecords?: number;
   maxBytes?: number;
+  options?: React.ReactNode;
 };
 
 /** How many preview rows and problems are drawn; the counts cover them all. */
@@ -104,6 +107,7 @@ export function ImportFlow<T>({
   confirmLabel,
   maxRecords = 10_000,
   maxBytes = 5 * 1024 * 1024,
+  options,
 }: ImportFlowProps<T>) {
   const t = useTheme();
   const desktop = useIsDesktop();
@@ -273,6 +277,7 @@ export function ImportFlow<T>({
 
         {step === 0 ? (
           <Card style={{ gap: t.spacing.md }}>
+            {options}
             <Text variant="small" tone="muted">
               {tr('banking:importFlow.kinds', { kinds })}
             </Text>

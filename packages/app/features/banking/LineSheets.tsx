@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
+import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { SkeletonGroup, SkeletonRows } from '@esmart/ui/components/Skeleton';
 import { Button } from '@esmart/ui/components/Button';
 import { PickerField, SwitchField, TextField } from '@esmart/ui/components/Field';
@@ -82,6 +83,8 @@ export function FindMatchSheet({ line, onClose }: { line: BankLine | null; onClo
 /** Record payment: money in from a customer, or out to a supplier, through this bank. */
 export function RecordPaymentSheet({ line, onClose }: { line: BankLine | null; onClose: () => void }) {
   const t = useTheme();
+  // A desktop keeps this dialog open under its pickers; a phone shows one sheet at a time.
+  const stack = useIsDesktop();
   const { t: tr } = useTranslation(['banking', 'common']);
   const into = (line?.amount.minor ?? 0) > 0;
   const [partyId, setPartyId] = useState<string>();
@@ -121,7 +124,7 @@ export function RecordPaymentSheet({ line, onClose }: { line: BankLine | null; o
   return (
     <>
       <Sheet
-        visible={!partyOpen && !methodOpen}
+        visible={stack || (!partyOpen && !methodOpen)}
         onClose={onClose}
         title={tr(into ? 'banking:record.paymentInTitle' : 'banking:record.paymentOutTitle')}
         footer={<Button title={tr('banking:record.savePayment')} onPress={() => void save()} loading={busy === 'payment'} disabled={!partyId || docsLoading || !!busy} fullWidth />}
@@ -213,6 +216,8 @@ export function RecordPaymentSheet({ line, onClose }: { line: BankLine | null; o
 /** Record expense: a debit line as an expense under a category, from a supplier if there was one. */
 export function RecordExpenseSheet({ line, onClose }: { line: BankLine | null; onClose: () => void }) {
   const t = useTheme();
+  // A desktop keeps this dialog open under its pickers; a phone shows one sheet at a time.
+  const stack = useIsDesktop();
   const { t: tr } = useTranslation(['banking', 'common']);
   const categories = useExpenseCategories();
   const [categoryId, setCategoryId] = useState<string>();
@@ -234,7 +239,7 @@ export function RecordExpenseSheet({ line, onClose }: { line: BankLine | null; o
   return (
     <>
       <Sheet
-        visible={!categoryOpen && !supplierOpen}
+        visible={stack || (!categoryOpen && !supplierOpen)}
         onClose={onClose}
         title={tr('banking:record.expenseTitle')}
         footer={<Button title={tr('banking:record.saveExpense')} onPress={() => void save()} loading={busy === 'expense'} disabled={!categoryId || !!busy} fullWidth />}
@@ -304,6 +309,8 @@ export function RecordExpenseSheet({ line, onClose }: { line: BankLine | null; o
  */
 export function RecordVoucherSheet({ line, onClose }: { line: BankLine | null; onClose: () => void }) {
   const t = useTheme();
+  // A desktop keeps this dialog open under its pickers; a phone shows one sheet at a time.
+  const stack = useIsDesktop();
   const { t: tr } = useTranslation(['banking', 'common']);
   const { book, loaded } = useServerBook();
   const nameOf = useAccountName();
@@ -327,7 +334,7 @@ export function RecordVoucherSheet({ line, onClose }: { line: BankLine | null; o
   return (
     <>
       <Sheet
-        visible={!picking}
+        visible={stack || !picking}
         onClose={onClose}
         title={tr(into ? 'banking:record.voucherInTitle' : 'banking:record.voucherOutTitle')}
         footer={<Button title={tr('banking:record.saveVoucher')} onPress={() => void save()} loading={busy === 'voucher'} disabled={!account || !!busy} fullWidth />}

@@ -855,7 +855,7 @@ export default function Report() {
 
   // A desktop browser gets its own layout; the phone keeps the single column above.
   // Reports without a desktop layout of their own keep the single column there too.
-  if (desktop && !['tds-register', 'tds-payable', 'tds-receivable', 'tds-26q', 'tds-challans', 'msme-payables'].includes(key)) {
+  if (desktop && !['tds-register', 'tds-payable', 'tds-receivable', 'tds-26q', 'tds-challans', 'tcs-register', 'tcs-payable', 'msme-payables'].includes(key)) {
     body = (
       <ReportDesktop
         report={key}

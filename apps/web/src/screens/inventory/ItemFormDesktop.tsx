@@ -22,7 +22,7 @@ import { useActiveCompany, useBaseCurrency, useBrands, useHasModule, useItemCate
 import { Divider, Panel, Row, SummaryRow, TwoColumns } from './parts';
 import { useGoBack } from '@esmart/app/navigation/useGoBack';
 import { FROM_DOCUMENT, handBack } from '@esmart/app/navigation/handBack';
-import { CustomFieldsSection } from '@esmart/app/features/customFields/CustomFieldsSection';
+import { CustomFieldsSection, customFieldErrors, useCustomFields } from '@esmart/app/features/customFields/CustomFieldsSection';
 import type { CustomValues } from '@esmart/core/domain/customFields';
 import { GstTreatmentFields } from '@esmart/app/features/catalog/GstTreatmentFields';
 
@@ -80,6 +80,10 @@ function ItemFormDesktopFields({ item }: { item?: Item }) {
   const [categoryId, setCategoryId] = useState(item?.categoryId ?? '');
   const [brandId, setBrandId] = useState(item?.brandId ?? '');
   const [customFields, setCustomFields] = useState<CustomValues>(item?.customFields ?? {});
+  // The company's own fields, checked as the server will; shown once Save is tried (as on the phone).
+  const companyFields = useCustomFields('item');
+  const customErrors = customFieldErrors(companyFields, 'item', customFields, tr);
+  const [customTried, setCustomTried] = useState(false);
   // The item's GST treatment (supply type, reverse charge, cess, ITC): kept, and editable, as on the phone.
   const [gst, setGst] = useState(item?.gst);
 
@@ -127,7 +131,8 @@ function ItemFormDesktopFields({ item }: { item?: Item }) {
       next.sku = tr('inventory:form.skuTaken');
     }
     setErrors(next);
-    if (hasErrors(next)) {
+    setCustomTried(true);
+    if (hasErrors(next) || Object.keys(customErrors).length) {
       focusFirstInvalid();
       return;
     }
@@ -260,7 +265,7 @@ function ItemFormDesktopFields({ item }: { item?: Item }) {
                     />
                   </Row>
                 ) : null}
-                <CustomFieldsSection entity="item" values={customFields} onChange={setCustomFields} />
+                <CustomFieldsSection entity="item" values={customFields} onChange={setCustomFields} errors={customTried ? customErrors : undefined} />
               </Panel>
 
               <Panel title={tr('inventory:form.section.pricing')} subtitle={tr('inventory:form.section.pricingHint')} icon="currency-inr">

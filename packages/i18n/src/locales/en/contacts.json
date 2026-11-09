@@ -216,6 +216,32 @@
       "invalid": "Fix",
       "duplicate": "Already there",
       "ready": "Ready"
+    },
+    "field": {
+      "name": "Name",
+      "displayName": "Display name",
+      "code": "Code",
+      "kind": "Type",
+      "taxId": "GSTIN",
+      "pan": "PAN",
+      "email": "Email",
+      "phone": "Phone",
+      "line1": "Address",
+      "line2": "Address line 2",
+      "city": "City",
+      "state": "State",
+      "postalCode": "PIN code",
+      "country": "Country",
+      "openingBalance": "Opening balance",
+      "openingSide": "Dr/Cr",
+      "creditLimit": "Credit limit",
+      "paymentTermsDays": "Credit days",
+      "notes": "Notes"
+    },
+    "fileHint": "Choose a CSV saved from Excel, Google Sheets, Tally or another app, then match its columns. Check it first; nothing is saved until you import.",
+    "col": {
+      "details": "Details",
+      "balance": "Opening balance"
     }
   }
 }

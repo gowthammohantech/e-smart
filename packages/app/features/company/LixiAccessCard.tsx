@@ -7,6 +7,7 @@ import { Card } from '@esmart/ui/components/Card';
 import { SwitchField } from '@esmart/ui/components/Field';
 import { LixiMark } from '@esmart/ui/components/LixiOrb';
 import { useToast } from '@esmart/ui/components/Toast';
+import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { type LixiAccess, useUiStore } from '../../store/uiStore';
 
 const LIXI_WAYS = [
@@ -28,6 +29,9 @@ export function LixiAccessCard() {
   const setLixiAccess = useUiStore((s) => s.setLixiAccess);
   const hintsLearned = useUiStore((s) => s.lixiHintsLearned);
   const resetLixiHints = useUiStore((s) => s.resetLixiHints);
+  // Holding a tab, swiping up, the floating orb and pulling down are phone gestures; a desktop opens Lixi from its side panel.
+  const desktop = useIsDesktop();
+  if (desktop) return null;
 
   return (
     <View style={{ gap: t.spacing.sm }}>
