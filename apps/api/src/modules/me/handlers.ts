@@ -35,6 +35,7 @@ export const meHandlers = defineHandlers({
       companies: await Promise.all(companies.map((c) => companyToWire(ctx.deps, c))),
       ...(defaultCompanyId ? { defaultCompanyId } : {}),
       platformRole: row.platformRole,
+      ...(ctx.user.demo ? { demo: true } : {}),
     };
   },
 
@@ -85,7 +86,8 @@ export const meHandlers = defineHandlers({
     const rows = await ctx.db
       .select()
       .from(S)
-      .where(and(eq(S.userId, ctx.user.id), isNull(S.revokedAt), gt(S.refreshExpiresAt, ctx.now)))
+      // Every visitor to the demo is the same user: each sees only their own device, not everyone else's.
+      .where(and(eq(S.userId, ctx.user.id), isNull(S.revokedAt), gt(S.refreshExpiresAt, ctx.now), ...(ctx.user.demo ? [eq(S.id, ctx.user.sessionId)] : [])))
       .orderBy(desc(S.lastActiveAt), desc(S.id));
     return {
       data: rows.map((s) =>

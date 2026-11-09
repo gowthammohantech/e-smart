@@ -119,6 +119,7 @@ paths:
     post:
       tags: [Auth]
       operationId: signIn
+      x-demo-allowed: true
       security: []
       summary: Sign in with email and password
       requestBody:
@@ -222,10 +223,33 @@ paths:
       responses:
         '204': { description: Password changed; all other sessions revoked }
         '400': { $ref: '#/components/responses/BadRequest' }
+  /auth/demo:
+    get:
+      tags: [Auth]
+      operationId: getDemoLogin
+      security: []
+      summary: The public demo account's sign-in, for the "Give it a try" button
+      description: |
+        The demo account is read-only (every write from it is refused with 403
+        DEMO_READ_ONLY), so its password is public. 404 when the demo is
+        switched off (DEMO_ENABLED=false) or not seeded yet.
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [email, password]
+                properties:
+                  email: { type: string, format: email }
+                  password: { type: string }
+        '404': { $ref: '#/components/responses/NotFound' }
   /auth/refresh:
     post:
       tags: [Auth]
       operationId: refreshToken
+      x-demo-allowed: true
       security: []
       summary: Rotate the refresh token and issue a new access token
       requestBody:
@@ -244,6 +268,7 @@ paths:
     post:
       tags: [Auth]
       operationId: signOut
+      x-demo-allowed: true
       summary: Revoke the current device session
       # Cancelling at the authenticator prompt signs out; that must not need the authenticator.
       x-mfa-exempt: true
@@ -2118,6 +2143,7 @@ paths:
     post:
       tags: [Documents]
       operationId: previewTds
+      x-demo-allowed: true
       x-plan-module: payables
       summary: The TDS a supplier's bill would keep back, as saving it would work it out
       description: |
@@ -2155,6 +2181,7 @@ paths:
     post:
       tags: [Documents]
       operationId: calculateDocument
+      x-demo-allowed: true
       summary: Compute totals and tax lines without saving anything
       description: The client's `lineCalc` gives an instant preview. This endpoint is the authoritative check.
       requestBody:
@@ -5617,6 +5644,7 @@ paths:
     post:
       tags: [Assistant]
       operationId: lixiChat
+      x-demo-allowed: true
       summary: Ask Lixi
       description: |
         Lixi answers from the company's books through the same routes the app
@@ -5810,6 +5838,7 @@ paths:
     post:
       tags: [Exports]
       operationId: createExport
+      x-demo-allowed: true
       summary: Export the whole company (backup), or Tally vouchers, as a background job. Also allowed while the business is archived.
       x-roles: [owner, admin]
       x-archived-allowed: true
@@ -6679,6 +6708,9 @@ components:
         platformRole:
           description: Set only for platform operators, who can use `/admin/*`
           oneOf: [{ $ref: '#/components/schemas/PlatformRole' }, { type: 'null' }]
+        demo:
+          type: boolean
+          description: The public demo account. Everything reads; every write is refused with 403 DEMO_READ_ONLY.
     PlanTier: { type: string, enum: [free, basic, pro, business] }
     UserRole: { type: string, enum: [owner, admin, accountant, sales, viewer] }
     InviteDetails:

@@ -114,6 +114,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/demo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The public demo account's sign-in, for the "Give it a try" button
+         * @description The demo account is read-only (every write from it is refused with 403
+         *     DEMO_READ_ONLY), so its password is public. 404 when the demo is
+         *     switched off (DEMO_ENABLED=false) or not seeded yet.
+         */
+        get: operations["getDemoLogin"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/refresh": {
         parameters: {
             query?: never;
@@ -4672,6 +4694,8 @@ export interface components {
             defaultCompanyId?: string;
             /** @description Set only for platform operators, who can use `/admin/*` */
             platformRole?: components["schemas"]["PlatformRole"] | null;
+            /** @description The public demo account. Everything reads; every write is refused with 403 DEMO_READ_ONLY. */
+            demo?: boolean;
         };
         /** @enum {string} */
         PlanTier: "free" | "basic" | "pro" | "business";
@@ -7532,6 +7556,31 @@ export interface operations {
                 content?: never;
             };
             400: components["responses"]["BadRequest"];
+        };
+    };
+    getDemoLogin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: email */
+                        email: string;
+                        password: string;
+                    };
+                };
+            };
+            404: components["responses"]["NotFound"];
         };
     };
     refreshToken: {

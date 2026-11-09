@@ -1,10 +1,11 @@
 import { randomInt } from 'node:crypto';
 import { and, desc, eq, gt, isNotNull, isNull, sql } from 'drizzle-orm';
 import { schema } from '@esmart/db';
+import { PUBLIC_DEMO_ACCOUNT_ID, PUBLIC_DEMO_OWNER_ID, publicDemoConfig } from '@esmart/db/demo/public/config';
 import { hashPassword, verifyPasswordTimed } from '../../auth/passwords';
 import { assertAccountActive, openSession, rotateSession } from '../../auth/sessions';
 import { defineHandlers, type Ctx } from '../../context';
-import { ApiError, badRequest, conflict, tooManyRequests, unauthorized } from '../../http/errors';
+import { ApiError, badRequest, conflict, notFound, tooManyRequests, unauthorized } from '../../http/errors';
 import { randomToken, sha256 } from '../../lib/crypto';
 import { newId } from '../../lib/ids';
 import { buildResetEmail } from '../../lib/resetEmail';
@@ -24,6 +25,12 @@ const LOCK_MAX_MINUTES = 1440;
 const PHONE_VERIFICATION_TTL_MS = 900_000;
 
 type AnyCtx = Ctx<'signIn'>;
+
+/** Whether an account is the public demo: its password is public, so it is never locked and never reset. */
+async function isDemoAccount(db: AnyCtx['db'], accountId: string) {
+  const [row] = await db.select({ isDemo: schema.accounts.isDemo }).from(schema.accounts).where(eq(schema.accounts.id, accountId));
+  return !!row?.isDemo;
+}
 
 async function sessionResponse(
   ctx: AnyCtx,
@@ -121,12 +128,15 @@ export const authHandlers = defineHandlers({
       await verifyPasswordTimed(null, ctx.body.password);
       throw unauthorized('INVALID_CREDENTIALS', 'Email or password is incorrect');
     }
+    // The demo's password is on the sign-in screen: a wrong guess there must not lock every visitor out.
+    const demo = await isDemoAccount(ctx.db, user.accountId);
     // Locked even for the right password: otherwise a guesser learns which guess was right.
-    if (user.lockedUntil && user.lockedUntil > ctx.now) throw accountLocked(ctx, user.lockedUntil);
+    if (!demo && user.lockedUntil && user.lockedUntil > ctx.now) throw accountLocked(ctx, user.lockedUntil);
     // The suspension lookup overlaps the password check instead of waiting for it.
     const accountCheck = assertAccountActive(ctx.db, user.accountId);
     accountCheck.catch(() => {});
     if (!(await verifyPasswordTimed(user.passwordHash, ctx.body.password))) {
+      if (demo) throw unauthorized('INVALID_CREDENTIALS', 'Email or password is incorrect');
       const [after] = await ctx.db
         .update(schema.users)
         .set({
@@ -228,7 +238,8 @@ export const authHandlers = defineHandlers({
 
   async forgotPassword(ctx) {
     const [user] = await ctx.db.select().from(schema.users).where(eq(schema.users.email, normalizeEmail(ctx.body.email)));
-    if (user && user.status === 'active') {
+    // The demo account's password is public and fixed; nobody may take it over by resetting it.
+    if (user && user.status === 'active' && !(await isDemoAccount(ctx.db, user.accountId))) {
       const token = randomToken();
       await ctx.db.insert(schema.passwordResetTokens).values({
         id: newId('prt'),
@@ -275,6 +286,19 @@ export const authHandlers = defineHandlers({
         .where(and(eq(schema.deviceSessions.userId, reset.userId), isNull(schema.deviceSessions.revokedAt)));
     });
     return undefined;
+  },
+
+  /** The public demo's sign-in, only while it is switched on and seeded (and not suspended). */
+  async getDemoLogin(ctx) {
+    const cfg = publicDemoConfig();
+    if (!cfg.enabled) throw notFound('Demo account');
+    const [row] = await ctx.db
+      .select({ email: schema.users.email, isDemo: schema.accounts.isDemo, suspendedAt: schema.accounts.suspendedAt })
+      .from(schema.users)
+      .innerJoin(schema.accounts, eq(schema.accounts.id, schema.users.accountId))
+      .where(and(eq(schema.users.id, PUBLIC_DEMO_OWNER_ID), eq(schema.users.accountId, PUBLIC_DEMO_ACCOUNT_ID)));
+    if (!row?.isDemo || row.suspendedAt) throw notFound('Demo account');
+    return { email: row.email, password: cfg.password };
   },
 
   async refreshToken(ctx) {

@@ -94,7 +94,7 @@ export async function remindMsmeDue(deps: Deps): Promise<number> {
     .from(P)
     .innerJoin(schema.companies, eq(schema.companies.id, P.companyId))
     .innerJoin(schema.accounts, eq(schema.accounts.id, schema.companies.accountId))
-    .where(and(inArray(P.msmeType, ['micro', 'small']), isNull(schema.accounts.suspendedAt), isNull(schema.companies.archivedAt)));
+    .where(and(inArray(P.msmeType, ['micro', 'small']), isNull(schema.accounts.suspendedAt), isNull(schema.companies.archivedAt), eq(schema.accounts.isDemo, false)));
   let sent = 0;
   for (const { id: companyId } of companies) {
     const { parties, bills, payments, names } = await loadMsme(deps.db, companyId, asOf);

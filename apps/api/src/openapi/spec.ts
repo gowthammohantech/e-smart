@@ -25,6 +25,8 @@ export type Operation = {
   mfaExempt: boolean;
   /** `x-archived-allowed`: a write still allowed on an archived business (exports, restoring it). */
   archivedAllowed: boolean;
+  /** `x-demo-allowed`: a non-GET the read-only demo account may still call (sign-in, totals preview, exports). */
+  demoAllowed: boolean;
   planModule: Module | null;
   /** False for `security: []` operations (auth, plans, most reference data). */
   secured: boolean;
@@ -113,6 +115,7 @@ export function loadOperations() {
           platformRoles: op['x-platform-roles'] ?? null,
           mfaExempt: op['x-mfa-exempt'] === true,
           archivedAllowed: op['x-archived-allowed'] === true,
+          demoAllowed: op['x-demo-allowed'] === true,
           planModule: op['x-plan-module'] ?? null,
           secured: isWebhook ? false : !(Array.isArray(op.security) && op.security.length === 0),
           successStatus,

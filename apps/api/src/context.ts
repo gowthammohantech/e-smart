@@ -36,6 +36,8 @@ export type AuthUser = {
   /** Operators only: an authenticator is set up, and this session has passed it. */
   mfaEnrolled: boolean;
   mfaVerified: boolean;
+  /** A user of the public demo account: reads only (guards.ts refuses every other write). */
+  demo?: boolean;
 };
 
 export type CompanyRow = typeof schema.companies.$inferSelect;

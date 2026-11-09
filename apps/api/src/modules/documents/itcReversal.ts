@@ -23,7 +23,7 @@ export async function reverseUnpaidItc(deps: Pick<Deps, 'db' | 'now'> & Deps): P
     .select({ id: schema.companies.id })
     .from(schema.companies)
     .innerJoin(schema.accounts, eq(schema.accounts.id, schema.companies.accountId))
-    .where(and(isNull(schema.accounts.suspendedAt), isNull(schema.companies.archivedAt), eq(schema.companies.taxRegistered, true)));
+    .where(and(isNull(schema.accounts.suspendedAt), isNull(schema.companies.archivedAt), eq(schema.accounts.isDemo, false), eq(schema.companies.taxRegistered, true)));
 
   const reversed = await deps.db
     .update(D)

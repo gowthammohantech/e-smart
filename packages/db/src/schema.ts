@@ -1749,6 +1749,14 @@ export const accounts = pgTable("accounts", {
 	 * requires them (72 months from the annual return's due date, so 8 years is safe), then erased.
 	 */
 	purgeAfter: timestamp("purge_after", { withTimezone: true, mode: 'date' }),
+	/**
+	 * The public "Give it a try" account: every user of it is read-only (the API refuses anything but reads),
+	 * background jobs leave its businesses alone, and the seeder rebuilds it (packages/db/src/demo/public).
+	 */
+	isDemo: boolean("is_demo").default(false).notNull(),
+	/** Which dataset version the demo seeder last wrote, and when; a newer version or a stale date rebuilds it. */
+	demoSeedVersion: integer("demo_seed_version"),
+	demoSeededAt: timestamp("demo_seeded_at", { withTimezone: true, mode: 'date' }),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
 }, (table): PgTableExtraConfigValue[] => [

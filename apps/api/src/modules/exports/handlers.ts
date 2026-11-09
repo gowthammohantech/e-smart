@@ -118,7 +118,7 @@ export async function queueDueBackups(deps: Pick<Deps, 'db' | 'now'>): Promise<s
     .from(BS)
     .innerJoin(schema.companies, eq(schema.companies.id, BS.companyId))
     .innerJoin(schema.accounts, eq(schema.accounts.id, schema.companies.accountId))
-    .where(and(eq(BS.automatic, true), isNull(schema.accounts.suspendedAt), isNull(schema.companies.archivedAt)));
+    .where(and(eq(BS.automatic, true), isNull(schema.accounts.suspendedAt), isNull(schema.companies.archivedAt), eq(schema.accounts.isDemo, false)));
   const queued: string[] = [];
   for (const r of rows) {
     if (r.lastBackupAt && now.getTime() - r.lastBackupAt.getTime() < BACKUP_EVERY_MS[r.frequency] - 3_600_000) continue;

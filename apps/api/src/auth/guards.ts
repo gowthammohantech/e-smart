@@ -8,7 +8,7 @@ import type { AccessClaims } from './sessions';
 
 async function loadUser(deps: Deps, claims: AccessClaims): Promise<AuthUser | null> {
   const [row] = await deps.db
-    .select({ u: schema.users, revokedAt: schema.deviceSessions.revokedAt, mfaVerifiedAt: schema.deviceSessions.mfaVerifiedAt, suspendedAt: schema.accounts.suspendedAt })
+    .select({ u: schema.users, revokedAt: schema.deviceSessions.revokedAt, mfaVerifiedAt: schema.deviceSessions.mfaVerifiedAt, suspendedAt: schema.accounts.suspendedAt, isDemo: schema.accounts.isDemo })
     .from(schema.users)
     .innerJoin(schema.deviceSessions, eq(schema.deviceSessions.userId, schema.users.id))
     .innerJoin(schema.accounts, eq(schema.accounts.id, schema.users.accountId))
@@ -36,6 +36,7 @@ async function loadUser(deps: Deps, claims: AccessClaims): Promise<AuthUser | nu
     sessionId: claims.sid,
     mfaEnrolled: !!row.u.totpEnabledAt,
     mfaVerified: !!row.mfaVerifiedAt,
+    demo: row.isDemo,
   };
 }
 
@@ -77,6 +78,10 @@ export async function companyFor(deps: Deps, user: AuthUser, companyId: string):
   return company;
 }
 
+/** What every write from the public demo account gets back; the app turns it into a "create your account" prompt. */
+export const demoReadOnly = () =>
+  new ApiError(403, 'DEMO_READ_ONLY', "This is a demo, so changes aren't saved. Create your free account to keep your own books.");
+
 /**
  * The guard chain, in order, for every contract route:
  * authenticate → company access → role → plan module.
@@ -94,6 +99,9 @@ export function registerGuards(app: FastifyInstance, deps: Deps) {
     await authenticate(app, deps, req, op.secured);
     const user = req.authUser;
     if (!user) return;
+
+    // The public demo is for looking around: it reads everything and changes nothing, its own profile included.
+    if (user.demo && op.method !== 'GET' && !op.demoAllowed) throw demoReadOnly();
 
     if (op.platformRoles) {
       if (!user.platformRole || !op.platformRoles.includes(user.platformRole)) {
