@@ -4,7 +4,7 @@ import { Platform, Pressable, StyleProp, TextInput, View, ViewStyle } from 'reac
 import { Icon } from './Icon';
 import { useTheme } from '../theme/ThemeProvider';
 import { WEB_INPUT_RESET, webFocusHalo } from './Field';
-import { useIsDesktop } from '../theme/breakpoints';
+import { SEARCH_MAX_WIDTH, useIsDesktop } from '../theme/breakpoints';
 
 export function SearchBar({
   value,
@@ -46,6 +46,8 @@ export function SearchBar({
           borderColor: webFocused ? t.c.primary : t.c.inputBorder,
           paddingHorizontal: t.spacing.md,
           height: small ? 38 : 44,
+          // A desktop search box is sized for a name, not the page; a screen can still set its own.
+          maxWidth: desktop ? SEARCH_MAX_WIDTH : undefined,
           ...webFocusHalo(t, webFocused),
         },
         style,

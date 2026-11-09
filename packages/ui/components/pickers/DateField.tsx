@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Platform, Pressable, View } from 'react-native';
+import { Platform, Pressable, StyleProp, View, ViewStyle } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Icon } from '../Icon';
 import { useTheme } from '../../theme/ThemeProvider';
@@ -19,6 +19,7 @@ export function DateField({
   error,
   minimumDate,
   maximumDate,
+  containerStyle,
 }: {
   label?: string;
   value: string;
@@ -28,6 +29,8 @@ export function DateField({
   error?: string;
   minimumDate?: Date;
   maximumDate?: Date;
+  /** Around the label and the box, as on the other fields (e.g. a desktop width). */
+  containerStyle?: StyleProp<ViewStyle>;
 }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['common']);
@@ -59,7 +62,7 @@ export function DateField({
   );
 
   return (
-    <FieldShell label={label} required={required} hint={hint} error={error}>
+    <FieldShell style={containerStyle} label={label} required={required} hint={hint} error={error}>
       <Pressable
         onPress={openPicker}
         accessibilityRole="button"

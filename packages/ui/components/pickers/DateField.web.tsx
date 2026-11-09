@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, View } from 'react-native';
+import { Pressable, StyleProp, View, ViewStyle } from 'react-native';
 import { Icon } from '../Icon';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useIsDesktop } from '../../theme/breakpoints';
@@ -36,6 +36,7 @@ export function DateField({
   error,
   minimumDate,
   maximumDate,
+  containerStyle,
 }: {
   label?: string;
   value: string;
@@ -45,6 +46,8 @@ export function DateField({
   error?: string;
   minimumDate?: Date;
   maximumDate?: Date;
+  /** Around the label and the box, as on the other fields (e.g. a desktop width). */
+  containerStyle?: StyleProp<ViewStyle>;
 }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['common']);
@@ -73,7 +76,7 @@ export function DateField({
   };
 
   return (
-    <FieldShell label={label} required={required} hint={hint} error={error} messageId={a11y.messageId}>
+    <FieldShell style={containerStyle} label={label} required={required} hint={hint} error={error} messageId={a11y.messageId}>
       <View
         style={{
           flexDirection: 'row',
@@ -85,7 +88,7 @@ export function DateField({
           borderWidth: 1,
           borderColor: error || stray ? t.c.bad : focused ? t.c.primary : t.c.inputBorder,
           paddingHorizontal: t.spacing.md,
-          height: desktop ? 42 : 48,
+          height: desktop ? 40 : 48,
           ...webFocusHalo(t, focused && !error && !stray),
         }}
       >

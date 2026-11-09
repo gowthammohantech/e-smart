@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Animated,
-  Dimensions,
   Keyboard,
   KeyboardEvent,
   LayoutAnimation,
@@ -14,11 +13,12 @@ import {
   StyleSheet,
   View,
   ViewStyle,
+  useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from './Icon';
 import { useTheme } from '../theme/ThemeProvider';
-import { FORM_MAX_WIDTH, useIsDesktop } from '../theme/breakpoints';
+import { DRAWER_WIDTH, FORM_MAX_WIDTH, useIsDesktop } from '../theme/breakpoints';
 import { Text } from './Text';
 import { ToastProvider } from './Toast';
 
@@ -45,13 +45,22 @@ type Props = {
    * draw under the Modal, so a message about the open sheet would be hidden.
    */
   ownToasts?: boolean;
+  /**
+   * How it opens in a desktop browser: a centred `dialog` (the default; a confirmation, a short
+   * form) or a `drawer` down the right edge, full height (a picker, a line editor, a record form),
+   * which keeps the page it was opened from in view. A phone always gets the bottom sheet.
+   */
+  desktopAs?: 'dialog' | 'drawer';
+  /** Desktop width: a dialog defaults to 520, a drawer to 480. */
+  desktopWidth?: number;
 };
 
 /**
  * Bottom sheet built on the platform Modal so it behaves natively on both
  * platforms without pulling in a gesture library. In a desktop browser it is
- * a centred dialog instead; react-native-web's Modal closes it on Escape and
- * keeps focus inside.
+ * a centred dialog, or a right-side drawer (`desktopAs`), instead;
+ * react-native-web's Modal closes it on Escape and keeps focus inside. There
+ * the footer's buttons line up at the right, as a desktop dialog's do.
  */
 export function Sheet({
   visible,
@@ -66,14 +75,20 @@ export function Sheet({
   fillHeight = false,
   contentStyle,
   ownToasts = false,
+  desktopAs = 'dialog',
+  desktopWidth,
 }: Props) {
   const t = useTheme();
   const { t: tr } = useTranslation(['common']);
   const insets = useSafeAreaInsets();
-  const dialog = useIsDesktop();
+  const desktop = useIsDesktop();
+  const drawer = desktop && desktopAs === 'drawer';
+  const dialog = desktop && !drawer;
+  // Read live, so the sheet follows a resized browser window.
+  const window = useWindowDimensions();
   // Lazy state rather than a ref, so the animated values are never read
-  // during render.
-  const [translate] = useState(() => new Animated.Value(600));
+  // during render. Slides up on a phone, in from the right as a drawer.
+  const [translate] = useState(() => new Animated.Value(700));
   const [fade] = useState(() => new Animated.Value(0));
 
   useEffect(() => {
@@ -83,7 +98,7 @@ export function Sheet({
         Animated.timing(fade, { toValue: 1, duration: 180, useNativeDriver: true }),
       ]).start();
     } else {
-      translate.setValue(600);
+      translate.setValue(700);
       fade.setValue(0);
     }
   }, [visible, translate, fade]);
@@ -114,17 +129,30 @@ export function Sheet({
     };
   }, [visible]);
 
-  const windowHeight = Dimensions.get('window').height;
+  const windowHeight = window.height;
   const maxHeight = Math.min(
     windowHeight * maxHeightRatio,
     windowHeight - keyboardHeight - insets.top - t.spacing.md,
   );
   const Body = scroll ? ScrollView : View;
 
-  const panelStyle: StyleProp<ViewStyle> = dialog
+  const drawerWidth = Math.min(desktopWidth ?? DRAWER_WIDTH.md, window.width - t.spacing.xxl);
+  const panelStyle: StyleProp<ViewStyle> = drawer
+    ? {
+        position: 'absolute',
+        top: 0,
+        bottom: 0,
+        right: 0,
+        width: drawerWidth,
+        backgroundColor: t.c.paper,
+        borderLeftWidth: 1,
+        borderColor: t.c.line,
+        transform: [{ translateX: translate }],
+      }
+    : dialog
     ? {
         width: '100%',
-        maxWidth: FORM_MAX_WIDTH,
+        maxWidth: desktopWidth ?? FORM_MAX_WIDTH,
         maxHeight,
         height: fillHeight ? maxHeight : undefined,
         backgroundColor: t.c.paper,
@@ -165,7 +193,7 @@ export function Sheet({
         }
       >
         <Animated.View style={[panelStyle, t.shadow.sheet]}>
-          {dialog ? (
+          {drawer ? null : dialog ? (
             <View style={{ height: t.spacing.sm }} />
           ) : (
             <View style={{ alignItems: 'center', paddingTop: t.spacing.sm }}>
@@ -180,7 +208,7 @@ export function Sheet({
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 paddingHorizontal: t.spacing.lg,
-                paddingTop: t.spacing.md,
+                paddingTop: drawer ? t.spacing.lg : t.spacing.md,
                 paddingBottom: t.spacing.sm,
                 gap: t.spacing.md,
               }}
@@ -215,7 +243,8 @@ export function Sheet({
           {header}
 
           <Body
-            style={fillHeight ? { flex: 1 } : scroll ? { flexGrow: 0 } : undefined}
+            // A drawer is full height whatever it holds; its footer stays at the bottom.
+            style={fillHeight || drawer ? { flex: 1 } : scroll ? { flexGrow: 0 } : undefined}
             contentContainerStyle={
               scroll ? [{ paddingBottom: t.spacing.lg }, contentStyle] : undefined
             }
@@ -227,12 +256,16 @@ export function Sheet({
 
           {footer ? (
             <View
-              style={{
-                padding: t.spacing.lg,
-                borderTopWidth: 1,
-                borderTopColor: t.c.line,
-                backgroundColor: t.c.paper,
-              }}
+              style={[
+                {
+                  padding: t.spacing.lg,
+                  borderTopWidth: 1,
+                  borderTopColor: t.c.line,
+                  backgroundColor: t.c.paper,
+                },
+                // A desktop dialog's buttons sit at the right at their own width, not as a phone's full-width bar.
+                desktop ? { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: t.spacing.sm } : null,
+              ]}
             >
               {footer}
             </View>

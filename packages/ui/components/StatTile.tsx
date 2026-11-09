@@ -9,6 +9,7 @@ import { formatCompactMoney } from '@esmart/core/lib/format';
 import { Sparkline } from './charts/BarChart';
 import { DeltaBadge } from './DeltaBadge';
 import { Skeleton } from './Skeleton';
+import { STAT_TILE_MAX_WIDTH, useIsDesktop } from '../theme/breakpoints';
 
 const WEB = Platform.OS === 'web';
 
@@ -38,6 +39,8 @@ export function StatTile({
   loading?: boolean;
 }) {
   const t = useTheme();
+  // One or two tiles on a desktop stay tile-sized instead of half the page each.
+  const cap = useIsDesktop() ? STAT_TILE_MAX_WIDTH : undefined;
   const display = typeof value === 'string' ? value : formatCompactMoney(value);
 
   const toneColor =
@@ -47,6 +50,7 @@ export function StatTile({
     <View
       style={{
         flex,
+        maxWidth: cap,
         backgroundColor: t.c.card,
         borderRadius: t.radius.lg,
         borderWidth: WEB || t.scheme === 'dark' ? 1 : 0,
@@ -114,7 +118,7 @@ export function StatTile({
       accessibilityLabel={`${label}: ${display}`}
       style={(state) => {
         const { pressed, hovered, focused } = state as WebPressState;
-        return [{ flex, borderRadius: t.radius.lg, opacity: pressed ? 0.75 : hovered ? 0.88 : 1 }, focusRing(t, focused)];
+        return [{ flex, maxWidth: cap, borderRadius: t.radius.lg, opacity: pressed ? 0.75 : hovered ? 0.88 : 1 }, focusRing(t, focused)];
       }}
     >
       {body}

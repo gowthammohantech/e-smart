@@ -5,6 +5,7 @@ import {
   Platform,
   Pressable,
   StyleProp,
+  StyleSheet,
   Switch,
   TextInput,
   TextInputProps,
@@ -558,29 +559,40 @@ export function PickerField({
   );
 }
 
+/** How far a switch may sit from the start of its label on a desktop. */
+const SWITCH_MAX_WIDTH = 560;
+
 export function SwitchField({
   label,
   description,
   value,
   onValueChange,
   disabled,
+  style,
 }: {
   label: string;
   description?: string;
   value: boolean;
   onValueChange: (v: boolean) => void;
   disabled?: boolean;
+  style?: StyleProp<ViewStyle>;
 }) {
   const t = useTheme();
+  const desktop = useIsDesktop();
   return (
     <View
-      style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: t.spacing.md,
-        paddingVertical: t.spacing.sm,
-        opacity: disabled ? 0.5 : 1,
-      }}
+      style={[
+        {
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: t.spacing.md,
+          paddingVertical: t.spacing.sm,
+          opacity: disabled ? 0.5 : 1,
+        },
+        // On a desktop the switch stays within reach of its label rather than at the far edge of the page.
+        desktop ? { maxWidth: SWITCH_MAX_WIDTH } : null,
+        style,
+      ]}
     >
       <View style={{ flex: 1, gap: 2 }}>
         <Text variant="body" weight="500">
@@ -630,6 +642,10 @@ export function Segmented<T extends string>({
   // A desktop shows the quieter web tab switch: the chosen option raised in
   // white on a grey track, rather than filled with the brand colour.
   const desktop = useIsDesktop();
+  // A phone splits the width evenly. A desktop sizes each option to its label, as web tabs are,
+  // unless the screen gives the control a width (or a flex) of its own to fill.
+  const own = StyleSheet.flatten(style) ?? {};
+  const fit = desktop && own.width === undefined && own.flex === undefined && own.flexGrow === undefined && own.alignSelf === undefined;
   return (
     <View
       style={[
@@ -640,6 +656,7 @@ export function Segmented<T extends string>({
           padding: 3,
           gap: 3,
         },
+        fit ? { alignSelf: 'flex-start', flexWrap: 'wrap', maxWidth: '100%' } : null,
         style,
       ]}
     >
@@ -654,7 +671,7 @@ export function Segmented<T extends string>({
             accessibilityState={{ selected: active, disabled: !!disabled }}
             accessibilityLabel={o.label}
             style={{
-              flex: 1,
+              ...(fit ? { paddingHorizontal: size === 'sm' ? t.spacing.md : t.spacing.lg } : { flex: 1 }),
               height: size === 'sm' ? 30 : desktop ? 34 : 38,
               borderRadius: t.radius.sm,
               alignItems: 'center',

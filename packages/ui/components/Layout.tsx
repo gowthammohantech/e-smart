@@ -1,7 +1,7 @@
 import React from 'react';
 import { Platform, StyleProp, View, ViewStyle } from 'react-native';
 import { useTheme } from '../theme/ThemeProvider';
-import { FORM_MAX_WIDTH, WIDE_FORM_MAX_WIDTH, useIsDesktop } from '../theme/breakpoints';
+import { FORM_MAX_WIDTH, STAT_TILE_MAX_WIDTH, WIDE_FORM_MAX_WIDTH, useIsDesktop } from '../theme/breakpoints';
 import { Card } from './Card';
 import { Text } from './Text';
 
@@ -37,8 +37,9 @@ export function StatGrid({ children }: { children: React.ReactNode }) {
   const desktop = useIsDesktop();
   return (
     <View style={{ flexDirection: desktop ? 'row' : 'column', gap: t.spacing.md }}>
+      {/* Each group holds a pair of tiles at most: one or two groups don't stretch across the page. */}
       {React.Children.map(children, (child) =>
-        child && desktop ? <View style={{ flex: 1 }}>{child}</View> : child,
+        child && desktop ? <View style={{ flex: 1, maxWidth: STAT_TILE_MAX_WIDTH * 2 + t.spacing.md }}>{child}</View> : child,
       )}
     </View>
   );
@@ -46,7 +47,7 @@ export function StatGrid({ children }: { children: React.ReactNode }) {
 
 /**
  * Keeps a form at a readable width on a desktop instead of stretching across
- * the content column. A no-op on phones.
+ * the content column, lined up under the page title at the left. A no-op on phones.
  */
 export function FormContainer({
   children,
@@ -61,7 +62,7 @@ export function FormContainer({
   const desktop = useIsDesktop();
   if (!desktop) return <View style={[{ flex: 1 }, style]}>{children}</View>;
   return (
-    <View style={[{ flex: 1, width: '100%', maxWidth: wide ? WIDE_FORM_MAX_WIDTH : FORM_MAX_WIDTH, alignSelf: 'center' }, style]}>
+    <View style={[{ flex: 1, width: '100%', maxWidth: wide ? WIDE_FORM_MAX_WIDTH : FORM_MAX_WIDTH, alignSelf: 'flex-start' }, style]}>
       {children}
     </View>
   );
@@ -70,14 +71,28 @@ export function FormContainer({
 /**
  * Form fields side by side on a desktop, stacked on a phone. On a phone it
  * adds no wrapper, so the fields keep the parent column's spacing.
+ *
+ * Every child slot keeps its column on a desktop, shown or not: a row of a date and a due date
+ * that hides the due date leaves the date at half the row, not stretched across it. `columns`
+ * sets the count when the children don't say it (e.g. a single field meant for a third).
  */
-export function FieldRow({ children }: { children: React.ReactNode }) {
+export function FieldRow({ children, columns }: { children: React.ReactNode; columns?: number }) {
   const t = useTheme();
   const desktop = useIsDesktop();
   if (!desktop) return <>{children}</>;
+  // Children.count counts null and false slots too, which is what holds a hidden field's place.
+  const slots = Math.max(columns ?? 0, React.Children.count(children));
+  const shown = React.Children.toArray(children).filter(Boolean);
   return (
     <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: t.spacing.lg }}>
-      {React.Children.map(children, (child) => (child ? <View style={{ flex: 1, minWidth: 0 }}>{child}</View> : null))}
+      {shown.map((child, i) => (
+        <View key={i} style={{ flex: 1, minWidth: 0 }}>
+          {child}
+        </View>
+      ))}
+      {Array.from({ length: Math.max(0, slots - shown.length) }, (_, i) => (
+        <View key={`gap-${i}`} style={{ flex: 1 }} />
+      ))}
     </View>
   );
 }

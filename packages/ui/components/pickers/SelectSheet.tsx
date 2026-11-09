@@ -10,6 +10,8 @@ import { EmptyState } from '../EmptyState';
 import { Button } from '../Button';
 import { useToast } from '../Toast';
 import { useKeepScrollWhileOpen } from '../ScrollKeep';
+import { DIALOG_WIDTH, useIsDesktop } from '../../theme/breakpoints';
+import type { WebPressState } from '../../theme/interaction';
 
 export type SelectOption = {
   value: string;
@@ -86,6 +88,7 @@ export function SelectSheet({
   confirmLabel?: (count: number) => string;
 }) {
   const t = useTheme();
+  const desktop = useIsDesktop();
   const { t: tr } = useTranslation(['common']);
   const [query, setQuery] = useState('');
   // The form behind the sheet stays where it was when the sheet closes.
@@ -151,12 +154,12 @@ export function SelectSheet({
       subtitle={subtitle}
       footer={
         multiple ? (
-          <View style={{ gap: t.spacing.md }}>
+          <View style={desktop ? { flexDirection: 'row-reverse', alignItems: 'center', gap: t.spacing.sm } : { gap: t.spacing.md }}>
             <Button
               title={confirmLabel ? confirmLabel(picked.length) : tr('common:action.done')}
               icon="check"
               disabled={picked.length === 0}
-              fullWidth
+              fullWidth={!desktop}
               onPress={() => {
                 onConfirm?.(picked);
                 close();
@@ -170,6 +173,10 @@ export function SelectSheet({
       }
       fillHeight={showSearch}
       ownToasts={hasBlocked}
+      // On a desktop a list worth searching opens down the right edge, beside the form it fills;
+      // a handful of options is a small dialog.
+      desktopAs={showSearch ? 'drawer' : 'dialog'}
+      desktopWidth={showSearch ? undefined : DIALOG_WIDTH.sm}
       header={
         showSearch ? (
           <View style={{ paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.sm }}>
@@ -215,16 +222,19 @@ export function SelectSheet({
               accessibilityState={multiple ? { checked, disabled: !!o.disabled || !!o.blocked } : { selected, disabled: !!o.disabled || !!o.blocked }}
               accessibilityLabel={o.label}
               accessibilityHint={o.blocked}
-              style={({ pressed }) => ({
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: t.spacing.md,
-                paddingVertical: t.spacing.md,
-                paddingHorizontal: t.spacing.lg,
-                minHeight: 52,
-                backgroundColor: pressed && !o.blocked ? t.c.card2 : 'transparent',
-                opacity: o.disabled ? 0.4 : o.blocked ? 0.55 : 1,
-              })}
+              style={(state) => {
+                const { pressed, hovered } = state as WebPressState;
+                return {
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: t.spacing.md,
+                  paddingVertical: desktop ? t.spacing.sm + 2 : t.spacing.md,
+                  paddingHorizontal: t.spacing.lg,
+                  minHeight: desktop ? 44 : 52,
+                  backgroundColor: (pressed || hovered) && !o.blocked && !o.disabled ? t.c.card2 : 'transparent',
+                  opacity: o.disabled ? 0.4 : o.blocked ? 0.55 : 1,
+                };
+              }}
             >
               {multiple ? (
                 <Icon
@@ -239,7 +249,7 @@ export function SelectSheet({
                   {o.label}
                 </Text>
                 {o.description ? (
-                  <Text variant="caption" tone="muted" numberOfLines={1}>
+                  <Text variant="caption" tone="muted" numberOfLines={desktop ? 2 : 1}>
                     {o.description}
                   </Text>
                 ) : null}

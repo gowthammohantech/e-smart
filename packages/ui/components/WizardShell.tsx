@@ -8,7 +8,7 @@ import { useTheme } from '../theme/ThemeProvider';
 import { Text } from './Text';
 import { Button } from './Button';
 import { Stepper } from './Stepper';
-import { SHOW_SCROLLBAR, useIsDesktop } from '../theme/breakpoints';
+import { SHOW_SCROLLBAR, useIsDesktop, WIDE_FORM_MAX_WIDTH } from '../theme/breakpoints';
 import { ScrollKeepContext, type ScrollKeep } from './ScrollKeep';
 import { Illustration } from './Illustration';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -16,8 +16,8 @@ import { PageBackdrop } from './PageBackdrop';
 import { isIllustrationName } from '../illustrations/registry';
 import { useEntrance } from '../illustrations/motion';
 
-/** The step content column on a desktop browser. */
-export const WIZARD_CONTENT_WIDTH = 760;
+/** The step content column on a desktop browser: the long-form width the rest of the app's forms use. */
+export const WIZARD_CONTENT_WIDTH = WIDE_FORM_MAX_WIDTH;
 
 export function WizardShell({
   title,

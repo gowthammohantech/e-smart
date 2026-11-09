@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleProp, View, ViewStyle , Platform } from 'react-native';
+import { ActivityIndicator, Pressable, StyleProp, StyleSheet, View, ViewStyle, Platform } from 'react-native';
 import { Icon, type IconName } from './Icon';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../theme/ThemeProvider';
@@ -83,6 +83,12 @@ export function Button({
   const isDisabled = disabled || busy;
   const keys = shortcut && desktop && Platform.OS === 'web' ? `${onMac ? '⌘' : 'Ctrl+'}${shortcut === 'Enter' ? 'Enter' : shortcut.toUpperCase()}` : null;
   const tip = (tooltip && desktop && Platform.OS === 'web' ? tooltip : null) ?? keys;
+  // In a column a button would take the column's width (alignSelf 'auto' inherits 'stretch').
+  // A desktop page keeps it at its own width unless it asks for more: fullWidth, or a width or
+  // flex of its own. A phone keeps the stretch its layouts are built on.
+  const own = StyleSheet.flatten(style) ?? {};
+  const fitContent =
+    desktop && WEB && !fullWidth && own.width === undefined && own.flex === undefined && own.flexGrow === undefined && own.alignSelf === undefined && own.minWidth === undefined;
 
   // The browser draws hover and press as colour, the way web buttons do; a
   // phone has no hover and keeps its opacity dip on press.
@@ -138,6 +144,8 @@ export function Button({
           paddingHorizontal: size === 'sm' ? t.spacing.md : t.spacing.xl,
           opacity: isDisabled ? 0.45 : WEB ? (pressed && variant !== 'primary' && variant !== 'ghost' ? 0.85 : 1) : pressed ? 0.8 : hovered ? 0.9 : 1,
           alignSelf: fullWidth ? 'stretch' : 'auto',
+          // RN's types don't list 'fit-content'; react-native-web passes it through to CSS.
+          ...(fitContent ? ({ width: 'fit-content', maxWidth: '100%' } as unknown as ViewStyle) : null),
           // A slight give under the finger, so a press feels physical.
           transform: [{ scale: pressed && !isDisabled ? 0.97 : 1 }],
           // Its tooltip sits over whatever is next to it.

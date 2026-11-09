@@ -16,15 +16,19 @@ export type HubTile = {
   tone?: 'default' | 'danger' | 'warning';
 };
 
+/** A hub tile on a desktop: an icon, a count and a label need no more. */
+const HUB_TILE_WIDTH = 220;
+
 export function HubTiles({ tiles }: { tiles: HubTile[] }) {
   const t = useTheme();
   const router = useRouter();
   const breakpoint = useBreakpoint();
-  // Two across on a phone, more as a desktop window widens. Empty fillers
-  // complete the last row so a lone tile doesn't stretch across it.
-  const columns = breakpoint === 'wide' ? 4 : breakpoint === 'phone' ? 2 : 3;
-  const tileWidth = columns === 2 ? '47.5%' : columns === 3 ? '30%' : '22%';
-  const fillers = (columns - (tiles.length % columns)) % columns;
+  // Two across on a phone, filling the row; empty fillers complete the last
+  // row so a lone tile doesn't stretch across it. A desktop gives each tile a
+  // fixed width and as many fit in a row as the window allows.
+  const phone = breakpoint === 'phone';
+  const tileWidth = phone ? '47.5%' : HUB_TILE_WIDTH;
+  const fillers = phone ? tiles.length % 2 : 0;
 
   return (
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.md }}>
@@ -38,7 +42,7 @@ export function HubTiles({ tiles }: { tiles: HubTile[] }) {
             const { pressed, hovered, focused } = state as WebPressState;
             return {
             width: tileWidth,
-            flexGrow: 1,
+            flexGrow: phone ? 1 : 0,
             backgroundColor: hovered ? t.c.card2 : t.c.card,
             borderRadius: t.radius.lg,
             borderWidth: t.scheme === 'dark' ? 1 : 0,
@@ -81,7 +85,7 @@ export function HubTiles({ tiles }: { tiles: HubTile[] }) {
         </Pressable>
       ))}
       {Array.from({ length: fillers }, (_, i) => (
-        <View key={`filler-${i}`} style={{ width: tileWidth, flexGrow: 1 }} />
+        <View key={`filler-${i}`} style={{ width: tileWidth, flexGrow: phone ? 1 : 0 }} />
       ))}
     </View>
   );
