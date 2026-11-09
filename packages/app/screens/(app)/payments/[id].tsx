@@ -11,6 +11,7 @@ import { Button } from '@esmart/ui/components/Button';
 import { Avatar } from '@esmart/ui/components/Avatar';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
+import { Skeleton } from '@esmart/ui/components/Skeleton';
 import { useServerSave } from '../../../components/useServerSave';
 import { useAppStore } from '../../../store/appStore';
 import { useBaseCurrency, useCurrentUser, useDocuments, useParty, usePayment, usePaymentAccounts } from '../../../store/selectors';
@@ -51,7 +52,8 @@ export default function PaymentDetail() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [refunding, setRefunding] = useState(false);
   // A refund names the receipt it paid back; fetched so its number shows.
-  const refundOf = usePaymentRecord(payment?.refundOf).data;
+  const refundOfQuery = usePaymentRecord(payment?.refundOf);
+  const refundOf = refundOfQuery.data;
   const { sharePdf, adjustAdvance, pdfBusy, adjusting } = usePaymentActions(payment);
 
   if (!payment && remote.isLoading) return <LoadingView />;
@@ -66,6 +68,8 @@ export default function PaymentDetail() {
 
   const isIn = payment.direction === 'received';
   const account = accounts.find((a) => a.id === payment.accountId);
+  // The record fetches its party with it: until then a bar, not "Received from Unknown".
+  const partyPending = !!payment.partyId && !party && remote.isFetching;
 
   return (
     <View style={{ flex: 1 }}>
@@ -89,9 +93,13 @@ export default function PaymentDetail() {
           <Text variant="h1" weight="700" tone={isIn ? 'good' : undefined}>
             {formatMoney(payment.amount)}
           </Text>
-          <Text variant="small" tone="muted">
-            {tr(isIn ? 'sales:payment.receivedFrom' : 'sales:payment.paidTo', { name: party?.name ?? tr('common:placeholder.unknown') })}
-          </Text>
+          {partyPending ? (
+            <Skeleton height={12} width={160} radius={4} />
+          ) : (
+            <Text variant="small" tone="muted">
+              {tr(isIn ? 'sales:payment.receivedFrom' : 'sales:payment.paidTo', { name: party?.name ?? tr('common:placeholder.unknown') })}
+            </Text>
+          )}
         </Card>
 
         <Card style={{ marginTop: t.spacing.md, gap: t.spacing.md }}>
@@ -218,9 +226,19 @@ export default function PaymentDetail() {
             style={{ marginTop: t.spacing.md, flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}
           >
             <Icon name="cash-refund" size={20} color={t.c.primary} />
-            <Text variant="small" style={{ flex: 1 }}>
-              {tr('sales:refund.of', { number: refundOf?.number ?? '…' })}
-            </Text>
+            {refundOf ? (
+              <Text variant="small" style={{ flex: 1 }}>
+                {tr('sales:refund.of', { number: refundOf.number })}
+              </Text>
+            ) : refundOfQuery.isLoading ? (
+              <View style={{ flex: 1 }}>
+                <Skeleton height={12} width={140} radius={4} />
+              </View>
+            ) : (
+              <Text variant="small" style={{ flex: 1 }}>
+                {tr('sales:refund.of', { number: '—' })}
+              </Text>
+            )}
             <Icon name="chevron-right" size={18} color={t.c.muted} />
           </Card>
         ) : null}

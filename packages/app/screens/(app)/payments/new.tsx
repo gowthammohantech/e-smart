@@ -21,6 +21,7 @@ import { useToast } from '@esmart/ui/components/Toast';
 import { useSaveOnline } from '../../../remote/save';
 import { useCanWrite } from '../../../remote/connectivity';
 import { CardRowsSkeleton } from '../../../components/ScreenSkeleton';
+import { Skeleton } from '@esmart/ui/components/Skeleton';
 import { useSaveShortcut } from '../../../components/useSaveShortcut';
 import { useLeaveGuard } from '../../../components/useLeaveGuard';
 
@@ -62,6 +63,13 @@ import { useGoBack } from '../../../navigation/useGoBack';
 type Adjustment = 'tdsDeducted' | 'discount' | 'writeOff';
 const ADJUSTMENTS: Adjustment[] = ['tdsDeducted', 'discount', 'writeOff'];
 export default function NewPayment() {
+  // Keyed by business: on web the page stays open across a switch, and the form seeds its method and
+  // account from the business it opened in.
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  return <NewPaymentForm key={companyId} />;
+}
+
+function NewPaymentForm() {
   const t = useTheme();
   const { t: tr } = useTranslation(['domain', 'sales', 'common']);
   const router = useRouter();
@@ -146,8 +154,11 @@ export default function NewPayment() {
   const leaveGuard = useLeaveGuard(touched || entered !== untouched);
 
   // The party from the server, with the advance it holds; the store copy until it lands.
-  const partyRecord = usePartyRecord(partyId ?? undefined).data;
+  const partyRecordQuery = usePartyRecord(partyId ?? undefined);
+  const partyRecord = partyRecordQuery.data;
   const party = (partyRecord as unknown as (typeof parties)[number] | undefined) ?? parties.find((p) => p.id === partyId);
+  // Opened for a contact (?partyId=) the device doesn't hold: a bar until it lands, not "Select customer".
+  const partyPending = !!partyId && !party && partyRecordQuery.isLoading;
   const [partyQuery, setPartyQuery] = useState('');
   const partySearch = usePartySearch(direction === 'received' ? 'customer' : 'supplier', useDebounced(partyQuery), partyOpen);
 
@@ -500,7 +511,14 @@ export default function NewPayment() {
   const partyCard = (
     <Pressable onPress={() => setPartyOpen(true)} accessibilityRole="button" accessibilityLabel={tr('sales:payment.selectContact')}>
       <Card style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
-        {party ? (
+        {partyPending ? (
+          <>
+            <Skeleton height={42} width={42} radius={21} />
+            <View style={{ flex: 1 }}>
+              <Skeleton height={14} width={160} radius={4} />
+            </View>
+          </>
+        ) : party ? (
           <>
             <Avatar name={party.name} size={42} />
             <View style={{ flex: 1, gap: 2 }}>
@@ -538,7 +556,12 @@ export default function NewPayment() {
     </Pressable>
   );
   // On a desktop the contact is one field among the others rather than a card of its own.
-  const partyField = (
+  const partyField = partyPending ? (
+    <View style={{ gap: 6 }}>
+      <Skeleton height={12} width={80} radius={4} />
+      <Skeleton height={44} radius={t.radius.md} />
+    </View>
+  ) : (
     <PickerField
       label={tr(direction === 'received' ? 'common:table.customer' : 'common:table.supplier')}
       value={party?.name}

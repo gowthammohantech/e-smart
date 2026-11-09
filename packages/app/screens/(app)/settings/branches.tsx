@@ -19,6 +19,7 @@ import { Branch } from '@esmart/core/types';
 import { useAppStore } from '../../../store/appStore';
 import { useActiveCompany, useBranches, usePlan } from '../../../store/selectors';
 import { useCompanyUsage } from '../../../remote/queries';
+import { Skeleton, SkeletonGroup } from '@esmart/ui/components/Skeleton';
 import { hasModule } from '@esmart/core/domain/plan';
 import { uid } from '@esmart/core/lib/id';
 import { Errors, hasErrors, validGstin, validPostalCode } from '@esmart/core/lib/validators';
@@ -39,7 +40,10 @@ export default function BranchSettings() {
 
   const company = useActiveCompany();
   const branches = useBranches();
-  const usage = useCompanyUsage().data;
+  const usageQuery = useCompanyUsage();
+  const usage = usageQuery.data;
+  // Until the server answers, a count would read 0 ("not used"): a placeholder instead.
+  const usagePending = !usage && !usageQuery.isError;
   const saveBranch = useAppStore((s) => s.saveBranch);
   const removeBranch = useAppStore((s) => s.removeBranch);
   const router = useRouter();
@@ -215,10 +219,22 @@ export default function BranchSettings() {
                 title={b.name}
                 // The GSTIN first, where it isn't cut off; the street is on the branch itself.
                 subtitle={[b.gstin, b.code, b.address.city].filter(Boolean).join(' · ')}
-                meta={tr('settings:branches.docCount', { count: docCount(b.id) })}
+                meta={usagePending ? undefined : tr('settings:branches.docCount', { count: docCount(b.id) })}
                 icon={b.isPrimary ? 'office-building-outline' : 'warehouse'}
                 divider={i < branches.length - 1}
-                right={b.isPrimary ? <Badge label={tr('settings:branches.primary')} tone="info" size="sm" /> : undefined}
+                right={
+                  usagePending ? (
+                    <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                      {b.isPrimary ? <Badge label={tr('settings:branches.primary')} tone="info" size="sm" /> : null}
+                      {/* The document count, not known yet. */}
+                      <SkeletonGroup>
+                        <Skeleton height={10} width={64} radius={4} />
+                      </SkeletonGroup>
+                    </View>
+                  ) : b.isPrimary ? (
+                    <Badge label={tr('settings:branches.primary')} tone="info" size="sm" />
+                  ) : undefined
+                }
                 onPress={() => open(b)}
                 chevron
               />

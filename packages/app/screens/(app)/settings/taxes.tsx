@@ -18,6 +18,7 @@ import { TaxCategory } from '@esmart/core/types';
 import { useAppStore } from '../../../store/appStore';
 import { useActiveCompany, useTaxCategories } from '../../../store/selectors';
 import { useCompanyUsage } from '../../../remote/queries';
+import { Skeleton, SkeletonGroup } from '@esmart/ui/components/Skeleton';
 import { formatPercent } from '@esmart/core/lib/format';
 import { formatDate, today } from '@esmart/core/lib/date';
 import { uid } from '@esmart/core/lib/id';
@@ -35,7 +36,10 @@ export default function TaxSettings() {
 
   const company = useActiveCompany();
   const categories = useTaxCategories();
-  const usage = useCompanyUsage().data;
+  const usageQuery = useCompanyUsage();
+  const usage = usageQuery.data;
+  // Until the server answers, a count would read 0 ("not used"): a placeholder instead.
+  const usagePending = !usage && !usageQuery.isError;
   const saveTaxCategory = useAppStore((s) => s.saveTaxCategory);
   const removeTaxCategory = useAppStore((s) => s.removeTaxCategory);
 
@@ -121,10 +125,24 @@ export default function TaxSettings() {
                 key={c.id}
                 title={c.name}
                 subtitle={c.description}
-                meta={tr('settings:taxes.rowMeta', { date: formatDate(c.effectiveFrom), count: usageOf(c.id) })}
+                // The use count waits for the server; the date is known already.
+                meta={
+                  usagePending
+                    ? `${tr('settings:taxes.effectiveFrom')} ${formatDate(c.effectiveFrom)}`
+                    : tr('settings:taxes.rowMeta', { date: formatDate(c.effectiveFrom), count: usageOf(c.id) })
+                }
                 icon="percent-outline"
                 divider={i < categories.length - 1}
-                right={<Badge label={formatPercent(c.rate)} tone={c.rate === 0 ? 'neutral' : 'info'} />}
+                right={
+                  <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                    <Badge label={formatPercent(c.rate)} tone={c.rate === 0 ? 'neutral' : 'info'} />
+                    {usagePending ? (
+                      <SkeletonGroup>
+                        <Skeleton height={10} width={56} radius={4} />
+                      </SkeletonGroup>
+                    ) : null}
+                  </View>
+                }
                 onPress={() => open(c)}
                 chevron
               />

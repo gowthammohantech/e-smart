@@ -24,6 +24,8 @@ import { unitShortName } from '@esmart/core/data/masters';
 import { NOTE_SOURCE } from '@esmart/core/domain/documentStates';
 import { DocumentEditor, detailRouteFor } from './DocumentEditor';
 import { ListSkeleton, MoreRowsSkeleton } from '../../components/ScreenSkeleton';
+import { LoadingView } from '../../components/LoadingView';
+import { Skeleton } from '@esmart/ui/components/Skeleton';
 
 /** Raised against one invoice or bill: returns, and credit and debit notes. */
 type AgainstSource = 'salesReturn' | 'purchaseReturn' | 'creditNote' | 'debitNote' | 'supplierCreditNote' | 'supplierDebitNote';
@@ -127,6 +129,11 @@ function SourceList({ kind }: { kind: AgainstSource }) {
   const allIds = (source?.lines ?? []).map((l) => l.id!).filter(Boolean);
   const toggle = (id: string, on: boolean) => setLineIds((cur) => (on ? [...cur, id] : cur.filter((x) => x !== id)));
 
+  // Opened on one invoice or bill: its lines (or the new note) come next, so the whole list isn't
+  // flashed while it loads. If it can't be fetched, or its lines are put away, the list is there.
+  const openingSource = !!params.sourceId && !source && (!pickedSource.current || loading.busy || creating.busy);
+  if (openingSource) return <LoadingView variant="list" keepTitle />;
+
   return (
     <View style={{ flex: 1 }}>
       <View style={{ padding: t.spacing.lg, gap: t.spacing.md }}>
@@ -157,13 +164,18 @@ function SourceList({ kind }: { kind: AgainstSource }) {
           <View style={{ flex: 1, minWidth: 220 }}>
             <SearchBar value={query} onChangeText={setQuery} placeholder={tr('sales:returnPicker.search')} />
           </View>
-          <Button
-            title={partyId ? (partyName ?? '…') : tr('sales:returnPicker.allParties')}
-            icon={purchase ? 'truck-outline' : 'account-outline'}
-            iconRight="chevron-down"
-            variant="secondary"
-            onPress={() => setPartyOpen(true)}
-          />
+          {partyId && !partyName && partyRecord.isLoading ? (
+            // The party's name is still on its way: a pill, not "…".
+            <Skeleton height={40} width={140} radius={t.radius.md} />
+          ) : (
+            <Button
+              title={partyId ? (partyName ?? '—') : tr('sales:returnPicker.allParties')}
+              icon={purchase ? 'truck-outline' : 'account-outline'}
+              iconRight="chevron-down"
+              variant="secondary"
+              onPress={() => setPartyOpen(true)}
+            />
+          )}
           {partyId ? <Button title={tr('sales:returnPicker.clearParty')} icon="close" variant="ghost" size="sm" onPress={() => setPartyId(undefined)} /> : null}
         </View>
         {creating.busy ? (

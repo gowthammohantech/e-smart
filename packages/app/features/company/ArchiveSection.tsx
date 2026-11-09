@@ -11,6 +11,7 @@ import { restoreCompany, useArchivedCompanies } from '../../remote/archive';
 import { useAppStore } from '../../store/appStore';
 import { useActiveCompany, useCurrentUser } from '../../store/selectors';
 import { ArchiveCompanySheet } from './ArchiveCompanySheet';
+import { CardRowsSkeleton } from '../../components/ScreenSkeleton';
 
 /**
  * The end of the business profile, for the account's owner: archive this business (while another
@@ -24,7 +25,8 @@ export function ArchiveSection() {
   const accountId = useAppStore((s) => s.accountId);
   const openOnAccount = useAppStore((s) => s.companies.filter((c) => c.accountId === s.accountId).length);
   const owner = user?.role === 'owner';
-  const archived = useArchivedCompanies(owner).data ?? [];
+  const archivedQuery = useArchivedCompanies(owner);
+  const archived = archivedQuery.data ?? [];
   const [archiving, setArchiving] = useState(false);
   const [restoring, setRestoring] = useState<string | null>(null);
 
@@ -49,7 +51,12 @@ export function ArchiveSection() {
       <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>
         {tr('settings:archiveCompany.section')}
       </Text>
-      {archived.length ? (
+      {/* While the list is fetched: a placeholder rather than rows popping in under the button. */}
+      {archivedQuery.isLoading ? (
+        <Card padded={false}>
+          <CardRowsSkeleton kind="list" rows={1} />
+        </Card>
+      ) : archived.length ? (
         <Card padded={false}>
           {archived.map((c, i) => (
             <ListRow

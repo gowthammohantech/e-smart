@@ -25,6 +25,7 @@ import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { useSaveShortcut } from '../../../components/useSaveShortcut';
 import { SheetActions } from '../../../features/company/SheetActions';
 import { useServerSave } from '../../../components/useServerSave';
+import { Skeleton, SkeletonGroup } from '@esmart/ui/components/Skeleton';
 
 export default function AccountSettings() {
   const t = useTheme();
@@ -35,7 +36,10 @@ export default function AccountSettings() {
   const company = useActiveCompany();
   const baseCurrency = useBaseCurrency();
   const accounts = usePaymentAccounts();
-  const usage = useCompanyUsage().data;
+  const usageQuery = useCompanyUsage();
+  const usage = usageQuery.data;
+  // Until the server answers, a balance would only be the opening one: a placeholder instead.
+  const balancesPending = !usage && !usageQuery.isError;
   const savePaymentAccount = useAppStore((s) => s.savePaymentAccount);
   const removePaymentAccount = useAppStore((s) => s.removePaymentAccount);
 
@@ -110,9 +114,15 @@ export default function AccountSettings() {
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 + insets.bottom }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <Card style={{ gap: 5, paddingVertical: t.spacing.xl }}>
           <Text variant="caption" tone="muted">{tr('settings:accounts.cashAndBank')}</Text>
-          <Text variant="h1" weight="700" tone={totalCash >= 0 ? 'default' : 'bad'}>
-            {formatMoney(money(totalCash, baseCurrency))}
-          </Text>
+          {balancesPending ? (
+            <SkeletonGroup style={{ paddingVertical: 4 }}>
+              <Skeleton height={28} width={160} />
+            </SkeletonGroup>
+          ) : (
+            <Text variant="h1" weight="700" tone={totalCash >= 0 ? 'default' : 'bad'}>
+              {formatMoney(money(totalCash, baseCurrency))}
+            </Text>
+          )}
           <Text variant="caption" tone="muted">{tr('settings:accounts.cashCaption')}</Text>
         </Card>
 
@@ -128,9 +138,15 @@ export default function AccountSettings() {
               divider={i < accounts.length - 1}
               right={
                 <View style={{ alignItems: 'flex-end', gap: 4 }}>
-                  <Text variant="small" weight="700">
-                    {formatMoney(money(balances[a.id] ?? 0, baseCurrency))}
-                  </Text>
+                  {balancesPending ? (
+                    <SkeletonGroup>
+                      <Skeleton height={14} width={72} />
+                    </SkeletonGroup>
+                  ) : (
+                    <Text variant="small" weight="700">
+                      {formatMoney(money(balances[a.id] ?? 0, baseCurrency))}
+                    </Text>
+                  )}
                   {a.isDefault ? <Badge label={tr('settings:accounts.default')} tone="info" size="sm" /> : null}
                 </View>
               }

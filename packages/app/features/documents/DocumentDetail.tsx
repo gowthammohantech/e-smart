@@ -14,6 +14,7 @@ import { Badge, StatusBadge } from '@esmart/ui/components/Badge';
 import { knownToServer } from '../../remote/meta';
 import { Button } from '@esmart/ui/components/Button';
 import { Avatar } from '@esmart/ui/components/Avatar';
+import { Skeleton } from '@esmart/ui/components/Skeleton';
 import { TotalsPanel } from '@esmart/ui/components/TotalsPanel';
 import { Sheet } from '@esmart/ui/components/Sheet';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
@@ -95,6 +96,9 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
   // The server's own view of this one: what it still owes (credit notes and returns off) and what was made from it.
   const recordQuery = useDocumentRecord(doc.id);
   const record = recordQuery.data;
+  // Until the server's copy lands, what it owes and what was made from it would be worked out from
+  // whatever the device happens to hold, which can be wrong: those wait for it.
+  const recordPending = !record && recordQuery.isFetching;
   const allPayments = usePayments();
   // Its current e-way bill, fetched into the store: the device keeps only the bills it has seen.
   useEwayBillRecord(doc.compliance?.ewayBillId);
@@ -184,7 +188,10 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
   const owing = isPayable && isFinalized(doc.status) && doc.status !== 'cancelled' && doc.status !== 'paid' && outstanding.minor > 0;
   const overdueDays = doc.dueDate && owing ? daysBetween(doc.dueDate, today()) : 0;
   // Advances and direct notes the party holds, which the adjustment entry can apply to this document.
-  const partyAdvance = (usePartyRecord(doc.partyId).data as { advance?: Money } | undefined)?.advance;
+  const partyQuery = usePartyRecord(doc.partyId);
+  const partyAdvance = (partyQuery.data as { advance?: Money } | undefined)?.advance;
+  // The contact may still be on its way: a bar, not "Unknown".
+  const partyPending = !!doc.partyId && !party && partyQuery.isLoading;
   const canAdjust = outstanding.minor > 0 && isFinalized(doc.status) && (partyAdvance?.minor ?? 0) > 0 && ['invoice', 'debitNote', 'purchaseBill', 'supplierDebitNote'].includes(doc.kind);
   const adjustRoute = `/(app)/receipts/adjust?partyId=${doc.partyId}&documentId=${doc.id}${['purchaseBill', 'supplierDebitNote'].includes(doc.kind) ? '&side=supplier' : ''}`;
 
@@ -402,7 +409,7 @@ ${url}`;
   const made = record?.linkedDocuments
     ? record.linkedDocuments.map((d) => ({ kind: d.kind!, status: d.status!, sourceDocumentId: doc.id }))
     : allDocuments;
-  const conversions = offered.filter((c) => !conversionBlock(doc, c.target, made));
+  const conversions = recordPending ? [] : offered.filter((c) => !conversionBlock(doc, c.target, made));
 
   const transitions = nextStatuses(doc.kind, doc.status).filter((s) => s !== 'cancelled');
   // What Finalise moves a draft to (issued, received, sent…), as the editor's Finalise does.
@@ -520,15 +527,27 @@ ${url}`;
           accessibilityLabel={party ? tr('sales:detail.openParty', { name: party.name }) : tr('sales:detail.openContact')}
           style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}
         >
-          <Avatar name={party?.name ?? '?'} size={42} />
-          <View style={{ flex: 1, gap: 2 }}>
-            <Text variant="body" weight="600">
-              {party?.name ?? tr('common:placeholder.unknown')}
-            </Text>
-            <Text variant="caption" tone="muted" numberOfLines={1}>
-              {party?.taxId ?? party?.phone ?? party?.email ?? '—'}
-            </Text>
-          </View>
+          {partyPending ? (
+            <>
+              <Skeleton height={42} width={42} radius={21} />
+              <View style={{ flex: 1, gap: 6 }}>
+                <Skeleton height={14} width={140} radius={4} />
+                <Skeleton height={10} width={100} radius={4} />
+              </View>
+            </>
+          ) : (
+            <>
+              <Avatar name={party?.name ?? '?'} size={42} />
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text variant="body" weight="600">
+                  {party?.name ?? tr('common:placeholder.unknown')}
+                </Text>
+                <Text variant="caption" tone="muted" numberOfLines={1}>
+                  {party?.taxId ?? party?.phone ?? party?.email ?? '—'}
+                </Text>
+              </View>
+            </>
+          )}
           <Icon name="chevron-right" size={18} color={t.c.muted} />
         </Pressable>
 
@@ -555,20 +574,31 @@ ${url}`;
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
             <View style={{ gap: 3 }}>
               <Text variant="caption" tone="muted">{tr('sales:detail.outstanding')}</Text>
-              <Text variant="h3" weight="700" tone={outstanding.minor > 0 ? (overdueDays > 0 ? 'bad' : 'warn') : 'good'}>
-                {formatMoney(outstanding)}
-              </Text>
+              {recordPending ? (
+                <Skeleton height={22} width={110} radius={4} />
+              ) : (
+                <Text variant="h3" weight="700" tone={outstanding.minor > 0 ? (overdueDays > 0 ? 'bad' : 'warn') : 'good'}>
+                  {formatMoney(outstanding)}
+                </Text>
+              )}
             </View>
             <View style={{ alignItems: 'flex-end', gap: 3 }}>
               <Text variant="caption" tone="muted">
                 {tr('sales:detail.paid')}
               </Text>
-              <Text variant="title" weight="600" tone="good">
-                {formatMoney(paid)}
-              </Text>
+              {recordPending ? (
+                <Skeleton height={18} width={90} radius={4} />
+              ) : (
+                <Text variant="title" weight="600" tone="good">
+                  {formatMoney(paid)}
+                </Text>
+              )}
             </View>
           </View>
 
+          {recordPending ? (
+            <Skeleton height={8} radius={4} />
+          ) : (
           <View style={{ height: 8, borderRadius: 4, backgroundColor: t.c.card2, overflow: 'hidden' }}>
             <View
               style={{
@@ -578,8 +608,9 @@ ${url}`;
               }}
             />
           </View>
+          )}
 
-          {outstanding.minor > 0 ? (
+          {!recordPending && outstanding.minor > 0 ? (
             <Button
               title={receivable ? tr('common:action.recordPayment') : tr('sales:detail.paySupplier')}
               icon={receivable ? 'cash-plus' : 'cash-minus'}
@@ -587,7 +618,7 @@ ${url}`;
               fullWidth
             />
           ) : null}
-          {canAdjust ? (
+          {canAdjust && !recordPending ? (
             <Button
               title={tr('sales:detail.adjustAdvance', { amount: formatMoney(partyAdvance!) })}
               icon="swap-horizontal"

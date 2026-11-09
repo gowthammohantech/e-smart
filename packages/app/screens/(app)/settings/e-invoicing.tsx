@@ -17,6 +17,7 @@ import { compliance } from '../../../remote';
 import { describeError } from '../../../remote/errors';
 import { useActiveCompany, useBaseCurrency, useComplianceSettings, useComplianceSummary, useSetupReady, useTransporters } from '../../../store/selectors';
 import { LoadingView } from '../../../components/LoadingView';
+import { Skeleton, SkeletonGroup } from '@esmart/ui/components/Skeleton';
 import { fromMajor, toMajor } from '@esmart/core/lib/money';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { useSaveShortcut } from '../../../components/useSaveShortcut';
@@ -329,25 +330,29 @@ function EInvoicingForm() {
         </View>
 
         {/* ---------------- state ---------------- */}
+        {/* Counts not in yet: a placeholder each, not a 0. */}
         <SectionLabel>{tr('compliance:settings.whereThingsStand')}</SectionLabel>
         <Card padded={false}>
           <ListRow
             title={tr('compliance:settings.reportedInvoices')}
-            meta={String(summary.eInvoice.generated)}
+            meta={summary.loaded ? String(summary.eInvoice.generated) : undefined}
+            right={summary.loaded ? undefined : <CountPending />}
             icon="shield-check-outline"
             divider
             onPress={() => router.push('/(app)/compliance')}
           />
           <ListRow
             title={tr('compliance:settings.rejectedOrUnreported')}
-            meta={String(summary.eInvoice.failed + summary.eInvoice.pending)}
+            meta={summary.loaded ? String(summary.eInvoice.failed + summary.eInvoice.pending) : undefined}
+            right={summary.loaded ? undefined : <CountPending />}
             icon="alert-circle-outline"
             divider
             onPress={() => router.push('/(app)/compliance')}
           />
           <ListRow
             title={tr('compliance:settings.activeEwb')}
-            meta={String(summary.eway.active)}
+            meta={summary.loaded ? String(summary.eway.active) : undefined}
+            right={summary.loaded ? undefined : <CountPending />}
             icon="truck-fast-outline"
             onPress={() => router.push('/(app)/compliance')}
           />
@@ -409,5 +414,14 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
     >
       {children}
     </Text>
+  );
+}
+
+/** A count that has not come from the server yet. */
+function CountPending() {
+  return (
+    <SkeletonGroup>
+      <Skeleton height={14} width={24} />
+    </SkeletonGroup>
   );
 }

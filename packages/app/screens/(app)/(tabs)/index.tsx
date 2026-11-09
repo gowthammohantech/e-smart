@@ -280,6 +280,8 @@ export default function Home() {
               value={String(compliance.eInvoice.generated)}
               tone="good"
               icon="shield-check-outline"
+              // Shimmer until the counts arrive, not a "0" that isn't real.
+              loading={!compliance.loaded}
               caption={compliance.eInvoice.failed ? tr('nav:home.eInvoiceRejected', { count: compliance.eInvoice.failed }) : tr('nav:home.eInvoiceReported')}
               // Both cards name their tab: the GST tab stays mounted and would keep the last one.
               onPress={() => router.push('/(app)/(tabs)/gst?tab=eInvoice')}
@@ -289,6 +291,7 @@ export default function Home() {
               value={String(compliance.eway.active)}
               tone={compliance.expiringSoon ? 'warn' : 'default'}
               icon="truck-fast-outline"
+              loading={!compliance.loaded}
               caption={compliance.expiringSoon ? tr('nav:home.ewbExpiring', { count: compliance.expiringSoon }) : tr('nav:home.ewbActive')}
               onPress={() => router.push('/(app)/(tabs)/gst?tab=eway')}
             />

@@ -24,12 +24,13 @@ export default function NotificationSettings() {
   const t = useTheme();
   const { t: tr } = useTranslation(['settings', 'nav']);
   const toast = useToast();
-  const [permission, setPermission] = useState<PushPermission>('undetermined');
+  // null until the phone says: starting at "undetermined" flashed "Notifications are off".
+  const [permission, setPermission] = useState<PushPermission | null>(null);
   const [muted, setMuted] = useState<string[] | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
 
-  const refresh = useCallback(() => void pushPermission().then(setPermission), []);
+  const refresh = useCallback(() => void pushPermission().then(setPermission, () => setPermission('unavailable')), []);
   useEffect(() => {
     refresh();
     // Back from the phone's settings: the permission may have changed there.
@@ -57,7 +58,13 @@ export default function NotificationSettings() {
     <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('nav:title.notifications') }} />
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40, gap: t.spacing.lg }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
-        {permission !== 'granted' ? (
+        {permission === null ? (
+          <Card>
+            <SkeletonGroup>
+              <SkeletonRows rows={1} kind="list" icon={false} />
+            </SkeletonGroup>
+          </Card>
+        ) : permission !== 'granted' ? (
           <Card style={{ gap: t.spacing.sm }}>
             <Text variant="body" weight="600">
               {tr(permission === 'unavailable' ? 'settings:notifications.unavailableTitle' : 'settings:notifications.offTitle')}

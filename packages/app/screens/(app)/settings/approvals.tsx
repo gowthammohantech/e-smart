@@ -23,6 +23,13 @@ const KINDS: (DocumentKind | 'payment')[] = ['invoice', 'creditNote', 'purchaseO
 
 /** Which documents wait for an owner or admin before they are issued, and over what amount. */
 export default function ApprovalRulesScreen() {
+  // Keyed by business: on the web the page stays open across a switch, and what it copied or fetched
+  // at mount belongs to the business it opened on.
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  return <ApprovalRulesScreenBody key={companyId} />;
+}
+
+function ApprovalRulesScreenBody() {
   const t = useTheme();
   const { t: tr } = useTranslation(['settings', 'domain']);
   const company = useActiveCompany();

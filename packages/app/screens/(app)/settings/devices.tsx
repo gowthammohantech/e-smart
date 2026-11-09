@@ -12,6 +12,8 @@ import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { useServerSave } from '../../../components/useServerSave';
 import { DeviceSession } from '@esmart/core/types';
 import { useAppStore } from '../../../store/appStore';
+import { useListsReady } from '../../../store/selectors';
+import { CardRowsSkeleton } from '../../../components/ScreenSkeleton';
 import { formatRelative } from '@esmart/core/lib/date';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 
@@ -21,6 +23,8 @@ export default function Devices() {
   const { run: serverSave } = useServerSave();
 
   const devices = useAppStore((s) => s.devices);
+  // Empty until the sessions have come, which is not "no devices".
+  const ready = useListsReady();
   const revokeDevice = useAppStore((s) => s.revokeDevice);
   const [confirmRevoke, setConfirmRevoke] = useState<DeviceSession | null>(null);
 
@@ -34,7 +38,7 @@ export default function Devices() {
         </Card>
 
         <Card padded={false}>
-          {devices.map((d, i) => (
+          {!ready ? <CardRowsSkeleton kind="list" rows={2} /> : devices.map((d, i) => (
             <ListRow
               key={d.id}
               title={d.label}

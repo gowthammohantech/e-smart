@@ -1,6 +1,6 @@
 import type { IconName } from '@esmart/ui/components/Icon';
 import type { Company } from '@esmart/core/types';
-import { useActiveCompany, useCanOpen } from '../../store/selectors';
+import { useActiveCompany, useCanOpen, useListsReady } from '../../store/selectors';
 import { useAppStore } from '../../store/appStore';
 import { useCompanyUsage } from '../../remote/queries';
 
@@ -26,6 +26,8 @@ export function useSetupSteps(): { steps: SetupStep[]; doneCount: number; comple
   const usage = useCompanyUsage();
   const counts = usage.data?.counts;
   const teammates = useAppStore((s) => s.users.filter((u) => company && u.companyIds.includes(company.id)).length);
+  // The team comes after the first screen; until then "Add a teammate" isn't known to be undone.
+  const teamReady = useListsReady();
 
   const reg = company?.taxRegistration;
   const all: SetupStep[] = [
@@ -55,5 +57,6 @@ export function useSetupSteps(): { steps: SetupStep[]; doneCount: number; comple
   ];
   const steps = all.filter((s) => canOpen(s.route));
   const doneCount = steps.filter((s) => s.done).length;
-  return { steps, doneCount, complete: doneCount === steps.length, loading: usage.isLoading };
+  const loading = usage.isLoading || (!teamReady && steps.some((s) => s.key === 'team'));
+  return { steps, doneCount, complete: doneCount === steps.length, loading };
 }

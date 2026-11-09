@@ -30,11 +30,19 @@ import { useGoBack } from '../../../navigation/useGoBack';
 import { LogoSection } from '../../../features/company/LogoSection';
 import { SignatureSection } from '../../../features/company/SignatureSection';
 import { ArchiveSection } from '../../../features/company/ArchiveSection';
+import { SkeletonGroup, SkeletonText } from '@esmart/ui/components/Skeleton';
 
 
 /** A sample UPI ID for the field's placeholder: an address, the same in every language. */
 const UPI_SAMPLE = 'business@okhdfc';
+
+/** Keyed by business: on the web the page stays open across a switch, and the form copies the profile once. */
 export default function CompanySettings() {
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  return <CompanySettingsForm key={companyId} />;
+}
+
+function CompanySettingsForm() {
   const t = useTheme();
   const desktop = useIsDesktop();
   const { t: tr } = useTranslation(['nav', 'settings', 'onboarding', 'errors']);
@@ -47,8 +55,11 @@ export default function CompanySettings() {
   const saveCompany = useAppStore((s) => s.saveCompany);
   // After the first posted entry, the fields those entries depend on are frozen.
   // Locked until the server says otherwise; it refuses the change either way.
-  const usage = useCompanyUsage().data;
+  const usageQuery = useCompanyUsage();
+  const usage = usageQuery.data;
   const posted = !usage || usage.postedDocuments > 0;
+  // Not known yet: the fields stay locked, but the notice waits rather than flashing on a fresh business.
+  const usagePending = !usage && !usageQuery.isError;
   const locks = profileLocks(company, posted);
 
   const [name, setName] = useState(company?.name ?? '');
@@ -183,7 +194,13 @@ export default function CompanySettings() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={SHOW_SCROLLBAR}
       >
-        {posted ? (
+        {usagePending ? (
+          <Card variant="flat">
+            <SkeletonGroup>
+              <SkeletonText lines={2} />
+            </SkeletonGroup>
+          </Card>
+        ) : posted ? (
           <Card variant="flat" style={{ flexDirection: 'row', gap: t.spacing.md }}>
             <Icon name="lock-outline" size={19} color={t.c.muted} />
             <Text variant="caption" tone="muted" style={{ flex: 1, lineHeight: 18 }}>

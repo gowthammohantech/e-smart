@@ -25,6 +25,7 @@ import { deliverFile, deliverPdf } from './exportFiles';
 import { presetParam, useQueryParams } from '../../navigation/queryParams';
 import { ReportTable, XLSX_MIME, exportName, tableHtml, toCsv, xlsxBytes } from './reportTable';
 import { ReportSkeleton } from '../../components/ScreenSkeleton';
+import { Skeleton, SkeletonGroup } from '@esmart/ui/components/Skeleton';
 
 export type ReportScope = {
   filters: ReportFilters;
@@ -85,10 +86,12 @@ export function ReportShell({
   const [partyOpen, setPartyOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const partySearch = usePartySearch(undefined, useDebounced(partyQuery), partyOpen);
-  usePartyRecord(scope.filters.partyId ?? undefined);
+  const partyRecord = usePartyRecord(scope.filters.partyId ?? undefined);
 
   const branch = branches.find((b) => b.id === scope.filters.branchId);
   const party = parties.find((p) => p.id === scope.filters.partyId);
+  // Opened with ?partyId= for a contact not yet in the store: shimmer the chip, not "All contacts".
+  const partyPending = !!scope.filters.partyId && !party && partyRecord.isLoading;
   const rangeLabel = asAt
     ? tr('reports:shell.asAt', { date: formatDate(scope.filters.range.to < today() ? scope.filters.range.to : today()) })
     : DATE_RANGE_PRESET_KEYS.includes(scope.preset)
@@ -221,7 +224,11 @@ export function ReportShell({
                 changeScope({ ...scope, filters: { ...scope.filters, branchId: null } }),
               )
             : null}
-          {showPartyFilter
+          {showPartyFilter && partyPending ? (
+            <SkeletonGroup>
+              <Skeleton height={40} width={120} radius={t.radius.pill} />
+            </SkeletonGroup>
+          ) : showPartyFilter
             ? chip(party?.name ?? tr('reports:shell.allContacts'), !!party, () => setPartyOpen(true), () =>
                 changeScope({ ...scope, filters: { ...scope.filters, partyId: null } }),
               )

@@ -18,7 +18,8 @@ import { describeError } from '../remote/errors';
 import { ConnectionBadge } from './ConnectionBadge';
 import { LatencyChip } from './LatencyChip';
 import { DemoChip } from './DemoChip';
-import { useActiveCompany, useBranches, useUnreadCount } from '../store/selectors';
+import { useActiveCompany, useBranches, useListsReady, useSetupReady, useUnreadCount } from '../store/selectors';
+import { Skeleton, SkeletonGroup } from '@esmart/ui/components/Skeleton';
 import { countLabel } from '@esmart/core/lib/format';
 import { inkOn } from '@esmart/ui/theme/contrast';
 
@@ -40,7 +41,11 @@ export function AppHeader({ title, subtitle }: { title?: string; subtitle?: stri
   const companies = useAppStore((s) => s.companies);
   const activeBranchId = useAppStore((s) => s.activeBranchId);
   const setActiveBranch = useAppStore((s) => s.setActiveBranch);
-  const unread = useUnreadCount();
+  const listsReady = useListsReady();
+  const setupReady = useSetupReady();
+  // No badge until this business's notifications have come: a count from before would be wrong.
+  const unreadCount = useUnreadCount();
+  const unread = listsReady ? unreadCount : 0;
 
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [branchOpen, setBranchOpen] = useState(false);
@@ -201,6 +206,11 @@ export function AppHeader({ title, subtitle }: { title?: string; subtitle?: stri
                   {`${branchName} · ${company?.baseCurrency ?? ''}`}
                 </Text>
               </Pressable>
+            ) : !setupReady ? (
+              // Branches not loaded yet: a placeholder, not a line that drops and comes back.
+              <SkeletonGroup style={{ paddingVertical: 2 }}>
+                <Skeleton width={90} height={10} radius={4} />
+              </SkeletonGroup>
             ) : (
               <Text variant="caption" tone="muted" numberOfLines={1}>
                 {company?.baseCurrency ?? ''}

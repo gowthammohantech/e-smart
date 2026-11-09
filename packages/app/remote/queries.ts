@@ -664,8 +664,11 @@ const EMPTY_BOOK: Book = { parties: [], paymentAccounts: [], expenseCategories: 
 
 /** The chart of accounts as the server names it, and each account's balance today. */
 export function useServerBook() {
-  const data = useBooksView<{ book: Book; accounts: Account[]; balances: Record<string, number> }>('accounts', { to: today() }).data;
-  return { book: data?.book ?? EMPTY_BOOK, accounts: data?.accounts ?? [], balances: data?.balances ?? {}, loaded: !!data };
+  const q = useBooksView<{ book: Book; accounts: Account[]; balances: Record<string, number> }>('accounts', { to: today() });
+  const data = q.data;
+  // `loaded`: the chart is in, or it failed (no access, no connection) and screens go on without names
+  // rather than shimmer for good.
+  return { book: data?.book ?? EMPTY_BOOK, accounts: data?.accounts ?? [], balances: data?.balances ?? {}, loaded: !!data || q.isError };
 }
 
 export type VoucherQuery = { kind?: 'journal' | 'contra' | 'gstJournal' | 'tdsChallan' | 'receipt' | 'gstChallan'; status?: 'draft' | 'posted'; from?: string; to?: string; q?: string; partyId?: string };
@@ -930,8 +933,9 @@ export function useComplianceCounts(enabled = true): ComplianceCounts & { loaded
       return data!;
     },
   });
-  // `loaded`: the zeros are real. Until then a tile or count shows its shimmer, not "0".
-  return useMemo(() => ({ ...(q.data ?? NO_COMPLIANCE), loaded: !!q.data }), [q.data]);
+  // `loaded`: the answer is in (or failed), so the zeros are real. Until then a tile shows its shimmer, not "0".
+  const loaded = !!q.data || q.isError;
+  return useMemo(() => ({ ...(q.data ?? NO_COMPLIANCE), loaded }), [q.data, loaded]);
 }
 
 /** The Purchases tab's figures for the period: bills, expenses and the Expenses tab, what's owed, counts, latest bills. */

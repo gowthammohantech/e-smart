@@ -28,7 +28,7 @@ import { zero, type Money } from '@esmart/core/lib/money';
 import { formatMoney } from '@esmart/core/lib/format';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { ListSkeleton, MoreRowsSkeleton } from '../../../components/ScreenSkeleton';
-import { SkeletonGroup, SkeletonStatGrid } from '@esmart/ui/components/Skeleton';
+import { Skeleton, SkeletonGroup, SkeletonStatGrid } from '@esmart/ui/components/Skeleton';
 import { LoadFailed } from '../../../features/company/LoadFailed';
 
 /** general: contacts with no account (a landlord, the auditor), which read like customers here. */
@@ -52,7 +52,10 @@ export default function ContactsTab() {
   const search = useDebounced(query);
   const pages = usePartyPages({ kind: tab, q: search });
   const summaryQuery = usePartySummary({ kind: tab, q: search });
-  const summary = summaryQuery.data;
+  // A tab or search change keeps the last list's rows and figures as placeholder: a customer's row
+  // would open as a supplier. Those show the shimmer until the new ones arrive.
+  const summary = summaryQuery.isPlaceholderData ? undefined : summaryQuery.data;
+  const rowsPending = pages.isLoading || pages.isPlaceholderData;
   const filtered = pages.rows as unknown as (Party & { outstanding?: Money; advance?: Money })[];
   /** What a party owes (a customer) or is owed (a supplier), in its own currency. */
   const owed = (p: { outstanding?: Money }) => p.outstanding?.minor ?? 0;
@@ -168,6 +171,12 @@ export default function ContactsTab() {
         </View>
         {/* Count and balance read together; Import sits apart on the right, all on one centred line. */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md, ...(desktop ? { flex: 1, justifyContent: 'flex-end' } : null) }}>
+          {/* No "0 customers" before the count is in. */}
+          {!summary && !summaryQuery.isError ? (
+            <View style={desktop ? { width: 200 } : { flex: 1 }}>
+              <Skeleton height={12} width={180} />
+            </View>
+          ) : (
           <Text variant="caption" tone="muted" numberOfLines={1} style={{ flexShrink: 1, ...(desktop ? null : { flex: 1 }) }}>
             {countLabel}
             {!general && summary ? (
@@ -179,6 +188,7 @@ export default function ContactsTab() {
               </Text>
             ) : null}
           </Text>
+          )}
           <Button title={tr('contacts:import.action')} icon="upload" variant="ghost" size="sm" onPress={() => router.push('/(app)/contacts/import' as never)} />
         </View>
       </View>
@@ -255,11 +265,12 @@ export default function ContactsTab() {
                   ),
               },
             ]}
-            rows={filtered}
+            rows={rowsPending ? [] : filtered}
             rowKey={(p) => p.id}
             onRowPress={(p) => router.push(detailRoute(p) as never)}
             rowLabel={(p) => p.name}
             {...pagedTableProps(pages, tr('common:table.loadFailed'), `contacts-${tab}`)}
+            loading={rowsPending}
             totalCount={summary?.count}
             selectable
             selectedKeys={selection.selected}
@@ -283,7 +294,7 @@ export default function ContactsTab() {
             <LoadFailed onRetry={pages.refetch} compact />
           </Card>
         </ScrollView>
-      ) : pages.isLoading && !filtered.length ? (
+      ) : (pages.isLoading && !filtered.length) || pages.isPlaceholderData ? (
         <ListSkeleton />
       ) : sections.length === 0 ? (
         <ScrollView contentContainerStyle={{ padding: t.spacing.lg }}>

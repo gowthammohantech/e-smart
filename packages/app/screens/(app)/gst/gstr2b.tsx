@@ -99,7 +99,8 @@ export function Gstr2bView({ mode }: { mode: 'download' | 'reconcile' }) {
       const list = [...new Set([...sessions.map((x) => x.gstin!).filter(isGstin), ...own])];
       setGstins(list);
       setConnectedTo(sessions.filter((x) => x.connected).map((x) => x.gstin!));
-      setGstin((g) => g ?? list[0] ?? null);
+      // On the web this screen stays open across a business switch: keep the GSTIN only if it is this business's.
+      setGstin((g) => (g && list.includes(g) ? g : list[0] ?? null));
       setGstinsLoaded(true);
     };
     api
@@ -155,9 +156,15 @@ export function Gstr2bView({ mode }: { mode: 'download' | 'reconcile' }) {
     act(() => api.PUT('/companies/{companyId}/gst/gstr2b/lines/{id}/decision', { params: { path: { ...path, id: row.id! } }, body: { decision, documentId } }));
   // The supplier's bills of the line's kind, not yet claimed: any of them can be the one 2B means.
   // The supplier is found on the server by GSTIN; a bill of entry names none, so any bill will do.
-  const lineSupplier = usePartySearch('supplier', linking?.supplierGstin ?? '', !!linking && linking.documentType !== 'BOE').data?.find((p) => p.taxId === linking?.supplierGstin);
+  const supplierQ = usePartySearch('supplier', linking?.supplierGstin ?? '', !!linking && linking.documentType !== 'BOE');
+  const lineSupplier = supplierQ.data?.find((p) => p.taxId === linking?.supplierGstin);
   const boe = linking?.documentType === 'BOE';
   const supplierBills = useDocumentPages({ kinds: linking ? [KIND_OF[linking.documentType ?? 'I']] : [], partyId: boe ? undefined : lineSupplier?.id }, !!linking && (boe || !!lineSupplier));
+  // Still finding the supplier or its bills: the sheet shimmers rather than say "no bills to link".
+  const linkSearching =
+    !!linking &&
+    ((!boe && (supplierQ.isLoading || supplierQ.isPlaceholderData)) ||
+      ((boe || !!lineSupplier) && (supplierBills.isLoading || supplierBills.isPlaceholderData)));
   const candidates = useMemo(
     () => (linking ? supplierBills.rows.filter((d) => !['draft', 'cancelled', 'rejected'].includes(d.status ?? '') && (!d.itcClaimPeriod || d.itcClaimPeriod === period)) : []),
     [linking, supplierBills.rows, period],
@@ -448,7 +455,8 @@ export function Gstr2bView({ mode }: { mode: 'download' | 'reconcile' }) {
         onClose={() => setLinking(null)}
         title={tr('compliance:gstr2b.linkTitle')}
         subtitle={linking ? `${linking.number} · ${formatMoney(linking.tax!)}` : undefined}
-        options={candidates.map((d) => ({ value: d.id!, label: `${d.supplierDocNumber ?? d.number} · ${formatDate(d.date!)}`, description: `${d.number} · ${d.totalTax ? formatMoney(d.totalTax) : ''}` }))}
+        options={(linkSearching ? [] : candidates).map((d) => ({ value: d.id!, label: `${d.supplierDocNumber ?? d.number} · ${formatDate(d.date!)}`, description: `${d.number} · ${d.totalTax ? formatMoney(d.totalTax) : ''}` }))}
+        loading={linkSearching}
         emptyMessage={tr('compliance:gstr2b.linkEmpty')}
         onSelect={(id) => linking && void decide(linking, 'accepted', id)}
       />

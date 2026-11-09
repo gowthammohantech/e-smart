@@ -94,7 +94,8 @@ export default function GstReturnsScreen() {
       const list = [...new Set([...sessions.map((x) => x.gstin!).filter(isGstin), ...own])];
       setConnected(sessions.some((x) => x.connected));
       setGstins(list);
-      setGstin((g) => g ?? list[0] ?? null);
+      // On the web this screen stays open across a business switch: keep the GSTIN only if it is this business's.
+      setGstin((g) => (g && list.includes(g) ? g : list[0] ?? null));
       setGstinsLoaded(true);
     };
     api

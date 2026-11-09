@@ -29,6 +29,17 @@ export function RecurrenceSheet({ doc, visible, onClose }: { doc: BusinessDocume
   const [endDate, setEndDate] = useState<string | undefined>(doc.recurrenceEndDate);
   const [autoSend, setAutoSend] = useState(!!doc.recurrenceAutoSend);
   const [saving, setSaving] = useState(false);
+  // Seeded again each time it opens: the document may have been refetched (or its series changed
+  // elsewhere) since this was mounted, and the sheet should show what is on it now.
+  const [openFor, setOpenFor] = useState(visible);
+  if (visible !== openFor) {
+    setOpenFor(visible);
+    if (visible) {
+      setRecurrence(doc.recurrence ?? 'none');
+      setEndDate(doc.recurrenceEndDate);
+      setAutoSend(!!doc.recurrenceAutoSend);
+    }
+  }
 
   const save = async () => {
     setSaving(true);

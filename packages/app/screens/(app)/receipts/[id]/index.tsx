@@ -9,6 +9,7 @@ import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { ListRow } from '@esmart/ui/components/ListRow';
 import { Text } from '@esmart/ui/components/Text';
+import { Skeleton } from '@esmart/ui/components/Skeleton';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { accountFor } from '@esmart/core/domain/ledger/accounts';
@@ -36,15 +37,16 @@ export default function ReceiptDetail() {
   const stored = useVouchers().find((v) => v.id === id);
   const remote = useVoucherRecord(id);
   const voucher = stored ?? (remote.data as typeof stored);
-  const { book } = useServerBook();
+  const { book, loaded } = useServerBook();
   const nameOf = useAccountName();
   const costCentres = useCostCentres(true);
-  usePartyRecord(voucher?.partyId);
+  const partyQuery = usePartyRecord(voucher?.partyId);
   const party = useParties().find((p) => p.id === voucher?.partyId);
   const removeVoucher = useAppStore((s) => s.removeVoucher);
   const [confirm, setConfirm] = useState(false);
 
-  if (!voucher && remote.isLoading) return <LoadingView />;
+  // The chart names Source and Into: until it's in they'd show raw account keys.
+  if ((!voucher && remote.isLoading) || (voucher && !loaded)) return <LoadingView />;
   if (!voucher || voucher.kind !== 'receipt') {
     return (
       <View style={{ flex: 1 }}>
@@ -60,10 +62,12 @@ export default function ReceiptDetail() {
   const { into, source } = receiptLines(voucher);
   const centre = source?.costCentreId ? (costCentres.find((c) => c.id === source.costCentreId)?.name ?? source.costCentreId) : undefined;
   const attachmentIds = voucher.attachmentIds ?? [];
-  const rows: [string, string | undefined][] = [
+  // The party may still be on its way from the server: a bar, not a missing row.
+  const partyPending = !!voucher.partyId && !party && partyQuery.isLoading;
+  const rows: [string, string | undefined | React.ReactNode][] = [
     [tr('books:receipts.source'), label(source?.account)],
     [tr('books:receipts.into'), label(into?.account)],
-    [tr('books:receipts.party'), party?.name],
+    [tr('books:receipts.party'), partyPending ? <Skeleton key="party" height={12} width={110} radius={4} /> : party?.name],
     [tr('books:costCentres.field'), centre],
     [tr('books:vouchers.reference'), voucher.reference],
     [tr('books:vouchers.narration'), voucher.narration],
@@ -98,7 +102,7 @@ export default function ReceiptDetail() {
         </Card>
         <Card padded={false}>
           {shown.map(([k, v], i) => (
-            <ListRow key={k} title={k} right={<Text variant="small" weight="600">{v}</Text>} divider={i < shown.length - 1} />
+            <ListRow key={k} title={k} right={typeof v === 'string' ? <Text variant="small" weight="600">{v}</Text> : v} divider={i < shown.length - 1} />
           ))}
         </Card>
         {attachmentIds.length ? (

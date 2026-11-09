@@ -13,7 +13,9 @@ import { Segmented } from '@esmart/ui/components/Field';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { useAppStore } from '../../store/appStore';
-import { useNotifications } from '../../store/selectors';
+import { useListsReady, useNotifications } from '../../store/selectors';
+import { Skeleton, SkeletonGroup } from '@esmart/ui/components/Skeleton';
+import { CardRowsSkeleton } from '../../components/ScreenSkeleton';
 import { NOTIFICATION_META, notificationRoute } from '../../features/notifications/notificationMeta';
 import { formatRelative } from '@esmart/core/lib/date';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
@@ -31,6 +33,8 @@ export default function Notifications() {
   const desktop = useIsDesktop();
 
   const notifications = useNotifications();
+  // Until this business's notifications come the list is empty, not "none": no counts, no empty picture.
+  const ready = useListsReady();
   const markRead = useAppStore((s) => s.markNotificationRead);
   const markAllRead = useAppStore((s) => s.markAllNotificationsRead);
   const clearAll = useAppStore((s) => s.clearNotifications);
@@ -59,16 +63,16 @@ export default function Notifications() {
             ? () => (
                 // A desktop keeps the page actions together, top right, instead of a bar at the bottom.
                 <View style={{ flexDirection: 'row', gap: t.spacing.sm }}>
-                  {unread > 0 ? (
+                  {ready && unread > 0 ? (
                     <Button title={tr('common:notifications.markAllRead')} variant="ghost" icon="check-all" onPress={readAll} />
                   ) : null}
-                  {notifications.length > 0 ? (
+                  {ready && notifications.length > 0 ? (
                     <Button title={tr('common:notifications.clearAll')} variant="ghost" icon="notification-clear-all" onPress={() => setConfirmClear(true)} />
                   ) : null}
                 </View>
               )
             : () =>
-                unread > 0 ? (
+                ready && unread > 0 ? (
                   <Pressable onPress={readAll} hitSlop={8} accessibilityRole="button" accessibilityLabel={tr('common:notifications.markAllRead')}>
                     <Text variant="small" tone="primary" weight="600">{tr('common:notifications.markAllRead')}</Text>
                   </Pressable>
@@ -84,15 +88,21 @@ export default function Notifications() {
             : { paddingHorizontal: t.spacing.lg, paddingTop: t.spacing.md }
         }
       >
-        <Segmented
-          options={[
-            { value: 'all', label: tr('common:notifications.filterAll', { n: notifications.length }) },
-            { value: 'unread', label: tr('common:notifications.filterUnread', { n: unread }) },
-          ]}
-          value={filter}
-          onChange={(v) => setFilter(v as 'all' | 'unread')}
-          size="sm"
-        />
+        {ready ? (
+          <Segmented
+            options={[
+              { value: 'all', label: tr('common:notifications.filterAll', { n: notifications.length }) },
+              { value: 'unread', label: tr('common:notifications.filterUnread', { n: unread }) },
+            ]}
+            value={filter}
+            onChange={(v) => setFilter(v as 'all' | 'unread')}
+            size="sm"
+          />
+        ) : (
+          <SkeletonGroup>
+            <Skeleton height={36} radius={t.radius.md} />
+          </SkeletonGroup>
+        )}
       </View>
 
       <ScrollView
@@ -100,7 +110,11 @@ export default function Notifications() {
         contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: desktop ? t.spacing.xxxl : 120 + insets.bottom }}
         showsVerticalScrollIndicator={SHOW_SCROLLBAR}
       >
-        {rows.length === 0 ? (
+        {!ready ? (
+          <Card padded={false}>
+            <CardRowsSkeleton kind="list" rows={6} />
+          </Card>
+        ) : rows.length === 0 ? (
           <Card padded={false}>
             <EmptyState
               illustration="no-notifications" icon="bell-check-outline"

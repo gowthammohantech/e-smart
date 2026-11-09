@@ -16,6 +16,7 @@ import { formatDateTime } from '@esmart/core/lib/date';
 import { auditChanges } from '@esmart/core/domain/auditDiff';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { CardRowsSkeleton, MoreRowsSkeleton } from '../../../components/ScreenSkeleton';
+import { Skeleton, SkeletonGroup } from '@esmart/ui/components/Skeleton';
 
 const ICONS: Record<string, IconName> = {
   created: 'plus-circle-outline',
@@ -58,9 +59,16 @@ export default function AuditTrail() {
 
       <View style={{ paddingHorizontal: t.spacing.lg, paddingTop: t.spacing.md, gap: t.spacing.sm }}>
         <SearchBar value={query} onChangeText={setQuery} placeholder={tr('settings:audit.search')} />
-        <Text variant="caption" tone="muted">
-          {tr('settings:audit.count', { count: filtered.length })}
-        </Text>
+        {/* Not "0 events" while the first page is on its way. */}
+        {pages.isLoading && !filtered.length ? (
+          <SkeletonGroup style={{ paddingVertical: 2 }}>
+            <Skeleton height={12} width={60} radius={4} />
+          </SkeletonGroup>
+        ) : (
+          <Text variant="caption" tone="muted">
+            {tr('settings:audit.count', { count: filtered.length })}
+          </Text>
+        )}
       </View>
 
       <ScrollView

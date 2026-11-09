@@ -144,8 +144,40 @@ export function DocumentEditor(props: EditorProps) {
   const party = usePartyRecord(props.prefill?.partyId);
   const item = useItemRecord(props.prefill?.itemId);
   const source = useDocumentRecord(props.initialDraft?.sourceDocumentId);
-  if (party.isLoading || item.isLoading || source.isLoading) return <LoadingView variant="items-form" keepTitle />;
-  return <DocumentEditorForm {...props} />;
+  // Several items at once (Low stock's reorder, a scanned bill's matched lines): any the store doesn't
+  // hold are fetched first, or a reload would open the editor with those lines dropped.
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  const wanted = useMemo(
+    () => [...new Set([...(props.prefill?.items ?? []).map((x) => x.itemId), ...(props.prefill?.lines ?? []).flatMap((l) => (l.itemId ? [l.itemId] : []))])],
+    [props.prefill?.items, props.prefill?.lines],
+  );
+  const held = useAppStore((s) => s.items);
+  const [settled, setSettled] = useState<string[]>([]);
+  const missing = wanted.filter((id) => !held.some((i) => i.id === id) && !settled.includes(id));
+  const markSettled = useCallback((id: string) => setSettled((cur) => (cur.includes(id) ? cur : [...cur, id])), []);
+  if (party.isLoading || item.isLoading || source.isLoading || missing.length) {
+    return (
+      <>
+        {missing.map((id) => (
+          <PrefillItemFetch key={id} id={id} onSettled={markSettled} />
+        ))}
+        <LoadingView variant="items-form" keepTitle />
+      </>
+    );
+  }
+  // Keyed by business: on web the page stays open across a switch, and the form seeds its branch,
+  // taxes and party from the business it opened in.
+  return <DocumentEditorForm key={companyId} {...props} />;
+}
+
+/** Fetches one prefilled item into the store; once it's answered (or can't be had) the editor may open. */
+function PrefillItemFetch({ id, onSettled }: { id: string; onSettled: (id: string) => void }) {
+  const q = useItemRecord(id);
+  const done = q.isSuccess || q.isError;
+  useEffect(() => {
+    if (done) onSettled(id);
+  }, [done, id, onSettled]);
+  return null;
 }
 
 function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }: EditorProps) {

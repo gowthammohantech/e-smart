@@ -24,6 +24,13 @@ import { Skeleton, SkeletonGroup } from '@esmart/ui/components/Skeleton';
 import { Button } from '@esmart/ui/components/Button';
 
 export default function BackupExport() {
+  // Keyed by business: on the web the page stays open across a switch, and what it copied or fetched
+  // at mount belongs to the business it opened on.
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  return <BackupExportBody key={companyId} />;
+}
+
+function BackupExportBody() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const { t: tr } = useTranslation(['nav', 'settings', 'auth', 'reports']);
@@ -185,10 +192,20 @@ export default function BackupExport() {
               <Skeleton height={28} width="100%" />
             </SkeletonGroup>
           )}
-          <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
-            {backup?.lastBackupAt ? tr('settings:backup.lastBackup', { when: formatDateTime(backup.lastBackupAt) }) : tr('settings:backup.noBackupYet')}{' '}
-            {tr('settings:backup.retentionNote')}
-          </Text>
+          {backup === null && !backupFailed ? (
+            // Not read yet: a placeholder rather than "No backup yet".
+            <SkeletonGroup style={{ gap: 6 }}>
+              <Skeleton height={12} width="70%" radius={4} />
+              <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
+                {tr('settings:backup.retentionNote')}
+              </Text>
+            </SkeletonGroup>
+          ) : (
+            <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
+              {backup?.lastBackupAt ? tr('settings:backup.lastBackup', { when: formatDateTime(backup.lastBackupAt) }) : tr('settings:backup.noBackupYet')}{' '}
+              {tr('settings:backup.retentionNote')}
+            </Text>
+          )}
         </Card>
       </ScrollView>
 

@@ -7,7 +7,9 @@ import { PickerField, SwitchField, TextField } from '@esmart/ui/components/Field
 import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { checkCustomValues, type CustomField, type CustomFieldEntity, type CustomValues } from '@esmart/core/domain/customFields';
+import { SkeletonFormField, SkeletonGroup } from '@esmart/ui/components/Skeleton';
 import { useAppStore } from '../../store/appStore';
+import { useSetupReady } from '../../store/selectors';
 
 /** The active company's fields for one kind of record, in their order. */
 export function useCustomFields(entity: CustomFieldEntity, includeInactive = false): CustomField[] {
@@ -47,7 +49,17 @@ export function CustomFieldsSection({ entity, values, onChange, errors }: { enti
   const t = useTheme();
   const { t: tr } = useTranslation(['settings']);
   const fields = useCustomFields(entity);
+  const setupReady = useSetupReady();
   const [picking, setPicking] = useState<CustomField | null>(null);
+  // The business's fields come with its setup: until then a placeholder, so a required one isn't missed.
+  if (!fields.length && !setupReady) {
+    return (
+      <SkeletonGroup style={{ gap: t.spacing.md }}>
+        <SkeletonFormField index={0} />
+        <SkeletonFormField index={1} />
+      </SkeletonGroup>
+    );
+  }
   if (!fields.length) return null;
   const set = (id: string, v: CustomValues[string]) => onChange({ ...values, [id]: v });
 

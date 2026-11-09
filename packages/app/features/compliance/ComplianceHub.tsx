@@ -82,7 +82,11 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
   const eInvoiceRows = eInvoices.rows;
   const unbilledRows = unbilled.rows;
   const ewayRows = bills.rows;
-  const loading = tab === 'eInvoice' ? eInvoices.isLoading : ewayFilter === 'pending' ? unbilled.isLoading : bills.isLoading;
+  // A chip or search change keeps the last filter's rows as placeholder; show the shimmer, not rows of the wrong kind.
+  const shownList = tab === 'eInvoice' ? eInvoices : ewayFilter === 'pending' ? unbilled : bills;
+  const loading = shownList.isLoading || shownList.isPlaceholderData;
+  // Until the counts arrive the tiles shimmer rather than read "0".
+  const countsLoading = !summary.loaded;
 
   return (
     <ScrollView
@@ -108,6 +112,7 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
             value={String(summary.eInvoice.generated)}
             icon="shield-check-outline"
             tone="good"
+            loading={countsLoading}
             caption={tr('compliance:hub.cancelledCount', { count: summary.eInvoice.cancelled })}
           />
           <StatTile
@@ -115,6 +120,7 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
             value={String(summary.eInvoice.pending + summary.eInvoice.failed)}
             icon="alert-circle-outline"
             tone={summary.eInvoice.failed ? 'bad' : 'warn'}
+            loading={countsLoading}
             caption={tr('compliance:hub.rejectedCount', { count: summary.eInvoice.failed })}
           />
         </StatRow>
@@ -125,12 +131,14 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
             value={String(summary.eway.active)}
             icon="truck-fast-outline"
             tone="good"
+            loading={countsLoading}
           />
           <StatTile
             label={tr('compliance:hub.expiring24h')}
             value={String(summary.expiringSoon)}
             icon="clock-alert-outline"
             tone={summary.expiringSoon ? 'warn' : 'default'}
+            loading={countsLoading}
             caption={tr('compliance:hub.unbilled', { count: summary.ewayOutstanding })}
           />
         </StatRow>

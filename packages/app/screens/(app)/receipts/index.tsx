@@ -28,6 +28,7 @@ import { useAccountName } from '../../../features/books/names';
 import { useDebounced } from '../../../components/useDebounced';
 import { pagedTableProps, useRowsExport, useTableSelection } from '../../../components/pagedTable';
 import { CardRowsSkeleton, MoreRowsSkeleton } from '../../../components/ScreenSkeleton';
+import { Skeleton } from '@esmart/ui/components/Skeleton';
 
 const DEFAULT_RANGE: DateRangePreset = 'last30';
 
@@ -45,7 +46,7 @@ export default function ReceiptsList() {
   const narrow = useBreakpoint() === 'tablet';
 
   // The chart the server names accounts from: the device needn't hold every party.
-  const { book } = useServerBook();
+  const { book, loaded } = useServerBook();
   const nameOf = useAccountName();
   const parties = useParties();
   const [params, setParams] = useQueryParams();
@@ -73,6 +74,10 @@ export default function ReceiptsList() {
   const byAccount = summary.data?.byAccount ?? [];
   const noneAtAll = range === 'all' && !search && summary.data?.count === 0;
   const loading = (pages.isLoading || summary.isLoading) && !receipts.length;
+  // Rows name their account from the chart: until it's in they'd all read "—", so they wait for it too.
+  const rowsLoading = loading || (!loaded && receipts.length > 0);
+  // The count and total wait for the summary: never "0 receipts · ₹0.00".
+  const totalsPending = loading || (!summary.data && summary.isLoading);
   // Didn't load: said so with a retry, never "no receipts" or a ₹0 total.
   const failed = pages.isError && !receipts.length;
   const failedState = (
@@ -117,7 +122,7 @@ export default function ReceiptsList() {
     />
   );
   const splitCard =
-    byAccount.length > 1 ? (
+    byAccount.length > 1 && loaded ? (
       <Card padded={false}>
         {byAccount.map((b, i) => (
           <ListRow key={b.account} title={label(b.account)} right={<Text variant="small" weight="600">{formatMoney(b.total as Money)}</Text>} divider={i < byAccount.length - 1} />
@@ -143,7 +148,12 @@ export default function ReceiptsList() {
             onChange={setRange}
           />
           {adjustButton}
-          {summary.isError ? null : (
+          {summary.isError ? null : totalsPending ? (
+            <View style={{ marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
+              <Skeleton height={12} width={80} radius={4} />
+              <Skeleton height={18} width={90} radius={4} />
+            </View>
+          ) : (
             <View style={{ marginLeft: 'auto', flexDirection: 'row', alignItems: 'baseline', gap: t.spacing.md }}>
               <Text variant="small" tone="muted">
                 {tr('books:receipts.count', { count })}
@@ -162,7 +172,7 @@ export default function ReceiptsList() {
                 columns={[
                   { key: 'number', header: tr('common:table.number'), width: 150, render: (v) => <Cell weight="600">{v.number}</Cell> },
                   { key: 'date', header: tr('common:table.date'), width: 110, render: (v) => <Cell tone="muted">{formatDate(v.date, 'dd MMM yyyy')}</Cell> },
-                  { key: 'for', header: tr('books:receipts.source'), flex: 1.4, render: (v) => <Cell>{label(incomeLine(v)?.account)}</Cell> },
+                  { key: 'for', header: tr('books:receipts.source'), flex: 1.4, render: (v) => (loaded ? <Cell>{label(incomeLine(v)?.account)}</Cell> : <Skeleton height={10} width={100} radius={4} />) },
                   { key: 'party', secondary: true, header: tr('books:receipts.party'), flex: 1.2, render: (v) => <Cell tone="muted">{partyName(v) ?? '—'}</Cell> },
                   { key: 'ref', secondary: true, header: tr('common:table.reference'), flex: 1.4, render: (v) => <Cell tone="muted">{v.reference || v.narration || '—'}</Cell> },
                   { key: 'amount', header: tr('common:table.amount'), width: 130, align: 'right', render: (v) => <Cell weight="600" mono>{formatMoney(amountOf(v, baseCurrency))}</Cell> },
@@ -246,7 +256,7 @@ export default function ReceiptsList() {
         {splitCard}
         <View style={{ alignItems: 'flex-start' }}>{adjustButton}</View>
         <Card padded={false}>
-          {loading ? (
+          {rowsLoading ? (
             <CardRowsSkeleton />
           ) : failed ? (
             failedState

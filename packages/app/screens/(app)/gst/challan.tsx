@@ -19,6 +19,7 @@ import { fromMajor, money } from '@esmart/core/lib/money';
 import { uid } from '@esmart/core/lib/id';
 import type { GstChallan, GstChallanHead, Voucher } from '@esmart/core/types';
 import { useServerSave } from '../../../components/useServerSave';
+import { CardRowsSkeleton } from '../../../components/ScreenSkeleton';
 import { useVoucherPages } from '../../../remote/queries';
 import { useAppStore } from '../../../store/appStore';
 import { useActiveCompany, useBaseCurrency, useDefaultBranchId, usePaymentAccounts } from '../../../store/selectors';
@@ -34,6 +35,12 @@ type Part = (typeof PARTS)[number];
  * set-off on the Utilization screen then takes it out (RULES 6.21).
  */
 export default function GstChallanScreen() {
+  // On the web the screen stays open across a business switch; a fresh form picks that business's bank.
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  return <ChallanForm key={companyId} />;
+}
+
+function ChallanForm() {
   const t = useTheme();
   const router = useRouter();
   const { t: tr } = useTranslation(['compliance', 'books', 'common']);
@@ -140,7 +147,11 @@ export default function GstChallanScreen() {
             </Text>
           ) : null}
           <FormSection title={tr('compliance:challan.recent')}>
-            {rows.length ? (
+            {recent.isLoading && !rows.length ? (
+              <Card padded={false}>
+                <CardRowsSkeleton rows={3} kind="list" />
+              </Card>
+            ) : rows.length ? (
               <Card padded={false}>
                 {rows.map((v, i) => (
                   <ListRow

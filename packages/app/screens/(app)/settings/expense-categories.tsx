@@ -15,6 +15,7 @@ import { ExpenseCategory } from '@esmart/core/types';
 import { useAppStore } from '../../../store/appStore';
 import { useActiveCompany, useBaseCurrency, useExpenseCategories } from '../../../store/selectors';
 import { useCompanyUsage } from '../../../remote/queries';
+import { Skeleton, SkeletonGroup } from '@esmart/ui/components/Skeleton';
 import { formatMoney } from '@esmart/core/lib/format';
 import { money } from '@esmart/core/lib/money';
 import { uid } from '@esmart/core/lib/id';
@@ -31,7 +32,10 @@ export default function ExpenseCategorySettings() {
   const company = useActiveCompany();
   const baseCurrency = useBaseCurrency();
   const categories = useExpenseCategories();
-  const usage = useCompanyUsage().data;
+  const usageQuery = useCompanyUsage();
+  const usage = usageQuery.data;
+  // Until the server answers, a count would read 0 ("not used"): a placeholder instead.
+  const usagePending = !usage && !usageQuery.isError;
   const saveExpenseCategory = useAppStore((s) => s.saveExpenseCategory);
   const removeExpenseCategory = useAppStore((s) => s.removeExpenseCategory);
 
@@ -64,12 +68,17 @@ export default function ExpenseCategorySettings() {
               <ListRow
                 key={c.id}
                 title={c.name}
-                subtitle={stat ? tr('settings:categories.entries', { count: stat.count }) : tr('settings:categories.unused')}
+                subtitle={usagePending ? undefined : stat ? tr('settings:categories.entries', { count: stat.count }) : tr('settings:categories.unused')}
                 icon={c.icon as never}
                 iconColor={c.color}
                 divider={i < categories.length - 1}
                 right={
-                  stat ? (
+                  usagePending ? (
+                    <SkeletonGroup style={{ alignItems: 'flex-end', gap: 4 }}>
+                      <Skeleton height={14} width={64} />
+                      <Skeleton height={10} width={44} radius={4} />
+                    </SkeletonGroup>
+                  ) : stat ? (
                     <Text variant="small" weight="600">
                       {formatMoney(money(stat.total, baseCurrency))}
                     </Text>

@@ -290,7 +290,8 @@ export default function Gstr1Report() {
   const wholeMonth = from.endsWith('-01') && to === new Date(Date.UTC(Number(y), Number(mo), 0)).toISOString().slice(0, 10);
   const companyGstin = company.taxRegistration?.identifier;
   const picked = scope.filters.branchId ? branches.find((b) => b.id === scope.filters.branchId) : undefined;
-  const gstins = new Set((picked ? [picked] : branches).map((b) => b.gstin || companyGstin).filter(Boolean));
+  // No branches listed (yet): the business files under its own GSTIN.
+  const gstins = new Set(picked || branches.length ? (picked ? [picked] : branches).map((b) => b.gstin || companyGstin).filter(Boolean) : [companyGstin].filter(Boolean));
   const jsonGstin = gstins.size === 1 ? [...gstins][0] : undefined;
   const exportJson = async () => {
     await deliverFile(`GSTR1_${jsonGstin ?? company.id}_${period}.json`, await gstr1Json(company.id, period, jsonGstin), 'application/json');

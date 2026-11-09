@@ -27,6 +27,7 @@ import { Text } from '@esmart/ui/components/Text';
 import { WEB_INPUT_RESET, webFocusHalo } from '@esmart/ui/components/Field';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { LIXI, LixiMark, LixiOrb } from '@esmart/ui/components/LixiOrb';
+import { SkeletonGroup, SkeletonText } from '@esmart/ui/components/Skeleton';
 import { greetWith, lixiSuggestions, LixiAction, LixiReply } from '../../features/lixi/brain';
 import { askRemote, confirmRemote, remoteLixiAvailable, type PendingLixiAction } from '../../features/lixi/remote';
 import { detailRouteFor } from '../../features/documents/DocumentEditor';
@@ -61,7 +62,10 @@ export default function LixiChat({ onClose, initialAsk }: LixiChatProps = {}) {
   const user = useCurrentUser();
   const plan = usePlan();
   // The greeting's heads-up comes from the same server figures as the Home tab.
-  const hub = useHomeHub(useDashboardScope()).data;
+  const hubQuery = useHomeHub(useDashboardScope());
+  const hub = hubQuery.data;
+  // Until both answer, the heads-up would read "everything's tidy": a placeholder instead.
+  const introReady = (!!hub || hubQuery.isError) && compliance.loaded;
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState('');
@@ -311,9 +315,17 @@ export default function LixiChat({ onClose, initialAsk }: LixiChatProps = {}) {
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: t.spacing.lg, paddingVertical: t.spacing.xxl }}>
             <LixiOrb size={96} thinking={thinking} face />
             <Text variant="h3" center>{tr('lixi:ui.prompt')}</Text>
-            <Text tone="muted" center style={{ maxWidth: 300 }}>
-              {intro.text}
-            </Text>
+            {introReady ? (
+              <Text tone="muted" center style={{ maxWidth: 300 }}>
+                {intro.text}
+              </Text>
+            ) : (
+              <SkeletonGroup style={{ width: 260, maxWidth: '100%', alignItems: 'center' }}>
+                <View style={{ width: '100%' }}>
+                  <SkeletonText lines={2} lastWidth="70%" />
+                </View>
+              </SkeletonGroup>
+            )}
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: t.spacing.sm, marginTop: t.spacing.sm }}>
               {lixiSuggestions(plan).map((s) => (
                 <Chip key={s} label={s} onPress={() => send(s)} />

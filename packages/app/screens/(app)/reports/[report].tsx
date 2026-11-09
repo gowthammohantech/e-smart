@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { Stack, useLocalSearchParams } from 'expo-router';
@@ -80,7 +80,12 @@ export default function Report() {
   const SERVER_KEYS = ['sales-summary', 'purchase-summary', 'expense-summary', 'receivables', 'payables', 'stock', 'tax-summary', 'payments', 'advances', 'profit', 'tds-register', 'tds-payable', 'tds-receivable', 'tds-26q', 'tds-challans', 'tcs-register', 'tcs-payable', 'msme-payables'];
   const serverKey = SERVER_KEYS.includes(key) ? (key as ReportDataKey) : null;
   const remote = useReportData<unknown>(serverKey, { ...scope.filters.range, branchId: scope.filters.branchId, partyId: scope.filters.partyId });
-  const data = remote.data;
+  // A new period keeps the last figures on screen while it loads, as intended; but if this screen is
+  // reused for another report, the placeholder is the old report's, in another shape: that waits.
+  const [dataKey, setDataKey] = useState(key);
+  if (remote.data && !remote.isPlaceholderData && dataKey !== key) setDataKey(key);
+  const otherReport = remote.isPlaceholderData && dataKey !== key;
+  const data = otherReport ? undefined : remote.data;
   const empty = useMemo(() => {
     const aging = { outstanding: [] as OutstandingDoc[], summary: summarizeAging([], baseCurrency) };
     return {
@@ -123,7 +128,7 @@ export default function Report() {
   const tdsReturn = pick<ReturnType<typeof tdsReturnRows>>(key === 'tds-challans' ? 'tds-challans' : 'tds-26q', { deductees: [], challans: [] });
   const msme = pick<{ rows: ReturnType<typeof msmePayables>; late: ReturnType<typeof sec43bh> }>('msme-payables', { rows: [], late: [] });
 
-  if (meta && serverKey && !data && remote.isLoading)
+  if (meta && serverKey && !data && (remote.isLoading || otherReport))
     return (
       <ReportLoading
         title={meta.title}

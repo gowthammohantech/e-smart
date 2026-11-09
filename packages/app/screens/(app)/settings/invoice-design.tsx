@@ -65,6 +65,13 @@ const TOGGLE_LABEL = {
  * invoice with the choices applied; an invoice can be printed in another template from its preview.
  */
 export default function InvoiceDesignScreen() {
+  // Keyed by business: on the web the page stays open across a switch, and what it copied or fetched
+  // at mount belongs to the business it opened on.
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  return <InvoiceDesignScreenBody key={companyId} />;
+}
+
+function InvoiceDesignScreenBody() {
   const t = useTheme();
   // A desktop puts the controls beside the preview, so a change shows without scrolling.
   const desktop = useIsDesktop();

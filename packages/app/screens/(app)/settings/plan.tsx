@@ -10,7 +10,8 @@ import { Badge } from '@esmart/ui/components/Badge';
 import { Button } from '@esmart/ui/components/Button';
 import { Segmented } from '@esmart/ui/components/Field';
 import { useAppStore } from '../../../store/appStore';
-import { useActiveCompany } from '../../../store/selectors';
+import { useActiveCompany, useListsReady } from '../../../store/selectors';
+import { Skeleton, SkeletonGroup } from '@esmart/ui/components/Skeleton';
 import { useCompanyUsage } from '../../../remote/queries';
 import { PLANS, planInfo, userLimit } from '@esmart/core/domain/plan';
 import { planBlurb, planFeatures } from '../../../features/plan/planCopy';
@@ -34,7 +35,10 @@ export default function PlanBilling() {
   // Only people who have accepted count; a pending invitation is not a user yet.
   const teamSize = useAppStore((s) => s.users.filter((u) => u.status === 'active' && u.companyIds.includes(s.activeCompanyId)).length);
   const pendingInvites = useAppStore((s) => s.users.filter((u) => u.status === 'invited' && u.companyIds.includes(s.activeCompanyId)).length);
-  const usage = useCompanyUsage().data;
+  const usageQuery = useCompanyUsage();
+  const usage = usageQuery.data;
+  // Until the team has loaded the store holds only you: a placeholder, not "1 of N".
+  const teamReady = useListsReady();
   const company = useActiveCompany();
   const currentPlan = company.plan;
   const current = planInfo(currentPlan);
@@ -64,17 +68,27 @@ export default function PlanBilling() {
           {[
             // Real counts. The plan's limits aren't served by the API yet (docs/PRODUCTION_READINESS.md).
             { label: tr('plan:billing.usageBusinesses'), value: String(companies.length) },
-            { label: tr('plan:billing.usageInvoices'), value: usage ? String(usage.counts.invoices) : '…' },
-            { label: tr('plan:billing.usageUsers'), value: seatLimit === null ? String(teamSize) : tr('plan:billing.ofTotal', { used: teamSize, total: seatLimit }) },
-            ...(pendingInvites > 0 ? [{ label: tr('plan:billing.usagePending'), value: String(pendingInvites) }] : []),
-          ].map((r) => (
+            // null: not known yet, drawn as a placeholder.
+            { label: tr('plan:billing.usageInvoices'), value: usage ? String(usage.counts.invoices) : usageQuery.isError ? '—' : null },
+            {
+              label: tr('plan:billing.usageUsers'),
+              value: !teamReady ? null : seatLimit === null ? String(teamSize) : tr('plan:billing.ofTotal', { used: teamSize, total: seatLimit }),
+            },
+            ...(teamReady && pendingInvites > 0 ? [{ label: tr('plan:billing.usagePending'), value: String(pendingInvites) }] : []),
+          ].map((r: { label: string; value: string | null }) => (
             <View key={r.label} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
               <Text variant="small" tone="muted">
                 {r.label}
               </Text>
-              <Text variant="small" weight="600">
-                {r.value}
-              </Text>
+              {r.value === null ? (
+                <SkeletonGroup>
+                  <Skeleton height={14} width={48} />
+                </SkeletonGroup>
+              ) : (
+                <Text variant="small" weight="600">
+                  {r.value}
+                </Text>
+              )}
             </View>
           ))}
         </Card>

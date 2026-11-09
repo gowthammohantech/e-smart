@@ -25,6 +25,7 @@ import { refreshSoon } from '../../../remote/refresh';
 import { useDebounced } from '../../../components/useDebounced';
 import { useBaseCurrency, useParties } from '../../../store/selectors';
 import { ListSkeleton } from '../../../components/ScreenSkeleton';
+import { Skeleton } from '@esmart/ui/components/Skeleton';
 
 type Side = 'customer' | 'supplier';
 
@@ -46,10 +47,12 @@ export default function AdjustAdvances() {
   const [picking, setPicking] = useState(false);
   const [query, setQuery] = useState('');
   const search = usePartySearch(undefined, useDebounced(query), picking);
-  usePartyRecord(partyId);
+  const partyQuery = usePartyRecord(partyId);
   const party = useParties().find((p) => p.id === partyId);
+  // The side follows the party's kind: until it's in, a supplier would be read as a customer.
+  const partyPending = !!partyId && !party && partyQuery.isLoading;
   const side: Side = party?.kind === 'supplier' ? 'supplier' : party?.kind === 'both' ? sideChoice : 'customer';
-  const data = useAdjustable(partyId, side);
+  const data = useAdjustable(partyPending ? undefined : partyId, side);
   const credits = data.data?.credits ?? [];
   const open = useMemo(() => {
     const rows = data.data?.open ?? [];
@@ -147,7 +150,14 @@ export default function AdjustAdvances() {
           <Text variant="small" tone="muted">
             {tr('books:adjust.intro')}
           </Text>
+          {partyPending ? (
+            <View style={{ gap: 6 }}>
+              <Skeleton height={12} width={80} radius={4} />
+              <Skeleton height={44} radius={t.radius.md} />
+            </View>
+          ) : (
           <PickerField label={tr('books:adjust.party')} value={party?.name} placeholder={tr('books:adjust.pickParty')} onPress={() => setPicking(true)} icon="account-outline" required />
+          )}
           {party?.kind === 'both' ? (
             <Segmented
               options={[
@@ -163,7 +173,7 @@ export default function AdjustAdvances() {
             />
           ) : null}
 
-          {!partyId ? null : data.isLoading ? (
+          {!partyId ? null : partyPending || data.isLoading ? (
             <ListSkeleton kind="list" rows={4} />
           ) : data.isError ? (
             // Not "nothing to adjust": what the party holds and owes didn't load.

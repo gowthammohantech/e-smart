@@ -64,7 +64,8 @@ export default function GstUtilizationScreen() {
   const [narration, setNarration] = useState('');
   const [open, setOpen] = useState<'gstin' | 'period' | null>(null);
   const [view, setView] = useState<UtilView | null>(null);
-  const [loading, setLoading] = useState(false);
+  // Loading from the first frame: the fetch starts in an effect, after a frame that would be empty.
+  const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [inputs, setInputs] = useState<Inputs | null>(null);
   const g = gstin ?? gstins[0];
@@ -80,6 +81,7 @@ export default function GstUtilizationScreen() {
     setInputs(null);
     // The last period's figures aren't this one's.
     setView(null);
+    setLoading(true);
   }
 
   const toInputs = (s: SetOff): Inputs => {
@@ -89,7 +91,10 @@ export default function GstUtilizationScreen() {
   };
 
   const load = useCallback(async () => {
-    if (!g) return;
+    if (!g) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setFailed(false);
     try {

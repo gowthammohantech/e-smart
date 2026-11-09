@@ -2,15 +2,25 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PickerField } from '@esmart/ui/components/Field';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
-import { useVehicles } from '../../store/selectors';
+import { SkeletonFormField, SkeletonGroup } from '@esmart/ui/components/Skeleton';
+import { useSetupReady, useVehicles } from '../../store/selectors';
 
 /** Picks one of the business's vehicles; shows nothing until it has one. */
 export function VehicleField({ value, onChange }: { value?: string; onChange: (id: string | undefined) => void }) {
   const { t: tr } = useTranslation(['settings']);
   const vehicles = useVehicles();
+  const setupReady = useSetupReady();
   const [open, setOpen] = useState(false);
   if (!vehicles.length && !value) return null;
   const picked = vehicles.find((v) => v.id === value);
+  // A vehicle is set but the list hasn't come yet: a placeholder, not "None".
+  if (value && !picked && !setupReady) {
+    return (
+      <SkeletonGroup>
+        <SkeletonFormField />
+      </SkeletonGroup>
+    );
+  }
   return (
     <>
       <PickerField

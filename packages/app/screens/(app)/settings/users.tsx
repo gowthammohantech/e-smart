@@ -19,7 +19,8 @@ import { useToast } from '@esmart/ui/components/Toast';
 import { User, UserRole } from '@esmart/core/types';
 import { nextUserPlan, planInfo, userLimit } from '@esmart/core/domain/plan';
 import { useAppStore } from '../../../store/appStore';
-import { useActiveCompany, useCurrentUser } from '../../../store/selectors';
+import { useActiveCompany, useCurrentUser, useListsReady } from '../../../store/selectors';
+import { CardRowsSkeleton } from '../../../components/ScreenSkeleton';
 import { remoteUsers } from '../../../remote';
 import { describeError } from '../../../remote/errors';
 import { Errors, hasErrors, required, validEmail } from '@esmart/core/lib/validators';
@@ -60,6 +61,8 @@ export default function UserSettings() {
     () => allUsers.filter((u) => u.companyIds.includes(company.id)),
     [allUsers, company.id],
   );
+  // Until the team has loaded the list holds only you, which would undercount the seats used.
+  const ready = useListsReady();
   const saveUser = useAppStore((s) => s.saveUser);
   const removeUser = useAppStore((s) => s.removeUser);
 
@@ -167,7 +170,7 @@ export default function UserSettings() {
 
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 + insets.bottom }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <Card padded={false}>
-          {users.map((u, i) => (
+          {!ready ? <CardRowsSkeleton kind="list" rows={3} /> : users.map((u, i) => (
             <ListRow
               key={u.id}
               title={u.name}
@@ -202,7 +205,8 @@ export default function UserSettings() {
         </Card>
       </ScrollView>
 
-      <PrimaryActionBar title={tr('settings:users.invite')} icon="account-plus-outline" onPress={() => open()} />
+      {/* Waits for the team, so the seat limit is checked against everyone. */}
+      <PrimaryActionBar title={tr('settings:users.invite')} icon="account-plus-outline" onPress={() => (ready ? open() : undefined)} loading={!ready} />
 
       <Sheet
         visible={!!editing}

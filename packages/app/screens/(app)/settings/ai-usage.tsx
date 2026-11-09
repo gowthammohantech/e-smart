@@ -24,6 +24,13 @@ import { SkeletonGroup, SkeletonText } from "@esmart/ui/components/Skeleton";
  * until the 1st.
  */
 export default function AiUsageScreen() {
+  // Keyed by business: on the web the page stays open across a switch, and what it copied or fetched
+  // at mount belongs to the business it opened on.
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  return <AiUsageScreenBody key={companyId} />;
+}
+
+function AiUsageScreenBody() {
   const t = useTheme();
   const { t: tr } = useTranslation(["settings"]);
   const company = useActiveCompany();

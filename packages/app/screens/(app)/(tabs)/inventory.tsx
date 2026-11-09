@@ -66,6 +66,8 @@ export default function InventoryTab() {
   const pages = useItemPages({ q: search, branchId, stock: filter === 'low' ? 'low' : filter === 'out' ? 'out' : filter === 'services' ? 'untracked' : undefined });
   const filtered = pages.rows as unknown as (Item & { stockOnHand?: number })[];
   const stock: Record<string, number> = Object.fromEntries(filtered.map((i) => [i.id, i.stockOnHand ?? 0]));
+  // A filter change keeps the last filter's rows as placeholder (stocked items under "Services"); shimmer instead.
+  const listPending = (pages.isLoading && !filtered.length) || pages.isPlaceholderData;
   const noneAtAll = filter === 'all' && !search && !pages.isLoading && !filtered.length;
   const loadMore = () => {
     if (pages.hasNextPage && !pages.isFetchingNextPage) void pages.fetchNextPage();
@@ -137,14 +139,14 @@ export default function InventoryTab() {
 
         <SectionHeader
           title={
-            // Only what's loaded is counted; more pages to come show as "50+ items".
-            pages.hasNextPage ? tr('inventory:hub.itemCountMore', { count: filtered.length }) : tr('inventory:hub.itemCount', { count: filtered.length })
+            // Only what's loaded is counted; more pages to come show as "50+ items". No "0 items" before the list is in.
+            listPending ? tr('inventory:catalog.items') : pages.hasNextPage ? tr('inventory:hub.itemCountMore', { count: filtered.length }) : tr('inventory:hub.itemCount', { count: filtered.length })
           } action={tr('inventory:hub.movements')} onAction={() => router.push('/(app)/inventory/movements')} />
 
         <Card padded={false}>
           {pages.isError && !filtered.length ? (
             <LoadFailed onRetry={pages.refetch} compact />
-          ) : pages.isLoading && !filtered.length ? (
+          ) : listPending ? (
             <CardRowsSkeleton kind="list" />
           ) : filtered.length === 0 ? (
             <EmptyState

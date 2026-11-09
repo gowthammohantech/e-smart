@@ -14,6 +14,7 @@ import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { formatDate } from '@esmart/core/lib/date';
 import { api } from '../../../remote/api';
 import { describeError } from '../../../remote/errors';
+import { useAppStore } from '../../../store/appStore';
 import { useActiveCompany } from '../../../store/selectors';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { SkeletonGroup, SkeletonRows } from '@esmart/ui/components/Skeleton';
@@ -26,6 +27,13 @@ type Session = Schema<'GstPortalSession'>;
  * filed through. Opened with their portal username and an OTP to their registered phone; online only.
  */
 export default function GstPortalSettings() {
+  // Keyed by business: on the web the page stays open across a switch, and what it copied or fetched
+  // at mount belongs to the business it opened on.
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  return <GstPortalSettingsBody key={companyId} />;
+}
+
+function GstPortalSettingsBody() {
   const t = useTheme();
   const { t: tr } = useTranslation(['settings', 'nav']);
   const toast = useToast();

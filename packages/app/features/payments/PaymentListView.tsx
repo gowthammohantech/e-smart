@@ -26,6 +26,7 @@ import { pagedTableProps, useRowsExport, useTableSelection } from '../../compone
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { presetParam, useQueryParams } from '../../navigation/queryParams';
 import { CardRowsSkeleton, MoreRowsSkeleton } from '../../components/ScreenSkeleton';
+import { Skeleton } from '@esmart/ui/components/Skeleton';
 import { BranchFilterMenu, BranchPickerChip, useListBranch } from '../../components/branchFilter';
 
 export function PaymentListView({ direction }: { direction: PaymentDirection }) {
@@ -61,6 +62,8 @@ export function PaymentListView({ direction }: { direction: PaymentDirection }) 
   // Nothing recorded at all, as against nothing matching the search or range.
   const noneAtAll = range === 'all' && !search && !branch.overridden && summary.data?.count === 0 && !filtered.length;
   const loading = (pages.isLoading || summary.isLoading) && !filtered.length;
+  // The count and total wait for the summary, even when rows are in: never "0 payments · ₹0.00".
+  const totalsPending = loading || (!summary.data && summary.isLoading);
   // Didn't load: said so with a retry, never "no payments" or a ₹0 total.
   const failed = pages.isError && !filtered.length;
   const retry = () => {
@@ -151,7 +154,12 @@ export function PaymentListView({ direction }: { direction: PaymentDirection }) 
         {desktop ? <BranchFilterMenu branch={branch} onChange={setBranch} /> : null}
         {desktop ? (
           // How many match and what they add up to, at the right end of the filter row (not ₹0 when it didn't load).
-          summary.isError ? null : <View style={{ marginLeft: 'auto', flexDirection: 'row', alignItems: 'baseline', gap: t.spacing.md }}>
+          summary.isError ? null : totalsPending ? (
+            <View style={{ marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
+              <Skeleton height={12} width={80} radius={4} />
+              <Skeleton height={18} width={90} radius={4} />
+            </View>
+          ) : <View style={{ marginLeft: 'auto', flexDirection: 'row', alignItems: 'baseline', gap: t.spacing.md }}>
             <Text variant="small" tone="muted">
               {tr('sales:list.count', { count })}
             </Text>
@@ -159,7 +167,12 @@ export function PaymentListView({ direction }: { direction: PaymentDirection }) 
               {formatMoney(total)}
             </Text>
           </View>
-        ) : failed || summary.isError ? null : (
+        ) : failed || summary.isError ? null : totalsPending ? (
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', minHeight: 16 }}>
+            <Skeleton height={10} width={90} radius={4} />
+            <Skeleton height={10} width={60} radius={4} />
+          </View>
+        ) : (
         <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
           <Text variant="caption" tone="muted">
             {tr('sales:list.count', { count })}

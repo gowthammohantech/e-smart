@@ -147,6 +147,8 @@ export function DocumentListView({
   // Nothing of this kind at all (in the top bar's branch, by default), as against nothing matching the filters.
   const noneAtAll = !activeFilterCount && !search && summary.data?.count === 0;
   const loading = (pages.isLoading || summary.isLoading) && !rows.length;
+  // Rows can land before the summary: the count and total wait for it, not "50 invoices · ₹0.00".
+  const totalsPending = loading || (!summary.data && summary.isLoading);
   // The list couldn't load: say so with a retry, never "Nothing matches" or a ₹0 total.
   const failed = pages.isError && !rows.length;
   const retry = () => {
@@ -176,9 +178,14 @@ export function DocumentListView({
       }}
     >
       <Icon name={purchaseKind ? 'truck-outline' : 'account-outline'} size={15} color={t.c.primary} />
-      <Text variant="caption" weight="600" tone="primary" numberOfLines={1} style={{ maxWidth: 220 }}>
-        {tr(purchaseKind ? 'common:documentList.supplierFilter' : 'common:documentList.customerFilter', { name: filterParty?.name ?? '…' })}
-      </Text>
+      {filterParty ? (
+        <Text variant="caption" weight="600" tone="primary" numberOfLines={1} style={{ maxWidth: 220 }}>
+          {tr(purchaseKind ? 'common:documentList.supplierFilter' : 'common:documentList.customerFilter', { name: filterParty.name })}
+        </Text>
+      ) : (
+        // The contact is still on its way: a bar, not "Customer: …".
+        <Skeleton height={10} width={110} radius={4} />
+      )}
       <Icon name="close" size={15} color={t.c.primary} />
     </Pressable>
   ) : null;
@@ -432,7 +439,7 @@ export function DocumentListView({
             </Text>
           ) : null}
           {/* How many match and what they add up to, at the right end of the filter row. */}
-          {failed || summary.isError ? null : loading ? (
+          {failed || summary.isError ? null : totalsPending ? (
             <View style={{ marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
               <Skeleton height={12} width={80} radius={4} />
               <Skeleton height={18} width={90} radius={4} />
@@ -595,7 +602,7 @@ export function DocumentListView({
 
         {headerExtra}
 
-        {failed || summary.isError ? null : loading ? (
+        {failed || summary.isError ? null : totalsPending ? (
           // Not "0 invoices · ₹0.00" before the count is in.
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', minHeight: 16 }}>
             <Skeleton height={10} width={90} radius={4} />
