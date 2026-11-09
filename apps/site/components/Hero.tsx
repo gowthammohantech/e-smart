@@ -10,6 +10,7 @@ import { PhoneFrame } from './mockups/Screens';
 import { Reveal } from './ui/Reveal';
 import { Avatar } from './ui/Avatar';
 import { StoreBadge } from './ui/StoreBadge';
+import { Button } from './ui/Button';
 
 // While the 3D phone's code and model load, a shimmering phone stands where it will be.
 const HeroPhone = dynamic(() => import('./three/HeroPhone'), {
@@ -71,6 +72,10 @@ export function Hero() {
             ))}
           </h1>
           <p className="mx-auto mt-5 max-w-md text-muted lg:mx-0">{hero.sub}</p>
+          <div className="mt-7 flex flex-col items-center gap-2 lg:items-start">
+            <Button href={hero.demo.href}>{hero.demo.label}</Button>
+            <p className="text-sm text-muted">{hero.demo.note}</p>
+          </div>
         </Reveal>
 
         {/* The phone overhangs the panel below it, so it sits above that panel. */}

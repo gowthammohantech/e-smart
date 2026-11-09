@@ -15,6 +15,7 @@ import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { useAppStore } from '../store/appStore';
 import { ConnectionBadge } from './ConnectionBadge';
 import { LatencyChip } from './LatencyChip';
+import { DemoChip } from './DemoChip';
 import { useActiveCompany, useBranches, useUnreadCount } from '../store/selectors';
 import { countLabel } from '@esmart/core/lib/format';
 import { inkOn } from '@esmart/ui/theme/contrast';
@@ -211,6 +212,7 @@ export function AppHeader({ title, subtitle }: { title?: string; subtitle?: stri
         <ConnectionBadge style={{ flexShrink: 1, alignSelf: 'center' }} />
         {/* Same slot: the server's speed once online and loaded (the two never show together). */}
         <LatencyChip />
+        <DemoChip />
 
         {desktop ? null : (
           <>

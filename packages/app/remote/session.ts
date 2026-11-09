@@ -70,7 +70,7 @@ async function open(userId: string, opts: { preferCompanyId?: string; preferBran
   useAppStore.setState({
     activeCompanyId: companyId,
     activeBranchId: branchId,
-    session: { userId, authenticated: true, onboardingComplete: !!(me?.onboardingComplete ?? opts.onboardingComplete), signedInAt: new Date().toISOString() },
+    session: { userId, authenticated: true, onboardingComplete: !!(me?.onboardingComplete ?? opts.onboardingComplete), signedInAt: new Date().toISOString(), ...(me?.demo && { demo: true }) },
   });
   refreshSoon(0);
 }
@@ -183,6 +183,22 @@ export async function signIn(email: string, password: string) {
   const { data } = await api.POST('/auth/sign-in', { body: { email: email.trim(), password, device: device() } });
   await begin(data!);
 }
+
+/**
+ * The public demo's sign-in, from the server (so no build carries it), or null when the demo is
+ * switched off or can't be reached. Asked once per launch.
+ */
+export function getDemoLogin(): Promise<{ email: string; password: string } | null> {
+  demoLogin ??= api.GET('/auth/demo').then(
+    ({ data }) => (data?.email && data.password ? { email: data.email, password: data.password } : null),
+    () => {
+      demoLogin = null;
+      return null;
+    },
+  );
+  return demoLogin;
+}
+let demoLogin: Promise<{ email: string; password: string } | null> | null = null;
 
 export async function signUp(input: { name: string; email: string; phone?: string; phoneVerificationId?: string; password: string; locale?: string; termsVersion?: string }) {
   const { data } = await api.POST('/auth/sign-up', { body: { ...input, email: input.email.trim(), phone: input.phone || undefined } });

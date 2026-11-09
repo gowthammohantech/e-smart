@@ -14,6 +14,7 @@ import { countLabel } from '@esmart/core/lib/format';
 import { formatRelative } from '@esmart/core/lib/date';
 import { useAppStore } from '@esmart/app/store/appStore';
 import { ConnectionBadge } from '@esmart/app/components/ConnectionBadge';
+import { DemoChip } from '@esmart/app/components/DemoChip';
 import { useBranches, useCurrentUser, useNotifications, useUnreadCount } from '@esmart/app/store/selectors';
 import { LIXI, LixiMark } from '@esmart/ui/components/LixiOrb';
 import { toggleLixiPanel, useLixiPanel } from '../lixiPanel';
@@ -252,6 +253,7 @@ export function TopBar() {
       >
       <ConnectionBadge style={{ alignSelf: 'center' }} />
       {narrow ? null : <LatencyBadge />}
+      <DemoChip />
 
       <LixiButton label={tr('nav:more.entry.askLixi')} />
       <IconButton

@@ -32,6 +32,9 @@ export const links = {
   playStore: process.env.NEXT_PUBLIC_PLAY_STORE_URL || 'https://play.google.com/store/apps/details?id=com.elixir.bookssmart',
 };
 
+/** The sign-in page with ?demo=1: the web app signs straight into the public demo (read-only sample businesses). */
+export const demoHref = `${links.webApp}${links.webApp.includes('?') ? '&' : '?'}demo=1`;
+
 export const brand = {
   name: 'Elixir Books Smart',
   short: 'Elixir Books',
@@ -47,6 +50,7 @@ export const nav = {
     { label: 'Cookbook', href: '/docs' },
   ],
   cta: { label: 'Get started', href: links.webApp },
+  demo: { label: 'Try the demo', href: demoHref },
 };
 
 export const hero = {
@@ -54,6 +58,7 @@ export const hero = {
   title: ['Invoices, GST', 'and stock.', 'Without the ERP.'],
   sub: 'Bill, file e-invoices and e-way bills, chase payments and keep stock — from your phone, in English or Tamil.',
   side: "Your books, on every device. Lixi, your AI assistant, keeps an eye on what's overdue, what's low and what's about to expire, and drafts the next step for you to confirm.",
+  demo: { label: 'Try the live demo', note: 'No sign-up. Eight sample businesses, ready to explore.', href: demoHref },
   downloadLabel: 'Download the app:',
   stores: [
     { store: 'apple', top: 'Download on the', name: 'App Store', href: links.appStore },

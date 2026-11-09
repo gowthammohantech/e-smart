@@ -1,7 +1,7 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, TextInput, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { AuthShell } from '@esmart/ui/components/AuthShell';
@@ -30,26 +30,58 @@ export default function SignIn() {
   const passwordRef = useRef<TextInput>(null);
   const [errors, setErrors] = useState<Errors<'email' | 'password' | 'phone'>>({});
   const [busy, setBusy] = useState(false);
+  // The public demo's sign-in, from the server; null while it's off or unreachable (the button hides).
+  const [demo, setDemo] = useState<{ email: string; password: string } | null>(null);
+  const { demo: demoParam } = useLocalSearchParams<{ demo?: string }>();
+  const autoTried = useRef(false);
+  useEffect(() => {
+    let live = true;
+    void remoteSession.getDemoLogin().then((d) => {
+      if (live) setDemo(d);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
   // While signing in, the links and tabs do nothing, so the attempt isn't left behind.
   const unlessBusy = (fn: () => void) => () => {
     if (!busy) fn();
   };
 
-  const submitEmail = () => {
+  const signInWith = (who: string, secret: string) => {
     if (busy) return;
     const next: Errors<'email' | 'password'> = {
-      email: required(email, tr('errors:field.email')) ?? validEmail(email),
-      password: required(password, tr('errors:field.password')),
+      email: required(who, tr('errors:field.email')) ?? validEmail(who),
+      password: required(secret, tr('errors:field.password')),
     };
     setErrors(next);
     if (hasErrors(next)) return;
     setBusy(true);
     // The root layout routes on once the session and its data are in.
-    remoteSession.signIn(email, password).then(welcome, (err: unknown) => {
+    remoteSession.signIn(who, secret).then(welcome, (err: unknown) => {
       setBusy(false);
       setErrors({ password: describeError(err, tr) });
     });
   };
+  const submitEmail = () => signInWith(email, password);
+
+  /** "Give it a try": the demo's sign-in fills the form, so it's plain what happens, then goes in. */
+  const tryDemo = () => {
+    if (busy || !demo) return;
+    setMode('email');
+    setEmail(demo.email);
+    setPassword(demo.password);
+    signInWith(demo.email, demo.password);
+  };
+  // A "Try the demo" link (sign-in?demo=1, from the website) goes straight in once the demo answers.
+  useEffect(() => {
+    if (demoParam === '1' && demo && !autoTried.current) {
+      autoTried.current = true;
+      tryDemo();
+    }
+    // tryDemo reads the latest state; this runs once when the demo's sign-in arrives.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [demoParam, demo]);
 
   // The code screen sends an SMS as it opens: a double tap would open it, and send, twice.
   const openedOtp = useRef(0);
@@ -141,6 +173,18 @@ export default function SignIn() {
           <Button title={tr('auth:signIn.sendCode')} onPress={submitPhone} fullWidth />
         </View>
       )}
+
+      {demo ? (
+        <View style={{ gap: t.spacing.sm, marginTop: t.spacing.lg }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
+            <View style={{ flex: 1, height: 1, backgroundColor: t.c.line }} />
+            <Text variant="caption" tone="muted">{tr('auth:signIn.or')}</Text>
+            <View style={{ flex: 1, height: 1, backgroundColor: t.c.line }} />
+          </View>
+          <Button title={tr('auth:signIn.tryDemo')} variant="secondary" icon="rocket-launch-outline" onPress={tryDemo} disabled={busy} fullWidth />
+          <Text variant="caption" tone="muted" style={{ textAlign: 'center' }}>{tr('auth:signIn.tryDemoHint')}</Text>
+        </View>
+      ) : null}
 
       <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 5, marginTop: t.spacing.lg }}>
         <Text variant="small" tone="muted">{tr('auth:signIn.newHere')}</Text>

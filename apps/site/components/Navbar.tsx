@@ -84,6 +84,9 @@ export function Navbar() {
         </ul>
         <div className="hidden items-center gap-3 md:flex">
           <ThemeToggle />
+          <a href={nav.demo.href} className="text-sm font-medium text-muted transition-colors hover:text-fg">
+            {nav.demo.label}
+          </a>
           <Button href={nav.cta.href} variant="outline">
             {nav.cta.label}
           </Button>
@@ -125,7 +128,10 @@ export function Navbar() {
                   </a>
                 </li>
               ))}
-              <li className="mt-2">
+              <li className="mt-2 flex flex-col gap-2">
+                <Button href={nav.demo.href} variant="outline" className="w-full">
+                  {nav.demo.label}
+                </Button>
                 <Button href={nav.cta.href} className="w-full">
                   {nav.cta.label}
                 </Button>

@@ -3,6 +3,7 @@ import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import { reportError } from '../lib/reporter';
+import { useAppStore } from '../store/appStore';
 import { api } from './api';
 
 /** The token this device registered, so signing out can take it back. */
@@ -45,7 +46,8 @@ export async function pushPermission(): Promise<PushPermission> {
 export async function ensurePushRegistered(opts: { ask: boolean }): Promise<boolean> {
   try {
     const id = projectId();
-    if (Platform.OS === 'web' || !id) return false;
+    // The demo is shared by everyone trying it: nobody's phone gets its notifications.
+    if (Platform.OS === 'web' || !id || useAppStore.getState().session.demo) return false;
     let { status, canAskAgain } = await Notifications.getPermissionsAsync();
     if (status !== 'granted' && opts.ask && canAskAgain) ({ status } = await Notifications.requestPermissionsAsync());
     if (status !== 'granted') return false;

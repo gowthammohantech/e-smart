@@ -410,5 +410,13 @@
       "fair": "a bit slow",
       "slow": "slow"
     }
+  },
+  "demo": {
+    "chip": "Demo",
+    "a11y": "You're in the demo. Tap to learn more.",
+    "title": "You're exploring a demo",
+    "body": "Eight sample businesses, one of each type, with six months of sales, purchases, payments, stock, books and GST. Look around as much as you like: changes aren't saved, and the demo is refreshed every week.",
+    "createAccount": "Create your free account",
+    "keepExploring": "Keep exploring"
   }
 }

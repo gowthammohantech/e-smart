@@ -104,6 +104,8 @@ export type Session = {
   authenticated: boolean;
   onboardingComplete: boolean;
   signedInAt?: string;
+  /** The public demo account: everything reads, nothing saves (the API answers 403 DEMO_READ_ONLY). */
+  demo?: boolean;
 };
 
 /** The store starts empty: everything arrives from the API on sign-in. */
