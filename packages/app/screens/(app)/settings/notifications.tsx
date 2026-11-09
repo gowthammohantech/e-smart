@@ -8,7 +8,7 @@ import { Card } from '@esmart/ui/components/Card';
 import { Button } from '@esmart/ui/components/Button';
 import { SwitchField } from '@esmart/ui/components/Field';
 import { useToast } from '@esmart/ui/components/Toast';
-import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, WIDE_FORM_MAX_WIDTH, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { api } from '../../../remote/api';
 import { describeError } from '../../../remote/errors';
 import { ensurePushRegistered, pushPermission, type PushPermission } from '../../../remote/push';
@@ -22,6 +22,7 @@ type Kind = (typeof KINDS)[number];
 /** Which notifications this phone shows. Everything still appears in the app's notification list. */
 export default function NotificationSettings() {
   const t = useTheme();
+  const desktop = useIsDesktop();
   const { t: tr } = useTranslation(['settings', 'nav']);
   const toast = useToast();
   // null until the phone says: starting at "undetermined" flashed "Notifications are off".
@@ -55,7 +56,8 @@ export default function NotificationSettings() {
   };
 
   return (
-    <View style={{ flex: 1 }}>
+    // A form's width on a desktop, so each switch and value stays near its label.
+    <View style={desktop ? { flex: 1, width: '100%', maxWidth: WIDE_FORM_MAX_WIDTH } : { flex: 1 }}>
       <Stack.Screen options={{ title: tr('nav:title.notifications') }} />
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40, gap: t.spacing.lg }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         {permission === null ? (

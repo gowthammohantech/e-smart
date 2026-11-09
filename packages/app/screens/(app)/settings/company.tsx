@@ -25,7 +25,7 @@ import { citiesForState } from '@esmart/core/data/cities';
 import { CURRENCIES } from '@esmart/core/lib/currencies';
 import { monthNames } from '@esmart/core/lib/date';
 import { Errors, hasErrors, required, validEmail, validGstin, validPostalCode, validTan } from '@esmart/core/lib/validators';
-import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, WIDE_FORM_MAX_WIDTH, useFieldWidth, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { useGoBack } from '../../../navigation/useGoBack';
 import { LogoSection } from '../../../features/company/LogoSection';
 import { SignatureSection } from '../../../features/company/SignatureSection';
@@ -45,6 +45,7 @@ export default function CompanySettings() {
 function CompanySettingsForm() {
   const t = useTheme();
   const desktop = useIsDesktop();
+  const fw = useFieldWidth();
   const { t: tr } = useTranslation(['nav', 'settings', 'onboarding', 'errors']);
   const months = monthNames();
   const goBack = useGoBack();
@@ -186,7 +187,8 @@ function CompanySettingsForm() {
   useSaveShortcut(() => void save(), !saving);
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    // A long form: a wide form's width on a desktop, its Save bar under it.
+    <KeyboardAvoidingView style={desktop ? { flex: 1, width: '100%', maxWidth: WIDE_FORM_MAX_WIDTH } : { flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Stack.Screen options={{ title: tr('nav:title.businessProfile') }} />
 
       <ScrollView
@@ -213,17 +215,17 @@ function CompanySettingsForm() {
           <TextField label={tr('settings:company.name')} value={name} onChangeText={setName} error={errors.name} required icon="domain" />
           <TextField label={tr('settings:company.legalName')} value={legalName} onChangeText={setLegalName} placeholder={tr('settings:company.legalPlaceholder')} editable={!locks.legalName} />
         </FieldRow>
-        <PickerField label={tr('settings:company.type')} value={tr(`onboarding:businessType.${businessType}` as 'onboarding:businessType.other')} onPress={() => setTypeOpen(true)} icon="storefront-outline" />
+        <PickerField label={tr('settings:company.type')} value={tr(`onboarding:businessType.${businessType}` as 'onboarding:businessType.other')} onPress={() => setTypeOpen(true)} icon="storefront-outline" containerStyle={fw('md')} />
 
         <FieldRow>
           <TextField label={tr('settings:company.email')} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" icon="email-outline" error={errors.email} />
           <PhoneField label={tr('settings:company.phone')} {...phone.field} error={errors.phone} />
         </FieldRow>
-        <TextField label={tr('settings:company.website')} value={website} onChangeText={setWebsite} autoCapitalize="none" icon="web" />
+        <TextField label={tr('settings:company.website')} value={website} onChangeText={setWebsite} autoCapitalize="none" icon="web" containerStyle={fw('lg')} />
 
         <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('settings:company.registeredAddress')}</Text>
         <TextField label={tr('settings:company.address')} value={line1} onChangeText={setLine1} icon="map-marker-outline" />
-        <PickerField label={tr('settings:company.state')} value={INDIAN_STATES.find((s) => s.code === stateCode)?.name} onPress={() => setStateOpen(true)} icon="map-outline" disabled={locks.state} />
+        <PickerField label={tr('settings:company.state')} value={INDIAN_STATES.find((s) => s.code === stateCode)?.name} onPress={() => setStateOpen(true)} icon="map-outline" disabled={locks.state} containerStyle={fw('md')} />
         <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
           <CityField label={tr('settings:company.city')} value={city} onChange={setCity} stateCode={stateCode} containerStyle={{ flex: 1 }} />
           <TextField label="PIN" value={postalCode} onChangeText={setPostalCode} keyboardType="number-pad" maxLength={company?.country === 'IN' ? 6 : undefined} error={errors.postalCode} containerStyle={{ flex: 1 }} />
@@ -235,7 +237,7 @@ function CompanySettingsForm() {
         <Text variant="caption" tone="muted" style={{ lineHeight: 18, marginTop: -t.spacing.sm }}>
           {tr('settings:company.bankHint')}
         </Text>
-        <TextField label={tr('settings:company.accountName')} value={accountName} onChangeText={setAccountName} icon="account-outline" placeholder={name} />
+        <TextField label={tr('settings:company.accountName')} value={accountName} onChangeText={setAccountName} icon="account-outline" placeholder={name} containerStyle={fw('lg')} />
         <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
           <TextField label={tr('settings:company.bankName')} value={bankName} onChangeText={setBankName} icon="bank-outline" containerStyle={{ flex: 1 }} />
           <TextField label={tr('settings:company.branchName')} value={bankBranch} onChangeText={setBankBranch} containerStyle={{ flex: 1 }} />
@@ -268,6 +270,7 @@ function CompanySettingsForm() {
           icon="qrcode"
           placeholder={UPI_SAMPLE}
           error={errors.upiId}
+          containerStyle={fw('lg')}
         />
         <SignatureSection />
 
@@ -276,7 +279,7 @@ function CompanySettingsForm() {
           <PickerField label={tr('settings:company.country')} value={country?.name} onPress={() => {}} icon="earth" hint={tr('settings:company.countryFixed')} disabled />
           <PickerField label={tr('settings:company.baseCurrency')} value={currency ? `${currency.name} (${currency.code})` : undefined} onPress={() => {}} icon="cash-multiple" disabled />
         </FieldRow>
-        <PickerField label={tr('settings:company.fyStarts')} value={months[fyMonth - 1]} onPress={() => setFyOpen(true)} icon="calendar-range" disabled={locks.fiscalYear} />
+        <PickerField label={tr('settings:company.fyStarts')} value={months[fyMonth - 1]} onPress={() => setFyOpen(true)} icon="calendar-range" disabled={locks.fiscalYear} containerStyle={fw('sm')} />
 
         <SwitchField
           label={tr('settings:company.registeredFor', { regime: country?.regime === 'VAT' ? 'VAT' : 'GST' })}
@@ -294,6 +297,7 @@ function CompanySettingsForm() {
               icon="card-account-details-outline"
               error={errors.taxId}
               editable={!locks.taxIdentity}
+              containerStyle={fw('md')}
             />
             <SwitchField
               label={tr('settings:company.composition')}
@@ -320,6 +324,8 @@ function CompanySettingsForm() {
                     {tr('settings:company.returnFrequencyHint')}
                   </Text>
                 </View>
+                {/* Short codes and a date: side by side on a desktop. */}
+                <FieldRow columns={3}>
                 <TextField
                   label={tr('settings:company.tan')}
                   value={tan}
@@ -342,6 +348,7 @@ function CompanySettingsForm() {
                 {lutNumber.trim() ? (
                   <DateField label={tr('settings:company.lutValidTill')} value={lutValidTill} onChange={setLutValidTill} />
                 ) : null}
+                </FieldRow>
               </>
             ) : null}
           </>
@@ -356,6 +363,8 @@ function CompanySettingsForm() {
         />
 
         <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('settings:company.rules')}</Text>
+        {/* Two short numbers: side by side on a desktop. */}
+        <FieldRow>
         <TextField
           label={tr('settings:company.msmeBankRate')}
           value={bankRate}
@@ -374,6 +383,7 @@ function CompanySettingsForm() {
           error={errors.toleranceDays}
           icon="calendar-range"
         />
+        </FieldRow>
 
         {/* Archiving is its own action, kept apart from the form and its Save. */}
         <View style={{ height: 1, backgroundColor: t.c.line, marginTop: t.spacing.xl }} />

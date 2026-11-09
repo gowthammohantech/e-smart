@@ -19,7 +19,7 @@ import { useActiveCompany, useBaseCurrency, useComplianceSettings, useCompliance
 import { LoadingView } from '../../../components/LoadingView';
 import { Skeleton, SkeletonGroup } from '@esmart/ui/components/Skeleton';
 import { fromMajor, toMajor } from '@esmart/core/lib/money';
-import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, WIDE_FORM_MAX_WIDTH, useFieldWidth, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { useSaveShortcut } from '../../../components/useSaveShortcut';
 import { useServerSave } from '../../../components/useServerSave';
 
@@ -42,6 +42,7 @@ function EInvoicingForm() {
   const { run: serverSave, saving } = useServerSave();
   // Always false in the native apps, so the desktop header action only ever reaches a browser.
   const desktop = useIsDesktop();
+  const fw = useFieldWidth();
 
   const stored = useComplianceSettings();
   const currency = useBaseCurrency();
@@ -157,7 +158,8 @@ function EInvoicingForm() {
   useSaveShortcut(onSave);
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    // A wide form's width on a desktop, its Save bar under it.
+    <KeyboardAvoidingView style={desktop ? { flex: 1, width: '100%', maxWidth: WIDE_FORM_MAX_WIDTH } : { flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Stack.Screen options={{ title: tr('nav:title.eInvoicingAndEWayBill') }} />
 
       <ScrollView
@@ -191,6 +193,7 @@ function EInvoicingForm() {
           onChangeValue={setTurnover}
           currency={currency}
           hint={tr('compliance:settings.turnoverHint')}
+          containerStyle={fw('md')}
         />
         <AmountField
           label={tr('compliance:settings.mandatoryAbove')}
@@ -198,6 +201,7 @@ function EInvoicingForm() {
           onChangeValue={setThreshold}
           currency={currency}
           hint={tr('compliance:settings.mandatoryHint')}
+          containerStyle={fw('md')}
         />
         <TextField
           label={tr('compliance:settings.window')}
@@ -206,6 +210,7 @@ function EInvoicingForm() {
           keyboardType="number-pad"
           suffix={tr('settings:eInvoicing.daysSuffix')}
           hint={tr('compliance:settings.windowHint')}
+          containerStyle={fw('md')}
         />
 
         <SectionLabel>{tr('compliance:settings.portalCredentials')}</SectionLabel>
@@ -233,6 +238,7 @@ function EInvoicingForm() {
             onChangeText={(v) => setLogin({ username: v })}
             autoCapitalize="none"
             autoCorrect={false}
+            containerStyle={fw('md')}
           />
           <TextField
             label={tr(portal === 'einvoice' ? 'compliance:settings.einvoicePassword' : 'compliance:settings.ewayPassword')}
@@ -243,6 +249,7 @@ function EInvoicingForm() {
             secureTextEntry
             autoCapitalize="none"
             autoCorrect={false}
+            containerStyle={fw('md')}
           />
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm, marginTop: t.spacing.xs }}>
             <Button title={tr('compliance:settings.testConnection')} variant="secondary" icon="lan-connect" loading={credBusy === 'test'} onPress={() => void testConnection()} />
@@ -280,6 +287,7 @@ function EInvoicingForm() {
           onChangeValue={setEwayThreshold}
           currency={currency}
           hint={tr('compliance:settings.requiredHint')}
+          containerStyle={fw('md')}
         />
         <PickerField
           label={tr('compliance:settings.defaultTransporter')}
@@ -294,6 +302,7 @@ function EInvoicingForm() {
           hint={transporters.length ? tr('settings:eInvoicing.transporterHint') : tr('settings:eInvoicing.noTransportersHint')}
           clearable={!!draft.defaultTransporterId}
           onClear={() => patch({ defaultTransporterId: undefined, defaultTransporterName: undefined })}
+          containerStyle={fw('lg')}
         />
         <TextField
           label={tr('compliance:settings.defaultDistance')}
@@ -301,6 +310,7 @@ function EInvoicingForm() {
           onChangeText={(v) => patch({ defaultDistanceKm: Number(v) || 0 })}
           keyboardType="number-pad"
           suffix={tr('compliance:ewb.km')}
+          containerStyle={fw('sm')}
         />
 
         <View style={{ gap: t.spacing.sm, marginBottom: t.spacing.md }}>
@@ -386,7 +396,7 @@ function EInvoicingForm() {
             title={tr('settings:transporters.add')}
             icon="plus"
             variant="ghost"
-            fullWidth
+            fullWidth={!desktop}
             onPress={() => {
               setTransporterOpen(false);
               router.push('/(app)/settings/transporters');

@@ -10,7 +10,7 @@ import { Card } from '@esmart/ui/components/Card';
 import { TextField } from '@esmart/ui/components/Field';
 import { Text } from '@esmart/ui/components/Text';
 import { useToast } from '@esmart/ui/components/Toast';
-import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, WIDE_FORM_MAX_WIDTH, useFieldWidth, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { formatDate } from '@esmart/core/lib/date';
 import { api } from '../../../remote/api';
 import { describeError } from '../../../remote/errors';
@@ -82,6 +82,8 @@ function GstPortalSettingsBody() {
       toast.show(tr('settings:gstPortal.connected'), 'success', { icon: 'link-variant' });
       load();
     });
+  const desktop = useIsDesktop();
+  const fw = useFieldWidth();
   const disconnect = (gstin: string) =>
     run(gstin, () => api.DELETE('/companies/{companyId}/gst/portal-sessions/{gstin}', { params: { path: { ...path, gstin } } }), () => {
       toast.show(tr('settings:gstPortal.disconnected'), 'success', { icon: 'link-variant-off' });
@@ -89,7 +91,8 @@ function GstPortalSettingsBody() {
     });
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    // On a desktop the cards stay a form's width, the status badge near its GSTIN.
+    <KeyboardAvoidingView style={desktop ? { flex: 1, width: '100%', maxWidth: WIDE_FORM_MAX_WIDTH } : { flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Stack.Screen options={{ title: tr('nav:title.gstPortal') }} />
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40, gap: t.spacing.lg }} showsVerticalScrollIndicator={SHOW_SCROLLBAR} keyboardShouldPersistTaps="handled">
         <Card variant="flat" style={{ gap: t.spacing.sm }}>
@@ -141,10 +144,10 @@ function GstPortalSettingsBody() {
                 </>
               ) : (
                 <>
-                  <TextField label={tr('settings:gstPortal.username')} value={f.username} onChangeText={(username) => patch(s.gstin!, { username })} autoCapitalize="none" icon="account-key-outline" />
+                  <TextField label={tr('settings:gstPortal.username')} value={f.username} onChangeText={(username) => patch(s.gstin!, { username })} autoCapitalize="none" icon="account-key-outline" containerStyle={fw('md')} />
                   {f.sent ? (
                     <>
-                      <TextField label={tr('settings:gstPortal.otp')} value={f.otp} onChangeText={(otp) => patch(s.gstin!, { otp: otp.replace(/\D/g, '').slice(0, 6) })} keyboardType="number-pad" maxLength={6} icon="message-lock-outline" hint={tr('settings:gstPortal.otpHint')} />
+                      <TextField label={tr('settings:gstPortal.otp')} value={f.otp} onChangeText={(otp) => patch(s.gstin!, { otp: otp.replace(/\D/g, '').slice(0, 6) })} keyboardType="number-pad" maxLength={6} icon="message-lock-outline" hint={tr('settings:gstPortal.otpHint')} containerStyle={fw('md')} />
                       <Button title={tr('settings:gstPortal.connect')} onPress={() => void connect(s.gstin!)} disabled={f.otp.length !== 6} loading={busy === s.gstin} />
                     </>
                   ) : (

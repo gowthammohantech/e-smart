@@ -4,6 +4,7 @@ import { Platform, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ApiError } from '@esmart/api-client';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
+import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { Sheet } from '@esmart/ui/components/Sheet';
 import { Text } from '@esmart/ui/components/Text';
 import { Button } from '@esmart/ui/components/Button';
@@ -24,6 +25,7 @@ import { canArchiveCompany } from './archiveRules';
  */
 export function ArchiveCompanySheet({ company, visible, onClose }: { company: Company; visible: boolean; onClose: () => void }) {
   const t = useTheme();
+  const desktop = useIsDesktop();
   const { t: tr } = useTranslation(['settings', 'common']);
   const router = useRouter();
   const toast = useToast();
@@ -100,7 +102,8 @@ export function ArchiveCompanySheet({ company, visible, onClose }: { company: Co
           variant="danger"
           onPress={submit}
           disabled={!ready}
-          fullWidth
+          // At the right at its own width on a desktop, as a dialog's buttons are.
+          fullWidth={!desktop}
         />
       }
     >

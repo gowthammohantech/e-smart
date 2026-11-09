@@ -14,7 +14,7 @@ import { SwitchField, TextField } from '@esmart/ui/components/Field';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { Text } from '@esmart/ui/components/Text';
-import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { DIALOG_WIDTH, SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { financialYearOf, today } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
 import { uid } from '@esmart/core/lib/id';
@@ -32,6 +32,7 @@ type Spend = { vehicleId: string; expenses: Money; expenseCount: number; documen
 export default function VehicleSettings() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
+  const desktop = useIsDesktop();
   const { t: tr } = useTranslation(['settings', 'errors']);
   const { run: serverSave, saving } = useServerSave();
   const company = useActiveCompany();
@@ -51,7 +52,8 @@ export default function VehicleSettings() {
   return (
     <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('settings:vehicles.title') }} />
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, gap: t.spacing.md, paddingBottom: 120 + insets.bottom }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
+      {/* A short list: kept within reach of its chevrons on a desktop, where the add button sits in the page header. */}
+      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, gap: t.spacing.md, paddingBottom: desktop ? t.spacing.xxl : 120 + insets.bottom, maxWidth: desktop ? 640 : undefined }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <Text variant="small" tone="muted">
           {tr('settings:vehicles.hint', { fy: fy.label })}
         </Text>
@@ -83,6 +85,8 @@ export default function VehicleSettings() {
       <Sheet
         visible={!!editing}
         onClose={() => setEditing(null)}
+        // One or two fields: a small dialog on a desktop.
+        desktopWidth={DIALOG_WIDTH.sm}
         title={editing?.id ? editing.registration : tr('settings:vehicles.add')}
         footer={
           <SheetActions

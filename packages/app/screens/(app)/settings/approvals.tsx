@@ -10,7 +10,7 @@ import { Card } from '@esmart/ui/components/Card';
 import { AmountField, SwitchField } from '@esmart/ui/components/Field';
 import { Text } from '@esmart/ui/components/Text';
 import { FormContainer } from '@esmart/ui/components/Layout';
-import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, useFieldWidth, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { documentKindLabel } from '@esmart/core/labels';
 import { fromMajor, toMajor } from '@esmart/core/lib/money';
 import type { DocumentKind } from '@esmart/core/types';
@@ -54,11 +54,12 @@ function ApprovalRulesScreenBody() {
     );
 
   const desktop = useIsDesktop();
+  const fw = useFieldWidth();
   useSaveShortcut(() => void save(), owner && !saving);
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-    <FormContainer style={{ maxWidth: '100%' }}>
+    <FormContainer>
       <Stack.Screen options={{ title: tr('settings:approvals.title') }} />
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, gap: t.spacing.lg }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <Text variant="small" tone="muted">
@@ -70,7 +71,7 @@ function ApprovalRulesScreenBody() {
             return (
               <View key={k} style={{ gap: t.spacing.sm }}>
                 <SwitchField label={k === 'payment' ? tr('settings:approvals.payments') : documentKindLabel(tr, k, 2)} value={on} onValueChange={(v) => setRules({ ...rules, [k]: v ? '0' : null })} disabled={!owner} />
-                {on ? <AmountField label={tr('settings:approvals.over')} value={rules[k] ?? ''} onChangeValue={(v) => setRules({ ...rules, [k]: v })} currency={currency} hint={tr('settings:approvals.overHint')} /> : null}
+                {on ? <AmountField label={tr('settings:approvals.over')} value={rules[k] ?? ''} onChangeValue={(v) => setRules({ ...rules, [k]: v })} currency={currency} hint={tr('settings:approvals.overHint')} containerStyle={fw('md')} /> : null}
               </View>
             );
           })}

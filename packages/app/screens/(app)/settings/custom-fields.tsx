@@ -12,7 +12,7 @@ import { ListRow } from '@esmart/ui/components/ListRow';
 import { Sheet } from '@esmart/ui/components/Sheet';
 import { Text } from '@esmart/ui/components/Text';
 import { FormContainer } from '@esmart/ui/components/Layout';
-import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { DRAWER_WIDTH, SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { uid } from '@esmart/core/lib/id';
 import type { CustomField, CustomFieldEntity, CustomFieldKind } from '@esmart/core/domain/customFields';
 import { useServerSave } from '../../../components/useServerSave';
@@ -28,6 +28,7 @@ const KINDS: CustomFieldKind[] = ['text', 'number', 'date', 'select', 'checkbox'
 export default function CustomFieldsScreen() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
+  const desktop = useIsDesktop();
   const { t: tr } = useTranslation(['settings']);
   const [entity, setEntity] = useState<CustomFieldEntity>('document');
   const fields = useCustomFields(entity, true);
@@ -53,9 +54,10 @@ export default function CustomFieldsScreen() {
   };
 
   return (
-    <FormContainer style={{ maxWidth: '100%' }}>
+    <FormContainer wide>
       <Stack.Screen options={{ title: tr('settings:customFields.title') }} />
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 + insets.bottom, gap: t.spacing.lg }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
+      {/* The add button sits in the page header on a desktop, so no room is kept for a bottom bar. */}
+      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: desktop ? t.spacing.xxl : 120 + insets.bottom, gap: t.spacing.lg }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <Text variant="small" tone="muted">
           {tr('settings:customFields.hint')}
         </Text>
@@ -86,6 +88,9 @@ export default function CustomFieldsScreen() {
       <Sheet
         visible={!!editing}
         onClose={() => setEditing(null)}
+        // A drawer on a desktop: wide enough for the five field kinds side by side.
+        desktopAs="drawer"
+        desktopWidth={DRAWER_WIDTH.lg}
         title={isNew ? tr('settings:customFields.add') : (editing?.label ?? '')}
         footer={
           editing ? (

@@ -19,13 +19,14 @@ import { Skeleton, SkeletonGroup } from '@esmart/ui/components/Skeleton';
 import { formatMoney } from '@esmart/core/lib/format';
 import { money } from '@esmart/core/lib/money';
 import { uid } from '@esmart/core/lib/id';
-import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { DIALOG_WIDTH, SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { SheetActions } from '../../../features/company/SheetActions';
 import { useServerSave } from '../../../components/useServerSave';
 
 export default function ExpenseCategorySettings() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
+  const desktop = useIsDesktop();
   const { t: tr } = useTranslation(['nav', 'settings', 'errors']);
   const { run: serverSave, saving } = useServerSave();
 
@@ -60,7 +61,8 @@ export default function ExpenseCategorySettings() {
     <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('nav:title.expenseCategories') }} />
 
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 + insets.bottom }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
+      {/* A short list: kept within reach of its chevrons on a desktop, where the add button sits in the page header. */}
+      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: desktop ? t.spacing.xxl : 120 + insets.bottom, maxWidth: desktop ? 640 : undefined }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <Card padded={false}>
           {categories.map((c, i) => {
             const stat = totals[c.id];
@@ -97,6 +99,8 @@ export default function ExpenseCategorySettings() {
       <Sheet
         visible={!!editing}
         onClose={() => setEditing(null)}
+        // One or two fields: a small dialog on a desktop.
+        desktopWidth={DIALOG_WIDTH.sm}
         title={editing?.id ? tr('settings:categories.editTitle') : tr('settings:categories.add')}
         footer={
           <SheetActions

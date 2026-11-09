@@ -15,7 +15,8 @@ import { ListRow } from '@esmart/ui/components/ListRow';
 import { useAppStore } from '../../../store/appStore';
 import { useCompanies, useCurrentUser } from '../../../store/selectors';
 import { Errors, hasErrors, required, validEmail } from '@esmart/core/lib/validators';
-import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, WIDE_FORM_MAX_WIDTH, useFieldWidth, useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { FieldRow } from '@esmart/ui/components/Layout';
 import type { UserRole } from '@esmart/core/types';
 import { useGoBack } from '../../../navigation/useGoBack';
 import { useSaveShortcut } from '../../../components/useSaveShortcut';
@@ -33,6 +34,7 @@ const ROLE_LABELS = {
 export default function Profile() {
   const t = useTheme();
   const desktop = useIsDesktop();
+  const fw = useFieldWidth();
   const { t: tr } = useTranslation(['nav', 'settings', 'auth', 'onboarding']);
   const goBack = useGoBack();
   const { run: serverSave, saving } = useServerSave();
@@ -66,7 +68,8 @@ export default function Profile() {
   useSaveShortcut(save);
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    // A wide form's width on a desktop, its Save bar under it.
+    <KeyboardAvoidingView style={desktop ? { flex: 1, width: '100%', maxWidth: WIDE_FORM_MAX_WIDTH } : { flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Stack.Screen options={{ title: tr('nav:title.yourProfile') }} />
 
       <ScrollView
@@ -82,9 +85,11 @@ export default function Profile() {
           <Badge label={tr(ROLE_LABELS[user?.role ?? 'owner'])} tone="info" />
         </Card>
 
+        <FieldRow>
         <TextField label={tr('settings:profile.name')} value={name} onChangeText={setName} icon="account-outline" error={errors.name} required />
         <TextField label={tr('settings:profile.email')} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" icon="email-outline" error={errors.email} required />
-        <PhoneField label={tr('settings:profile.phone')} {...phone.field} icon="cellphone" error={errors.phone} />
+        </FieldRow>
+        <PhoneField label={tr('settings:profile.phone')} {...phone.field} icon="cellphone" error={errors.phone} containerStyle={fw('md')} />
 
         <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('settings:profile.yourBusinesses')}</Text>
         <Card padded={false}>

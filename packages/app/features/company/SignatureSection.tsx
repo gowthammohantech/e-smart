@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, View } from 'react-native';
 import { Image } from 'expo-image';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
+import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { Card } from '@esmart/ui/components/Card';
 import { Button } from '@esmart/ui/components/Button';
 import { Icon } from '@esmart/ui/components/Icon';
@@ -29,6 +30,7 @@ const INK_MUTED = '#667085';
  */
 export function SignatureSection() {
   const t = useTheme();
+  const desktop = useIsDesktop();
   const { t: tr } = useTranslation(['settings', 'sales', 'common']);
   const toast = useToast();
   const company = useActiveCompany();
@@ -137,8 +139,8 @@ export function SignatureSection() {
         subtitle={tr('settings:company.signaturePreviewHint')}
         footer={
           <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
-            <Button title={tr('common:component.cancel')} variant="secondary" onPress={() => setPending(null)} style={{ flex: 1 }} />
-            <Button title={tr('settings:company.signatureConfirm')} icon="check" onPress={confirm} style={{ flex: 1 }} />
+            <Button title={tr('common:component.cancel')} variant="secondary" onPress={() => setPending(null)} style={desktop ? undefined : { flex: 1 }} />
+            <Button title={tr('settings:company.signatureConfirm')} icon="check" onPress={confirm} style={desktop ? undefined : { flex: 1 }} />
           </View>
         }
       >

@@ -23,13 +23,15 @@ import { useActiveCompany, useBaseCurrency, useExchangeRates } from '../../../st
 import { CURRENCIES, currencyMeta } from '@esmart/core/lib/currencies';
 import { formatDate, today } from '@esmart/core/lib/date';
 import { uid } from '@esmart/core/lib/id';
-import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { FieldRow } from '@esmart/ui/components/Layout';
 import { useSaveShortcut } from '../../../components/useSaveShortcut';
 import { useServerSave } from '../../../components/useServerSave';
 
 export default function CurrencySettings() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
+  const desktop = useIsDesktop();
   const { t: tr } = useTranslation(['nav', 'settings']);
   const sourceLabel = (source: ExchangeRate['source']) => (source === 'provider' ? tr('settings:currencies.sourceProvider') : tr('settings:currencies.sourceManual'));
   const { run: serverSave, saving } = useServerSave();
@@ -91,7 +93,8 @@ export default function CurrencySettings() {
     <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('nav:title.currenciesAndRates') }} />
 
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 + insets.bottom }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
+      {/* The add button sits in the page header on a desktop, so no room is kept for a bottom bar. */}
+      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: desktop ? t.spacing.xxl : 120 + insets.bottom }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <Card style={{ gap: t.spacing.sm }}>
           <Text variant="caption" tone="muted">{tr('settings:currencies.baseCurrency')}</Text>
           <Text variant="h3" weight="700">
@@ -173,6 +176,7 @@ export default function CurrencySettings() {
       >
         <View style={{ padding: t.spacing.lg, gap: t.spacing.lg }}>
           <PickerField label={tr('settings:currencies.currency')} value={`${currencyMeta(from).name} (${from})`} onPress={() => setFromOpen(true)} icon="cash-multiple" />
+          <FieldRow>
           <TextField
             label={tr('settings:currencies.rateLabel', { from, to: baseCurrency })}
             value={rate}
@@ -183,6 +187,7 @@ export default function CurrencySettings() {
             required
           />
           <DateField label={tr('settings:currencies.effectiveFrom')} value={effectiveFrom} onChange={setEffectiveFrom} hint={tr('settings:currencies.effectiveHint')} />
+          </FieldRow>
         </View>
       </Sheet>
 

@@ -13,7 +13,7 @@ import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import type { Brand } from '@esmart/core/types';
 import { uid } from '@esmart/core/lib/id';
-import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { DIALOG_WIDTH, SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { useAppStore } from '../../../store/appStore';
 import { useActiveCompany, useBrands } from '../../../store/selectors';
 import { SheetActions } from '../../../features/company/SheetActions';
@@ -22,6 +22,7 @@ import { useServerSave } from '../../../components/useServerSave';
 export default function BrandSettings() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
+  const desktop = useIsDesktop();
   const { t: tr } = useTranslation(['nav', 'settings', 'errors']);
   const { run: serverSave, saving } = useServerSave();
 
@@ -46,7 +47,8 @@ export default function BrandSettings() {
     <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('nav:title.brands') }} />
 
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 + insets.bottom }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
+      {/* A short list: kept within reach of its chevrons on a desktop, where the add button sits in the page header. */}
+      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: desktop ? t.spacing.xxl : 120 + insets.bottom, maxWidth: desktop ? 640 : undefined }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         {brands.length ? (
           <Card padded={false}>
             {brands.map((b, i) => (
@@ -63,6 +65,8 @@ export default function BrandSettings() {
       <Sheet
         visible={!!editing}
         onClose={() => setEditing(null)}
+        // One or two fields: a small dialog on a desktop.
+        desktopWidth={DIALOG_WIDTH.sm}
         title={editing?.id ? tr('settings:brands.editTitle') : tr('settings:brands.add')}
         footer={
           <SheetActions

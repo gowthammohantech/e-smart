@@ -126,6 +126,7 @@ export default function TransportersSettings() {
       <Sheet
         visible={sheetOpen}
         onClose={() => setSheetOpen(false)}
+        desktopAs="drawer"
         title={editing ? tr('settings:transporters.editTitle') : tr('settings:transporters.add')}
         footer={
           <SheetActions

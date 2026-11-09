@@ -19,7 +19,7 @@ import { useAppStore } from '../../../store/appStore';
 import { useActiveCompany } from '../../../store/selectors';
 import { useCompanyUsage } from '../../../remote/queries';
 import { formatDateTime } from '@esmart/core/lib/date';
-import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, WIDE_FORM_MAX_WIDTH, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { Skeleton, SkeletonGroup } from '@esmart/ui/components/Skeleton';
 import { Button } from '@esmart/ui/components/Button';
 
@@ -33,6 +33,7 @@ export default function BackupExport() {
 function BackupExportBody() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
+  const desktop = useIsDesktop();
   const { t: tr } = useTranslation(['nav', 'settings', 'auth', 'reports']);
   const toast = useToast();
 
@@ -115,7 +116,8 @@ function BackupExportBody() {
     <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('nav:title.backupAndExport') }} />
 
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 140 + insets.bottom }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
+      {/* On a desktop the counts stay near their labels, and the export button sits in the page header. */}
+      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: desktop ? t.spacing.xxl : 140 + insets.bottom, maxWidth: desktop ? WIDE_FORM_MAX_WIDTH : undefined }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <Card style={{ gap: t.spacing.sm }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
             <Icon name="database-export-outline" size={21} color={t.c.primary} />

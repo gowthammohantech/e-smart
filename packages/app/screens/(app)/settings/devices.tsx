@@ -15,10 +15,11 @@ import { useAppStore } from '../../../store/appStore';
 import { useListsReady } from '../../../store/selectors';
 import { CardRowsSkeleton } from '../../../components/ScreenSkeleton';
 import { formatRelative } from '@esmart/core/lib/date';
-import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, WIDE_FORM_MAX_WIDTH, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 
 export default function Devices() {
   const t = useTheme();
+  const desktop = useIsDesktop();
   const { t: tr } = useTranslation(['nav', 'settings']);
   const { run: serverSave } = useServerSave();
 
@@ -29,7 +30,8 @@ export default function Devices() {
   const [confirmRevoke, setConfirmRevoke] = useState<DeviceSession | null>(null);
 
   return (
-    <View style={{ flex: 1 }}>
+    // A form's width on a desktop, so each switch and value stays near its label.
+    <View style={desktop ? { flex: 1, width: '100%', maxWidth: WIDE_FORM_MAX_WIDTH } : { flex: 1 }}>
       <Stack.Screen options={{ title: tr('nav:title.devicesAndSessions') }} />
 
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40 }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>

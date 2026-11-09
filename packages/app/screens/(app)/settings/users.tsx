@@ -26,7 +26,7 @@ import { describeError } from '../../../remote/errors';
 import { Errors, hasErrors, required, validEmail } from '@esmart/core/lib/validators';
 import { formatRelative } from '@esmart/core/lib/date';
 import { uid } from '@esmart/core/lib/id';
-import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { useSaveShortcut } from '../../../components/useSaveShortcut';
 import { useServerSave } from '../../../components/useServerSave';
 import { ApiError } from '@esmart/api-client';
@@ -47,6 +47,7 @@ const ROLE_KEYS = [
 export default function UserSettings() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
+  const desktop = useIsDesktop();
   const { t: tr } = useTranslation(['nav', 'settings', 'auth', 'common']);
   const toast = useToast();
   const ROLES = ROLE_KEYS.map((r) => ({ value: r.value as UserRole, label: tr(r.label), description: tr(r.description) }));
@@ -168,7 +169,8 @@ export default function UserSettings() {
     <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('nav:title.usersAndRoles') }} />
 
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 + insets.bottom }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
+      {/* The invite button sits in the page header on a desktop, so no room is kept for a bottom bar. */}
+      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: desktop ? t.spacing.xxl : 120 + insets.bottom }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <Card padded={false}>
           {!ready ? <CardRowsSkeleton kind="list" rows={3} /> : users.map((u, i) => (
             <ListRow
@@ -211,16 +213,18 @@ export default function UserSettings() {
       <Sheet
         visible={!!editing}
         onClose={() => setEditing(null)}
+        desktopAs="drawer"
         title={editing?.id ? tr('settings:users.editTitle') : tr('settings:users.invite')}
         footer={
-          <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
+          // On a desktop the buttons keep their own width, Remove pushed to the far left.
+          <View style={[{ flexDirection: 'row', gap: t.spacing.md }, desktop ? { flex: 1, justifyContent: 'flex-end' } : null]}>
             {/* Remove stays on the left, apart from Save, as every settings sheet has it. */}
             {editing?.id && editing.role !== 'owner' ? (
               <Button
                 title={tr('settings:users.remove')}
                 variant="danger"
                 icon="delete-outline"
-                style={{ flex: 1, marginRight: t.spacing.md }}
+                style={desktop ? { marginRight: 'auto' } : { flex: 1, marginRight: t.spacing.md }}
                 onPress={() => {
                   const u = editing;
                   setEditing(null);
@@ -235,10 +239,10 @@ export default function UserSettings() {
                 loading={busy}
                 disabled={resendWait > 0}
                 onPress={resend}
-                style={{ flex: 2 }}
+                style={desktop ? undefined : { flex: 2 }}
               />
             ) : null}
-            {isGuest ? null : <Button shortcut="S" title={editing?.id ? tr('common:action.save') : tr('settings:users.sendInvite')} onPress={save} loading={busy} style={{ flex: 2 }} />}
+            {isGuest ? null : <Button shortcut="S" title={editing?.id ? tr('common:action.save') : tr('settings:users.sendInvite')} onPress={save} loading={busy} style={desktop ? undefined : { flex: 2 }} />}
           </View>
         }
       >

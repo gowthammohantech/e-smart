@@ -11,7 +11,7 @@ import { useServerSave } from '../../../components/useServerSave';
 import { useAppStore } from '../../../store/appStore';
 import { useComplianceSettings } from '../../../store/selectors';
 import { Integration } from '@esmart/core/types';
-import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, WIDE_FORM_MAX_WIDTH, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 
 const GROUPS = [
   { key: 'payments', title: 'settings:integrations.group.payments', blurb: 'settings:integrations.group.paymentsHint' },
@@ -26,6 +26,7 @@ const PORTAL_OF: Record<string, 'einvoice' | 'ewaybill'> = { int_einvoice: 'einv
 
 export default function Integrations() {
   const t = useTheme();
+  const desktop = useIsDesktop();
   const { t: tr } = useTranslation(['nav', 'settings']);
   const { run: serverSave } = useServerSave();
   const router = useRouter();
@@ -45,7 +46,8 @@ export default function Integrations() {
   };
 
   return (
-    <View style={{ flex: 1 }}>
+    // A form's width on a desktop, so each switch and value stays near its label.
+    <View style={desktop ? { flex: 1, width: '100%', maxWidth: WIDE_FORM_MAX_WIDTH } : { flex: 1 }}>
       <Stack.Screen options={{ title: tr('nav:title.integrations') }} />
 
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40 }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>

@@ -26,7 +26,7 @@ import { Errors, hasErrors, validGstin, validPostalCode } from '@esmart/core/lib
 import { normalizeGstin } from '@esmart/core/domain/gstin';
 import { INDIAN_STATES, stateName } from '@esmart/core/data/masters';
 import { citiesForState } from '@esmart/core/data/cities';
-import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, useFieldWidth, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { useGstinLookup, type GstinDetails } from '../../../features/gstin/useGstinLookup';
 import { useSaveShortcut } from '../../../components/useSaveShortcut';
 import { SheetActions } from '../../../features/company/SheetActions';
@@ -35,6 +35,8 @@ import { useServerSave } from '../../../components/useServerSave';
 export default function BranchSettings() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
+  const desktop = useIsDesktop();
+  const fw = useFieldWidth();
   const { t: tr } = useTranslation(['nav', 'settings', 'errors']);
   const { run: serverSave, saving } = useServerSave();
 
@@ -197,7 +199,8 @@ export default function BranchSettings() {
     <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('nav:title.branches') }} />
 
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 + insets.bottom }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
+      {/* The add button sits in the page header on a desktop, so no room is kept for a bottom bar. */}
+      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: desktop ? t.spacing.xxl : 120 + insets.bottom }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <Card variant="flat" style={{ marginBottom: t.spacing.lg }}>
           <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
             {tr('settings:branches.intro')}
@@ -253,6 +256,8 @@ export default function BranchSettings() {
       <Sheet
         visible={!!editing}
         onClose={() => setEditing(null)}
+        // Nine fields: a drawer beside the list on a desktop.
+        desktopAs="drawer"
         title={editing?.id ? tr('settings:branches.editTitle') : tr('settings:branches.addTitle')}
         footer={
           <SheetActions
@@ -321,6 +326,7 @@ export default function BranchSettings() {
             icon="mailbox-outline"
             error={errors.postalCode}
             editable={!locked}
+            containerStyle={fw('sm')}
           />
           <PhoneField label={tr('settings:branches.phone')} {...phone.field} error={errors.phone} disabled={locked} />
           <SwitchField label={tr('settings:branches.primaryBranch')} description={tr('settings:branches.primaryHint')} value={isPrimary} onValueChange={setIsPrimary} disabled={locked} />

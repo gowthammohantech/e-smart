@@ -11,7 +11,7 @@ import { FormActions } from "@esmart/ui/components/ActionBar";
 import { LixiAccessCard } from "../../../features/company/LixiAccessCard";
 import { LoadFailed } from "../../../features/company/LoadFailed";
 import { useSaveShortcut } from "../../../components/useSaveShortcut";
-import { SHOW_SCROLLBAR, useIsDesktop } from "@esmart/ui/theme/breakpoints";
+import { SHOW_SCROLLBAR, WIDE_FORM_MAX_WIDTH, useFieldWidth, useIsDesktop } from "@esmart/ui/theme/breakpoints";
 import { useServerSave } from "../../../components/useServerSave";
 import { useAiUsage } from "../../../remote/queries";
 import { useAppStore } from "../../../store/appStore";
@@ -50,6 +50,7 @@ function AiUsageScreenBody() {
   const badBudget =
     capped && (!Number.isFinite(budgetValue) || (budgetValue ?? 0) < 0);
   const desktop = useIsDesktop();
+  const fw = useFieldWidth();
   const save = () =>
     serverSave(
       () => saveCompany({ ...company, aiMonthlyLimit: budgetValue }),
@@ -59,9 +60,9 @@ function AiUsageScreenBody() {
   useSaveShortcut(() => void save(), owner && !badBudget && !saving);
 
   return (
-    // Full width and left-aligned, like the other settings pages, rather than a narrow centred column.
+    // Left-aligned like the other settings pages; a wide form's width on a desktop.
     <KeyboardAvoidingView
-      style={{ flex: 1 }}
+      style={desktop ? { flex: 1, width: "100%", maxWidth: WIDE_FORM_MAX_WIDTH } : { flex: 1 }}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <Stack.Screen options={{ title: tr("settings:aiUsage.title") }} />
@@ -147,6 +148,7 @@ function AiUsageScreenBody() {
               error={
                 badBudget ? tr("settings:aiUsage.budgetInvalid") : undefined
               }
+              containerStyle={fw("sm")}
             />
           ) : null}
         </Card>

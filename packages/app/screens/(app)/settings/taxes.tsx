@@ -22,7 +22,8 @@ import { Skeleton, SkeletonGroup } from '@esmart/ui/components/Skeleton';
 import { formatPercent } from '@esmart/core/lib/format';
 import { formatDate, today } from '@esmart/core/lib/date';
 import { uid } from '@esmart/core/lib/id';
-import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { FieldRow } from '@esmart/ui/components/Layout';
 import { useSaveShortcut } from '../../../components/useSaveShortcut';
 import { SheetActions } from '../../../features/company/SheetActions';
 import { useServerSave } from '../../../components/useServerSave';
@@ -31,6 +32,7 @@ import { validTaxRate } from '@esmart/core/lib/validators';
 export default function TaxSettings() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
+  const desktop = useIsDesktop();
   const { t: tr } = useTranslation(['nav', 'settings', 'errors']);
   const { run: serverSave, saving } = useServerSave();
 
@@ -101,7 +103,8 @@ export default function TaxSettings() {
     <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('nav:title.taxes') }} />
 
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 140 + insets.bottom }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
+      {/* The add button sits in the page header on a desktop, so no room is kept for a bottom bar. */}
+      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: desktop ? t.spacing.xxl : 140 + insets.bottom }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <Card variant="flat" style={{ marginBottom: t.spacing.lg, gap: t.spacing.sm }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
             <Badge label={regime} tone="info" />
@@ -151,7 +154,8 @@ export default function TaxSettings() {
         </Card>
 
         {regime === 'GST' ? (
-          <Card style={{ marginTop: t.spacing.lg, gap: t.spacing.md }}>
+          // Label and value stay within reach of each other on a wide screen.
+          <Card style={{ marginTop: t.spacing.lg, gap: t.spacing.md, maxWidth: desktop ? 640 : undefined }}>
             <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('settings:taxes.howApplied')}</Text>
             {[
               { label: tr('settings:taxes.applied.intraState'), value: tr('settings:taxes.applied.intraStateValue') },
@@ -202,6 +206,7 @@ export default function TaxSettings() {
             setNameError(undefined);
           }}
           error={nameError} placeholder={tr('settings:taxes.namePlaceholder')} required />
+          <FieldRow>
           <TextField
             label={tr('settings:taxes.rate')}
             value={rate}
@@ -216,6 +221,7 @@ export default function TaxSettings() {
             required
           />
           <DateField label={tr('settings:taxes.effectiveFrom')} value={effectiveFrom} onChange={setEffectiveFrom} hint={tr('settings:taxes.effectiveHint')} />
+          </FieldRow>
           <TextField label={tr('settings:taxes.description')} value={description} onChangeText={setDescription} placeholder={tr('settings:taxes.descriptionPlaceholder')} multiline />
         </View>
       </Sheet>

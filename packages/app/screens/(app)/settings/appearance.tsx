@@ -13,7 +13,7 @@ import { useUiStore } from '../../../store/uiStore';
 import { AppLanguage, SUPPORTED_LANGUAGES } from '@esmart/i18n/config';
 import { fromMajor } from '@esmart/core/lib/money';
 import { useBaseCurrency } from '../../../store/selectors';
-import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, WIDE_FORM_MAX_WIDTH, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 
 const MODES = [
   { value: 'system', label: 'settings:language.matchDevice', description: 'settings:appearance.mode.systemHint', icon: 'cellphone-cog' },
@@ -95,6 +95,7 @@ function RadioRow({ label, description, icon, active, last, onPress }: RadioRowP
 
 export default function Appearance() {
   const t = useTheme();
+  const desktop = useIsDesktop();
   const { t: tr } = useTranslation(['domain', 'nav', 'settings']);
   const baseCurrency = useBaseCurrency();
   const themeMode = useUiStore((s) => s.themeMode);
@@ -103,7 +104,8 @@ export default function Appearance() {
   const setLanguage = useUiStore((s) => s.setLanguage);
 
   return (
-    <View style={{ flex: 1 }}>
+    // A form's width on a desktop, so each switch and value stays near its label.
+    <View style={desktop ? { flex: 1, width: '100%', maxWidth: WIDE_FORM_MAX_WIDTH } : { flex: 1 }}>
       <Stack.Screen options={{ title: tr('nav:title.appearance') }} />
 
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40, gap: t.spacing.lg }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
