@@ -1,7 +1,7 @@
 import type { BusinessDocument, DocumentLine } from '../../types';
 import { calculateDocument } from '../lineCalc';
 import { money } from '../../lib/money';
-import { hsnSummary } from '../hsnSummary';
+import { hsnSummary, lineTaxes } from '../hsnSummary';
 
 const line = (id: string, over: Partial<DocumentLine>): DocumentLine => ({
   id,
@@ -92,5 +92,20 @@ describe('HSN summary on the printed invoice', () => {
   it('prints a line with no HSN under an empty code, after the coded ones', () => {
     const s = hsnSummary(doc([line('a', {}), line('b', { hsnCode: '0401' })]));
     expect(s.rows.map((r) => r.hsnCode)).toEqual(['0401', '']);
+  });
+});
+
+describe("each line's share of the tax", () => {
+  it('adds up to the tax on the invoice, line by line', () => {
+    const d = doc([
+      line('a', { unitPrice: money(3_333, 'INR'), taxCategoryId: 'gst18', taxRate: 18 }),
+      line('b', { unitPrice: money(3_333, 'INR'), taxCategoryId: 'gst18', taxRate: 18 }),
+      line('c', { unitPrice: money(3_334, 'INR'), taxCategoryId: 'gst18', taxRate: 18, discountMode: 'percent', discountValue: 10 }),
+    ]);
+    const lines = lineTaxes(d);
+    expect(lines.map((l) => l.lineId)).toEqual(['a', 'b', 'c']);
+    expect(lines.reduce((a, l) => a + l.tax.minor, 0)).toBe(d.totals.totalTax.minor);
+    expect(lines[2].discount.minor).toBe(333);
+    expect(lines[2].taxable.minor).toBe(3_001);
   });
 });
