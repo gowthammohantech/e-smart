@@ -98,6 +98,9 @@ function LineEditorForm({
   const decimals = unitDecimals(unit);
 
   const category = taxCategories.find((c) => c.id === taxCategoryId);
+  // A rate the list doesn't have (yet) stays the line's own: never saved over as no tax.
+  const keptRate = !category && taxCategoryId && taxCategoryId === line?.taxCategoryId ? line.taxRate : undefined;
+  const rate = category?.rate ?? keptRate ?? 0;
   const preview = calculateLine(
     {
       ...line,
@@ -108,7 +111,7 @@ function LineEditorForm({
       discountMode,
       discountValue: Number(discountValue) || 0,
       taxCategoryId,
-      taxRate: category?.rate ?? 0,
+      taxRate: rate,
       taxInclusive,
       gst,
     },
@@ -143,7 +146,7 @@ function LineEditorForm({
       discountMode,
       discountValue: Number(discountValue) || 0,
       taxCategoryId,
-      taxRate: reimbursement ? 0 : (category?.rate ?? 0),
+      taxRate: reimbursement ? 0 : rate,
       taxInclusive: reimbursement ? false : taxInclusive,
       gst,
       costCentreId: ownCentre ? costCentreId : undefined,
@@ -265,7 +268,7 @@ function LineEditorForm({
 
         <PickerField
           label={tr('sales:line.tax')}
-          value={category ? `${category.name} (${formatPercent(category.rate)})` : tr('common:totals.noTax')}
+          value={category ? `${category.name} (${formatPercent(category.rate)})` : keptRate !== undefined ? formatPercent(keptRate) : tr('common:totals.noTax')}
           onPress={() => setTaxOpen(true)}
           icon="percent-outline"
         />

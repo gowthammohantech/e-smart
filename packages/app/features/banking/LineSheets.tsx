@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
+import { SkeletonGroup, SkeletonRows } from '@esmart/ui/components/Skeleton';
 import { Button } from '@esmart/ui/components/Button';
 import { PickerField, SwitchField, TextField } from '@esmart/ui/components/Field';
 import { Sheet } from '@esmart/ui/components/Sheet';
@@ -110,8 +111,10 @@ export function RecordPaymentSheet({ line, onClose }: { line: BankLine | null; o
   const left = amount - allocations.reduce((sum, a) => sum + a.amountMinor, 0);
   const cur = line.amount.currency;
   const allowed = (parties.data ?? []).filter((p) => p.kind && (into ? sellsTo(p.kind) : buysFrom(p.kind)));
+  // Until the party's open invoices are here, a save would settle none of them and book it all as an advance.
+  const docsLoading = !!partyId && open.isPending;
   const save = async () => {
-    if (!partyId) return;
+    if (!partyId || docsLoading) return;
     const ok = await run('payment', () => createPaymentFromBankLine(line, { partyId, method, notes, allocations }), tr(into ? 'banking:record.paymentInSaved' : 'banking:record.paymentOutSaved'));
     if (ok) onClose();
   };
@@ -121,7 +124,7 @@ export function RecordPaymentSheet({ line, onClose }: { line: BankLine | null; o
         visible={!partyOpen && !methodOpen}
         onClose={onClose}
         title={tr(into ? 'banking:record.paymentInTitle' : 'banking:record.paymentOutTitle')}
-        footer={<Button title={tr('banking:record.savePayment')} onPress={() => void save()} loading={busy === 'payment'} disabled={!partyId || !!busy} fullWidth />}
+        footer={<Button title={tr('banking:record.savePayment')} onPress={() => void save()} loading={busy === 'payment'} disabled={!partyId || docsLoading || !!busy} fullWidth />}
       >
         <View style={{ padding: t.spacing.lg, gap: t.spacing.lg }}>
           <LineSummary line={line} />
@@ -133,6 +136,11 @@ export function RecordPaymentSheet({ line, onClose }: { line: BankLine | null; o
             onPress={() => setPartyOpen(true)}
             icon="account-outline"
           />
+          {docsLoading ? (
+            <SkeletonGroup>
+              <SkeletonRows rows={2} kind="list" icon={false} />
+            </SkeletonGroup>
+          ) : null}
           {partyId && docs.length ? (
             <View style={{ gap: t.spacing.sm }}>
               <Text variant="small" weight="600">

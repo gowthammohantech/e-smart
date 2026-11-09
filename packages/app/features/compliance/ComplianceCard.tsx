@@ -13,6 +13,8 @@ import { QrCode } from '@esmart/ui/components/QrCode';
 import { MIN_READABLE_QR_SIZE } from '@esmart/core/lib/qr';
 import { BusinessDocument } from '@esmart/core/types';
 import { useAppStore } from '../../store/appStore';
+import { useEwayBillRecord } from '../../remote/queries';
+import { Skeleton, SkeletonGroup } from '@esmart/ui/components/Skeleton';
 import {
   useActiveCompany,
   useActiveEwayBill,
@@ -39,6 +41,9 @@ export function ComplianceCard({ document: doc }: { document: BusinessDocument }
   const parties = useAppStore((s) => s.parties);
   const items = useAppStore((s) => s.items);
   const bill = useActiveEwayBill(doc.id);
+  // A document that has a bill shows it once it's here, never "Pending" and a button to raise another meanwhile.
+  const billQuery = useEwayBillRecord(doc.compliance?.ewayBillId);
+  const billLoading = !bill && !!doc.compliance?.ewayBillId && billQuery.isLoading;
 
   const [sheet, setSheet] = useState<'generate' | 'cancel' | null>(null);
 
@@ -214,7 +219,9 @@ export function ComplianceCard({ document: doc }: { document: BusinessDocument }
         <View style={{ gap: t.spacing.md }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: t.spacing.md }}>
             <Text variant="small" weight="600" style={{ flex: 1 }}>{tr('compliance:einv.ewayBill')}</Text>
-            {billMeta ? (
+            {billLoading ? (
+              <Skeleton height={22} width={80} radius={11} />
+            ) : billMeta ? (
               <Badge label={keyLabel(tr, billMeta.labelKey)} tone={expiringSoon ? 'warning' : billMeta.tone} icon={billMeta.icon} />
             ) : (
               <Badge
@@ -224,7 +231,13 @@ export function ComplianceCard({ document: doc }: { document: BusinessDocument }
             )}
           </View>
 
-          {!requirement.required && !bill ? (
+          {billLoading ? (
+            <SkeletonGroup>
+              <Skeleton height={44} radius={8} />
+            </SkeletonGroup>
+          ) : null}
+
+          {!requirement.required && !bill && !billLoading ? (
             <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
               {requirement.reason}.
             </Text>
@@ -257,7 +270,7 @@ export function ComplianceCard({ document: doc }: { document: BusinessDocument }
             </Pressable>
           ) : null}
 
-          {requirement.required && (!bill || billStatus !== 'active') ? (
+          {requirement.required && !billLoading && (!bill || billStatus !== 'active') ? (
             <Button
               title={bill ? tr('compliance:ewb.raiseNew') : tr('compliance:ewb.generate')}
               icon="truck-fast-outline"

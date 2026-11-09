@@ -20,6 +20,8 @@ import { stateName } from '@esmart/core/data/masters';
 import { formatDate } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
 import { useDocument, useParties } from '@esmart/app/store/selectors';
+import { useDocumentRecord } from '@esmart/app/remote/queries';
+import { LoadingView } from '@esmart/app/components/LoadingView';
 import { EwayBillFormSheets, useEwayBillForm, type EwayBillFormState } from '@esmart/app/features/compliance/EwayBillForm';
 
 function Label({ children }: { children: string }) {
@@ -179,6 +181,10 @@ export function NewEwayBillDesktop() {
   const { t: tr } = useTranslation(['compliance', 'nav']);
   const { documentId } = useLocalSearchParams<{ documentId?: string }>();
   const document = useDocument(documentId);
+  // The form fills from the document's party, so it waits for the fresh copy (which brings the party):
+  // filled from a half-loaded one it would raise the bill to a blank consignee.
+  const remote = useDocumentRecord(documentId);
+  if (remote.isLoading) return <LoadingView variant="form" title={tr('nav:title.newEWayBill')} />;
 
   return (
     <View style={{ flex: 1 }}>

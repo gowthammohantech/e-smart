@@ -24,6 +24,7 @@ import { useGoBack } from '@esmart/app/navigation/useGoBack';
 import { FROM_DOCUMENT, handBack } from '@esmart/app/navigation/handBack';
 import { CustomFieldsSection } from '@esmart/app/features/customFields/CustomFieldsSection';
 import type { CustomValues } from '@esmart/core/domain/customFields';
+import { GstTreatmentFields } from '@esmart/app/features/catalog/GstTreatmentFields';
 
 /**
  * Add an item, laid out for a desktop: the item's identity and prices in the
@@ -43,7 +44,9 @@ export function ItemFormDesktop({ item }: { item?: Item }) {
   const itemCategories = useItemCategories();
   const brands = useBrands();
   const existing = useItems();
-  const hsnRequired = hsnMandatory(useActiveCompany()?.taxRegistration);
+  const taxRegistration = useActiveCompany()?.taxRegistration;
+  const hsnRequired = hsnMandatory(taxRegistration);
+  const gstRegistered = taxRegistration?.regime === 'GST' && !!taxRegistration.registered;
   const saveItem = useAppStore((s) => s.saveItem);
   const activeCompanyId = useAppStore((s) => s.activeCompanyId);
   const hasInventory = useHasModule('inventory');
@@ -71,6 +74,8 @@ export function ItemFormDesktop({ item }: { item?: Item }) {
   const [categoryId, setCategoryId] = useState(item?.categoryId ?? '');
   const [brandId, setBrandId] = useState(item?.brandId ?? '');
   const [customFields, setCustomFields] = useState<CustomValues>(item?.customFields ?? {});
+  // The item's GST treatment (supply type, reverse charge, cess, ITC): kept, and editable, as on the phone.
+  const [gst, setGst] = useState(item?.gst);
 
   const [unitOpen, setUnitOpen] = useState(false);
   const [taxOpen, setTaxOpen] = useState(false);
@@ -142,6 +147,7 @@ export function ItemFormDesktop({ item }: { item?: Item }) {
       categoryId: categoryId || undefined,
       brandId: brandId || undefined,
       customFields,
+      gst: gst && type === 'service' && gst.capitalGoods ? { ...gst, capitalGoods: undefined } : gst,
       status: active ? 'active' : 'inactive',
       createdAt: item?.createdAt ?? nowISO(),
     };
@@ -275,6 +281,7 @@ export function ItemFormDesktop({ item }: { item?: Item }) {
                     required={hsnRequired}
                   />
                 </Row>
+                {gstRegistered || gst ? <GstTreatmentFields value={gst} onChange={setGst} type={type} /> : null}
               </Panel>
             </>
           }

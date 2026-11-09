@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Platform, Pressable, ScrollView, Switch, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
@@ -30,7 +30,10 @@ export default function Integrations() {
   const { run: serverSave } = useServerSave();
   const router = useRouter();
 
-  const integrations = useAppStore((s) => s.integrations);
+  // The store holds every business opened this session: only this one's.
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  const allIntegrations = useAppStore((s) => s.integrations);
+  const integrations = useMemo(() => allIntegrations.filter((i) => i.companyId === companyId), [allIntegrations, companyId]);
   const toggleIntegration = useAppStore((s) => s.toggleIntegration);
   const compliance = useComplianceSettings();
   // A portal has a login once its username is saved (the password is never sent back).

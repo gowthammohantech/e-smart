@@ -13,7 +13,9 @@ export default function NewEwayBill() {
   const { documentId } = useLocalSearchParams<{ documentId?: string }>();
   const document = useDocument(documentId);
   const remote = useDocumentRecord(documentId);
-  if (!document && remote.isLoading) return <LoadingView variant="form" />;
+  // The form fills from the document's party, so it waits for the fresh copy (which brings the party):
+  // filled from a half-loaded one it would raise the bill to a blank consignee.
+  if (remote.isLoading) return <LoadingView variant="form" title={tr('nav:title.newEWayBill')} />;
 
   return (
     <View style={{ flex: 1 }}>

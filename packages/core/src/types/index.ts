@@ -1074,6 +1074,8 @@ export type Integration = {
   available?: boolean;
   /** Where the row links for configuration, when it has any. */
   configRoute?: string;
+  /** The business it belongs to: the same integration id appears once per business. */
+  companyId?: string;
 };
 
 /* ------------------------------------------------------------------ */

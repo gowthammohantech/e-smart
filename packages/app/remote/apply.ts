@@ -64,11 +64,14 @@ export function remapIds(map: Record<string, string>) {
 export function applyEntity(entityType: string, data: unknown) {
   const map = COLLECTIONS[entityType];
   if (!map || !data || typeof data !== 'object') return;
-  const row = data as Row;
+  let row = data as Row;
   const key = row[map.key];
   if (typeof key !== 'string') return;
   const list = useAppStore.getState()[map.collection] as Row[];
-  const at = list.findIndex((r) => r[map.key] === key);
+  // An integration's id is the same in every business: match the open one's row, and say whose it is.
+  const scoped = map.collection === 'integrations';
+  if (scoped && !row.companyId) row = { ...row, companyId: useAppStore.getState().activeCompanyId };
+  const at = list.findIndex((r) => r[map.key] === key && (!scoped || r.companyId === row.companyId));
   const next = at >= 0 ? list.map((r, i) => (i === at ? { ...r, ...row } : r)) : [...list, row];
   useAppStore.setState({ [map.collection]: next } as never);
   if (typeof row.version === 'number' && typeof row.id === 'string') useRemoteMeta.getState().setVersion(row.id, row.version);

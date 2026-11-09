@@ -1173,7 +1173,8 @@ export const useAppStore = create<AppState>()(
           set({ notifications: get().notifications.filter((n) => n.companyId !== get().activeCompanyId) }),
         toggleIntegration: (id) =>
           set({
-            integrations: get().integrations.map((i) => (i.id === id ? { ...i, connected: !i.connected } : i)),
+            // The same id is in every business: only the open one's.
+            integrations: get().integrations.map((i) => (i.id === id && i.companyId === get().activeCompanyId ? { ...i, connected: !i.connected } : i)),
           }),
         /* ------------------------------------------------------------ */
         /* compliance (FRD 16)                                          */

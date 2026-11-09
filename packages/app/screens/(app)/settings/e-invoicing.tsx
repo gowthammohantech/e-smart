@@ -15,13 +15,26 @@ import { ComplianceSettings, TransportMode, VehicleType } from '@esmart/core/typ
 import { useAppStore } from '../../../store/appStore';
 import { compliance } from '../../../remote';
 import { describeError } from '../../../remote/errors';
-import { useActiveCompany, useBaseCurrency, useComplianceSettings, useComplianceSummary, useTransporters } from '../../../store/selectors';
+import { useActiveCompany, useBaseCurrency, useComplianceSettings, useComplianceSummary, useSetupReady, useTransporters } from '../../../store/selectors';
+import { LoadingView } from '../../../components/LoadingView';
 import { fromMajor, toMajor } from '@esmart/core/lib/money';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { useSaveShortcut } from '../../../components/useSaveShortcut';
 import { useServerSave } from '../../../components/useServerSave';
 
+/**
+ * The form starts from the business's saved settings, so it waits for them: drawn from the defaults
+ * it would save those over the real ones. Keyed by business, so a switch starts it again.
+ */
 export default function EInvoicingSettings() {
+  const { t: tr } = useTranslation(['nav']);
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  const ready = useSetupReady();
+  if (!ready) return <LoadingView variant="form" title={tr('nav:title.eInvoicingAndEWayBill')} />;
+  return <EInvoicingForm key={companyId} />;
+}
+
+function EInvoicingForm() {
   const t = useTheme();
   const { t: tr } = useTranslation(['compliance', 'nav', 'auth', 'settings']);
   const router = useRouter();

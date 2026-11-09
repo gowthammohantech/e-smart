@@ -208,7 +208,7 @@ export const MUTATIONS: Partial<Record<keyof AppState, Builder>> = {
     outbox.action({ method: 'PUT', path: `${c(s.companyId)}/compliance-settings`, body: s, entityType: 'compliance_settings', entityId: s.companyId, label: 'Compliance settings' });
   },
   toggleIntegration: ({ args, after }) => {
-    const i = byId(after.integrations, args[0]);
+    const i = after.integrations.find((x) => x.id === args[0] && x.companyId === after.activeCompanyId);
     if (!i) return;
     outbox.action({ method: 'POST', path: `${c(after.activeCompanyId)}/integrations/${i.id}/${i.connected ? 'connect' : 'disconnect'}`, body: {}, entityType: 'integration', entityId: i.id, label: i.name });
   },
