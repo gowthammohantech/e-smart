@@ -10,7 +10,7 @@ import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { ListRow } from '@esmart/ui/components/ListRow';
 import { Text } from '@esmart/ui/components/Text';
 import { Skeleton } from '@esmart/ui/components/Skeleton';
-import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, WIDE_FORM_MAX_WIDTH, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { accountFor } from '@esmart/core/domain/ledger/accounts';
 import { formatDate } from '@esmart/core/lib/date';
@@ -91,7 +91,14 @@ export default function ReceiptDetail() {
             : undefined,
         }}
       />
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: desktop ? t.spacing.xxxl : 140 + insets.bottom, gap: t.spacing.md }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
+      <ScrollView
+        contentContainerStyle={[
+          { padding: t.spacing.lg, paddingBottom: desktop ? t.spacing.xxxl : 140 + insets.bottom, gap: t.spacing.md },
+          // A desktop keeps the labels near their values, as a form's width.
+          desktop ? { width: '100%', maxWidth: WIDE_FORM_MAX_WIDTH } : null,
+        ]}
+        showsVerticalScrollIndicator={SHOW_SCROLLBAR}
+      >
         <Card style={{ gap: t.spacing.xs }}>
           <Text variant="caption" tone="muted">
             {`${voucher.number} · ${formatDate(voucher.date)}`}

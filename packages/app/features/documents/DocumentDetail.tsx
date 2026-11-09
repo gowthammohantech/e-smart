@@ -57,9 +57,10 @@ import { ApprovalBanner } from '../approvals/ApprovalBanner';
 import { EInvoiceSheet } from '../compliance/EInvoiceSheet';
 import { canCancelEInvoice, isEInvoiceApplicable } from '@esmart/core/domain/eInvoice';
 import { ewayBillStatusAt, isEwayBillRequired } from '@esmart/core/domain/ewayBill';
-import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { DIALOG_WIDTH, SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { Cell, DataTable, TABLE_PAGE_SIZE } from '@esmart/ui/components/DataTable';
 import { SplitPane } from '@esmart/ui/components/Layout';
+import { Menu, MenuDivider, MenuItem, MenuSection, useMenuAnchor } from '@esmart/ui/components/Menu';
 import { Segmented } from '@esmart/ui/components/Field';
 import { HtmlPreview } from './HtmlPreview';
 import { deliverFile } from '../reports/exportFiles';
@@ -138,6 +139,9 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
   const { run: oneAtATime, busy } = useSingleFlight();
   const desktop = useIsDesktop();
   const [desktopTab, setDesktopTab] = useState<'details' | 'preview'>('details');
+  // A desktop drops the actions, and then the statuses, down from the header's Actions button.
+  const { setAnchor: setActionsAnchor, rect: actionsRect, open: openActionsMenu, close: closeActionsMenu } = useMenuAnchor();
+  const [menuKind, setMenuKind] = useState<'actions' | 'status'>('actions');
 
   const eInvoiceApplicable = useMemo(
     () =>
@@ -470,6 +474,14 @@ ${url}`;
 
   // Finalise asks once, then finalises; the status list is for anything else.
   const finalise = () => (finaliseTo ? setConfirmFinalize(true) : setStatusOpen(true));
+  // From the Actions menu a desktop lists the statuses in the same spot, as a menu; a phone opens the sheet.
+  const openStatus = () => {
+    setActionsOpen(false);
+    if (desktop) {
+      setMenuKind('status');
+      openActionsMenu();
+    } else setStatusOpen(true);
+  };
 
   const headerCard = (
     <>
@@ -565,6 +577,28 @@ ${url}`;
       </Card>
     </>
   );
+  const payButtons =
+    (!recordPending && outstanding.minor > 0) || (canAdjust && !recordPending) ? (
+      <>
+        {!recordPending && outstanding.minor > 0 ? (
+          <Button
+            title={receivable ? tr('common:action.recordPayment') : tr('sales:detail.paySupplier')}
+            icon={receivable ? 'cash-plus' : 'cash-minus'}
+            onPress={() => router.push(paymentRoute as never)}
+            fullWidth={!desktop}
+          />
+        ) : null}
+        {canAdjust && !recordPending ? (
+          <Button
+            title={tr('sales:detail.adjustAdvance', { amount: formatMoney(partyAdvance!) })}
+            icon="swap-horizontal"
+            variant="secondary"
+            onPress={() => router.push(adjustRoute as never)}
+            fullWidth={!desktop}
+          />
+        ) : null}
+      </>
+    ) : null;
   const paymentCard = (
     <>
       {/* Payment status */}
@@ -610,23 +644,12 @@ ${url}`;
           </View>
           )}
 
-          {!recordPending && outstanding.minor > 0 ? (
-            <Button
-              title={receivable ? tr('common:action.recordPayment') : tr('sales:detail.paySupplier')}
-              icon={receivable ? 'cash-plus' : 'cash-minus'}
-              onPress={() => router.push(paymentRoute as never)}
-              fullWidth
-            />
-          ) : null}
-          {canAdjust && !recordPending ? (
-            <Button
-              title={tr('sales:detail.adjustAdvance', { amount: formatMoney(partyAdvance!) })}
-              icon="swap-horizontal"
-              variant="secondary"
-              onPress={() => router.push(adjustRoute as never)}
-              fullWidth
-            />
-          ) : null}
+          {desktop ? (
+            // A desktop keeps the buttons at their own width, side by side when they fit.
+            payButtons ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm }}>{payButtons}</View> : null
+          ) : (
+            payButtons
+          )}
         </Card>
       ) : null}
     </>
@@ -670,8 +693,8 @@ ${url}`;
   );
   const totalsCard = (
     <>
-      {/* Totals */}
-      <Card style={{ marginTop: t.spacing.md }}>
+      {/* Totals: a block at the right of a desktop's main column, under the amounts it adds up. */}
+      <Card style={[{ marginTop: t.spacing.md }, desktop ? { alignSelf: 'flex-end', width: '100%', maxWidth: 440 } : null]}>
         <TotalsPanel
           totals={doc.totals}
           currency={doc.currency}
@@ -972,6 +995,96 @@ ${url}`;
       ? { title: primaryConversion.label, icon: primaryConversion.icon, onPress: () => void convert(primaryConversion.target), loading: false }
       : { title: pdfLabel, icon: pdfIcon as IconName, onPress: shareDocument, loading: busy };
 
+  // What the Actions button offers: a sheet on a phone, a menu from the button on a desktop.
+  const actionItems: { label: string; icon: IconName; onPress: () => void; danger?: boolean }[] = [
+    // What it can become comes first: the reason most people open this sheet.
+    ...conversions.filter((c) => c !== primaryConversion).map((c) => ({ label: c.label, icon: c.icon, onPress: () => void convert(c.target) })),
+    ...(isFinalized(doc.status)
+      ? [
+          // The PDF is the footer's own button, unless carrying it forward took that place.
+          ...(primaryConversion ? [{ label: pdfLabel, icon: 'file-pdf-box' as const, onPress: shareDocument }] : []),
+          { label: tr('sales:detail.sendEmail'), icon: 'email-outline' as const, onPress: () => sendVia('email') },
+          { label: tr('sales:detail.sendWhatsapp'), icon: 'whatsapp' as const, onPress: () => sendVia('whatsapp') },
+          // An issued invoice, not itself a copy, can repeat; the server says if it can't.
+          ...(doc.kind === 'invoice' && !doc.recurringParentId && doc.status !== 'cancelled'
+            ? [{ label: doc.recurrence && doc.recurrence !== 'none' ? `${tr('sales:recurring.action')} · ${tr(`sales:recurring.frequency.${doc.recurrence}`)}` : tr('sales:recurring.action'), icon: 'repeat' as const, onPress: () => setRecurrenceOpen(true) }]
+            : []),
+          { label: Platform.OS === 'web' ? tr('sales:detail.copyLink') : tr('sales:detail.shareLink'), icon: 'link-variant' as const, onPress: () =>
+              runRemote(async () => handOverLink(await pdfLink(doc.companyId, doc.id)), {
+                loading: tr('sales:detail.creatingLink'),
+                success: tr(Platform.OS === 'web' ? 'common:documentDetail.linkCopied' : 'sales:detail.linkReady'),
+                icon: 'link-variant',
+              }) },
+          ...(doc.kind === 'invoice' && outstanding.minor > 0
+            ? [{ label: tr('sales:detail.paymentLink'), icon: 'credit-card-outline' as const, onPress: () =>
+                    runRemote(async () => handOverLink((await paymentLink(doc.companyId, doc.id)).url), {
+                      loading: tr('sales:detail.creatingLink'),
+                      success: tr(Platform.OS === 'web' ? 'common:documentDetail.linkCopied' : 'sales:detail.linkReady'),
+                      icon: 'credit-card-outline',
+                    }) }]
+            : []),
+          ...(editable
+            ? [{ label: tr('sales:detail.edit'), icon: 'pencil-outline' as const, onPress: openEditor }]
+            : editHint
+              ? [{ label: tr('sales:detail.edit'), icon: 'pencil-off-outline' as const, onPress: () => toast.show(editHint, 'info') }]
+              : []),
+        ]
+      : [{ label: tr('sales:detail.edit'), icon: 'pencil-outline' as const, onPress: openEditor }]),
+    // Only on what money settles; a quote or an order has nothing to pay.
+    ...(isPayable && doc.status !== 'cancelled'
+      ? [
+          {
+            label: receivable ? tr('common:action.recordPayment') : tr('sales:detail.paySupplier'),
+            icon: (receivable ? 'cash-plus' : 'cash-minus') as IconName,
+            onPress: () => {
+              if (!isFinalized(doc.status)) return toast.show(tr('common:documentDetail.issueFirst'), 'warning');
+              if (outstanding.minor <= 0) return toast.show(tr('common:documentDetail.nothingDue'), 'info', { icon: 'check-decagram-outline', detail: doc.number });
+              router.push(paymentRoute as never);
+            },
+          },
+        ]
+      : []),
+    { label: tr('sales:detail.previewDocument'), icon: 'eye-outline' as const, onPress: () => router.push(`/(app)/documents/${doc.id}`) },
+    ...(eInvoiceApplicable && doc.compliance?.eInvoiceStatus !== 'generated' && doc.compliance?.eInvoiceStatus !== 'cancelled'
+      ? [{ label: tr('sales:detail.generateEInvoice'), icon: 'shield-check-outline' as const, onPress: () => { setActionsOpen(false); setComplianceSheet('generate'); } }]
+      : []),
+    ...(canCancelIrn
+      ? [{ label: tr('compliance:einv.cancelIrnShort'), icon: 'shield-off-outline' as const, onPress: () => { setActionsOpen(false); setComplianceSheet('cancel'); } }]
+      : []),
+    ...(ewayBill
+      ? [{ label: tr('sales:detail.viewEwayBill'), icon: 'truck-fast-outline' as const, onPress: () => { setActionsOpen(false); router.push(`/(app)/compliance/eway/${ewayBill.id}`); } }]
+      : ewayRequired
+        ? [{ label: tr('compliance:ewb.generate'), icon: 'truck-fast-outline' as const, onPress: () => { setActionsOpen(false); router.push(`/(app)/compliance/eway/new?documentId=${doc.id}`); } }]
+        : []),
+    { label: tr('sales:detail.duplicate'), icon: 'content-duplicate' as const, onPress: () => {
+      setActionsOpen(false);
+      void serverSave(() => duplicateDocument(doc.id)).then((res) => {
+        if (res?.result) router.push(detailRouteFor(doc.kind, res.id ?? res.result) as never);
+      });
+    } },
+    ...(transitions.length ? [{ label: tr('common:documentDetail.changeStatus'), icon: 'swap-vertical' as const, onPress: openStatus }] : []),
+    // A draft quote can be withdrawn too, where its kind allows that.
+    ...(doc.status !== 'cancelled' && (isFinalized(doc.status) || canTransition(doc.kind, doc.status, 'cancelled'))
+      ? [{ label: tr('common:documentDetail.cancelKind', { kind: kindName }), icon: 'close-octagon-outline' as const, danger: true, onPress: () => {
+          setActionsOpen(false);
+          // The server refuses while the e-way bill or the IRN is live (in that
+          // order), so say so before the user confirms.
+          if (ewayBill && ewayBillStatusAt(ewayBill, new Date().toISOString()) === 'active') {
+            toast.show(tr('sales:detail.cancelEwayFirst', { number: ewayBill.ewayBillNumber }), 'warning', { icon: 'truck-alert-outline' });
+            return;
+          }
+          if (doc.compliance?.eInvoiceStatus === 'generated') {
+            toast.show(tr('sales:detail.cancelIrnFirst'), 'warning', { icon: 'file-alert-outline' });
+            return;
+          }
+          setConfirmCancel(true);
+        } }]
+      : []),
+    ...(!isFinalized(doc.status)
+      ? [{ label: tr('sales:detail.deleteDraft'), icon: 'trash-can-outline' as const, danger: true, onPress: () => { setActionsOpen(false); setConfirmDelete(true); } }]
+      : []),
+  ];
+
   const desktopActions = (
     <View style={{ flexDirection: 'row', gap: t.spacing.sm }}>
       {editable ? (
@@ -979,7 +1092,17 @@ ${url}`;
       ) : editHint ? (
         <Button title={tr('sales:detail.edit')} variant="ghost" icon="pencil-off-outline" tooltip={editHint} onPress={() => toast.show(editHint, 'info')} />
       ) : null}
-      <Button title={tr('sales:detail.actions')} variant="ghost" icon="dots-horizontal" onPress={() => setActionsOpen(true)} />
+      <View ref={setActionsAnchor} collapsable={false}>
+        <Button
+          title={tr('sales:detail.actions')}
+          variant="ghost"
+          icon="dots-horizontal"
+          onPress={() => {
+            setMenuKind('actions');
+            openActionsMenu();
+          }}
+        />
+      </View>
       {primaryConversion ? <Button title={pdfLabel} variant="secondary" icon={pdfIcon} onPress={shareDocument} loading={busy} /> : null}
       <Button title={primaryAction.title} icon={primaryAction.icon} onPress={primaryAction.onPress} loading={primaryAction.loading} />
     </View>
@@ -1015,6 +1138,8 @@ ${url}`;
               showsVerticalScrollIndicator={SHOW_SCROLLBAR}
             >
               <SplitPane
+                // Capped as the editor is, so the main column's rows and notes don't run on across a wide screen.
+                style={{ maxWidth: 1180 }}
                 main={
                   <View style={{ gap: t.spacing.md }}>
                     {headerCard}
@@ -1074,97 +1199,46 @@ ${url}`;
 
       <RecurrenceSheet doc={doc} visible={recurrenceOpen} onClose={() => setRecurrenceOpen(false)} />
 
+      {desktop ? (
+        <Menu anchor={actionsRect} onClose={closeActionsMenu} align="right" width={menuKind === 'status' ? 240 : 280}>
+          {menuKind === 'status' ? (
+            <>
+              <MenuSection title={tr('common:documentDetail.changeStatus')} />
+              {transitions.map((s: DocStatus) => (
+                <MenuItem
+                  key={s}
+                  label={statusLabel(tr, s)}
+                  onPress={() => {
+                    closeActionsMenu();
+                    markAs(s);
+                  }}
+                />
+              ))}
+            </>
+          ) : (
+            actionItems.map((a, i, all) => (
+              <React.Fragment key={a.label}>
+                {/* Cancel and delete sit apart, below a rule, as on the phone's sheet. */}
+                {a.danger && !all[i - 1]?.danger ? <MenuDivider /> : null}
+                <MenuItem
+                  icon={a.icon}
+                  label={a.label}
+                  destructive={a.danger}
+                  onPress={() => {
+                    // Closed first: the status menu opens in its place, and other actions navigate away.
+                    closeActionsMenu();
+                    a.onPress();
+                  }}
+                />
+              </React.Fragment>
+            ))
+          )}
+        </Menu>
+      ) : null}
+
       {/* Action sheet */}
       <Sheet visible={actionsOpen} onClose={() => setActionsOpen(false)} title={shownNumber}>
-        {/* eslint-disable-next-line react-hooks/refs -- these onPress handlers read remoteBusy.current only when tapped, never while rendering */}
-        {([
-          // What it can become comes first: the reason most people open this sheet.
-          ...conversions.filter((c) => c !== primaryConversion).map((c) => ({ label: c.label, icon: c.icon, onPress: () => void convert(c.target) })),
-          ...(isFinalized(doc.status)
-            ? [
-                // The PDF is the footer's own button, unless carrying it forward took that place.
-                ...(primaryConversion ? [{ label: pdfLabel, icon: 'file-pdf-box' as const, onPress: shareDocument }] : []),
-                { label: tr('sales:detail.sendEmail'), icon: 'email-outline' as const, onPress: () => sendVia('email') },
-                { label: tr('sales:detail.sendWhatsapp'), icon: 'whatsapp' as const, onPress: () => sendVia('whatsapp') },
-                // An issued invoice, not itself a copy, can repeat; the server says if it can't.
-                ...(doc.kind === 'invoice' && !doc.recurringParentId && doc.status !== 'cancelled'
-                  ? [{ label: doc.recurrence && doc.recurrence !== 'none' ? `${tr('sales:recurring.action')} · ${tr(`sales:recurring.frequency.${doc.recurrence}`)}` : tr('sales:recurring.action'), icon: 'repeat' as const, onPress: () => setRecurrenceOpen(true) }]
-                  : []),
-                { label: Platform.OS === 'web' ? tr('sales:detail.copyLink') : tr('sales:detail.shareLink'), icon: 'link-variant' as const, onPress: () =>
-                    runRemote(async () => handOverLink(await pdfLink(doc.companyId, doc.id)), {
-                      loading: tr('sales:detail.creatingLink'),
-                      success: tr(Platform.OS === 'web' ? 'common:documentDetail.linkCopied' : 'sales:detail.linkReady'),
-                      icon: 'link-variant',
-                    }) },
-                ...(doc.kind === 'invoice' && outstanding.minor > 0
-                  ? [{ label: tr('sales:detail.paymentLink'), icon: 'credit-card-outline' as const, onPress: () =>
-                          runRemote(async () => handOverLink((await paymentLink(doc.companyId, doc.id)).url), {
-                            loading: tr('sales:detail.creatingLink'),
-                            success: tr(Platform.OS === 'web' ? 'common:documentDetail.linkCopied' : 'sales:detail.linkReady'),
-                            icon: 'credit-card-outline',
-                          }) }]
-                  : []),
-                ...(editable
-                  ? [{ label: tr('sales:detail.edit'), icon: 'pencil-outline' as const, onPress: openEditor }]
-                  : editHint
-                    ? [{ label: tr('sales:detail.edit'), icon: 'pencil-off-outline' as const, onPress: () => toast.show(editHint, 'info') }]
-                    : []),
-              ]
-            : [{ label: tr('sales:detail.edit'), icon: 'pencil-outline' as const, onPress: openEditor }]),
-          // Only on what money settles; a quote or an order has nothing to pay.
-          ...(isPayable && doc.status !== 'cancelled'
-            ? [
-                {
-                  label: receivable ? tr('common:action.recordPayment') : tr('sales:detail.paySupplier'),
-                  icon: (receivable ? 'cash-plus' : 'cash-minus') as IconName,
-                  onPress: () => {
-                    if (!isFinalized(doc.status)) return toast.show(tr('common:documentDetail.issueFirst'), 'warning');
-                    if (outstanding.minor <= 0) return toast.show(tr('common:documentDetail.nothingDue'), 'info', { icon: 'check-decagram-outline', detail: doc.number });
-                    router.push(paymentRoute as never);
-                  },
-                },
-              ]
-            : []),
-          { label: tr('sales:detail.previewDocument'), icon: 'eye-outline' as const, onPress: () => router.push(`/(app)/documents/${doc.id}`) },
-          ...(eInvoiceApplicable && doc.compliance?.eInvoiceStatus !== 'generated' && doc.compliance?.eInvoiceStatus !== 'cancelled'
-            ? [{ label: tr('sales:detail.generateEInvoice'), icon: 'shield-check-outline' as const, onPress: () => { setActionsOpen(false); setComplianceSheet('generate'); } }]
-            : []),
-          ...(canCancelIrn
-            ? [{ label: tr('compliance:einv.cancelIrnShort'), icon: 'shield-off-outline' as const, onPress: () => { setActionsOpen(false); setComplianceSheet('cancel'); } }]
-            : []),
-          ...(ewayBill
-            ? [{ label: tr('sales:detail.viewEwayBill'), icon: 'truck-fast-outline' as const, onPress: () => { setActionsOpen(false); router.push(`/(app)/compliance/eway/${ewayBill.id}`); } }]
-            : ewayRequired
-              ? [{ label: tr('compliance:ewb.generate'), icon: 'truck-fast-outline' as const, onPress: () => { setActionsOpen(false); router.push(`/(app)/compliance/eway/new?documentId=${doc.id}`); } }]
-              : []),
-          { label: tr('sales:detail.duplicate'), icon: 'content-duplicate' as const, onPress: () => {
-            setActionsOpen(false);
-            void serverSave(() => duplicateDocument(doc.id)).then((res) => {
-              if (res?.result) router.push(detailRouteFor(doc.kind, res.id ?? res.result) as never);
-            });
-          } },
-          ...(transitions.length ? [{ label: tr('common:documentDetail.changeStatus'), icon: 'swap-vertical' as const, onPress: () => { setActionsOpen(false); setStatusOpen(true); } }] : []),
-          // A draft quote can be withdrawn too, where its kind allows that.
-          ...(doc.status !== 'cancelled' && (isFinalized(doc.status) || canTransition(doc.kind, doc.status, 'cancelled'))
-            ? [{ label: tr('common:documentDetail.cancelKind', { kind: kindName }), icon: 'close-octagon-outline' as const, danger: true, onPress: () => {
-                setActionsOpen(false);
-                // The server refuses while the e-way bill or the IRN is live (in that
-                // order), so say so before the user confirms.
-                if (ewayBill && ewayBillStatusAt(ewayBill, new Date().toISOString()) === 'active') {
-                  toast.show(tr('sales:detail.cancelEwayFirst', { number: ewayBill.ewayBillNumber }), 'warning', { icon: 'truck-alert-outline' });
-                  return;
-                }
-                if (doc.compliance?.eInvoiceStatus === 'generated') {
-                  toast.show(tr('sales:detail.cancelIrnFirst'), 'warning', { icon: 'file-alert-outline' });
-                  return;
-                }
-                setConfirmCancel(true);
-              } }]
-            : []),
-          ...(!isFinalized(doc.status)
-            ? [{ label: tr('sales:detail.deleteDraft'), icon: 'trash-can-outline' as const, danger: true, onPress: () => { setActionsOpen(false); setConfirmDelete(true); } }]
-            : []),
-        ] as { label: string; icon: IconName; onPress: () => void; danger?: boolean }[]).map((a, i, all) => (
+        {actionItems.map((a, i, all) => (
           <Pressable
             key={a.label}
             // Every action closes the sheet first; it is a modal, so one left open
@@ -1200,6 +1274,8 @@ ${url}`;
         onClose={() => setStatusOpen(false)}
         title={tr('common:documentDetail.changeStatus')}
         subtitle={tr('common:documentDetail.currently', { status: statusLabel(tr, doc.status) })}
+        // A short list: a small dialog on a desktop.
+        desktopWidth={DIALOG_WIDTH.sm}
       >
         {transitions.length === 0 ? (
           <EmptyState icon="check-all" title={tr('sales:detail.nothingLeft')} message={tr('sales:detail.nothingLeftBody')} compact />

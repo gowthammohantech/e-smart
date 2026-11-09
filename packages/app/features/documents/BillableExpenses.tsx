@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
+import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { Button } from '@esmart/ui/components/Button';
 import { Card } from '@esmart/ui/components/Card';
 import { Text } from '@esmart/ui/components/Text';
@@ -20,6 +21,7 @@ import { useBillableExpenses } from '../../remote/queries';
  */
 export function BillableExpenses({ partyId, currency, documentId, lines, onAdd }: { partyId?: string; currency: string; documentId?: string; lines: DocumentLine[]; onAdd: (line: DocumentLine) => void }) {
   const t = useTheme();
+  const desktop = useIsDesktop();
   const { t: tr } = useTranslation(['sales']);
   // The server knows which are already on a live invoice; lines added here count too.
   const billable = useBillableExpenses(useHasModule('expenses') ? partyId : undefined, currency, documentId).data;
@@ -60,7 +62,8 @@ export function BillableExpenses({ partyId, currency, documentId, lines, onAdd }
         {tr('sales:reimburse.body')}
       </Text>
       {open.map((e) => (
-        <View key={e.id} style={{ gap: t.spacing.xs }}>
+        // A desktop keeps Add beside its expense, not across the editor's column.
+        <View key={e.id} style={[{ gap: t.spacing.xs }, desktop ? { maxWidth: 560 } : null]}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: t.spacing.md }}>
             <Text variant="small" style={{ flex: 1 }} numberOfLines={1}>
               {`${e.number} · ${formatDate(e.date)} · ${formatMoney(e.amount)}`}

@@ -12,7 +12,7 @@ import { Sheet } from "@esmart/ui/components/Sheet";
 import { Text } from "@esmart/ui/components/Text";
 import { ListRow } from "@esmart/ui/components/ListRow";
 import { useToast } from "@esmart/ui/components/Toast";
-import { SHOW_SCROLLBAR } from "@esmart/ui/theme/breakpoints";
+import { SHOW_SCROLLBAR, useIsDesktop } from "@esmart/ui/theme/breakpoints";
 import { documentKindLabel } from "@esmart/core/labels";
 import { formatMoney } from "@esmart/core/lib/format";
 import type { BusinessDocument } from "@esmart/core/types";
@@ -28,6 +28,7 @@ import { ListSkeleton } from "../../../components/ScreenSkeleton";
 /** What waits for an owner or admin: documents and payments over an approval rule's amount, oldest first. */
 export default function ApprovalsScreen() {
   const t = useTheme();
+  const desktop = useIsDesktop();
   const router = useRouter();
   const toast = useToast();
   const { t: tr } = useTranslation(["sales", "common"]);
@@ -127,7 +128,8 @@ export default function ApprovalsScreen() {
   };
 
   return (
-    <View style={{ flex: 1 }}>
+    // A desktop caps the list so Reject and Approve sit near what they decide on.
+    <View style={[{ flex: 1 }, desktop ? { width: "100%", maxWidth: 880 } : null]}>
       <Stack.Screen options={{ title: tr("sales:approval.title") }} />
       {pending.isLoading || requests.isLoading ? (
         <View style={{ padding: t.spacing.lg }}>
@@ -256,6 +258,7 @@ export default function ApprovalsScreen() {
           <Button
             title={tr(declining?.what === "payment" ? "sales:approval.paymentReject" : "sales:approval.sendBack")}
             variant="danger"
+            style={desktop ? { alignSelf: "flex-end" } : undefined}
             disabled={!why.trim() || busy || deciding !== null}
             loading={busy || deciding !== null}
             onPress={() => {

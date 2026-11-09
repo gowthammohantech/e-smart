@@ -5,6 +5,7 @@ import { Pressable, ScrollView, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
+import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
 import { Badge } from '@esmart/ui/components/Badge';
@@ -53,6 +54,7 @@ export function EInvoiceSheet({
   mode: 'generate' | 'cancel';
 }) {
   const t = useTheme();
+  const desktop = useIsDesktop();
   const { t: tr } = useTranslation(['compliance']);
   const toast = useToast();
   const company = useActiveCompany();
@@ -140,6 +142,8 @@ export function EInvoiceSheet({
         onClose={onClose}
         title={tr('compliance:einv.cancelIrn')}
         subtitle={doc.number}
+        // A desktop opens it as a drawer beside the invoice: reasons, a remark and a warning.
+        desktopAs="drawer"
         footer={
           <Button
             title={tr('compliance:einv.cancelIrn')}
@@ -148,7 +152,7 @@ export function EInvoiceSheet({
             loading={busy}
             disabled={!cancellation.allowed || (needsRemark && remark.trim().length === 0)}
             onPress={cancel}
-            fullWidth
+            fullWidth={!desktop}
           />
         }
       >
@@ -220,9 +224,11 @@ export function EInvoiceSheet({
       onClose={onClose}
       title={reported ? tr('compliance:einv.eInvoice') : tr('compliance:einv.generateTitle')}
       subtitle={doc.number}
+      // A desktop drawer gives the checks and the JSON payload the room a 520px dialog didn't.
+      desktopAs="drawer"
       footer={
         reported || !applicability.applicable ? undefined : (
-          <View style={{ gap: t.spacing.sm }}>
+          <View style={desktop ? { flexDirection: 'row', alignItems: 'center', gap: t.spacing.md } : { gap: t.spacing.sm }}>
             {blocking.length > 0 ? (
               <Text variant="caption" tone="bad" center>
                 {tr('compliance:einv.fixProblems', { count: blocking.length })}
@@ -234,7 +240,7 @@ export function EInvoiceSheet({
               loading={busy}
               disabled={blocking.length > 0}
               onPress={generate}
-              fullWidth
+              fullWidth={!desktop}
             />
           </View>
         )
@@ -288,7 +294,7 @@ export function EInvoiceSheet({
                 await Clipboard.setStringAsync(doc.compliance?.irn ?? '');
                 toast.show(tr('compliance:einv.copied'), 'success', { icon: 'content-copy', detail: doc.compliance?.irn });
               }}
-              fullWidth
+              fullWidth={!desktop}
             />
           </Card>
         ) : null}

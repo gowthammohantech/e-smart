@@ -3,6 +3,8 @@ import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
+import { DRAWER_WIDTH, useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { FieldRow } from '@esmart/ui/components/Layout';
 import { Sheet } from '@esmart/ui/components/Sheet';
 import { useSaveShortcut } from '../../components/useSaveShortcut';
 import { Text } from '@esmart/ui/components/Text';
@@ -62,6 +64,7 @@ function LineEditorForm({
   purchase = false,
 }: EditorProps & { line: DocumentLine }) {
   const t = useTheme();
+  const desktop = useIsDesktop();
   const { t: tr } = useTranslation(['sales', 'common', 'inventory']);
 
   const [name, setName] = useState(line?.name ?? '');
@@ -163,8 +166,12 @@ function LineEditorForm({
       onClose={onClose}
       title={tr('sales:line.editLine')}
       subtitle={line.name || tr('sales:line.newLine')}
+      // A desktop edits the line in a drawer beside the grid, not a narrow dialog over it.
+      desktopAs="drawer"
+      desktopWidth={DRAWER_WIDTH.lg}
       footer={
-        <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
+        // A desktop keeps Remove at the left, apart from Save line at the right, both at their own width.
+        <View style={desktop ? { flex: 1, flexDirection: 'row', justifyContent: onRemove ? 'space-between' : 'flex-end' } : { flexDirection: 'row', gap: t.spacing.md }}>
           {onRemove ? (
             <Button
               title={tr('sales:line.remove')}
@@ -172,10 +179,10 @@ function LineEditorForm({
               // Asks first, and kept apart from Save line so a slip doesn't lose the line.
               onPress={() => setConfirmRemove(true)}
               variant="danger"
-              style={{ flex: 1 }}
+              style={desktop ? undefined : { flex: 1 }}
             />
           ) : null}
-          <Button shortcut="S" title={tr('sales:line.saveLine')} onPress={save} style={{ flex: 2, marginLeft: onRemove ? t.spacing.md : 0 }} />
+          <Button shortcut="S" title={tr('sales:line.saveLine')} onPress={save} style={desktop ? undefined : { flex: 2, marginLeft: onRemove ? t.spacing.md : 0 }} />
         </View>
       }
     >
@@ -222,6 +229,7 @@ function LineEditorForm({
           </Text>
         ) : null}
 
+        <FieldRow>
         <TextField
           label={itemType === 'service' ? tr('sales:line.sacCode') : tr('sales:line.hsnCode')}
           value={hsnCode}
@@ -236,6 +244,7 @@ function LineEditorForm({
         />
 
         <AmountField label={tr('sales:line.rate')} value={price} onChangeValue={setPrice} currency={currency} placeholder="0" error={errors.rate} required />
+        </FieldRow>
 
         <View style={{ gap: 6 }}>
           <Text nativeID="line-discount-label" variant="caption" tone="muted" weight="600">{tr('sales:line.discount')}</Text>

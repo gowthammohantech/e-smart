@@ -174,17 +174,30 @@ export function ReceiptForm({ voucher, onSaved }: { voucher?: Voucher; onSaved: 
 
   const options = (list: Account[]) => list.map((a) => ({ value: a.key, label: nameOf(a), description: groupName(a.group) }));
 
+  const amountField = <AmountField label={tr('books:receipts.amount')} value={amount} onChangeValue={setAmount} currency={baseCurrency} size={desktop ? 'md' : 'lg'} required autoFocus={!voucher} />;
+  // A post-dated cheque or a receipt booked ahead is allowed, as on a payment.
+  const dateField = <DateField label={tr('books:vouchers.date')} value={date} onChange={setDate} />;
+  const referenceField = <TextField label={tr('books:vouchers.reference')} value={reference} onChangeText={setReference} placeholder={tr('books:receipts.referencePlaceholder')} icon="pound" />;
+
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <FormContainer wide>
         <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: t.spacing.xxxl, gap: t.spacing.lg }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
-          <AmountField label={tr('books:receipts.amount')} value={amount} onChangeValue={setAmount} currency={baseCurrency} size={desktop ? 'md' : 'lg'} required autoFocus={!voucher} />
+          {/* A desktop pairs the short fields: amount with date, party with who it's from, reference with cost centre. */}
+          {desktop ? (
+            <FieldRow>
+              {amountField}
+              {dateField}
+            </FieldRow>
+          ) : (
+            amountField
+          )}
           <FieldRow>
             <PickerField label={tr('books:receipts.source')} value={label(source)} placeholder={tr('books:receipts.pickSource')} onPress={() => setPicking('source')} icon="tag-outline" required hint={tr('books:receipts.sourceHint')} />
             <PickerField label={tr('books:receipts.into')} value={label(into)} placeholder={tr('books:receipts.pickInto')} onPress={() => setPicking('into')} icon="bank-outline" required />
           </FieldRow>
-          {/* A post-dated cheque or a receipt booked ahead is allowed, as on a payment. */}
-          <DateField label={tr('books:vouchers.date')} value={date} onChange={setDate} />
+          {desktop ? null : dateField}
+          <FieldRow>
           <PickerField
             label={tr('books:receipts.party')}
             value={party?.name}
@@ -195,10 +208,19 @@ export function ReceiptForm({ voucher, onSaved }: { voucher?: Voucher; onSaved: 
             onClear={() => setPartyId(undefined)}
           />
           {!partyId ? <TextField label={tr('books:receipts.from')} value={from} onChangeText={setFrom} placeholder={tr('books:receipts.fromPlaceholder')} icon="account-question-outline" /> : null}
-          <FieldRow>
-            <CostCentreField value={costCentreId} onChange={setCostCentreId} />
-            <TextField label={tr('books:vouchers.reference')} value={reference} onChangeText={setReference} placeholder={tr('books:receipts.referencePlaceholder')} icon="pound" />
           </FieldRow>
+          {desktop ? (
+            // Reference first: the cost centre field is often hidden, and its empty slot then sits at the right.
+            <FieldRow columns={2}>
+              {referenceField}
+              <CostCentreField value={costCentreId} onChange={setCostCentreId} />
+            </FieldRow>
+          ) : (
+            <>
+              <CostCentreField value={costCentreId} onChange={setCostCentreId} />
+              {referenceField}
+            </>
+          )}
           <TextField label={tr('books:vouchers.narration')} value={narration} onChangeText={setNarration} placeholder={tr('books:vouchers.narrationPlaceholder')} multiline />
           <Card variant="flat" style={{ gap: t.spacing.md }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>

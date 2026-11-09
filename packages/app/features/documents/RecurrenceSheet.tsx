@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
+import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { Button } from '@esmart/ui/components/Button';
 import { Segmented, SwitchField } from '@esmart/ui/components/Field';
 import { Sheet } from '@esmart/ui/components/Sheet';
@@ -23,6 +24,7 @@ const FREQUENCIES: RecurrenceFrequency[] = ['none', 'weekly', 'monthly', 'quarte
  */
 export function RecurrenceSheet({ doc, visible, onClose }: { doc: BusinessDocument; visible: boolean; onClose: () => void }) {
   const t = useTheme();
+  const desktop = useIsDesktop();
   const toast = useToast();
   const { t: tr } = useTranslation(['sales', 'common']);
   const [recurrence, setRecurrence] = useState<RecurrenceFrequency>(doc.recurrence ?? 'none');
@@ -81,7 +83,8 @@ export function RecurrenceSheet({ doc, visible, onClose }: { doc: BusinessDocume
             {tr('sales:recurring.next', { date: formatDate(doc.nextRecurrenceDate) })}
           </Text>
         ) : null}
-        <Button title={tr('sales:recurring.save')} onPress={() => void save()} loading={saving} disabled={saving} fullWidth />
+        {/* A desktop dialog's button sits at the right at its own width. */}
+        <Button title={tr('sales:recurring.save')} onPress={() => void save()} loading={saving} disabled={saving} fullWidth={!desktop} style={desktop ? { alignSelf: 'flex-end' } : undefined} />
       </View>
     </Sheet>
   );

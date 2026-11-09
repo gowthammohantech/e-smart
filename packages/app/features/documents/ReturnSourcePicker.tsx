@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, FlatList, Pressable, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
+import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
 import { SearchBar } from '@esmart/ui/components/SearchBar';
@@ -30,6 +31,9 @@ import { Skeleton } from '@esmart/ui/components/Skeleton';
 /** Raised against one invoice or bill: returns, and credit and debit notes. */
 type AgainstSource = 'salesReturn' | 'purchaseReturn' | 'creditNote' | 'debitNote' | 'supplierCreditNote' | 'supplierDebitNote';
 
+/** Desktop cap: the rows' amounts stay near their numbers and names, not a screen away. */
+const PICKER_MAX_WIDTH = 880;
+
 /** An invoice or bill that can take a return or note: finalised, not cancelled (see `conversionBlock`). */
 const OPEN_TO_NOTES: DocStatus[] = ['issued', 'partiallyPaid', 'paid', 'overdue'];
 
@@ -49,6 +53,7 @@ export function ReturnSourcePicker({ kind }: { kind: AgainstSource }) {
 
 function SourceList({ kind }: { kind: AgainstSource }) {
   const t = useTheme();
+  const desktop = useIsDesktop();
   const { t: tr } = useTranslation(['sales', 'common']);
   const router = useRouter();
   const params = useLocalSearchParams<{ partyId?: string; sourceId?: string }>();
@@ -138,7 +143,7 @@ function SourceList({ kind }: { kind: AgainstSource }) {
   if (openingSource) return <LoadingView variant="list" keepTitle />;
 
   return (
-    <View style={{ flex: 1 }}>
+    <View style={[{ flex: 1 }, desktop ? { width: '100%', maxWidth: PICKER_MAX_WIDTH } : null]}>
       <View style={{ padding: t.spacing.lg, gap: t.spacing.md }}>
         {isReturn ? null : (
           <Card style={{ gap: t.spacing.sm }}>
@@ -146,7 +151,7 @@ function SourceList({ kind }: { kind: AgainstSource }) {
               title={tr(purchase ? 'sales:notePicker.directBill' : 'sales:notePicker.directInvoice')}
               icon="file-document-outline"
               variant="primary"
-              fullWidth
+              fullWidth={!desktop}
               disabled={busy}
               onPress={() => router.setParams({ direct: '1' } as never)}
             />
@@ -164,7 +169,7 @@ function SourceList({ kind }: { kind: AgainstSource }) {
           {tr(isReturn ? (purchase ? 'sales:returnPicker.purchaseHint' : 'sales:returnPicker.salesHint') : `sales:notePicker.hint.${kind}`)}
         </Text>
         <View style={{ flexDirection: 'row', gap: t.spacing.sm, alignItems: 'center', flexWrap: 'wrap' }}>
-          <View style={{ flex: 1, minWidth: 220 }}>
+          <View style={desktop ? { width: 420, maxWidth: '100%' } : { flex: 1, minWidth: 220 }}>
             <SearchBar value={query} onChangeText={setQuery} placeholder={tr('sales:returnPicker.search')} />
           </View>
           {partyId && !partyName && partyRecord.isLoading ? (
@@ -264,16 +269,18 @@ function SourceList({ kind }: { kind: AgainstSource }) {
         visible={!!source}
         onClose={() => (creating.busy ? undefined : setSource(null))}
         title={tr('sales:returnPicker.linesTitle')}
+        // A desktop chooses the lines in a drawer beside the list.
+        desktopAs="drawer"
         subtitle={source ? tr('sales:returnPicker.linesSubtitle', { number: source.number ?? '', party: source.party?.name ?? '' }) : undefined}
         footer={
-          <View style={{ gap: t.spacing.sm }}>
-            <Text variant="caption" tone={lineIds.length ? 'muted' : 'bad'} center>
+          <View style={desktop ? { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: t.spacing.md } : { gap: t.spacing.sm }}>
+            <Text variant="caption" tone={lineIds.length ? 'muted' : 'bad'} center={!desktop}>
               {lineIds.length ? tr('sales:returnPicker.linesPicked', { count: lineIds.length, total: allIds.length }) : tr('sales:returnPicker.noLines')}
             </Text>
             <Button
               title={tr(isReturn ? 'sales:returnPicker.createReturn' : 'sales:returnPicker.createNote')}
               icon="check"
-              fullWidth
+              fullWidth={!desktop}
               disabled={!lineIds.length}
               loading={creating.busy}
               // All lines is the server's default: send none so the request stays as it was.

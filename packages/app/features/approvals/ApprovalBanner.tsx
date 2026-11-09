@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
+import { useFieldWidth, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { Button } from '@esmart/ui/components/Button';
 import { Card } from '@esmart/ui/components/Card';
 import { TextField } from '@esmart/ui/components/Field';
@@ -48,6 +49,8 @@ export function useApprovalActions() {
  */
 export function ApprovalBanner({ doc }: { doc: BusinessDocument }) {
   const t = useTheme();
+  const desktop = useIsDesktop();
+  const fw = useFieldWidth();
   const toast = useToast();
   const { t: tr } = useTranslation(['sales']);
   const user = useCurrentUser();
@@ -84,16 +87,17 @@ export function ApprovalBanner({ doc }: { doc: BusinessDocument }) {
       {approval.status === 'pending' && canDecide ? (
         rejecting ? (
           <View style={{ gap: t.spacing.sm }}>
-            <TextField label={tr('sales:approval.why')} value={note} onChangeText={setNote} multiline />
-            <View style={{ flexDirection: 'row', gap: t.spacing.sm }}>
-              <Button title={tr('sales:approval.cancel')} variant="ghost" onPress={() => setRejecting(false)} style={{ flex: 1 }} />
-              <Button title={tr('sales:approval.sendBack')} variant="danger" onPress={() => void run(() => reject(doc.id, note.trim()), tr('sales:approval.sentBack'))} loading={busy} disabled={busy || !note.trim()} style={{ flex: 1 }} />
+            <TextField label={tr('sales:approval.why')} value={note} onChangeText={setNote} multiline containerStyle={fw('lg')} />
+            {/* A desktop keeps the pair at its own width at the right; a phone splits the row. */}
+            <View style={{ flexDirection: 'row', gap: t.spacing.sm, justifyContent: desktop ? 'flex-end' : undefined }}>
+              <Button title={tr('sales:approval.cancel')} variant="ghost" onPress={() => setRejecting(false)} style={desktop ? undefined : { flex: 1 }} />
+              <Button title={tr('sales:approval.sendBack')} variant="danger" onPress={() => void run(() => reject(doc.id, note.trim()), tr('sales:approval.sentBack'))} loading={busy} disabled={busy || !note.trim()} style={desktop ? undefined : { flex: 1 }} />
             </View>
           </View>
         ) : (
-          <View style={{ flexDirection: 'row', gap: t.spacing.sm }}>
-            <Button title={tr('sales:approval.reject')} variant="secondary" onPress={() => setRejecting(true)} style={{ flex: 1 }} />
-            <Button title={tr('sales:approval.approve')} onPress={() => void run(() => approve(doc.id), tr('sales:approval.approved'))} loading={busy} disabled={busy} style={{ flex: 1 }} />
+          <View style={{ flexDirection: 'row', gap: t.spacing.sm, justifyContent: desktop ? 'flex-end' : undefined }}>
+            <Button title={tr('sales:approval.reject')} variant="secondary" onPress={() => setRejecting(true)} style={desktop ? undefined : { flex: 1 }} />
+            <Button title={tr('sales:approval.approve')} onPress={() => void run(() => approve(doc.id), tr('sales:approval.approved'))} loading={busy} disabled={busy} style={desktop ? undefined : { flex: 1 }} />
           </View>
         )
       ) : null}

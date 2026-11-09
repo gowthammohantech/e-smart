@@ -33,6 +33,9 @@ import { useDocumentRecord } from '../../../remote/queries';
 import { LoadingView } from '../../../components/LoadingView';
 import { useAppStore } from '../../../store/appStore';
 
+/** A desktop's template and copy pickers: sized to their values, not half the screen each. */
+const PICKER_DESKTOP = { width: 280 };
+
 export default function DocumentPreview() {
   const t = useTheme();
   const { t: tr } = useTranslation(['common', 'domain', 'nav', 'sales', 'settings']);
@@ -140,9 +143,28 @@ export default function DocumentPreview() {
     }
   };
 
+  const print = () => printHtml(html).catch(() => toast.show(tr('sales:print.printUnavailable'), 'warning', { icon: 'printer-off-outline' }));
+  const pdfTitle = Platform.OS === 'web' ? tr('sales:print.savePdf') : tr('sales:print.sharePdf');
+  const pdfIcon = Platform.OS === 'web' ? 'file-download-outline' : 'share-variant';
+
   return (
     <View style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
-      <Stack.Screen options={{ title: tr('nav:title.documentPreview', { kind: label }) }} />
+      <Stack.Screen
+        options={{
+          title: tr('nav:title.documentPreview', { kind: label }),
+          // A desktop prints and saves from the header, not a bar across the foot of the page.
+          ...(desktop
+            ? {
+                headerRight: () => (
+                  <View style={{ flexDirection: 'row', gap: t.spacing.sm }}>
+                    <Button title={tr('sales:print.print')} variant="ghost" icon="printer-outline" onPress={print} />
+                    <Button title={pdfTitle} icon={pdfIcon} onPress={share} loading={busy} />
+                  </View>
+                ),
+              }
+            : null),
+        }}
+      />
 
       {/* How this one prints: its template (saved on it) and which copy (only for this print). */}
       <View
@@ -162,9 +184,9 @@ export default function DocumentPreview() {
           icon="file-document-edit-outline"
           onPress={() => setPicking('layout')}
           disabled={savingLayout}
-          containerStyle={{ flex: 1 }}
+          containerStyle={desktop ? PICKER_DESKTOP : { flex: 1 }}
         />
-        <PickerField label={tr('sales:print.copy')} value={tr(`sales:print.copies.${copy}`)} icon="content-copy" onPress={() => setPicking('copy')} containerStyle={{ flex: 1 }} />
+        <PickerField label={tr('sales:print.copy')} value={tr(`sales:print.copies.${copy}`)} icon="content-copy" onPress={() => setPicking('copy')} containerStyle={desktop ? PICKER_DESKTOP : { flex: 1 }} />
       </View>
       <SelectSheet
         visible={picking === 'layout'}
@@ -208,32 +230,23 @@ export default function DocumentPreview() {
         <HtmlPreview html={html} />
       )}
 
-      <View
-        style={{
-          padding: t.spacing.lg,
-          paddingBottom: insets.bottom + t.spacing.md,
-          borderTopWidth: 1,
-          borderTopColor: t.c.line,
-          backgroundColor: t.c.paper,
-          flexDirection: 'row',
-          gap: t.spacing.md,
-        }}
-      >
-        <Button
-          title={tr('sales:print.print')}
-          variant="ghost"
-          icon="printer-outline"
-          onPress={() => printHtml(html).catch(() => toast.show(tr('sales:print.printUnavailable'), 'warning', { icon: 'printer-off-outline' }))}
-          style={{ flex: 1 }}
-        />
-        <Button
-          title={Platform.OS === 'web' ? tr('sales:print.savePdf') : tr('sales:print.sharePdf')}
-          icon={Platform.OS === 'web' ? 'file-download-outline' : 'share-variant'}
-          onPress={share}
-          loading={busy}
-          style={{ flex: 1 }}
-        />
-      </View>
+      {/* A desktop has these in the page header instead. */}
+      {desktop ? null : (
+        <View
+          style={{
+            padding: t.spacing.lg,
+            paddingBottom: insets.bottom + t.spacing.md,
+            borderTopWidth: 1,
+            borderTopColor: t.c.line,
+            backgroundColor: t.c.paper,
+            flexDirection: 'row',
+            gap: t.spacing.md,
+          }}
+        >
+          <Button title={tr('sales:print.print')} variant="ghost" icon="printer-outline" onPress={print} style={{ flex: 1 }} />
+          <Button title={pdfTitle} icon={pdfIcon} onPress={share} loading={busy} style={{ flex: 1 }} />
+        </View>
+      )}
     </View>
   );
 }
