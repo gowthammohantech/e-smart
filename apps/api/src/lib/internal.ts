@@ -10,6 +10,13 @@ import { randomBytes } from 'node:crypto';
 export const INTERNAL_HEADER = 'x-esmart-internal';
 export const INTERNAL_TOKEN = randomBytes(24).toString('base64url');
 
+/**
+ * Marks the demo seeder's own in-process requests (src/demo): the only writes the read-only demo
+ * account accepts. Per-process and never sent over the network, so nobody outside can carry it.
+ */
+export const DEMO_SEED_HEADER = 'x-esmart-demo-seed';
+export const DEMO_SEED_TOKEN = randomBytes(24).toString('base64url');
+
 export type InjectResult = { status: number; body: unknown };
 
 /** One in-process request as the caller. */

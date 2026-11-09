@@ -3,6 +3,8 @@ import { JOB_HANDLERS, SCHEDULES } from './registry';
 import { tickSchedules } from './schedule';
 import { createWorker } from './worker';
 
+import { enqueue } from './queue';
+
 export { enqueue, enqueueOnce } from './queue';
 
 type Log = Parameters<typeof createWorker>[2]['log'];
@@ -17,6 +19,8 @@ export function startBackground(deps: Deps, log: Log, opts: { concurrency: numbe
   const ticker = setInterval(tick, 30_000);
   tick();
   worker.start();
+  // On start-up the demo is checked at once (a new deploy, a new dataset), not at the next 03:45.
+  void enqueue(deps.db, 'demo.refresh', {}, { uniqueKey: 'demo.refresh', maxAttempts: 2 }).catch((err) => log.warn({ err }, 'demo check not queued'));
   return async () => {
     clearInterval(ticker);
     await worker.stop();

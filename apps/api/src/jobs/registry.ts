@@ -93,6 +93,11 @@ export const JOB_HANDLERS: Record<string, JobHandler> = {
   'gstr2b.fetch': async ({ deps, log }) => {
     log.info({ fetched: await fetchDueGstr2b(deps) }, 'GSTR-2B downloaded');
   },
+  // The public demo: built if missing, rebuilt when a week old or its dataset changed (src/demo).
+  'demo.refresh': async ({ deps, log }) => {
+    const { ensurePublicDemo } = await import('../demo/seed');
+    log.info({ outcome: await ensurePublicDemo(deps, log as never) }, 'public demo checked');
+  },
 };
 
 /** What runs on its own, and when. */
@@ -117,4 +122,6 @@ export const SCHEDULES: Schedule[] = [
   { kind: 'gst.returns.recover', everyMinutes: 15 },
   // A week before a micro or small supplier's bill passes its legal limit, and once it has.
   { kind: 'msme.reminders', dailyAt: { hour: 8, minute: 30 } },
+  // Early morning IST, when hardly anyone is trying the demo; it only rebuilds once a week.
+  { kind: 'demo.refresh', dailyAt: { hour: 3, minute: 45 } },
 ];

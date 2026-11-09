@@ -17,4 +17,6 @@ export default async function setup() {
   await client.end();
   await runMigrations(url.toString(), {});
   process.env.TEST_DATABASE_URL = url.toString();
+  // The public demo builds itself wherever a scheduled tick runs its job; the suites turn it on themselves when they test it.
+  process.env.DEMO_ENABLED ??= 'false';
 }

@@ -10,7 +10,8 @@
     "build": "tsup",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "demo:seed": "tsx --env-file-if-exists=.env src/demo/run.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.129.0",

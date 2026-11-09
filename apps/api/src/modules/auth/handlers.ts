@@ -1,7 +1,7 @@
 import { randomInt } from 'node:crypto';
 import { and, desc, eq, gt, isNotNull, isNull, sql } from 'drizzle-orm';
 import { schema } from '@esmart/db';
-import { PUBLIC_DEMO_ACCOUNT_ID, PUBLIC_DEMO_OWNER_ID, publicDemoConfig } from '@esmart/db/demo/public/config';
+import { publicDemoConfig } from '@esmart/db/demo/public/config';
 import { hashPassword, verifyPasswordTimed } from '../../auth/passwords';
 import { assertAccountActive, openSession, rotateSession } from '../../auth/sessions';
 import { defineHandlers, type Ctx } from '../../context';
@@ -295,8 +295,8 @@ export const authHandlers = defineHandlers({
     const [row] = await ctx.db
       .select({ email: schema.users.email, isDemo: schema.accounts.isDemo, suspendedAt: schema.accounts.suspendedAt })
       .from(schema.users)
-      .innerJoin(schema.accounts, eq(schema.accounts.id, schema.users.accountId))
-      .where(and(eq(schema.users.id, PUBLIC_DEMO_OWNER_ID), eq(schema.users.accountId, PUBLIC_DEMO_ACCOUNT_ID)));
+      .innerJoin(schema.accounts, eq(schema.accounts.ownerUserId, schema.users.id))
+      .where(and(eq(schema.users.email, cfg.email), eq(schema.accounts.isDemo, true)));
     if (!row?.isDemo || row.suspendedAt) throw notFound('Demo account');
     return { email: row.email, password: cfg.password };
   },

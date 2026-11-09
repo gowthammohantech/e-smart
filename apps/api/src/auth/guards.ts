@@ -4,6 +4,7 @@ import { schema } from '@esmart/db';
 import { FULL_PLAN, hasModule, moduleEnabled, type Module } from '@esmart/core/domain/plan';
 import type { AuthUser, CompanyRow, Deps } from '../context';
 import { ApiError, forbidden, planUpgradeRequired, unauthorized } from '../http/errors';
+import { DEMO_SEED_HEADER, DEMO_SEED_TOKEN } from '../lib/internal';
 import type { AccessClaims } from './sessions';
 
 async function loadUser(deps: Deps, claims: AccessClaims): Promise<AuthUser | null> {
@@ -101,7 +102,7 @@ export function registerGuards(app: FastifyInstance, deps: Deps) {
     if (!user) return;
 
     // The public demo is for looking around: it reads everything and changes nothing, its own profile included.
-    if (user.demo && op.method !== 'GET' && !op.demoAllowed) throw demoReadOnly();
+    if (user.demo && op.method !== 'GET' && !op.demoAllowed && req.headers[DEMO_SEED_HEADER] !== DEMO_SEED_TOKEN) throw demoReadOnly();
 
     if (op.platformRoles) {
       if (!user.platformRole || !op.platformRoles.includes(user.platformRole)) {

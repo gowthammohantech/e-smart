@@ -127,6 +127,7 @@ API will not start until the provider rows are real.
 - [ ] `RAZORPAY_WEBHOOK_SECRET`, `WHATSAPP_WEBHOOK_SECRET` from the vendors' dashboards
 - [ ] `DEMO_OTP` unset
 - [ ] `SEED_DEMO_ACCOUNT` unset in production (or `true` with a 12+ character `DEMO_ACCOUNT_PASSWORD` on a demo environment)
+- [ ] The public demo: on by default (`DEMO_ENABLED`); its account is read-only and its password public. `DEMO_EMAIL` must not belong to a real account. `DEMO_ENABLED=false` to switch it off
 
 **web / admin**
 
@@ -134,7 +135,7 @@ API will not start until the provider rows are real.
 - [ ] `CSP_REPORT_ONLY=false` on web and admin once invoices, uploads, PDFs and printing were checked with the browser console open
 
 - [ ] `EXPO_PUBLIC_API_URL` / `VITE_API_URL`
-- [ ] `EXPO_PUBLIC_DEMO_LOGIN_*` / `VITE_DEMO_LOGIN_*` unset (they are compiled into the bundle)
+- [ ] `EXPO_PUBLIC_DEMO_LOGIN_*` / `VITE_DEMO_LOGIN_*` unset (they are compiled into the bundle). The "Give it a try" button needs nothing here: it asks the API (`GET /auth/demo`)
 
 ### Before deploying the server changes
 

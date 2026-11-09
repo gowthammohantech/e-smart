@@ -1,14 +1,11 @@
 /**
- * The public "Give it a try" account: its ids, its sign-in and the switch that
- * turns it on. Shared by the seeder (which builds it) and the API (which hands
- * the sign-in to the app and keeps the account read-only).
+ * The public "Give it a try" account's switch and sign-in. Shared by the API's demo seeder
+ * (apps/api/src/demo), which builds it, and the auth handlers, which hand the sign-in to the app.
  *
- *   DEMO_ENABLED    on unless `false` / `0` / `off`
+ *   DEMO_ENABLED    on unless `false` / `0` / `off` / `no`
  *   DEMO_EMAIL      default demo@elixir-books.com
  *   DEMO_PASSWORD   default below; public on purpose, since the account only reads
  */
-export const PUBLIC_DEMO_ACCOUNT_ID = 'acct_public_demo';
-export const PUBLIC_DEMO_OWNER_ID = 'dmo_usr_owner';
 
 /** Bump when the dataset changes: every environment rebuilds the demo on its next check. */
 export const PUBLIC_DEMO_SEED_VERSION = 1;

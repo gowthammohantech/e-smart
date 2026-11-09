@@ -46,7 +46,7 @@ export async function buildApp(deps: Deps, opts: BuildOptions = {}): Promise<Fas
       level: deps.config.LOG_LEVEL,
       // Never in the logs: tokens, passwords, codes, portal logins.
       redact: {
-        paths: ['req.headers.authorization', 'req.headers.cookie', 'req.headers["x-esmart-internal"]', '*.password', '*.refreshToken', '*.accessToken', '*.otpCode', '*.token', '*.secret', 'err.config.headers'],
+        paths: ['req.headers.authorization', 'req.headers.cookie', 'req.headers["x-esmart-internal"]', 'req.headers["x-esmart-demo-seed"]', '*.password', '*.refreshToken', '*.accessToken', '*.otpCode', '*.token', '*.secret', 'err.config.headers'],
         censor: '[redacted]',
       },
     },

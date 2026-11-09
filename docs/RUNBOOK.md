@@ -38,6 +38,7 @@ They live in the `jobs` table; the code is in `apps/api/src/jobs/` and the sched
 | `msme.reminders` | 08:30 | Tells the business, once each, a week before a micro or small supplier's bill passes its MSMED s.15 limit, and once it has |
 | `gstr2b.fetch` | 09:00 | From the 14th, downloads last month's GSTR-2B for each connected GSTIN that hasn't got it, and tells the business |
 | `gst.returns.recover` | every 15 min | Settles GST return filings whose answer was lost, from the portal's return tracker; a settled GSTR-3B closes its month and posts its set-off |
+| `demo.refresh` | 03:45, and at start-up | Builds the public demo if it is missing, and rebuilds it when a week old or when `PUBLIC_DEMO_SEED_VERSION` changes. See "The public demo" below |
 
 ## GST returns: switching filing on
 
@@ -79,6 +80,17 @@ pg_restore --clean --if-exists --no-owner --no-privileges -d "$STAGING_DATABASE_
 | Date | Restored from | Took | Result |
 |---|---|---|---|
 | | | | |
+
+## The public demo
+
+The sign-in screen's **Give it a try** signs visitors into one shared account: eight sample businesses (one per business type, each with branches) on the Business plan, with about six months of trading in every module. The code is `apps/api/src/demo/`.
+
+- **Read-only.** The API refuses every write from a demo user with 403 `DEMO_READ_ONLY`, apart from operations marked `x-demo-allowed` in the contract (sign-in and out, document totals, TDS preview, exports, Lixi questions). Its password is public, so a wrong one never locks it and it can't be reset. Background jobs skip demo businesses.
+- **How it is built.** In-process, through the API itself (every rule applies; the books must pass the integrity checks or it isn't swapped in), with simulators for every outside service, so it reaches no GST portal, bank or inbox. It is built beside the live demo under a temporary sign-in, then swapped in: visitors on the old one are signed out and its data erased. A build takes under a minute.
+- **When.** At start-up and daily at 03:45 (`demo.refresh`): only when there is none, it is 7 days old, or `PUBLIC_DEMO_SEED_VERSION` (`packages/db/src/demo/public/config.ts`) went up. Bump that whenever the dataset (`profiles.ts`, `build.ts`) changes.
+- **By hand.** `npm run demo:seed -w @esmart/api` (checks), `-- --force` (rebuilds now).
+- **Off.** `DEMO_ENABLED=false`: the next check suspends it (everyone signed out, the button disappears); the data stays until it is switched back on, which rebuilds it.
+- **If a build fails**, the old demo stays live and the error is in the API log (`demo build failed`). `DEMO_KEEP_FAILED=1` (development only) keeps the half-built account to look at.
 
 ## Deploys and migrations
 
