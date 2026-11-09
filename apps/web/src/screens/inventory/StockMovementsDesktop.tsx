@@ -6,6 +6,7 @@ import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { focusRing, type WebPressState } from '@esmart/ui/theme/interaction';
 import { Text } from '@esmart/ui/components/Text';
+import { Skeleton } from '@esmart/ui/components/Skeleton';
 import { Card } from '@esmart/ui/components/Card';
 import { Badge } from '@esmart/ui/components/Badge';
 import { Cell, DataTable } from '@esmart/ui/components/DataTable';
@@ -62,9 +63,14 @@ export function StockMovementsDesktop() {
         <View style={{ gap: t.spacing.md }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.lg }}>
             <SearchBar value={query} onChangeText={setQuery} placeholder={tr('inventory:movements.search')} style={{ flex: 1, maxWidth: 520 }} />
-            <Text variant="small" tone="muted">
-              {tr('inventory:movements.count', { count: filtered.length })}
-            </Text>
+            {/* No count until the first page is back: "0 movements" would read as none. */}
+            {pages.isPending ? (
+              <Skeleton height={14} width={80} radius={4} />
+            ) : (
+              <Text variant="small" tone="muted">
+                {tr('inventory:movements.count', { count: filtered.length })}
+              </Text>
+            )}
           </View>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm }}>
             {TYPES.map((ty) => {

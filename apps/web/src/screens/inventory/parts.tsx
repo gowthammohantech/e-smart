@@ -4,6 +4,7 @@ import { Icon, type IconName } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Card } from '@esmart/ui/components/Card';
 import { Text, type TextTone } from '@esmart/ui/components/Text';
+import { Skeleton } from '@esmart/ui/components/Skeleton';
 
 /** The widest a desktop form page gets; wider just spreads the fields apart. */
 export const PAGE_MAX_WIDTH = 1100;
@@ -99,11 +100,14 @@ export function SummaryRow({
   value,
   tone,
   strong,
+  loading,
 }: {
   label: string;
   value: string;
   tone?: TextTone;
   strong?: boolean;
+  /** The figure isn't known yet: a placeholder instead of a 0 that reads as real. */
+  loading?: boolean;
 }) {
   const t = useTheme();
   return (
@@ -111,9 +115,13 @@ export function SummaryRow({
       <Text variant={strong ? 'body' : 'small'} tone={strong ? 'default' : 'muted'} weight={strong ? '700' : '400'}>
         {label}
       </Text>
-      <Text variant={strong ? 'h3' : 'small'} weight={strong ? '700' : '600'} tone={tone} style={{ flexShrink: 1, textAlign: 'right' }}>
-        {value}
-      </Text>
+      {loading ? (
+        <Skeleton height={strong ? 20 : 14} width={72} radius={4} style={{ alignSelf: 'center' }} />
+      ) : (
+        <Text variant={strong ? 'h3' : 'small'} weight={strong ? '700' : '600'} tone={tone} style={{ flexShrink: 1, textAlign: 'right' }}>
+          {value}
+        </Text>
+      )}
     </View>
   );
 }

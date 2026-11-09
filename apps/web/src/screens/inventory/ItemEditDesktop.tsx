@@ -16,7 +16,8 @@ export function ItemEditDesktop() {
   // Fetched on opening, so it shows even when the book on the device doesn't hold it.
   const remote = useItemRecord(id);
 
-  if (!item && remote.isLoading) return <LoadingView variant="form" />;
+  // The form copies what it starts from, so wait for this visit's fetch rather than open on a stale copy it would never take in.
+  if ((!item && remote.isLoading) || (remote.isFetching && !remote.isFetchedAfterMount)) return <LoadingView variant="form" />;
   if (!item) {
     return (
       <View style={{ flex: 1 }}>

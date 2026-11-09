@@ -10,7 +10,8 @@ import { Badge } from '@esmart/ui/components/Badge';
 import { Button } from '@esmart/ui/components/Button';
 import { Segmented } from '@esmart/ui/components/Field';
 import { useAppStore } from '@esmart/app/store/appStore';
-import { useActiveCompany } from '@esmart/app/store/selectors';
+import { useActiveCompany, useListsReady } from '@esmart/app/store/selectors';
+import { Skeleton } from '@esmart/ui/components/Skeleton';
 import { useCompanyUsage } from '@esmart/app/remote/queries';
 import { PLANS, planInfo, userLimit } from '@esmart/core/domain/plan';
 import { planBlurb, planFeatures } from '@esmart/app/features/plan/planCopy';
@@ -39,12 +40,14 @@ export function PlanBillingDesktop() {
   // Only people who have accepted count; a pending invitation is not a user yet.
   const teamSize = useAppStore((s) => s.users.filter((u) => u.status === 'active' && u.companyIds.includes(s.activeCompanyId)).length);
   const pendingInvites = useAppStore((s) => s.users.filter((u) => u.status === 'invited' && u.companyIds.includes(s.activeCompanyId)).length);
-  const usage: { label: string; value: string; ratio: number | null }[] = [
+  // The team isn't counted until the business's people are in: "0 of 3" would read as real.
+  const listsReady = useListsReady();
+  const usage: { label: string; value: string; ratio: number | null; loading?: boolean }[] = [
     { label: tr('plan:billing.usageBusinesses'), value: String(companies.length), ratio: null },
-    { label: tr('plan:billing.usageInvoices'), value: companyUsage ? String(companyUsage.counts.invoices) : '…', ratio: null },
-    { label: tr('plan:billing.usageUsers'), value: seatLimit === null ? String(teamSize) : tr('plan:billing.ofTotal', { used: teamSize, total: seatLimit }), ratio: seatLimit === null ? null : teamSize / seatLimit },
+    { label: tr('plan:billing.usageInvoices'), value: companyUsage ? String(companyUsage.counts.invoices) : '', ratio: null, loading: !companyUsage },
+    { label: tr('plan:billing.usageUsers'), value: seatLimit === null ? String(teamSize) : tr('plan:billing.ofTotal', { used: teamSize, total: seatLimit }), ratio: seatLimit === null ? null : teamSize / seatLimit, loading: !listsReady },
   ];
-  if (pendingInvites > 0) usage.push({ label: tr('plan:billing.usagePending'), value: String(pendingInvites), ratio: null });
+  if (listsReady && pendingInvites > 0) usage.push({ label: tr('plan:billing.usagePending'), value: String(pendingInvites), ratio: null });
 
   return (
     <View style={{ flex: 1 }}>
@@ -89,10 +92,14 @@ export function PlanBillingDesktop() {
                   <Text variant="caption" tone="muted">
                     {u.label}
                   </Text>
-                  <Text variant="h3" weight="700">
-                    {u.value}
-                  </Text>
-                  {u.ratio !== null ? (
+                  {u.loading ? (
+                    <Skeleton height={22} width={64} radius={4} style={{ marginVertical: 2 }} />
+                  ) : (
+                    <Text variant="h3" weight="700">
+                      {u.value}
+                    </Text>
+                  )}
+                  {u.ratio !== null && !u.loading ? (
                     <View style={{ height: 6, borderRadius: 3, backgroundColor: t.c.card2, overflow: 'hidden' }}>
                       <View
                         style={{

@@ -5,6 +5,7 @@ import { Stack, useRouter } from 'expo-router';
 import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
+import { Skeleton } from '@esmart/ui/components/Skeleton';
 import { Card } from '@esmart/ui/components/Card';
 import { Badge } from '@esmart/ui/components/Badge';
 import { SearchBar } from '@esmart/ui/components/SearchBar';
@@ -79,10 +80,15 @@ export default function StockMovements() {
             );
           })}
         </ScrollView>
-        <Text variant="caption" tone="muted">
-          {/* What's loaded so far; more pages to come read "50+ movements". */}
-          {pages.hasNextPage ? tr('inventory:movements.countMore', { count: filtered.length }) : tr('inventory:movements.count', { count: filtered.length })}
-        </Text>
+        {/* No count until the first page is back: "0 movements" would read as none. */}
+        {pages.isPending ? (
+          <Skeleton height={12} width={80} radius={4} style={{ marginVertical: 2 }} />
+        ) : (
+          <Text variant="caption" tone="muted">
+            {/* What's loaded so far; more pages to come read "50+ movements". */}
+            {pages.hasNextPage ? tr('inventory:movements.countMore', { count: filtered.length }) : tr('inventory:movements.count', { count: filtered.length })}
+          </Text>
+        )}
       </View>
 
       <ScrollView

@@ -84,7 +84,8 @@ export function PartyStatementView({ party }: { party: Party }) {
         </View>
       </View>
 
-      {statement.isLoading ? (
+      {/* A new range still loading: the old range's figures would sit under the new dates. */}
+      {statement.isLoading || statement.isPlaceholderData ? (
         <ReportSkeleton />
       ) : statement.isError ? (
         <EmptyState icon="alert-circle-outline" title={tr('contacts:statement.loadFailed')} message={describeError(statement.error, tr)} actionLabel={tr('common:action.retry')} onAction={() => void statement.refetch()} />

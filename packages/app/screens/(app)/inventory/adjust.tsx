@@ -10,6 +10,7 @@ import { Button } from '@esmart/ui/components/Button';
 import { PickerField, Segmented, TextField } from '@esmart/ui/components/Field';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
+import { Skeleton, SkeletonFormField, SkeletonGroup } from '@esmart/ui/components/Skeleton';
 import { useServerSave } from '../../../components/useServerSave';
 import { useSaveShortcut } from '../../../components/useSaveShortcut';
 import { useAppStore } from '../../../store/appStore';
@@ -26,6 +27,12 @@ type AdjustReason = 'damaged' | 'lost' | 'found' | 'recount' | 'expired' | 'othe
 const SERVER_REASON: Record<string, AdjustReason> = { damaged: 'damaged', lost: 'lost', expired: 'expired', found: 'found', countCorrection: 'recount' };
 
 export default function StockAdjust() {
+  // On web the screen can stay mounted across a business switch; the branch copied into state must start again.
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  return <StockAdjustForm key={companyId} />;
+}
+
+function StockAdjustForm() {
   const t = useTheme();
   const { t: tr } = useTranslation(['inventory', 'nav']);
   const goBack = useGoBack();
@@ -34,7 +41,7 @@ export default function StockAdjust() {
   const params = useLocalSearchParams<{ itemId?: string }>();
 
   // Every tracked item and what's on hand at the active branch, from the server.
-  const { items, stock } = useTrackedItems();
+  const { items, stock, isPending: itemsPending } = useTrackedItems();
   const branches = useBranches();
   const addStockMovement = useAppStore((s) => s.addStockMovement);
   const activeCompanyId = useAppStore((s) => s.activeCompanyId);
@@ -56,6 +63,8 @@ export default function StockAdjust() {
   const activeBranchId = useAppStore((s) => s.activeBranchId);
   const fallback = branchId === activeBranchId ? stock : {};
   const current = itemId ? (levels ? (levels[itemId] ?? 0) : (fallback[itemId] ?? 0)) : 0;
+  // Neither the branch's levels nor the active branch's tracked list back yet: no "0 in stock".
+  const levelsKnown = levels !== undefined || (branchId === activeBranchId && !itemsPending);
   const unit = item ? unitShortName(item.unit) || item.unit : '';
   const qty = Number(quantity) || 0;
   const delta = direction === 'increase' ? qty : -qty;
@@ -102,13 +111,20 @@ export default function StockAdjust() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={SHOW_SCROLLBAR}
       >
-        <PickerField
-          label={tr('inventory:adjust.item')}
-          value={item ? `${item.name} (${item.sku})` : undefined}
-          onPress={() => setItemOpen(true)}
-          icon="package-variant-closed"
-          required
-        />
+        {/* Opened for an item that hasn't arrived yet: a placeholder, not an empty picker. */}
+        {itemId && !item && itemsPending ? (
+          <SkeletonGroup>
+            <SkeletonFormField />
+          </SkeletonGroup>
+        ) : (
+          <PickerField
+            label={tr('inventory:adjust.item')}
+            value={item ? `${item.name} (${item.sku})` : undefined}
+            onPress={() => setItemOpen(true)}
+            icon="package-variant-closed"
+            required
+          />
+        )}
 
         {branches.length > 1 ? (
           <PickerField label={tr('inventory:adjust.branch')} value={branches.find((b) => b.id === branchId)?.name} onPress={() => setBranchOpen(true)} icon="warehouse" />
@@ -150,26 +166,34 @@ export default function StockAdjust() {
         {item ? (
           <Card variant="flat" style={{ gap: t.spacing.sm }}>
             {[
-              { label: tr('inventory:adjust.currentStock'), value: `${formatQty(current)} ${unit}` },
-              { label: tr('inventory:adjust.adjustment'), value: `${delta >= 0 ? '+' : ''}${formatQty(delta)} ${unit}` },
+              { label: tr('inventory:adjust.currentStock'), value: `${formatQty(current)} ${unit}`, known: levelsKnown },
+              { label: tr('inventory:adjust.adjustment'), value: `${delta >= 0 ? '+' : ''}${formatQty(delta)} ${unit}`, known: true },
             ].map((r) => (
-              <View key={r.label} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+              <View key={r.label} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Text variant="caption" tone="muted">
                   {r.label}
                 </Text>
-                <Text variant="caption" weight="600">
-                  {r.value}
-                </Text>
+                {r.known ? (
+                  <Text variant="caption" weight="600">
+                    {r.value}
+                  </Text>
+                ) : (
+                  <Skeleton height={12} width={64} radius={4} />
+                )}
               </View>
             ))}
             <View style={{ height: 1, backgroundColor: t.c.line, marginVertical: 2 }} />
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
               <Text variant="body" weight="700">{tr('inventory:adjust.newStock')}</Text>
-              <Text variant="body" weight="700" tone={resulting < 0 ? 'bad' : 'good'}>
-                {formatQty(resulting)} {unit}
-              </Text>
+              {levelsKnown ? (
+                <Text variant="body" weight="700" tone={resulting < 0 ? 'bad' : 'good'}>
+                  {formatQty(resulting)} {unit}
+                </Text>
+              ) : (
+                <Skeleton height={16} width={72} radius={4} />
+              )}
             </View>
-            {resulting < 0 ? (
+            {levelsKnown && resulting < 0 ? (
               <Text variant="caption" tone="bad">{tr('inventory:adjust.negativeWarning')}</Text>
             ) : null}
           </Card>
@@ -192,7 +216,8 @@ export default function StockAdjust() {
         visible={itemOpen}
         onClose={() => setItemOpen(false)}
         title={tr('inventory:adjust.selectItem')}
-        options={items.map((i) => ({ value: i.id, label: i.name, description: i.sku, trailing: `${formatQty(levels ? (levels[i.id] ?? 0) : (fallback[i.id] ?? 0))} ${unitShortName(i.unit) || i.unit}` }))}
+        options={items.map((i) => ({ value: i.id, label: i.name, description: i.sku, trailing: levelsKnown ? `${formatQty(levels ? (levels[i.id] ?? 0) : (fallback[i.id] ?? 0))} ${unitShortName(i.unit) || i.unit}` : undefined }))}
+        loading={itemsPending}
         value={itemId}
         onSelect={setItemId}
       />

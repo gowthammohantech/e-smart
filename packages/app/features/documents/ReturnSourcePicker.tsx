@@ -81,6 +81,8 @@ function SourceList({ kind }: { kind: AgainstSource }) {
   const creating = useSingleFlight();
   const busy = loading.busy || creating.busy;
   const [pickedId, setPickedId] = useState<string | null>(null);
+  // The ?sourceId= document has been tried (opened, created from, or failed): the list may show now.
+  const [sourceSettled, setSourceSettled] = useState(false);
 
   const create = (doc: SourceRecord, ids?: string[]) =>
     creating.run(
@@ -111,6 +113,7 @@ function SourceList({ kind }: { kind: AgainstSource }) {
         setSource(doc);
       } finally {
         setPickedId(null);
+        if (id === params.sourceId) setSourceSettled(true);
       }
     });
 
@@ -131,7 +134,7 @@ function SourceList({ kind }: { kind: AgainstSource }) {
 
   // Opened on one invoice or bill: its lines (or the new note) come next, so the whole list isn't
   // flashed while it loads. If it can't be fetched, or its lines are put away, the list is there.
-  const openingSource = !!params.sourceId && !source && (!pickedSource.current || loading.busy || creating.busy);
+  const openingSource = !!params.sourceId && !source && !sourceSettled;
   if (openingSource) return <LoadingView variant="list" keepTitle />;
 
   return (

@@ -12,7 +12,8 @@ import { Menu, MenuDivider, MenuItem, MenuSection, useMenuAnchor } from '@esmart
 import { useAppStore } from '@esmart/app/store/appStore';
 import { switchCompany } from '@esmart/app/remote/refresh';
 import { describeError } from '@esmart/app/remote/errors';
-import { useActiveCompany, useBranches } from '@esmart/app/store/selectors';
+import { useActiveCompany, useBranches, useSetupReady } from '@esmart/app/store/selectors';
+import { Skeleton } from '@esmart/ui/components/Skeleton';
 
 /** The top bar's picker button: what's chosen, a hint above it, and a chevron. */
 const PickerButton = React.forwardRef<
@@ -154,7 +155,10 @@ export function BranchPicker({ compact }: { compact: boolean }) {
   const activeBranchId = useAppStore((s) => s.activeBranchId);
   const setActiveBranch = useAppStore((s) => s.setActiveBranch);
   const { setAnchor, rect, open, close } = useMenuAnchor();
+  const setupReady = useSetupReady();
 
+  // The business's branches still on their way: hold the picker's place rather than pop it in.
+  if (branches.length === 0 && !setupReady) return <Skeleton height={40} width={compact ? 40 : 160} radius={t.radius.md} />;
   if (branches.length === 0) return null;
   const branch = branches.find((b) => b.id === activeBranchId);
   const iconFor = (primary: boolean): IconName => (primary ? 'office-building-outline' : 'warehouse');

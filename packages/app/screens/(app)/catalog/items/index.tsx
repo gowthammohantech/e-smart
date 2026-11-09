@@ -51,10 +51,14 @@ export default function ItemList() {
   const showFilters = hasPos && (categories.length > 0 || brands.length > 0);
   const filtering = categoryId !== 'all' || brandId !== 'all';
   const pages = useItemPages({ type: tab, q: search, categoryId: categoryId === 'all' ? undefined : categoryId, brandId: brandId === 'all' ? undefined : brandId });
-  const filtered = pages.rows as unknown as (Item & { stockOnHand?: number })[];
+  const held = pages.rows as unknown as (Item & { stockOnHand?: number })[];
+  // Just switched Goods/Services: the other tab's rows are held over while this one's load. They're
+  // the wrong kind (services under Goods), so the list waits on placeholders instead.
+  const wrongKind = pages.isPlaceholderData && (held.length === 0 || held.some((i) => i.type !== tab));
+  const filtered = wrongKind ? [] : held;
   const stock: Record<string, number> = Object.fromEntries(filtered.map((i) => [i.id, i.stockOnHand ?? 0]));
   // Nothing in this tab at all, as against nothing matching the search.
-  const inTab = search || filtering || pages.isLoading ? [true] : filtered;
+  const inTab = search || filtering || pages.isLoading || wrongKind ? [true] : filtered;
   const loadMore = () => {
     if (pages.hasNextPage && !pages.isFetchingNextPage) void pages.fetchNextPage();
   };
@@ -193,6 +197,7 @@ export default function ItemList() {
             onRowPress={(i) => router.push(`/(app)/catalog/items/${i.id}`)}
             rowLabel={(i) => i.name}
             {...pagedTableProps(pages, tr('common:table.loadFailed'), 'items')}
+            loading={pages.isLoading || wrongKind}
             selectable
             selectedKeys={selection.selected}
             onSelectionChange={selection.setSelected}
@@ -232,7 +237,7 @@ export default function ItemList() {
           <Card padded={false}>
             <LoadFailed onRetry={pages.refetch} compact />
           </Card>
-        ) : pages.isLoading && !filtered.length ? (
+        ) : (pages.isLoading || wrongKind) && !filtered.length ? (
           <ListSkeleton kind="list" />
         ) : filtered.length === 0 ? (
           <EmptyState

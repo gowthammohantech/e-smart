@@ -9,7 +9,9 @@ import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
 import { Badge } from '@esmart/ui/components/Badge';
 import { TextField } from '@esmart/ui/components/Field';
-import { EmptyState } from '@esmart/ui/components/EmptyState';
+import { EmptyState, SkeletonList } from '@esmart/ui/components/EmptyState';
+import { SkeletonGroup, SkeletonRows } from '@esmart/ui/components/Skeleton';
+import { useDebounced } from '@esmart/app/components/useDebounced';
 import { Illustration } from '@esmart/ui/components/Illustration';
 import { useItemPages } from '@esmart/app/remote/queries';
 import type { Item } from '@esmart/core/types';
@@ -29,10 +31,16 @@ export function ScanBarcodeDesktop() {
   const [code, setCode] = useState('');
 
   // Samples from the first page of items; the code typed is looked up on the server, exactly.
-  const firstPage = useItemPages({}).rows as unknown as (Item & { stockOnHand?: number })[];
+  const firstPages = useItemPages({});
+  const firstPage = firstPages.rows as unknown as (Item & { stockOnHand?: number })[];
   const withBarcodes = firstPage.filter((i) => i.barcode);
-  const found = useItemPages({ barcode: code.trim() }, !!code.trim()).rows as unknown as (Item & { stockOnHand?: number })[];
-  const match = code.trim() ? found[0] : undefined;
+  // Looked up once typing pauses, not on every keystroke.
+  const lookup = useDebounced(code.trim());
+  const foundPages = useItemPages({ barcode: lookup }, !!lookup);
+  const found = foundPages.rows as unknown as (Item & { stockOnHand?: number })[];
+  // Typing ahead of the lookup, or the lookup on its way: no "No item" and no old code's match yet.
+  const searching = !!code.trim() && (lookup !== code.trim() || foundPages.isFetching);
+  const match = code.trim() && !searching ? found[0] : undefined;
   const stock: Record<string, number> = match ? { [match.id]: match.stockOnHand ?? 0 } : {};
 
   return (
@@ -70,7 +78,11 @@ export function ScanBarcodeDesktop() {
                   autoFocus
                 />
                 {code.trim().length > 0 ? (
-                  match ? (
+                  searching ? (
+                    <Card variant="flat" padded={false}>
+                      <SkeletonList rows={1} />
+                    </Card>
+                  ) : match ? (
                     <Pressable
                       onPress={() => router.push(`/(app)/catalog/items/${match.id}`)}
                       accessibilityRole="link"
@@ -130,6 +142,12 @@ export function ScanBarcodeDesktop() {
           side={
             <Panel title={tr('inventory:scan.tryOne')} subtitle={tr('inventory:scan.samplesHint')} icon="format-list-bulleted">
               <View style={{ marginHorizontal: -t.spacing.xl, marginBottom: -t.spacing.lg }}>
+                {/* Samples still loading: placeholder rows, not an empty panel. */}
+                {firstPages.isPending ? (
+                  <SkeletonGroup style={{ paddingHorizontal: t.spacing.sm }}>
+                    <SkeletonRows rows={4} icon={false} />
+                  </SkeletonGroup>
+                ) : null}
                 {withBarcodes.slice(0, 8).map((i, idx, arr) => (
                   <Pressable
                     key={i.id}

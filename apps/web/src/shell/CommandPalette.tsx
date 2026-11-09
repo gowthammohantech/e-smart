@@ -6,6 +6,7 @@ import { Icon, type IconName } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import type { WebPressState } from '@esmart/ui/theme/interaction';
 import { Text } from '@esmart/ui/components/Text';
+import { Skeleton, SkeletonGroup, SkeletonRows } from '@esmart/ui/components/Skeleton';
 import { quickActions } from '@esmart/app/components/QuickActions';
 import { TABS } from '@esmart/app/navigation/tabs';
 import { useGlobalSearch } from '@esmart/app/features/search/useGlobalSearch';
@@ -162,9 +163,9 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
                 </Pressable>
               </View>
             ) : null}
-            {searching && !isError && entries.length === 0 ? (
+            {searching && !isError && !pending && entries.length === 0 ? (
               <Text variant="small" tone="muted" style={{ padding: t.spacing.lg }}>
-                {pending ? tr('nav:shell.searching') : tr('nav:shell.noMatches', { query: query.trim() })}
+                {tr('nav:shell.noMatches', { query: query.trim() })}
               </Text>
             ) : null}
             {entries.map((entry, i) => {
@@ -222,6 +223,13 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
                 </React.Fragment>
               );
             })}
+            {/* Records still on their way: hold their place under the pages and actions, so they don't pop in. */}
+            {searching && !isError && pending ? (
+              <SkeletonGroup label={tr('nav:shell.searching')} style={{ paddingTop: t.spacing.md }}>
+                <Skeleton height={10} width={72} radius={4} style={{ marginHorizontal: t.spacing.md, marginBottom: 4 }} />
+                <SkeletonRows rows={3} />
+              </SkeletonGroup>
+            ) : null}
           </ScrollView>
 
           <View style={{ paddingHorizontal: t.spacing.lg, paddingVertical: t.spacing.sm, borderTopWidth: 1, borderTopColor: t.c.line }}>

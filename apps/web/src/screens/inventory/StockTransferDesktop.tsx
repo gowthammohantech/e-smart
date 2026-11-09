@@ -10,6 +10,7 @@ import { PickerField, TextField } from '@esmart/ui/components/Field';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
+import { SkeletonFormField, SkeletonGroup } from '@esmart/ui/components/Skeleton';
 import { useServerSave } from '@esmart/app/components/useServerSave';
 import { useAppStore } from '@esmart/app/store/appStore';
 import { useBranches, useDefaultBranchId } from '@esmart/app/store/selectors';
@@ -26,6 +27,12 @@ import { useGoBack } from '@esmart/app/navigation/useGoBack';
  * and save as the phone screen (`@esmart/app/screens/(app)/inventory/transfer`).
  */
 export function StockTransferDesktop() {
+  // The page stays mounted across a business switch; the branches copied into state must start again.
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  return <StockTransferForm key={companyId} />;
+}
+
+function StockTransferForm() {
   const t = useTheme();
   const { t: tr } = useTranslation(['inventory', 'nav', 'common']);
   const router = useRouter();
@@ -34,7 +41,7 @@ export function StockTransferDesktop() {
   const params = useLocalSearchParams<{ itemId?: string }>();
 
   // Every tracked item, from the server.
-  const { items } = useTrackedItems();
+  const { items, isPending: itemsPending } = useTrackedItems();
   const branches = useBranches();
   // From the branch picked in the switcher, to the first other one.
   const defaultBranchId = useDefaultBranchId();
@@ -57,11 +64,14 @@ export function StockTransferDesktop() {
   // On hand at each branch now, from the server, which checks the transfer again on saving.
   const fromLevels = useServerStockLevels(fromBranchId, !!fromBranchId).data;
   const toLevels = useServerStockLevels(toBranchId, !!toBranchId).data;
+  // Until the source branch's levels are back, nothing is "only 0 available".
+  const levelsKnown = fromLevels !== undefined;
+  const toKnown = !toBranchId || toLevels !== undefined;
   const available = item ? (fromLevels?.[item.id] ?? 0) : 0;
   const atDestination = item && toBranchId ? (toLevels?.[item.id] ?? 0) : 0;
   const qty = Number(quantity) || 0;
-  const exceeds = qty > available;
-  const canSave = !!itemId && qty > 0 && fromBranchId !== toBranchId && !!toBranchId && !exceeds;
+  const exceeds = levelsKnown && qty > available;
+  const canSave = !!itemId && qty > 0 && fromBranchId !== toBranchId && !!toBranchId && levelsKnown && !exceeds;
   const nameOf = (id: string) => branches.find((b) => b.id === id)?.name ?? '—';
 
   if (branches.length < 2) {
@@ -88,13 +98,20 @@ export function StockTransferDesktop() {
           main={
             <>
               <Panel title={tr('inventory:transfer.whatTitle')} subtitle={tr('inventory:transfer.whatHint')} icon="package-variant-closed">
-                <PickerField
-                  label={tr('inventory:transfer.item')}
-                  value={item ? `${item.name} (${item.sku})` : undefined}
-                  onPress={() => setItemOpen(true)}
-                  icon="package-variant-closed"
-                  required
-                />
+                {/* Opened for an item that hasn't arrived yet: a placeholder, not an empty picker. */}
+                {itemId && !item && itemsPending ? (
+                  <SkeletonGroup>
+                    <SkeletonFormField />
+                  </SkeletonGroup>
+                ) : (
+                  <PickerField
+                    label={tr('inventory:transfer.item')}
+                    value={item ? `${item.name} (${item.sku})` : undefined}
+                    onPress={() => setItemOpen(true)}
+                    icon="package-variant-closed"
+                    required
+                  />
+                )}
                 <Row>
                   <TextField
                     label={tr('inventory:transfer.quantity')}
@@ -104,7 +121,7 @@ export function StockTransferDesktop() {
                     keyboardType="decimal-pad"
                     icon="counter"
                     error={exceeds ? tr('inventory:transfer.onlyAvailable', { qty: formatQty(available), unit }) : undefined}
-                    hint={item ? tr('inventory:transfer.available', { qty: formatQty(available), unit }) : undefined}
+                    hint={item ? (levelsKnown ? tr('inventory:transfer.available', { qty: formatQty(available), unit }) : tr('inventory:transfer.checking')) : undefined}
                     required
                   />
                   <DateField label={tr('inventory:transfer.date')} value={date} onChange={setDate} />
@@ -146,11 +163,11 @@ export function StockTransferDesktop() {
               <Panel title={tr('inventory:transfer.afterTitle')} subtitle={item ? item.name : tr('inventory:transfer.pickItemHint')} icon="clipboard-text-outline">
                 {item ? (
                   <>
-                    <SummaryRow label={tr('inventory:transfer.branchNow', { branch: nameOf(fromBranchId) })} value={`${formatQty(available)} ${unit}`} />
-                    <SummaryRow label={tr('inventory:transfer.branchAfter', { branch: nameOf(fromBranchId) })} value={`${formatQty(available - qty)} ${unit}`} tone={exceeds ? 'bad' : undefined} strong />
+                    <SummaryRow label={tr('inventory:transfer.branchNow', { branch: nameOf(fromBranchId) })} value={`${formatQty(available)} ${unit}`} loading={!levelsKnown} />
+                    <SummaryRow label={tr('inventory:transfer.branchAfter', { branch: nameOf(fromBranchId) })} value={`${formatQty(available - qty)} ${unit}`} tone={exceeds ? 'bad' : undefined} strong loading={!levelsKnown} />
                     <Divider />
-                    <SummaryRow label={tr('inventory:transfer.branchNow', { branch: nameOf(toBranchId) })} value={`${formatQty(atDestination)} ${unit}`} />
-                    <SummaryRow label={tr('inventory:transfer.branchAfter', { branch: nameOf(toBranchId) })} value={`${formatQty(atDestination + qty)} ${unit}`} tone="good" strong />
+                    <SummaryRow label={tr('inventory:transfer.branchNow', { branch: nameOf(toBranchId) })} value={`${formatQty(atDestination)} ${unit}`} loading={!toKnown} />
+                    <SummaryRow label={tr('inventory:transfer.branchAfter', { branch: nameOf(toBranchId) })} value={`${formatQty(atDestination + qty)} ${unit}`} tone="good" strong loading={!toKnown} />
                     {exceeds ? (
                       <Text variant="caption" tone="bad">
                         {tr('inventory:transfer.exceedsSource')}
@@ -190,6 +207,7 @@ export function StockTransferDesktop() {
         onClose={() => setItemOpen(false)}
         title={tr('inventory:transfer.selectItem')}
         options={items.map((i) => ({ value: i.id, label: i.name, description: i.sku }))}
+        loading={itemsPending}
         value={itemId}
         onSelect={setItemId}
       />

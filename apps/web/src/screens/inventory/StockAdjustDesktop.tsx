@@ -8,6 +8,7 @@ import { Button } from '@esmart/ui/components/Button';
 import { PickerField, Segmented, TextField } from '@esmart/ui/components/Field';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
+import { SkeletonFormField, SkeletonGroup } from '@esmart/ui/components/Skeleton';
 import { useServerSave } from '@esmart/app/components/useServerSave';
 import { useSaveShortcut } from '@esmart/app/components/useSaveShortcut';
 import { useAppStore } from '@esmart/app/store/appStore';
@@ -25,6 +26,12 @@ import { useGoBack } from '@esmart/app/navigation/useGoBack';
  * (`@esmart/app/screens/(app)/inventory/adjust`).
  */
 export function StockAdjustDesktop() {
+  // The page stays mounted across a business switch; the branch copied into state must start again.
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  return <StockAdjustForm key={companyId} />;
+}
+
+function StockAdjustForm() {
   const t = useTheme();
   const { t: tr } = useTranslation(['inventory', 'nav', 'common']);
   const goBack = useGoBack();
@@ -32,7 +39,7 @@ export function StockAdjustDesktop() {
   const params = useLocalSearchParams<{ itemId?: string }>();
 
   // Every tracked item and what's on hand at the active branch, from the server.
-  const { items, stock } = useTrackedItems();
+  const { items, stock, isPending: itemsPending } = useTrackedItems();
   const branches = useBranches();
   const addStockMovement = useAppStore((s) => s.addStockMovement);
   const activeCompanyId = useAppStore((s) => s.activeCompanyId);
@@ -54,6 +61,8 @@ export function StockAdjustDesktop() {
   const activeBranchId = useAppStore((s) => s.activeBranchId);
   const fallback = branchId === activeBranchId ? stock : {};
   const current = itemId ? (levels ? (levels[itemId] ?? 0) : (fallback[itemId] ?? 0)) : 0;
+  // Neither the branch's levels nor the active branch's tracked list back yet: no "0 in stock".
+  const levelsKnown = levels !== undefined || (branchId === activeBranchId && !itemsPending);
   const unit = item ? unitShortName(item.unit) || item.unit : '';
   const qty = Number(quantity) || 0;
   const delta = direction === 'increase' ? qty : -qty;
@@ -95,13 +104,20 @@ export function StockAdjustDesktop() {
           main={
             <Panel title={tr('inventory:adjust.adjustment')} subtitle={tr('inventory:adjust.panelHint')} icon="tune-variant">
               <Row>
-                <PickerField
-                  label={tr('inventory:adjust.item')}
-                  value={item ? `${item.name} (${item.sku})` : undefined}
-                  onPress={() => setItemOpen(true)}
-                  icon="package-variant-closed"
-                  required
-                />
+                {/* Opened for an item that hasn't arrived yet: a placeholder, not an empty picker. */}
+                {itemId && !item && itemsPending ? (
+                  <SkeletonGroup>
+                    <SkeletonFormField />
+                  </SkeletonGroup>
+                ) : (
+                  <PickerField
+                    label={tr('inventory:adjust.item')}
+                    value={item ? `${item.name} (${item.sku})` : undefined}
+                    onPress={() => setItemOpen(true)}
+                    icon="package-variant-closed"
+                    required
+                  />
+                )}
                 {branches.length > 1 ? (
                   <PickerField
                     label={tr('inventory:adjust.branch')}
@@ -158,7 +174,7 @@ export function StockAdjustDesktop() {
             <Panel title={tr('inventory:adjust.result')} subtitle={item ? item.name : tr('inventory:adjust.pickItemHint')} icon="clipboard-text-outline">
               {item ? (
                 <>
-                  <SummaryRow label={tr('inventory:adjust.currentStock')} value={`${formatQty(current)} ${unit}`} />
+                  <SummaryRow label={tr('inventory:adjust.currentStock')} value={`${formatQty(current)} ${unit}`} loading={!levelsKnown} />
                   <SummaryRow
                     label={tr('inventory:adjust.adjustment')}
                     value={`${delta >= 0 ? '+' : ''}${formatQty(delta)} ${unit}`}
@@ -170,8 +186,9 @@ export function StockAdjustDesktop() {
                     value={`${formatQty(resulting)} ${unit}`}
                     tone={resulting < 0 ? 'bad' : 'good'}
                     strong
+                    loading={!levelsKnown}
                   />
-                  {resulting < 0 ? (
+                  {levelsKnown && resulting < 0 ? (
                     <Text variant="caption" tone="bad">
                       {tr('inventory:adjust.negativeWarning')}
                     </Text>
@@ -194,7 +211,8 @@ export function StockAdjustDesktop() {
         visible={itemOpen}
         onClose={() => setItemOpen(false)}
         title={tr('inventory:adjust.selectItem')}
-        options={items.map((i) => ({ value: i.id, label: i.name, description: i.sku, trailing: `${formatQty(levels ? (levels[i.id] ?? 0) : (fallback[i.id] ?? 0))} ${unitShortName(i.unit) || i.unit}` }))}
+        options={items.map((i) => ({ value: i.id, label: i.name, description: i.sku, trailing: levelsKnown ? `${formatQty(levels ? (levels[i.id] ?? 0) : (fallback[i.id] ?? 0))} ${unitShortName(i.unit) || i.unit}` : undefined }))}
+        loading={itemsPending}
         value={itemId}
         onSelect={setItemId}
       />

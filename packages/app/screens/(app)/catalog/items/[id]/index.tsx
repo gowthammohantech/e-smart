@@ -25,6 +25,7 @@ import {
 } from '../../../../../store/selectors';
 import { useItemLedger, useItemRecord } from '../../../../../remote/queries';
 import { LoadingView } from '../../../../../components/LoadingView';
+import { CardRowsSkeleton } from '../../../../../components/ScreenSkeleton';
 import { isLowStock, ledgerFor, signedQuantity, stockOnHand, stockValue } from '@esmart/core/domain/stockLedger';
 import type { Money } from '@esmart/core/lib/money';
 import { formatMoney, formatPercent, formatQty } from '@esmart/core/lib/format';
@@ -59,9 +60,14 @@ export default function ItemDetail() {
   const [actionsOpen, setActionsOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  // Stock, value, quantity sold and the movements come from the server; the device's figures until it answers.
+  // Stock, value, quantity sold and the movements come from the server. Until it answers they
+  // show as placeholders: the device only holds recent movements, so its sums read as wrong
+  // figures (0 in stock, nothing sold). The device's figures stand in only if the server fails.
   const activeBranchId = useAppStore((s) => s.activeBranchId) || undefined;
-  const server = useItemLedger(item?.id, activeBranchId, hasInventory && !!item?.trackInventory).data;
+  const ledgerEnabled = hasInventory && !!item?.trackInventory;
+  const ledgerQ = useItemLedger(item?.id, activeBranchId, ledgerEnabled);
+  const server = ledgerQ.data;
+  const ledgerPending = ledgerEnabled && ledgerQ.isPending;
   const deviceLedger = useMemo(() => (item ? ledgerFor(item.id, movements).reverse() : []), [item, movements]);
   const ledger = (server?.rows as typeof deviceLedger | undefined) ?? deviceLedger;
 
@@ -122,7 +128,8 @@ export default function ItemDetail() {
           </Text>
           <View style={{ flexDirection: 'row', gap: 5, marginTop: 3, flexWrap: 'wrap' }}>
             <Badge label={tr(`inventory:type.${item.type}`)} tone="neutral" size="sm" />
-            <Badge label={formatPercent(category?.rate ?? 0)} tone="info" size="sm" />
+            {/* No category on the item: no rate, rather than a 0% it may not be. */}
+            {category ? <Badge label={formatPercent(category.rate)} tone="info" size="sm" /> : null}
             {item.hsnCode ? <Badge label={`HSN ${item.hsnCode}`} tone="neutral" size="sm" /> : null}
             {item.status === 'inactive' ? <Badge label={tr('inventory:detail.inactive')} tone="warning" size="sm" /> : null}
           </View>
@@ -160,10 +167,11 @@ export default function ItemDetail() {
             label={tr('inventory:detail.inStock')}
             value={`${formatQty(onHand)} ${item.unit}`}
             tone={onHand <= 0 ? 'bad' : low ? 'warn' : 'good'}
+            loading={ledgerPending}
             icon="warehouse"
             caption={item.reorderLevel > 0 ? tr('inventory:detail.reorderAt', { qty: formatQty(item.reorderLevel) }) : undefined}
           />
-          <StatTile label={tr('inventory:detail.stockValue')} value={value} icon="cash" caption={tr('inventory:detail.soldAllTime', { qty: formatQty(server?.soldQuantity ?? soldQty) })} />
+          <StatTile label={tr('inventory:detail.stockValue')} value={value} loading={ledgerPending} icon="cash" caption={tr('inventory:detail.soldAllTime', { qty: formatQty(server?.soldQuantity ?? soldQty) })} />
         </StatRow>
       </>
     ) : null}
@@ -200,7 +208,9 @@ export default function ItemDetail() {
       <>
         <Text variant="caption" tone="muted" weight="600" style={{ marginTop: t.spacing.xl, marginBottom: t.spacing.sm, textTransform: 'uppercase', letterSpacing: 0.8 }}>{tr('inventory:detail.stockMovements')}</Text>
         <Card padded={false}>
-          {ledger.length === 0 ? (
+          {ledgerPending ? (
+            <CardRowsSkeleton rows={5} kind="list" />
+          ) : ledger.length === 0 ? (
             <EmptyState illustration="no-movements" icon="swap-vertical" title={tr('inventory:detail.noMovements')} compact />
           ) : (
             ledger.slice(0, 20).map((row, i) => {

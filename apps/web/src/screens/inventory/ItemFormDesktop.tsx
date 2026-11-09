@@ -33,6 +33,12 @@ import { GstTreatmentFields } from '@esmart/app/features/catalog/GstTreatmentFie
  * (`@esmart/app/features/catalog/ItemForm`).
  */
 export function ItemFormDesktop({ item }: { item?: Item }) {
+  // The page can stay mounted across a business switch; the tax default copied into state must start again.
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  return <ItemFormDesktopFields key={companyId} item={item} />;
+}
+
+function ItemFormDesktopFields({ item }: { item?: Item }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['inventory', 'nav', 'common']);
   const router = useRouter();

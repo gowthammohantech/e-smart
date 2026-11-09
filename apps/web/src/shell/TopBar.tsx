@@ -15,7 +15,8 @@ import { formatRelative } from '@esmart/core/lib/date';
 import { useAppStore } from '@esmart/app/store/appStore';
 import { ConnectionBadge } from '@esmart/app/components/ConnectionBadge';
 import { DemoChip } from '@esmart/app/components/DemoChip';
-import { useBranches, useCurrentUser, useNotifications, useUnreadCount } from '@esmart/app/store/selectors';
+import { useBranches, useCurrentUser, useListsReady, useNotifications, useSetupReady, useUnreadCount } from '@esmart/app/store/selectors';
+import { Skeleton, SkeletonGroup, SkeletonRows } from '@esmart/ui/components/Skeleton';
 import { LIXI, LixiMark } from '@esmart/ui/components/LixiOrb';
 import { toggleLixiPanel, useLixiPanel } from '../lixiPanel';
 import { useSignOut } from '@esmart/app/features/session/useSignOut';
@@ -141,7 +142,10 @@ export function TopBar() {
   const { t: tr } = useTranslation(['nav', 'common']);
   const router = useRouter();
 
+  // Until the business's people and notifications are in: placeholders, not a "?" avatar or "All caught up".
+  const listsReady = useListsReady();
   const user = useCurrentUser();
+  const userKnown = useAppStore((s) => s.users.some((u) => u.id === s.session.userId)) || listsReady;
   const notifications = useNotifications();
   const unread = useUnreadCount();
   const markRead = useAppStore((s) => s.markNotificationRead);
@@ -172,7 +176,9 @@ export function TopBar() {
   }, []);
 
   const go = (route: string) => router.push(route as never);
-  const hasBranches = useBranches().length > 0;
+  // Room for the branch picker while it's still loading, too: it shows a placeholder there.
+  const setupReady = useSetupReady();
+  const hasBranches = useBranches().length > 0 || !setupReady;
   // The bar's own width, not the window's: the Lixi panel and the sidebar both take from it.
   const [barWidth, setBarWidth] = useState(0);
   const tablet = useBreakpoint() === 'tablet';
@@ -261,7 +267,7 @@ export function TopBar() {
         icon="bell-outline"
         label={unread > 0 ? tr('nav:tabBadgeA11y', { label: tr('nav:shell.notifications'), count: unread }) : tr('nav:shell.notifications')}
         onPress={openBellMenu}
-        badge={unread}
+        badge={listsReady ? unread : 0}
       />
 
       <Pressable
@@ -271,7 +277,11 @@ export function TopBar() {
         accessibilityLabel={tr('nav:shell.account')}
         style={(state) => [{ borderRadius: 18, opacity: (state as WebPressState).hovered ? 0.85 : 1 }, focusRing(t, (state as WebPressState).focused)]}
       >
-        <Avatar name={user?.name ?? '?'} size={30} color={user?.avatarColor} />
+        {userKnown ? (
+          <Avatar name={user?.name ?? '?'} size={30} color={user?.avatarColor} />
+        ) : (
+          <Skeleton height={30} width={30} radius={15} />
+        )}
       </Pressable>
       </View>
 
@@ -300,7 +310,11 @@ export function TopBar() {
           ) : null}
         </View>
         <MenuDivider />
-        {notifications.length === 0 ? (
+        {!listsReady && notifications.length === 0 ? (
+          <SkeletonGroup>
+            <SkeletonRows rows={3} />
+          </SkeletonGroup>
+        ) : notifications.length === 0 ? (
           <Text variant="small" tone="muted" style={{ padding: t.spacing.lg }}>
             {tr('nav:shell.allCaughtUp')}
           </Text>
@@ -333,13 +347,22 @@ export function TopBar() {
       </Menu>
 
       <Menu anchor={accountRect} onClose={closeAccountMenu} align="right" width={260}>
-        <View style={{ paddingHorizontal: t.spacing.lg, paddingVertical: t.spacing.sm, gap: 2 }}>
-          <Text variant="small" weight="600" numberOfLines={1}>
-            {user?.name}
-          </Text>
-          <Text variant="caption" tone="muted" numberOfLines={1}>
-            {user?.email}
-          </Text>
+        <View style={{ paddingHorizontal: t.spacing.lg, paddingVertical: t.spacing.sm, gap: userKnown ? 2 : 6 }}>
+          {userKnown ? (
+            <>
+              <Text variant="small" weight="600" numberOfLines={1}>
+                {user?.name}
+              </Text>
+              <Text variant="caption" tone="muted" numberOfLines={1}>
+                {user?.email}
+              </Text>
+            </>
+          ) : (
+            <SkeletonGroup style={{ gap: 6 }}>
+              <Skeleton height={13} width="60%" radius={4} />
+              <Skeleton height={10} width="80%" radius={4} />
+            </SkeletonGroup>
+          )}
         </View>
         <MenuDivider />
         {(

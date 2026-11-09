@@ -28,6 +28,12 @@ import { CustomFieldsSection, customFieldErrors, useCustomFields } from '../cust
 import type { CustomValues } from '@esmart/core/domain/customFields';
 
 export function ItemForm({ item }: { item?: Item }) {
+  // The page can stay mounted across a business switch; the tax default copied into state must start again.
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  return <ItemFormFields key={companyId} item={item} />;
+}
+
+function ItemFormFields({ item }: { item?: Item }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['inventory', 'common', 'settings']);
   const router = useRouter();

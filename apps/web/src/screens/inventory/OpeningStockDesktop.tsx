@@ -10,6 +10,7 @@ import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { SearchBar } from '@esmart/ui/components/SearchBar';
 import { Card } from '@esmart/ui/components/Card';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
+import { TableSkeleton } from '@esmart/app/components/ScreenSkeleton';
 import { useServerSave } from '@esmart/app/components/useServerSave';
 import { useSaveShortcut } from '@esmart/app/components/useSaveShortcut';
 import type { Item } from '@esmart/core/types';
@@ -35,7 +36,7 @@ export function OpeningStockDesktop() {
   const { run: serverSave, saving } = useServerSave();
 
   // Every tracked item and what's on hand at the active branch, from the server.
-  const { items, stock } = useTrackedItems();
+  const { items, stock, isPending } = useTrackedItems();
   const baseCurrency = useBaseCurrency();
   const addStockMovement = useAppStore((s) => s.addStockMovement);
   const activeCompanyId = useAppStore((s) => s.activeCompanyId);
@@ -88,7 +89,10 @@ export function OpeningStockDesktop() {
             <>
               <Note>{tr('inventory:opening.intro')}</Note>
               <SearchBar value={query} onChangeText={setQuery} placeholder={tr('inventory:opening.search')} />
-              {filtered.length === 0 ? (
+              {isPending ? (
+                // Still loading: rows, not "No tracked items".
+                <TableSkeleton rows={8} cols={3} />
+              ) : filtered.length === 0 ? (
                 <Card padded={false}>
                   <EmptyState illustration="no-items" icon="package-variant" title={tr('inventory:opening.noTracked')} compact />
                 </Card>

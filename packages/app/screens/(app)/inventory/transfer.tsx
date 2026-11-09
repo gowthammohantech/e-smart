@@ -23,6 +23,12 @@ import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { useGoBack } from '../../../navigation/useGoBack';
 
 export default function StockTransfer() {
+  // On web the screen can stay mounted across a business switch; the branches copied into state must start again.
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  return <StockTransferForm key={companyId} />;
+}
+
+function StockTransferForm() {
   const t = useTheme();
   const { t: tr } = useTranslation(['inventory', 'nav']);
   const router = useRouter();

@@ -65,9 +65,12 @@ export function PartyDetail({ party }: { party: Party }) {
   const canTransact = party.kind !== 'general';
 
   // Everything below comes from the server, so the party's whole history needn't be on the device.
-  const record = usePartyRecord(party.id).data;
+  // Another party's figures held over while this one's load are not shown: they'd read as this party's.
+  const recordQ = usePartyRecord(party.id);
+  const record = recordQ.isPlaceholderData ? undefined : recordQ.data;
+  const recordPending = recordQ.isPending || recordQ.isPlaceholderData;
   const agingQ = usePartyAging(party.id, isCustomer ? 'customer' : 'supplier');
-  const aging = agingQ.data;
+  const aging = agingQ.isPlaceholderData ? undefined : agingQ.data;
   const outstanding = useMemo(
     () =>
       (aging?.documents ?? []).map((o) => ({
@@ -86,7 +89,7 @@ export function PartyDetail({ party }: { party: Party }) {
 
   const billKind: DocumentKind = isCustomer ? 'invoice' : 'purchaseBill';
   const billedQ = useDocumentSummary({ kinds: [billKind], partyId: party.id });
-  const billed = billedQ.data;
+  const billed = billedQ.isPlaceholderData ? undefined : billedQ.data;
   // Drafts and cancelled documents don't count towards what was billed.
   const lifetimeValue = money(
     (billed?.byStatus ?? []).filter((b) => !['draft', 'cancelled', 'rejected'].includes(b.status)).reduce((a, b) => a + (b.total?.minor ?? 0), 0),
@@ -103,7 +106,10 @@ export function PartyDetail({ party }: { party: Party }) {
   const bills = useDocumentPages(pagesOf([billKind]));
   const returns = useDocumentPages(pagesOf([isCustomer ? 'salesReturn' : 'purchaseReturn']));
   const payments = usePaymentPages({ direction: isCustomer ? 'received' : 'paid', partyId: party.id });
-  const partyPayments = payments.rows as unknown as Payment[];
+  const partyPayments = (payments.isPlaceholderData ? [] : payments.rows) as unknown as Payment[];
+  // A list still on its way, or showing the last party's rows while this one's load.
+  const docGroupLoading = (g: { isLoading: boolean; isPlaceholderData: boolean }) => g.isLoading || g.isPlaceholderData;
+  const docRows = <T,>(g: { rows: T[]; isPlaceholderData: boolean }) => (g.isPlaceholderData ? [] : g.rows);
 
   const contactAction = (icon: IconName, label: string, onPress: () => void, disabled?: boolean) => (
     <Pressable
@@ -205,6 +211,8 @@ export function PartyDetail({ party }: { party: Party }) {
         value={totalOutstanding}
         tone={totalOutstanding.minor > 0 ? (overdueCount > 0 ? 'bad' : 'warn') : 'good'}
         icon="clock-alert-outline"
+        // The server's balance and the open documents: no ₹0.00 "settled" or "0 open" before they're back.
+        loading={recordPending || (!aging && !agingQ.isError)}
         caption={
           overdueCount
             ? `${tr('contacts:detail.openCount', { count: outstanding.length })} · ${tr('contacts:detail.overdueCount', { count: overdueCount })}`
@@ -216,6 +224,7 @@ export function PartyDetail({ party }: { party: Party }) {
           label={tr('contacts:detail.payable')}
           value={((record as { payable?: Money } | undefined)?.payable) ?? { minor: 0, currency: party.currency }}
           icon="cash-minus"
+          loading={recordPending}
         />
       ) : null}
       <StatTile
@@ -223,7 +232,7 @@ export function PartyDetail({ party }: { party: Party }) {
         value={lifetimeValue}
         icon="chart-line"
         caption={tr('contacts:detail.documentCount', { count: billCount })}
-        loading={!billed && billedQ.isLoading}
+        loading={!billed && (billedQ.isLoading || billedQ.isPlaceholderData)}
       />
     </StatRow>
     </>
@@ -265,23 +274,23 @@ export function PartyDetail({ party }: { party: Party }) {
           { title: isCustomer ? tr('nav:title.invoices') : tr('contacts:detail.bills'), pages: bills, kind: billKind },
           { title: tr('contacts:detail.returns'), pages: returns, kind: (isCustomer ? 'salesReturn' : 'purchaseReturn') as DocumentKind },
         ]
-          .filter((g) => g.pages.rows.length > 0)
+          .filter((g) => docRows(g.pages).length > 0)
           .map((g) => (
             <View key={g.title}>
               <Text variant="caption" tone="muted" weight="600" style={{ marginBottom: t.spacing.sm, textTransform: 'uppercase', letterSpacing: 0.6 }}>
                 {g.title}
               </Text>
-              <Card padded={false}>{renderDocuments(g.pages.rows, tr('contacts:detail.noneYet'))}</Card>
+              <Card padded={false}>{renderDocuments(docRows(g.pages), tr('contacts:detail.noneYet'))}</Card>
               {g.pages.hasNextPage && listRoute[g.kind] ? (
                 <Button title={tr('common:action.seeAll')} variant="ghost" size="sm" onPress={() => router.push(`${listRoute[g.kind]}?party=${party.id}` as never)} />
               ) : null}
             </View>
           ))}
         {/* Nothing yet, and some still on the way: shapes, not "no documents". */}
-        {[quotes, orders, bills, returns].every((g) => g.rows.length === 0) && [quotes, orders, bills, returns].some((g) => g.isLoading) ? (
+        {[quotes, orders, bills, returns].every((g) => docRows(g).length === 0) && [quotes, orders, bills, returns].some(docGroupLoading) ? (
           <ListSkeleton rows={4} />
         ) : null}
-        {[quotes, orders, bills, returns].every((g) => !g.isLoading && g.rows.length === 0) ? (
+        {[quotes, orders, bills, returns].every((g) => !docGroupLoading(g) && g.rows.length === 0) ? (
           <Card padded={false}>
             <EmptyState illustration="no-documents" icon="file-outline" title={tr('contacts:detail.noDocuments')} compact />
           </Card>
@@ -291,7 +300,7 @@ export function PartyDetail({ party }: { party: Party }) {
 
     {shownTab === 'payments' ? (
       <Card padded={false}>
-        {partyPayments.length === 0 && payments.isLoading ? (
+        {partyPayments.length === 0 && docGroupLoading(payments) ? (
           <CardRowsSkeleton kind="list" rows={4} />
         ) : partyPayments.length === 0 ? (
           <EmptyState illustration="no-payments" icon="cash-remove" title={tr('contacts:detail.noPayments')} compact />
