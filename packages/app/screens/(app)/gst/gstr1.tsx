@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
+import { useFieldWidth, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { PickerField, Segmented } from '@esmart/ui/components/Field';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { Text } from '@esmart/ui/components/Text';
@@ -61,6 +62,8 @@ const NATURE_KEY = { invoice: 'compliance:gstr1.invoices', creditNote: 'complian
  */
 export default function Gstr1Report() {
   const t = useTheme();
+  const desktop = useIsDesktop();
+  const fw = useFieldWidth();
   const { t: tr } = useTranslation(['compliance', 'nav', 'common']);
   const { scope, setScope } = useReportScope('thisMonth');
   const [view, setView] = useState<View_>('b2b');
@@ -320,6 +323,7 @@ export default function Gstr1Report() {
           onPress={() => setMonthOpen(true)}
           icon="calendar-month-outline"
           hint={wholeMonth ? undefined : tr('compliance:gstr1.notWholeMonth')}
+          containerStyle={fw('md')}
         />
         <View style={{ height: t.spacing.lg }} />
         {/* The first answer still on its way: shapes, not a return of zeros. A failure says so. */}
@@ -329,13 +333,16 @@ export default function Gstr1Report() {
           <ReportSkeleton />
         ) : (
         <>
-        <KeyFigures
-          rows={[
-            { label: tr('compliance:gstr1.documents'), value: String(summary.totals.documents) },
-            { label: tr('common:totals.taxableValue'), value: formatMoney(summary.totals.taxableValue) },
-            { label: tr('common:table.tax'), value: formatMoney(summary.totals.tax) },
-          ]}
-        />
+        {/* Three figures: on a desktop the amounts sit beside their labels, not across the page. */}
+        <View style={desktop ? { maxWidth: 480 } : undefined}>
+          <KeyFigures
+            rows={[
+              { label: tr('compliance:gstr1.documents'), value: String(summary.totals.documents) },
+              { label: tr('common:totals.taxableValue'), value: formatMoney(summary.totals.taxableValue) },
+              { label: tr('common:table.tax'), value: formatMoney(summary.totals.tax) },
+            ]}
+          />
+        </View>
 
         <View style={{ height: t.spacing.lg }} />
 
@@ -382,7 +389,7 @@ export default function Gstr1Report() {
         <View style={{ height: t.spacing.md }} />
 
         {count === 0 ? (
-          <Card padded={false}>
+          <Card padded={false} style={desktop ? { maxWidth: 720 } : undefined}>
             <EmptyState
               illustration="no-documents"
               icon="file-send-outline"

@@ -93,25 +93,29 @@ function StockTransferForm() {
   return (
     <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('nav:title.branchTransfer') }} />
-      <ScrollView contentContainerStyle={{ paddingBottom: 48, gap: t.spacing.lg }} keyboardShouldPersistTaps="handled">
+      {/* Inset to line up with the page title, as the item form is. */}
+      <ScrollView contentContainerStyle={{ paddingHorizontal: t.spacing.lg, paddingBottom: 48, gap: t.spacing.lg }} keyboardShouldPersistTaps="handled">
         <TwoColumns
           main={
             <>
               <Panel title={tr('inventory:transfer.whatTitle')} subtitle={tr('inventory:transfer.whatHint')} icon="package-variant-closed">
-                {/* Opened for an item that hasn't arrived yet: a placeholder, not an empty picker. */}
-                {itemId && !item && itemsPending ? (
-                  <SkeletonGroup>
-                    <SkeletonFormField />
-                  </SkeletonGroup>
-                ) : (
-                  <PickerField
-                    label={tr('inventory:transfer.item')}
-                    value={item ? `${item.name} (${item.sku})` : undefined}
-                    onPress={() => setItemOpen(true)}
-                    icon="package-variant-closed"
-                    required
-                  />
-                )}
+                {/* Opened for an item that hasn't arrived yet: a placeholder, not an empty picker. Half the row, over the quantity. */}
+                <Row>
+                  {itemId && !item && itemsPending ? (
+                    <SkeletonGroup>
+                      <SkeletonFormField />
+                    </SkeletonGroup>
+                  ) : (
+                    <PickerField
+                      label={tr('inventory:transfer.item')}
+                      value={item ? `${item.name} (${item.sku})` : undefined}
+                      onPress={() => setItemOpen(true)}
+                      icon="package-variant-closed"
+                      required
+                    />
+                  )}
+                  {null}
+                </Row>
                 <Row>
                   <TextField
                     label={tr('inventory:transfer.quantity')}

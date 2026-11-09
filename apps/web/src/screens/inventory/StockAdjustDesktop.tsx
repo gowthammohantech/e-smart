@@ -99,7 +99,8 @@ function StockAdjustForm() {
   return (
     <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('nav:title.stockAdjustment') }} />
-      <ScrollView contentContainerStyle={{ paddingBottom: 48, gap: t.spacing.lg }} keyboardShouldPersistTaps="handled">
+      {/* Inset to line up with the page title, as the item form is. */}
+      <ScrollView contentContainerStyle={{ paddingHorizontal: t.spacing.lg, paddingBottom: 48, gap: t.spacing.lg }} keyboardShouldPersistTaps="handled">
         <TwoColumns
           main={
             <Panel title={tr('inventory:adjust.adjustment')} subtitle={tr('inventory:adjust.panelHint')} icon="tune-variant">
@@ -161,13 +162,17 @@ function StockAdjustForm() {
                 <DateField label={tr('inventory:adjust.date')} value={date} onChange={setDate} />
               </Row>
 
-              <PickerField
-                label={tr('inventory:adjust.reason')}
-                value={reason || undefined}
-                placeholder={tr('inventory:adjust.reasonPlaceholder')}
-                onPress={() => setReasonOpen(true)}
-                icon="comment-question-outline"
-              />
+              {/* Half the row, under the quantity. */}
+              <Row>
+                <PickerField
+                  label={tr('inventory:adjust.reason')}
+                  value={reason || undefined}
+                  placeholder={tr('inventory:adjust.reasonPlaceholder')}
+                  onPress={() => setReasonOpen(true)}
+                  icon="comment-question-outline"
+                />
+                {null}
+              </Row>
             </Panel>
           }
           side={

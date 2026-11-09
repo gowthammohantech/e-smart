@@ -23,7 +23,8 @@ import { detailRouteFor } from '../documents/DocumentEditor';
 import { formatDate, nowISO } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
 import { EWAY_STATUS_META, E_INVOICE_STATUS_META, expiryPhrase } from './complianceMeta';
-import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { Cell, DataTable } from '@esmart/ui/components/DataTable';
 import { useQueryParams } from '../../navigation/queryParams';
 import { ListSkeleton, MoreRowsSkeleton } from '../../components/ScreenSkeleton';
 
@@ -58,6 +59,7 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
   const t = useTheme();
   const { t: tr } = useTranslation(['compliance', 'common']);
   const router = useRouter();
+  const desktop = useIsDesktop();
 
   // Tab and status filters live in the URL (`?tab=eway&eway=active`); search stays local.
   const [params, setParams] = useQueryParams();
@@ -87,10 +89,16 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
   const loading = shownList.isLoading || shownList.isPlaceholderData;
   // Until the counts arrive the tiles shimmer rather than read "0".
   const countsLoading = !summary.loaded;
+  // Banners and notes read as one line of text; on a desktop they stop at a readable width.
+  const noteWidth = desktop ? { maxWidth: 720 } : null;
+  const statusCell = (label: string, tone: React.ComponentProps<typeof Badge>['tone']) => (
+    <Badge label={label} tone={tone} size="sm" />
+  );
 
   return (
     <ScrollView
-      contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: bottomInset }}
+      // A desktop has no tab bar or floating button to clear at the bottom.
+      contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: desktop ? t.spacing.xxl : bottomInset }}
       showsVerticalScrollIndicator={SHOW_SCROLLBAR}
       keyboardShouldPersistTaps="handled"
     >
@@ -145,7 +153,7 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
       )}
 
       {tab === 'eway' && summary.ewayOutstanding && ewayFilter !== 'pending' ? (
-        <Pressable onPress={() => setEwayFilter('pending')} accessibilityRole="button" style={{ marginTop: t.spacing.md }}>
+        <Pressable onPress={() => setEwayFilter('pending')} accessibilityRole="button" style={[{ marginTop: t.spacing.md }, noteWidth]}>
           <Card variant="flat" style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md, borderColor: t.c.warn }}>
             <Icon name="truck-alert-outline" size={20} color={t.c.warn} />
             <Text variant="small" tone="warn" style={{ flex: 1, lineHeight: 18 }}>
@@ -160,7 +168,7 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
         <Pressable
           onPress={() => setEwayFilter('active')}
           accessibilityRole="button"
-          style={{ marginTop: t.spacing.md }}
+          style={[{ marginTop: t.spacing.md }, noteWidth]}
         >
           <Card
             variant="flat"
@@ -181,7 +189,7 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
       ) : null}
 
       {!settings.eInvoiceEnabled && tab === 'eInvoice' ? (
-        <Card variant="flat" style={{ marginTop: t.spacing.md }}>
+        <Card variant="flat" style={[{ marginTop: t.spacing.md }, noteWidth]}>
           <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>{tr('compliance:hub.switchedOff')}</Text>
         </Card>
       ) : null}
@@ -231,6 +239,87 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
 
       {loading ? (
         <ListSkeleton kind="list" />
+      ) : desktop && tab === 'eInvoice' && eInvoiceRows.length ? (
+        // A desktop reads the register as a table: number, party, date, IRN, amount and status in columns.
+        <DataTable
+          scroll={false}
+          rows={eInvoiceRows}
+          rowKey={(d) => d.id}
+          rowLabel={(d) => d.number}
+          onRowPress={(d) => router.push(detailRouteFor(d.kind!, d.id) as never)}
+          columns={[
+            { key: 'number', header: tr('common:table.number'), width: 170, render: (d) => <Cell weight="600">{d.number}</Cell> },
+            { key: 'party', header: tr('common:table.party'), flex: 1.5, render: (d) => <Cell>{nameOf(d)}</Cell> },
+            { key: 'date', header: tr('common:table.date'), width: 130, render: (d) => <Cell tone="muted">{formatDate(d.date)}</Cell> },
+            { key: 'irn', header: 'IRN', flex: 1, secondary: true, render: (d) => <Cell tone="muted" mono>{d.irn ? `${d.irn.slice(0, 16)}…` : '—'}</Cell> },
+            { key: 'amount', header: tr('common:table.amount'), width: 150, align: 'right', render: (d) => <Cell mono>{formatMoney(d.grandTotal)}</Cell> },
+            {
+              key: 'status',
+              header: tr('common:table.status'),
+              width: 160,
+              render: (d) => {
+                const meta = E_INVOICE_STATUS_META[d.eInvoiceStatus ?? 'pending'];
+                return statusCell(keyLabel(tr, meta.labelKey), meta.tone);
+              },
+            },
+          ]}
+        />
+      ) : desktop && tab === 'eway' && ewayFilter === 'pending' && unbilledRows.length ? (
+        <DataTable
+          scroll={false}
+          rows={unbilledRows}
+          rowKey={(d) => d.id}
+          rowLabel={(d) => d.number}
+          // The document's own page raises the bill.
+          onRowPress={(d) => router.push(detailRouteFor(d.kind!, d.id) as never)}
+          columns={[
+            { key: 'number', header: tr('common:table.number'), width: 170, render: (d) => <Cell weight="600">{d.number}</Cell> },
+            { key: 'party', header: tr('common:table.party'), flex: 1.5, render: (d) => <Cell>{nameOf(d)}</Cell> },
+            { key: 'date', header: tr('common:table.date'), width: 130, render: (d) => <Cell tone="muted">{formatDate(d.date)}</Cell> },
+            { key: 'amount', header: tr('common:table.amount'), width: 150, align: 'right', render: (d) => <Cell mono>{formatMoney(d.grandTotal)}</Cell> },
+            { key: 'status', header: tr('common:table.status'), width: 160, render: () => statusCell(tr('compliance:hub.needsBill'), 'warning') },
+          ]}
+        />
+      ) : desktop && tab === 'eway' && ewayFilter !== 'pending' && ewayRows.length ? (
+        <DataTable
+          scroll={false}
+          rows={ewayRows}
+          rowKey={(b) => b.id}
+          rowLabel={(b) => b.ewayBillNumber}
+          onRowPress={(b) => router.push(`/(app)/compliance/eway/${b.id}`)}
+          columns={[
+            { key: 'number', header: tr('compliance:ewb.number'), width: 170, render: (b) => <Cell weight="600" mono>{b.ewayBillNumber}</Cell> },
+            { key: 'document', header: tr('compliance:ewb.document'), width: 160, render: (b) => <Cell>{b.documentNumber}</Cell> },
+            { key: 'party', header: tr('common:table.party'), flex: 1.5, render: (b) => <Cell>{b.to.legalName}</Cell> },
+            {
+              key: 'valid',
+              header: tr('compliance:ewb.validUntil'),
+              flex: 1,
+              render: (b) => {
+                const status = ewayBillStatusAt(b, now);
+                if (status === 'cancelled') {
+                  return (
+                    <Cell tone="muted">
+                      {b.cancelledAt ? tr('compliance:ewb.cancelledOn', { date: formatDate(b.cancelledAt.slice(0, 10)) }) : tr('compliance:status.eway.cancelled')}
+                    </Cell>
+                  );
+                }
+                return <Cell tone="muted">{`${formatDate(b.validUpto.slice(0, 10))} · ${expiryPhrase(tr, hoursUntilExpiry(b, now))}`}</Cell>;
+              },
+            },
+            {
+              key: 'status',
+              header: tr('common:table.status'),
+              width: 150,
+              render: (b) => {
+                const status = ewayBillStatusAt(b, now);
+                const meta = EWAY_STATUS_META[status];
+                const soon = status === 'active' && hoursUntilExpiry(b, now) <= 24;
+                return statusCell(keyLabel(tr, meta.labelKey), soon ? 'warning' : meta.tone);
+              },
+            },
+          ]}
+        />
       ) : tab === 'eInvoice' ? (
         eInvoiceRows.length ? (
           <Card padded={false}>

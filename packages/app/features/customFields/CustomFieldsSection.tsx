@@ -8,6 +8,8 @@ import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { checkCustomValues, type CustomField, type CustomFieldEntity, type CustomValues } from '@esmart/core/domain/customFields';
 import { SkeletonFormField, SkeletonGroup } from '@esmart/ui/components/Skeleton';
+import { FieldRow } from '@esmart/ui/components/Layout';
+import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { useAppStore } from '../../store/appStore';
 import { useSetupReady } from '../../store/selectors';
 
@@ -47,6 +49,7 @@ export function customFieldErrors(fields: CustomField[], entity: CustomFieldEnti
  */
 export function CustomFieldsSection({ entity, values, onChange, errors }: { entity: CustomFieldEntity; values: CustomValues; onChange: (next: CustomValues) => void; errors?: Record<string, string> }) {
   const t = useTheme();
+  const desktop = useIsDesktop();
   const { t: tr } = useTranslation(['settings']);
   const fields = useCustomFields(entity);
   const setupReady = useSetupReady();
@@ -65,7 +68,7 @@ export function CustomFieldsSection({ entity, values, onChange, errors }: { enti
 
   return (
     <View style={{ gap: t.spacing.md }}>
-      {fields.map((f) => {
+      {pairs(desktop, fields.map((f) => {
         const v = values[f.id];
         const error = errors?.[f.id];
         switch (f.kind) {
@@ -101,7 +104,7 @@ export function CustomFieldsSection({ entity, values, onChange, errors }: { enti
           default:
             return <TextField key={f.id} label={f.label} required={f.required} value={typeof v === 'string' ? v : ''} onChangeText={(text) => set(f.id, text)} error={error} />;
         }
-      })}
+      }))}
       <SelectSheet
         visible={!!picking}
         onClose={() => setPicking(null)}
@@ -115,4 +118,22 @@ export function CustomFieldsSection({ entity, values, onChange, errors }: { enti
       />
     </View>
   );
+}
+
+/**
+ * On a desktop the fields go two to a row, so a short value isn't a box the width of the form and a
+ * tick box's switch sits near its label. A phone keeps one per row.
+ */
+function pairs(desktop: boolean, nodes: React.ReactElement[]): React.ReactNode {
+  if (!desktop) return nodes;
+  const rows: React.ReactNode[] = [];
+  for (let i = 0; i < nodes.length; i += 2) {
+    rows.push(
+      <FieldRow key={String(nodes[i].key)} columns={2}>
+        {nodes[i]}
+        {nodes[i + 1] ?? null}
+      </FieldRow>,
+    );
+  }
+  return rows;
 }

@@ -43,7 +43,7 @@ import { formatDate, formatDateTime, nowISO } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
 import { EWAY_STATUS_META, expiryPhrase } from './complianceMeta';
 import { portalToast } from './portalToast';
-import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 
 type Entry =
   | { at: string; kind: 'partB'; label: string; detail: string; icon: 'truck-outline' }
@@ -504,6 +504,7 @@ function PartBSheet({
   }) => void;
 }) {
   const t = useTheme();
+  const desktop = useIsDesktop();
   const { t: tr } = useTranslation(['compliance', 'common', 'domain']);
   const [mode, setMode] = useState<TransportMode>(bill.transportMode);
   const [vehicleNumber, setVehicleNumber] = useState(bill.vehicleNumber ?? '');
@@ -513,9 +514,11 @@ function PartBSheet({
   const [remark, setRemark] = useState('');
 
   return (
+    // A drawer on a desktop: the bill stays in view beside the form.
     <Sheet
       visible={visible}
       onClose={onClose}
+      desktopAs="drawer"
       title={tr('compliance:ewb.updatePartB')}
       subtitle={bill.ewayBillNumber}
       footer={
@@ -535,7 +538,7 @@ function PartBSheet({
               remark: remark.trim() || undefined,
             })
           }
-          fullWidth
+          fullWidth={!desktop}
         />
       }
     >
@@ -612,6 +615,7 @@ function ExtendSheet({
   }) => void;
 }) {
   const t = useTheme();
+  const desktop = useIsDesktop();
   const { t: tr } = useTranslation(['compliance', 'common', 'domain']);
   const [remaining, setRemaining] = useState('');
   const [reasonCode, setReasonCode] = useState<EwayExtendReasonCode>('3');
@@ -621,9 +625,11 @@ function ExtendSheet({
   const [pincode, setPincode] = useState(bill.to.pincode);
 
   return (
+    // A drawer on a desktop: the bill stays in view beside the form.
     <Sheet
       visible={visible}
       onClose={onClose}
+      desktopAs="drawer"
       title={tr('compliance:ewb.extendValidity')}
       subtitle={bill.ewayBillNumber}
       footer={
@@ -642,7 +648,7 @@ function ExtendSheet({
               currentStateCode: bill.to.stateCode,
             })
           }
-          fullWidth
+          fullWidth={!desktop}
         />
       }
     >
@@ -703,21 +709,24 @@ function CancelSheet({
   onSubmit: (code: CancelReasonCode, remark?: string) => void;
 }) {
   const t = useTheme();
+  const desktop = useIsDesktop();
   const { t: tr } = useTranslation(['compliance', 'common', 'domain']);
   const [reasonCode, setReasonCode] = useState<CancelReasonCode>('2');
   const [remark, setRemark] = useState('');
 
   return (
+    // A drawer on a desktop: the bill stays in view beside the form.
     <Sheet
       visible={visible}
       onClose={onClose}
+      desktopAs="drawer"
       title={tr('compliance:ewb.cancelEwb')}
       footer={
         <Button
           title={tr('compliance:ewb.continue')}
           variant="danger"
           onPress={() => onSubmit(reasonCode, remark.trim() || undefined)}
-          fullWidth
+          fullWidth={!desktop}
         />
       }
     >

@@ -14,7 +14,7 @@ import { PickerField, Segmented, TextField } from '@esmart/ui/components/Field';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { Text } from '@esmart/ui/components/Text';
 import { useToast } from '@esmart/ui/components/Toast';
-import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, useFieldWidth, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { formatDate } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
 import { api } from '../../../remote/api';
@@ -63,6 +63,8 @@ const taxOf = (a?: Amounts) => add(a?.igst, a?.cgst, a?.sgst, a?.cess);
  */
 export default function GstReturnsScreen() {
   const t = useTheme();
+  const desktop = useIsDesktop();
+  const fw = useFieldWidth();
   const router = useRouter();
   const toast = useToast();
   const { t: tr, i18n } = useTranslation(['compliance', 'nav']);
@@ -272,7 +274,8 @@ export default function GstReturnsScreen() {
     const blocked = r === 'gstr3b' && statusOf('gstr1') !== 'filed';
     const saveLabel = status === 'none' || status === 'prepared' || status === 'failed' ? tr('compliance:returns.save') : tr('compliance:returns.saveAgain');
     return (
-      <Card key={r} style={{ gap: t.spacing.md }}>
+      // On a desktop the two returns sit side by side, each half the row.
+      <Card key={r} style={[{ gap: t.spacing.md }, desktop ? { flex: 1, minWidth: 0 } : null]}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: t.spacing.md }}>
           <Text variant="body" weight="700">
             {r === 'gstr1' ? 'GSTR-1' : 'GSTR-3B'}
@@ -312,7 +315,7 @@ export default function GstReturnsScreen() {
               ) : (
                 <>
                   <Button title={tr('compliance:returns.sendEvc')} size="sm" variant="secondary" icon="cellphone-message" loading={busy === `${r}:evc`} disabled={!!busy} onPress={() => void step(r, 'evc', tr('compliance:returns.evcSent'))} />
-                  <TextField label={tr('compliance:returns.evcOtp')} hint={tr('compliance:returns.evcHint')} value={otp[r]} onChangeText={(v) => setOtp((o) => ({ ...o, [r]: v.replace(/\D/g, '').slice(0, 6) }))} keyboardType="number-pad" />
+                  <TextField label={tr('compliance:returns.evcOtp')} hint={tr('compliance:returns.evcHint')} value={otp[r]} onChangeText={(v) => setOtp((o) => ({ ...o, [r]: v.replace(/\D/g, '').slice(0, 6) }))} keyboardType="number-pad" containerStyle={fw('sm')} />
                   <Button title={tr('compliance:returns.file')} icon="send-check-outline" loading={busy === `${r}:file`} disabled={!!busy || otp[r].length !== 6} onPress={() => setAskFile(r)} />
                 </>
               )
@@ -334,12 +337,13 @@ export default function GstReturnsScreen() {
         ) : (
           <>
             <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
+              {/* A desktop keeps each picker at a GSTIN's width, so a lone period picker isn't page-wide. */}
               {gstins.length > 1 ? (
-                <View style={{ flex: 1 }}>
+                <View style={desktop ? { width: 320 } : { flex: 1 }}>
                   <PickerField label="GSTIN" value={gstin ?? undefined} onPress={() => setOpen('gstin')} />
                 </View>
               ) : null}
-              <View style={{ flex: 1 }}>
+              <View style={desktop ? { width: 320 } : { flex: 1 }}>
                 <PickerField label={tr('compliance:gstr2b.period')} value={periodLabel(period)} onPress={() => setOpen('period')} icon="calendar-month-outline" />
               </View>
             </View>
@@ -355,6 +359,7 @@ export default function GstReturnsScreen() {
             ) : null}
             {view ? (
               <>
+                <View style={desktop ? { maxWidth: 480 } : undefined}>
                 <KeyFigures
                   rows={[
                     { label: tr('compliance:returns.dueDate'), value: formatDate(view.dueDate!) },
@@ -364,6 +369,7 @@ export default function GstReturnsScreen() {
                     { label: tr('compliance:returns.cashLedger'), value: formatMoney(taxOf(s?.cashLedger)), tone: taxOf(s?.cashLedger).minor < taxOf(s?.cash).minor ? 'warn' : 'good' },
                   ]}
                 />
+                </View>
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm }}>
                   <Button title={tr('compliance:returns.openUtilization')} icon="scale-balance" variant="secondary" size="sm" onPress={() => router.push(`/(app)/gst/utilization?gstin=${gstin}&period=${period}` as never)} />
                   <Button title={tr('compliance:returns.recordChallan')} icon="bank-plus" variant="ghost" size="sm" onPress={() => router.push('/(app)/gst/challan' as never)} />
@@ -374,21 +380,30 @@ export default function GstReturnsScreen() {
                   </Text>
                 ) : null}
                 {!connected ? (
-                  <Card>
+                  <Card style={desktop ? { maxWidth: 720 } : undefined}>
                     <Text variant="caption" tone="muted">
                       {tr('compliance:returns.fromBooks')}
                     </Text>
                   </Card>
                 ) : !view.filingEnabled ? (
-                  <Card>
+                  <Card style={desktop ? { maxWidth: 720 } : undefined}>
                     <Text variant="caption" tone="muted">
                       {tr('compliance:returns.filingOff')}
                     </Text>
                   </Card>
                 ) : null}
                 {/* Each return's state shows with or without the portal; its steps need the portal. */}
-                {returnCard('gstr1')}
-                {returnCard('gstr3b')}
+                {desktop ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: t.spacing.lg }}>
+                    {returnCard('gstr1')}
+                    {returnCard('gstr3b')}
+                  </View>
+                ) : (
+                  <>
+                    {returnCard('gstr1')}
+                    {returnCard('gstr3b')}
+                  </>
+                )}
                 {/* The 3B as a file, whichever layout is on screen. */}
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm }}>
                   <Button title={tr('compliance:returns.exportPdf')} icon="file-pdf-box" size="sm" variant="secondary" onPress={exportPdf} />
@@ -510,7 +525,8 @@ export default function GstReturnsScreen() {
           </>
         )}
       </ScrollView>
-      <Sheet visible={!!breakup} onClose={() => setBreakup(null)} title={breakup ? tr('compliance:returns.breakupTitle', { table: tableLabel(breakup) }) : undefined}>
+      {/* A drawer on a desktop: the 3B table the documents add up to stays in view. */}
+      <Sheet visible={!!breakup} onClose={() => setBreakup(null)} title={breakup ? tr('compliance:returns.breakupTitle', { table: tableLabel(breakup) }) : undefined} desktopAs="drawer">
         <View style={{ paddingBottom: t.spacing.lg }}>
           {sources.map((x, i) => (
             <ListRow

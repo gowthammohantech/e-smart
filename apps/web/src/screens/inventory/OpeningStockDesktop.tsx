@@ -83,7 +83,8 @@ export function OpeningStockDesktop() {
   return (
     <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('nav:title.openingStock') }} />
-      <ScrollView contentContainerStyle={{ paddingBottom: 48, gap: t.spacing.lg }} keyboardShouldPersistTaps="handled">
+      {/* Inset to line up with the page title, as the item form is. */}
+      <ScrollView contentContainerStyle={{ paddingHorizontal: t.spacing.lg, paddingBottom: 48, gap: t.spacing.lg }} keyboardShouldPersistTaps="handled">
         <TwoColumns
           main={
             <>

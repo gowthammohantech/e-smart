@@ -28,7 +28,7 @@ import { nowISO, today } from '@esmart/core/lib/date';
 import { Errors, gstinRequiredFor, hasErrors, partyGstinError, required, validEmail, validPostalCode } from '@esmart/core/lib/validators';
 import { useAppStore } from '../../store/appStore';
 import { useBaseCurrency, useHasModule, useParties } from '../../store/selectors';
-import { SHOW_SCROLLBAR, useBreakpoint } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, WIDE_FORM_MAX_WIDTH, useBreakpoint } from '@esmart/ui/theme/breakpoints';
 import { useGoBack } from '../../navigation/useGoBack';
 import { useGstinLookup, type GstinDetails } from '../gstin/useGstinLookup';
 import { CustomFieldsSection, customFieldErrors, useCustomFields } from '../customFields/CustomFieldsSection';
@@ -352,7 +352,9 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
           hint={tr('contacts:form.tdsSectionHint')}
         />
         {tdsSectionCode ? (
-          <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
+          // Side by side on a phone; a desktop's side column is too narrow for a date beside the
+          // rate, so there the two stack, the rate at a percentage's width.
+          <View style={desktop ? { gap: t.spacing.lg } : { flexDirection: 'row', gap: t.spacing.md }}>
             <TextField
               label={tr('contacts:form.lowerTdsRate')}
               value={certRate}
@@ -360,9 +362,9 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
               placeholder="—"
               keyboardType="decimal-pad"
               hint={tr('contacts:form.lowerTds')}
-              containerStyle={{ flex: 1 }}
+              containerStyle={desktop ? { maxWidth: 160 } : { flex: 1 }}
             />
-            <View style={{ flex: 1 }}>
+            <View style={desktop ? { maxWidth: 220 } : { flex: 1 }}>
               <DateField label={tr('contacts:form.lowerTdsValidTill')} value={certValidTill} onChange={setCertValidTill} />
             </View>
           </View>
@@ -620,7 +622,7 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
     >
       {/* A narrow browser window (icon-only sidebar) has no room for the side column. */}
       {breakpoint === 'tablet' ? (
-        <View style={{ gap: t.spacing.lg }}>
+        <View style={{ gap: t.spacing.lg, maxWidth: WIDE_FORM_MAX_WIDTH }}>
           {details}
           {address}
           {trading}
@@ -628,7 +630,7 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
         </View>
       ) : (
         <SplitPane
-          sideWidth={360}
+          sideWidth={380}
           main={
             <View style={{ gap: t.spacing.lg }}>
               {details}
@@ -648,7 +650,8 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <FormContainer wide={desktop} style={desktop ? { maxWidth: '100%' } : undefined}>
+      {/* Two columns on a desktop: the details and address beside the terms, no wider than they need. */}
+      <FormContainer wide={desktop} style={desktop ? { maxWidth: 1180 } : undefined}>
         {desktop ? desktopForm : phoneForm}
 
         <FormActions>

@@ -202,7 +202,6 @@ function ItemFormDesktopFields({ item }: { item?: Item }) {
       {/* Inset to line up with the page title and the header buttons. */}
       <ScrollView contentContainerStyle={{ paddingHorizontal: t.spacing.lg, paddingBottom: 48, gap: t.spacing.lg }} keyboardShouldPersistTaps="handled">
         <TwoColumns
-          fill
           main={
             <>
               <Panel title={tr('inventory:form.section.details')} subtitle={tr('inventory:form.section.detailsHint')} icon="tag-outline">

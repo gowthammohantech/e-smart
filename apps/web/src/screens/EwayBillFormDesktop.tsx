@@ -281,13 +281,16 @@ function EwayBillFormDesktop({ doc }: { doc: BusinessDocument }) {
 
       <FormSection title={tr('compliance:ewb.transportPartB')}>
         {transporters.length ? (
-          <PickerField
-            label={tr('compliance:ewb.savedTransporter')}
-            value={transporters.find((x) => x.transporterId === transporterId.trim().toUpperCase())?.name}
-            placeholder={tr('compliance:ewb.pickOrType')}
-            onPress={() => setTransporterOpen(true)}
-            icon="truck-outline"
-          />
+          // Half the row, over the ID and name it fills in.
+          <FieldRow columns={2}>
+            <PickerField
+              label={tr('compliance:ewb.savedTransporter')}
+              value={transporters.find((x) => x.transporterId === transporterId.trim().toUpperCase())?.name}
+              placeholder={tr('compliance:ewb.pickOrType')}
+              onPress={() => setTransporterOpen(true)}
+              icon="truck-outline"
+            />
+          </FieldRow>
         ) : null}
         <FieldRow>
           <TextField
@@ -363,7 +366,7 @@ function EwayBillFormDesktop({ doc }: { doc: BusinessDocument }) {
                 error={errors.transportDocDate}
               />
             </FieldRow>
-            {distanceField}
+            <FieldRow columns={2}>{distanceField}</FieldRow>
           </>
         )}
       </FormSection>
@@ -420,7 +423,8 @@ function EwayBillFormDesktop({ doc }: { doc: BusinessDocument }) {
   return (
     <>
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: t.spacing.xxxl }} keyboardShouldPersistTaps="handled">
-        <SplitPane main={main} side={side} sideWidth={360} />
+        {/* The form and its summary stop at a width where pairs of fields read as pairs. */}
+        <SplitPane main={main} side={side} sideWidth={360} style={{ maxWidth: 1180 }} />
       </ScrollView>
       <EwayBillFormSheets form={form} />
     </>

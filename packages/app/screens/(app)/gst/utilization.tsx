@@ -15,7 +15,7 @@ import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { Text } from '@esmart/ui/components/Text';
 import { useToast } from '@esmart/ui/components/Toast';
-import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, useFieldWidth, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { cashUsed, creditMayPay, HEADS, setOffIssues, type Heads, type SetOff, type SetOffInput } from '@esmart/core/domain/gstUtilization';
 import { formatDate, today } from '@esmart/core/lib/date';
 import { formatMoney, toAmountInput } from '@esmart/core/lib/format';
@@ -48,6 +48,8 @@ const emptyHeads = (): Record<Head, string> => ({ igst: '', cgst: '', sgst: '', 
  */
 export default function GstUtilizationScreen() {
   const t = useTheme();
+  const desktop = useIsDesktop();
+  const fw = useFieldWidth();
   const router = useRouter();
   const toast = useToast();
   const { t: tr } = useTranslation(['compliance', 'books', 'common']);
@@ -180,7 +182,8 @@ export default function GstUtilizationScreen() {
   };
 
   const field = (key: string, value: string, onChange: (v: string) => void, label: string) => (
-    <View key={key} style={{ flexGrow: 1, flexBasis: 120 }}>
+    // A desktop keeps each amount at an amount's width, so the heads line up in columns.
+    <View key={key} style={desktop ? { width: 200 } : { flexGrow: 1, flexBasis: 120 }}>
       <AmountField label={label} value={value} onChangeValue={onChange} currency={baseCurrency} align="right" />
     </View>
   );
@@ -197,21 +200,22 @@ export default function GstUtilizationScreen() {
   return (
     <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('compliance:utilization.title') }} />
-      <FormContainer style={{ maxWidth: '100%' }}>
+      {/* Room for the six-column position table on a desktop, no more. */}
+      <FormContainer style={{ maxWidth: desktop ? 960 : '100%' }}>
         <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: t.spacing.xxxl, gap: t.spacing.lg }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
           <Text variant="small" tone="muted">
             {tr('compliance:utilization.hint')}
           </Text>
           <View style={{ flexDirection: 'row', gap: t.spacing.md, flexWrap: 'wrap' }}>
             {gstins.length > 1 ? (
-              <View style={{ flex: 1, minWidth: 200 }}>
+              <View style={desktop ? { width: 320 } : { flex: 1, minWidth: 200 }}>
                 <PickerField label="GSTIN" value={g} onPress={() => setOpen('gstin')} />
               </View>
             ) : null}
-            <View style={{ flex: 1, minWidth: 160 }}>
+            <View style={desktop ? { width: 220 } : { flex: 1, minWidth: 160 }}>
               <PickerField label={tr('compliance:gstr2b.period')} value={periodLabel(period)} onPress={() => setOpen('period')} icon="calendar-month-outline" />
             </View>
-            <View style={{ flex: 1, minWidth: 160 }}>
+            <View style={desktop ? { width: 220 } : { flex: 1, minWidth: 160 }}>
               <DateField label={tr('compliance:utilization.date')} value={date} onChange={setDate} maximumDate={new Date()} />
             </View>
           </View>
@@ -304,6 +308,7 @@ export default function GstUtilizationScreen() {
                     </Text>
                   </FormSection>
                   {needed ? (
+                    <View style={desktop ? { maxWidth: 480 } : undefined}>
                     <KeyFigures
                       rows={HEADS.filter((h) => needed[h] || view.cashBalance[h]).map((h) => ({
                         label: tr('compliance:utilization.cashNeeded', { head: headLabel(h) }),
@@ -311,6 +316,7 @@ export default function GstUtilizationScreen() {
                         tone: needed[h] > view.cashBalance[h] ? 'bad' : 'good',
                       }))}
                     />
+                    </View>
                   ) : null}
                   {rules.map((i) => (
                     <Text key={i.field + i.message} variant="caption" tone="bad">
@@ -318,7 +324,7 @@ export default function GstUtilizationScreen() {
                     </Text>
                   ))}
                   {short.length ? (
-                    <Card style={{ gap: t.spacing.sm }}>
+                    <Card style={[{ gap: t.spacing.sm }, desktop ? { maxWidth: 720 } : null]}>
                       <Text variant="body" weight="700" tone="bad">
                         {tr('compliance:utilization.short')}
                       </Text>
@@ -330,7 +336,7 @@ export default function GstUtilizationScreen() {
                       <Button title={tr('compliance:returns.recordChallan')} icon="bank-plus" size="sm" onPress={recordChallan} />
                     </Card>
                   ) : null}
-                  <TextField label={tr('books:vouchers.narration')} value={narration} onChangeText={setNarration} placeholder={tr('compliance:utilization.narrationPlaceholder', { period: periodLabel(period) })} />
+                  <TextField label={tr('books:vouchers.narration')} value={narration} onChangeText={setNarration} placeholder={tr('compliance:utilization.narrationPlaceholder', { period: periodLabel(period) })} containerStyle={fw('lg')} />
                   <Button title={tr('compliance:utilization.resetPrefill')} icon="restore" variant="ghost" size="sm" onPress={() => setInputs(toInputs(view.prefill as SetOff))} />
                 </>
               ) : null}
@@ -339,7 +345,7 @@ export default function GstUtilizationScreen() {
         </ScrollView>
         {view && !existing.length ? (
           <FormActions>
-            <Button title={tr('compliance:utilization.post')} onPress={() => void post()} loading={busy} disabled={busy || !!issues.length} fullWidth shortcut="S" />
+            <Button title={tr('compliance:utilization.post')} onPress={() => void post()} loading={busy} disabled={busy || !!issues.length} fullWidth={!desktop} shortcut="S" />
           </FormActions>
         ) : null}
       </FormContainer>

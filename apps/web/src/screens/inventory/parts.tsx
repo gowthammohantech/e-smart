@@ -38,14 +38,15 @@ export function TwoColumns({
   );
 }
 
-/** Fields side by side, equal widths. */
+/**
+ * Fields side by side, equal widths. A hidden field (null) keeps its slot, so the
+ * one left beside it stays half the row instead of stretching across it.
+ */
 export function Row({ children }: { children: React.ReactNode }) {
   const t = useTheme();
   return (
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.lg, alignItems: 'flex-start' }}>
-      {React.Children.map(children, (child) =>
-        child ? <View style={{ flexGrow: 1, flexBasis: 200, minWidth: 0 }}>{child}</View> : null,
-      )}
+      {React.Children.map(children, (child) => <View style={{ flexGrow: 1, flexBasis: 200, minWidth: 0 }}>{child || null}</View>)}
     </View>
   );
 }

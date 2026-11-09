@@ -18,7 +18,8 @@ import { today } from '@esmart/core/lib/date';
 import type { Item } from '@esmart/core/types';
 import { formatMoney, formatQty } from '@esmart/core/lib/format';
 import { multiply } from '@esmart/core/lib/money';
-import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { Cell, DataTable } from '@esmart/ui/components/DataTable';
 import { CardRowsSkeleton } from '../../../components/ScreenSkeleton';
 import { unitShortName } from '@esmart/core/data/masters';
 import { LoadFailed } from '../../../features/company/LoadFailed';
@@ -26,8 +27,9 @@ import { LoadFailed } from '../../../features/company/LoadFailed';
 export default function LowStock() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
-  const { t: tr } = useTranslation(['inventory', 'nav']);
+  const { t: tr } = useTranslation(['inventory', 'nav', 'common']);
   const router = useRouter();
+  const desktop = useIsDesktop();
 
   const baseCurrency = useBaseCurrency();
   const companyId = useAppStore((s) => s.activeCompanyId);
@@ -58,7 +60,7 @@ export default function LowStock() {
     <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('nav:title.lowStock') }} />
 
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 + insets.bottom }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
+      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: desktop ? t.spacing.xxl : 120 + insets.bottom }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         {failed ? (
           <Card padded={false}>
             <LoadFailed onRetry={reportQuery.refetch} />
@@ -78,7 +80,49 @@ export default function LowStock() {
 
         <View style={{ height: t.spacing.lg }} />
 
-        <Card padded={false}>
+        {desktop && (loading || rows.length) ? (
+          // A desktop reads the short items as a table: on hand against the reorder level, and what to buy.
+          <DataTable
+            scroll={false}
+            loading={loading}
+            rows={rows}
+            rowKey={(r) => r.item.id}
+            rowLabel={(r) => r.item.name}
+            onRowPress={(r) => router.push(`/(app)/catalog/items/${r.item.id}`)}
+            columns={[
+              { key: 'name', header: tr('common:table.name'), flex: 2, render: (r) => <Cell weight="600">{r.item.name}</Cell> },
+              { key: 'sku', header: tr('common:table.sku'), width: 140, render: (r) => <Cell tone="muted">{r.item.sku || '—'}</Cell> },
+              {
+                key: 'onHand',
+                header: tr('common:table.onHand'),
+                width: 120,
+                align: 'right',
+                render: (r) => (
+                  <Cell weight="700" tone={r.onHand <= 0 ? 'bad' : 'warn'} mono>
+                    {`${formatQty(r.onHand)} ${unitShortName(r.item.unit) || r.item.unit}`}
+                  </Cell>
+                ),
+              },
+              { key: 'reorder', header: tr('inventory:form.reorderLevel'), width: 140, align: 'right', render: (r) => <Cell tone="muted" mono>{formatQty(r.item.reorderLevel)}</Cell> },
+              {
+                key: 'restock',
+                header: tr('inventory:lowStock.restockCost'),
+                flex: 1.2,
+                render: (r) => {
+                  const shortfall = Math.max(0, r.item.reorderLevel * 2 - r.onHand);
+                  return <Cell tone="muted">{tr('inventory:lowStock.buySuggestion', { qty: formatQty(shortfall), amount: formatMoney(multiply(r.item.purchasePrice, shortfall)) })}</Cell>;
+                },
+              },
+              {
+                key: 'status',
+                header: tr('common:table.status'),
+                width: 110,
+                render: (r) => (r.onHand <= 0 ? <Badge label={tr('inventory:lowStock.out')} tone="danger" size="sm" /> : null),
+              },
+            ]}
+          />
+        ) : (
+        <Card padded={false} style={desktop ? { maxWidth: 720 } : undefined}>
           {loading ? (
             <CardRowsSkeleton kind="list" rows={6} />
           ) : rows.length === 0 ? (
@@ -139,6 +183,7 @@ export default function LowStock() {
             })
           )}
         </Card>
+        )}
         </>
         )}
       </ScrollView>

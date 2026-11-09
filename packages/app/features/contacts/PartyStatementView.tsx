@@ -11,6 +11,7 @@ import { Text } from '@esmart/ui/components/Text';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { useToast } from '@esmart/ui/components/Toast';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { Cell, DataTable } from '@esmart/ui/components/DataTable';
 import { financialYearOf, formatDate, today } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
 import type { Money } from '@esmart/core/lib/money';
@@ -33,7 +34,7 @@ export function PartyStatementView({ party }: { party: Party }) {
   const desktop = useIsDesktop();
   const router = useRouter();
   const toast = useToast();
-  const { t: tr } = useTranslation(['contacts', 'common']);
+  const { t: tr } = useTranslation(['contacts', 'common', 'books']);
   const company = useActiveCompany();
   const [from, setFrom] = useState(() => financialYearOf(today(), company.fiscalYearStartMonth).start);
   const [to, setTo] = useState(today());
@@ -75,13 +76,19 @@ export function PartyStatementView({ party }: { party: Party }) {
   const entries = data?.entries ?? [];
   return (
     <ScrollView contentContainerStyle={{ padding: t.spacing.lg, gap: t.spacing.md, paddingBottom: t.spacing.xxxl }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
-      <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
-        <View style={{ flex: 1 }}>
+      {/* A desktop keeps the dates at a date's width, with the download at the right of the same row. */}
+      <View style={{ flexDirection: 'row', gap: t.spacing.md, alignItems: desktop ? 'flex-end' : undefined }}>
+        <View style={desktop ? { width: 200 } : { flex: 1 }}>
           <DateField label={tr('contacts:statement.from')} value={from} onChange={setFrom} maximumDate={new Date()} />
         </View>
-        <View style={{ flex: 1 }}>
+        <View style={desktop ? { width: 200 } : { flex: 1 }}>
           <DateField label={tr('contacts:statement.to')} value={to} onChange={setTo} maximumDate={new Date()} />
         </View>
+        {desktop ? (
+          <View style={{ flex: 1, alignItems: 'flex-end' }}>
+            <Button title={tr('contacts:statement.download')} icon="file-pdf-box" variant="secondary" onPress={() => void download()} loading={busy} disabled={busy || !data} />
+          </View>
+        ) : null}
       </View>
 
       {/* A new range still loading: the old range's figures would sit under the new dates. */}
@@ -91,7 +98,7 @@ export function PartyStatementView({ party }: { party: Party }) {
         <EmptyState icon="alert-circle-outline" title={tr('contacts:statement.loadFailed')} message={describeError(statement.error, tr)} actionLabel={tr('common:action.retry')} onAction={() => void statement.refetch()} />
       ) : (
         <>
-          <Card style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+          <Card style={[{ flexDirection: 'row', justifyContent: 'space-between' }, desktop ? { maxWidth: 560 } : null]}>
             <View>
               <Text variant="caption" tone="muted">
                 {tr('contacts:statement.opening', { date: formatDate(range.from) })}
@@ -110,7 +117,29 @@ export function PartyStatementView({ party }: { party: Party }) {
             </View>
           </Card>
 
-          {entries.length ? (
+          {entries.length && desktop ? (
+            // A desktop reads the statement as a ledger: debit, credit and the balance after each line in columns.
+            <DataTable
+              scroll={false}
+              rows={entries}
+              rowKey={(e) => `${e.entityType}-${e.entityId}-${entries.indexOf(e)}`}
+              rowLabel={(e) => e.number ?? tr('contacts:statement.openingEntry')}
+              onRowPress={(e) => (e.entityType === 'opening' ? undefined : open(e))}
+              columns={[
+                { key: 'date', header: tr('common:table.date'), width: 130, render: (e) => <Cell tone="muted">{e.date ? formatDate(e.date) : ''}</Cell> },
+                { key: 'type', header: tr('common:table.type'), width: 150, render: (e) => <Cell tone="muted">{tr(`contacts:statement.type.${e.entityType ?? 'document'}`)}</Cell> },
+                {
+                  key: 'number',
+                  header: tr('common:table.number'),
+                  flex: 1,
+                  render: (e) => <Cell weight="600">{e.entityType === 'opening' ? tr('contacts:statement.openingEntry') : (e.number ?? '')}</Cell>,
+                },
+                { key: 'debit', header: tr('books:accounts.debitSide'), width: 150, align: 'right', render: (e) => <Cell mono>{e.debit?.minor ? formatMoney(e.debit) : ''}</Cell> },
+                { key: 'credit', header: tr('books:accounts.creditSide'), width: 150, align: 'right', render: (e) => <Cell mono>{e.credit?.minor ? formatMoney(e.credit) : ''}</Cell> },
+                { key: 'balance', header: tr('books:accounts.balance'), width: 170, align: 'right', render: (e) => <Cell weight="600" mono>{balance(e.balance)}</Cell> },
+              ]}
+            />
+          ) : entries.length ? (
             <Card padded={false}>
               {entries.map((e, i) => (
                 <ListRow
@@ -137,7 +166,7 @@ export function PartyStatementView({ party }: { party: Party }) {
             <EmptyState icon="book-open-outline" title={tr('contacts:statement.empty')} message={tr('contacts:statement.emptyBody')} />
           )}
 
-          <Button title={tr('contacts:statement.download')} icon="file-pdf-box" onPress={() => void download()} loading={busy} disabled={busy} fullWidth={!desktop} style={desktop ? { alignSelf: 'flex-end' } : undefined} />
+          {desktop ? null : <Button title={tr('contacts:statement.download')} icon="file-pdf-box" onPress={() => void download()} loading={busy} disabled={busy} fullWidth />}
         </>
       )}
     </ScrollView>

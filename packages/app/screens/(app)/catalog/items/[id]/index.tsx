@@ -33,13 +33,15 @@ import { formatDate } from '@esmart/core/lib/date';
 import { multiply } from '@esmart/core/lib/money';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { SplitPane } from '@esmart/ui/components/Layout';
+import { Menu, MenuItem, useMenuAnchor } from '@esmart/ui/components/Menu';
+import { Cell, DataTable } from '@esmart/ui/components/DataTable';
 import { useGoBack } from '../../../../../navigation/useGoBack';
 
 export default function ItemDetail() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const desktop = useIsDesktop();
-  const { t: tr } = useTranslation(['common', 'inventory', 'nav']);
+  const { t: tr } = useTranslation(['common', 'inventory', 'nav', 'books']);
   const router = useRouter();
   const goBack = useGoBack();
   const { run: serverSave } = useServerSave();
@@ -58,6 +60,8 @@ export default function ItemDetail() {
   const removeItem = useAppStore((s) => s.removeItem);
 
   const [actionsOpen, setActionsOpen] = useState(false);
+  // On a desktop the actions drop down from their header button instead of a sheet.
+  const { setAnchor, rect: actionsRect, open: openActionsMenu, close: closeActionsMenu } = useMenuAnchor();
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   // Stock, value, quantity sold and the movements come from the server. Until it answers they
@@ -207,6 +211,40 @@ export default function ItemDetail() {
     {item.trackInventory && hasInventory ? (
       <>
         <Text variant="caption" tone="muted" weight="600" style={{ marginTop: t.spacing.xl, marginBottom: t.spacing.sm, textTransform: 'uppercase', letterSpacing: 0.8 }}>{tr('inventory:detail.stockMovements')}</Text>
+        {desktop && (ledgerPending || ledger.length) ? (
+          // A desktop reads the movements as a ledger: date, type, reference, the change and the balance after it.
+          <DataTable
+            scroll={false}
+            loading={ledgerPending}
+            rows={ledgerPending ? [] : ledger.slice(0, 20)}
+            rowKey={(row) => row.movement.id}
+            columns={[
+              { key: 'date', header: tr('common:table.date'), width: 130, render: (row) => <Cell tone="muted">{formatDate(row.movement.date)}</Cell> },
+              { key: 'type', header: tr('common:table.type'), flex: 1, render: (row) => <Cell weight="600">{tr(`inventory:movementType.${row.movement.type}`)}</Cell> },
+              {
+                key: 'reference',
+                header: tr('common:table.reference'),
+                flex: 1.4,
+                render: (row) => <Cell tone="muted">{[row.movement.referenceNumber, row.movement.notes].filter(Boolean).join(' · ') || '—'}</Cell>,
+              },
+              {
+                key: 'change',
+                header: tr('common:component.quantity'),
+                width: 120,
+                align: 'right',
+                render: (row) => {
+                  const delta = signedQuantity(row.movement);
+                  return (
+                    <Cell weight="700" tone={delta >= 0 ? 'good' : 'bad'} mono>
+                      {`${delta >= 0 ? '+' : ''}${formatQty(delta)}`}
+                    </Cell>
+                  );
+                },
+              },
+              { key: 'balance', header: tr('books:accounts.balance'), width: 120, align: 'right', render: (row) => <Cell mono>{formatQty(row.balance)}</Cell> },
+            ]}
+          />
+        ) : (
         <Card padded={false}>
           {ledgerPending ? (
             <CardRowsSkeleton rows={5} kind="list" />
@@ -256,10 +294,25 @@ export default function ItemDetail() {
             })
           )}
         </Card>
+        )}
       </>
     ) : null}
     </>
   );
+
+  const actions = [
+    ...(item.trackInventory && hasInventory
+      ? [
+          { label: tr('inventory:detail.adjustStock'), icon: 'tune' as const, onPress: () => router.push(`/(app)/inventory/adjust?itemId=${item.id}`) },
+          { label: tr('inventory:detail.transferBranches'), icon: 'swap-horizontal' as const, onPress: () => router.push(`/(app)/inventory/transfer?itemId=${item.id}`) },
+        ]
+      : []),
+    { label: tr('inventory:detail.sellItem'), icon: 'file-document-edit-outline' as const, onPress: () => router.push(`/(app)/sales/invoices/new?itemId=${item.id}`) },
+    ...(hasPurchases
+      ? [{ label: tr('inventory:detail.buyItem'), icon: 'cart-outline' as const, onPress: () => router.push(`/(app)/purchases/bills/new?itemId=${item.id}`) }]
+      : []),
+    { label: tr('inventory:detail.deleteItem'), icon: 'trash-can-outline' as const, destructive: true, onPress: () => { setActionsOpen(false); setConfirmDelete(true); } },
+  ];
 
   return (
     <View style={{ flex: 1 }}>
@@ -270,7 +323,9 @@ export default function ItemDetail() {
             ? {
                 headerRight: () => (
                   <View style={{ flexDirection: 'row', gap: t.spacing.sm }}>
-                    <Button title={tr('inventory:detail.actions')} variant="ghost" icon="dots-horizontal" onPress={() => setActionsOpen(true)} />
+                    <View ref={setAnchor} collapsable={false}>
+                      <Button title={tr('inventory:detail.actions')} variant="ghost" icon="dots-horizontal" onPress={openActionsMenu} />
+                    </View>
                     <Button title={tr('inventory:detail.edit')} icon="pencil-outline" onPress={() => router.push(`/(app)/catalog/items/${item.id}/edit`)} />
                   </View>
                 ),
@@ -293,7 +348,8 @@ export default function ItemDetail() {
                 {item.trackInventory && hasInventory ? pricingBlock : null}
               </>
             }
-            main={<View>{item.trackInventory && hasInventory ? movementsBlock : pricingBlock}</View>}
+            // An untracked item's main column holds only its prices: kept to a readable width.
+            main={<View style={item.trackInventory && hasInventory ? undefined : { maxWidth: 560 }}>{item.trackInventory && hasInventory ? movementsBlock : pricingBlock}</View>}
           />
         ) : (
           <>
@@ -326,20 +382,22 @@ export default function ItemDetail() {
         </View>
       )}
 
+      <Menu anchor={actionsRect} onClose={closeActionsMenu} align="right" width={240}>
+        {actions.map((a) => (
+          <MenuItem
+            key={a.label}
+            icon={a.icon}
+            label={a.label}
+            destructive={a.destructive}
+            onPress={() => {
+              closeActionsMenu();
+              a.onPress();
+            }}
+          />
+        ))}
+      </Menu>
       <Sheet visible={actionsOpen} onClose={() => setActionsOpen(false)} title={item.name}>
-        {[
-          ...(item.trackInventory && hasInventory
-            ? [
-                { label: tr('inventory:detail.adjustStock'), icon: 'tune' as const, onPress: () => router.push(`/(app)/inventory/adjust?itemId=${item.id}`) },
-                { label: tr('inventory:detail.transferBranches'), icon: 'swap-horizontal' as const, onPress: () => router.push(`/(app)/inventory/transfer?itemId=${item.id}`) },
-              ]
-            : []),
-          { label: tr('inventory:detail.sellItem'), icon: 'file-document-edit-outline' as const, onPress: () => router.push(`/(app)/sales/invoices/new?itemId=${item.id}`) },
-          ...(hasPurchases
-            ? [{ label: tr('inventory:detail.buyItem'), icon: 'cart-outline' as const, onPress: () => router.push(`/(app)/purchases/bills/new?itemId=${item.id}`) }]
-            : []),
-          { label: tr('inventory:detail.deleteItem'), icon: 'trash-can-outline' as const, onPress: () => { setActionsOpen(false); setConfirmDelete(true); } },
-        ].map((a) => (
+        {actions.map((a) => (
           <Pressable
             key={a.label}
             // Every action closes the sheet first; it is a modal, so one left open

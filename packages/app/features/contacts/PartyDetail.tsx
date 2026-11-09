@@ -32,6 +32,7 @@ import { useDocumentPages, useDocumentSummary, usePartyAging, usePaymentPages, u
 import { detailRouteFor } from '../documents/DocumentEditor';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { SplitPane } from '@esmart/ui/components/Layout';
+import { Menu, MenuItem, useMenuAnchor } from '@esmart/ui/components/Menu';
 import { useGoBack } from '../../navigation/useGoBack';
 import { PaymentReminderSheet } from '../ledger/PaymentReminderSheet';
 import { CardRowsSkeleton, ListSkeleton } from '../../components/ScreenSkeleton';
@@ -55,6 +56,8 @@ export function PartyDetail({ party }: { party: Party }) {
   const desktop = useIsDesktop();
   // Details sit in the side column on a desktop, so that tab falls back.
   const shownTab: Tab = desktop && tab === 'details' ? 'activity' : tab;
+  // On a desktop the actions drop down from their header button instead of a sheet.
+  const { setAnchor, rect: actionsRect, open: openActionsMenu, close: closeActionsMenu } = useMenuAnchor();
   const [actionsOpen, setActionsOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [reminderOpen, setReminderOpen] = useState(false);
@@ -380,6 +383,29 @@ export function PartyDetail({ party }: { party: Party }) {
     </>
   );
 
+  const actions: { label: string; icon: IconName; destructive?: boolean; onPress: () => void }[] = [
+    { label: tr('contacts:detail.editContact'), icon: 'pencil-outline' as const, onPress: () => router.push(isCustomer ? `/(app)/contacts/customers/${party.id}/edit` : `/(app)/contacts/suppliers/${party.id}/edit`) },
+    { label: tr('contacts:detail.statement'), icon: 'book-open-outline' as const, onPress: () => router.push(`/(app)/contacts/${isCustomer ? 'customers' : 'suppliers'}/${party.id}/statement` as never) },
+    ...(!canTransact
+      ? []
+      : isCustomer
+      ? [
+          { label: tr('common:quickAction.newInvoice'), icon: 'file-document-edit-outline' as const, onPress: () => router.push(`/(app)/sales/invoices/new?partyId=${party.id}`) },
+          { label: tr('nav:title.newQuotation'), icon: 'file-percent-outline' as const, onPress: () => router.push(`/(app)/sales/quotes/new?partyId=${party.id}`) },
+          // Only when something is owed; it opens the same reminder as the aging screen.
+          ...(outstanding.length ? [{ label: tr('contacts:detail.sendReminder'), icon: 'bell-ring-outline' as const, onPress: () => setReminderOpen(true) }] : []),
+          // A party that is both is bought from too.
+          ...(isBoth
+            ? [
+                { label: tr('nav:title.newPurchaseBill'), icon: 'cart-outline' as const, onPress: () => router.push(`/(app)/purchases/bills/new?partyId=${party.id}`) },
+                { label: tr('contacts:detail.pay'), icon: 'cash-minus' as const, onPress: () => router.push(`/(app)/payments/new?direction=paid&partyId=${party.id}`) },
+              ]
+            : []),
+        ]
+      : [{ label: tr('nav:title.newPurchaseBill'), icon: 'cart-outline' as const, onPress: () => router.push(`/(app)/purchases/bills/new?partyId=${party.id}`) }]),
+    { label: tr('contacts:detail.deleteContact'), icon: 'trash-can-outline' as const, destructive: true, onPress: () => setConfirmDelete(true) },
+  ];
+
   return (
     <View style={{ flex: 1 }}>
       {desktop ? (
@@ -387,7 +413,9 @@ export function PartyDetail({ party }: { party: Party }) {
           options={{
             headerRight: () => (
               <View style={{ flexDirection: 'row', gap: t.spacing.sm }}>
-                <Button title={tr('contacts:detail.actions')} variant="ghost" icon="dots-horizontal" onPress={() => setActionsOpen(true)} />
+                <View ref={setAnchor} collapsable={false}>
+                  <Button title={tr('contacts:detail.actions')} variant="ghost" icon="dots-horizontal" onPress={openActionsMenu} />
+                </View>
                 {canTransact ? (
                   <Button
                     title={isCustomer ? tr('common:quickAction.receivePayment') : tr('contacts:detail.pay')}
@@ -407,15 +435,18 @@ export function PartyDetail({ party }: { party: Party }) {
         {desktop ? (
           <SplitPane
             sideWidth={340}
+            // The rows' amounts stay near their numbers; the figures sit over the tabs, where each
+            // tile has room (in the side column two or three of them were about 100px each).
+            style={{ maxWidth: 1180 }}
             side={
               <>
                 {headerCard}
-                {statTiles}
                 {detailsCard}
               </>
             }
             main={
               <View style={{ gap: t.spacing.md }}>
+                {statTiles}
                 <Segmented
                   options={[
                     { value: 'activity', label: tr('contacts:detail.tabOpen') },
@@ -482,29 +513,22 @@ export function PartyDetail({ party }: { party: Party }) {
         </View>
       )}
 
+      <Menu anchor={actionsRect} onClose={closeActionsMenu} align="right" width={260}>
+        {actions.map((a) => (
+          <MenuItem
+            key={a.label}
+            icon={a.icon}
+            label={a.label}
+            destructive={a.destructive}
+            onPress={() => {
+              closeActionsMenu();
+              a.onPress();
+            }}
+          />
+        ))}
+      </Menu>
       <Sheet visible={actionsOpen} onClose={() => setActionsOpen(false)} title={party.name}>
-        {[
-          { label: tr('contacts:detail.editContact'), icon: 'pencil-outline' as const, onPress: () => router.push(isCustomer ? `/(app)/contacts/customers/${party.id}/edit` : `/(app)/contacts/suppliers/${party.id}/edit`) },
-          { label: tr('contacts:detail.statement'), icon: 'book-open-outline' as const, onPress: () => router.push(`/(app)/contacts/${isCustomer ? 'customers' : 'suppliers'}/${party.id}/statement` as never) },
-          ...(!canTransact
-            ? []
-            : isCustomer
-            ? [
-                { label: tr('common:quickAction.newInvoice'), icon: 'file-document-edit-outline' as const, onPress: () => router.push(`/(app)/sales/invoices/new?partyId=${party.id}`) },
-                { label: tr('nav:title.newQuotation'), icon: 'file-percent-outline' as const, onPress: () => router.push(`/(app)/sales/quotes/new?partyId=${party.id}`) },
-                // Only when something is owed; it opens the same reminder as the aging screen.
-                ...(outstanding.length ? [{ label: tr('contacts:detail.sendReminder'), icon: 'bell-ring-outline' as const, onPress: () => setReminderOpen(true) }] : []),
-                // A party that is both is bought from too.
-                ...(isBoth
-                  ? [
-                      { label: tr('nav:title.newPurchaseBill'), icon: 'cart-outline' as const, onPress: () => router.push(`/(app)/purchases/bills/new?partyId=${party.id}`) },
-                      { label: tr('contacts:detail.pay'), icon: 'cash-minus' as const, onPress: () => router.push(`/(app)/payments/new?direction=paid&partyId=${party.id}`) },
-                    ]
-                  : []),
-              ]
-            : [{ label: tr('nav:title.newPurchaseBill'), icon: 'cart-outline' as const, onPress: () => router.push(`/(app)/purchases/bills/new?partyId=${party.id}`) }]),
-          { label: tr('contacts:detail.deleteContact'), icon: 'trash-can-outline' as const, onPress: () => setConfirmDelete(true) },
-        ].map((a) => (
+        {actions.map((a) => (
           <Pressable
             key={a.label}
             // Every action closes the sheet first; it is a modal, so one left open

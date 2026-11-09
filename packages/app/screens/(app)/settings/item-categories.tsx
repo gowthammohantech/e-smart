@@ -14,7 +14,7 @@ import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { Text } from '@esmart/ui/components/Text';
 import type { ItemCategory } from '@esmart/core/types';
 import { uid } from '@esmart/core/lib/id';
-import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { DIALOG_WIDTH, SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { useAppStore } from '../../../store/appStore';
 import { useActiveCompany, useItemCategories } from '../../../store/selectors';
 import { SheetActions } from '../../../features/company/SheetActions';
@@ -25,6 +25,7 @@ const COLOURS = ['#8E98AC', '#4DA3FF', '#2EC4B6', '#5CB85C', '#F5A623', '#F2711C
 
 export default function ItemCategorySettings() {
   const t = useTheme();
+  const desktop = useIsDesktop();
   const insets = useSafeAreaInsets();
   const { t: tr } = useTranslation(['nav', 'settings', 'errors']);
   const { run: serverSave, saving } = useServerSave();
@@ -52,7 +53,8 @@ export default function ItemCategorySettings() {
     <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('nav:title.itemCategories') }} />
 
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 + insets.bottom }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
+      {/* A short list: kept within reach of its chevrons on a desktop, where the add button sits in the page header. */}
+      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: desktop ? t.spacing.xxl : 120 + insets.bottom, maxWidth: desktop ? 640 : undefined }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         {categories.length ? (
           <Card padded={false}>
             {categories.map((c, i) => (
@@ -77,6 +79,8 @@ export default function ItemCategorySettings() {
       <Sheet
         visible={!!editing}
         onClose={() => setEditing(null)}
+        // A name and a colour: a small dialog on a desktop.
+        desktopWidth={DIALOG_WIDTH.sm}
         title={editing?.id ? tr('settings:itemCategories.editTitle') : tr('settings:itemCategories.add')}
         footer={
           <SheetActions

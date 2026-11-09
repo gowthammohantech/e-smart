@@ -12,14 +12,13 @@ import { TextField } from '@esmart/ui/components/Field';
 import { EmptyState, SkeletonList } from '@esmart/ui/components/EmptyState';
 import { SkeletonGroup, SkeletonRows } from '@esmart/ui/components/Skeleton';
 import { useDebounced } from '@esmart/app/components/useDebounced';
-import { Illustration } from '@esmart/ui/components/Illustration';
 import { useItemPages } from '@esmart/app/remote/queries';
 import type { Item } from '@esmart/core/types';
 import { formatMoney, formatQty } from '@esmart/core/lib/format';
 import { Panel, TwoColumns } from './parts';
 
 /**
- * Barcode lookup for a desktop: the scanner and the code box with its result
+ * Barcode lookup for a desktop: the code box (a scanner types into it) with its result
  * on the left, the sample codes to try on the right. Same behaviour as the
  * phone screen (`@esmart/app/screens/(app)/inventory/scan`).
  */
@@ -46,28 +45,12 @@ export function ScanBarcodeDesktop() {
   return (
     <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('nav:title.scanBarcode') }} />
-      <ScrollView contentContainerStyle={{ paddingBottom: 48, gap: t.spacing.lg }} keyboardShouldPersistTaps="handled">
+      {/* Inset to line up with the page title, as the item form is. */}
+      <ScrollView contentContainerStyle={{ paddingHorizontal: t.spacing.lg, paddingBottom: 48, gap: t.spacing.lg }} keyboardShouldPersistTaps="handled">
         <TwoColumns
           main={
             <>
-              <Card
-                variant="flat"
-                style={{
-                  alignItems: 'center',
-                  gap: t.spacing.md,
-                  paddingVertical: t.spacing.xxl,
-                  borderStyle: 'dashed',
-                  borderWidth: 1,
-                  borderColor: t.c.line,
-                }}
-              >
-                <Illustration name="scanning" height={150} />
-                <Text weight="600">{tr('inventory:scan.pointCamera')}</Text>
-                <Text variant="caption" tone="muted" center style={{ maxWidth: 380, lineHeight: 18 }}>
-                  {tr('inventory:scan.manualNote')}
-                </Text>
-              </Card>
-
+              {/* No camera on a desktop: a USB scanner types into the code box, which takes focus. */}
               <Panel title={tr('inventory:scan.lookUp')} subtitle={tr('inventory:scan.lookUpHint')} icon="barcode-scan">
                 <TextField
                   label={tr('inventory:scan.barcode')}
@@ -76,6 +59,7 @@ export function ScanBarcodeDesktop() {
                   placeholder={tr('inventory:scan.barcodePlaceholder')}
                   icon="barcode"
                   autoFocus
+                  containerStyle={{ maxWidth: 420 }}
                 />
                 {code.trim().length > 0 ? (
                   searching ? (

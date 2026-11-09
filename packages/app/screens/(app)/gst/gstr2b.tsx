@@ -12,7 +12,10 @@ import { PickerField } from '@esmart/ui/components/Field';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { Text } from '@esmart/ui/components/Text';
 import { useToast } from '@esmart/ui/components/Toast';
-import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { Cell, DataTable as Table, type RowAction } from '@esmart/ui/components/DataTable';
+import { Sheet } from '@esmart/ui/components/Sheet';
+import { ListRow } from '@esmart/ui/components/ListRow';
 import { formatDate } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
 import { api } from '../../../remote/api';
@@ -23,7 +26,7 @@ import { DataTable, KeyFigures, ReportSection } from '../../../features/reports/
 import { deliverFile } from '../../../features/reports/exportFiles';
 import { XLSX_MIME, toCsv, xlsxBytes } from '../../../features/reports/reportTable';
 import { ReportFailed } from '../../../features/reports/ReportShell';
-import { ReportSkeleton } from '../../../components/ScreenSkeleton';
+import { ListSkeleton, ReportSkeleton } from '../../../components/ScreenSkeleton';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { useDocumentPages, usePartySearch } from '../../../remote/queries';
 import { periodLabel, recentPeriods } from '../../../features/compliance/periods';
@@ -69,9 +72,10 @@ export default function Gstr2bScreen() {
  */
 export function Gstr2bView({ mode }: { mode: 'download' | 'reconcile' }) {
   const t = useTheme();
+  const desktop = useIsDesktop();
   const router = useRouter();
   const toast = useToast();
-  const { t: tr } = useTranslation(['compliance', 'nav']);
+  const { t: tr } = useTranslation(['compliance', 'nav', 'common']);
   const company = useActiveCompany();
   const branches = useBranches();
   const path = { companyId: company.id };
@@ -231,6 +235,21 @@ export function Gstr2bView({ mode }: { mode: 'download' | 'reconcile' }) {
     ...(rec?.missingIn2b?.length ? [{ key: 'missingIn2b' as Filter, count: rec.missingIn2b.length, taxable: sum(rec.missingIn2b.map((b) => b.taxable ?? money0)), tax: sum(rec.missingIn2b.map((b) => b.tax ?? money0)) }] : []),
   ];
   const in2b = { count: all.length, taxable: sum(all.map((r) => r.taxable ?? money0)), tax: sum(all.map((r) => r.tax ?? money0)) };
+  // Phone buttons share the row; a desktop keeps each at its label's width.
+  const grow = desktop ? undefined : { flexGrow: 1 };
+  /** What can still be done with a 2B line: the same choices as the buttons on a phone card. */
+  const actionsFor = (row: Row): RowAction[] => [
+    ...((row.status === 'partial' || row.status === 'probable') && row.bill ? [{ key: 'accept', label: tr('compliance:gstr2b.accept'), icon: 'check' as const, onPress: () => void decide(row, 'accepted') }] : []),
+    ...(row.status === 'missingInBooks' ? [{ key: 'add', label: tr('compliance:gstr2b.addBill'), icon: 'plus' as const, onPress: () => void addBill(row) }] : []),
+    ...(LINKABLE.includes(row.status!) ? [{ key: 'link', label: tr('compliance:gstr2b.link'), icon: 'link-variant' as const, onPress: () => setLinking(row) }] : []),
+    ...(['partial', 'probable', 'missingInBooks'].includes(row.status!)
+      ? [
+          { key: 'later', label: tr('compliance:gstr2b.later'), icon: 'clock-outline' as const, onPress: () => void decide(row, 'claimLater') },
+          { key: 'notOurs', label: tr('compliance:gstr2b.notOurs'), icon: 'close-circle-outline' as const, onPress: () => void decide(row, 'notOurs') },
+        ]
+      : []),
+    ...(row.decision ? [{ key: 'undo', label: tr('compliance:gstr2b.undo'), icon: 'undo' as const, onPress: () => void decide(row, 'undecided') }] : []),
+  ];
   const matchedTotal = (s?.matched ?? 0) + (s?.matchedWithinTolerance ?? 0) + (s?.manuallyLinked ?? 0) + (s?.claimed ?? 0);
 
   return (
@@ -244,12 +263,13 @@ export function Gstr2bView({ mode }: { mode: 'download' | 'reconcile' }) {
         ) : (
           <>
             <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
+              {/* A desktop keeps each picker at a GSTIN's width, so a lone period picker isn't page-wide. */}
               {gstins.length > 1 ? (
-                <View style={{ flex: 1 }}>
+                <View style={desktop ? { width: 320 } : { flex: 1 }}>
                   <PickerField label="GSTIN" value={gstin ?? undefined} onPress={() => setOpen('gstin')} />
                 </View>
               ) : null}
-              <View style={{ flex: 1 }}>
+              <View style={desktop ? { width: 320 } : { flex: 1 }}>
                 <PickerField label={tr('compliance:gstr2b.period')} value={periodLabel(period)} onPress={() => setOpen('period')} icon="calendar-month-outline" />
               </View>
             </View>
@@ -273,10 +293,10 @@ export function Gstr2bView({ mode }: { mode: 'download' | 'reconcile' }) {
                     loading={busy}
                     disabled={!connected}
                     variant={rec?.fetched || !connected ? 'secondary' : 'primary'}
-                    style={{ flexGrow: 1 }}
+                    style={grow}
                   />
                   {CAN_PICK_FILES ? (
-                    <Button title={tr('compliance:gstr2b.upload')} icon="file-upload-outline" onPress={() => void upload2b()} disabled={busy} variant={connected ? 'secondary' : 'primary'} style={{ flexGrow: 1 }} />
+                    <Button title={tr('compliance:gstr2b.upload')} icon="file-upload-outline" onPress={() => void upload2b()} disabled={busy} variant={connected ? 'secondary' : 'primary'} style={grow} />
                   ) : null}
                 </View>
                 <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
@@ -297,14 +317,18 @@ export function Gstr2bView({ mode }: { mode: 'download' | 'reconcile' }) {
                 <Text variant="caption" tone="muted">
                   {tr('compliance:gstr2b.fetchedAt', { date: formatDate(rec.fetchedAt!) })}
                 </Text>
-                <KeyFigures
-                  rows={[
-                    { label: tr('compliance:gstr2b.claimable'), value: formatMoney(s.claimableTax!), tone: 'good' },
-                    { label: tr('compliance:gstr2b.matchedCount'), value: `${matchedTotal} / ${s.lines}` },
-                    { label: tr('compliance:gstr2b.toReview'), value: String((s.partial ?? 0) + (s.probable ?? 0) + (s.missingInBooks ?? 0)), tone: 'warn' },
-                    { label: tr('compliance:gstr2b.notIn2b'), value: String(s.missingIn2b), tone: s.missingIn2b ? 'bad' : undefined },
-                  ]}
-                />
+                {/* On a desktop the figures and the status totals stop at a width where each amount sits by its label. */}
+                <View style={desktop ? { maxWidth: 480 } : undefined}>
+                  <KeyFigures
+                    rows={[
+                      { label: tr('compliance:gstr2b.claimable'), value: formatMoney(s.claimableTax!), tone: 'good' },
+                      { label: tr('compliance:gstr2b.matchedCount'), value: `${matchedTotal} / ${s.lines}` },
+                      { label: tr('compliance:gstr2b.toReview'), value: String((s.partial ?? 0) + (s.probable ?? 0) + (s.missingInBooks ?? 0)), tone: 'warn' },
+                      { label: tr('compliance:gstr2b.notIn2b'), value: String(s.missingIn2b), tone: s.missingIn2b ? 'bad' : undefined },
+                    ]}
+                  />
+                </View>
+                <View style={desktop ? { maxWidth: 760 } : undefined}>
                 <ReportSection title={tr('compliance:gstr2b.totals')}>
                   <DataTable
                     headers={[tr('compliance:gstr2b.head.status'), tr('compliance:gstr2b.head.count'), tr('compliance:returns.head.taxable'), tr('compliance:returns.head.tax')]}
@@ -316,13 +340,14 @@ export function Gstr2bView({ mode }: { mode: 'download' | 'reconcile' }) {
                     {tr('compliance:gstr2b.totalsNote')}
                   </Text>
                 </ReportSection>
+                </View>
                 {mode === 'download' ? (
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm }}>
                     <Button
                       title={tr('nav:title.gstr2bReconciliation')}
                       icon="file-compare"
                       onPress={() => router.push(`/(app)/gst/gstr2b-reconciliation?gstin=${gstin ?? ''}&period=${period}` as never)}
-                      style={{ flexGrow: 1 }}
+                      style={grow}
                     />
                     <Button title={tr('compliance:gstr2b.exportExcel')} icon="file-excel-box" variant="secondary" onPress={() => exportFile('xlsx')} disabled={!all.length} />
                     <Button title={tr('compliance:gstr2b.exportCsv')} icon="file-delimited-outline" variant="secondary" onPress={() => exportFile('csv')} disabled={!all.length} />
@@ -330,7 +355,7 @@ export function Gstr2bView({ mode }: { mode: 'download' | 'reconcile' }) {
                 ) : (
                   <>
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm }}>
-                      <Button title={tr('compliance:gstr2b.claim')} icon="check-all" onPress={() => setAskClaim(true)} loading={busy} disabled={busy || !matchedTotal} style={{ flexGrow: 1 }} />
+                      <Button title={tr('compliance:gstr2b.claim')} icon="check-all" onPress={() => setAskClaim(true)} loading={busy} disabled={busy || !matchedTotal} style={grow} />
                       <Button title={tr('compliance:gstr2b.exportExcel')} icon="file-excel-box" variant="secondary" onPress={() => exportFile('xlsx')} disabled={!all.length} />
                       <Button title={tr('compliance:gstr2b.exportCsv')} icon="file-delimited-outline" variant="secondary" onPress={() => exportFile('csv')} disabled={!all.length} />
                     </View>
@@ -354,7 +379,70 @@ export function Gstr2bView({ mode }: { mode: 'download' | 'reconcile' }) {
                           );
                         })}
                     </ScrollView>
-                    {filter === 'missingIn2b' ? null : rows.map((row) => (
+                    {filter === 'missingIn2b' ? null : desktop ? (
+                      // A desktop reconciles in a table: 2B and the books side by side per line, the choices in each row's menu.
+                      <Table
+                        scroll={false}
+                        rows={rows}
+                        rowKey={(row) => row.id!}
+                        rowLabel={(row) => `${row.supplierName ?? row.supplierGstin} ${row.number ?? ''}`}
+                        rowActions={actionsFor}
+                        columns={[
+                          {
+                            key: 'supplier',
+                            header: tr('common:table.supplier'),
+                            flex: 1.4,
+                            render: (row) => (
+                              <View style={{ minWidth: 0 }}>
+                                <Cell weight="600">{row.supplierName ?? row.supplierGstin}</Cell>
+                                {row.supplierName ? <Cell tone="muted">{row.supplierGstin}</Cell> : null}
+                              </View>
+                            ),
+                          },
+                          {
+                            key: 'in2b',
+                            header: tr('compliance:gstr2b.in2b'),
+                            flex: 1.3,
+                            render: (row) => (
+                              <View style={{ minWidth: 0 }}>
+                                <Cell>{`${row.number} · ${formatDate(row.date!)}`}</Cell>
+                                <Cell tone="muted" mono>{`${formatMoney(row.taxable!)} + ${formatMoney(row.tax!)}`}</Cell>
+                                {row.itcAvailable ? null : <Cell tone="warn">{tr('compliance:gstr2b.itcUnavailable')}</Cell>}
+                              </View>
+                            ),
+                          },
+                          {
+                            key: 'books',
+                            header: tr('compliance:gstr2b.inBooks'),
+                            flex: 1.3,
+                            render: (row) =>
+                              row.bill ? (
+                                <View style={{ minWidth: 0 }}>
+                                  <Cell>{`${row.bill.supplierNumber} · ${formatDate(row.bill.date!)}`}</Cell>
+                                  <Cell tone="muted" mono>{`${formatMoney(row.bill.taxable!)} + ${formatMoney(row.bill.tax!)}`}</Cell>
+                                </View>
+                              ) : (
+                                <Cell tone="muted">—</Cell>
+                              ),
+                          },
+                          {
+                            key: 'reasons',
+                            header: tr('compliance:gstr2b.head.status'),
+                            width: 200,
+                            render: (row) => (
+                              <View style={{ gap: 4, alignItems: 'flex-start' }}>
+                                <Badge label={tr(`compliance:gstr2b.status.${row.status!}`)} tone={TONE[row.status!]} size="sm" />
+                                {row.reasons?.length ? (
+                                  <Text variant="caption" tone="warn">
+                                    {tr('compliance:gstr2b.differsIn', { what: row.reasons.map((r) => tr(`compliance:gstr2b.reason.${r}`)).join(', ') })}
+                                  </Text>
+                                ) : null}
+                              </View>
+                            ),
+                          },
+                        ]}
+                      />
+                    ) : rows.map((row) => (
                       <Card key={row.id} style={{ gap: t.spacing.sm }}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: t.spacing.md }}>
                           <Text variant="body" weight="600" style={{ flex: 1 }} numberOfLines={1}>
@@ -415,7 +503,7 @@ export function Gstr2bView({ mode }: { mode: 'download' | 'reconcile' }) {
                       </Card>
                     ))}
                     {rec.missingIn2b?.length && (filter === 'all' || filter === 'missingIn2b') ? (
-                      <Card style={{ gap: t.spacing.sm }}>
+                      <Card style={[{ gap: t.spacing.sm }, desktop ? { maxWidth: 720 } : null]}>
                         <Text variant="body" weight="600">
                           {tr('compliance:gstr2b.notIn2bTitle', { count: rec.missingIn2b.length })}
                         </Text>
@@ -450,8 +538,34 @@ export function Gstr2bView({ mode }: { mode: 'download' | 'reconcile' }) {
         }}
       />
       <SelectSheet visible={open === 'gstin'} onClose={() => setOpen(null)} title="GSTIN" options={gstins.map((g) => ({ value: g, label: g }))} value={gstin} onSelect={setGstin} searchable={false} />
+      {desktop ? (
+        // Beside the table, not over it: the line being linked stays in view while the bills are compared.
+        <Sheet visible={!!linking} onClose={() => setLinking(null)} title={tr('compliance:gstr2b.linkTitle')} subtitle={linking ? `${linking.number} · ${formatMoney(linking.tax!)}` : undefined} desktopAs="drawer">
+          {linkSearching ? (
+            <ListSkeleton kind="list" />
+          ) : candidates.length ? (
+            <Card padded={false}>
+              {candidates.map((d, i) => (
+                <ListRow
+                  key={d.id}
+                  title={`${d.supplierDocNumber ?? d.number} · ${formatDate(d.date!)}`}
+                  subtitle={`${d.number} · ${d.totalTax ? formatMoney(d.totalTax) : ''}`}
+                  divider={i < candidates.length - 1}
+                  onPress={() => {
+                    const row = linking;
+                    setLinking(null);
+                    if (row) void decide(row, 'accepted', d.id!);
+                  }}
+                />
+              ))}
+            </Card>
+          ) : (
+            <EmptyState icon="link-variant-off" title={tr('compliance:gstr2b.linkEmpty')} compact />
+          )}
+        </Sheet>
+      ) : null}
       <SelectSheet
-        visible={!!linking}
+        visible={!desktop && !!linking}
         onClose={() => setLinking(null)}
         title={tr('compliance:gstr2b.linkTitle')}
         subtitle={linking ? `${linking.number} · ${formatMoney(linking.tax!)}` : undefined}

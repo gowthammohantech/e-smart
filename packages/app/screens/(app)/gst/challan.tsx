@@ -7,12 +7,12 @@ import { Button } from '@esmart/ui/components/Button';
 import { FormActions } from '@esmart/ui/components/ActionBar';
 import { Card } from '@esmart/ui/components/Card';
 import { AmountField, PickerField, TextField } from '@esmart/ui/components/Field';
-import { FormContainer, FormSection } from '@esmart/ui/components/Layout';
+import { FieldRow, FormContainer, FormSection } from '@esmart/ui/components/Layout';
 import { ListRow } from '@esmart/ui/components/ListRow';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { Text } from '@esmart/ui/components/Text';
-import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, useFieldWidth, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { formatDate, nowISO, today } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
 import { fromMajor, money } from '@esmart/core/lib/money';
@@ -42,6 +42,8 @@ export default function GstChallanScreen() {
 
 function ChallanForm() {
   const t = useTheme();
+  const desktop = useIsDesktop();
+  const fw = useFieldWidth();
   const router = useRouter();
   const { t: tr } = useTranslation(['compliance', 'books', 'common']);
   const params = useLocalSearchParams<{ igst?: string; cgst?: string; sgst?: string; cess?: string; back?: string }>();
@@ -111,13 +113,16 @@ function ChallanForm() {
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Stack.Screen options={{ title: tr('compliance:challan.title') }} />
-      <FormContainer style={{ maxWidth: 960 }}>
+      {/* A desktop form's width; the account and CPIN share a row, the amounts sit in columns. */}
+      <FormContainer wide style={desktop ? undefined : { maxWidth: 960 }}>
         <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: t.spacing.xxxl, gap: t.spacing.lg }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
           <Text variant="small" tone="muted">
             {tr('compliance:challan.hint')}
           </Text>
-          <PickerField label={tr('compliance:challan.paidFrom')} value={accounts.find((a) => a.id === bank)?.name} placeholder={tr('books:transfer.pickAccount')} onPress={() => setPicking(true)} icon="bank-outline" required />
-          <TextField label={tr('compliance:challan.cpin')} value={cpin} onChangeText={(v) => setCpin(v.replace(/[^0-9A-Za-z]/g, '').slice(0, 14))} hint={tr('compliance:challan.cpinHint')} required />
+          <FieldRow>
+            <PickerField label={tr('compliance:challan.paidFrom')} value={accounts.find((a) => a.id === bank)?.name} placeholder={tr('books:transfer.pickAccount')} onPress={() => setPicking(true)} icon="bank-outline" required />
+            <TextField label={tr('compliance:challan.cpin')} value={cpin} onChangeText={(v) => setCpin(v.replace(/[^0-9A-Za-z]/g, '').slice(0, 14))} hint={tr('compliance:challan.cpinHint')} required />
+          </FieldRow>
           <View style={{ flexDirection: 'row', gap: t.spacing.md, flexWrap: 'wrap' }}>
             <View style={{ flex: 1, minWidth: 200 }}>
               <TextField label={tr('compliance:challan.cin')} value={cin} onChangeText={(v) => setCin(v.slice(0, 20))} />
@@ -126,12 +131,12 @@ function ChallanForm() {
               <TextField label={tr('compliance:challan.brn')} value={brn} onChangeText={(v) => setBrn(v.slice(0, 40))} />
             </View>
           </View>
-          <DateField label={tr('compliance:challan.depositedOn')} value={date} onChange={setDate} maximumDate={new Date()} />
+          <DateField label={tr('compliance:challan.depositedOn')} value={date} onChange={setDate} maximumDate={new Date()} containerStyle={fw('sm')} />
           {HEADS.map((h) => (
             <FormSection key={h} title={`${headLabel(h)} · ${formatMoney(money(headTotal(h), baseCurrency))}`}>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.md }}>
                 {PARTS.map((p) => (
-                  <View key={p} style={{ flexGrow: 1, flexBasis: 140 }}>
+                  <View key={p} style={desktop ? { width: 200 } : { flexGrow: 1, flexBasis: 140 }}>
                     <AmountField label={tr(`compliance:challan.part.${p}`)} value={amounts[h][p]} onChangeValue={(v) => setAmounts((a) => ({ ...a, [h]: { ...a[h], [p]: v } }))} currency={baseCurrency} align="right" />
                   </View>
                 ))}
@@ -177,7 +182,7 @@ function ChallanForm() {
           </FormSection>
         </ScrollView>
         <FormActions>
-          <Button title={tr('compliance:challan.save')} onPress={() => void save()} loading={saving} disabled={blocked || !!problem} fullWidth shortcut="S" />
+          <Button title={tr('compliance:challan.save')} onPress={() => void save()} loading={saving} disabled={blocked || !!problem} fullWidth={!desktop} shortcut="S" />
         </FormActions>
       </FormContainer>
       <SelectSheet

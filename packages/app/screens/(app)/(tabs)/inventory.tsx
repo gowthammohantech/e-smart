@@ -26,7 +26,9 @@ import { isLowStock } from '@esmart/core/domain/stockLedger';
 import { today } from '@esmart/core/lib/date';
 import { zero, type Money } from '@esmart/core/lib/money';
 import type { Item } from '@esmart/core/types';
-import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { Cell, DataTable } from '@esmart/ui/components/DataTable';
+import { Menu, MenuItem } from '@esmart/ui/components/Menu';
 import { useQueryParams } from '../../../navigation/queryParams';
 import { CardRowsSkeleton, MoreRowsSkeleton } from '../../../components/ScreenSkeleton';
 
@@ -37,6 +39,7 @@ export default function InventoryTab() {
   const t = useTheme();
   const { t: tr } = useTranslation(['inventory', 'common', 'nav', 'reports']);
   const router = useRouter();
+  const desktop = useIsDesktop();
 
   const baseCurrency = useBaseCurrency();
   // The branch picked in the header, as the device's figures were.
@@ -48,7 +51,26 @@ export default function InventoryTab() {
   const filter: Filter = FILTERS.includes(params.filter as Filter) ? (params.filter as Filter) : 'all';
   const setFilter = (f: Filter) => setParams({ filter: f === 'all' ? undefined : f });
   const [actionsOpen, setActionsOpen] = useState(false);
+  // On a desktop "New" drops a menu from the header button instead of opening a sheet.
+  const [newMenu, setNewMenu] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const canOpen = useCanOpen();
+  const openNew = () => {
+    // The header button the click came from is the focused element; the menu hangs from it.
+    const el = desktop && typeof document !== 'undefined' ? (document.activeElement as HTMLElement | null) : null;
+    const r = el?.getBoundingClientRect?.();
+    if (r && r.width) setNewMenu({ x: r.left, y: r.top, width: r.width, height: r.height });
+    else setActionsOpen(true);
+  };
+  const newActions = [
+    { label: tr('common:quickAction.addItem'), icon: 'tag-plus-outline' as const, route: '/(app)/catalog/items/new' },
+    { label: tr('nav:title.stockAdjustment'), icon: 'tune' as const, route: '/(app)/inventory/adjust' },
+    { label: tr('nav:title.branchTransfer'), icon: 'swap-horizontal' as const, route: '/(app)/inventory/transfer' },
+    { label: tr('inventory:hub.setOpeningStock'), icon: 'database-import-outline' as const, route: '/(app)/inventory/opening-stock' },
+    { label: tr('inventory:hub.scanBarcode'), icon: 'barcode-scan' as const, route: '/(app)/inventory/scan' },
+    { label: tr('nav:title.stockMovements'), icon: 'format-list-bulleted' as const, route: '/(app)/inventory/movements' },
+  ]
+    // Only what this plan and these modules can open, as Home's sheet does.
+    .filter((a) => canOpen(a.route));
 
   // Worked out by the server: the figures from its stock report, the list a page at a time.
   const day = today();
@@ -78,7 +100,8 @@ export default function InventoryTab() {
       <AppHeader title={tr('inventory:hub.title')} subtitle={tr('inventory:hub.subtitle')} />
 
       <ScrollView
-        contentContainerStyle={{ paddingHorizontal: t.spacing.lg, paddingBottom: 120 }}
+        // A desktop has no floating button to clear at the bottom.
+        contentContainerStyle={{ paddingHorizontal: t.spacing.lg, paddingBottom: desktop ? t.spacing.xxl : 120 }}
         showsVerticalScrollIndicator={SHOW_SCROLLBAR}
         // The next page loads before the end is reached, so scrolling rarely waits.
         onScroll={({ nativeEvent: e }: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -111,7 +134,9 @@ export default function InventoryTab() {
             value={query}
             onChangeText={setQuery}
             placeholder={tr('inventory:hub.searchPlaceholder')}
+            // The camera scan is a phone's; a desktop scans from "New" (a USB scanner types into the search).
             right={
+              desktop ? undefined : (
               <Pressable
                 onPress={() => router.push('/(app)/inventory/scan')}
                 // A full 44pt target, not just the glyph.
@@ -122,6 +147,7 @@ export default function InventoryTab() {
               >
                 <Icon name="barcode-scan" size={20} color={t.c.primary} />
               </Pressable>
+              )
             }
           />
           <Segmented
@@ -143,6 +169,52 @@ export default function InventoryTab() {
             listPending ? tr('inventory:catalog.items') : pages.hasNextPage ? tr('inventory:hub.itemCountMore', { count: filtered.length }) : tr('inventory:hub.itemCount', { count: filtered.length })
           } action={tr('inventory:hub.movements')} onAction={() => router.push('/(app)/inventory/movements')} />
 
+        {desktop && !(pages.isError && !filtered.length) && !(filtered.length === 0 && !listPending) ? (
+          // A desktop reads the stock as a table: name, SKU, price, on hand and its state in columns.
+          <DataTable
+            scroll={false}
+            loading={listPending}
+            rows={listPending ? [] : filtered}
+            rowKey={(i) => i.id}
+            rowLabel={(i) => i.name}
+            onRowPress={(i) => router.push(`/(app)/catalog/items/${i.id}`)}
+            columns={[
+              { key: 'name', header: tr('common:table.name'), flex: 2, render: (i) => <Cell weight="600">{i.name}</Cell> },
+              { key: 'sku', header: tr('common:table.sku'), width: 140, render: (i) => <Cell tone="muted">{i.sku || '—'}</Cell> },
+              { key: 'unit', header: tr('common:table.unit'), width: 100, secondary: true, render: (i) => <Cell tone="muted">{unitShortName(i.unit) || i.unit || '—'}</Cell> },
+              { key: 'price', header: tr('common:table.price'), width: 150, align: 'right', render: (i) => <Cell mono>{formatMoney(i.salePrice)}</Cell> },
+              {
+                key: 'onHand',
+                header: tr('common:table.onHand'),
+                width: 130,
+                align: 'right',
+                render: (i) => {
+                  const onHand = stock[i.id] ?? 0;
+                  const low = i.trackInventory && isLowStock(i, onHand);
+                  return i.trackInventory ? (
+                    <Cell weight="700" tone={onHand <= 0 ? 'bad' : low ? 'warn' : 'default'} mono>
+                      {formatQty(onHand)}
+                    </Cell>
+                  ) : (
+                    <Cell tone="muted">—</Cell>
+                  );
+                },
+              },
+              {
+                key: 'status',
+                header: tr('common:table.status'),
+                width: 120,
+                render: (i) => {
+                  const onHand = stock[i.id] ?? 0;
+                  if (!i.trackInventory) return <Badge label={tr('inventory:hub.service')} tone="neutral" size="sm" />;
+                  if (onHand <= 0) return <Badge label={tr('inventory:hub.out')} tone="danger" size="sm" />;
+                  if (isLowStock(i, onHand)) return <Badge label={tr('inventory:hub.low')} tone="warning" size="sm" />;
+                  return null;
+                },
+              },
+            ]}
+          />
+        ) : (
         <Card padded={false}>
           {pages.isError && !filtered.length ? (
             <LoadFailed onRetry={pages.refetch} compact />
@@ -238,23 +310,27 @@ export default function InventoryTab() {
             })
           )}
         </Card>
+        )}
         {pages.isFetchingNextPage ? <MoreRowsSkeleton kind="list" /> : null}
       </ScrollView>
 
-      <Fab icon="plus" onPress={() => setActionsOpen(true)} />
+      <Fab icon="plus" onPress={openNew} />
+      <Menu anchor={newMenu} onClose={() => setNewMenu(null)} align="right" width={260}>
+        {newActions.map((a) => (
+          <MenuItem
+            key={a.label}
+            icon={a.icon}
+            label={a.label}
+            onPress={() => {
+              setNewMenu(null);
+              router.push(a.route as never);
+            }}
+          />
+        ))}
+      </Menu>
 
       <Sheet visible={actionsOpen} onClose={() => setActionsOpen(false)} title={tr('inventory:hub.actions')}>
-        {[
-          { label: tr('common:quickAction.addItem'), icon: 'tag-plus-outline' as const, route: '/(app)/catalog/items/new' },
-          { label: tr('nav:title.stockAdjustment'), icon: 'tune' as const, route: '/(app)/inventory/adjust' },
-          { label: tr('nav:title.branchTransfer'), icon: 'swap-horizontal' as const, route: '/(app)/inventory/transfer' },
-          { label: tr('inventory:hub.setOpeningStock'), icon: 'database-import-outline' as const, route: '/(app)/inventory/opening-stock' },
-          { label: tr('inventory:hub.scanBarcode'), icon: 'barcode-scan' as const, route: '/(app)/inventory/scan' },
-          { label: tr('nav:title.stockMovements'), icon: 'format-list-bulleted' as const, route: '/(app)/inventory/movements' },
-        ]
-          // Only what this plan and these modules can open, as Home's sheet does.
-          .filter((a) => canOpen(a.route))
-          .map((a) => (
+        {newActions.map((a) => (
           <Pressable
             key={a.label}
             onPress={() => {
