@@ -10,6 +10,8 @@ import { Text } from '@esmart/ui/components/Text';
 import { CompanyLogo } from '@esmart/ui/components/CompanyLogo';
 import { Menu, MenuDivider, MenuItem, MenuSection, useMenuAnchor } from '@esmart/ui/components/Menu';
 import { useAppStore } from '@esmart/app/store/appStore';
+import { switchCompany } from '@esmart/app/remote/refresh';
+import { describeError } from '@esmart/app/remote/errors';
 import { useActiveCompany, useBranches } from '@esmart/app/store/selectors';
 
 /** The top bar's picker button: what's chosen, a hint above it, and a chevron. */
@@ -85,7 +87,6 @@ export function CompanyPicker({ compact }: { compact: boolean }) {
 
   const company = useActiveCompany();
   const companies = useAppStore((s) => s.companies);
-  const setActiveCompany = useAppStore((s) => s.setActiveCompany);
   const { setAnchor, rect, open, close } = useMenuAnchor();
 
   const tax = company?.taxRegistration;
@@ -117,8 +118,11 @@ export function CompanyPicker({ compact }: { compact: boolean }) {
               close();
               // Already the active business: nothing switched, so no message.
               if (c.id === company?.id) return;
-              setActiveCompany(c.id);
-              toast.show(tr('common:toast.switchedBusiness', { name: c.name }), 'info', { icon: 'swap-horizontal', detail: c.baseCurrency, varies: true });
+              // Its setup loads first, so nothing draws the new business half-empty.
+              switchCompany(c.id).then(
+                () => toast.show(tr('common:toast.switchedBusiness', { name: c.name }), 'info', { icon: 'swap-horizontal', detail: c.baseCurrency, varies: true }),
+                (err: unknown) => toast.show(describeError(err, tr), 'error'),
+              );
             }}
           />
         ))}

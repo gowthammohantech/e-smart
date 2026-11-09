@@ -1,4 +1,5 @@
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
+import { keepWithin } from './keepWithin';
 import type { Schema } from '@esmart/api-client';
 import { useAppStore } from '../store/appStore';
 import { api } from './api';
@@ -31,7 +32,7 @@ export function useBudgetVariance(id: string | undefined, range?: { from: string
   return useQuery({
     queryKey: keys.variance(c, id ?? '', range?.from, range?.to),
     enabled: !!c && !!id,
-    placeholderData: keepPreviousData,
+    placeholderData: keepWithin(c),
     queryFn: async () => (await api.GET('/companies/{companyId}/budgets/{id}/variance', { params: { path: { companyId: c, id: id! }, query: range } })).data!,
   });
 }

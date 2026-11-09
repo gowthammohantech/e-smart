@@ -13,6 +13,8 @@ import { PageHeader } from '@esmart/ui/components/PageHeader';
 import { tabForPath } from '../navigation/tabs';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { useAppStore } from '../store/appStore';
+import { switchCompany } from '../remote/refresh';
+import { describeError } from '../remote/errors';
 import { ConnectionBadge } from './ConnectionBadge';
 import { LatencyChip } from './LatencyChip';
 import { DemoChip } from './DemoChip';
@@ -37,7 +39,6 @@ export function AppHeader({ title, subtitle }: { title?: string; subtitle?: stri
   const branches = useBranches();
   const companies = useAppStore((s) => s.companies);
   const activeBranchId = useAppStore((s) => s.activeBranchId);
-  const setActiveCompany = useAppStore((s) => s.setActiveCompany);
   const setActiveBranch = useAppStore((s) => s.setActiveBranch);
   const unread = useUnreadCount();
 
@@ -244,8 +245,11 @@ export function AppHeader({ title, subtitle }: { title?: string; subtitle?: stri
         onSelect={(id) => {
           const next = companies.find((c) => c.id === id);
           if (!next || id === company?.id) return;
-          setActiveCompany(id);
-          toast.show(tr('common:toast.switchedBusiness', { name: next.name }), 'info', { icon: 'swap-horizontal', detail: next.baseCurrency, varies: true });
+          // Its setup loads first, so nothing draws the new business half-empty.
+          switchCompany(id).then(
+            () => toast.show(tr('common:toast.switchedBusiness', { name: next.name }), 'info', { icon: 'swap-horizontal', detail: next.baseCurrency, varies: true }),
+            (err: unknown) => toast.show(describeError(err, tr), 'error'),
+          );
         }}
         searchable={false}
       />

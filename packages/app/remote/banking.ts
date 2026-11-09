@@ -1,4 +1,5 @@
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
+import { keepWithin } from './keepWithin';
 import type { Schema } from '@esmart/api-client';
 import { addDaysISO } from '@esmart/core/lib/date';
 import { useAppStore } from '../store/appStore';
@@ -147,7 +148,7 @@ export function useBankMatchSearch(line: BankLine | null, q: string) {
     queryKey: [...bankingKeys.account(c, line?.accountId ?? ''), 'find', line?.id ?? '', q.trim()],
     enabled: !!c && !!line,
     staleTime: 0,
-    placeholderData: keepPreviousData,
+    placeholderData: keepWithin(c),
     queryFn: async ({ signal }): Promise<MatchCandidate[]> => {
       const { data } = await api.GET('/companies/{companyId}/bank-lines/{id}/candidates', { params: { path: { companyId: c, id: line!.id }, query: { q: q.trim() || undefined } }, signal });
       return (data?.data ?? []).map((r) => ({ type: r.type, id: r.id, number: r.number, date: r.date, amountMinor: r.amount.minor, partyName: r.partyName, reference: r.reference }));

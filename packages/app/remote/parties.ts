@@ -1,4 +1,5 @@
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
+import { keepWithin } from './keepWithin';
 import type { Schema } from '@esmart/api-client';
 import { useAppStore } from '../store/appStore';
 import { api } from './api';
@@ -22,7 +23,7 @@ export function usePartyStatement(partyId: string | undefined, range: StatementR
       const { data } = await api.GET('/companies/{companyId}/parties/{id}/statement', { params: params(companyId, partyId!, range), signal });
       return data as PartyStatement;
     },
-    placeholderData: keepPreviousData,
+    placeholderData: keepWithin(companyId),
   });
 }
 

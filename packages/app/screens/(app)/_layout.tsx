@@ -1,4 +1,5 @@
 import React from 'react';
+import { SwitchingOverlay } from '../../components/SwitchingOverlay';
 import { Stack, useRouter, type ErrorBoundaryProps } from 'expo-router';
 import { ErrorFallback } from '../../components/ErrorFallback';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
@@ -56,6 +57,7 @@ function AppStack() {
         options={{ headerShown: false, presentation: 'fullScreenModal', animation: 'slide_from_bottom' }}
       />
     </Stack>
+    <SwitchingOverlay />
     </>
   );
 }

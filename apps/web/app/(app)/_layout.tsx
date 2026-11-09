@@ -12,6 +12,7 @@ import { MAIN_ID, SkipLink } from '../../src/shell/SkipLink';
 import { CONTENT_MAX_WIDTH, useBreakpoint, useIsDesktop } from '../../src/layout';
 import { PageSurface } from '@esmart/ui/components/Doodles';
 import { hubBackOptions } from '@esmart/app/navigation/HubBackButton';
+import { SwitchingOverlay } from '@esmart/app/components/SwitchingOverlay';
 
 /**
  * The signed-in shell for the browser. On a desktop: the sidebar on the
@@ -73,6 +74,7 @@ export default function WebAppLayout() {
     return (
       <View style={{ flex: 1, backgroundColor: t.c.bg, outlineStyle: 'none' } as object} role="main" id={MAIN_ID} tabIndex={-1}>
         {stack}
+        <SwitchingOverlay />
       </View>
     );
 
@@ -109,6 +111,7 @@ export default function WebAppLayout() {
                 style={{ flex: 1, maxWidth: inSettings && !wideSettings ? 880 : undefined, outlineStyle: 'none' } as object}
               >
                 {stack}
+                <SwitchingOverlay />
               </View>
             </Animated.View>
           </View>

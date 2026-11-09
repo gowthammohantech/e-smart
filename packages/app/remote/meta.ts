@@ -20,6 +20,12 @@ export type RemoteMeta = {
    * business (expenses on Pro), and what it couldn't read came through empty.
    */
   plans: Record<string, string>;
+  /** Businesses whose setup lists have loaded this session (see refresh.loadCompany). */
+  setupLoaded: Record<string, boolean>;
+  /** The business the after-first-screen lists (notifications, team, devices, movements) were last loaded for. */
+  listsLoadedFor: string | null;
+  /** A business being switched to: its setup loads before it opens. */
+  switchingTo: string | null;
   online: boolean;
   syncing: boolean;
   lastSyncAt?: string;
@@ -36,6 +42,9 @@ export const useRemoteMeta = create<RemoteMeta>()((set, get) => ({
       versions: {},
       idAliases: {},
       plans: {},
+      setupLoaded: {},
+      listsLoadedFor: null,
+      switchingTo: null,
       online: true,
       syncing: false,
       setVersion: (id, version) => {
@@ -49,7 +58,7 @@ export const useRemoteMeta = create<RemoteMeta>()((set, get) => ({
       },
       addAliases: (map) => set({ idAliases: { ...get().idAliases, ...map } }),
       patch: (p) => set(p),
-      reset: () => set({ cursor: null, versions: {}, idAliases: {}, plans: {}, syncing: false, lastSyncAt: undefined, lastError: undefined }),
+      reset: () => set({ cursor: null, versions: {}, idAliases: {}, plans: {}, setupLoaded: {}, listsLoadedFor: null, switchingTo: null, syncing: false, lastSyncAt: undefined, lastError: undefined }),
 }));
 
 export const knownToServer = (id: string) => useRemoteMeta.getState().versions[id] !== undefined;

@@ -1,4 +1,5 @@
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
+import { keepWithin } from './keepWithin';
 import type { Schema } from '@esmart/api-client';
 import { useAppStore } from '../store/appStore';
 import { api } from './api';
@@ -31,7 +32,7 @@ export function useFixedAssets(status?: 'active' | 'disposed', enabled = true) {
   return useQuery({
     queryKey: fixedAssetKeys.list(c, status),
     enabled: !!c && enabled,
-    placeholderData: keepPreviousData,
+    placeholderData: keepWithin(c),
     queryFn: async () => (await api.GET('/companies/{companyId}/fixed-assets', { params: { path: { companyId: c }, query: { status } } })).data!.data,
   });
 }
@@ -50,7 +51,7 @@ export function useFixedAssetSchedule(range: { from: string; to: string; branchI
   return useQuery({
     queryKey: [...fixedAssetKeys.schedule(c, range.from, range.to), range.branchId ?? ''],
     enabled: !!c,
-    placeholderData: keepPreviousData,
+    placeholderData: keepWithin(c),
     queryFn: async () => (await api.GET('/companies/{companyId}/fixed-assets/schedule', { params: { path: { companyId: c }, query: range } })).data!,
   });
 }

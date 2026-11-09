@@ -512,11 +512,26 @@ export function useEInvoiceDocuments(status?: EInvoiceStatus): BusinessDocument[
   }, [documents, company, settings, parties, items, status]);
 }
 
-export type ComplianceSummary = ComplianceCounts;
+export type ComplianceSummary = ComplianceCounts & { loaded: boolean };
 
 /** E-invoice and e-way bill counts, from the server: the device no longer holds every document. */
 export function useComplianceSummary(): ComplianceSummary {
   return useComplianceCounts();
+}
+
+/** Whether the open business's setup (branches, tax rates, accounts, series…) has come from the server. */
+export function useSetupReady(): boolean {
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  return useRemoteMeta((m) => !!companyId && !!m.setupLoaded[companyId]);
+}
+
+/**
+ * Whether the lists loaded after the first screen (notifications, team, devices, recent stock
+ * movements) have come for the open business. Until then they are empty, not "none".
+ */
+export function useListsReady(): boolean {
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  return useRemoteMeta((m) => !!companyId && m.listsLoadedFor === companyId);
 }
 
 /** Documents that need an e-way bill and have no live one, newest first. */

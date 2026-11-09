@@ -103,6 +103,25 @@ export async function loadCompany(companyId: string, started = session): Promise
   }
   if (compliance) next.complianceSettings = [...s.complianceSettings.filter((r) => r.companyId !== companyId), { ...compliance, companyId }];
   useAppStore.setState(next as never);
+  useRemoteMeta.getState().patch({ setupLoaded: { ...useRemoteMeta.getState().setupLoaded, [companyId]: true } });
+}
+
+/**
+ * Opens another business once its setup is here, so no screen draws it with empty branches, tax
+ * rates or accounts. One seen this session opens at once and refreshes behind. Throws when the
+ * server can't be reached; the open business stays as it was.
+ */
+export async function switchCompany(companyId: string): Promise<void> {
+  const meta = useRemoteMeta.getState();
+  if (!meta.setupLoaded[companyId]) {
+    meta.patch({ switchingTo: companyId });
+    try {
+      await loadCompany(companyId);
+    } finally {
+      useRemoteMeta.getState().patch({ switchingTo: null });
+    }
+  }
+  useAppStore.getState().setActiveCompany(companyId);
 }
 
 const COLLECTION_OF: Record<string, string> = {
@@ -154,6 +173,7 @@ async function refreshLists(started = session) {
   replaceForCompany('notifications', companyId, notifications as never);
   replaceForCompany('stockMovements', companyId, movements as never);
   useAppStore.setState({ devices: devices as never, users: users as never });
+  useRemoteMeta.getState().patch({ listsLoadedFor: companyId });
   const { setVersion } = useRemoteMeta.getState();
   for (const u of users as Row[]) if (u.id && typeof u.version === 'number') setVersion(u.id, u.version);
 }

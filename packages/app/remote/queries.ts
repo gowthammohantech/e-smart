@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from 'react';
-import { QueryClient, keepPreviousData, useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { keepWithin } from './keepWithin';
+import { QueryClient, useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import type { Schema } from '@esmart/api-client';
 import type { AuditEvent, DocStatus, DocumentKind, EInvoiceStatus, EwayBill, EwayBillStatus, Expense, Item, Voucher } from '@esmart/core/types';
 import type { Account, Book } from '@esmart/core/domain/ledger/accounts';
@@ -93,7 +94,7 @@ export function useDocumentPages(f: DocumentQuery, enabled = true) {
     },
     getNextPageParam: (last) => last.nextCursor ?? undefined,
     // A new filter keeps showing the old rows until its first page lands, rather than flashing empty.
-    placeholderData: keepPreviousData,
+    placeholderData: keepWithin(companyId),
   });
   const rows = query.data?.pages.flatMap((p) => p.data ?? []) ?? [];
   return { ...query, rows };
@@ -110,7 +111,7 @@ export function useDocumentSummary(f: Omit<DocumentQuery, 'sort'>) {
       const { data } = await api.GET('/companies/{companyId}/documents/summary', { params: p, signal });
       return data!;
     },
-    placeholderData: keepPreviousData,
+    placeholderData: keepWithin(companyId),
   });
 }
 
@@ -142,7 +143,7 @@ export function usePartySearch(kind: 'customer' | 'supplier' | undefined, q: str
     },
     // Asked again each time the picker opens: keeping results in the store marks nothing stale.
     staleTime: 0,
-    placeholderData: keepPreviousData,
+    placeholderData: keepWithin(companyId),
   });
 }
 
@@ -159,7 +160,7 @@ export function useItemSearch(q: string, enabled = true) {
       return rows;
     },
     staleTime: 0,
-    placeholderData: keepPreviousData,
+    placeholderData: keepWithin(companyId),
   });
 }
 
@@ -187,7 +188,7 @@ export function useTdsPreview(input: { partyId?: string; date: string; taxableMi
       });
       return data!;
     },
-    placeholderData: keepPreviousData,
+    placeholderData: keepWithin(companyId),
   });
 }
 
@@ -295,7 +296,7 @@ export function usePaymentPages(f: PaymentQuery) {
       return data!;
     },
     getNextPageParam: (last) => last.nextCursor ?? undefined,
-    placeholderData: keepPreviousData,
+    placeholderData: keepWithin(companyId),
   });
   return { ...query, rows: query.data?.pages.flatMap((p) => p.data ?? []) ?? [] };
 }
@@ -310,7 +311,7 @@ export function usePaymentSummary(f: PaymentQuery) {
       const { data } = await api.GET('/companies/{companyId}/payments/summary', { params: { path: { companyId }, query: paymentParams(f) }, signal });
       return data!;
     },
-    placeholderData: keepPreviousData,
+    placeholderData: keepWithin(companyId),
   });
 }
 
@@ -357,7 +358,7 @@ export function useExpensePages(f: ExpenseQuery) {
       return data!;
     },
     getNextPageParam: (last) => last.nextCursor ?? undefined,
-    placeholderData: keepPreviousData,
+    placeholderData: keepWithin(companyId),
   });
   return { ...query, rows: query.data?.pages.flatMap((p) => p.data ?? []) ?? [] };
 }
@@ -372,7 +373,7 @@ export function useExpenseSummary(f: ExpenseQuery) {
       const { data } = await api.GET('/companies/{companyId}/expenses/summary', { params: { path: { companyId }, query: expenseParams(f) }, signal });
       return data!;
     },
-    placeholderData: keepPreviousData,
+    placeholderData: keepWithin(companyId),
   });
 }
 
@@ -411,7 +412,7 @@ export function usePartyPages(f: PartyQuery) {
       return data!;
     },
     getNextPageParam: (last) => last.nextCursor ?? undefined,
-    placeholderData: keepPreviousData,
+    placeholderData: keepWithin(companyId),
   });
   return { ...query, rows: query.data?.pages.flatMap((p) => p.data ?? []) ?? [] };
 }
@@ -426,7 +427,7 @@ export function usePartySummary(f: PartyQuery) {
       const { data } = await api.GET('/companies/{companyId}/parties/summary', { params: { path: { companyId }, query: { kind: f.kind, q: f.q?.trim() || undefined } }, signal });
       return data!;
     },
-    placeholderData: keepPreviousData,
+    placeholderData: keepWithin(companyId),
   });
 }
 
@@ -483,7 +484,7 @@ export function useServerReport<T = unknown>(key: ReportKey, scope: { from: stri
       });
       return data as T;
     },
-    placeholderData: keepPreviousData,
+    placeholderData: keepWithin(companyId),
   });
 }
 
@@ -507,7 +508,7 @@ export function useItemPages(f: ItemQuery, enabled = true) {
       return data!;
     },
     getNextPageParam: (last) => last.nextCursor ?? undefined,
-    placeholderData: keepPreviousData,
+    placeholderData: keepWithin(companyId),
   });
   return { ...query, rows: query.data?.pages.flatMap((p) => p.data ?? []) ?? [] };
 }
@@ -599,7 +600,7 @@ export function useStockAvailable(branchId: string | undefined, asOf: string, en
       for (const l of data?.data ?? []) if (l.itemId) out[l.itemId] = l.onHand ?? 0;
       return out;
     },
-    placeholderData: keepPreviousData,
+    placeholderData: keepWithin(companyId),
   });
 }
 
@@ -631,7 +632,7 @@ export function useMovementPages(f: { branchId?: string; itemId?: string; type?:
       return data!;
     },
     getNextPageParam: (last) => last.nextCursor ?? undefined,
-    placeholderData: keepPreviousData,
+    placeholderData: keepWithin(companyId),
   });
   return { ...query, rows: query.data?.pages.flatMap((p) => p.data ?? []) ?? [] };
 }
@@ -655,7 +656,7 @@ export function useBooksView<T>(
       const { data } = await api.GET('/companies/{companyId}/books/{view}', { params: { path: { companyId, view }, query: { from: scope.from, to: scope.to, account: scope.account, breakdown: scope.breakdown, compare: scope.compare } }, signal });
       return data as T;
     },
-    placeholderData: keepPreviousData,
+    placeholderData: keepWithin(companyId),
   });
 }
 
@@ -685,7 +686,7 @@ export function useVoucherPages(f: VoucherQuery) {
       return data!;
     },
     getNextPageParam: (last) => last.nextCursor ?? undefined,
-    placeholderData: keepPreviousData,
+    placeholderData: keepWithin(companyId),
   });
   return { ...query, rows: (query.data?.pages.flatMap((p) => p.data ?? []) ?? []) as unknown as Voucher[] };
 }
@@ -764,7 +765,7 @@ export function useVoucherSummary(f: VoucherQuery) {
       const { data } = await api.GET('/companies/{companyId}/vouchers/summary', { params: { path: { companyId }, query: voucherParams(f) }, signal });
       return data!;
     },
-    placeholderData: keepPreviousData,
+    placeholderData: keepWithin(companyId),
   });
 }
 
@@ -785,7 +786,7 @@ export function useAllVouchers(f: VoucherQuery, enabled = true) {
       }
       return rows;
     },
-    placeholderData: keepPreviousData,
+    placeholderData: keepWithin(companyId),
   });
 }
 
@@ -824,7 +825,7 @@ export function useReportData<T>(key: ReportDataKey | null, scope: { from: strin
       });
       return data as T;
     },
-    placeholderData: keepPreviousData,
+    placeholderData: keepWithin(companyId),
   });
 }
 
@@ -862,7 +863,7 @@ export function useHomeHub(scope: HubScope) {
   return useQuery({
     queryKey: hubKeys.home(companyId, scope),
     enabled: !!companyId,
-    placeholderData: keepPreviousData,
+    placeholderData: keepWithin(companyId),
     queryFn: async ({ signal }) => {
       const { data } = await api.GET('/companies/{companyId}/hubs/home', { params: { path: { companyId }, query: { branchId: scope.branchId, ...periodQuery(scope.period) } }, signal });
       return data!;
@@ -876,7 +877,7 @@ export function useAccountsHub(scope: HubScope, enabled = true) {
   return useQuery({
     queryKey: hubKeys.accounts(companyId, scope),
     enabled: enabled && !!companyId,
-    placeholderData: keepPreviousData,
+    placeholderData: keepWithin(companyId),
     queryFn: async ({ signal }) => {
       const { data } = await api.GET('/companies/{companyId}/hubs/accounts', { params: { path: { companyId }, query: { branchId: scope.branchId, ...periodQuery(scope.period) } }, signal });
       return data!;
@@ -918,7 +919,7 @@ const NO_COMPLIANCE: ComplianceCounts = {
  * E-invoice and e-way bill counts for badges, the GST tab and the compliance hub. Zero until the
  * first answer, so a badge never shows a stale guess; the same query serves every caller.
  */
-export function useComplianceCounts(enabled = true): ComplianceCounts {
+export function useComplianceCounts(enabled = true): ComplianceCounts & { loaded: boolean } {
   const companyId = useAppStore((s) => s.activeCompanyId);
   const branchId = useAppStore((s) => s.activeBranchId) || undefined;
   const q = useQuery({
@@ -929,7 +930,8 @@ export function useComplianceCounts(enabled = true): ComplianceCounts {
       return data!;
     },
   });
-  return q.data ?? NO_COMPLIANCE;
+  // `loaded`: the zeros are real. Until then a tile or count shows its shimmer, not "0".
+  return useMemo(() => ({ ...(q.data ?? NO_COMPLIANCE), loaded: !!q.data }), [q.data]);
 }
 
 /** The Purchases tab's figures for the period: bills, expenses and the Expenses tab, what's owed, counts, latest bills. */
@@ -938,7 +940,7 @@ export function usePurchasesHub(scope: HubScope) {
   return useQuery({
     queryKey: hubKeys.purchases(companyId, scope),
     enabled: !!companyId,
-    placeholderData: keepPreviousData,
+    placeholderData: keepWithin(companyId),
     queryFn: async ({ signal }) => {
       const { data } = await api.GET('/companies/{companyId}/hubs/purchases', { params: { path: { companyId }, query: { branchId: scope.branchId, ...periodQuery(scope.period) } }, signal });
       return data!;
@@ -952,7 +954,7 @@ export function useSalesHub(scope: HubScope) {
   return useQuery({
     queryKey: hubKeys.sales(companyId, scope),
     enabled: !!companyId,
-    placeholderData: keepPreviousData,
+    placeholderData: keepWithin(companyId),
     queryFn: async ({ signal }) => {
       const { data } = await api.GET('/companies/{companyId}/hubs/sales', { params: { path: { companyId }, query: { branchId: scope.branchId, ...periodQuery(scope.period) } }, signal });
       return data!;
@@ -975,7 +977,7 @@ export function useServerSearch(query: string, withExpenses: boolean) {
       const { data } = await api.GET('/companies/{companyId}/search', { params: { path: { companyId }, query: { q, limit: 10 } }, signal });
       return data!;
     },
-    placeholderData: keepPreviousData,
+    placeholderData: keepWithin(companyId),
   });
   const expenses = useQuery({
     queryKey: [...expenseKeys.all(companyId), 'search', q],
@@ -984,7 +986,7 @@ export function useServerSearch(query: string, withExpenses: boolean) {
       const { data } = await api.GET('/companies/{companyId}/expenses', { params: { path: { companyId }, query: { q, limit: 10 } }, signal });
       return data!.data ?? [];
     },
-    placeholderData: keepPreviousData,
+    placeholderData: keepWithin(companyId),
   });
   return {
     found: enabled ? found.data : undefined,
@@ -1075,7 +1077,7 @@ export function useAuditPages(q: string) {
       return data!;
     },
     getNextPageParam: (last) => last.nextCursor ?? undefined,
-    placeholderData: keepPreviousData,
+    placeholderData: keepWithin(companyId),
   });
   return { ...query, rows: (query.data?.pages.flatMap((p) => p.data ?? []) ?? []) as unknown as AuditEvent[] };
 }
@@ -1091,7 +1093,7 @@ export function useComplianceDocuments(f: { need: 'eInvoice' | 'ewayBill'; statu
       const { data } = await api.GET('/companies/{companyId}/compliance/documents', { params: { path: { companyId }, query: { ...f, branchId, limit: 200 } }, signal });
       return data!.data;
     },
-    placeholderData: keepPreviousData,
+    placeholderData: keepWithin(companyId),
   });
   return { ...query, rows: (query.data ?? []) as ListedDocument[] };
 }
@@ -1109,7 +1111,7 @@ export function useEwayBillPages(f: { status?: EwayBillStatus; q?: string }, ena
       return data!;
     },
     getNextPageParam: (last) => last.nextCursor ?? undefined,
-    placeholderData: keepPreviousData,
+    placeholderData: keepWithin(companyId),
   });
   return { ...query, rows: (query.data?.pages.flatMap((p) => p.data ?? []) ?? []) as unknown as EwayBill[] };
 }
@@ -1141,7 +1143,7 @@ export function useBankLines(accountId: string | undefined, status?: BankLineSta
       return data!;
     },
     getNextPageParam: (last) => last.nextCursor ?? undefined,
-    placeholderData: keepPreviousData,
+    placeholderData: keepWithin(companyId),
   });
   return { ...query, rows: (query.data?.pages.flatMap((p) => p.data ?? []) ?? []) as BankLine[] };
 }
@@ -1156,7 +1158,7 @@ export function useBankLineSummary(accountId: string | undefined) {
       const { data } = await api.GET('/companies/{companyId}/payment-accounts/{id}/bank-lines/summary', { params: { path: { companyId, id: accountId! } }, signal });
       return data!;
     },
-    placeholderData: keepPreviousData,
+    placeholderData: keepWithin(companyId),
   });
 }
 
@@ -1170,7 +1172,7 @@ export function useBankReconciliation(accountId: string | undefined, asOf: strin
       const { data } = await api.GET('/companies/{companyId}/payment-accounts/{id}/reconciliation', { params: { path: { companyId, id: accountId! }, query: { asOf } }, signal });
       return data!;
     },
-    placeholderData: keepPreviousData,
+    placeholderData: keepWithin(companyId),
   });
 }
 
