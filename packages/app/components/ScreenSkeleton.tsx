@@ -152,9 +152,10 @@ export function FormSkeleton({ fields = 5, items = false, label }: { fields?: nu
           </View>
         </SkeletonCard>
       ) : null}
+      {/* A desktop's buttons are 36px tall and sized to their labels. */}
       <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: t.spacing.md }}>
-        <Skeleton height={44} width={110} radius={t.radius.md} />
-        <Skeleton height={44} width={140} radius={t.radius.md} />
+        <Skeleton height={desktop ? 36 : 44} width={desktop ? 88 : 110} radius={t.radius.md} />
+        <Skeleton height={desktop ? 36 : 44} width={desktop ? 112 : 140} radius={t.radius.md} />
       </View>
     </SkeletonGroup>
   );

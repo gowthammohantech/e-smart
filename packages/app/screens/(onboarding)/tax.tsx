@@ -13,6 +13,7 @@ import { COUNTRIES, INDIAN_STATES } from '@esmart/core/data/masters';
 import { useSignOut } from '../../features/session/useSignOut';
 import { useGstinLookup, type GstinDetails } from '../../features/gstin/useGstinLookup';
 import { validGstin } from '@esmart/core/lib/validators';
+import { useFieldWidth } from '@esmart/ui/theme/breakpoints';
 
 export default function TaxStep() {
   const t = useTheme();
@@ -20,6 +21,7 @@ export default function TaxStep() {
   const router = useRouter();
   const { draft, set, setAddress } = useOnboardingStore();
   const signOut = useSignOut();
+  const fw = useFieldWidth();
   const [error, setError] = useState<string | undefined>();
   const country = COUNTRIES.find((c) => c.code === draft.country);
   const isGst = country?.regime === 'GST';
@@ -107,6 +109,8 @@ export default function TaxStep() {
             error={error}
             hint={gstinLookup.hint ?? (draft.country === 'IN' ? tr('onboarding:tax.stateHint') : undefined)}
             suffix={gstinLookup.suffix}
+            // A 15-character number: a desktop doesn't stretch it across the step.
+            containerStyle={fw('md')}
           />
 
           {isGst && draft.country === 'IN' ? (

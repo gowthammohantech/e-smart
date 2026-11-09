@@ -23,6 +23,9 @@ import { focusRing, type WebPressState } from '@esmart/ui/theme/interaction';
 import { useQueryParams } from '../../navigation/queryParams';
 import type { AppNotification } from '@esmart/core/types';
 
+/** How wide the list grows on a desktop. */
+const DESKTOP_LIST_WIDTH = 880;
+
 export default function Notifications() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
@@ -110,6 +113,8 @@ export default function Notifications() {
         contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: desktop ? t.spacing.xxxl : 120 + insets.bottom }}
         showsVerticalScrollIndicator={SHOW_SCROLLBAR}
       >
+        {/* A desktop keeps the list in a readable column, so the time stays near its message. */}
+        <View style={desktop ? { width: '100%', maxWidth: DESKTOP_LIST_WIDTH } : undefined}>
         {!ready ? (
           <Card padded={false}>
             <CardRowsSkeleton kind="list" rows={6} />
@@ -225,6 +230,7 @@ export default function Notifications() {
             {tr('common:notifications.deliveryNote')}
           </Text>
         </View>
+        </View>
       </ScrollView>
 
       {/* On a desktop, Clear all sits in the header instead. */}
@@ -276,7 +282,7 @@ function DesktopRowText({ n }: { n: AppNotification }) {
           {n.body}
         </Text>
       </View>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: t.spacing.sm, minWidth: 110 }}>
         <Text variant="caption" tone="muted">
           {formatRelative(n.createdAt.slice(0, 10))}
         </Text>

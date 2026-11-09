@@ -34,6 +34,8 @@ export default function CountryStep() {
       currentStep={stepIndex('country', draft.plan)}
       onPrimary={() => router.push(nextStepRoute('country', draft.plan))}
     >
+      {/* On a desktop the country takes one column, lined up with the pair below it. */}
+      <FieldRow columns={2}>
       <PickerField
         label={tr('onboarding:country.country')}
         value={country?.name}
@@ -41,6 +43,7 @@ export default function CountryStep() {
         icon="earth"
         required
       />
+      </FieldRow>
       <FieldRow>
       <PickerField
         label={tr('onboarding:country.baseCurrency')}

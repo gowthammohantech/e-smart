@@ -10,12 +10,15 @@ import { Text } from '@esmart/ui/components/Text';
 import { nextStepRoute, onboardingSteps, stepIndex, useOnboardingStore } from '../../store/onboardingStore';
 import { financialYearOf, today } from '@esmart/core/lib/date';
 import { E_INVOICE_DOC_NUMBER_MAX, sanitizePrefix } from '@esmart/core/lib/validators';
+import { useFieldWidth } from '@esmart/ui/theme/breakpoints';
 
 export default function NumberingStep() {
   const t = useTheme();
   const { t: tr } = useTranslation(['onboarding', 'settings']);
   const router = useRouter();
   const { draft, set } = useOnboardingStore();
+  // A prefix and a start number are a few characters: a desktop keeps them short, side by side.
+  const short = useFieldWidth()('sm') ?? { flex: 1 };
 
   const fy = financialYearOf(today(), draft.fiscalYearStartMonth);
   const seq = String(Number(draft.invoiceNextNumber) || 1).padStart(4, '0');
@@ -53,7 +56,7 @@ export default function NumberingStep() {
           onChangeText={(v) => set({ invoicePrefix: sanitizePrefix(v) })}
           placeholder="INV"
           autoCapitalize="characters"
-          containerStyle={{ flex: 1 }}
+          containerStyle={short}
         />
         <TextField
           label={tr('onboarding:numbering.startFrom')}
@@ -61,7 +64,7 @@ export default function NumberingStep() {
           onChangeText={(v) => set({ invoiceNextNumber: v.replace(/[^0-9]/g, '') })}
           placeholder="1"
           keyboardType="number-pad"
-          containerStyle={{ flex: 1 }}
+          containerStyle={short}
         />
       </View>
 

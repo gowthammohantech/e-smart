@@ -17,12 +17,16 @@ import { INDIAN_STATES, stateName } from '@esmart/core/data/masters';
 import { citiesForState } from '@esmart/core/data/cities';
 import { normalizeGstin } from '@esmart/core/domain/gstin';
 import { validGstin, validPostalCode } from '@esmart/core/lib/validators';
+import { FieldRow } from '@esmart/ui/components/Layout';
+import { useFieldWidth, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 
 export default function BranchesStep() {
   const t = useTheme();
   const { t: tr } = useTranslation(['onboarding', 'settings']);
   const router = useRouter();
   const { draft, set } = useOnboardingStore();
+  const desktop = useIsDesktop();
+  const fw = useFieldWidth();
 
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
@@ -64,6 +68,16 @@ export default function BranchesStep() {
     setPostalCode('');
     setGstin('');
   };
+
+  const codeField = (
+    <TextField
+      label={tr('onboarding:branches.code')}
+      value={code}
+      onChangeText={(v) => setCode(v.toUpperCase().slice(0, 5))}
+      placeholder="PUN"
+      autoCapitalize="characters"
+    />
+  );
 
   return (
     <WizardShell
@@ -107,8 +121,12 @@ export default function BranchesStep() {
         </Card>
       ))}
 
+      {/* A desktop pairs the short fields and keeps Add branch at its own width, at the right. */}
       <View style={{ gap: t.spacing.md }}>
-        <TextField label={tr('onboarding:branches.name')} value={name} onChangeText={setName} placeholder={tr('onboarding:branches.namePlaceholder')} icon="warehouse" />
+        <FieldRow>
+          <TextField label={tr('onboarding:branches.name')} value={name} onChangeText={setName} placeholder={tr('onboarding:branches.namePlaceholder')} icon="warehouse" />
+          {desktop ? codeField : null}
+        </FieldRow>
         <TextField
           label={tr('settings:branches.address')}
           value={line1}
@@ -117,38 +135,34 @@ export default function BranchesStep() {
           icon="map-marker-outline"
         />
         {/* State before city: the city list depends on the state. */}
-        <PickerField
-          label={tr('settings:branches.state')}
-          value={stateCode ? stateName(stateCode) : undefined}
-          onPress={() => setStateOpen(true)}
-          icon="map-outline"
-        />
-        <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
-          <CityField
-            label={tr('onboarding:branches.city')}
-            value={city}
-            onChange={setCity}
-            stateCode={stateCode}
-            placeholder={tr('onboarding:branches.cityPlaceholder')}
-            containerStyle={{ flex: 1 }}
+        <FieldRow>
+          <PickerField
+            label={tr('settings:branches.state')}
+            value={stateCode ? stateName(stateCode) : undefined}
+            onPress={() => setStateOpen(true)}
+            icon="map-outline"
           />
-          <TextField
-            label={tr('settings:branches.pin')}
-            value={postalCode}
-            onChangeText={(v) => setPostalCode(v.replace(/[^0-9]/g, '').slice(0, 6))}
-            placeholder="411001"
-            keyboardType="number-pad"
-            error={pinError}
-            containerStyle={{ flex: 1 }}
-          />
-        </View>
-        <TextField
-          label={tr('onboarding:branches.code')}
-          value={code}
-          onChangeText={(v) => setCode(v.toUpperCase().slice(0, 5))}
-          placeholder="PUN"
-          autoCapitalize="characters"
-        />
+          <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
+            <CityField
+              label={tr('onboarding:branches.city')}
+              value={city}
+              onChange={setCity}
+              stateCode={stateCode}
+              placeholder={tr('onboarding:branches.cityPlaceholder')}
+              containerStyle={{ flex: 1 }}
+            />
+            <TextField
+              label={tr('settings:branches.pin')}
+              value={postalCode}
+              onChangeText={(v) => setPostalCode(v.replace(/[^0-9]/g, '').slice(0, 6))}
+              placeholder="411001"
+              keyboardType="number-pad"
+              error={pinError}
+              containerStyle={{ flex: 1 }}
+            />
+          </View>
+        </FieldRow>
+        {desktop ? null : codeField}
         <TextField
           label={tr('settings:branches.gstin')}
           value={gstin}
@@ -158,8 +172,11 @@ export default function BranchesStep() {
           icon="card-account-details-outline"
           error={gstin.length === 15 ? gstinError : undefined}
           hint={tr('settings:branches.gstinHint')}
+          containerStyle={fw('md')}
         />
-        <Button title={tr('onboarding:branches.add')} variant="secondary" icon="plus" onPress={add} disabled={!canAdd} />
+        <View style={desktop ? { flexDirection: 'row', justifyContent: 'flex-end' } : undefined}>
+          <Button title={tr('onboarding:branches.add')} variant="secondary" icon="plus" onPress={add} disabled={!canAdd} />
+        </View>
       </View>
 
       <ConfirmDialog

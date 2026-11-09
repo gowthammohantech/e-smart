@@ -3,6 +3,7 @@ import { ActivityIndicator, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Screen } from '@esmart/ui/components/Screen';
+import { useIsDesktop, WIDE_FORM_MAX_WIDTH } from '@esmart/ui/theme/breakpoints';
 import { DetailSkeleton, FormSkeleton, ListSkeleton, PageSkeleton, ReportPageSkeleton } from './ScreenSkeleton';
 
 export type LoadingVariant = 'detail' | 'form' | 'items-form' | 'report' | 'list' | 'page' | 'spinner';
@@ -14,6 +15,7 @@ export type LoadingVariant = 'detail' | 'form' | 'items-form' | 'report' | 'list
  */
 export function LoadingView({ title, variant = 'detail', keepTitle }: { title?: string; variant?: LoadingVariant; keepTitle?: boolean }) {
   const t = useTheme();
+  const desktop = useIsDesktop();
   // Untitled, the header would show the route's file path until the record lands. `keepTitle` is for
   // a part of a screen (an editor) whose screen has set the title already.
   const head = keepTitle ? null : <Stack.Screen options={{ title: title ?? '' }} />;
@@ -29,7 +31,11 @@ export function LoadingView({ title, variant = 'detail', keepTitle }: { title?: 
     <Screen contentStyle={{ paddingTop: t.spacing.lg }}>
       {head}
       {variant === 'form' || variant === 'items-form' ? (
-        <FormSkeleton items={variant === 'items-form'} />
+        // A desktop form stops at the long-form width, so the skeleton does too and nothing jumps
+        // when the form lands. A document editor (items) uses the whole column, as its grid does.
+        <View style={desktop && variant === 'form' ? { width: '100%', maxWidth: WIDE_FORM_MAX_WIDTH, alignSelf: 'flex-start' } : undefined}>
+          <FormSkeleton items={variant === 'items-form'} />
+        </View>
       ) : variant === 'report' ? (
         <ReportPageSkeleton />
       ) : variant === 'list' ? (
