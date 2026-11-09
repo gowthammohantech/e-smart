@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, View } from 'react-native';
+import { Pressable, useWindowDimensions, View } from 'react-native';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Sheet } from '@esmart/ui/components/Sheet';
@@ -8,12 +8,16 @@ import { latencyTone, summarise, useLatency, useRemoteMeta } from '../remote';
 
 const ms = (n: number) => `${Math.round(n)} ms`;
 
+/** Below this width (pt) the chip drops its number and keeps only the dot, so the business name keeps its room. */
+const DOT_ONLY_BELOW = 380;
+
 /**
  * The phone header's server-speed readout, the twin of the web top bar's: a small pill with a
  * coloured dot (green fast, amber sluggish, red slow) and the median round trip. Tapping it opens a
  * sheet that splits the time into the server's share and the network's. It shares the header slot
  * with the connection badge and never shows alongside it: hidden while offline or while the books
- * are first loading, and before the first request has come back.
+ * are first loading, and before the first request has come back. On a narrow phone it is just the
+ * dot; the number is one tap away in the sheet.
  */
 export function LatencyChip() {
   const t = useTheme();
@@ -22,6 +26,7 @@ export function LatencyChip() {
   const firstLoad = useRemoteMeta((s) => s.syncing && !s.lastSyncAt);
   const samples = useLatency((s) => s.samples);
   const [open, setOpen] = useState(false);
+  const dotOnly = useWindowDimensions().width < DOT_ONLY_BELOW;
 
   const summary = summarise(samples);
   if (!online || firstLoad || !summary) return null;
@@ -58,9 +63,11 @@ export function LatencyChip() {
         style={({ pressed }) => ({
           flexDirection: 'row',
           alignItems: 'center',
+          justifyContent: 'center',
           gap: 5,
           height: 28,
-          paddingHorizontal: 9,
+          minWidth: 28,
+          paddingHorizontal: dotOnly ? 0 : 9,
           borderRadius: 14,
           backgroundColor: t.c.card,
           borderWidth: t.scheme === 'dark' ? 1 : 0,
@@ -69,10 +76,12 @@ export function LatencyChip() {
           opacity: pressed ? 0.7 : 1,
         })}
       >
-        <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: dot }} />
-        <Text variant="mono" tone="muted" style={{ fontSize: t.fontSize.caption }}>
-          {ms(summary.ms)}
-        </Text>
+        <View style={{ width: dotOnly ? 9 : 7, height: dotOnly ? 9 : 7, borderRadius: 5, backgroundColor: dot }} />
+        {dotOnly ? null : (
+          <Text variant="mono" tone="muted" style={{ fontSize: t.fontSize.caption }}>
+            {ms(summary.ms)}
+          </Text>
+        )}
       </Pressable>
 
       <Sheet
