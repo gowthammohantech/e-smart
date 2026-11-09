@@ -1,20 +1,21 @@
 import { and, count, desc, eq, gte, inArray, lte, notInArray, sql, type SQL } from 'drizzle-orm';
 import type { Schema } from '@esmart/api-contract';
 import { bucketOf, voucherCashFlows, type Bucket, type CashFlow, type Period } from '@esmart/core/domain/dashboard';
-import { profitSnapshot, type ProfitSnapshot } from '@esmart/core/domain/reports';
+import type { ProfitSnapshot } from '@esmart/core/domain/reports';
+import { profitFigures } from '@esmart/core/domain/ledger/reports';
 import { schema } from '@esmart/db';
 import type { AuthUser, CompanyRow } from '../../context';
 import type { DbOrTx } from '../../lib/audit';
 import { money } from '../../lib/wire';
 import { effectiveStatusSql } from '../documents/lifecycle';
-import { loadDocuments, loadExpenses, loadItems } from '../reports/data';
-import { loadPerpetualCost } from '../books/book';
+import { loadBook } from '../books/book';
+import { branchScope } from './period';
 import { paymentAccountBalances } from '../settings/handlers';
 
 /**
  * The dashboard's one metrics layer. Every hub takes its sales, collections, expenses, profit, cash
  * and trends from here, so the same figure reads the same on every tab, and profit is the profit
- * report's own (core `profitSnapshot` over the same documents). Amounts are base-currency paise.
+ * report's own (core `profitFigures`: the books' profit and loss). Amounts are base-currency paise.
  */
 
 export type MetricsCtx = { db: DbOrTx; company: CompanyRow; user: AuthUser; now: Date };
@@ -100,30 +101,21 @@ function perBucket(buckets: Bucket[], rows: { date: string; minor: number }[]): 
 /* ------------------------------------------------------------------ profit */
 
 /**
- * Profit as the profit report works it out, for any number of periods ending on or before `upTo`.
- * Loads what the report loads (the whole book up to `upTo`, so average cost has its history) once,
- * and gives each period the documents the report would have had for it.
+ * Profit as the profit report works it out (the books' profit and loss), for any number of periods
+ * ending on or before `upTo`. Loads the book up to `upTo` once; each period is worked out from it,
+ * kept to the branch asked for, or to the user's branches.
  */
 export async function profitLoader(c: MetricsCtx, branchId: string | undefined, upTo: string) {
-  const all = { ...c, from: '1900-01-01', to: upTo };
-  const [{ docs }, { expenses: spent }, items] = await Promise.all([
-    loadDocuments(all, ['invoice', 'debitNote', 'salesReturn', 'creditNote', 'purchaseBill']),
-    loadExpenses(all),
-    loadItems(all),
-  ]);
-  const base = c.company.baseCurrency.trim();
-  // Costed once up to `upTo`: a movement's cost depends only on what came before it.
-  const perpetual = await loadPerpetualCost(all, docs, items);
-  return (p: Period): ProfitSnapshot => {
-    const asOf = (d: { date: string }) => d.date <= p.to;
-    return profitSnapshot(docs.filter(asOf), spent.filter(asOf), items, base, { range: p, branchId: branchId ?? null, partyId: null, currency: null }, perpetual);
-  };
+  const { postings, book, stock } = await loadBook({ ...c, from: '1900-01-01', to: upTo });
+  const branches = branchScope(c.user, branchId);
+  return (p: Period): ProfitSnapshot => profitFigures(postings, book, p, stock, branches);
 }
 
 export const profitWire = (s: ProfitSnapshot): Schema<'ProfitFigures'> => ({
   revenue: s.revenue,
   costOfGoods: s.costOfGoods,
   grossProfit: s.grossProfit,
+  ...(s.otherIncome && { otherIncome: s.otherIncome }),
   expenses: s.expenses,
   netProfit: s.netProfit,
   margin: Math.round(s.margin * 10) / 10,

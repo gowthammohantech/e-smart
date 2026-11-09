@@ -820,6 +820,7 @@ export default function Report() {
               // One minus sign throughout, the one amounts carry: −₹ and -₹ side by side read as two things.
               { label: tr('reports:figure.costOfGoodsSold'), value: formatMoney({ ...profit.costOfGoods, minor: -profit.costOfGoods.minor }) },
               { label: tr('reports:figure.grossProfit'), value: formatMoney(profit.grossProfit), tone: 'good' },
+              ...(profit.otherIncome?.minor ? [{ label: tr('reports:figure.otherIncome'), value: formatMoney(profit.otherIncome) }] : []),
               { label: tr('reports:figure.operatingExpenses'), value: formatMoney({ ...profit.expenses, minor: -profit.expenses.minor }), tone: 'warn' },
               { label: tr('reports:detail.netProfit'), value: formatMoney(profit.netProfit), tone: profit.netProfit.minor >= 0 ? 'good' : 'bad' },
             ]}
@@ -841,8 +842,9 @@ export default function Report() {
     );
     exportRows = () =>
       reportTable(
-        [tr('reports:column.month'), tr('reports:column.revenue'), tr('reports:column.costOfGoods'), tr('reports:column.expenses'), tr('reports:column.profit')],
-        profit.byMonth.map((m) => [m.key, toMajor(m.revenue), toMajor(m.cost), toMajor(m.expenses), toMajor(m.profit)]),
+        [tr('reports:column.month'), tr('reports:column.revenue'), tr('reports:column.costOfGoods'), ...(profit.otherIncome?.minor ? [tr('reports:figure.otherIncome')] : []), tr('reports:column.expenses'), tr('reports:column.profit')],
+        // Other income only when there is some, so each row still adds up to its profit.
+        profit.byMonth.map((m) => [m.key, toMajor(m.revenue), toMajor(m.cost), ...(profit.otherIncome?.minor ? [m.otherIncome ? toMajor(m.otherIncome) : 0] : []), toMajor(m.expenses), toMajor(m.profit)]),
       );
   }
 

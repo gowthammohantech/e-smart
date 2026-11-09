@@ -215,6 +215,31 @@ describe('dashboard', () => {
       expect(accounts.body.tax).toEqual({ output: tax.body.outwardTotal, input: tax.body.inwardTotal, netPayable: tax.body.netPayable });
     });
 
+    it('gives the profit report and Accounts & P&L the books\' profit and loss, vouchers and other income included', async () => {
+      const m = await moneySetup(t);
+      await t.deps.db.update(schema.companies).set({ perpetualStockFrom: null }).where(eq(schema.companies.id, m.companyId));
+      await books(t, m);
+      // Postings the documents alone never showed: round off on a journal (indirect expense) and a discount received (indirect income).
+      const j = await t.post(`${m.c}/vouchers`, { kind: 'journal', date: '2026-09-25', lines: [{ account: 'sys:roundOff', debit: INR(500), credit: INR(0) }, { account: 'sys:capital', debit: INR(0), credit: INR(500) }] }, { token: m.token });
+      expect(j.status).toBe(201);
+      const r = await t.post(`${m.c}/vouchers`, { kind: 'receipt', date: '2026-09-26', lines: [{ account: `pay:${m.cash.id}`, debit: INR(700), credit: INR(0) }, { account: 'sys:discountReceived', debit: INR(0), credit: INR(700) }] }, { token: m.token });
+      expect(r.status).toBe(201);
+      const range = { from: '2026-09-01', to: '2026-09-30' };
+      const pl = await t.get(`${m.c}/books/profit-loss`, { token: m.token, query: range });
+      const report = await t.get(`${m.c}/report-data/profit`, { token: m.token, query: range });
+      const hub = await t.get(`${m.c}/hubs/accounts`, { token: m.token, query: { range: 'custom', ...range } });
+      for (const figures of [report.body, hub.body.profit]) {
+        expect(figures.grossProfit.minor).toBe(pl.body.grossProfit);
+        expect(figures.netProfit.minor).toBe(pl.body.netProfit);
+        expect(figures.otherIncome).toEqual(INR(700));
+        expect(figures.grossProfit.minor + figures.otherIncome.minor - figures.expenses.minor).toBe(figures.netProfit.minor);
+      }
+      // The expense (100 net of tax) and the round off.
+      expect(report.body.expenses).toEqual(INR(10500));
+      // The tile beside them is the period's net cash flow, not a balance: money in less money out.
+      expect(hub.body.cash.net.minor).toBe(hub.body.cash.inflow.minor - hub.body.cash.outflow.minor);
+    });
+
     it('gives the Expenses tab the period\'s spending', async () => {
       const m = await moneySetup(t);
       const k = await books(t, m);

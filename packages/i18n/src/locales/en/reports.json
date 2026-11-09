@@ -225,7 +225,7 @@
     "profit": {
       "title": "Profit snapshot",
       "description": "Revenue less cost and expenses",
-      "basis": "Revenue is taxable value, so tax collected is not counted as income."
+      "basis": "From the books' profit and loss. Revenue is taxable value, so tax collected is not counted as income; cost of goods counts the change in stock."
     },
     "tdsRegister": {
       "title": "TDS deducted",
@@ -298,6 +298,7 @@
     "costOfGoodsSold": "Cost of goods sold",
     "grossProfit": "Gross profit",
     "operatingExpenses": "Operating expenses",
+    "otherIncome": "Other income",
     "stockOnHand": "Stock on hand",
     "tdsDeducted": "TDS deducted"
   },
@@ -541,6 +542,7 @@
       "revenue": "Revenue",
       "costOfGoods": "Cost of goods",
       "grossProfit": "Gross profit",
+      "otherIncome": "Other income",
       "expenses": "Expenses",
       "netProfit": "Net profit",
       "margin": "{{pct}}% margin",

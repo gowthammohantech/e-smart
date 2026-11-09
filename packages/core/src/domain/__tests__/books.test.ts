@@ -1,7 +1,7 @@
 import { calculateDocument } from '../lineCalc';
 import { buildTaxContext } from '../taxEngine';
 import { allPostings, postDocument, postExpense, postPayment, postVoucher, Posting, RCM_OUTPUT_FROM } from '../ledger/postings';
-import { balanceSheet, ledgerStatement, profitAndLoss, trialBalance } from '../ledger/reports';
+import { balanceSheet, ledgerStatement, profitAndLoss, profitAndLossStatement, profitFigures, trialBalance, type StatementLabels } from '../ledger/reports';
 import { balanceSheetColumns, comparisonPeriod, profitAndLossColumns, splitPeriods, variance } from '../ledger/comparative';
 import { Book, chartOfAccounts, groupTree } from '../ledger/accounts';
 import { BusinessDocument, Company, DocumentKind, DocumentLine, Expense, GstFlags, Item, Party, Payment, PaymentAccount, StockMovement, Voucher } from '../../types';
@@ -450,6 +450,112 @@ describe('books', () => {
   it('names every account in the chart', () => {
     const keys = chartOfAccounts(book).map((a) => a.key);
     expect(keys).toEqual(expect.arrayContaining(['sys:sales', 'party:cus', 'pay:bank', 'exp:rent', 'acc:loan', 'sys:inputIgst']));
+  });
+});
+
+describe('the statements agree with each other (browser walk, 9 Nov 2026)', () => {
+  const invoice = doc('invoice');
+  const bill = doc('purchaseBill', { date: '2026-05-01', lines: [line({ quantity: 20, unitPrice: inr('60') })] });
+  // A second branch's sale, and indirect income: interest taken in on a receipt voucher.
+  const pune = doc('invoice', { branchId: 'b2', date: '2026-07-15', lines: [line({ quantity: 2 })] });
+  const interest: Voucher = { id: 'vi', companyId: 'c', branchId: 'b', kind: 'receipt', number: 'RV-1', date: '2026-08-10', lines: [{ account: 'pay:bank', debit: inr('500'), credit: zero('INR') }, { account: 'sys:discountReceived', debit: zero('INR'), credit: inr('500') }], createdBy: 'u', createdAt: '' };
+  const rent = { id: 'e1', number: 'EXP-1', categoryId: 'rent', accountId: 'bank', branchId: 'b', date: '2026-06-05', amount: inr('3000'), taxAmount: inr('0'), exchangeRate: 1 } as Expense;
+  const movements = [move('opening', 5, '2026-04-01'), move('purchaseReceipt', 20, '2026-05-01'), move('salesIssue', -10, '2026-06-01'), { ...move('salesIssue', -2, '2026-07-15'), branchId: 'b2' }];
+  const stock = { items: [item], movements, baseCurrency: 'INR' };
+  const postings = allPostings({
+    baseCurrency: 'INR',
+    company,
+    branches: [],
+    taxCategories: [],
+    documents: [invoice, bill, pune],
+    payments: [],
+    expenses: [rent],
+    vouchers: [interest],
+    parties: [customer, supplier],
+    paymentAccounts: [cash, bank],
+    ledgerAccounts: [],
+    openingStockMinor: 5 * 6000,
+  });
+  const year = { from: '2026-04-01', to: '2027-03-31' };
+
+  it('totals every column of the trial balance from its rows: opening, the period, and closing debit and credit balances', () => {
+    const tb = trialBalance(postings, book, year);
+    const sum = (f: (r: (typeof tb.rows)[number]) => number) => tb.rows.reduce((a, r) => a + f(r), 0);
+    expect(tb.totals.openingDebit).toBe(sum((r) => Math.max(r.opening, 0)));
+    expect(tb.totals.openingCredit).toBe(sum((r) => Math.max(-r.opening, 0)));
+    expect(tb.totals.closingDebit).toBe(sum((r) => Math.max(r.closing, 0)));
+    expect(tb.totals.closingCredit).toBe(sum((r) => Math.max(-r.closing, 0)));
+    expect(tb.totals.openingDebit).toBe(tb.totals.openingCredit);
+    expect(tb.totals.closingDebit).toBe(tb.totals.closingCredit);
+    // The period's movements are a different total from the closing balances: the screen must label them apart.
+    expect(tb.totals.debit).toBe(tb.totals.credit);
+    expect(tb.totals.debit).not.toBe(tb.totals.closingDebit);
+  });
+
+  it('gives the profit report the books’ profit: periodic cost of goods from purchases and the change in stock (RULES 6.2)', () => {
+    const pl = profitAndLoss(postings, book, year, stock);
+    const f = profitFigures(postings, book, year, stock);
+    expect(f.grossProfit.minor).toBe(pl.grossProfit);
+    expect(f.netProfit.minor).toBe(pl.netProfit);
+    // Sales 1,200; cost of goods = opening 300 + purchases 1,200 − closing 780 (13 units at ₹60) = 720.
+    expect(f.revenue.minor).toBe(120000);
+    expect(f.costOfGoods.minor).toBe(30000 + 120000 - 78000);
+    expect(f.revenue.minor - f.costOfGoods.minor).toBe(f.grossProfit.minor);
+    // Indirect income is its own line, so net profit = gross profit + other income − expenses.
+    expect(f.otherIncome?.minor).toBe(50000);
+    expect(f.expenses.minor).toBe(300000);
+    expect(f.grossProfit.minor + (f.otherIncome?.minor ?? 0) - f.expenses.minor).toBe(f.netProfit.minor);
+    // Its months add up to the year (each month's stock change telescopes).
+    expect(f.byMonth.reduce((a, m) => a + m.profit.minor, 0)).toBe(f.netProfit.minor);
+    // May only bought goods into stock: nothing reaches profit, so it has no row.
+    expect(f.byMonth.map((m) => m.key)).toEqual(['2026-06', '2026-07', '2026-08']);
+  });
+
+  it('splits the profit by branch, stock at the company’s cost, and the branches add up to the whole', () => {
+    const whole = profitFigures(postings, book, year, stock);
+    const mumbai = profitFigures(postings, book, year, stock, ['b']);
+    const puneOnly = profitFigures(postings, book, year, stock, ['b2']);
+    expect(puneOnly.revenue.minor).toBe(20000);
+    for (const k of ['revenue', 'costOfGoods', 'grossProfit', 'expenses', 'netProfit'] as const) expect(mumbai[k].minor + puneOnly[k].minor).toBe(whole[k].minor);
+  });
+
+  const labels: StatementLabels = { account: (a) => a.name, openingStock: 'Opening stock', closingStock: 'Closing stock', grossProfit: 'Gross profit', grossLoss: 'Gross loss', netProfit: 'Net profit', netLoss: 'Net loss' };
+
+  it('shows a net loss on the income side as the balancing figure, so both columns total the same', () => {
+    const pl = profitAndLoss(postings, book, year, stock);
+    expect(pl.netProfit).toBeLessThan(0);
+    const st = profitAndLossStatement(pl, labels);
+    const last = st.indirect.rows[st.indirect.rows.length - 1];
+    expect(last).toEqual({ label: 'Net loss', income: -pl.netProfit, result: true });
+    expect(st.indirect.total.income).toBe(st.indirect.total.expense);
+    expect(st.trading.total.income).toBe(st.trading.total.expense);
+    // A gross profit closes the trading account on the expenses side and opens the P&L on the income side.
+    expect(st.trading.rows[st.trading.rows.length - 1]).toEqual({ label: 'Gross profit', expense: pl.grossProfit, result: true });
+    expect(st.indirect.rows[0]).toEqual({ label: 'Gross profit', income: pl.grossProfit, result: true });
+  });
+
+  it('shows a net profit on the expenses side, and a gross loss carried down as an expense', () => {
+    const pl = { trading: { income: [], expense: [], openingStock: 500, closingStock: 0 }, grossProfit: -500, indirect: { income: [{ group: 'indirectIncomes' as const, account: { key: 'sys:otherIncome', name: 'Written back', group: 'indirectIncomes' as const, kind: 'system' as const }, amount: 2000 }], expense: [] }, netProfit: 1500 };
+    const st = profitAndLossStatement(pl, labels);
+    expect(st.trading.rows[st.trading.rows.length - 1]).toEqual({ label: 'Gross loss', income: 500, result: true });
+    expect(st.indirect.rows[0]).toEqual({ label: 'Gross loss', expense: 500, result: true });
+    expect(st.indirect.rows[st.indirect.rows.length - 1]).toEqual({ label: 'Net profit', expense: 1500, result: true });
+    expect(st.indirect.total).toEqual({ income: 2000, expense: 2000 });
+  });
+
+  it('keeps an overdrawn bank and a customer in credit on the assets side, as negatives (RULES has no reclassification)', () => {
+    const ps: Posting[] = [
+      { date: '2026-06-01', account: 'exp:rent', debit: 500000, credit: 0, source: { type: 'expense', id: 'x', number: 'x' } },
+      { date: '2026-06-01', account: 'pay:bank', debit: 0, credit: 500000, source: { type: 'expense', id: 'x', number: 'x' } },
+      { date: '2026-06-02', account: 'pay:cash', debit: 300000, credit: 0, source: { type: 'payment', id: 'p', number: 'p' } },
+      { date: '2026-06-02', account: 'party:cus', debit: 0, credit: 300000, source: { type: 'payment', id: 'p', number: 'p' } },
+    ];
+    const bs = balanceSheet(ps, book, '2027-03-31', { items: [], movements: [], baseCurrency: 'INR' });
+    const assets = bs.assets.flatMap((s) => s.lines.map((l) => [l.account.key, l.amount]));
+    expect(assets).toEqual(expect.arrayContaining([['pay:bank', -500000], ['party:cus', -300000], ['pay:cash', 300000]]));
+    expect(bs.liabilities.flatMap((s) => s.lines.map((l) => l.account.key))).not.toEqual(expect.arrayContaining(['pay:bank']));
+    expect(bs.liabilities.flatMap((s) => s.lines.map((l) => l.account.key))).not.toContain('party:cus');
+    expect(bs.totalAssets).toBe(bs.totalLiabilities);
   });
 });
 

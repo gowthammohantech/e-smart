@@ -1,6 +1,8 @@
 import { Item, LedgerGroup, StockMovement } from '../../types';
 import { financialYearOf } from '../../lib/date';
-import { valueStock, type StockCosting } from '../stockLedger';
+import { money } from '../../lib/money';
+import { stockOnHand, valueStock, type StockCosting } from '../stockLedger';
+import type { ProfitSnapshot } from '../reports';
 import { Account, Book, GROUPS, accountFor, isDebitNature } from './accounts';
 import { OPENING_DATE, Posting } from './postings';
 
@@ -10,10 +12,20 @@ const dayBefore = (iso: string) => new Date(Date.parse(`${iso}T00:00:00Z`) - 86_
 /**
  * Stock in hand on `date`, at weighted-average cost: every tracked item's movements up to that day.
  * Stock counted when the books began counts from the start, whatever day it was counted.
+ * For some branches only: what each item holds there, at the company's value a unit (cost is worked
+ * out across the company, RULES 6.2), so the branches add up to the whole.
  */
-export function stockValueOn(items: Item[], movements: StockMovement[], date: string, baseCurrency: string, method: StockCosting = 'average'): number {
+export function stockValueOn(items: Item[], movements: StockMovement[], date: string, baseCurrency: string, method: StockCosting = 'average', branchIds?: string[]): number {
   const upTo = movements.filter((m) => m.type === 'opening' || m.date <= date);
-  return items.filter((i) => i.trackInventory).reduce((a, i) => a + valueStock(i, upTo, baseCurrency, method).minor, 0);
+  return items
+    .filter((i) => i.trackInventory)
+    .reduce((a, i) => {
+      const value = valueStock(i, upTo, baseCurrency, method).minor;
+      if (!branchIds?.length || !value) return a + value;
+      const all = stockOnHand(i.id, upTo);
+      const here = branchIds.reduce((q, b) => q + stockOnHand(i.id, upTo, b), 0);
+      return all > 0 ? a + Math.round((value * here) / all) : a;
+    }, 0);
 }
 
 /** Stock counted when the books began (opening stock movements). */
@@ -118,9 +130,13 @@ export type ProfitAndLoss = {
   netProfit: number;
 };
 
-/** Income and expense for a period, in the Tally layout. Income lines are positive, as are expenses. */
-export function profitAndLoss(postings: Posting[], book: Book, range: { from: string; to: string }, stock: Stock): ProfitAndLoss {
-  const net = netByAccount(postings.filter((p) => p.date >= range.from && p.date <= range.to));
+/**
+ * Income and expense for a period, in the Tally layout. Income lines are positive, as are expenses.
+ * `branchIds` keeps it to those branches' postings and stock (the books themselves cover every branch).
+ */
+export function profitAndLoss(postings: Posting[], book: Book, range: { from: string; to: string }, stock: Stock, branchIds?: string[]): ProfitAndLoss {
+  const mine = (p: Posting) => !branchIds?.length || (!!p.branchId && branchIds.includes(p.branchId));
+  const net = netByAccount(postings.filter((p) => p.date >= range.from && p.date <= range.to && mine(p)));
   const lines: StatementLine[] = [];
   for (const [key, value] of net) {
     const account = accountFor(key, book);
@@ -134,13 +150,98 @@ export function profitAndLoss(postings: Posting[], book: Book, range: { from: st
   // runs into perpetual stock values its periodic part, up to the day before it starts.
   const periodicTo = perpetualOn(stock, range.to) ? dayBefore(stock.perpetualFrom!) : range.to;
   const periodic = !perpetualOn(stock, range.from);
-  const openingStock = periodic ? stockValueOn(stock.items, stock.movements, dayBefore(range.from), stock.baseCurrency, stock.costing) : 0;
-  const closingStock = periodic ? stockValueOn(stock.items, stock.movements, periodicTo, stock.baseCurrency, stock.costing) : 0;
+  const openingStock = periodic ? stockValueOn(stock.items, stock.movements, dayBefore(range.from), stock.baseCurrency, stock.costing, branchIds) : 0;
+  const closingStock = periodic ? stockValueOn(stock.items, stock.movements, periodicTo, stock.baseCurrency, stock.costing, branchIds) : 0;
   const total = (ls: StatementLine[]) => ls.reduce((a, l) => a + l.amount, 0);
   const trading = { income: pick(true, 'income'), expense: pick(true, 'expense'), openingStock, closingStock };
   const grossProfit = total(trading.income) + closingStock - openingStock - total(trading.expense);
   const indirect = { income: pick(false, 'income'), expense: pick(false, 'expense') };
   return { trading, grossProfit, indirect, netProfit: grossProfit + total(indirect.income) - total(indirect.expense) };
+}
+
+/** The calendar months a range touches, each clipped to the range. */
+function monthsOf(range: { from: string; to: string }): { key: string; from: string; to: string }[] {
+  const out: { key: string; from: string; to: string }[] = [];
+  let [y, m] = range.from.slice(0, 7).split('-').map(Number);
+  for (;;) {
+    const key = `${y}-${String(m).padStart(2, '0')}`;
+    if (`${key}-01` > range.to) break;
+    const last = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+    out.push({ key, from: `${key}-01` < range.from ? range.from : `${key}-01`, to: last > range.to ? range.to : last });
+    m += 1;
+    if (m === 13) { m = 1; y += 1; }
+  }
+  return out;
+}
+
+/**
+ * The profit report's figures, taken from the books' profit and loss, so the report, the dashboard
+ * and Books → Profit and loss give one profit (RULES 6.2, 6.10). Revenue is the trading account's
+ * income (sales and direct income, net of returns and notes); cost of goods is what the trading
+ * account sets against it (opening stock + purchases + direct costs − closing stock under periodic
+ * stock, cost of goods sold under perpetual), so gross profit is the books' gross profit; other
+ * income and expenses are the indirect side. Months with nothing in them are left out.
+ */
+export function profitFigures(postings: Posting[], book: Book, range: { from: string; to: string }, stock: Stock, branchIds?: string[]): ProfitSnapshot {
+  const base = stock.baseCurrency;
+  const total = (ls: StatementLine[]) => ls.reduce((a, l) => a + l.amount, 0);
+  const figures = (r: { from: string; to: string }) => {
+    const pl = profitAndLoss(postings, book, r, stock, branchIds);
+    const revenue = total(pl.trading.income);
+    return { revenue, cost: revenue - pl.grossProfit, gross: pl.grossProfit, otherIncome: total(pl.indirect.income), expenses: total(pl.indirect.expense), net: pl.netProfit };
+  };
+  const f = figures(range);
+  const byMonth = monthsOf(range)
+    .map((mo) => ({ key: mo.key, ...figures(mo) }))
+    .filter((mo) => mo.revenue || mo.cost || mo.otherIncome || mo.expenses)
+    .map((mo) => ({ key: mo.key, revenue: money(mo.revenue, base), cost: money(mo.cost, base), ...(mo.otherIncome ? { otherIncome: money(mo.otherIncome, base) } : {}), expenses: money(mo.expenses, base), profit: money(mo.net, base) }));
+  return {
+    revenue: money(f.revenue, base),
+    costOfGoods: money(f.cost, base),
+    grossProfit: money(f.gross, base),
+    ...(f.otherIncome ? { otherIncome: money(f.otherIncome, base) } : {}),
+    expenses: money(f.expenses, base),
+    netProfit: money(f.net, base),
+    margin: f.revenue === 0 ? 0 : (f.net / f.revenue) * 100,
+    byMonth,
+  };
+}
+
+export type StatementRow = { label: string; income?: number; expense?: number; result?: boolean };
+export type StatementSection = { rows: StatementRow[]; total: { income: number; expense: number } };
+export type StatementLabels = {
+  account: (account: Account) => string;
+  openingStock: string;
+  closingStock: string;
+  grossProfit: string;
+  grossLoss: string;
+  netProfit: string;
+  netLoss: string;
+};
+
+/**
+ * The profit and loss laid out in two columns, income and expenses, in the Tally (T-form) way: each
+ * section closes with its result as the balancing figure, a profit on the expenses side and a loss on
+ * the income side, so both columns add up to the same total. The gross result is carried down to the
+ * profit and loss section on the other side (a gross profit as income there, a gross loss as expense).
+ * The screen and its export both read this.
+ */
+export function profitAndLossStatement(pl: ProfitAndLoss, labels: StatementLabels): { trading: StatementSection; indirect: StatementSection } {
+  const income = (lines: StatementLine[]): StatementRow[] => lines.map((l) => ({ label: labels.account(l.account), income: l.amount }));
+  const expense = (lines: StatementLine[]): StatementRow[] => lines.map((l) => ({ label: labels.account(l.account), expense: l.amount }));
+  const balancing = (value: number, profit: string, loss: string): StatementRow => (value >= 0 ? { label: profit, expense: value, result: true } : { label: loss, income: -value, result: true });
+  const broughtDown = (value: number): StatementRow => (value >= 0 ? { label: labels.grossProfit, income: value, result: true } : { label: labels.grossLoss, expense: -value, result: true });
+  const section = (rows: StatementRow[]): StatementSection => ({ rows, total: { income: rows.reduce((a, r) => a + (r.income ?? 0), 0), expense: rows.reduce((a, r) => a + (r.expense ?? 0), 0) } });
+  return {
+    trading: section([
+      { label: labels.openingStock, expense: pl.trading.openingStock },
+      ...expense(pl.trading.expense),
+      ...income(pl.trading.income),
+      { label: labels.closingStock, income: pl.trading.closingStock },
+      balancing(pl.grossProfit, labels.grossProfit, labels.grossLoss),
+    ]),
+    indirect: section([broughtDown(pl.grossProfit), ...income(pl.indirect.income), ...expense(pl.indirect.expense), balancing(pl.netProfit, labels.netProfit, labels.netLoss)]),
+  };
 }
 
 export type BalanceSheetSide = { heading: NonNullable<(typeof GROUPS)[LedgerGroup]['parent']>; lines: StatementLine[]; total: number }[];

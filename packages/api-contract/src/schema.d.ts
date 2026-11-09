@@ -6968,10 +6968,12 @@ export interface components {
             }[];
             payments?: components["schemas"]["Payment"][];
         };
+        /** @description The books' profit and loss (core `profitFigures`): revenue and cost of goods are the trading account, so gross profit is the books' gross profit; other income and expenses are the indirect side */
         ProfitSnapshot: {
             revenue?: components["schemas"]["Money"];
             costOfGoods?: components["schemas"]["Money"];
             grossProfit?: components["schemas"]["Money"];
+            otherIncome?: components["schemas"]["Money"];
             expenses?: components["schemas"]["Money"];
             netProfit?: components["schemas"]["Money"];
             margin?: number;
@@ -6979,6 +6981,7 @@ export interface components {
                 key?: string;
                 revenue?: components["schemas"]["Money"];
                 cost?: components["schemas"]["Money"];
+                otherIncome?: components["schemas"]["Money"];
                 expenses?: components["schemas"]["Money"];
                 profit?: components["schemas"]["Money"];
             }[];
@@ -7121,11 +7124,12 @@ export interface components {
             name: string;
             total: components["schemas"]["Money"];
         };
-        /** @description As the profit report works it out (core `profitSnapshot`): taxable revenue less the average cost of goods sold, less expenses that are not billable */
+        /** @description As the profit report works it out (core `profitFigures`, the books' profit and loss): the trading account's revenue less its cost of goods is gross profit; net profit adds other income and takes off indirect expenses */
         ProfitFigures: {
             revenue: components["schemas"]["Money"];
             costOfGoods: components["schemas"]["Money"];
             grossProfit: components["schemas"]["Money"];
+            otherIncome?: components["schemas"]["Money"];
             expenses: components["schemas"]["Money"];
             netProfit: components["schemas"]["Money"];
             /** @description Net profit as a percentage of revenue */

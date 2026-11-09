@@ -90,7 +90,8 @@ export default function AccountsHub() {
                       />
                     </View>
                     <View style={EQUAL_TILE}>
-                      <StatTile label={tr('reports:dash.home.cash')} value={cash.net} tone={cash.net.minor >= 0 ? 'good' : 'bad'} icon="wallet-outline" caption={tr('reports:dash.home.net')} />
+                      {/* The period's money in less money out, not a balance: Home's Cash & bank is the balance (cash.closing here). */}
+                      <StatTile label={tr('reports:dash.home.cashFlow')} value={cash.net} tone={cash.net.minor >= 0 ? 'good' : 'bad'} icon="wallet-outline" caption={tr('reports:dash.home.cashFlowCaption')} />
                     </View>
                   </StatRow>
                 </StatGrid>
@@ -108,6 +109,7 @@ export default function AccountsHub() {
                               [tr('reports:dash.accounts.revenue'), major(p.revenue)],
                               [tr('reports:dash.accounts.costOfGoods'), -major(p.costOfGoods)],
                               [tr('reports:dash.accounts.grossProfit'), major(p.grossProfit)],
+                              ...(p.otherIncome ? [[tr('reports:dash.accounts.otherIncome'), major(p.otherIncome)] as [string, number]] : []),
                               [tr('reports:dash.accounts.expenses'), -major(p.expenses)],
                               [tr('reports:dash.accounts.netProfit'), major(p.netProfit)],
                             ],
@@ -120,6 +122,7 @@ export default function AccountsHub() {
                             { label: tr('reports:dash.accounts.revenue'), value: p.revenue, kind: 'total' },
                             { label: tr('reports:dash.accounts.costOfGoods'), value: neg(p.costOfGoods), kind: 'change' },
                             { label: tr('reports:dash.accounts.grossProfit'), value: p.grossProfit, kind: 'total' },
+                            ...(p.otherIncome ? [{ label: tr('reports:dash.accounts.otherIncome'), value: p.otherIncome, kind: 'change' as const }] : []),
                             { label: tr('reports:dash.accounts.expenses'), value: neg(p.expenses), kind: 'change' },
                             { label: tr('reports:dash.accounts.netProfit'), value: p.netProfit, kind: 'total' },
                           ]}

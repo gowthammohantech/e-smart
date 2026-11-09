@@ -12,7 +12,7 @@ const range = { from: '2026-08-01', to: '2026-09-30' };
 describe('reports', () => {
   it('builds every report from the books with core reports', async () => {
     const m = await moneySetup(t);
-    // Periodic books: the profit snapshot costs goods at the average the bills paid (RULES 6.2).
+    // Periodic books: the profit report is the books' P&L, cost of goods from the change in stock (RULES 6.2).
     // Under perpetual stock it takes the posted cost of goods sold (api `perpetual stock`).
     await t.deps.db.update(schema.companies).set({ perpetualStockFrom: null }).where(eq(schema.companies.id, m.companyId));
     const k = await books(t, m);
@@ -50,16 +50,21 @@ describe('reports', () => {
     expect(payments).toMatchObject({ received: INR(100000), paid: INR(0), net: INR(100000), byMethod: [{ label: 'Cash', value: INR(100000), count: 1 }], byAccount: [{ label: 'Cash', value: INR(100000), count: 1 }] });
     expect(payments.payments[0].id).toBe(k.payment.id);
 
-    // Core's profit: revenue is taxable sales, less cost of goods sold at the
-    // average the bills paid (3 × 550, weighted average as RULES 6.2), not the
-    // item's list purchase price of 600, less expenses net of their input tax.
+    // The books' profit (core profitFigures, RULES 6.2 periodic): revenue is taxable sales; cost of
+    // goods is opening stock + purchases − closing stock (0 + 5 × 550 − 2 left × 550 = 3 × 550), so it
+    // agrees with Books → Profit and loss; expenses are net of their input tax.
     const profit = await report('profit');
     expect(profit).toMatchObject({ revenue: INR(300000), costOfGoods: INR(165000), grossProfit: INR(135000), expenses: INR(10000), netProfit: INR(125000) });
     expect(profit.netProfit.minor).toBe(sales.taxable.minor - 3 * 55000 - (expenses.total.minor - expenses.tax.minor));
     expect(profit.margin).toBeCloseTo((125000 / 300000) * 100, 6);
+    const pl = await t.get(`${m.c}/books/profit-loss`, { token: m.token, query: range });
+    expect(pl.status).toBe(200);
+    expect([profit.grossProfit.minor, profit.netProfit.minor]).toEqual([pl.body.grossProfit, pl.body.netProfit]);
+    // By month as the books have it: August sold a rod before any was bought (no stock to cost it
+    // from, so nothing moves out of stock); September's bill and closing stock carry the cost.
     expect(profit.byMonth).toEqual([
-      { key: '2026-08', revenue: INR(100000), cost: INR(55000), expenses: INR(0), profit: INR(45000) },
-      { key: '2026-09', revenue: INR(200000), cost: INR(110000), expenses: INR(10000), profit: INR(80000) },
+      { key: '2026-08', revenue: INR(100000), cost: INR(0), expenses: INR(0), profit: INR(100000) },
+      { key: '2026-09', revenue: INR(200000), cost: INR(165000), expenses: INR(10000), profit: INR(25000) },
     ]);
 
     // As of the end of the range: A is part paid and not yet due, B is 16 days overdue.

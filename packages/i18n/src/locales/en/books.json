@@ -204,6 +204,12 @@
     "debit": "Debit",
     "credit": "Credit",
     "closing": "Closing",
+    "openingDebit": "Opening Dr",
+    "openingCredit": "Opening Cr",
+    "closingDebit": "Closing Dr",
+    "closingCredit": "Closing Cr",
+    "closingDebits": "Closing debit balances",
+    "closingCredits": "Closing credit balances",
     "total": "Total",
     "balanced": "Debits equal credits",
     "unbalanced": "Out by {{amount}}: report this to support"
@@ -234,6 +240,7 @@
       "currentAssets": "Current assets"
     },
     "currentProfit": "Profit for the year so far",
+    "currentLoss": "Loss for the year so far",
     "total": "Total",
     "differs": "The two sides differ by {{amount}}: report this to support"
   },

@@ -411,6 +411,7 @@ export function ReportDesktop({ report, data }: { report: string; data: ReportDa
                 { label: tr('reports:figure.revenueTaxable'), value: money(pr.revenue) },
                 { label: tr('reports:figure.costOfGoodsSold'), value: money({ ...pr.costOfGoods, minor: -pr.costOfGoods.minor }) },
                 { label: tr('reports:figure.grossProfit'), value: money(pr.grossProfit), tone: 'good' },
+                ...(pr.otherIncome?.minor ? [{ label: tr('reports:figure.otherIncome'), value: money(pr.otherIncome) }] : []),
                 { label: tr('reports:figure.operatingExpenses'), value: money({ ...pr.expenses, minor: -pr.expenses.minor }), tone: 'warn' },
                 { label: tr('reports:detail.netProfit'), value: money(pr.netProfit), tone: pr.netProfit.minor >= 0 ? 'good' : 'bad' },
               ]}

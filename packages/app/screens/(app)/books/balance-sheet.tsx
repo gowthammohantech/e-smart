@@ -28,7 +28,8 @@ export default function BalanceSheetScreen() {
   type Line = { label: string; amount: number; heading?: boolean };
   const lines = (side: BalanceSheetSide): Line[] =>
     side.flatMap((s) => [{ label: tr(`books:bs.heading.${s.heading}`), amount: s.total, heading: true }, ...s.lines.map((l) => ({ label: `   ${nameOf(l.account)}`, amount: l.amount }))]);
-  const liabilities: Line[] = [...lines(bs.liabilities), { label: tr('books:bs.currentProfit'), amount: bs.currentProfit, heading: true }];
+  // A loss so far is taken off capital: named as a loss, its amount keeps its minus sign.
+  const liabilities: Line[] = [...lines(bs.liabilities), { label: tr(bs.currentProfit < 0 ? 'books:bs.currentLoss' : 'books:bs.currentProfit'), amount: bs.currentProfit, heading: true }];
   const assets = lines(bs.assets);
   const headingRows = (side: Line[]) => side.flatMap((l, i) => (l.heading ? [i] : []));
   const off = bs.totalAssets - bs.totalLiabilities;

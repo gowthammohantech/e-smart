@@ -8829,10 +8829,12 @@ components:
         payments: { type: array, items: { $ref: '#/components/schemas/Payment' } }
     ProfitSnapshot:
       type: object
+      description: 'The books'' profit and loss (core `profitFigures`): revenue and cost of goods are the trading account, so gross profit is the books'' gross profit; other income and expenses are the indirect side'
       properties:
         revenue: { $ref: '#/components/schemas/Money' }
         costOfGoods: { $ref: '#/components/schemas/Money' }
         grossProfit: { $ref: '#/components/schemas/Money' }
+        otherIncome: { $ref: '#/components/schemas/Money' }
         expenses: { $ref: '#/components/schemas/Money' }
         netProfit: { $ref: '#/components/schemas/Money' }
         margin: { type: number }
@@ -8844,6 +8846,7 @@ components:
               key: { type: string }
               revenue: { $ref: '#/components/schemas/Money' }
               cost: { $ref: '#/components/schemas/Money' }
+              otherIncome: { $ref: '#/components/schemas/Money' }
               expenses: { $ref: '#/components/schemas/Money' }
               profit: { $ref: '#/components/schemas/Money' }
     Gstr1Row:
@@ -8982,12 +8985,13 @@ components:
       properties: { partyId: { type: string }, name: { type: string }, total: { $ref: '#/components/schemas/Money' } }
     ProfitFigures:
       type: object
-      description: 'As the profit report works it out (core `profitSnapshot`): taxable revenue less the average cost of goods sold, less expenses that are not billable'
+      description: 'As the profit report works it out (core `profitFigures`, the books'' profit and loss): the trading account''s revenue less its cost of goods is gross profit; net profit adds other income and takes off indirect expenses'
       required: [revenue, costOfGoods, grossProfit, expenses, netProfit, margin]
       properties:
         revenue: { $ref: '#/components/schemas/Money' }
         costOfGoods: { $ref: '#/components/schemas/Money' }
         grossProfit: { $ref: '#/components/schemas/Money' }
+        otherIncome: { $ref: '#/components/schemas/Money' }
         expenses: { $ref: '#/components/schemas/Money' }
         netProfit: { $ref: '#/components/schemas/Money' }
         margin: { type: number, description: Net profit as a percentage of revenue }

@@ -472,12 +472,20 @@ export type ProfitSnapshot = {
   revenue: Money;
   costOfGoods: Money;
   grossProfit: Money;
+  /** Indirect income (discount received, interest, profit on assets sold); net profit counts it. */
+  otherIncome?: Money;
   expenses: Money;
   netProfit: Money;
   margin: number;
-  byMonth: { key: string; revenue: Money; cost: Money; expenses: Money; profit: Money }[];
+  byMonth: { key: string; revenue: Money; cost: Money; otherIncome?: Money; expenses: Money; profit: Money }[];
 };
 
+/**
+ * A rough profit from the documents alone: periodic cost of goods at the average bill price of what
+ * was sold, expenses from the expense records. It is not the books' profit (it leaves out vouchers,
+ * depreciation, round off and the change in stock), so the server's profit report and dashboard use
+ * `profitFigures` (ledger/reports) instead; this one fills an empty report while it loads.
+ */
 export function profitSnapshot(
   documents: BusinessDocument[],
   expenses: Expense[],

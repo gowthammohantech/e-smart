@@ -6,17 +6,17 @@ import { FULL_PLAN, hasModule, moduleForReport } from '@esmart/core/domain/plan'
 import { tdsRegister } from '@esmart/core/domain/tds';
 import type { BusinessDocument } from '@esmart/core/types';
 import { schema } from '@esmart/db';
-import { profitSnapshot, summarizeAdvances, summarizeDocuments, summarizeExpenses, summarizePayments, summarizeStock, summarizeTax, type ReportFilters } from '@esmart/core/domain/reports';
+import { summarizeAdvances, summarizeDocuments, summarizeExpenses, summarizePayments, summarizeStock, summarizeTax, type ReportFilters } from '@esmart/core/domain/reports';
 import { RawBody, defineHandlers, type Ctx } from '../../context';
 import { forbidden, invalid, planUpgradeRequired } from '../../http/errors';
-import { loadBook, loadPerpetualCost, loadVouchers } from '../books/book';
+import { loadBook, loadVouchers } from '../books/book';
 import { amendmentsForScreen, gstr1ForRange } from '../gst/handlers';
 import { buildOutstanding, summarizeAging } from '@esmart/core/domain/receivables';
 import { tds26asMatch, tdsPayableSummary, tdsReceivable, tdsReturnRows } from '@esmart/core/domain/tdsReports';
 import { tcsPayableSummary, tcsRegister } from '@esmart/core/domain/tcsReports';
 import { msmePayables, sec43bh } from '@esmart/core/domain/msme';
 import { today } from '../documents/lifecycle';
-import { trialBalance } from '@esmart/core/domain/ledger/reports';
+import { profitFigures, trialBalance } from '@esmart/core/domain/ledger/reports';
 import { money } from '../../lib/wire';
 import { expensesToWire } from '../expenses/wire';
 import { coreMovements } from '../inventory/ledger';
@@ -101,11 +101,9 @@ export async function buildReport(s: Scope, key: ReportKey, q: Query): Promise<R
       return { ...r, payments: r.payments.map((p) => wire.get(p.id)!) };
     }
     case 'profit': {
-      // Bills give the average cost of what was sold.
-      const { docs } = await loadDocuments(s, ['invoice', 'debitNote', 'salesReturn', 'creditNote', 'purchaseBill']);
-      const { expenses } = await loadExpenses(s);
-      const items = await loadItems(s);
-      return profitSnapshot(docs, expenses, items, base, filters, await loadPerpetualCost(s, docs, items));
+      // The books' profit and loss, so this report agrees with Books → Profit and loss (RULES 6.2).
+      const { postings, book, stock } = await loadBook(s);
+      return profitFigures(postings, book, { from: s.from, to: s.to }, stock, branchScope(s.user, q.branchId));
     }
     case 'trial-balance': {
       // The books are one set across branches; a user limited to some of them sees the branch reports instead.
@@ -199,10 +197,9 @@ export const reportsHandlers = defineHandlers({
         return summarizeStock(await loadItems(all), movements, base, branchId ?? null, ctx.company.stockCosting as 'average' | 'fifo') as never;
       }
       case 'profit': {
-        const { docs } = await loadDocuments(all, ['invoice', 'debitNote', 'salesReturn', 'creditNote', 'purchaseBill']);
-        const { expenses } = await loadExpenses(all);
-        const items = await loadItems(all);
-        return profitSnapshot(docs, expenses, items, base, filters, await loadPerpetualCost(all, docs, items)) as never;
+        // The books' profit and loss, so this report agrees with Books → Profit and loss (RULES 6.2).
+        const { postings, book, stock } = await loadBook(all);
+        return profitFigures(postings, book, range, stock, branchScope(ctx.user, branchId)) as never;
       }
       case 'receivables':
       case 'payables': {
