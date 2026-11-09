@@ -95,8 +95,6 @@ export function SelectSheet({
   useKeepScrollWhileOpen(visible);
   // Kept in tap order so whatever is confirmed arrives in the order it was picked.
   const [picked, setPicked] = useState<string[]>([]);
-  // Only a list with rows that can't be picked needs its own toasts.
-  const hasBlocked = options.some((o) => o.blocked);
   const sheetToastRef = useRef<ReturnType<typeof useToast> | null>(null);
 
   const close = () => {
@@ -172,7 +170,9 @@ export function SelectSheet({
         )
       }
       fillHeight={showSearch}
-      ownToasts={hasBlocked}
+      // Always on, not only while a blocked row is listed: blocked rows often arrive after the
+      // sheet opens, and switching it then rebuilds the sheet mid-slide, leaving it off-screen.
+      ownToasts
       // On a desktop a list worth searching opens down the right edge, beside the form it fills;
       // a handful of options is a small dialog.
       desktopAs={showSearch ? 'drawer' : 'dialog'}
@@ -192,7 +192,7 @@ export function SelectSheet({
         ) : null
       }
     >
-      {hasBlocked ? <ToastCapture intoRef={sheetToastRef} /> : null}
+      <ToastCapture intoRef={sheetToastRef} />
 
       {loading && filtered.length === 0 ? (
         <ActivityIndicator color={t.c.muted} style={{ padding: t.spacing.xl }} />

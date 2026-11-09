@@ -43,6 +43,8 @@ type Props = {
   /**
    * Show toasts raised from inside the sheet over it. The app's own toasts
    * draw under the Modal, so a message about the open sheet would be hidden.
+   * Keep it fixed while the sheet is open: changing it rebuilds the sheet,
+   * which stops its slide-in where it is.
    */
   ownToasts?: boolean;
   /**
@@ -93,10 +95,14 @@ export function Sheet({
 
   useEffect(() => {
     if (visible) {
-      Animated.parallel([
+      const enter = Animated.parallel([
         Animated.spring(translate, { toValue: 0, useNativeDriver: true, damping: 22, stiffness: 240 }),
         Animated.timing(fade, { toValue: 1, duration: 180, useNativeDriver: true }),
-      ]).start();
+      ]);
+      enter.start();
+      // A second run while this one is still going (the sheet re-rendered as it opened) must stop
+      // this one first: stopping it later stops the shared values, freezing the new run mid-slide.
+      return () => enter.stop();
     } else {
       translate.setValue(700);
       fade.setValue(0);
