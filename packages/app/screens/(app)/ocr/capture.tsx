@@ -16,7 +16,7 @@ import { recognizeText } from '../../../features/ocr/recognize';
 import { useAppStore } from '../../../store/appStore';
 import { OcrUnavailableError, extractBill } from '../../../remote/ocr';
 import { describeError } from '../../../remote/errors';
-import { SHOW_SCROLLBAR, useBreakpoint } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, WIDE_FORM_MAX_WIDTH, useBreakpoint } from '@esmart/ui/theme/breakpoints';
 import { focusRing, type WebPressState } from '@esmart/ui/theme/interaction';
 import { FormSection, SplitPane } from '@esmart/ui/components/Layout';
 
@@ -181,7 +181,11 @@ export default function OcrCapture() {
     return (
       <View style={{ flex: 1 }}>
         <Stack.Screen options={{ title: tr('nav:title.scanABill') }} />
-        <ScrollView contentContainerStyle={{ paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.xxxl }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
+        <ScrollView
+          // The drop zone and its steps at a readable width, not a page-wide tile around a small picture.
+          contentContainerStyle={{ paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.xxxl, width: '100%', maxWidth: (breakpoint === 'tablet' ? WIDE_FORM_MAX_WIDTH : WIDE_FORM_MAX_WIDTH + 360 + t.spacing.xl) + 2 * t.spacing.lg }}
+          showsVerticalScrollIndicator={SHOW_SCROLLBAR}
+        >
           {/* A narrow browser window (icon-only sidebar) has no room for the side column. */}
           {breakpoint === 'tablet' ? (
             <View style={{ gap: t.spacing.lg }}>

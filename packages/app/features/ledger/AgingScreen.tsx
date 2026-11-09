@@ -202,7 +202,11 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
 
     return (
       <View style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: t.spacing.xxxl, gap: t.spacing.lg }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
+        <ScrollView
+          // Held to a readable width, so a document's amount isn't a page away from its number.
+          contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: t.spacing.xxxl, gap: t.spacing.lg, width: '100%', maxWidth: 1180 + 2 * t.spacing.lg }}
+          showsVerticalScrollIndicator={SHOW_SCROLLBAR}
+        >
           <StatGrid>
             <StatTile
               label={isReceivable ? tr('reports:home.totalReceivable') : tr('reports:home.totalPayable')}
@@ -226,7 +230,7 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
             />
           </StatGrid>
 
-          {sideAging ? null : agingCard}
+          {sideAging ? null : <View style={{ maxWidth: 720 }}>{agingCard}</View>}
           <SplitPane main={list} side={sideAging ? agingCard : undefined} sideWidth={340} />
         </ScrollView>
 

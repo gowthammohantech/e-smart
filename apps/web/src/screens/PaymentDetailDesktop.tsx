@@ -139,8 +139,9 @@ export function PaymentDetailDesktop() {
         }}
       />
 
-      {/* The same side gutter as every other page. */}
-      <ScrollView contentContainerStyle={{ paddingHorizontal: t.spacing.lg, paddingBottom: 48, gap: t.spacing.lg }}>
+      {/* The same side gutter as every other page, held to a readable width: the facts and amounts
+          don't drift a page apart on a wide screen. */}
+      <ScrollView contentContainerStyle={{ paddingHorizontal: t.spacing.lg, paddingBottom: 48, gap: t.spacing.lg, width: '100%', maxWidth: 1100 + 2 * t.spacing.lg }}>
         {/* The headline: amount, who, and the facts that identify it */}
         <Card style={{ padding: t.spacing.xxl, gap: t.spacing.xl }}>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: t.spacing.xl }}>
@@ -300,7 +301,7 @@ export function PaymentDetailDesktop() {
           </View>
 
           {/* The record, the party and the notes */}
-          <View style={{ flexGrow: 2, flexBasis: 320, gap: t.spacing.lg, minWidth: 0 }}>
+          <View style={{ flexGrow: 1, flexBasis: 320, maxWidth: 400, gap: t.spacing.lg, minWidth: 0 }}>
             <View style={{ gap: t.spacing.md }}>
               <SectionTitle>{tr('sales:detail.tabDetails')}</SectionTitle>
               <Card style={{ gap: t.spacing.md }}>

@@ -22,7 +22,7 @@ import { paymentMethodLabel } from '@esmart/core/labels';
 import { formatMoney, formatPercent } from '@esmart/core/lib/format';
 import { formatDate, formatDateTime } from '@esmart/core/lib/date';
 import { subtract } from '@esmart/core/lib/money';
-import { SHOW_SCROLLBAR, useBreakpoint } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, WIDE_FORM_MAX_WIDTH, useBreakpoint } from '@esmart/ui/theme/breakpoints';
 import { focusRing, type WebPressState } from '@esmart/ui/theme/interaction';
 import { Avatar } from '@esmart/ui/components/Avatar';
 import { FormSection, SplitPane } from '@esmart/ui/components/Layout';
@@ -136,11 +136,12 @@ export default function ExpenseDetail() {
             <Text variant="h1" weight="700" style={{ fontVariant: ['tabular-nums'] }}>
               {formatMoney(expense.amount)}
             </Text>
-          </View>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 6 }}>
-            {expense.recurrence !== 'none' ? <Badge label={tr(`purchases:recurrence.${expense.recurrence}`)} tone="info" icon="repeat" /> : null}
-            {expense.billable ? <Badge label={tr('purchases:expense.billable')} tone="warning" /> : null}
-            {extraBadges}
+            {/* Under the amount they describe, not at the far edge of the card. */}
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+              {expense.recurrence !== 'none' ? <Badge label={tr(`purchases:recurrence.${expense.recurrence}`)} tone="info" icon="repeat" /> : null}
+              {expense.billable ? <Badge label={tr('purchases:expense.billable')} tone="warning" /> : null}
+              {extraBadges}
+            </View>
           </View>
         </Card>
 
@@ -250,7 +251,11 @@ export default function ExpenseDetail() {
             ),
           }}
         />
-        <ScrollView contentContainerStyle={{ paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.xxxl }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
+        <ScrollView
+          // Held to a readable width: the details beside their side column, or the wide form width when stacked.
+          contentContainerStyle={{ paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.xxxl, width: '100%', maxWidth: (stacked ? WIDE_FORM_MAX_WIDTH : WIDE_FORM_MAX_WIDTH + 340 + t.spacing.xl) + 2 * t.spacing.lg }}
+          showsVerticalScrollIndicator={SHOW_SCROLLBAR}
+        >
           {stacked ? (
             <View style={{ gap: t.spacing.lg }}>
               {main}

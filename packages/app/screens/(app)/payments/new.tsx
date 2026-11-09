@@ -55,11 +55,14 @@ import {
 import { describeError } from '../../../remote/errors';
 import { adjustAdvancesFor, loadForAdvances, queryClient, useOpenDocuments, usePartyRecord, usePartySearch, useServerAccountBalances } from '../../../remote/queries';
 import { useDebounced } from '../../../components/useDebounced';
-import { SHOW_SCROLLBAR, useBreakpoint } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, WIDE_FORM_MAX_WIDTH, useBreakpoint, useFieldWidth } from '@esmart/ui/theme/breakpoints';
 import { useGoBack } from '../../../navigation/useGoBack';
 
 
 /** What settles a document besides cash. */
+/** The desktop side column (summary, notes). */
+const SIDE_WIDTH = 360;
+
 type Adjustment = 'tdsDeducted' | 'discount' | 'writeOff';
 const ADJUSTMENTS: Adjustment[] = ['tdsDeducted', 'discount', 'writeOff'];
 export default function NewPayment() {
@@ -71,7 +74,7 @@ export default function NewPayment() {
 
 function NewPaymentForm() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['domain', 'sales', 'common']);
+  const { t: tr } = useTranslation(['domain', 'sales', 'common', 'purchases']);
   const router = useRouter();
   const goBack = useGoBack();
   const toast = useToast();
@@ -83,6 +86,7 @@ function NewPaymentForm() {
   // Always 'phone' in the native apps, so the desktop layout only ever reaches a browser.
   const breakpoint = useBreakpoint();
   const desktop = breakpoint !== 'phone';
+  const fw = useFieldWidth();
 
   const params = useLocalSearchParams<{ direction?: string; partyId?: string; documentId?: string; advance?: string }>();
   // Paying suppliers is part of payables, which the Sales plan leaves out.
@@ -898,7 +902,10 @@ function NewPaymentForm() {
     </>
   );
 
-  const notesField = (
+  // TDS and the GST on a service advance: in the notes column on a phone, a card of their own in the
+  // main column on a desktop, where the side column is too narrow for fields side by side.
+  const hasTaxFields = (direction === 'received' && unallocated.minor > 0) || keepsTds || advanceTds.minor > 0 || canAdvance;
+  const taxFields = (
     <>
       {direction === 'received' && unallocated.minor > 0 ? (
         <AmountField
@@ -907,6 +914,7 @@ function NewPaymentForm() {
           onChangeValue={setAdvanceTdsText}
           currency={currency}
           hint={tr('sales:payment.advanceTdsHint')}
+          containerStyle={fw('md')}
         />
       ) : null}
       {keepsTds || advanceTds.minor > 0 ? (
@@ -918,6 +926,7 @@ function NewPaymentForm() {
             onPress={() => setAdvanceSheet('tds')}
             icon="percent-outline"
             hint={tr('sales:payment.tdsSectionHint')}
+            containerStyle={fw('lg')}
             required={needsTdsSection}
             // Said here rather than leaving Save greyed out with no reason.
             error={needsTdsSection && !tdsSectionPicked ? tr('sales:payment.tdsSectionRequired') : undefined}
@@ -979,7 +988,13 @@ function NewPaymentForm() {
           <SelectSheet visible={advanceSheet === 'pos'} onClose={() => setAdvanceSheet(null)} title={tr('sales:editor.placeOfSupply')} options={INDIAN_STATES.map((st) => ({ value: st.code, label: st.name }))} value={pos} onSelect={setAdvancePos} />
         </>
       ) : null}
-      <TextField label={tr('sales:payment.notes')} value={notes} onChangeText={setNotes} placeholder={tr('sales:payment.notesPlaceholder')} multiline />
+    </>
+  );
+  const notesInput = <TextField label={tr('sales:payment.notes')} value={notes} onChangeText={setNotes} placeholder={tr('sales:payment.notesPlaceholder')} multiline />;
+  const notesField = (
+    <>
+      {taxFields}
+      {notesInput}
     </>
   );
 
@@ -1051,8 +1066,13 @@ function NewPaymentForm() {
       <View style={{ gap: t.spacing.sm }}>{summaryRows}</View>
     </FormSection>
   );
+  const taxSection = hasTaxFields ? (
+    <FormSection title={tr('purchases:form.tax')}>
+      <View style={{ gap: t.spacing.lg }}>{taxFields}</View>
+    </FormSection>
+  ) : null;
   // Notes sit beside the summary so the documents to apply the payment to stay high on the page.
-  const notesCard = <Card>{notesField}</Card>;
+  const notesCard = <Card>{notesInput}</Card>;
 
   const desktopForm = (
     <ScrollView
@@ -1066,17 +1086,19 @@ function NewPaymentForm() {
           {details}
           {advanceCard}
           {allocation}
+          {taxSection}
           {summary}
           {notesCard}
         </View>
       ) : (
         <SplitPane
-          sideWidth={360}
+          sideWidth={SIDE_WIDTH}
           main={
             <View style={{ gap: t.spacing.lg }}>
               {details}
               {advanceCard}
               {allocation}
+              {taxSection}
             </View>
           }
           side={
@@ -1095,7 +1117,9 @@ function NewPaymentForm() {
       style={{ flex: 1 }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <FormContainer wide style={desktop ? { maxWidth: '100%' } : undefined}>
+      {/* A wide desktop holds the form at a readable width with its side column beside it, not across
+          the whole page; a narrow one (icon-only sidebar) stacks it in the wide form width. */}
+      <FormContainer wide style={breakpoint === 'desktop' || breakpoint === 'wide' ? { maxWidth: WIDE_FORM_MAX_WIDTH + SIDE_WIDTH + t.spacing.xl + 2 * t.spacing.lg } : undefined}>
         <Stack.Screen options={{ title: direction === 'received' ? (params.advance === '1' ? tr('sales:payment.advanceReceipt') : tr('common:quickAction.receivePayment')) : tr('sales:payment.makePayment') }} />
 
         {desktop ? desktopForm : phoneForm}

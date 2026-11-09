@@ -10,7 +10,7 @@ import { Text } from '@esmart/ui/components/Text';
 import { Icon } from '@esmart/ui/components/Icon';
 import { Segmented } from '@esmart/ui/components/Field';
 import { StatRow, StatTile } from '@esmart/ui/components/StatTile';
-import { StatGrid } from '@esmart/ui/components/Layout';
+import { Columns, StatGrid } from '@esmart/ui/components/Layout';
 import { HubTiles } from '@esmart/ui/components/HubTiles';
 import { DocumentRow } from '@esmart/ui/components/DocumentRow';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
@@ -24,7 +24,7 @@ import { zero, type Money } from '@esmart/core/lib/money';
 import { formatMoney } from '@esmart/core/lib/format';
 import { formatDate } from '@esmart/core/lib/date';
 import type { DocStatus, DocumentKind } from '@esmart/core/types';
-import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { useSectionTiles } from '../../../navigation/useSectionTiles';
 import { HubState } from '../../../features/dashboard/HubState';
 import { PeriodBar } from '../../../features/dashboard/PeriodBar';
@@ -37,6 +37,9 @@ export default function PurchasesTab() {
   const t = useTheme();
   const { t: tr } = useTranslation(['purchases', 'common', 'nav', 'reports']);
   const router = useRouter();
+  const desktop = useIsDesktop();
+  // A desktop keeps lists of rows to a readable width, not the value 1000px from its name.
+  const listCap = desktop ? { maxWidth: 880 } : undefined;
 
   const baseCurrency = useBaseCurrency();
   const withExpenses = useHasModule('expenses');
@@ -114,7 +117,7 @@ export default function PurchasesTab() {
       <HubTiles tiles={tiles} />
 
       <SectionHeader title={tr('purchases:hub.recentBills')} action={tr('nav:shell.viewAll')} onAction={() => router.push('/(app)/purchases/bills')} />
-      <Card padded={false}>
+      <Card padded={false} style={listCap}>
         {recent.length === 0 ? (
           <EmptyState
             illustration="no-documents"
@@ -161,57 +164,75 @@ export default function PurchasesTab() {
         </StatRow>
       </StatGrid>
 
-      <SectionHeader
-        title={tr('reports:dash.expenses.trend')}
-        action={tr('reports:dash.export.csv')}
-        onAction={() => exportCsv(tr('reports:dash.expenses.trend'), hub?.period, { headers: [tr('reports:dash.period.label'), tr('reports:dash.expenses.total')], rows: insights.trend.map((r) => [r.key!, major(r.value)]) })}
-      />
-      <Card>
-        <BarChart data={insights.trend.map((r) => ({ label: bucketLabel(r.key!, hub!.period.grain), value: r.value as Money }))} caption={tr('reports:dash.expenses.trendCaption')} color={seriesColor(t.scheme, 1)} />
-      </Card>
-
-      <SectionHeader
-        title={tr('reports:dash.expenses.byCategory')}
-        // Export when there is something to export; nothing in its place otherwise.
-        action={expenseSlices.length ? tr('reports:dash.export.csv') : undefined}
-        onAction={() =>
-          exportCsv(tr('reports:dash.expenses.byCategory'), hub?.period, { headers: [tr('reports:dash.expenses.byCategory'), tr('reports:dash.expenses.total')], rows: expenseSlices.map((c) => [c.label, major(c.value)]) })
+      {/* Side by side on a desktop rather than four page-wide cards; one after the other on a phone. */}
+      <Columns
+        left={
+          <View>
+            <SectionHeader
+              title={tr('reports:dash.expenses.trend')}
+              action={tr('reports:dash.export.csv')}
+              onAction={() => exportCsv(tr('reports:dash.expenses.trend'), hub?.period, { headers: [tr('reports:dash.period.label'), tr('reports:dash.expenses.total')], rows: insights.trend.map((r) => [r.key!, major(r.value)]) })}
+            />
+            <Card>
+              <BarChart data={insights.trend.map((r) => ({ label: bucketLabel(r.key!, hub!.period.grain), value: r.value as Money }))} caption={tr('reports:dash.expenses.trendCaption')} color={seriesColor(t.scheme, 1)} />
+            </Card>
+          </View>
+        }
+        right={
+          <View>
+            <SectionHeader
+              title={tr('reports:dash.expenses.byCategory')}
+              // Export when there is something to export; nothing in its place otherwise.
+              action={expenseSlices.length ? tr('reports:dash.export.csv') : undefined}
+              onAction={() =>
+                exportCsv(tr('reports:dash.expenses.byCategory'), hub?.period, { headers: [tr('reports:dash.expenses.byCategory'), tr('reports:dash.expenses.total')], rows: expenseSlices.map((c) => [c.label, major(c.value)]) })
+              }
+            />
+            <Card>
+              <DonutChart slices={expenseSlices} centerLabel={title} />
+            </Card>
+          </View>
         }
       />
-      <Card>
-        <DonutChart slices={expenseSlices} centerLabel={title} />
-      </Card>
-
-      <SectionHeader title={tr('reports:dash.expenses.topSuppliers')} />
-      <Card>
-        <RankedBars rows={insights.topSuppliers.map((s) => ({ label: s.name, value: s.total as Money }))} colorFor={(i) => seriesColor(t.scheme, i)} emptyLabel={tr('reports:dash.expenses.noSuppliers')} />
-      </Card>
-
-      <SectionHeader title={tr('reports:dash.expenses.upcoming')} action={tr('nav:shell.viewAll')} onAction={() => router.push('/(app)/expenses')} />
-      <Card padded={false}>
-        {insights.upcomingRecurring.length === 0 ? (
-          <Text variant="small" tone="muted" style={{ padding: t.spacing.lg }}>
-            {tr('reports:dash.expenses.noUpcoming')}
-          </Text>
-        ) : (
-          insights.upcomingRecurring.map((r, i, arr) => (
-            <View key={r.id} style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md, paddingHorizontal: t.spacing.lg, paddingVertical: t.spacing.md, borderBottomWidth: i < arr.length - 1 ? 0.5 : 0, borderBottomColor: t.c.line }}>
-              <Icon name="repeat" size={18} color={t.c.muted} />
-              <View style={{ flex: 1, gap: 2 }}>
-                <Text variant="small" weight="500" numberOfLines={1}>
-                  {r.description || r.category}
+      <Columns
+        left={
+          <View>
+            <SectionHeader title={tr('reports:dash.expenses.topSuppliers')} />
+            <Card>
+              <RankedBars rows={insights.topSuppliers.map((s) => ({ label: s.name, value: s.total as Money }))} colorFor={(i) => seriesColor(t.scheme, i)} emptyLabel={tr('reports:dash.expenses.noSuppliers')} />
+            </Card>
+          </View>
+        }
+        right={
+          <View>
+            <SectionHeader title={tr('reports:dash.expenses.upcoming')} action={tr('nav:shell.viewAll')} onAction={() => router.push('/(app)/expenses')} />
+            <Card padded={false}>
+              {insights.upcomingRecurring.length === 0 ? (
+                <Text variant="small" tone="muted" style={{ padding: t.spacing.lg }}>
+                  {tr('reports:dash.expenses.noUpcoming')}
                 </Text>
-                <Text variant="micro" tone="muted" numberOfLines={1}>
-                  {[formatDate(r.nextDate, 'd MMM'), tr(`reports:dash.expenses.recurrence.${r.recurrence}`)].join(' · ')}
-                </Text>
-              </View>
-              <Text variant="small" weight="600">
-                {formatMoney(r.amount as Money)}
-              </Text>
-            </View>
-          ))
-        )}
-      </Card>
+              ) : (
+                insights.upcomingRecurring.map((r, i, arr) => (
+                  <View key={r.id} style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md, paddingHorizontal: t.spacing.lg, paddingVertical: t.spacing.md, borderBottomWidth: i < arr.length - 1 ? 0.5 : 0, borderBottomColor: t.c.line }}>
+                    <Icon name="repeat" size={18} color={t.c.muted} />
+                    <View style={{ flex: 1, gap: 2 }}>
+                      <Text variant="small" weight="500" numberOfLines={1}>
+                        {r.description || r.category}
+                      </Text>
+                      <Text variant="micro" tone="muted" numberOfLines={1}>
+                        {[formatDate(r.nextDate, 'd MMM'), tr(`reports:dash.expenses.recurrence.${r.recurrence}`)].join(' · ')}
+                      </Text>
+                    </View>
+                    <Text variant="small" weight="600">
+                      {formatMoney(r.amount as Money)}
+                    </Text>
+                  </View>
+                ))
+              )}
+            </Card>
+          </View>
+        }
+      />
     </>
   ) : null;
 
@@ -220,7 +241,8 @@ export default function PurchasesTab() {
       <AppHeader title={tr('purchases:hub.title')} subtitle={tr('purchases:hub.subtitle')} />
 
       <ScrollView
-        contentContainerStyle={{ paddingHorizontal: t.spacing.lg, paddingBottom: 120 }}
+        // No FAB or tab bar to clear on a desktop.
+        contentContainerStyle={{ paddingHorizontal: t.spacing.lg, paddingBottom: desktop ? t.spacing.xxl : 120 }}
         showsVerticalScrollIndicator={SHOW_SCROLLBAR}
       >
         {withExpenses ? (

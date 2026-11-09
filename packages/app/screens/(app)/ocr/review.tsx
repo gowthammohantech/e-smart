@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, View, useWindowDimensions } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
@@ -19,7 +19,7 @@ import { isoOrUndefined } from '../../../features/ocr/matchParty';
 import { formatMoney, formatPercent, formatQty } from '@esmart/core/lib/format';
 import { fromMajor, money } from '@esmart/core/lib/money';
 import { useBaseCurrency } from '../../../store/selectors';
-import { SHOW_SCROLLBAR, useBreakpoint } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, WIDE_FORM_MAX_WIDTH, useBreakpoint } from '@esmart/ui/theme/breakpoints';
 import { FieldRow, FormSection, SplitPane } from '@esmart/ui/components/Layout';
 
 function confidenceTone(c: number): 'success' | 'warning' | 'danger' {
@@ -93,6 +93,7 @@ export default function OcrReview() {
   // Always 'phone' in the native apps, so the desktop layout only ever reaches a browser.
   const breakpoint = useBreakpoint();
   const desktop = breakpoint !== 'phone';
+  const { height: windowHeight } = useWindowDimensions();
 
   const baseCurrency = useBaseCurrency();
   const result = useOcrStore((s) => s.result);
@@ -198,12 +199,11 @@ export default function OcrReview() {
 
         <FormSection title={tr('inventory:ocr.extractedFields')}>
           {fieldPairs.map((pair) => (
-            <FieldRow key={pair.map((f) => f.key).join('-')}>
+            // Two columns even when the last row has one field, so it keeps its width.
+            <FieldRow key={pair.map((f) => f.key).join('-')} columns={2}>
               {pair.map((f) => (
                 <ReviewField key={f.key} f={f} />
               ))}
-              {/* Holds the column when the last row has one field, so it keeps its width. */}
-              {pair.length === 1 ? <View /> : null}
             </FieldRow>
           ))}
         </FormSection>
@@ -246,6 +246,10 @@ export default function OcrReview() {
       </View>
     );
 
+    // The bill is what every field gets checked against, so it gets a tall column of its own beside them.
+    const stacked = breakpoint === 'tablet';
+    const photoHeight = stacked ? 480 : Math.max(420, windowHeight - 340);
+    const sideWidth = result.imageUri && !stacked ? 480 : 340;
     const side = (
       <>
         <Card style={{ gap: t.spacing.xs }}>
@@ -259,8 +263,11 @@ export default function OcrReview() {
 
         {result.imageUri ? (
           <Pressable onPress={() => setZoom(true)} accessibilityRole="imagebutton" accessibilityLabel={tr('purchases:ocr.viewPhoto')}>
-            <Card padded={false} style={{ height: 240, overflow: 'hidden' }}>
+            <Card padded={false} style={{ height: photoHeight, overflow: 'hidden' }}>
               <Image source={{ uri: result.imageUri }} style={{ width: '100%', height: '100%' }} contentFit="contain" />
+              <View style={{ position: 'absolute', right: t.spacing.sm, bottom: t.spacing.sm, width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center' }}>
+                <Icon name="magnify" size={18} color="#fff" />
+              </View>
             </Card>
           </Pressable>
         ) : null}
@@ -287,18 +294,20 @@ export default function OcrReview() {
           }}
         />
         <ScrollView
-          contentContainerStyle={{ paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.xxxl }}
+          // The fields at a form's width beside the photo, not stretched across a wide screen.
+          contentContainerStyle={{ paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.xxxl, width: '100%', maxWidth: (stacked ? WIDE_FORM_MAX_WIDTH : WIDE_FORM_MAX_WIDTH + sideWidth + t.spacing.xl) + 2 * t.spacing.lg }}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={SHOW_SCROLLBAR}
         >
           {/* A narrow browser window (icon-only sidebar) has no room for the side column. */}
-          {breakpoint === 'tablet' ? (
+          {stacked ? (
             <View style={{ gap: t.spacing.lg }}>
               {main}
               {side}
             </View>
           ) : (
-            <SplitPane main={main} side={side} sideWidth={340} />
+            // The photo stays in view while the fields scroll past it.
+            <SplitPane main={main} side={side} sideWidth={sideWidth} stickySide />
           )}
         </ScrollView>
         {dialogs}

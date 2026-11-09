@@ -43,8 +43,11 @@ import {
   useDefaultBranchId,
   useTaxCategories,
 } from '../../store/selectors';
-import { SHOW_SCROLLBAR, useBreakpoint } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, WIDE_FORM_MAX_WIDTH, useBreakpoint } from '@esmart/ui/theme/breakpoints';
 import { useGoBack } from '../../navigation/useGoBack';
+
+/** The desktop side column (summary, receipt). */
+const SIDE_WIDTH = 360;
 
 const RECURRENCES: RecurrenceFrequency[] = ['none', 'weekly', 'monthly', 'quarterly', 'yearly'];
 
@@ -535,14 +538,14 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
       <FieldRow>
         {taxField}
         {/* The switch sits level with the picker's box rather than its label. */}
-        {taxRate > 0 ? <View style={{ paddingTop: 22 }}>{inclusiveField}</View> : <View />}
+        {taxRate > 0 ? <View style={{ paddingTop: 22 }}>{inclusiveField}</View> : null}
       </FieldRow>
       {taxRate > 0 ? (
         <>
           {reverseChargeField}
           <FieldRow>
             {itcField}
-            {gstinField ?? <View />}
+            {gstinField}
           </FieldRow>
         </>
       ) : null}
@@ -585,7 +588,7 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
         </View>
       ) : (
         <SplitPane
-          sideWidth={360}
+          sideWidth={SIDE_WIDTH}
           main={
             <View style={{ gap: t.spacing.lg }}>
               {details}
@@ -606,7 +609,9 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <FormContainer wide={desktop} style={desktop ? { maxWidth: '100%' } : undefined}>
+      {/* A wide desktop holds the form at a readable width with its side column beside it, not across
+          the whole page; a narrow one (icon-only sidebar) stacks it in the wide form width. */}
+      <FormContainer wide={desktop} style={breakpoint === 'desktop' || breakpoint === 'wide' ? { maxWidth: WIDE_FORM_MAX_WIDTH + SIDE_WIDTH + t.spacing.xl + 2 * t.spacing.lg } : undefined}>
         {desktop ? desktopForm : phoneForm}
 
         {desktop ? (
