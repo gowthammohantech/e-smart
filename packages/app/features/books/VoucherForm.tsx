@@ -10,8 +10,8 @@ import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { Sheet } from '@esmart/ui/components/Sheet';
 import { Text } from '@esmart/ui/components/Text';
-import { FormContainer } from '@esmart/ui/components/Layout';
-import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { FieldRow, FormContainer } from '@esmart/ui/components/Layout';
+import { DIALOG_WIDTH, SHOW_SCROLLBAR, WIDE_FORM_MAX_WIDTH, useFieldWidth, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { TDS_SECTIONS } from '@esmart/core/data/tdsSections';
 import { TCS_SECTIONS } from '@esmart/core/data/tcsSections';
 import { accountFor, chartOfAccounts, type Account } from '@esmart/core/domain/ledger/accounts';
@@ -50,6 +50,8 @@ const isBlank = (l: GridLine) => !l.account && !l.amount && !l.narration && !l.c
  */
 export function VoucherForm({ voucher, onSaved, initialKind }: { voucher?: Voucher; onSaved: (id: string) => void; initialKind?: VoucherKind }) {
   const t = useTheme();
+  const desktop = useIsDesktop();
+  const fw = useFieldWidth();
   const { t: tr } = useTranslation(['books', 'common']);
   const { run: serverSave, saving, blocked } = useServerSave();
   const company = useActiveCompany();
@@ -197,7 +199,7 @@ export function VoucherForm({ voucher, onSaved, initialKind }: { voucher?: Vouch
           <Text variant="small" tone="muted">
             {tr(`books:vouchers.kindHint.${kind}`)}
           </Text>
-          <DateField label={tr('books:vouchers.date')} value={date} onChange={setDate} maximumDate={new Date()} />
+          <DateField label={tr('books:vouchers.date')} value={date} onChange={setDate} maximumDate={new Date()} containerStyle={fw('sm')} />
 
           <VoucherGrid
             lines={lines}
@@ -221,16 +223,19 @@ export function VoucherForm({ voucher, onSaved, initialKind }: { voucher?: Vouch
             </Text>
           ) : null}
 
-          <TextField label={tr('books:vouchers.narration')} value={narration} onChangeText={setNarration} placeholder={tr('books:vouchers.narrationPlaceholder')} multiline />
-          {kind === 'tdsChallan' ? (
-            <>
-              <TextField label={tr('books:vouchers.bsrCode')} value={bsrCode} onChangeText={(v) => setBsrCode(v.replace(/\D/g, '').slice(0, 7))} keyboardType="number-pad" hint={tr('books:vouchers.bsrHint')} />
-              <TextField label={tr('books:vouchers.challanSerial')} value={serial} onChangeText={(v) => setSerial(v.replace(/\D/g, '').slice(0, 5))} keyboardType="number-pad" />
-              <DateField label={tr('books:vouchers.depositedOn')} value={depositedOn} onChange={setDepositedOn} maximumDate={new Date()} />
-            </>
-          ) : null}
-          <TextField label={tr('books:vouchers.reference')} value={reference} onChangeText={setReference} hint={tr('books:vouchers.referenceHint')} icon="pound" />
-          {lines.some((l) => l.account) ? <Button title={tr('books:templates.save')} icon="content-save-outline" variant="ghost" size="sm" onPress={() => setTemplateName(narration.trim().slice(0, 60))} /> : null}
+          {/* The grid takes the form's width on a desktop; the fields under it keep a form's width. */}
+          <View style={desktop ? { gap: t.spacing.lg, maxWidth: WIDE_FORM_MAX_WIDTH } : { gap: t.spacing.lg }}>
+            <TextField label={tr('books:vouchers.narration')} value={narration} onChangeText={setNarration} placeholder={tr('books:vouchers.narrationPlaceholder')} multiline />
+            {kind === 'tdsChallan' ? (
+              <FieldRow columns={3}>
+                <TextField label={tr('books:vouchers.bsrCode')} value={bsrCode} onChangeText={(v) => setBsrCode(v.replace(/\D/g, '').slice(0, 7))} keyboardType="number-pad" hint={tr('books:vouchers.bsrHint')} />
+                <TextField label={tr('books:vouchers.challanSerial')} value={serial} onChangeText={(v) => setSerial(v.replace(/\D/g, '').slice(0, 5))} keyboardType="number-pad" />
+                <DateField label={tr('books:vouchers.depositedOn')} value={depositedOn} onChange={setDepositedOn} maximumDate={new Date()} />
+              </FieldRow>
+            ) : null}
+            <TextField label={tr('books:vouchers.reference')} value={reference} onChangeText={setReference} hint={tr('books:vouchers.referenceHint')} icon="pound" containerStyle={fw('md')} />
+            {lines.some((l) => l.account) ? <Button title={tr('books:templates.save')} icon="content-save-outline" variant="ghost" size="sm" onPress={() => setTemplateName(narration.trim().slice(0, 60))} /> : null}
+          </View>
         </ScrollView>
         <FormActions>
           {/* A posted voucher stays posted; a new one or a draft can be kept as a draft. */}
@@ -256,9 +261,9 @@ export function VoucherForm({ voucher, onSaved, initialKind }: { voucher?: Vouch
           setLines([...tpl.lines.map((l) => ({ id: uid('vl'), side: l.side, account: l.account, amount: l.amount ? String(toMajor(l.amount)) : '', narration: l.narration, costCentreId: l.costCentreId })), gridLine()]);
         }}
       />
-      <Sheet visible={templateName !== null} onClose={() => setTemplateName(null)} title={tr('books:templates.save')}>
-        <View style={{ gap: t.spacing.md, paddingBottom: t.spacing.lg }}>
-          <TextField label={tr('books:templates.name')} value={templateName ?? ''} onChangeText={setTemplateName} maxLength={100} />
+      <Sheet visible={templateName !== null} onClose={() => setTemplateName(null)} title={tr('books:templates.save')} desktopWidth={DIALOG_WIDTH.sm}>
+        <View style={{ gap: t.spacing.md, paddingBottom: t.spacing.lg, alignItems: desktop ? 'flex-end' : undefined }}>
+          <TextField containerStyle={desktop ? { alignSelf: 'stretch' } : undefined} label={tr('books:templates.name')} value={templateName ?? ''} onChangeText={setTemplateName} maxLength={100} />
           <Button
             title={tr('books:templates.save')}
             disabled={!templateName?.trim() || saving}

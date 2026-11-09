@@ -151,7 +151,7 @@ export function ReconciliationView({ accountId, accountName }: { accountId: stri
           </ReportRow>
 
           {r.difference ? (
-            <Card style={{ gap: t.spacing.xs, borderWidth: 1, borderColor: differs ? t.c.bad : t.c.good }}>
+            <Card style={[{ gap: t.spacing.xs, borderWidth: 1, borderColor: differs ? t.c.bad : t.c.good }, desktop && { maxWidth: 640 }]}>
               <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: t.spacing.md }}>
                 <Text variant="body" weight="700" style={{ flex: 1 }}>
                   {tr('banking:brs.difference')}

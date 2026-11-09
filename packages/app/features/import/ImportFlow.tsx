@@ -42,7 +42,7 @@ import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
-import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, WIDE_FORM_MAX_WIDTH, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { Badge } from '@esmart/ui/components/Badge';
 import { Button } from '@esmart/ui/components/Button';
 import { Card } from '@esmart/ui/components/Card';
@@ -111,6 +111,8 @@ export function ImportFlow<T>({
 }: ImportFlowProps<T>) {
   const t = useTheme();
   const desktop = useIsDesktop();
+  // The steps' cards and buttons keep a form's width on a desktop; only the preview table spreads.
+  const narrow = desktop ? { maxWidth: WIDE_FORM_MAX_WIDTH, width: '100%' as const } : undefined;
   const toast = useToast();
   const { t: tr } = useTranslation(['banking', 'common']);
   const [step, setStep] = useState<0 | 1 | 2>(0);
@@ -263,25 +265,27 @@ export function ImportFlow<T>({
   return (
     <FormContainer style={{ maxWidth: '100%' }}>
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, gap: t.spacing.lg, paddingBottom: t.spacing.xxxl }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
-        <View style={{ gap: t.spacing.xs }}>
-          <Text variant="h3" weight="700">
-            {title}
-          </Text>
-          {hint ? (
-            <Text variant="small" tone="muted">
-              {hint}
+        <View style={[{ gap: t.spacing.lg }, narrow]}>
+          <View style={{ gap: t.spacing.xs }}>
+            <Text variant="h3" weight="700">
+              {title}
             </Text>
-          ) : null}
+            {hint ? (
+              <Text variant="small" tone="muted">
+                {hint}
+              </Text>
+            ) : null}
+          </View>
+          <Stepper steps={steps} current={step} />
         </View>
-        <Stepper steps={steps} current={step} />
 
         {step === 0 ? (
-          <Card style={{ gap: t.spacing.md }}>
+          <Card style={[{ gap: t.spacing.md }, narrow]}>
             {options}
             <Text variant="small" tone="muted">
               {tr('banking:importFlow.kinds', { kinds })}
             </Text>
-            <Button title={picking ? tr('banking:importFlow.reading', { name: picking }) : tr('banking:importFlow.choose')} icon="upload" onPress={() => void choose()} loading={!!picking} disabled={!!picking} />
+            <Button title={picking ? tr('banking:importFlow.reading', { name: picking }) : tr('banking:importFlow.choose')} icon="upload" onPress={() => void choose()} loading={!!picking} disabled={!!picking} fullWidth={!desktop} />
             {problem ? (
               <Text variant="caption" tone="bad" role="alert">
                 {problem}
@@ -291,43 +295,47 @@ export function ImportFlow<T>({
         ) : null}
 
         {step === 1 ? (
-          <>
+          <View style={[{ gap: t.spacing.lg }, narrow]}>
             <Card style={{ gap: t.spacing.md }}>
               <Text variant="small" tone="muted">
                 {headerRow >= 0 ? tr('banking:importFlow.headerAt', { name: fileName, row: headerRow + 1, count: rows.length - headerRow - 1 }) : tr('banking:importFlow.noHeader', { name: fileName, count: rows.length })}
               </Text>
-              {fields.map((f) => {
-                const col = mapping[f.key];
-                return (
-                  <PickerField
-                    key={f.key}
-                    label={f.label}
-                    required={f.required}
-                    value={col !== undefined ? fileCols[col]?.label : undefined}
-                    placeholder={tr('banking:importFlow.notInFile')}
-                    hint={col !== undefined && sampleRow[col] ? tr('banking:importFlow.sample', { value: sampleRow[col] }) : undefined}
-                    onPress={() => setOpenField(f)}
-                    clearable={col !== undefined && !f.required}
-                    onClear={() => changeMapping(f.key, undefined)}
-                  />
-                );
-              })}
+              {/* Two fields to a row on a desktop, each with a sample from the file under it. */}
+              <View style={desktop ? { flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.md } : { gap: t.spacing.md }}>
+                {fields.map((f) => {
+                  const col = mapping[f.key];
+                  return (
+                    <View key={f.key} style={desktop ? { flexBasis: '45%', flexGrow: 1 } : undefined}>
+                      <PickerField
+                        label={f.label}
+                        required={f.required}
+                        value={col !== undefined ? fileCols[col]?.label : undefined}
+                        placeholder={tr('banking:importFlow.notInFile')}
+                        hint={col !== undefined && sampleRow[col] ? tr('banking:importFlow.sample', { value: sampleRow[col] }) : undefined}
+                        onPress={() => setOpenField(f)}
+                        clearable={col !== undefined && !f.required}
+                        onClear={() => changeMapping(f.key, undefined)}
+                      />
+                    </View>
+                  );
+                })}
+              </View>
               {mappingProblem ? (
                 <Text variant="caption" tone="bad" role="alert">
                   {mappingProblem}
                 </Text>
               ) : null}
             </Card>
-            <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
-              <Button title={tr('banking:importFlow.otherFile')} variant="ghost" onPress={() => setStep(0)} style={{ flex: 1 }} />
-              <Button title={tr('banking:importFlow.next')} onPress={() => setStep(2)} disabled={!!mappingProblem} style={{ flex: 1 }} />
+            <View style={[{ flexDirection: 'row', gap: t.spacing.md }, desktop && { justifyContent: 'flex-end' }]}>
+              <Button title={tr('banking:importFlow.otherFile')} variant="ghost" onPress={() => setStep(0)} style={desktop ? undefined : { flex: 1 }} />
+              <Button title={tr('banking:importFlow.next')} onPress={() => setStep(2)} disabled={!!mappingProblem} style={desktop ? undefined : { flex: 1 }} />
             </View>
-          </>
+          </View>
         ) : null}
 
         {step === 2 ? (
           <>
-            <Card style={{ gap: t.spacing.xs }}>
+            <Card style={[{ gap: t.spacing.xs }, narrow]}>
               <Text variant="body" weight="600">
                 {tr('banking:importFlow.counts', { count: parsed.records.length, problems: parsed.errors.length })}
               </Text>
@@ -348,7 +356,7 @@ export function ImportFlow<T>({
             </Card>
 
             {parsed.errors.length ? (
-              <View style={{ gap: t.spacing.sm }}>
+              <View style={[{ gap: t.spacing.sm }, narrow]}>
                 <Text variant="caption" tone="muted" weight="600">
                   {tr('banking:importFlow.skipped')}
                 </Text>
@@ -374,8 +382,8 @@ export function ImportFlow<T>({
               </Text>
             ) : null}
 
-            <View style={{ flexDirection: 'row', gap: t.spacing.md, flexWrap: 'wrap' }}>
-              <Button title={tr('banking:importFlow.back')} variant="ghost" onPress={() => setStep(1)} disabled={!!busy} style={{ flex: 1, minWidth: 120 }} />
+            <View style={[{ flexDirection: 'row', gap: t.spacing.md, flexWrap: 'wrap' }, desktop && { justifyContent: 'flex-end' }]}>
+              <Button title={tr('banking:importFlow.back')} variant="ghost" onPress={() => setStep(1)} disabled={!!busy} style={desktop ? undefined : { flex: 1, minWidth: 120 }} />
               {onDryRun ? (
                 <Button
                   title={tr('banking:importFlow.check')}
@@ -383,7 +391,7 @@ export function ImportFlow<T>({
                   onPress={() => void check()}
                   loading={busy === 'check'}
                   disabled={!!busy || !parsed.records.length || tooMany}
-                  style={{ flex: 1, minWidth: 120 }}
+                  style={desktop ? undefined : { flex: 1, minWidth: 120 }}
                 />
               ) : null}
               <Button
@@ -391,7 +399,7 @@ export function ImportFlow<T>({
                 onPress={() => void confirm()}
                 loading={busy === 'import'}
                 disabled={!!busy || !parsed.records.length || tooMany || (!!onDryRun && !dry)}
-                style={{ flex: 1, minWidth: 120 }}
+                style={desktop ? undefined : { flex: 1, minWidth: 120 }}
               />
             </View>
           </>

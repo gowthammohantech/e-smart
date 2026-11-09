@@ -9,7 +9,7 @@ import { Segmented } from '@esmart/ui/components/Field';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { Text } from '@esmart/ui/components/Text';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
-import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { addDaysISO, financialYearOf, formatDate, today } from '@esmart/core/lib/date';
 import { useServerSave } from '../../../components/useServerSave';
 import { useAppStore } from '../../../store/appStore';
@@ -22,6 +22,7 @@ import { useActiveCompany, useCurrentUser } from '../../../store/selectors';
  */
 export default function CloseBooks() {
   const t = useTheme();
+  const desktop = useIsDesktop();
   const { t: tr } = useTranslation(['books']);
   const { run: serverSave, saving, blocked } = useServerSave();
   const company = useActiveCompany();
@@ -57,7 +58,7 @@ export default function CloseBooks() {
   return (
     <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('books:hub.close') }} />
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, gap: t.spacing.lg }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
+      <ScrollView contentContainerStyle={[{ padding: t.spacing.lg, gap: t.spacing.lg }, desktop && { maxWidth: 720, width: '100%' }]} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <Card style={{ gap: t.spacing.sm }}>
           <Text variant="body" weight="600">
             {company.lockedThroughDate ? tr('books:close.closedThrough', { date: formatDate(company.lockedThroughDate) }) : tr('books:close.open')}
@@ -68,7 +69,7 @@ export default function CloseBooks() {
         </Card>
         {owner ? (
           <>
-            <DateField label={tr('books:close.through')} value={date} onChange={setDate} maximumDate={new Date()} hint={tr('books:close.throughHint')} />
+            <DateField label={tr('books:close.through')} value={date} onChange={setDate} maximumDate={new Date()} hint={tr('books:close.throughHint')} containerStyle={desktop ? { maxWidth: 200, width: '100%' } : undefined} />
             <Button title={tr('books:close.close')} icon="lock-outline" onPress={() => setAskLock('close')} loading={saving} disabled={blocked || date === company.lockedThroughDate} />
             {company.lockedThroughDate ? (
               <View style={{ gap: t.spacing.sm }}>

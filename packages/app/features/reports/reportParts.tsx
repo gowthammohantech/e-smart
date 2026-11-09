@@ -43,6 +43,24 @@ export function SectionCard({ children, style, padded }: { children: React.React
 export function KeyFigures({ rows }: { rows: { label: string; value: string; tone?: 'good' | 'bad' | 'warn' }[] }) {
   const t = useTheme();
   const inRow = useContext(InRow);
+  const desktop = useIsDesktop();
+  if (desktop && !inRow) {
+    // On its own across a desktop page, each figure sits under its label, side by side, instead of a label and value a page apart.
+    return (
+      <Card style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: t.spacing.xxl, rowGap: t.spacing.md, alignSelf: 'flex-start', maxWidth: '100%' }}>
+        {rows.map((r) => (
+          <View key={r.label} style={{ gap: 2, minWidth: 140 }}>
+            <Text variant="caption" tone="muted">
+              {r.label}
+            </Text>
+            <Text variant="body" weight="700" tone={r.tone ?? 'default'} style={{ fontVariant: ['tabular-nums'] }}>
+              {r.value}
+            </Text>
+          </View>
+        ))}
+      </Card>
+    );
+  }
   return (
     // In a row the figures spread over the card's height, divided by hairlines.
     <Card style={inRow ? { flex: 1, justifyContent: 'space-around' } : { gap: t.spacing.md }}>
@@ -81,8 +99,10 @@ export function HeroFigure({
   tone?: 'good' | 'bad' | 'warn';
 }) {
   const t = useTheme();
+  const desktop = useIsDesktop();
   return (
-    <Card style={{ gap: 5, paddingVertical: t.spacing.xl }}>
+    // One number needn't span a desktop page: the card keeps to its figure there.
+    <Card style={[{ gap: 5, paddingVertical: t.spacing.xl }, desktop && { alignSelf: 'flex-start', minWidth: 320, maxWidth: '100%' }]}>
       <Text variant="caption" tone="muted">
         {label}
       </Text>
@@ -168,6 +188,8 @@ export function DataTable({
     return (
       <UiDataTable
         scroll={false}
+        // Two or three columns read across a desktop page only at a table's own width.
+        maxWidth={headers.length <= 3 ? 720 : undefined}
         pageSize={paged ? TABLE_PAGE_SIZE : undefined}
         columns={headers.map((h, i) => ({
           key: String(i),

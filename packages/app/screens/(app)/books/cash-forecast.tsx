@@ -8,7 +8,7 @@ import { Card } from '@esmart/ui/components/Card';
 import { Segmented } from '@esmart/ui/components/Field';
 import { ListRow } from '@esmart/ui/components/ListRow';
 import { Text } from '@esmart/ui/components/Text';
-import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import type { CashForecast, ForecastFlow } from '@esmart/core/domain/cashForecast';
 import { formatDate } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
@@ -24,6 +24,7 @@ const HORIZONS = ['4', '13', '26'] as const;
 /** Where cash is heading over the coming weeks, from what is owed each way and what recurs. */
 export default function CashForecastScreen() {
   const t = useTheme();
+  const desktop = useIsDesktop();
   const router = useRouter();
   const { t: tr } = useTranslation(['books']);
   const companyId = useAppStore((s) => s.activeCompanyId);
@@ -46,7 +47,7 @@ export default function CashForecastScreen() {
   return (
     <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('books:forecast.title') }} />
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, gap: t.spacing.md }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
+      <ScrollView contentContainerStyle={[{ padding: t.spacing.lg, gap: t.spacing.md }, desktop && { maxWidth: 960, width: '100%' }]} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <Text variant="small" tone="muted">
           {tr('books:forecast.basis')}
         </Text>

@@ -11,7 +11,7 @@ import { ListRow } from "@esmart/ui/components/ListRow";
 import { Text } from "@esmart/ui/components/Text";
 import { useToast } from "@esmart/ui/components/Toast";
 import { FormContainer } from "@esmart/ui/components/Layout";
-import { SHOW_SCROLLBAR } from "@esmart/ui/theme/breakpoints";
+import { SHOW_SCROLLBAR, useIsDesktop } from "@esmart/ui/theme/breakpoints";
 import { SkeletonCard, SkeletonGroup, SkeletonRows } from "@esmart/ui/components/Skeleton";
 import { parseCsv } from "@esmart/core/lib/csv";
 import {
@@ -48,6 +48,7 @@ const SAMPLE_CSV = [
  */
 export function ImportJournals() {
   const t = useTheme();
+  const desktop = useIsDesktop();
   const router = useRouter();
   const toast = useToast();
   const { t: tr } = useTranslation(["books", "common"]);
@@ -269,21 +270,27 @@ export function ImportJournals() {
           </>
         ) : null}
 
-        <View style={{ flexDirection: "row", gap: t.spacing.md }}>
+        <View
+          style={{
+            flexDirection: "row",
+            gap: t.spacing.md,
+            justifyContent: desktop ? "flex-end" : undefined,
+          }}
+        >
           <Button
             title={tr("books:journalImport.check")}
             variant="secondary"
             onPress={() => void send(true)}
             loading={busy && !outcomes}
             disabled={busy || !good.length || good.length > 500}
-            style={{ flex: 1 }}
+            style={desktop ? undefined : { flex: 1 }}
           />
           <Button
             title={tr("books:journalImport.import", { count: willCreate })}
             onPress={() => void send(false)}
             loading={busy && !!outcomes}
             disabled={busy || !outcomes || !willCreate}
-            style={{ flex: 1 }}
+            style={desktop ? undefined : { flex: 1 }}
           />
         </View>
         {good.length > 500 ? (

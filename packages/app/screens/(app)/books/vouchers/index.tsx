@@ -6,23 +6,26 @@ import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Badge } from '@esmart/ui/components/Badge';
 import { Button } from '@esmart/ui/components/Button';
 import { Card } from '@esmart/ui/components/Card';
+import { Cell, DataTable } from '@esmart/ui/components/DataTable';
 import { Segmented } from '@esmart/ui/components/Field';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { Fab } from '@esmart/ui/components/Fab';
 import { ListRow } from '@esmart/ui/components/ListRow';
 import { Text } from '@esmart/ui/components/Text';
-import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { formatDate } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
 import { money } from '@esmart/core/lib/money';
 import { useVoucherPages, type VoucherQuery } from '../../../../remote/queries';
 import { useBaseCurrency } from '../../../../store/selectors';
 import { ListSkeleton, MoreRowsSkeleton } from '../../../../components/ScreenSkeleton';
+import { pagedTableProps } from '../../../../components/pagedTable';
 
 export default function VoucherList() {
   const t = useTheme();
+  const desktop = useIsDesktop();
   const router = useRouter();
-  const { t: tr } = useTranslation(['books', 'reports']);
+  const { t: tr } = useTranslation(['books', 'reports', 'common']);
   // From the server, newest first, 50 at a time.
   const [status, setStatus] = useState<'all' | 'draft' | 'posted'>('all');
   // `?kind=contra` (the transfer entry's "all transfers") lists one kind.
@@ -32,6 +35,9 @@ export default function VoucherList() {
   const pages = useVoucherPages({ ...(status === 'all' ? {} : { status }), kind });
   const vouchers = pages.rows;
   const baseCurrency = useBaseCurrency();
+  const amountOf = (v: (typeof vouchers)[number]) => formatMoney(money(v.lines.reduce((a, l) => a + l.debit.minor, 0), baseCurrency));
+  const open = (v: (typeof vouchers)[number]) => router.push(`/(app)/books/vouchers/${v.id}` as never);
+  const empty = <EmptyState icon="swap-horizontal" title={tr('books:vouchers.empty')} message={tr('books:vouchers.emptyBody')} actionLabel={tr('books:vouchers.new')} onAction={() => router.push('/(app)/books/vouchers/new')} />;
   return (
     <View style={{ flex: 1 }}>
       <Stack.Screen
@@ -47,7 +53,27 @@ export default function VoucherList() {
           onChange={(v) => setStatus(v as typeof status)}
         />
       </View>
-      {vouchers.length ? (
+      {desktop ? (
+        // A desktop lists vouchers as a table: number, date, kind and narration in columns, the amount beside them.
+        <View style={{ flex: 1, padding: t.spacing.lg }}>
+          <DataTable
+            columns={[
+              { key: 'number', header: tr('common:table.number'), width: 150, render: (v) => <Cell weight="600">{v.status === 'draft' ? tr('books:vouchers.draftTitle') : v.number}</Cell> },
+              { key: 'date', header: tr('common:table.date'), width: 120, render: (v) => <Cell tone="muted">{formatDate(v.date)}</Cell> },
+              { key: 'kind', header: tr('common:table.type'), width: 150, render: (v) => <Cell>{tr(`books:vouchers.kind.${v.kind}`)}</Cell> },
+              { key: 'narration', header: tr('books:vouchers.narration'), flex: 2, secondary: true, render: (v) => <Cell tone="muted">{v.narration || '—'}</Cell> },
+              { key: 'status', header: tr('common:table.status'), width: 110, render: (v) => (v.status === 'draft' ? <Badge label={tr('books:vouchers.draft')} tone="warning" size="sm" /> : null) },
+              { key: 'amount', header: tr('common:table.amount'), width: 150, align: 'right', render: (v) => <Cell weight="600" mono>{amountOf(v)}</Cell> },
+            ]}
+            rows={vouchers}
+            rowKey={(v) => v.id}
+            onRowPress={open}
+            rowLabel={(v) => `${v.number || tr('books:vouchers.draftTitle')}, ${amountOf(v)}`}
+            {...pagedTableProps(pages, tr('common:table.loadFailed'), 'vouchers')}
+            empty={empty}
+          />
+        </View>
+      ) : vouchers.length ? (
         <ScrollView
           contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 }}
           showsVerticalScrollIndicator={SHOW_SCROLLBAR}
@@ -85,7 +111,7 @@ export default function VoucherList() {
         // A failed fetch isn't "no vouchers yet".
         <EmptyState icon="cloud-off-outline" title={tr('reports:dash.state.failedTitle')} message={tr('reports:dash.state.failedBody')} actionLabel={tr('reports:dash.state.retry')} onAction={() => void pages.refetch()} />
       ) : (
-        <EmptyState icon="swap-horizontal" title={tr('books:vouchers.empty')} message={tr('books:vouchers.emptyBody')} actionLabel={tr('books:vouchers.new')} onAction={() => router.push('/(app)/books/vouchers/new')} />
+        empty
       )}
       <Fab icon="plus" onPress={() => router.push('/(app)/books/vouchers/new')} />
     </View>

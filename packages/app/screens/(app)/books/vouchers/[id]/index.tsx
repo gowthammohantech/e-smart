@@ -9,7 +9,7 @@ import { Button } from '@esmart/ui/components/Button';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { Text } from '@esmart/ui/components/Text';
-import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { accountFor } from '@esmart/core/domain/ledger/accounts';
 import { formatDate } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
@@ -26,6 +26,7 @@ const AMOUNT_W = 104;
 
 export default function VoucherDetail() {
   const t = useTheme();
+  const desktop = useIsDesktop();
   const router = useRouter();
   const { t: tr } = useTranslation(['books', 'common', 'reports']);
   const { run: serverSave, saving, blocked } = useServerSave();
@@ -74,7 +75,7 @@ export default function VoucherDetail() {
   return (
     <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title }} />
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, gap: t.spacing.md }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
+      <ScrollView contentContainerStyle={[{ padding: t.spacing.lg, gap: t.spacing.md }, desktop && { maxWidth: 880, width: '100%' }]} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <Card style={{ gap: t.spacing.xs }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
             <Text variant="title" weight="700">
@@ -146,11 +147,11 @@ export default function VoucherDetail() {
           </View>
         </Card>
         <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
-          <Button title={tr('books:vouchers.edit')} variant={isDraft ? 'secondary' : 'primary'} style={{ flex: 1 }} onPress={() => router.push(`/(app)/books/vouchers/${voucher.id}/edit` as never)} disabled={saving} />
+          <Button title={tr('books:vouchers.edit')} variant={isDraft ? 'secondary' : 'primary'} style={desktop ? undefined : { flex: 1 }} onPress={() => router.push(`/(app)/books/vouchers/${voucher.id}/edit` as never)} disabled={saving} />
           {isDraft ? (
             <Button
               title={tr('books:vouchers.post')}
-              style={{ flex: 1 }}
+              style={desktop ? undefined : { flex: 1 }}
               loading={saving}
               disabled={blocked}
               // The server checks it in full and says what's wrong if it can't be posted yet.

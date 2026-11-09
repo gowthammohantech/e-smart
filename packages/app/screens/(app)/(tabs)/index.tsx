@@ -19,6 +19,8 @@ import { Badge } from '@esmart/ui/components/Badge';
 import { Fab } from '@esmart/ui/components/Fab';
 import { Illustration } from '@esmart/ui/components/Illustration';
 import { Sheet } from '@esmart/ui/components/Sheet';
+import { Button } from '@esmart/ui/components/Button';
+import { Menu, MenuItem, useMenuAnchor } from '@esmart/ui/components/Menu';
 import { useBaseCurrency, useCanOpen, useComplianceSummary, useCurrentUser, useDashboardScope, useHasModule, useModuleSet } from '../../../store/selectors';
 import { useHomeHub } from '../../../remote/queries';
 import { money, type Money } from '@esmart/core/lib/money';
@@ -63,6 +65,8 @@ export default function Home() {
   const [actionsOpen, setActionsOpen] = useState(false);
   // Always false in the native apps.
   const desktop = useIsDesktop();
+  // A desktop's Create drops a menu down from its button instead of opening a sheet.
+  const { setAnchor: setCreateAnchor, rect: createRect, open: openCreate, close: closeCreate } = useMenuAnchor();
 
   const zero = money(0, baseCurrency);
   const monthSales = hub?.salesThisMonth ?? zero;
@@ -146,7 +150,28 @@ export default function Home() {
       ))}
     </Sheet>
   );
-  const fab = <Fab icon="plus" label={tr('reports:home.create')} onPress={() => setActionsOpen(true)} />;
+  const createMenu = desktop ? (
+    <Menu anchor={createRect} onClose={closeCreate} align="right" width={260}>
+      {quickActions(tr, t.c.primary).filter((a) => canOpen(a.route)).map((a) => (
+        <MenuItem
+          key={a.key}
+          icon={a.icon}
+          label={a.label}
+          onPress={() => {
+            closeCreate();
+            router.push(a.route as never);
+          }}
+        />
+      ))}
+    </Menu>
+  ) : null;
+  // On a desktop the button sits on the page, where its menu can drop from it; a phone keeps the round button.
+  const createButton = (
+    <View ref={setCreateAnchor} collapsable={false}>
+      <Button title={tr('reports:home.create')} icon="plus" onPress={openCreate} />
+    </View>
+  );
+  const fab = desktop ? createMenu : <Fab icon="plus" label={tr('reports:home.create')} onPress={() => setActionsOpen(true)} />;
 
   if (!hub) {
     return (
@@ -164,7 +189,8 @@ export default function Home() {
     return (
       <View style={{ flex: 1 }}>
         <AppHeader />
-        <Screen bottomInset={80}>
+        <Screen>
+          <View style={{ alignItems: 'flex-end', marginBottom: t.spacing.md }}>{createButton}</View>
           <FirstRunDesktop />
         </Screen>
 
@@ -209,25 +235,33 @@ export default function Home() {
       <AppHeader />
 
       <Screen
-        bottomInset={80}
+        bottomInset={desktop ? 0 : 80}
         onRefresh={pullToLixi ? () => openLixi() : undefined}
         refreshTitle={tr('lixi:ui.letGo')}
       >
-        <Text variant="h2" style={{ marginBottom: 2 }}>
-          {tr(greetingKey(), { name: user?.name?.split(' ')[0] ?? tr('nav:home.there') })}
-        </Text>
-        <Text variant="small" tone="muted">
-          {tr('nav:home.subtitle')}
-        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
+          <View style={{ flex: 1 }}>
+            <Text variant="h2" style={{ marginBottom: 2 }}>
+              {tr(greetingKey(), { name: user?.name?.split(' ')[0] ?? tr('nav:home.there') })}
+            </Text>
+            <Text variant="small" tone="muted">
+              {tr('nav:home.subtitle')}
+            </Text>
+          </View>
+          {desktop ? createButton : null}
+        </View>
 
         {/* Until the business is set up (or the person hides it). */}
         <View style={{ marginTop: t.spacing.lg }}>
           <SetupChecklist />
         </View>
 
-        <View style={{ marginTop: t.spacing.xl, marginHorizontal: -t.spacing.lg, paddingLeft: t.spacing.lg }}>
-          <QuickActions />
-        </View>
+        {/* A phone's swipeable row of shortcuts; a desktop has them in the Create menu. */}
+        {desktop ? null : (
+          <View style={{ marginTop: t.spacing.xl, marginHorizontal: -t.spacing.lg, paddingLeft: t.spacing.lg }}>
+            <QuickActions />
+          </View>
+        )}
 
         <PeriodBar />
 

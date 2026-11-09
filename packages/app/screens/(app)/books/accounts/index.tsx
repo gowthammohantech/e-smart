@@ -395,6 +395,8 @@ export default function ChartOfAccounts() {
         visible={!!editing}
         onClose={() => setEditing(null)}
         title={editing?.id ? tr('books:accounts.edit') : tr('books:accounts.add')}
+        // A drawer on a desktop, beside the list it adds to.
+        desktopAs="drawer"
         footer={<Button title={tr('books:accounts.save')} onPress={() => void save()} loading={saving} disabled={blocked || !name.trim()} />}
       >
         <View style={{ padding: t.spacing.lg, gap: t.spacing.lg }}>

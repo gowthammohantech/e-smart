@@ -125,9 +125,11 @@ export function RecordPaymentSheet({ line, onClose }: { line: BankLine | null; o
     <>
       <Sheet
         visible={stack || (!partyOpen && !methodOpen)}
+        // A drawer on a desktop: the bank lines stay in sight beside it.
+        desktopAs="drawer"
         onClose={onClose}
         title={tr(into ? 'banking:record.paymentInTitle' : 'banking:record.paymentOutTitle')}
-        footer={<Button title={tr('banking:record.savePayment')} onPress={() => void save()} loading={busy === 'payment'} disabled={!partyId || docsLoading || !!busy} fullWidth />}
+        footer={<Button title={tr('banking:record.savePayment')} onPress={() => void save()} loading={busy === 'payment'} disabled={!partyId || docsLoading || !!busy} fullWidth={!stack} />}
       >
         <View style={{ padding: t.spacing.lg, gap: t.spacing.lg }}>
           <LineSummary line={line} />
@@ -240,9 +242,10 @@ export function RecordExpenseSheet({ line, onClose }: { line: BankLine | null; o
     <>
       <Sheet
         visible={stack || (!categoryOpen && !supplierOpen)}
+        desktopAs="drawer"
         onClose={onClose}
         title={tr('banking:record.expenseTitle')}
-        footer={<Button title={tr('banking:record.saveExpense')} onPress={() => void save()} loading={busy === 'expense'} disabled={!categoryId || !!busy} fullWidth />}
+        footer={<Button title={tr('banking:record.saveExpense')} onPress={() => void save()} loading={busy === 'expense'} disabled={!categoryId || !!busy} fullWidth={!stack} />}
       >
         <View style={{ padding: t.spacing.lg, gap: t.spacing.lg }}>
           <LineSummary line={line} />
@@ -335,9 +338,10 @@ export function RecordVoucherSheet({ line, onClose }: { line: BankLine | null; o
     <>
       <Sheet
         visible={stack || !picking}
+        desktopAs="drawer"
         onClose={onClose}
         title={tr(into ? 'banking:record.voucherInTitle' : 'banking:record.voucherOutTitle')}
-        footer={<Button title={tr('banking:record.saveVoucher')} onPress={() => void save()} loading={busy === 'voucher'} disabled={!account || !!busy} fullWidth />}
+        footer={<Button title={tr('banking:record.saveVoucher')} onPress={() => void save()} loading={busy === 'voucher'} disabled={!account || !!busy} fullWidth={!stack} />}
       >
         <View style={{ padding: t.spacing.lg, gap: t.spacing.lg }}>
           <LineSummary line={line} />
@@ -375,6 +379,7 @@ export function RecordVoucherSheet({ line, onClose }: { line: BankLine | null; o
 /** Exclude: a line the books needn't have (a transfer already in, a bank's own reversal), with why. */
 export function ExcludeSheet({ line, onClose }: { line: BankLine | null; onClose: () => void }) {
   const t = useTheme();
+  const desktop = useIsDesktop();
   const { t: tr } = useTranslation(['banking']);
   const [reason, setReason] = useState('');
   const { run, busy } = useBankAction();
@@ -388,7 +393,7 @@ export function ExcludeSheet({ line, onClose }: { line: BankLine | null; onClose
       visible
       onClose={onClose}
       title={tr('banking:exclude.title')}
-      footer={<Button title={tr('banking:exclude.confirm')} variant="danger" onPress={() => void save()} loading={busy === 'exclude'} disabled={!!busy} fullWidth />}
+      footer={<Button title={tr('banking:exclude.confirm')} variant="danger" onPress={() => void save()} loading={busy === 'exclude'} disabled={!!busy} fullWidth={!desktop} />}
     >
       <View style={{ padding: t.spacing.lg, gap: t.spacing.lg }}>
         <LineSummary line={line} />

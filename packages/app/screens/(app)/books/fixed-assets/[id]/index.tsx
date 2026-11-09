@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
-import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { Badge } from '@esmart/ui/components/Badge';
 import { Button } from '@esmart/ui/components/Button';
 import { Card } from '@esmart/ui/components/Card';
@@ -23,6 +23,7 @@ import { Skeleton, SkeletonGroup } from '@esmart/ui/components/Skeleton';
 /** One asset: what it cost, what has been written off, and its depreciation year by year. */
 export default function FixedAssetDetail() {
   const t = useTheme();
+  const desktop = useIsDesktop();
   const router = useRouter();
   const { t: tr } = useTranslation(['books']);
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -39,7 +40,7 @@ export default function FixedAssetDetail() {
   return (
     <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: a.name }} />
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, gap: t.spacing.md, paddingBottom: 80 }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
+      <ScrollView contentContainerStyle={[{ padding: t.spacing.lg, gap: t.spacing.md, paddingBottom: desktop ? t.spacing.xxl : 80 }, desktop && { maxWidth: 880, width: '100%' }]} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <Card style={{ gap: t.spacing.sm }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm, flexWrap: 'wrap' }}>
             <Text variant="h3" style={{ flex: 1 }}>

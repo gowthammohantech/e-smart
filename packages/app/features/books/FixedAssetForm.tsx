@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
-import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, useFieldWidth, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { FormActions } from '@esmart/ui/components/ActionBar';
 import { Button } from '@esmart/ui/components/Button';
 import { Card } from '@esmart/ui/components/Card';
@@ -41,6 +41,8 @@ export type AssetPrefill = { name?: string; costMinor?: number; acquiredOn?: str
 
 export function FixedAssetForm({ asset, prefill }: { asset?: FixedAsset; prefill?: AssetPrefill }) {
   const t = useTheme();
+  const desktop = useIsDesktop();
+  const fw = useFieldWidth();
   const router = useRouter();
   const toast = useToast();
   const { t: tr } = useTranslation(['books', 'common']);
@@ -140,7 +142,7 @@ export function FixedAssetForm({ asset, prefill }: { asset?: FixedAsset; prefill
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <FormContainer wide>
-        <ScrollView contentContainerStyle={{ padding: t.spacing.lg, gap: t.spacing.lg, paddingBottom: 140 }} showsVerticalScrollIndicator={SHOW_SCROLLBAR} keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerStyle={{ padding: t.spacing.lg, gap: t.spacing.lg, paddingBottom: desktop ? t.spacing.xxl : 140 }} showsVerticalScrollIndicator={SHOW_SCROLLBAR} keyboardShouldPersistTaps="handled">
           <Card style={{ gap: t.spacing.lg }}>
             <TextField label={tr('books:assets.name')} value={name} onChangeText={setName} placeholder={tr('books:assets.namePlaceholder')} required maxLength={200} />
             <View style={{ flexDirection: 'row', gap: t.spacing.md, flexWrap: 'wrap' }}>
@@ -151,7 +153,7 @@ export function FixedAssetForm({ asset, prefill }: { asset?: FixedAsset; prefill
                 <TextField label={tr('books:assets.code')} value={assetCode} onChangeText={setAssetCode} placeholder={tr('books:assets.codePlaceholder')} maxLength={60} />
               </View>
             </View>
-            <PickerField label={tr('books:assets.account')} required value={chosen ? nameOf(chosen) : account} onPress={() => setPicking('account')} icon="book-open-variant" hint={tr('books:assets.accountHint')} />
+            <PickerField label={tr('books:assets.account')} required value={chosen ? nameOf(chosen) : account} onPress={() => setPicking('account')} icon="book-open-variant" hint={tr('books:assets.accountHint')} containerStyle={fw('lg')} />
           </Card>
 
           <Card style={{ gap: t.spacing.lg }}>
@@ -179,9 +181,9 @@ export function FixedAssetForm({ asset, prefill }: { asset?: FixedAsset; prefill
             </Text>
             <Segmented options={[{ value: 'slm', label: tr('books:assets.slm') }, { value: 'wdv', label: tr('books:assets.wdv') }]} value={method} onChange={(v) => setMethod(v as 'slm' | 'wdv')} />
             {method === 'slm' ? (
-              <TextField label={tr('books:assets.lifeYears')} value={lifeYears} onChangeText={setLifeYears} keyboardType="decimal-pad" required hint={tr('books:assets.slmHint')} />
+              <TextField label={tr('books:assets.lifeYears')} value={lifeYears} onChangeText={setLifeYears} keyboardType="decimal-pad" required hint={tr('books:assets.slmHint')} containerStyle={fw('sm')} />
             ) : (
-              <TextField label={tr('books:assets.rate')} value={rate} onChangeText={setRate} keyboardType="decimal-pad" required hint={tr('books:assets.wdvHint')} />
+              <TextField label={tr('books:assets.rate')} value={rate} onChangeText={setRate} keyboardType="decimal-pad" required hint={tr('books:assets.wdvHint')} containerStyle={fw('sm')} />
             )}
             <SwitchField label={tr('books:assets.brought')} description={tr('books:assets.broughtHint')} value={brought} onValueChange={setBrought} />
             {brought ? (
@@ -203,8 +205,8 @@ export function FixedAssetForm({ asset, prefill }: { asset?: FixedAsset; prefill
                 <SwitchField label={tr('books:assets.disposed')} description={tr('books:assets.disposedHint')} value={disposing} onValueChange={setDisposing} />
                 {disposing ? (
                   <>
-                    <DateField label={tr('books:assets.disposedOn')} value={disposedOn} onChange={setDisposedOn} maximumDate={new Date()} />
-                    <TextField label={tr('books:assets.disposalNote')} value={disposalNote} onChangeText={setDisposalNote} placeholder={tr('books:assets.disposalNotePlaceholder')} maxLength={500} />
+                    <DateField label={tr('books:assets.disposedOn')} value={disposedOn} onChange={setDisposedOn} maximumDate={new Date()} containerStyle={fw('sm')} />
+                    <TextField label={tr('books:assets.disposalNote')} value={disposalNote} onChangeText={setDisposalNote} placeholder={tr('books:assets.disposalNotePlaceholder')} maxLength={500} containerStyle={fw('lg')} />
                   </>
                 ) : null}
               </>
@@ -214,11 +216,11 @@ export function FixedAssetForm({ asset, prefill }: { asset?: FixedAsset; prefill
         </ScrollView>
         <FormActions>
           {problem ? (
-            <Text variant="caption" tone="muted" style={{ textAlign: 'center' }}>
+            <Text variant="caption" tone="muted" style={{ textAlign: 'center', alignSelf: desktop ? 'center' : undefined }}>
               {problem}
             </Text>
           ) : null}
-          <Button title={tr(asset?.id ? 'books:assets.save' : 'books:assets.add')} onPress={() => void save()} loading={busy} disabled={!canWrite || busy || !!problem} fullWidth shortcut="S" />
+          <Button title={tr(asset?.id ? 'books:assets.save' : 'books:assets.add')} onPress={() => void save()} loading={busy} disabled={!canWrite || busy || !!problem} fullWidth={!desktop} shortcut="S" />
         </FormActions>
       </FormContainer>
 

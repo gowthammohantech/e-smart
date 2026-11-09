@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
-import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { FIELD_WIDTH, SHOW_SCROLLBAR, useFieldWidth, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { FormActions } from '@esmart/ui/components/ActionBar';
 import { Button } from '@esmart/ui/components/Button';
 import { Card } from '@esmart/ui/components/Card';
@@ -33,6 +33,8 @@ type Row = { account: string; months: string[]; open: boolean };
  */
 export function BudgetForm({ budget }: { budget?: Budget }) {
   const t = useTheme();
+  const desktop = useIsDesktop();
+  const fw = useFieldWidth();
   const router = useRouter();
   const toast = useToast();
   const { t: tr } = useTranslation(['books', 'common']);
@@ -96,10 +98,11 @@ export function BudgetForm({ budget }: { budget?: Budget }) {
   if (!loaded) return <LoadingView variant="form" keepTitle />;
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <FormContainer style={{ maxWidth: '100%' }}>
-        <ScrollView contentContainerStyle={{ padding: t.spacing.lg, gap: t.spacing.lg, paddingBottom: 140 }} showsVerticalScrollIndicator={SHOW_SCROLLBAR} keyboardShouldPersistTaps="handled">
-          <Card style={{ gap: t.spacing.lg }}>
-            <TextField label={tr('books:budgets.name')} value={name} onChangeText={setName} required maxLength={200} />
+      {/* Wide enough on a desktop for six months to a row under an account. */}
+      <FormContainer style={{ maxWidth: desktop ? 1100 : '100%' }}>
+        <ScrollView contentContainerStyle={{ padding: t.spacing.lg, gap: t.spacing.lg, paddingBottom: desktop ? t.spacing.xxl : 140 }} showsVerticalScrollIndicator={SHOW_SCROLLBAR} keyboardShouldPersistTaps="handled">
+          <Card style={[{ gap: t.spacing.lg }, desktop && { maxWidth: 720 }]}>
+            <TextField label={tr('books:budgets.name')} value={name} onChangeText={setName} required maxLength={200} containerStyle={fw('lg')} />
             {budget?.id ? (
               <Text variant="small" tone="muted">
                 {tr('books:budgets.for', { year: financialYearOf(yearFrom, company.fiscalYearStartMonth).label })}
@@ -108,7 +111,48 @@ export function BudgetForm({ budget }: { budget?: Budget }) {
               <Segmented options={[{ value: fy.start, label: fy.label }, { value: next.start, label: next.label }]} value={yearFrom} onChange={setYearFrom} />
             )}
           </Card>
-          {rows.map((r, i) => {
+          {desktop && rows.length ? (
+            // On a desktop the accounts read as one table: the account, its year's figure, then its months six to a row.
+            <Card padded={false}>
+              {rows.map((r, i) => {
+                const a = accountFor(r.account, book);
+                return (
+                  <View key={r.account} style={{ padding: t.spacing.md, gap: t.spacing.md, borderTopWidth: i ? 1 : 0, borderTopColor: t.c.line }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text variant="body" weight="600" numberOfLines={1}>
+                          {a ? nameOf(a) : r.account}
+                        </Text>
+                        <Text variant="caption" tone="muted">
+                          {a ? groupName(a.group) : ''}
+                        </Text>
+                      </View>
+                      <View style={{ width: FIELD_WIDTH.md }}>
+                        <AmountField
+                          label={tr('books:budgets.annual')}
+                          value={major(annual(r))}
+                          onChangeValue={(v) => patch(i, { months: spreadEvenly(minor(v)).map(major) })}
+                          currency={currency}
+                        />
+                      </View>
+                      <Button size="sm" variant="ghost" icon={r.open ? 'chevron-up' : 'chevron-down'} title={tr(r.open ? 'books:budgets.hideMonths' : 'books:budgets.showMonths')} onPress={() => patch(i, { open: !r.open })} />
+                      <Button size="sm" variant="ghost" icon="delete-outline" title={tr('books:budgets.removeLine')} onPress={() => setRows((rs) => rs.filter((_, k) => k !== i))} />
+                    </View>
+                    {r.open ? (
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.md }}>
+                        {months.map((m, k) => (
+                          <View key={m} style={{ flexBasis: '15%', flexGrow: 1 }}>
+                            <AmountField label={formatDate(m, 'MMM yyyy')} value={r.months[k]} onChangeValue={(v) => patch(i, { months: r.months.map((x, j) => (j === k ? v : x)) })} currency={currency} />
+                          </View>
+                        ))}
+                      </View>
+                    ) : null}
+                  </View>
+                );
+              })}
+            </Card>
+          ) : null}
+          {!desktop && rows.map((r, i) => {
             const a = accountFor(r.account, book);
             return (
               <Card key={r.account} style={{ gap: t.spacing.md }}>
@@ -143,11 +187,13 @@ export function BudgetForm({ budget }: { budget?: Budget }) {
               </Card>
             );
           })}
-          <Button title={tr('books:budgets.addLine')} icon="plus" variant="secondary" onPress={() => setPicking(true)} disabled={!accounts.length} />
-          {budget?.id ? <Button title={tr('books:budgets.remove')} variant="danger" icon="delete-outline" onPress={() => setConfirmRemove(true)} disabled={!canWrite || busy} /> : null}
+          <View style={desktop ? { flexDirection: 'row', gap: t.spacing.sm } : { gap: t.spacing.lg }}>
+            <Button title={tr('books:budgets.addLine')} icon="plus" variant="secondary" onPress={() => setPicking(true)} disabled={!accounts.length} />
+            {budget?.id ? <Button title={tr('books:budgets.remove')} variant="danger" icon="delete-outline" onPress={() => setConfirmRemove(true)} disabled={!canWrite || busy} /> : null}
+          </View>
         </ScrollView>
         <FormActions>
-          <Button title={tr('books:budgets.save')} onPress={() => void save()} loading={busy} disabled={!canWrite || busy || !name.trim()} fullWidth shortcut="S" />
+          <Button title={tr('books:budgets.save')} onPress={() => void save()} loading={busy} disabled={!canWrite || busy || !name.trim()} fullWidth={!desktop} shortcut="S" />
         </FormActions>
       </FormContainer>
       <SelectSheet

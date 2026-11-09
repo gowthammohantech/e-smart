@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { focusRing, type WebPressState } from '@esmart/ui/theme/interaction';
-import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { DIALOG_WIDTH, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { Icon } from '@esmart/ui/components/Icon';
 import { Text } from '@esmart/ui/components/Text';
 import { Sheet } from '@esmart/ui/components/Sheet';
@@ -111,6 +111,8 @@ export function PeriodBar({ showGrain = true }: { showGrain?: boolean }) {
         visible={customOpen}
         onClose={() => setCustomOpen(false)}
         title={tr('reports:dash.period.customTitle')}
+        // Two dates and Apply: a small dialog on a desktop, the dates side by side.
+        desktopWidth={DIALOG_WIDTH.sm}
         footer={
           <Button
             title={tr('reports:dash.period.apply')}
@@ -119,13 +121,17 @@ export function PeriodBar({ showGrain = true }: { showGrain?: boolean }) {
               setPeriod({ ...period, range: 'custom', from, to });
               setCustomOpen(false);
             }}
-            fullWidth
+            fullWidth={!desktop}
           />
         }
       >
-        <View style={{ gap: t.spacing.md, paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.md }}>
-          <DateField label={tr('reports:dash.period.from')} value={from} onChange={setFrom} />
-          <DateField label={tr('reports:dash.period.to')} value={to} onChange={setTo} error={from && to && from > to ? tr('reports:dash.period.backwards') : undefined} />
+        <View style={{ gap: t.spacing.md, paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.md, flexDirection: desktop ? 'row' : 'column' }}>
+          <View style={desktop ? { flex: 1 } : undefined}>
+            <DateField label={tr('reports:dash.period.from')} value={from} onChange={setFrom} />
+          </View>
+          <View style={desktop ? { flex: 1 } : undefined}>
+            <DateField label={tr('reports:dash.period.to')} value={to} onChange={setTo} error={from && to && from > to ? tr('reports:dash.period.backwards') : undefined} />
+          </View>
         </View>
       </Sheet>
     </View>

@@ -7,12 +7,12 @@ import { Button } from '@esmart/ui/components/Button';
 import { FormActions } from '@esmart/ui/components/ActionBar';
 import { Card } from '@esmart/ui/components/Card';
 import { AmountField, PickerField, TextField } from '@esmart/ui/components/Field';
-import { FormContainer, FormSection } from '@esmart/ui/components/Layout';
+import { FieldRow, FormContainer, FormSection } from '@esmart/ui/components/Layout';
 import { ListRow } from '@esmart/ui/components/ListRow';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { Text } from '@esmart/ui/components/Text';
-import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { formatDate, nowISO, today } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
 import { fromMajor, money } from '@esmart/core/lib/money';
@@ -37,6 +37,7 @@ export default function TransferScreen() {
 
 function TransferForm() {
   const t = useTheme();
+  const desktop = useIsDesktop();
   const router = useRouter();
   const { t: tr } = useTranslation(['books', 'common']);
   const company = useActiveCompany();
@@ -98,11 +99,16 @@ function TransferForm() {
           <Text variant="small" tone="muted">
             {tr('books:transfer.hint')}
           </Text>
-          <PickerField label={tr('books:transfer.from')} value={nameOf(from)} placeholder={tr('books:transfer.pickAccount')} onPress={() => setPicking('from')} icon="bank-outline" required />
-          <PickerField label={tr('books:transfer.to')} value={nameOf(to)} placeholder={tr('books:transfer.pickAccount')} onPress={() => setPicking('to')} icon="bank-outline" required />
-          <AmountField label={tr('books:transfer.amount')} value={amount} onChangeValue={setAmount} currency={baseCurrency} required />
-          <DateField label={tr('books:vouchers.date')} value={date} onChange={setDate} maximumDate={new Date()} />
-          <TextField label={tr('books:vouchers.reference')} value={reference} onChangeText={setReference} hint={tr('books:transfer.referenceHint')} icon="pound" />
+          {/* From and to side by side on a desktop, then the amount, date and reference on one row. */}
+          <FieldRow>
+            <PickerField label={tr('books:transfer.from')} value={nameOf(from)} placeholder={tr('books:transfer.pickAccount')} onPress={() => setPicking('from')} icon="bank-outline" required />
+            <PickerField label={tr('books:transfer.to')} value={nameOf(to)} placeholder={tr('books:transfer.pickAccount')} onPress={() => setPicking('to')} icon="bank-outline" required />
+          </FieldRow>
+          <FieldRow>
+            <AmountField label={tr('books:transfer.amount')} value={amount} onChangeValue={setAmount} currency={baseCurrency} required />
+            <DateField label={tr('books:vouchers.date')} value={date} onChange={setDate} maximumDate={new Date()} />
+            <TextField label={tr('books:vouchers.reference')} value={reference} onChangeText={setReference} hint={tr('books:transfer.referenceHint')} icon="pound" />
+          </FieldRow>
           <TextField label={tr('books:vouchers.narration')} value={narration} onChangeText={setNarration} placeholder={tr('books:vouchers.narrationPlaceholder')} multiline />
           {problem && (from || to || amount) ? (
             <Text variant="caption" tone="bad">
@@ -148,7 +154,7 @@ function TransferForm() {
         </ScrollView>
         <View>
           <FormActions>
-            <Button title={tr('books:transfer.save')} onPress={() => void save()} loading={saving} disabled={blocked || !!problem} fullWidth shortcut="S" />
+            <Button title={tr('books:transfer.save')} onPress={() => void save()} loading={saving} disabled={blocked || !!problem} fullWidth={!desktop} shortcut="S" />
           </FormActions>
         </View>
       </FormContainer>

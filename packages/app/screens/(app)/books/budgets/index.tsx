@@ -4,7 +4,7 @@ import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
-import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { PrimaryActionBar } from '@esmart/ui/components/ActionBar';
 import { Card } from '@esmart/ui/components/Card';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
@@ -19,6 +19,7 @@ import { ListSkeleton } from '../../../../components/ScreenSkeleton';
 /** The business's budgets, the latest year first. */
 export default function Budgets() {
   const t = useTheme();
+  const desktop = useIsDesktop();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { t: tr } = useTranslation(['books']);
@@ -29,7 +30,7 @@ export default function Budgets() {
   return (
     <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('books:budgets.title') }} />
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 + insets.bottom, gap: t.spacing.md }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
+      <ScrollView contentContainerStyle={[{ padding: t.spacing.lg, paddingBottom: desktop ? t.spacing.xxl : 120 + insets.bottom, gap: t.spacing.md }, desktop && { maxWidth: 880, width: '100%' }]} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <Text variant="small" tone="muted">
           {tr('books:budgets.intro')}
         </Text>

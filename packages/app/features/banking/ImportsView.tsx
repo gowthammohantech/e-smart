@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView } from 'react-native';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
-import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { Button } from '@esmart/ui/components/Button';
 import { Card } from '@esmart/ui/components/Card';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
@@ -21,6 +21,7 @@ import { ListSkeleton } from '../../components/ScreenSkeleton';
  */
 export function ImportsView({ accountId }: { accountId: string }) {
   const t = useTheme();
+  const desktop = useIsDesktop();
   const { t: tr } = useTranslation(['banking', 'reports']);
   const statements = useBankStatements(accountId);
   const canWrite = useCanWrite();
@@ -33,8 +34,9 @@ export function ImportsView({ accountId }: { accountId: string }) {
   const rows = statements.data ?? [];
   if (!rows.length) return <EmptyState icon="file-upload-outline" title={tr('banking:imports.empty')} message={tr('banking:imports.emptyBody')} />;
   return (
-    <ScrollView contentContainerStyle={{ padding: t.spacing.lg, gap: t.spacing.md }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
-      <Card padded={false}>
+    // The screen pads a desktop's tab already; the list keeps a readable width there, Undo near the file it undoes.
+    <ScrollView contentContainerStyle={{ padding: desktop ? 0 : t.spacing.lg, gap: t.spacing.md }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
+      <Card padded={false} style={desktop ? { maxWidth: 880 } : undefined}>
         {rows.map((s, i) => (
           <ListRow
             key={s.id}

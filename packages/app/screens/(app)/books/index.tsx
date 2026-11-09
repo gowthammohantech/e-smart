@@ -7,7 +7,7 @@ import { Card } from '@esmart/ui/components/Card';
 import { ListRow } from '@esmart/ui/components/ListRow';
 import { Text } from '@esmart/ui/components/Text';
 import type { IconName } from '@esmart/ui/components/Icon';
-import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 
 const LINKS: { key: 'accounts' | 'vouchers' | 'costCentres' | 'trialBalance' | 'profitLoss' | 'balanceSheet' | 'dayBook' | 'integrity' | 'close'; route: string; icon: IconName }[] = [
   { key: 'accounts', route: '/(app)/books/accounts', icon: 'format-list-bulleted-type' },
@@ -24,12 +24,13 @@ const LINKS: { key: 'accounts' | 'vouchers' | 'costCentres' | 'trialBalance' | '
 /** The books: the general ledger the app keeps from everything recorded, and the statements from it. */
 export default function BooksHub() {
   const t = useTheme();
+  const desktop = useIsDesktop();
   const router = useRouter();
   const { t: tr } = useTranslation(['books']);
   return (
     <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('books:hub.title') }} />
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, gap: t.spacing.md }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
+      <ScrollView contentContainerStyle={[{ padding: t.spacing.lg, gap: t.spacing.md }, desktop && { maxWidth: 720, width: '100%' }]} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <Text variant="small" tone="muted">
           {tr('books:hub.subtitle')}
         </Text>

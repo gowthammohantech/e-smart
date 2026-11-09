@@ -12,7 +12,7 @@ import { ListRow } from '@esmart/ui/components/ListRow';
 import { Sheet } from '@esmart/ui/components/Sheet';
 import { PickerField, SwitchField, TextField } from '@esmart/ui/components/Field';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
-import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { uid } from '@esmart/core/lib/id';
 import { nowISO } from '@esmart/core/lib/date';
 import type { CostCentre } from '@esmart/core/types';
@@ -24,6 +24,7 @@ import { useActiveCompany } from '../../../../store/selectors';
 /** Projects, departments and the like: documents, expenses and voucher lines can carry one. */
 export default function CostCentres() {
   const t = useTheme();
+  const desktop = useIsDesktop();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { t: tr } = useTranslation(['books', 'common']);
@@ -64,7 +65,7 @@ export default function CostCentres() {
   return (
     <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('books:hub.costCentres') }} />
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 120 + insets.bottom, gap: t.spacing.md }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
+      <ScrollView contentContainerStyle={[{ padding: t.spacing.lg, paddingBottom: desktop ? t.spacing.xxl : 120 + insets.bottom, gap: t.spacing.md }, desktop && { maxWidth: 880, width: '100%' }]} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         {centres.length ? (
           <>
             <Card padded={false}>
@@ -94,6 +95,8 @@ export default function CostCentres() {
         visible={!!editing}
         onClose={() => setEditing(null)}
         title={editing?.id ? tr('books:costCentres.edit') : tr('books:costCentres.add')}
+        // A drawer on a desktop, beside the list it adds to.
+        desktopAs="drawer"
         footer={<Button title={tr('books:accounts.save')} onPress={() => void save()} loading={saving} disabled={blocked || !name.trim()} />}
       >
         <View style={{ padding: t.spacing.lg, gap: t.spacing.lg }}>

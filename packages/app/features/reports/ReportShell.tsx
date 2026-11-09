@@ -10,6 +10,7 @@ import { Card } from '@esmart/ui/components/Card';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { ApiError } from '@esmart/api-client';
 import { Button } from '@esmart/ui/components/Button';
+import { Menu, MenuDivider, MenuItem, useMenuAnchor } from '@esmart/ui/components/Menu';
 import { Sheet } from '@esmart/ui/components/Sheet';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
@@ -20,7 +21,7 @@ import { useActiveCompany, useBranches, useParties } from '../../store/selectors
 import { usePartyRecord, usePartySearch } from '../../remote/queries';
 import { useDebounced } from '../../components/useDebounced';
 import { ReportFilters } from '@esmart/core/domain/reports';
-import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { DIALOG_WIDTH, SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { deliverFile, deliverPdf } from './exportFiles';
 import { presetParam, useQueryParams } from '../../navigation/queryParams';
 import { ReportTable, XLSX_MIME, exportName, tableHtml, toCsv, xlsxBytes } from './reportTable';
@@ -85,6 +86,9 @@ export function ReportShell({
   const [branchOpen, setBranchOpen] = useState(false);
   const [partyOpen, setPartyOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  // On a desktop, Export and the period drop down from their buttons instead of opening a sheet.
+  const exportMenu = useMenuAnchor();
+  const rangeMenu = useMenuAnchor();
   const partySearch = usePartySearch(undefined, useDebounced(partyQuery), partyOpen);
   const partyRecord = usePartyRecord(scope.filters.partyId ?? undefined);
 
@@ -109,6 +113,13 @@ export function ReportShell({
     setCustomFrom(r.from);
     setCustomTo(r.to);
     setCustomOpen(scope.preset === 'custom');
+    if (desktop) rangeMenu.open();
+    else setFilterOpen(true);
+  };
+  // Desktop: "Custom range" in the period menu opens a small dialog with just the two dates.
+  const openCustomDialog = () => {
+    rangeMenu.close();
+    setCustomOpen(true);
     setFilterOpen(true);
   };
 
@@ -135,6 +146,7 @@ export function ReportShell({
   const doExport = async (format: 'pdf' | 'xlsx' | 'csv') => {
     if (!exportRows) return;
     setExportOpen(false);
+    exportMenu.close();
     const table = exportRows();
     const name = exportName(title, scope.filters.range.from, scope.filters.range.to);
     try {
@@ -152,9 +164,25 @@ export function ReportShell({
     { format: 'csv', icon: 'file-delimited-outline', label: tr('reports:shell.exportCsv') },
   ];
 
+  const exportItems = [
+    ...EXPORTS.map((e) => ({ key: e.format, icon: e.icon, label: e.label, onPress: () => doExport(e.format) })),
+    ...extraExports.map((e) => ({
+      key: e.key,
+      icon: e.icon,
+      label: e.label,
+      onPress: () => {
+        setExportOpen(false);
+        exportMenu.close();
+        e.run().catch(() => toast.show(tr('reports:shell.exportFailed'), 'error', { icon: 'file-alert-outline' }));
+      },
+    })),
+  ];
+
   // Chips are a full 40pt tall; a set filter's clear button is its own target beside the label.
-  const chip = (label: string, active: boolean, onPress: () => void, onClear?: () => void) => (
+  const chip = (label: string, active: boolean, onPress: () => void, onClear?: () => void, anchor?: (node: View | null) => void) => (
     <View
+      ref={anchor}
+      collapsable={false}
       style={{
         flexDirection: 'row',
         alignItems: 'center',
@@ -204,7 +232,15 @@ export function ReportShell({
         <Stack.Screen
           options={{
             headerRight: () => (
-              <Button title={tr('reports:shell.export')} icon="file-export-outline" variant={desktop ? 'secondary' : 'ghost'} size={desktop ? undefined : 'sm'} onPress={() => setExportOpen(true)} />
+              <View ref={exportMenu.setAnchor} collapsable={false}>
+                <Button
+                  title={tr('reports:shell.export')}
+                  icon="file-export-outline"
+                  variant={desktop ? 'secondary' : 'ghost'}
+                  size={desktop ? undefined : 'sm'}
+                  onPress={desktop ? exportMenu.open : () => setExportOpen(true)}
+                />
+              </View>
             ),
           }}
         />
@@ -218,7 +254,7 @@ export function ReportShell({
         }
       >
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: t.spacing.sm, paddingRight: t.spacing.lg }}>
-          {chip(rangeLabel, true, openRangeSheet)}
+          {chip(rangeLabel, true, openRangeSheet, undefined, rangeMenu.setAnchor)}
           {branches.length > 1
             ? chip(branch?.name ?? tr('common:component.allBranches'), !!branch, () => setBranchOpen(true), () =>
                 changeScope({ ...scope, filters: { ...scope.filters, branchId: null } }),
@@ -241,7 +277,8 @@ export function ReportShell({
         contentContainerStyle={desktop ? { padding: t.spacing.lg, paddingBottom: t.spacing.xxxl } : { padding: t.spacing.lg, paddingBottom: 120 }}
         showsVerticalScrollIndicator={SHOW_SCROLLBAR}
       >
-        <Card variant="flat" style={{ marginBottom: t.spacing.lg, gap: 4 }}>
+        {/* A paragraph reads at a line's length, not the page's, on a desktop. */}
+        <Card variant="flat" style={[{ marginBottom: t.spacing.lg, gap: 4 }, desktop && { maxWidth: 880 }]}>
           <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('reports:shell.basis')}</Text>
           <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
             {tr('reports:shell.basisFull', basisParams)}
@@ -277,19 +314,29 @@ export function ReportShell({
         </View>
       ) : null}
 
+      <Menu anchor={exportMenu.rect} onClose={exportMenu.close} align="right" width={240}>
+        {exportItems.map((e) => (
+          <MenuItem key={e.key} icon={e.icon} label={e.label} onPress={() => void e.onPress()} />
+        ))}
+      </Menu>
+      <Menu anchor={rangeMenu.rect} onClose={rangeMenu.close} width={260}>
+        {DATE_RANGE_PRESET_KEYS.map((p) => (
+          <MenuItem
+            key={p}
+            label={dateRangeLabel(tr, p)}
+            selected={scope.preset === p}
+            onPress={() => {
+              rangeMenu.close();
+              setPreset(p);
+            }}
+          />
+        ))}
+        <MenuDivider />
+        <MenuItem icon="calendar-range" label={tr('reports:shell.customRange')} selected={scope.preset === 'custom'} onPress={openCustomDialog} />
+      </Menu>
+
       <Sheet visible={exportOpen} onClose={() => setExportOpen(false)} title={tr('reports:shell.export')}>
-        {[
-          ...EXPORTS.map((e) => ({ key: e.format, icon: e.icon, label: e.label, onPress: () => doExport(e.format) })),
-          ...extraExports.map((e) => ({
-            key: e.key,
-            icon: e.icon,
-            label: e.label,
-            onPress: () => {
-              setExportOpen(false);
-              e.run().catch(() => toast.show(tr('reports:shell.exportFailed'), 'error', { icon: 'file-alert-outline' }));
-            },
-          })),
-        ].map((e) => (
+        {exportItems.map((e) => (
           <Pressable
             key={e.key}
             onPress={e.onPress}
@@ -311,50 +358,55 @@ export function ReportShell({
         ))}
       </Sheet>
 
-      <Sheet visible={filterOpen} onClose={() => setFilterOpen(false)} title={tr('reports:shell.dateRange')}>
-        {DATE_RANGE_PRESET_KEYS.map((p) => (
-          <Pressable
-            key={p}
-            onPress={() => {
-              setPreset(p);
-              setFilterOpen(false);
-            }}
-            accessibilityRole="button"
-            accessibilityState={{ selected: scope.preset === p }}
-            style={({ pressed }) => ({
-              flexDirection: 'row',
-              alignItems: 'center',
-              paddingVertical: t.spacing.md,
-              paddingHorizontal: t.spacing.lg,
-              backgroundColor: pressed ? t.c.card2 : 'transparent',
-            })}
-          >
-            <Text variant="body" style={{ flex: 1 }} weight={scope.preset === p ? '600' : '400'}>
-              {dateRangeLabel(tr, p)}
-            </Text>
-            {scope.preset === p ? <Icon name="check" size={19} color={t.c.primary} /> : null}
-          </Pressable>
-        ))}
-        <Pressable
-          onPress={() => setCustomOpen((o) => !o)}
-          accessibilityRole="button"
-          accessibilityState={{ selected: scope.preset === 'custom', expanded: customOpen }}
-          style={({ pressed }) => ({
-            flexDirection: 'row',
-            alignItems: 'center',
-            paddingVertical: t.spacing.md,
-            paddingHorizontal: t.spacing.lg,
-            backgroundColor: pressed ? t.c.card2 : 'transparent',
-          })}
-        >
-          <Text variant="body" style={{ flex: 1 }} weight={scope.preset === 'custom' ? '600' : '400'}>
-            {tr('reports:shell.customRange')}
-          </Text>
-          <Icon name={customOpen ? 'chevron-up' : 'chevron-down'} size={19} color={scope.preset === 'custom' ? t.c.primary : t.c.muted} />
-        </Pressable>
+      <Sheet visible={filterOpen} onClose={() => setFilterOpen(false)} title={tr(desktop ? 'reports:shell.customRange' : 'reports:shell.dateRange')} desktopWidth={DIALOG_WIDTH.sm}>
+        {/* A desktop picks a preset from the period menu; this is only the custom dates there. */}
+        {desktop ? null : (
+          <>
+            {DATE_RANGE_PRESET_KEYS.map((p) => (
+              <Pressable
+                key={p}
+                onPress={() => {
+                  setPreset(p);
+                  setFilterOpen(false);
+                }}
+                accessibilityRole="button"
+                accessibilityState={{ selected: scope.preset === p }}
+                style={({ pressed }) => ({
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  paddingVertical: t.spacing.md,
+                  paddingHorizontal: t.spacing.lg,
+                  backgroundColor: pressed ? t.c.card2 : 'transparent',
+                })}
+              >
+                <Text variant="body" style={{ flex: 1 }} weight={scope.preset === p ? '600' : '400'}>
+                  {dateRangeLabel(tr, p)}
+                </Text>
+                {scope.preset === p ? <Icon name="check" size={19} color={t.c.primary} /> : null}
+              </Pressable>
+            ))}
+            <Pressable
+              onPress={() => setCustomOpen((o) => !o)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: scope.preset === 'custom', expanded: customOpen }}
+              style={({ pressed }) => ({
+                flexDirection: 'row',
+                alignItems: 'center',
+                paddingVertical: t.spacing.md,
+                paddingHorizontal: t.spacing.lg,
+                backgroundColor: pressed ? t.c.card2 : 'transparent',
+              })}
+            >
+              <Text variant="body" style={{ flex: 1 }} weight={scope.preset === 'custom' ? '600' : '400'}>
+                {tr('reports:shell.customRange')}
+              </Text>
+              <Icon name={customOpen ? 'chevron-up' : 'chevron-down'} size={19} color={scope.preset === 'custom' ? t.c.primary : t.c.muted} />
+            </Pressable>
+          </>
+        )}
         {customOpen ? (
-          <View style={{ paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.md, gap: t.spacing.md }}>
-            <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
+          <View style={{ paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.md, gap: t.spacing.md, alignItems: desktop ? 'flex-end' : undefined }}>
+            <View style={[{ flexDirection: 'row', gap: t.spacing.md }, desktop && { alignSelf: 'stretch' }]}>
               <View style={{ flex: 1 }}>
                 <DateField label={tr('reports:shell.from')} value={customFrom} onChange={setCustomFrom} />
               </View>
@@ -369,7 +421,7 @@ export function ReportShell({
                 changeScope({ preset: 'custom', filters: { ...scope.filters, range: { from: customFrom, to: customTo } } });
                 setFilterOpen(false);
               }}
-              fullWidth
+              fullWidth={!desktop}
             />
           </View>
         ) : null}

@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
-import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { Badge } from '@esmart/ui/components/Badge';
 import { Card } from '@esmart/ui/components/Card';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
@@ -56,13 +56,14 @@ function AccountRow({ account, last }: { account: PaymentAccount; last: boolean 
 /** Bank reconciliation: the company's bank accounts, each with what its imported statements still need. */
 export default function BankReconciliationHome() {
   const t = useTheme();
+  const desktop = useIsDesktop();
   const router = useRouter();
   const { t: tr } = useTranslation(['banking']);
   const banks = usePaymentAccounts().filter((a) => a.type === 'bank');
   return (
     <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('banking:title') }} />
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, gap: t.spacing.md }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
+      <ScrollView contentContainerStyle={[{ padding: t.spacing.lg, gap: t.spacing.md }, desktop && { maxWidth: 880, width: '100%' }]} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <Text variant="small" tone="muted">
           {tr('banking:accounts.intro')}
         </Text>
