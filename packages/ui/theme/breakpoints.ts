@@ -35,9 +35,6 @@ export type FieldWidth = keyof typeof FIELD_WIDTH;
 /** A search box on a desktop: wide enough for a name, no wider. */
 export const SEARCH_MAX_WIDTH = 420;
 
-/** A stat tile on a desktop: one or two of them don't stretch across the page. */
-export const STAT_TILE_MAX_WIDTH = 360;
-
 export type Breakpoint = 'phone' | 'tablet' | 'desktop' | 'wide';
 
 /**

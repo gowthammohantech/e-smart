@@ -1,7 +1,7 @@
 import React from 'react';
 import { Platform, StyleProp, View, ViewStyle } from 'react-native';
 import { useTheme } from '../theme/ThemeProvider';
-import { FORM_MAX_WIDTH, STAT_TILE_MAX_WIDTH, WIDE_FORM_MAX_WIDTH, useIsDesktop } from '../theme/breakpoints';
+import { FORM_MAX_WIDTH, WIDE_FORM_MAX_WIDTH, useIsDesktop } from '../theme/breakpoints';
 import { Card } from './Card';
 import { Text } from './Text';
 
@@ -38,10 +38,8 @@ export function StatGrid({ children }: { children: React.ReactNode }) {
   const desktop = useIsDesktop();
   return (
     <View style={{ flexDirection: desktop ? 'row' : 'column', gap: t.spacing.md }}>
-      {/* Each group holds a pair of tiles at most: one or two groups don't stretch across the page. */}
-      {React.Children.map(children, (child) =>
-        child && desktop ? <View style={{ flex: 1, maxWidth: STAT_TILE_MAX_WIDTH * 2 + t.spacing.md }}>{child}</View> : child,
-      )}
+      {/* The tiles share the page's width, so a row of them ends where the sections below it do. */}
+      {React.Children.map(children, (child) => (child && desktop ? <View style={{ flex: 1 }}>{child}</View> : child))}
     </View>
   );
 }
