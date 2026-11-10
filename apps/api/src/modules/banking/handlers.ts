@@ -9,6 +9,8 @@ import { defineHandlers, type Ctx } from '../../context';
 import { checkIfMatch, setEtag } from '../../http/etag';
 import { conflict, invalid, notFound, planUpgradeRequired, preconditionFailed, unprocessable, type Issue } from '../../http/errors';
 import { keyset } from '../../http/pagination';
+import { sizeBucket } from '@esmart/core/analytics/events';
+import { track } from '../../analytics/track';
 import { recordChange, type DbOrTx } from '../../lib/audit';
 import { newId } from '../../lib/ids';
 import { assignNumber } from '../../lib/numbering';
@@ -316,7 +318,10 @@ export const bankingHandlers = defineHandlers({
       });
       return { statement: statementToWire(statement, cur), ...counts, lines: preview };
     });
-    if (!body.dryRun) void ctx.reply.status(201);
+    if (!body.dryRun) {
+      void ctx.reply.status(201);
+      track(ctx, 'bank_statement_imported', { lines: sizeBucket(result.imported) });
+    }
     return result;
   },
 
@@ -466,6 +471,7 @@ export const bankingHandlers = defineHandlers({
       const [wire] = await paymentsToWire(tx, [payment], ctx.company.baseCurrency.trim());
       return { line: lineToWire(matched.line, cur, { match: matched.record }), payment: wire };
     });
+    track(ctx, 'payment_recorded', { direction: out.payment.direction, mode: out.payment.method, fromBankLine: true, allocations: out.payment.allocations?.length ?? 0 });
     return out;
   },
 

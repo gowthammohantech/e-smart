@@ -1,6 +1,7 @@
 import type { FastifyBaseLogger } from 'fastify';
 import type { Db } from '@esmart/db';
 import type { Config } from '../config';
+import { createAnalytics, type AnalyticsClient } from '../analytics/client';
 import { createAssistantProvider, type AssistantProvider } from './assistant';
 import { createComplianceProvider, type ComplianceProvider } from './compliance';
 import { createFxProvider, type FxProvider } from './fx';
@@ -28,6 +29,8 @@ export type Providers = {
   fx: FxProvider;
   payments: PaymentsProvider;
   assistant: AssistantProvider;
+  /** Product analytics; a MemoryAnalytics (inspectable in tests) when no PostHog key is set. */
+  analytics: AnalyticsClient;
 };
 
 /**
@@ -50,6 +53,7 @@ export function createProviders(config: Config, log: FastifyBaseLogger | { info:
     fx: createFxProvider(config),
     payments: createPaymentsProvider(config),
     assistant: createAssistantProvider(config),
+    analytics: createAnalytics(config),
   };
 }
 

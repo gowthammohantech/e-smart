@@ -1,4 +1,6 @@
 import { businessDate } from '@esmart/core/lib/date';
+import { sizeBucket } from '@esmart/core/analytics/events';
+import { track } from '../../analytics/track';
 import Anthropic from '@anthropic-ai/sdk';
 import type { Schema } from '@esmart/api-contract';
 import { canOpen, hasModule, MODULES, planInfo } from '@esmart/core/domain/plan';
@@ -149,12 +151,16 @@ export const lixiHandlers = defineHandlers({
       await recordAiCost(ctx.db, ctx.company.id, ctx.now, 'lixi', reply.usage).catch((err: unknown) => ctx.req.log.warn({ err }, 'lixi usage not recorded'));
     }
     const done = pending as PendingAction | null;
+    // Tokens as a size band only; the question and the answer never leave.
+    const tokens = reply.usage ? reply.usage.inputTokens + reply.usage.outputTokens : 0;
+    track(ctx, 'lixi_message', { model: reply.usage?.model ?? ctx.deps.providers.assistant.name, tokens: sizeBucket(Math.ceil(tokens / 100)), toolUsed: !!done });
     return { reply: toWire(reply, ctx.company.plan), ...(done ? { pendingAction: done } : {}) };
   },
 
   async lixiConfirmAction(ctx) {
     const done = await confirm(ctx.body.token, toolCtx(ctx), ctx.deps.config.JWT_SECRET);
     const { result } = done;
+    track(ctx, 'lixi_action_confirmed', { action: result.entity ?? 'other' });
     const actions: LixiReply['actions'] =
       result.entity === 'document' && result.id && result.kind && DOC_KINDS.has(result.kind)
         ? [{ type: 'document', label: result.number && !result.number.endsWith('-DRAFT') ? result.number : 'Open draft', id: result.id, kind: result.kind as DocumentKind }]

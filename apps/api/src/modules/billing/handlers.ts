@@ -3,6 +3,7 @@ import type { Schema } from '@esmart/api-contract';
 import { schema } from '@esmart/db';
 import { defineHandlers } from '../../context';
 import { conflict, invalid } from '../../http/errors';
+import { track } from '../../analytics/track';
 import { recordChange } from '../../lib/audit';
 import { newId } from '../../lib/ids';
 import { compact, iso } from '../../lib/wire';
@@ -86,6 +87,7 @@ export const billingHandlers = defineHandlers({
       }
       await tx.insert(schema.subscriptionEvents).values({ id: newId('sev'), companyId: ctx.company.id, fromPlan: ctx.company.plan, toPlan: plan, event: 'checkout.started' });
     });
+    track(ctx, 'checkout_started', { toPlan: plan });
     return { provider: 'razorpay' as const, subscriptionId: checkout.subscriptionId, checkoutUrl: checkout.checkoutUrl, keyId: ctx.deps.providers.payments.keyId };
   },
 
@@ -100,6 +102,7 @@ export const billingHandlers = defineHandlers({
       await recordChange(tx, ctx.user, { companyId: ctx.company.id, action: 'cancellation scheduled', entityType: 'subscription', entityId: ctx.company.id, entityLabel: current.plan, version: updated.version });
       return updated;
     });
+    track(ctx, 'subscription_cancel_requested', { plan: current.plan });
     return subscriptionToWire(ctx.company.id, ctx.company.plan, row);
   },
 });

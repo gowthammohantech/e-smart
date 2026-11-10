@@ -5,6 +5,7 @@ import { conflict, invalid, notFound, preconditionFailed } from '../../http/erro
 import { compact, iso } from '../../lib/wire';
 import { onboardingComplete, userToWire } from '../auth/users';
 import { companyToWire } from '../companies/wire';
+import { identifyCompany, track } from '../../analytics/track';
 import { recordUserChange } from '../users/shared';
 
 const U = schema.users;
@@ -76,10 +77,15 @@ export const meHandlers = defineHandlers({
   /** Stamps every company the caller can open that hasn't finished onboarding. */
   async completeOnboarding(ctx) {
     if (!ctx.user.companyIds.length) throw conflict('NO_COMPANY', 'Create a company before finishing onboarding');
-    await ctx.db
+    const done = await ctx.db
       .update(schema.companies)
       .set({ onboardingCompletedAt: ctx.now })
-      .where(and(inArray(schema.companies.id, ctx.user.companyIds), isNull(schema.companies.onboardingCompletedAt)));
+      .where(and(inArray(schema.companies.id, ctx.user.companyIds), isNull(schema.companies.onboardingCompletedAt)))
+      .returning();
+    for (const company of done) {
+      identifyCompany(ctx, company);
+      track(ctx, 'onboarding_completed', {}, { company });
+    }
     return undefined;
   },
 
@@ -137,6 +143,8 @@ export const meHandlers = defineHandlers({
 
   async savePrivacyPreferences(ctx) {
     const optOut = !ctx.body.shareUsageData;
+    // The last event before the switch takes effect, so opt-outs can be counted (it carries nothing else).
+    if (optOut && !ctx.user.analyticsOptOut) track(ctx, 'analytics_opted_out');
     await ctx.db.update(U).set({ analyticsOptOut: optOut, updatedAt: ctx.now }).where(eq(U.id, ctx.user.id));
     return { shareUsageData: !optOut };
   },

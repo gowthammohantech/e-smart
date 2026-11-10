@@ -6,6 +6,7 @@ import { money } from '../../lib/wire';
 import { checkIfMatch, setEtag } from '../../http/etag';
 import { ApiError, notFound } from '../../http/errors';
 import { keyset } from '../../http/pagination';
+import { track } from '../../analytics/track';
 import type { DbOrTx } from '../../lib/audit';
 import { deletePayment, assertDirectionAllowed, linkPaymentAttachments, writePayment } from './engine';
 import { amountInBase, holdPayment, paymentLimit, requestInput } from './requests';
@@ -96,6 +97,7 @@ export const paymentsHandlers = defineHandlers({
       await linkPaymentAttachments(tx, ctx.company.id, created.id, ctx.body.attachmentIds);
       return created;
     });
+    track(ctx, 'payment_recorded', { direction: row.direction, mode: row.method, fromBankLine: false, allocations: ctx.body.allocations?.length ?? 0 });
     setEtag(ctx.reply, row.version);
     return toWire(ctx, row);
   },

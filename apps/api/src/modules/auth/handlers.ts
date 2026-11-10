@@ -9,6 +9,7 @@ import { ApiError, badRequest, conflict, notFound, tooManyRequests, unauthorized
 import { randomToken, sha256 } from '../../lib/crypto';
 import { newId } from '../../lib/ids';
 import { buildResetEmail } from '../../lib/resetEmail';
+import { track } from '../../analytics/track';
 import { recordPlatformAction } from '../platform/audit';
 import { avatarColorFor, onboardingComplete, userToWire } from './users';
 
@@ -37,6 +38,7 @@ async function sessionResponse(
   user: typeof schema.users.$inferSelect,
   device?: { label?: string; platform?: string; appVersion?: string },
   accountChecked = false,
+  event: { name: 'signed_up' } | { name: 'signed_in'; method: 'password' | 'otp' | 'invite' } = { name: 'signed_in', method: 'password' },
 ) {
   // Each query is a round trip to the database, so they run together rather than one after another.
   const [tokens, wire, onboarded] = await Promise.all([
@@ -45,6 +47,10 @@ async function sessionResponse(
     onboardingComplete(ctx.db, user.id),
     ctx.db.update(schema.users).set({ lastActiveAt: ctx.now }).where(eq(schema.users.id, user.id)),
   ]);
+  const demo = await isDemoAccount(ctx.db, user.accountId);
+  const who = { id: user.id, role: user.role, locale: user.locale, demo, analyticsOptOut: user.analyticsOptOut, createdAt: user.createdAt };
+  if (event.name === 'signed_up') track(ctx, 'signed_up', {}, { user: who });
+  else track(ctx, 'signed_in', { method: event.method }, { user: who });
   if (user.platformRole) {
     await recordPlatformAction(ctx.db, user, ctx.req, { action: 'operator.signed_in', target: { type: 'user', id: user.id, label: user.email }, reason: `Signed in (${device?.platform ?? 'unknown device'})` });
   }
@@ -118,7 +124,7 @@ export const authHandlers = defineHandlers({
       await tx.update(schema.accounts).set({ ownerUserId: userId }).where(eq(schema.accounts.id, accountId));
       return row;
     });
-    return sessionResponse(ctx as unknown as AnyCtx, user);
+    return sessionResponse(ctx as unknown as AnyCtx, user, undefined, false, { name: 'signed_up' });
   },
 
   async signIn(ctx) {
@@ -233,7 +239,7 @@ export const authHandlers = defineHandlers({
     if (!user) throw unauthorized('PHONE_NOT_REGISTERED', 'No account uses this phone number yet; finish signing up');
     if (user.status === 'disabled') throw unauthorized('USER_DISABLED', 'This user has been disabled');
     if (user.status === 'invited') throw unauthorized('INVITE_PENDING', 'Accept your invitation first');
-    return sessionResponse(ctx as unknown as AnyCtx, user, ctx.body.device);
+    return sessionResponse(ctx as unknown as AnyCtx, user, ctx.body.device, false, { name: 'signed_in', method: 'otp' });
   },
 
   async forgotPassword(ctx) {

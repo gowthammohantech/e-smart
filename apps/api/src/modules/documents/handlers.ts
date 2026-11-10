@@ -9,6 +9,7 @@ import { RawBody, defineHandlers, type AuthUser, type Ctx } from '../../context'
 import { checkIfMatch, setEtag } from '../../http/etag';
 import { conflict, invalid, notFound, preconditionFailed, unprocessable, upstream } from '../../http/errors';
 import { keyset } from '../../http/pagination';
+import { track } from '../../analytics/track';
 import { recordChange, type DbOrTx } from '../../lib/audit';
 import { newId } from '../../lib/ids';
 import { notify } from '../../lib/notify';
@@ -482,6 +483,7 @@ export const documentsHandlers = defineHandlers({
     assertKindAllowed(ctx.company, body.kind);
     const status = checkRequestedStatus(body.kind, body.status);
     const row = await insertDocument(ctx, fieldsFromWire(body), linesFromWire(body.lines), status, { attachmentIds: body.attachmentIds, overrideCreditLimit: body.overrideCreditLimit });
+    await trackCreated(ctx, row);
     setEtag(ctx.reply, row.version);
     return toWire(ctx, row);
   },
@@ -546,6 +548,7 @@ export const documentsHandlers = defineHandlers({
       });
       return updated;
     });
+    track(ctx, 'invoice_template_changed', { template: layout ?? 'company', scope: 'document' });
     setEtag(ctx.reply, row.version);
     return toWire(ctx, row);
   },
@@ -727,6 +730,7 @@ export const documentsHandlers = defineHandlers({
   async finalizeDocument(ctx) {
     const current = await findDocument(ctx, ctx.db, ctx.params.id);
     const row = await finalizeDraft(ctx, current.id, FINAL_STATUS[current.kind], { overrideCreditLimit: ctx.body?.overrideCreditLimit });
+    track(ctx, 'document_finalized', { kind: row.kind });
     setEtag(ctx.reply, row.version);
     return { document: await toWire(ctx, row) };
   },
@@ -778,6 +782,7 @@ export const documentsHandlers = defineHandlers({
       snapshotRates: false,
       action: `converted from ${src.number}`,
     });
+    track(ctx, 'document_converted', { fromKind: src.kind, toKind: target });
     setEtag(ctx.reply, row.version);
     return toWire(ctx, row);
   },
@@ -939,6 +944,7 @@ export const documentsHandlers = defineHandlers({
         entityType: 'document',
         entityId: row.id,
       });
+      track(ctx, 'document_sent', { kind: row.kind, channel: body.channel });
     }
     return { messageId, status: 'queued' as const };
   },
@@ -951,3 +957,14 @@ export const documentsHandlers = defineHandlers({
     return { url: link.url, upiUri: link.upiUri ?? undefined, expiresAt: link.expiresAt?.toISOString() };
   },
 });
+
+/** `document_created`, with whether it is the business's first of its kind (the activation moment). */
+async function trackCreated(ctx: Ctx<'createDocument'>, row: typeof D.$inferSelect) {
+  try {
+    const firstTwo = await ctx.db.select({ id: D.id }).from(D).where(and(eq(D.companyId, row.companyId), eq(D.kind, row.kind))).limit(2);
+    const layout = (row.printLayout as string | null) ?? (ctx.company.invoiceTemplate as { layout?: string } | null)?.layout ?? 'standard';
+    track(ctx, 'document_created', { kind: row.kind, isFirst: firstTwo.length === 1, hasTds: row.tdsAmountMinor > 0, template: layout });
+  } catch {
+    // Analytics never fails a save.
+  }
+}

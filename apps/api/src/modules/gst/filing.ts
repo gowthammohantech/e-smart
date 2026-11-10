@@ -1,8 +1,9 @@
 import { and, eq, inArray, ne } from 'drizzle-orm';
-import type { Schema } from '@esmart/api-contract';
+import type { OperationId, Schema } from '@esmart/api-contract';
 import { gstr3bJson, type Amounts, type TaxKind } from '@esmart/core/domain/gstr3b';
 import { schema } from '@esmart/db';
-import { defineHandlers, type AuthUser, type CompanyRow, type Deps } from '../../context';
+import { track } from '../../analytics/track';
+import { defineHandlers, type AuthUser, type CompanyRow, type Deps, type Handler } from '../../context';
 import { ApiError, conflict, invalid } from '../../http/errors';
 import { recordChange, type DbOrTx } from '../../lib/audit';
 import { newId } from '../../lib/ids';
@@ -166,7 +167,7 @@ const amounts = (a: Partial<Amounts> | Record<TaxKind, number>, base: string): S
 });
 
 /** GST returns: GSTR-3B from the books, and saving and filing both returns through the portal. */
-export const gstFilingHandlers = defineHandlers({
+const filingHandlers = defineHandlers({
   async getGstr3b(ctx) {
     const { gstin, period } = ctx.query;
     await assertCompanyGstin(ctx.db, ctx.company, gstin);
@@ -310,6 +311,26 @@ async function ownerOf(db: DbOrTx, company: CompanyRow): Promise<AuthUser> {
 }
 
 /** The `gst.returns.recover` job: returns whose filing answer was lost, settled from the portal's tracker. */
+type GstAction = 'save' | 'offset' | 'proceed' | 'evc' | 'file';
+
+/** Each step of filing, counted once it succeeds: which return and which step, nothing from it. */
+function tracked<K extends OperationId>(handler: Handler<K>, action: GstAction): Handler<K> {
+  return async (ctx) => {
+    const result = await handler(ctx);
+    track(ctx, 'gst_return_action', { returnType: String((ctx.params as { returnType?: string }).returnType), action });
+    return result;
+  };
+}
+
+export const gstFilingHandlers = {
+  ...filingHandlers,
+  saveGstReturn: tracked(filingHandlers.saveGstReturn, 'save'),
+  offsetGstReturn: tracked(filingHandlers.offsetGstReturn, 'offset'),
+  proceedGstReturn: tracked(filingHandlers.proceedGstReturn, 'proceed'),
+  requestGstReturnEvc: tracked(filingHandlers.requestGstReturnEvc, 'evc'),
+  fileGstReturn: tracked(filingHandlers.fileGstReturn, 'file'),
+};
+
 export async function recoverLostFilings(deps: Deps): Promise<number> {
   const rows = await deps.db.select().from(R).where(and(eq(R.status, 'submitted'), eq(R.lastError, ANSWER_LOST)));
   let settled = 0;

@@ -1,3 +1,4 @@
+import { trackForCompany } from '../../analytics/track';
 import { and, asc, count, desc, eq, exists, gte, ilike, isNotNull, isNull, lt, or, sql, type SQL } from 'drizzle-orm';
 import type { Schema } from '@esmart/api-contract';
 import { schema } from '@esmart/db';
@@ -317,8 +318,9 @@ export const platformHandlers = defineHandlers({
         before: snapshot(current, company.plan),
         after: snapshot(subscription, plan),
       });
-      return { company: updated, subscription };
+      return { company: updated, subscription, fromPlan: company.plan };
     });
+    if (result.fromPlan !== result.company.plan) await trackForCompany(ctx.deps, result.company.id, 'plan_changed', { fromPlan: result.fromPlan, toPlan: result.company.plan }, 'admin');
     const provider = result.subscription.provider;
     return {
       company: companyToPlatform(result.company, result.subscription.status),

@@ -3,6 +3,7 @@ import type { Schema } from '@esmart/api-contract';
 import { schema } from '@esmart/db';
 import { defineHandlers } from '../../context';
 import { ApiError } from '../../http/errors';
+import { track } from '../../analytics/track';
 import { recordChange } from '../../lib/audit';
 import { encrypt } from '../../lib/crypto';
 import { claimMatched, decide, fetchGstr2b, importGstr2b, reconciliation } from './gstr2b';
@@ -124,6 +125,7 @@ export const gstr2bHandlers = defineHandlers({
     await assertCompanyGstin(ctx.db, ctx.company, gstin);
     const { lines } = await importGstr2b(ctx.db, ctx.company, ctx.user.id, gstin, period, fileName, contentBase64, ctx.now);
     await recordChange(ctx.db, ctx.user, { companyId: ctx.company.id, action: `imported the GSTR-2B file for ${period}`, entityType: 'company', entityId: ctx.company.id, entityLabel: gstin, version: ctx.company.version, after: { fileName, lines } });
+    track(ctx, 'gstr2b_imported');
     return reconciliation(ctx.db, ctx.company, gstin, period);
   },
 

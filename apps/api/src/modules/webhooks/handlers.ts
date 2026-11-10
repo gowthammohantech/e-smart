@@ -5,6 +5,7 @@ import type { PaymentMethod, PlanTier } from '@esmart/core/types';
 import { schema } from '@esmart/db';
 import type { AuthUser, WebhookCtx, WebhookHandlers } from '../../context';
 import { unauthorized } from '../../http/errors';
+import { trackForCompany } from '../../analytics/track';
 import { recordChange, type DbOrTx } from '../../lib/audit';
 import { safeEqual, sha256 } from '../../lib/crypto';
 import { newId } from '../../lib/ids';
@@ -194,6 +195,7 @@ async function subscriptionCharged(ctx: WebhookCtx, tx: DbOrTx, eventId: string,
   if (company.plan !== plan) {
     const [updated] = await tx.update(schema.companies).set({ plan, version: company.version + 1, updatedAt: ctx.now }).where(eq(schema.companies.id, companyId)).returning();
     if (actor) await recordChange(tx, actor, { companyId, action: `plan changed to ${plan}`, entityType: 'company', entityId: companyId, entityLabel: company.name, version: updated.version, before: { plan: company.plan }, after: { plan } });
+    void trackForCompany(ctx.deps, companyId, 'plan_changed', { fromPlan: company.plan, toPlan: plan });
   }
   if (actor) await recordChange(tx, actor, { companyId, action: eventType, entityType: 'subscription', entityId: companyId, entityLabel: plan, version: row.version });
 }
@@ -281,6 +283,7 @@ async function subscriptionEnded(ctx: WebhookCtx, tx: DbOrTx, eventId: string, e
   if (company.plan !== 'free') {
     const [updated] = await tx.update(schema.companies).set({ plan: 'free', version: company.version + 1, updatedAt: ctx.now }).where(eq(schema.companies.id, company.id)).returning();
     if (actor) await recordChange(tx, actor, { companyId: company.id, action: 'plan changed to free', entityType: 'company', entityId: company.id, entityLabel: company.name, version: updated.version, before: { plan: company.plan }, after: { plan: 'free' } });
+    void trackForCompany(ctx.deps, company.id, 'subscription_ended', { plan: company.plan });
   }
   if (actor) await recordChange(tx, actor, { companyId: company.id, action: eventType, entityType: 'subscription', entityId: company.id, entityLabel: row.plan, version: row.version });
 }

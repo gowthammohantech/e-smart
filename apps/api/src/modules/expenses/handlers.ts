@@ -10,6 +10,7 @@ import { defineHandlers, type Ctx } from '../../context';
 import { checkIfMatch, setEtag } from '../../http/etag';
 import { conflict, notFound, planUpgradeRequired, preconditionFailed, unprocessable, type Issue } from '../../http/errors';
 import { keyset } from '../../http/pagination';
+import { track } from '../../analytics/track';
 import { recordChange, type DbOrTx } from '../../lib/audit';
 import { newId } from '../../lib/ids';
 import { assignNumber } from '../../lib/numbering';
@@ -266,6 +267,7 @@ export const expensesHandlers = defineHandlers({
       await recordChange(tx, ctx.user, { companyId: ctx.company.id, action: 'created', entityType: 'expense', entityId: created.id, entityLabel: created.number, version: created.version, after: wire });
       return created;
     });
+    track(ctx, 'expense_created', { hasTax: row.taxAmountMinor > 0 });
     setEtag(ctx.reply, row.version);
     return toWire(ctx.db, row);
   },

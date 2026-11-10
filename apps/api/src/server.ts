@@ -3,7 +3,7 @@ import { buildApp } from './app';
 import { loadConfig } from './config';
 import { startBackground } from './jobs';
 import { createProviders } from './providers';
-import { reportError } from './lib/reporter';
+import { reportError, setErrorReporter } from './lib/reporter';
 
 const config = loadConfig();
 const pool = createPool(config.DATABASE_URL);
@@ -11,6 +11,13 @@ const db = createDb(pool);
 const providers = createProviders(config, console, db);
 const deps = { db, pool, config, providers, now: () => new Date() };
 const app = await buildApp(deps);
+
+// Crashes and 500s also go to PostHog error tracking, anonymously: the error, the route and the
+// request id (to find it in the logs), never who sent it or the request body.
+setErrorReporter((err, ctx) => {
+  const where = Object.fromEntries(Object.entries({ requestId: ctx.requestId, route: ctx.route, job: ctx.source, fatal: ctx.fatal }).filter(([, v]) => v !== undefined));
+  providers.analytics.captureException(err, undefined, { source: 'api', ...where });
+});
 
 // Scheduled work and queued jobs (apps/api/src/jobs), unless a separate worker service does them.
 const stopBackground = config.WORKER === 'off' ? async () => {} : startBackground(deps, app.log, { concurrency: config.WORKER_CONCURRENCY });
@@ -20,6 +27,8 @@ async function shutdown(signal: string) {
   // Running jobs finish (or go back to the queue) before the database closes.
   await stopBackground();
   await app.close();
+  // Events still queued for PostHog go out before the process ends.
+  await providers.analytics.shutdown().catch(() => {});
   await pool.end();
   process.exit(0);
 }

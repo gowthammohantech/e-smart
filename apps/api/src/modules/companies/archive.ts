@@ -2,6 +2,7 @@ import { and, eq, isNull, ne, sql } from 'drizzle-orm';
 import { schema } from '@esmart/db';
 import { defineHandlers } from '../../context';
 import { conflict, forbidden, preconditionFailed, unprocessable, upstream } from '../../http/errors';
+import { identifyCompany, track } from '../../analytics/track';
 import { recordChange } from '../../lib/audit';
 import { newId } from '../../lib/ids';
 import { reauthenticate } from '../me/deleteAccount';
@@ -71,6 +72,8 @@ export const companyArchiveHandlers = defineHandlers({
       });
       return updated;
     });
+    identifyCompany(ctx, row);
+    track(ctx, 'company_archived', {}, { company: row });
     return companyWithImages(ctx.deps, ctx.db, row);
   },
 
@@ -89,6 +92,8 @@ export const companyArchiveHandlers = defineHandlers({
       await recordChange(tx, ctx.user, { companyId: company.id, action: 'restored', entityType: 'company', entityId: company.id, entityLabel: company.name, version: updated.version });
       return updated;
     });
+    identifyCompany(ctx, row);
+    track(ctx, 'company_restored', {}, { company: row });
     return companyWithImages(ctx.deps, ctx.db, row);
   },
 });

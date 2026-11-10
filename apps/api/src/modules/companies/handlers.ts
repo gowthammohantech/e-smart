@@ -9,6 +9,7 @@ import { defineHandlers } from '../../context';
 import { checkIfMatch, setEtag } from '../../http/etag';
 import { conflict, forbidden, invalid, preconditionFailed, unprocessable, type Issue } from '../../http/errors';
 import { financialYearOf } from '@esmart/core/lib/date';
+import { identifyCompany, track } from '../../analytics/track';
 import { recordChange } from '../../lib/audit';
 import { newId } from '../../lib/ids';
 import { addressTo } from '../../lib/wire';
@@ -89,6 +90,8 @@ export const companiesHandlers = defineHandlers({
       await logCompanyDefaults(tx, companyId);
       return company;
     });
+    identifyCompany(ctx, row);
+    track(ctx, 'business_created', { businessType: row.businessType, taxRegime: row.taxRegime, stateCode: row.addressStateCode, branchCount: branches.length }, { company: row });
     setEtag(ctx.reply, row.version);
     return companyToWire(ctx.deps, row);
   },
@@ -165,6 +168,9 @@ export const companiesHandlers = defineHandlers({
       });
       return updated;
     });
+    identifyCompany(ctx, row);
+    const layoutOf = (t: unknown) => (t as { layout?: string } | null)?.layout ?? 'standard';
+    if (layoutOf(row.invoiceTemplate) !== layoutOf(current.invoiceTemplate)) track(ctx, 'invoice_template_changed', { template: layoutOf(row.invoiceTemplate), scope: 'company' }, { company: row });
     setEtag(ctx.reply, row.version);
     return companyWithImages(ctx.deps, ctx.db, row);
   },

@@ -218,6 +218,12 @@ const Env = z.object({
   LIXI_MAX_TOOL_ROUNDS: z.coerce.number().int().min(1).max(20).default(8),
   /** Lixi questions per user per minute; each one can cost several model calls. */
   LIXI_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().default(20),
+  /** PostHog project API key (phc_…). Unset: product analytics stays in memory (development, tests). */
+  POSTHOG_API_KEY: z.string().optional(),
+  /** PostHog Cloud EU; the key must belong to a project in the same region. */
+  POSTHOG_HOST: z.string().url().default('https://eu.i.posthog.com'),
+  /** Off sends nothing even with a key set. */
+  ANALYTICS_ENABLED: bool.default(true),
 }).superRefine((env, ctx) => {
   if (env.SMS_PROVIDER === 'pay4sms' && !env.PAY4SMS_TOKEN?.trim()) {
     ctx.addIssue({ code: 'custom', path: ['PAY4SMS_TOKEN'], message: 'PAY4SMS_TOKEN must be set for SMS_PROVIDER=pay4sms.' });

@@ -13,21 +13,21 @@ type Spec =
   /** A small whole number (a count, not an amount). */
   | { type: 'count' };
 
-const token: Spec = { type: 'token' };
-const bool: Spec = { type: 'bool' };
-const count: Spec = { type: 'count' };
-const oneOf = (...values: string[]): Spec => ({ type: 'enum', values });
+const token = { type: 'token' } as const satisfies Spec;
+const bool = { type: 'bool' } as const satisfies Spec;
+const count = { type: 'count' } as const satisfies Spec;
+const oneOf = (...values: string[]) => ({ type: 'enum', values }) as const satisfies Spec;
 
 const PLAN = oneOf('free', 'basic', 'pro', 'business');
 const SIZE = oneOf('0', '1-10', '11-50', '51-200', '201-1000', '1000+');
 
 /** Properties any event may carry (set by the API or the app wrapper, never from user input). */
-const COMMON: Record<string, Spec> = {
+const COMMON = {
   platform: oneOf('ios', 'android', 'web', 'desktop', 'server'),
   appVersion: token,
   build: token,
   source: oneOf('app', 'api', 'webhook', 'admin', 'lixi'),
-};
+} satisfies Record<string, Spec>;
 
 export const ANALYTICS_EVENTS = {
   signed_up: {},
@@ -44,7 +44,7 @@ export const ANALYTICS_EVENTS = {
   document_sent: { kind: token, channel: token },
 
   expense_created: { hasTax: bool },
-  payment_recorded: { direction: oneOf('in', 'out'), mode: token, fromBankLine: bool, allocations: count },
+  payment_recorded: { direction: oneOf('received', 'paid'), mode: token, fromBankLine: bool, allocations: count },
 
   gst_return_action: { returnType: token, action: oneOf('save', 'offset', 'proceed', 'evc', 'file') },
   gstr2b_imported: {},
@@ -56,6 +56,7 @@ export const ANALYTICS_EVENTS = {
 
   checkout_started: { toPlan: PLAN },
   plan_changed: { fromPlan: PLAN, toPlan: PLAN },
+  subscription_cancel_requested: { plan: PLAN },
   subscription_ended: { plan: PLAN },
 
   invoice_template_changed: { template: token, scope: oneOf('company', 'document') },
@@ -71,7 +72,7 @@ export type AnalyticsEvent = keyof typeof ANALYTICS_EVENTS;
 type Value<S> = S extends { type: 'bool' } ? boolean : S extends { type: 'count' } ? number : string;
 export type AnalyticsProps<E extends AnalyticsEvent> = {
   [K in keyof (typeof ANALYTICS_EVENTS)[E]]?: Value<(typeof ANALYTICS_EVENTS)[E][K]> | null;
-} & { [K in keyof typeof COMMON]?: string };
+} & { [K in keyof typeof COMMON]?: string | null };
 
 /** Properties allowed on the company group (PostHog group type `company`). */
 export const COMPANY_GROUP_PROPS: Record<string, Spec> = {
@@ -91,7 +92,7 @@ export const PERSON_PROPS: Record<string, Spec> = {
   role: token,
   locale: token,
   createdAt: token,
-  platform: COMMON.platform!,
+  platform: COMMON.platform,
 };
 
 const GSTIN_SHAPE = /^\d{2}[A-Z]{5}\d{4}[A-Z][0-9A-Z]Z[0-9A-Z]$/i;
@@ -132,6 +133,8 @@ export function sanitize(event: string, props?: Record<string, unknown>): Record
   return pick({ ...COMMON, ...specs }, props);
 }
 
+/** Only the properties every event may carry (platform, version, source). */
+export const sanitizeCommon = (props?: Record<string, unknown>) => pick(COMMON, props);
 export const sanitizeCompany = (props?: Record<string, unknown>) => pick(COMPANY_GROUP_PROPS, props);
 export const sanitizePerson = (props?: Record<string, unknown>) => pick(PERSON_PROPS, props);
 

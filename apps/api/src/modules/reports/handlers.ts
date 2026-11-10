@@ -1,4 +1,5 @@
 import { inArray } from 'drizzle-orm';
+import { track } from '../../analytics/track';
 import type { Schema } from '@esmart/api-contract';
 import { PAYMENT_METHODS } from '@esmart/core/data/masters';
 import { PAYABLE_KINDS, RECEIVABLE_KINDS, isCancelled } from '@esmart/core/domain/documentStates';
@@ -292,6 +293,7 @@ export const reportsHandlers = defineHandlers({
 
     const accept = String(ctx.req.headers.accept ?? '');
     const wants = (type: string) => accept.includes(type) && !accept.includes('application/json');
+    track(ctx, 'report_viewed', { report: key, format: wants('text/csv') ? 'csv' : wants('application/pdf') ? 'pdf' : 'screen' });
     if (wants('text/csv') || wants('application/pdf')) {
       const category = key === 'expense-summary' ? Object.fromEntries((await loadExpenseCategories(scope)).map((c) => [c.id, c.name])) : {};
       const table = tableOf(key, body, { category });
