@@ -414,6 +414,13 @@
       "when": 1794249850204,
       "tag": "0058_document_print_layout",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1794272195423,
+      "tag": "0059_analytics_opt_out",
+      "breakpoints": true
     }
   ]
 }

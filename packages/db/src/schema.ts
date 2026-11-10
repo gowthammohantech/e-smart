@@ -170,6 +170,8 @@ export const users = pgTable("users", {
 	recoveryCodeHashes: jsonb("recovery_code_hashes").$type<string[]>(),
 	/** Notification kinds this person turned off for push (they still appear in the app). */
 	pushMuted: jsonb("push_muted").$type<string[]>().default([]).notNull(),
+	/** They turned off "Share usage data": nothing about them goes to product analytics. */
+	analyticsOptOut: boolean("analytics_opt_out").default(false).notNull(),
 	version: integer().default(1).notNull(),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),

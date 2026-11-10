@@ -36,6 +36,7 @@ export const meHandlers = defineHandlers({
       ...(defaultCompanyId ? { defaultCompanyId } : {}),
       platformRole: row.platformRole,
       ...(ctx.user.demo ? { demo: true } : {}),
+      shareUsageData: !row.analyticsOptOut && !ctx.user.demo,
     };
   },
 
@@ -127,6 +128,17 @@ export const meHandlers = defineHandlers({
     const pushMuted = [...new Set(ctx.body.pushMuted)];
     await ctx.db.update(U).set({ pushMuted, updatedAt: ctx.now }).where(eq(U.id, ctx.user.id));
     return { pushMuted };
+  },
+
+  async getPrivacyPreferences(ctx) {
+    const [row] = await ctx.db.select({ optOut: U.analyticsOptOut }).from(U).where(eq(U.id, ctx.user.id));
+    return { shareUsageData: !row?.optOut };
+  },
+
+  async savePrivacyPreferences(ctx) {
+    const optOut = !ctx.body.shareUsageData;
+    await ctx.db.update(U).set({ analyticsOptOut: optOut, updatedAt: ctx.now }).where(eq(U.id, ctx.user.id));
+    return { shareUsageData: !optOut };
   },
 
   /** A token that moves to another user (a handed-over phone) follows the new user. */

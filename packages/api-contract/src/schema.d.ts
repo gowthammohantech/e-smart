@@ -342,6 +342,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/me/privacy-preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Whether this person shares anonymous usage data (product analytics and error reports) */
+        get: operations["getPrivacyPreferences"];
+        put: operations["savePrivacyPreferences"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me/push-tokens": {
         parameters: {
             query?: never;
@@ -4719,6 +4736,8 @@ export interface components {
             platformRole?: components["schemas"]["PlatformRole"] | null;
             /** @description The public demo account. Everything reads; every write is refused with 403 DEMO_READ_ONLY. */
             demo?: boolean;
+            /** @description This person shares anonymous usage data; false means the apps send no analytics for them */
+            shareUsageData?: boolean;
         };
         /** @enum {string} */
         PlanTier: "free" | "basic" | "pro" | "business";
@@ -6861,6 +6880,10 @@ export interface components {
             /** @description Kinds not pushed to this person's devices */
             pushMuted: ("invoiceSent" | "paymentReceived" | "invoiceOverdue" | "lowStock" | "compliance" | "syncFailure" | "system")[];
         };
+        PrivacyPreferences: {
+            /** @description Anonymous usage events and error reports go to product analytics (never amounts, names or tax numbers) */
+            shareUsageData: boolean;
+        };
         MfaStatus: {
             /** @description An authenticator is set up */
             enrolled: boolean;
@@ -7962,6 +7985,51 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NotificationPreferences"];
+                };
+            };
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    getPrivacyPreferences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrivacyPreferences"];
+                };
+            };
+        };
+    };
+    savePrivacyPreferences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PrivacyPreferences"];
+            };
+        };
+        responses: {
+            /** @description Saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrivacyPreferences"];
                 };
             };
             422: components["responses"]["Unprocessable"];

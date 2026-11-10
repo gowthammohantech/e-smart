@@ -38,6 +38,10 @@ export type AuthUser = {
   mfaVerified: boolean;
   /** A user of the public demo account: reads only (guards.ts refuses every other write). */
   demo?: boolean;
+  /** They turned off "Share usage data": no analytics events for them. */
+  analyticsOptOut?: boolean;
+  /** The user's own sign-up time, for analytics person properties. */
+  createdAt?: Date;
 };
 
 export type CompanyRow = typeof schema.companies.$inferSelect;

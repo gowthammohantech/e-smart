@@ -38,6 +38,8 @@ async function loadUser(deps: Deps, claims: AccessClaims): Promise<AuthUser | nu
     mfaEnrolled: !!row.u.totpEnabledAt,
     mfaVerified: !!row.mfaVerifiedAt,
     demo: row.isDemo,
+    analyticsOptOut: row.u.analyticsOptOut,
+    createdAt: row.u.createdAt,
   };
 }
 

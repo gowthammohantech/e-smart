@@ -463,6 +463,32 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/NotificationPreferences' }
         '422': { $ref: '#/components/responses/Unprocessable' }
+  /me/privacy-preferences:
+    get:
+      tags: [Me]
+      operationId: getPrivacyPreferences
+      summary: Whether this person shares anonymous usage data (product analytics and error reports)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PrivacyPreferences' }
+    put:
+      tags: [Me]
+      operationId: savePrivacyPreferences
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PrivacyPreferences' }
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PrivacyPreferences' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
   /me/push-tokens:
     post:
       tags: [Me]
@@ -6741,6 +6767,9 @@ components:
         demo:
           type: boolean
           description: The public demo account. Everything reads; every write is refused with 403 DEMO_READ_ONLY.
+        shareUsageData:
+          type: boolean
+          description: This person shares anonymous usage data; false means the apps send no analytics for them
     PlanTier: { type: string, enum: [free, basic, pro, business] }
     UserRole: { type: string, enum: [owner, admin, accountant, sales, viewer] }
     InviteDetails:
@@ -8711,6 +8740,13 @@ components:
           type: array
           description: Kinds not pushed to this person's devices
           items: { type: string, enum: [invoiceSent, paymentReceived, invoiceOverdue, lowStock, compliance, syncFailure, system] }
+    PrivacyPreferences:
+      type: object
+      required: [shareUsageData]
+      properties:
+        shareUsageData:
+          type: boolean
+          description: Anonymous usage events and error reports go to product analytics (never amounts, names or tax numbers)
     MfaStatus:
       type: object
       required: [enrolled, verified, recoveryCodesLeft]
