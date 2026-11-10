@@ -428,6 +428,13 @@
       "when": 1794292378048,
       "tag": "0060_invoice_bank_account",
       "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1794294245223,
+      "tag": "0061_row_level_security",
+      "breakpoints": true
     }
   ]
 }
