@@ -585,7 +585,7 @@ ${url}`;
             title={receivable ? tr('common:action.recordPayment') : tr('sales:detail.paySupplier')}
             icon={receivable ? 'cash-plus' : 'cash-minus'}
             onPress={() => router.push(paymentRoute as never)}
-            fullWidth={!desktop}
+            fullWidth
           />
         ) : null}
         {canAdjust && !recordPending ? (
@@ -594,7 +594,7 @@ ${url}`;
             icon="swap-horizontal"
             variant="secondary"
             onPress={() => router.push(adjustRoute as never)}
-            fullWidth={!desktop}
+            fullWidth
           />
         ) : null}
       </>
@@ -644,12 +644,8 @@ ${url}`;
           </View>
           )}
 
-          {desktop ? (
-            // A desktop keeps the buttons at their own width, side by side when they fit.
-            payButtons ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm }}>{payButtons}</View> : null
-          ) : (
-            payButtons
-          )}
+          {/* Full width in the narrow side column, one above the other, as on a phone. */}
+          {payButtons}
         </Card>
       ) : null}
     </>
@@ -693,8 +689,8 @@ ${url}`;
   );
   const totalsCard = (
     <>
-      {/* Totals: a block at the right of a desktop's main column, under the amounts it adds up. */}
-      <Card style={[{ marginTop: t.spacing.md }, desktop ? { alignSelf: 'flex-end', width: '100%', maxWidth: 440 } : null]}>
+      {/* Totals: as wide as the lines above them, the figures at the card's right edge as on a printed invoice. */}
+      <Card style={{ marginTop: t.spacing.md }}>
         <TotalsPanel
           totals={doc.totals}
           currency={doc.currency}
@@ -1138,8 +1134,6 @@ ${url}`;
               showsVerticalScrollIndicator={SHOW_SCROLLBAR}
             >
               <SplitPane
-                // Capped as the editor is, so the main column's rows and notes don't run on across a wide screen.
-                style={{ maxWidth: 1180 }}
                 main={
                   <View style={{ gap: t.spacing.md }}>
                     {headerCard}

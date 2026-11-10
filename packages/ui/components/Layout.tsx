@@ -73,17 +73,16 @@ export function FormContainer({
  * Form fields side by side on a desktop, stacked on a phone. On a phone it
  * adds no wrapper, so the fields keep the parent column's spacing.
  *
- * Every child slot keeps its column on a desktop, shown or not: a row of a date and a due date
- * that hides the due date leaves the date at half the row, not stretched across it. `columns`
- * sets the count when the children don't say it (e.g. a single field meant for a third).
+ * On a desktop the row is shared between the fields shown, and a lone field keeps half of it
+ * rather than stretching across. So rows of halves line up down a form whichever fields a
+ * document shows. `columns` fixes the count instead (e.g. a single field meant for a third).
  */
 export function FieldRow({ children, columns }: { children: React.ReactNode; columns?: number }) {
   const t = useTheme();
   const desktop = useIsDesktop();
   if (!desktop) return <>{children}</>;
-  // Children.count counts null and false slots too, which is what holds a hidden field's place.
-  const slots = Math.max(columns ?? 0, React.Children.count(children));
   const shown = React.Children.toArray(children).filter(Boolean);
+  const slots = Math.max(columns ?? (shown.length === 1 ? 2 : 0), shown.length);
   return (
     <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: t.spacing.lg }}>
       {shown.map((child, i) => (

@@ -569,9 +569,6 @@ export function PickerField({
   );
 }
 
-/** How far a switch may sit from the start of its label on a desktop. */
-const SWITCH_MAX_WIDTH = 560;
-
 export function SwitchField({
   label,
   description,
@@ -588,7 +585,6 @@ export function SwitchField({
   style?: StyleProp<ViewStyle>;
 }) {
   const t = useTheme();
-  const desktop = useIsDesktop();
   return (
     <View
       style={[
@@ -599,8 +595,6 @@ export function SwitchField({
           paddingVertical: t.spacing.sm,
           opacity: disabled ? 0.5 : 1,
         },
-        // On a desktop the switch stays within reach of its label rather than at the far edge of the page.
-        desktop ? { maxWidth: SWITCH_MAX_WIDTH } : null,
         style,
       ]}
     >

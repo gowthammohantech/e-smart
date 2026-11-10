@@ -68,7 +68,7 @@ import {
 } from './useDocumentDraft';
 import { LineEditorSheet } from './LineEditorSheet';
 import { LineGrid } from './LineGrid';
-import { SHOW_SCROLLBAR, useFieldWidth, useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { useQueryParams } from '../../navigation/queryParams';
 import { useCanWrite } from '../../remote/connectivity';
 import { useSaveOnline } from '../../remote/save';
@@ -113,8 +113,6 @@ const STEPS = ['party', 'items', 'extras', 'review'] as const;
 /** The documents GST is charged on, where reverse charge can apply. */
 const TAX_KINDS: DocumentKind[] = ['invoice', 'salesReturn', 'purchaseBill', 'purchaseReturn', ...NOTE_KINDS];
 const NOTE_REASONS: NoteReason[] = ['discount', 'priceChange', 'taxCorrection', 'deficiency', 'other'];
-// Desktop cap: the line grid (about 712px) and the 360px summary side by side.
-const EDITOR_MAX_WIDTH = 1180;
 /** The documents goods travel with, where a vehicle is worth recording. */
 const VEHICLE_KINDS: DocumentKind[] = ['invoice', 'salesOrder', 'delivery', 'salesReturn', 'purchaseOrder', 'goodsReceipt', 'purchaseBill', 'purchaseReturn'];
 
@@ -196,7 +194,6 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   const blocked = !useCanWrite();
   const insets = useSafeAreaInsets();
   const desktop = useIsDesktop();
-  const fw = useFieldWidth();
   // Whether these pickers show at all, so a desktop doesn't keep an empty row for them.
   const hasCostCentres = useCostCentres().length > 0;
   const hasVehicles = useVehicles().length > 0;
@@ -1070,14 +1067,15 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
 
 
       {draft.currency !== baseCurrency ? (
+        <FieldRow>
         <TextField
           label={`${tr('common:totals.exchangeRate')} (1 ${draft.currency} → ${baseCurrency})`}
           {...rateText}
           keyboardType="decimal-pad"
           icon="swap-horizontal"
           hint={tr('sales:editor.rateStored')}
-          containerStyle={fw('md')}
         />
+        </FieldRow>
       ) : null}
     </View>
   );
@@ -1243,7 +1241,9 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
         />
       ) : null}
       {billTds ? (
-        <View style={[{ gap: t.spacing.xs }, desktop ? { maxWidth: '50%' } : null]}>
+        // Half the row on a desktop, lined up with the other half-width fields.
+        <FieldRow>
+        <View style={{ gap: t.spacing.xs }}>
           <PickerField
             label={tr('purchases:tds.section')}
             value={tdsSectionLabel(draft.tdsSection ?? parties.find((p) => p.id === draft.partyId)?.tdsSection)}
@@ -1261,6 +1261,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
             </View>
           ) : null}
         </View>
+        </FieldRow>
       ) : null}
 
       {saleTds ? (
@@ -1295,14 +1296,15 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       ) : null}
 
       {kind === 'invoice' ? (
+        <FieldRow>
         <PickerField
-          containerStyle={desktop ? { maxWidth: '50%' } : undefined}
           label={tr('sales:tcs.section')}
           value={draft.tcsSection && draft.tcsSection !== 'none' ? `${tcsSection(draft.tcsSection)?.label ?? draft.tcsSection} · ${tcsSection(draft.tcsSection)?.nature ?? ''}` : tr('sales:tcs.none')}
           onPress={() => setTcsOpen(true)}
           icon="cash-plus"
           hint={totals.tcs ? tr('sales:tcs.willCollect', { amount: formatMoney(totals.tcs) }) : tr('sales:tcs.hint')}
         />
+        </FieldRow>
       ) : null}
 
       {desktop ? (
@@ -1433,6 +1435,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
             size="sm"
           />
           {draft.roundOffManual && (
+            <FieldRow>
             <AmountField
               label={tr('sales:editor.roundOffAmount')}
               value={roundOffText}
@@ -1444,8 +1447,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
               hint={tr('sales:editor.roundOffAmountHint')}
               error={roundOffError}
               allowNegative
-              containerStyle={fw('md')}
             />
+            </FieldRow>
           )}
         </View>
       )}
@@ -1558,7 +1561,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       style={{ flex: 1 }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <FormContainer wide style={desktop ? { maxWidth: EDITOR_MAX_WIDTH } : undefined}>
+      {/* The whole page column, so the page header's buttons line up with the summary beside the form. */}
+      <FormContainer wide style={desktop ? { maxWidth: '100%' } : undefined}>
         {desktop ? (
           <>
             <Stack.Screen
