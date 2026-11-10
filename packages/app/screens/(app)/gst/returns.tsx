@@ -83,6 +83,14 @@ export default function GstReturnsScreen() {
   // Until the GSTINs are known, "no GSTIN" isn't said; until a period's figures come, the last period's aren't shown.
   const [gstinsLoaded, setGstinsLoaded] = useState(false);
   const [loadState, setLoadState] = useState<'loading' | 'failed' | 'done'>('loading');
+  // Another period or GSTIN: what was on screen belongs to the last one, so it clears as this one loads.
+  const scope = `${gstin}|${period}|${company.id}`;
+  const [shownScope, setShownScope] = useState(scope);
+  if (shownScope !== scope) {
+    setShownScope(scope);
+    setView(null);
+    setLoadState('loading');
+  }
   // Filing with the EVC can't be undone: it is asked first.
   const [askFile, setAskFile] = useState<ReturnType | null>(null);
   const branches = useBranches();
@@ -118,9 +126,6 @@ export default function GstReturnsScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gstin, period, company.id]);
   useEffect(() => {
-    // Another period or GSTIN: what was on screen belongs to the last one.
-    setView(null);
-    setLoadState('loading');
     void load();
   }, [load]);
 
