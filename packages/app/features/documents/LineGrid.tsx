@@ -10,9 +10,10 @@ import { WEB_INPUT_RESET } from '@esmart/ui/components/Field';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import type { DocumentLine, GstFlags, ItcEligibility, TaxCategory } from '@esmart/core/types';
-import { calculateLine } from '@esmart/core/domain/lineCalc';
+import { calculateLine, shownCessRate } from '@esmart/core/domain/lineCalc';
 import type { TaxContext } from '@esmart/core/domain/taxEngine';
 import { formatMoney, formatPercent, sanitizeAmountInput } from '@esmart/core/lib/format';
+import { lineRateLabel } from './lineRate';
 import { fromMajor, subtract, toMajor } from '@esmart/core/lib/money';
 import { unitDecimals, unitShortName } from '@esmart/core/data/masters';
 import { useCostCentres } from '../../store/books';
@@ -267,7 +268,7 @@ export function LineGrid({
                 onPress={() => setTaxFor(line)}
                 disabled={!!line.gst?.reimbursement}
                 accessibilityRole="button"
-                accessibilityLabel={`${label(tr('sales:line.tax'))}: ${formatPercent(line.taxRate)}`}
+                accessibilityLabel={`${label(tr('sales:line.tax'))}: ${lineRateLabel(line)}`}
                 style={(state) => [
                   {
                     flexDirection: 'row',
@@ -282,9 +283,16 @@ export function LineGrid({
                   focusRing(t, (state as WebPressState).focused),
                 ]}
               >
-                <Text variant="small" style={{ fontVariant: ['tabular-nums'] }}>
-                  {formatPercent(line.taxRate)}
-                </Text>
+                <View>
+                  <Text variant="small" style={{ fontVariant: ['tabular-nums'] }}>
+                    {formatPercent(line.taxRate)}
+                  </Text>
+                  {shownCessRate(line) ? (
+                    <Text variant="micro" tone="muted" numberOfLines={1} style={{ fontVariant: ['tabular-nums'] }}>
+                      {tr('sales:line.plusCess', { cess: formatPercent(shownCessRate(line)) })}
+                    </Text>
+                  ) : null}
+                </View>
                 {line.taxInclusive ? (
                   <Text variant="micro" tone="primary" weight="600">
                     {tr('sales:editor.inclusive')}

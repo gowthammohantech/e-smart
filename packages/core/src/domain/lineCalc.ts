@@ -104,6 +104,8 @@ export type LineBreakdown = {
   cessRate: number;
   /** GST and cess on the line, reverse-charge tax included. */
   taxAmount: Money;
+  /** The cess part of `taxAmount`; the rest is GST. */
+  cessAmount: Money;
   /** The buyer pays this line's tax to the government; it isn't in `total`. */
   reverseCharge: boolean;
   /** A pure-agent reimbursement: no tax, outside the taxable value. */
@@ -156,22 +158,27 @@ export function calculateLine(line: DocumentLine, currency: string, ctx: TaxCont
 
   let taxable: Money;
   let taxAmount: Money;
+  let cessAmount: Money;
 
   // Reverse-charge tax is never inside the supplier's price.
   if (line.taxInclusive && combined > 0 && !t.reverseCharge) {
     // The entered price already contains the tax: strip it back out.
     taxAmount = inclusiveTax(net, combined);
     taxable = subtract(net, taxAmount);
+    cessAmount = money(Math.round((taxAmount.minor * t.cessRate) / combined), currency);
   } else {
     taxable = net;
-    taxAmount = add(percent(net, t.rate), percent(net, t.cessRate));
+    cessAmount = percent(net, t.cessRate);
+    taxAmount = add(percent(net, t.rate), cessAmount);
   }
 
   // The line's share of the document's charges is taxed with it, on top of its own value.
   if (line.chargeShare?.minor) {
     const share = money(line.chargeShare.minor, currency);
+    const shareCess = percent(share, t.cessRate);
     taxable = add(taxable, share);
-    taxAmount = add(taxAmount, add(percent(share, t.rate), percent(share, t.cessRate)));
+    cessAmount = add(cessAmount, shareCess);
+    taxAmount = add(taxAmount, add(percent(share, t.rate), shareCess));
   }
 
   return {
@@ -182,6 +189,7 @@ export function calculateLine(line: DocumentLine, currency: string, ctx: TaxCont
     taxRate: t.rate,
     cessRate: t.cessRate,
     taxAmount,
+    cessAmount,
     reverseCharge: t.reverseCharge,
     reimbursement: t.reimbursement,
     total: t.reverseCharge ? taxable : add(taxable, taxAmount),
@@ -313,4 +321,14 @@ export function flattenTaxComponents(taxLines: TaxLine[], currency: string): Tax
     });
   });
   return Array.from(byLabel.values());
+}
+
+/**
+ * The cess rate a line shows beside its GST rate, 0 when none: only a taxable line (not exempt,
+ * nil-rated, non-GST or a reimbursement) carries cess.
+ */
+export function shownCessRate(line: Pick<DocumentLine, 'gst'>): number {
+  const g = line.gst;
+  if (!g?.cessRate || g.cessRate <= 0 || g.reimbursement || (g.supplyType ?? 'taxable') !== 'taxable') return 0;
+  return g.cessRate;
 }

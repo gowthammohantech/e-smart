@@ -70,6 +70,7 @@ import { RecurrenceSheet } from './RecurrenceSheet';
 import { ensurePushRegistered } from '../../remote/push';
 import { useGoBack } from '../../navigation/useGoBack';
 import { useItcBreakup } from './itcBreakup';
+import { lineRateLabel } from './lineRate';
 import { useFixedAssets } from '../../remote/fixedAssets';
 import { calculateLine } from '@esmart/core/domain/lineCalc';
 
@@ -676,7 +677,7 @@ ${url}`;
                 {line.discountValue > 0 ? ` · −${discountText(line)}` : ''}
               </Text>
               <View style={{ flexDirection: 'row', gap: 5, marginTop: 2 }}>
-                <Badge label={formatPercent(line.taxRate)} tone="neutral" size="sm" />
+                <Badge label={lineRateLabel(line)} tone="neutral" size="sm" />
                 {line.hsnCode ? <Badge label={`HSN ${line.hsnCode}`} tone="neutral" size="sm" /> : null}
               </View>
             </View>
@@ -956,7 +957,7 @@ ${url}`;
               </Cell>
             ),
           },
-          { key: 'tax', header: tr('sales:detail.taxRate'), width: 80, align: 'right', render: (line) => <Cell tone="muted">{formatPercent(line.taxRate)}</Cell> },
+          { key: 'tax', header: tr('sales:detail.taxRate'), width: 80, align: 'right', render: (line) => <Cell tone="muted">{lineRateLabel(line)}</Cell> },
           {
             key: 'amount',
             header: tr('sales:detail.lineAmount'),

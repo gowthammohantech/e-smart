@@ -3,6 +3,7 @@ import { formatDate } from '../../lib/date';
 import { money } from '../../lib/money';
 import { amountInWords } from '../../lib/amountInWords';
 import { unitShortName } from '../../data/masters';
+import { shownCessRate } from '../../domain/lineCalc';
 import { tint } from '../invoiceTemplate';
 import type { DocView } from '../docView';
 import { addressBlock, bankBlock, cancelledStrip, eInvoiceBlock, esc, logoTag, NOTE_REASON, printedCustomFields, reimbursementTable, signatureTag, SUPPLY_NOTE } from '../blocks';
@@ -32,7 +33,7 @@ export function standardLayout(view: DocView): string {
         <td class="num">${formatQty(line.quantity)} ${esc(unitShortName(line.unit))}</td>
         <td class="num">${formatMoney(line.unitPrice)}</td>
         ${tpl.showDiscountColumn ? `<td class="num">${discount}</td>` : ''}
-        ${tpl.showTaxColumn ? `<td class="num">${formatPercent(line.taxRate)}</td>` : ''}
+        ${tpl.showTaxColumn ? `<td class="num">${formatPercent(line.taxRate)}${shownCessRate(line) ? `<div class="sub">+ ${formatPercent(shownCessRate(line))} ${bi('sales:pdf.cess')}</div>` : ''}</td>` : ''}
         <td class="num strong">${formatMoney(gross)}</td>
       </tr>`;
     })

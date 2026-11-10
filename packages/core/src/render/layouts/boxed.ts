@@ -43,6 +43,8 @@ export function boxedLayout(view: DocView, variant: 'classic' | 'detailed', copy
   // Detailed: each line carries its discount, taxable value, tax and total.
   const taxes = detailed ? view.lineTaxes() : [];
   const showDisc = detailed && tpl.showDiscountColumn;
+  // Cess gets its own columns, beside GST, only when a line carries it.
+  const showCess = detailed && taxes.some((x) => x.cess.minor !== 0);
   const head = detailed
     ? `<tr>
         <th rowspan="2" class="sl">${bi('sales:pdf.slNo')}</th>
@@ -55,9 +57,10 @@ export function boxedLayout(view: DocView, variant: 'classic' | 'detailed', copy
         ${showDisc ? `<th colspan="2" class="ctr">${bi('sales:pdf.discount')}</th>` : ''}
         <th rowspan="2" class="num">${bi('sales:pdf.taxableAmount')}</th>
         <th colspan="2" class="ctr">${bi('sales:pdf.tax')}</th>
+        ${showCess ? `<th colspan="2" class="ctr">${bi('sales:pdf.cess')}</th>` : ''}
         <th rowspan="2" class="num">${bi('sales:pdf.totalAmount')}</th>
       </tr>
-      <tr>${showDisc ? `<th class="ctr">%</th><th class="num">${bi('sales:pdf.amt')}</th>` : ''}<th class="ctr">%</th><th class="num">${bi('sales:pdf.amt')}</th></tr>`
+      <tr>${showDisc ? `<th class="ctr">%</th><th class="num">${bi('sales:pdf.amt')}</th>` : ''}<th class="ctr">%</th><th class="num">${bi('sales:pdf.amt')}</th>${showCess ? `<th class="ctr">%</th><th class="num">${bi('sales:pdf.amt')}</th>` : ''}</tr>`
     : `<tr>
         <th class="sl">${bi('sales:pdf.slNo')}</th>
         <th>${bi('sales:pdf.description')}</th>
@@ -67,10 +70,13 @@ export function boxedLayout(view: DocView, variant: 'classic' | 'detailed', copy
         <th>${bi('sales:pdf.per')}</th>
         <th class="num">${bi('sales:pdf.amount')}</th>
       </tr>`;
-  const cols = detailed ? 11 + (showDisc ? 2 : 0) : 7;
+  const cols = detailed ? 11 + (showDisc ? 2 : 0) + (showCess ? 2 : 0) : 7;
 
   const describe = (line: (typeof view.items)[number]) =>
     `<div class="item">${esc(line.name)}</div>${line.description ? `<div class="sub">${esc(line.description)}</div>` : ''}${line.gst?.supplyType && line.gst.supplyType !== 'taxable' ? `<div class="sub">${SUPPLY_NOTE[line.gst.supplyType]}</div>` : ''}`;
+
+  // The tax column is GST alone when cess has columns of its own.
+  const gstOf = (t: (typeof taxes)[number]) => (showCess ? money(t.tax.minor - t.cess.minor, doc.currency) : t.tax);
 
   const rows = view.items
     .map((line, i) => {
@@ -100,7 +106,8 @@ export function boxedLayout(view: DocView, variant: 'classic' | 'detailed', copy
         ${showDisc ? `<td class="num">${discPct}</td><td class="num">${t && t.discount.minor ? formatMoney(t.discount) : ''}</td>` : ''}
         <td class="num">${t ? formatMoney(t.taxable) : ''}</td>
         <td class="num">${t?.rate ? formatPercent(t.rate) : ''}</td>
-        <td class="num">${t && t.tax.minor ? formatMoney(t.tax) : ''}</td>
+        <td class="num">${t && gstOf(t).minor ? formatMoney(gstOf(t)) : ''}</td>
+        ${showCess ? `<td class="num">${t?.cessRate && t.cess.minor ? formatPercent(t.cessRate) : ''}</td><td class="num">${t && t.cess.minor ? formatMoney(t.cess) : ''}</td>` : ''}
         <td class="num b">${t ? formatMoney(money(t.taxable.minor + (t.reverseCharge ? 0 : t.tax.minor), doc.currency)) : ''}</td>
       </tr>`;
     })

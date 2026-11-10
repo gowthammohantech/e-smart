@@ -250,7 +250,7 @@ export async function buildBusiness(api: DemoApi, p: Profile, ctx: BuildContext)
         hsnCode: s.hsn,
         trackInventory: goods && !s.capitalGoods,
         ...(goods && !s.capitalGoods && { openingStock: s.stock ?? 0, openingStockDate: opened, reorderLevel: s.reorder ?? 0 }),
-        ...((s.exempt || s.capitalGoods) && { gst: { ...(s.exempt && { supplyType: 'exempt' }), ...(s.capitalGoods && { capitalGoods: true }) } }),
+        ...((s.exempt || s.capitalGoods || (s.cess && p.registered)) && { gst: { ...(s.exempt && { supplyType: 'exempt' }), ...(s.capitalGoods && { capitalGoods: true }), ...(s.cess && p.registered && { cessRate: s.cess }) } }),
         ...(s.category && { categoryId: catIds.get(s.category) ?? null }),
         ...(s.brand && { brandId: brandIds.get(s.brand) ?? null }),
         customFields: goods && !s.rawMaterial ? { [warrantyField]: r.pick([6, 12, 24]) } : {},

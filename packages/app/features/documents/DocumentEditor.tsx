@@ -80,6 +80,7 @@ import { useLeaveGuard } from '../../components/useLeaveGuard';
 import { FROM_DOCUMENT, takeHandBack } from '../../navigation/handBack';
 import { tdsForDocument } from '../../store/tds';
 import { useItcBreakup } from './itcBreakup';
+import { lineRateLabel } from './lineRate';
 import { expectedSaleTds } from '@esmart/core/domain/tds';
 import { panOfGstin } from '@esmart/core/domain/gstin';
 import { CostCentreField } from '../books/CostCentreField';
@@ -1182,7 +1183,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
                       {line.name || tr('sales:editor.untitledLine')}
                     </Text>
                     <View style={{ flexDirection: 'row', gap: 5 }}>
-                      <Badge label={formatPercent(line.taxRate)} tone="neutral" size="sm" />
+                      <Badge label={lineRateLabel(line)} tone="neutral" size="sm" />
                       {line.taxInclusive ? <Badge label={tr('sales:editor.inclusive')} tone="info" size="sm" /> : null}
                       {line.hsnCode ? <Badge label={`HSN ${line.hsnCode}`} tone="neutral" size="sm" /> : null}
                     </View>
@@ -1805,7 +1806,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
                   value: l.id,
                   label: l.name,
                   description: `${formatQty(l.quantity)} ${unitShortName(l.unit)} × ${formatMoney(l.unitPrice)}`,
-                  trailing: formatPercent(l.taxRate),
+                  trailing: lineRateLabel(l),
                 }))
               : itemOptions.map((i) => ({
                   value: i.id,
