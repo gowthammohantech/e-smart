@@ -13,8 +13,8 @@ import { TextField } from '@esmart/ui/components/Field';
 import { QrCode } from '@esmart/ui/components/QrCode';
 import { Text } from '@esmart/ui/components/Text';
 import { useToast } from '@esmart/ui/components/Toast';
-import { FormContainer } from '@esmart/ui/components/Layout';
-import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { Columns } from '@esmart/ui/components/Layout';
+import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { api } from '../../../remote/api';
 import { describeError } from '../../../remote/errors';
 import { Skeleton, SkeletonGroup } from '@esmart/ui/components/Skeleton';
@@ -27,6 +27,7 @@ type Step = { kind: 'idle' } | { kind: 'scan'; secret: string; uri: string } | {
  */
 export default function SecurityScreen() {
   const t = useTheme();
+  const desktop = useIsDesktop();
   const toast = useToast();
   const { t: tr } = useTranslation(['settings', 'nav']);
   const status = useQuery({
@@ -74,10 +75,8 @@ export default function SecurityScreen() {
   const enrolled = !!status.data?.enrolled;
   // Turn on / Turn off only once the server has said which applies.
   const known = !!status.data;
-  return (
-    <FormContainer>
-      <Stack.Screen options={{ title: tr('settings:security.title') }} />
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, gap: t.spacing.lg }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
+  const statusCard = (
+    <>
         {!known && status.isError ? (
           <Card padded={false}>
             <LoadFailed onRetry={status.refetch} compact />
@@ -110,9 +109,17 @@ export default function SecurityScreen() {
         </Card>
         )}
 
+    </>
+  );
+  const idleButtons = (
+    <>
         {step.kind === 'idle' && known && !enrolled ? <Button title={tr('settings:security.turnOn')} icon="shield-check-outline" onPress={() => void start()} loading={busy} /> : null}
         {step.kind === 'idle' && enrolled ? <Button title={tr('settings:security.turnOff')} variant="danger" onPress={() => setStep({ kind: 'disable' })} /> : null}
 
+    </>
+  );
+  const steps = (
+    <>
         {step.kind === 'scan' ? (
           <Card style={{ gap: t.spacing.md, alignItems: 'center' }}>
             <Text variant="small">{tr('settings:security.scan')}</Text>
@@ -166,7 +173,25 @@ export default function SecurityScreen() {
             <Button title={tr('settings:security.cancel')} variant="ghost" onPress={() => setStep({ kind: 'idle' })} />
           </Card>
         ) : null}
+    </>
+  );
+  const inStep = step.kind !== 'idle';
+
+  return (
+    <View style={{ flex: 1 }}>
+      <Stack.Screen options={{ title: tr('settings:security.title') }} />
+      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, gap: t.spacing.lg }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
+        {desktop && inStep ? (
+          // A step sits beside the status card on a desktop rather than under it.
+          <Columns left={statusCard} right={<View style={{ gap: t.spacing.lg }}>{steps}</View>} />
+        ) : (
+          <>
+            {statusCard}
+            {idleButtons}
+            {steps}
+          </>
+        )}
       </ScrollView>
-    </FormContainer>
+    </View>
   );
 }

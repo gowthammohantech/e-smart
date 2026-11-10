@@ -8,6 +8,7 @@ import { Card } from '@esmart/ui/components/Card';
 import { Badge } from '@esmart/ui/components/Badge';
 import { Button } from '@esmart/ui/components/Button';
 import { ListRow } from '@esmart/ui/components/ListRow';
+import { Cell, DataTable } from '@esmart/ui/components/DataTable';
 import { Sheet } from '@esmart/ui/components/Sheet';
 import { PickerField, SwitchField, TextField } from '@esmart/ui/components/Field';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
@@ -30,7 +31,7 @@ const RESET_LABELS = {
 
 export default function NumberingSettings() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['domain', 'nav', 'settings']);
+  const { t: tr } = useTranslation(['domain', 'nav', 'settings', 'common']);
   const { run: serverSave, saving } = useServerSave();
 
   const series = useNumberingSeries();
@@ -105,6 +106,22 @@ export default function NumberingSettings() {
           </Text>
         </Card>
 
+        {desktop ? (
+          // A table across the page; a row opens the same editor the phone's row does.
+          <DataTable
+            columns={[
+              { key: 'type', header: tr('common:table.type'), flex: 2, render: (s) => <Cell weight="600">{seriesLabel(tr, s.kind)}</Cell>, sortValue: (s) => seriesLabel(tr, s.kind) },
+              { key: 'prefix', header: tr('settings:numbering.prefix'), flex: 1, render: (s) => <Cell mono>{s.prefix || '—'}</Cell> },
+              { key: 'next', header: tr('settings:numbering.nextNumber'), flex: 2, render: (s) => <Cell mono>{formatNumber(s, { date: today(), branchCode })}</Cell> },
+              { key: 'reset', header: tr('settings:numbering.resetPolicy'), flex: 2, render: (s) => <Cell tone="muted">{tr(RESET_LABELS[s.resetPolicy])}</Cell> },
+            ]}
+            rows={series}
+            rowKey={(s) => s.id}
+            onRowPress={open}
+            rowLabel={(s) => `${seriesLabel(tr, s.kind)}, ${formatNumber(s, { date: today(), branchCode })}`}
+            scroll={false}
+          />
+        ) : (
         <Card padded={false}>
           {series.map((s, i) => (
             <ListRow
@@ -120,6 +137,7 @@ export default function NumberingSettings() {
             />
           ))}
         </Card>
+        )}
       </ScrollView>
 
       <Sheet

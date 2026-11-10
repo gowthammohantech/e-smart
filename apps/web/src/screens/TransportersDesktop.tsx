@@ -8,6 +8,7 @@ import { focusRing, type WebPressState } from '@esmart/ui/theme/interaction';
 import { Card } from '@esmart/ui/components/Card';
 import { Text } from '@esmart/ui/components/Text';
 import { Badge } from '@esmart/ui/components/Badge';
+import { Cell, DataTable } from '@esmart/ui/components/DataTable';
 import { Button } from '@esmart/ui/components/Button';
 import { PhoneField, TextField, usePhoneInput } from '@esmart/ui/components/Field';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
@@ -118,43 +119,24 @@ export function TransportersDesktop() {
             />
           </Card>
         ) : (
-          <Card padded={false}>
-            {transporters.map((transporter, i) => (
-              <Pressable
-                key={transporter.id}
-                onPress={() => open(transporter)}
-                accessibilityRole="button"
-                accessibilityLabel={transporter.name}
-                style={(state) => {
-                  const { pressed, hovered, focused } = state as WebPressState;
-                  return [
-                    {
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      gap: t.spacing.md,
-                      padding: t.spacing.lg,
-                      borderBottomWidth: i < transporters.length - 1 ? 0.5 : 0,
-                      borderBottomColor: t.c.line,
-                      backgroundColor: pressed || hovered ? t.c.card2 : 'transparent',
-                    },
-                    focusRing(t, focused),
-                  ];
-                }}
-              >
-                <Icon name="truck-outline" size={20} color={t.c.muted} />
-                <View style={{ flex: 1, gap: 2 }}>
-                  <Text variant="body" weight="600">
-                    {transporter.name}
-                  </Text>
-                  <Text variant="caption" tone="muted">
-                    {formatGstin(transporter.transporterId)}
-                  </Text>
-                </View>
-                {transporter.status === 'inactive' ? <Badge label={tr('settings:transporters.inactive')} tone="neutral" size="sm" /> : null}
-                <Icon name="chevron-right" size={18} color={t.c.muted} />
-              </Pressable>
-            ))}
-          </Card>
+          // A table, as the other settings lists are on a desktop; a row opens its form.
+          <DataTable<Transporter>
+            rows={transporters}
+            rowKey={(r) => r.id}
+            onRowPress={(r) => open(r)}
+            rowLabel={(r) => r.name}
+            columns={[
+              { key: 'name', header: tr('settings:transporters.name'), flex: 2, sortValue: (r) => r.name, render: (r) => <Cell weight="600">{r.name}</Cell> },
+              { key: 'id', header: tr('settings:transporters.id'), width: 220, render: (r) => <Cell mono tone="muted">{formatGstin(r.transporterId)}</Cell> },
+              { key: 'phone', header: tr('settings:transporters.phone'), width: 180, render: (r) => <Cell tone="muted">{r.phone || '—'}</Cell> },
+              {
+                key: 'status',
+                header: tr('common:table.status'),
+                width: 130,
+                render: (r) => (r.status === 'inactive' ? <Badge label={tr('settings:transporters.inactive')} tone="neutral" size="sm" /> : <Cell tone="muted">—</Cell>),
+              },
+            ]}
+          />
         )}
       </ScrollView>
 

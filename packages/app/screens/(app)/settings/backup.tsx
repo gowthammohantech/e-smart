@@ -19,7 +19,8 @@ import { useAppStore } from '../../../store/appStore';
 import { useActiveCompany } from '../../../store/selectors';
 import { useCompanyUsage } from '../../../remote/queries';
 import { formatDateTime } from '@esmart/core/lib/date';
-import { SHOW_SCROLLBAR, WIDE_FORM_MAX_WIDTH, useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { Columns } from '@esmart/ui/components/Layout';
 import { Skeleton, SkeletonGroup } from '@esmart/ui/components/Skeleton';
 import { Button } from '@esmart/ui/components/Button';
 
@@ -112,24 +113,8 @@ function BackupExportBody() {
     }
   };
 
-  return (
-    <View style={{ flex: 1 }}>
-      <Stack.Screen options={{ title: tr('nav:title.backupAndExport') }} />
-
-      {/* On a desktop the counts stay near their labels, and the export button sits in the page header. */}
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: desktop ? t.spacing.xxl : 140 + insets.bottom, maxWidth: desktop ? WIDE_FORM_MAX_WIDTH : undefined }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
-        <Card style={{ gap: t.spacing.sm }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
-            <Icon name="database-export-outline" size={21} color={t.c.primary} />
-            <Text variant="title" weight="700" style={{ flex: 1 }}>
-              {company.name}
-            </Text>
-          </View>
-          <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
-            {tr('settings:backup.scopeNote', { count: companies.length - 1 })}
-          </Text>
-        </Card>
-
+  const included = (
+    <>
         <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6, marginTop: t.spacing.xl, marginBottom: t.spacing.sm }}>
           {tr('settings:backup.included')}
         </Text>
@@ -162,6 +147,10 @@ function BackupExportBody() {
           ))}
         </Card>
 
+    </>
+  );
+  const formats = (
+    <>
         <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6, marginTop: t.spacing.xl, marginBottom: t.spacing.sm }}>{tr('settings:backup.formats')}</Text>
         <Card padded={false}>
           <ListRow title={tr('settings:backup.json')} subtitle={tr('settings:backup.jsonHint')} icon="code-json" chevron onPress={() => setConfirmExport('json-backup')} />
@@ -209,6 +198,36 @@ function BackupExportBody() {
             </Text>
           )}
         </Card>
+    </>
+  );
+
+  return (
+    <View style={{ flex: 1 }}>
+      <Stack.Screen options={{ title: tr('nav:title.backupAndExport') }} />
+
+      {/* On a desktop the counts sit beside the formats, and the export button sits in the page header. */}
+      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: desktop ? t.spacing.xxl : 140 + insets.bottom }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
+        <Card style={{ gap: t.spacing.sm }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
+            <Icon name="database-export-outline" size={21} color={t.c.primary} />
+            <Text variant="title" weight="700" style={{ flex: 1 }}>
+              {company.name}
+            </Text>
+          </View>
+          <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
+            {tr('settings:backup.scopeNote', { count: companies.length - 1 })}
+          </Text>
+        </Card>
+
+        {desktop ? (
+          // What's included beside how to export it, across the page's width.
+          <Columns left={<View>{included}</View>} right={<View>{formats}</View>} />
+        ) : (
+          <>
+            {included}
+            {formats}
+          </>
+        )}
       </ScrollView>
 
       <PrimaryActionBar title={tr('settings:backup.export')} icon="database-export-outline" onPress={() => setConfirmExport('json-backup')} loading={busy} />

@@ -19,8 +19,8 @@ import { useActiveCompany, useBaseCurrency, useComplianceSettings, useCompliance
 import { LoadingView } from '../../../components/LoadingView';
 import { Skeleton, SkeletonGroup } from '@esmart/ui/components/Skeleton';
 import { fromMajor, toMajor } from '@esmart/core/lib/money';
-import { SHOW_SCROLLBAR, WIDE_FORM_MAX_WIDTH, useIsDesktop } from '@esmart/ui/theme/breakpoints';
-import { FieldGrid } from '@esmart/ui/components/Layout';
+import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { Columns, FieldGrid } from '@esmart/ui/components/Layout';
 import { useSaveShortcut } from '../../../components/useSaveShortcut';
 import { useServerSave } from '../../../components/useServerSave';
 
@@ -157,16 +157,9 @@ function EInvoicingForm() {
   // Ctrl+S (⌘+S) does what Save does.
   useSaveShortcut(onSave);
 
-  return (
-    // A wide form's width on a desktop, its Save bar under it.
-    <KeyboardAvoidingView style={desktop ? { flex: 1, width: '100%', maxWidth: WIDE_FORM_MAX_WIDTH } : { flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <Stack.Screen options={{ title: tr('nav:title.eInvoicingAndEWayBill') }} />
-
-      <ScrollView
-        contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: t.spacing.xxxl }}
-        showsVerticalScrollIndicator={SHOW_SCROLLBAR}
-        keyboardShouldPersistTaps="handled"
-      >
+  // Each section built once: a desktop puts them two to a row, a phone stacks them in this order.
+  const eInvoiceSection = (
+    <>
         {/* ---------------- e-invoice ---------------- */}
         <SectionLabel>{tr('compliance:settings.eInvoice')}</SectionLabel>
         <Card style={{ gap: t.spacing.sm }}>
@@ -218,6 +211,10 @@ function EInvoicingForm() {
           ]}
         />
 
+    </>
+  );
+  const credentialsSection = (
+    <>
         <SectionLabel>{tr('compliance:settings.portalCredentials')}</SectionLabel>
         <Card style={{ gap: t.spacing.sm }}>
           <Segmented
@@ -271,6 +268,10 @@ function EInvoicingForm() {
           ) : null}
         </Card>
 
+    </>
+  );
+  const ewaySection = (
+    <>
         {/* ---------------- e-way bill ---------------- */}
         <SectionLabel>{tr('compliance:settings.ewayBill')}</SectionLabel>
         <Card style={{ gap: t.spacing.sm }}>
@@ -356,6 +357,10 @@ function EInvoicingForm() {
           />
         </View>
 
+    </>
+  );
+  const stateSection = (
+    <>
         {/* ---------------- state ---------------- */}
         {/* Counts not in yet: a placeholder each, not a 0. */}
         <SectionLabel>{tr('compliance:settings.whereThingsStand')}</SectionLabel>
@@ -384,6 +389,32 @@ function EInvoicingForm() {
             onPress={() => router.push('/(app)/compliance')}
           />
         </Card>
+    </>
+  );
+
+  return (
+    // The page's whole width on a desktop, its Save bar under it.
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <Stack.Screen options={{ title: tr('nav:title.eInvoicingAndEWayBill') }} />
+
+      <ScrollView
+        contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: t.spacing.xxxl }}
+        showsVerticalScrollIndicator={SHOW_SCROLLBAR}
+        keyboardShouldPersistTaps="handled"
+      >
+        {desktop ? (
+          <>
+            <Columns left={<View>{eInvoiceSection}</View>} right={<View>{ewaySection}</View>} />
+            <Columns left={<View>{credentialsSection}</View>} right={<View>{stateSection}</View>} />
+          </>
+        ) : (
+          <>
+            {eInvoiceSection}
+            {credentialsSection}
+            {ewaySection}
+            {stateSection}
+          </>
+        )}
       </ScrollView>
 
       {/* The bar under the form, in the flow so the keyboard lifts it and it never covers the last fields. */}

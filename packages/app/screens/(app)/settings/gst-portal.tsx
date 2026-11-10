@@ -10,7 +10,7 @@ import { Card } from '@esmart/ui/components/Card';
 import { TextField } from '@esmart/ui/components/Field';
 import { Text } from '@esmart/ui/components/Text';
 import { useToast } from '@esmart/ui/components/Toast';
-import { SHOW_SCROLLBAR, WIDE_FORM_MAX_WIDTH, useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { formatDate } from '@esmart/core/lib/date';
 import { api } from '../../../remote/api';
 import { describeError } from '../../../remote/errors';
@@ -19,6 +19,7 @@ import { useActiveCompany } from '../../../store/selectors';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { SkeletonGroup, SkeletonRows } from '@esmart/ui/components/Skeleton';
 import { LoadFailed } from '../../../features/company/LoadFailed';
+import { Columns } from '@esmart/ui/components/Layout';
 
 type Session = Schema<'GstPortalSession'>;
 
@@ -89,19 +90,18 @@ function GstPortalSettingsBody() {
       load();
     });
 
-  return (
-    // On a desktop the cards stay a form's width, the status badge near its GSTIN.
-    <KeyboardAvoidingView style={desktop ? { flex: 1, width: '100%', maxWidth: WIDE_FORM_MAX_WIDTH } : { flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <Stack.Screen options={{ title: tr('nav:title.gstPortal') }} />
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40, gap: t.spacing.lg }} showsVerticalScrollIndicator={SHOW_SCROLLBAR} keyboardShouldPersistTaps="handled">
-        <Card variant="flat" style={{ gap: t.spacing.sm }}>
-          <Text variant="body" weight="600">
-            {tr('settings:gstPortal.howTitle')}
-          </Text>
-          <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
-            {tr('settings:gstPortal.how')}
-          </Text>
-        </Card>
+  const how = (
+    <Card variant="flat" style={{ gap: t.spacing.sm }}>
+      <Text variant="body" weight="600">
+        {tr('settings:gstPortal.howTitle')}
+      </Text>
+      <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
+        {tr('settings:gstPortal.how')}
+      </Text>
+    </Card>
+  );
+  const sessionCards = (
+    <>
         {!sessions && loadFailed ? (
           <Card padded={false}>
             <LoadFailed
@@ -157,6 +157,22 @@ function GstPortalSettingsBody() {
             </Card>
           );
         })}
+    </>
+  );
+
+  return (
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <Stack.Screen options={{ title: tr('nav:title.gstPortal') }} />
+      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40, gap: t.spacing.lg }} showsVerticalScrollIndicator={SHOW_SCROLLBAR} keyboardShouldPersistTaps="handled">
+        {desktop ? (
+          // The GSTIN cards beside the how-to, so neither stretches across the page.
+          <Columns ratio={[3, 2]} left={<View style={{ gap: t.spacing.lg }}>{sessionCards}</View>} right={how} />
+        ) : (
+          <>
+            {how}
+            {sessionCards}
+          </>
+        )}
       </ScrollView>
       <ConfirmDialog
         visible={!!confirmDisconnect}

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { Stack } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
@@ -15,8 +15,8 @@ import { ListRow } from '@esmart/ui/components/ListRow';
 import { useAppStore } from '../../../store/appStore';
 import { useCompanies, useCurrentUser } from '../../../store/selectors';
 import { Errors, hasErrors, required, validEmail } from '@esmart/core/lib/validators';
-import { SHOW_SCROLLBAR, WIDE_FORM_MAX_WIDTH, useIsDesktop } from '@esmart/ui/theme/breakpoints';
-import { FieldRow } from '@esmart/ui/components/Layout';
+import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { Columns, FieldGrid } from '@esmart/ui/components/Layout';
 import type { UserRole } from '@esmart/core/types';
 import { useGoBack } from '../../../navigation/useGoBack';
 import { useSaveShortcut } from '../../../components/useSaveShortcut';
@@ -66,16 +66,8 @@ export default function Profile() {
   // Ctrl+S (⌘+S) does what Save does.
   useSaveShortcut(save);
 
-  return (
-    // A wide form's width on a desktop, its Save bar under it.
-    <KeyboardAvoidingView style={desktop ? { flex: 1, width: '100%', maxWidth: WIDE_FORM_MAX_WIDTH } : { flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <Stack.Screen options={{ title: tr('nav:title.yourProfile') }} />
-
-      <ScrollView
-        contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: t.spacing.xxxl, gap: t.spacing.lg }}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={SHOW_SCROLLBAR}
-      >
+  const header = (
+    <>
         <Card style={{ alignItems: 'center', gap: t.spacing.sm, paddingVertical: t.spacing.xl }}>
           <Avatar name={user?.name ?? tr('settings:profile.you')} size={72} color={user?.avatarColor} />
           <Text variant="title" weight="700">
@@ -84,12 +76,21 @@ export default function Profile() {
           <Badge label={tr(ROLE_LABELS[user?.role ?? 'owner'])} tone="info" />
         </Card>
 
-        <FieldRow>
-        <TextField label={tr('settings:profile.name')} value={name} onChangeText={setName} icon="account-outline" error={errors.name} required />
-        <TextField label={tr('settings:profile.email')} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" icon="email-outline" error={errors.email} required />
-        </FieldRow>
-        <PhoneField label={tr('settings:profile.phone')} {...phone.field} icon="cellphone" error={errors.phone} />
-
+    </>
+  );
+  const fields = (
+    <>
+        <FieldGrid
+          items={[
+            <TextField key="name" label={tr('settings:profile.name')} value={name} onChangeText={setName} icon="account-outline" error={errors.name} required />,
+            <TextField key="email" label={tr('settings:profile.email')} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" icon="email-outline" error={errors.email} required />,
+            <PhoneField key="phone" label={tr('settings:profile.phone')} {...phone.field} icon="cellphone" error={errors.phone} />,
+          ]}
+        />
+    </>
+  );
+  const businesses = (
+    <>
         <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('settings:profile.yourBusinesses')}</Text>
         <Card padded={false}>
           {companies.map((c, i) => (
@@ -105,9 +106,50 @@ export default function Profile() {
           ))}
         </Card>
 
+    </>
+  );
+  const deleteRow = (
+    <>
         <Card padded={false}>
           <ListRow title={tr('settings:deleteAccount.row')} icon="account-remove-outline" destructive divider={false} onPress={() => setDeleting(true)} />
         </Card>
+    </>
+  );
+
+  return (
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <Stack.Screen options={{ title: tr('nav:title.yourProfile') }} />
+
+      <ScrollView
+        contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: t.spacing.xxxl, gap: t.spacing.lg }}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={SHOW_SCROLLBAR}
+      >
+        {desktop ? (
+          // Who you are on the left, what you edit on the right, across the page's width.
+          <Columns
+            ratio={[1, 2]}
+            left={
+              <View style={{ gap: t.spacing.lg }}>
+                {header}
+                {deleteRow}
+              </View>
+            }
+            right={
+              <View style={{ gap: t.spacing.lg }}>
+                {fields}
+                {businesses}
+              </View>
+            }
+          />
+        ) : (
+          <>
+            {header}
+            {fields}
+            {businesses}
+            {deleteRow}
+          </>
+        )}
       </ScrollView>
       <DeleteAccountSheet visible={deleting} onClose={() => setDeleting(false)} />
 

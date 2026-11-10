@@ -17,7 +17,7 @@ import { useActiveCompany } from '../../../store/selectors';
 import { useCompanyUsage } from '../../../remote/queries';
 import { profileLocks } from '@esmart/core/domain/companyLock';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
-import { FieldGrid, FieldRow } from '@esmart/ui/components/Layout';
+import { Columns, FieldGrid, FormSection } from '@esmart/ui/components/Layout';
 import { Card } from '@esmart/ui/components/Card';
 import { Icon } from '@esmart/ui/components/Icon';
 import { BUSINESS_TYPES, COUNTRIES, INDIAN_STATES } from '@esmart/core/data/masters';
@@ -25,7 +25,7 @@ import { citiesForState } from '@esmart/core/data/cities';
 import { CURRENCIES } from '@esmart/core/lib/currencies';
 import { monthNames } from '@esmart/core/lib/date';
 import { Errors, hasErrors, required, validEmail, validGstin, validPostalCode, validTan } from '@esmart/core/lib/validators';
-import { SHOW_SCROLLBAR, WIDE_FORM_MAX_WIDTH, useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { useGoBack } from '../../../navigation/useGoBack';
 import { LogoSection } from '../../../features/company/LogoSection';
 import { SignatureSection } from '../../../features/company/SignatureSection';
@@ -45,7 +45,7 @@ export default function CompanySettings() {
 function CompanySettingsForm() {
   const t = useTheme();
   const desktop = useIsDesktop();
-  const { t: tr } = useTranslation(['nav', 'settings', 'onboarding', 'errors']);
+  const { t: tr } = useTranslation(['nav', 'settings', 'onboarding', 'errors', 'contacts']);
   const months = monthNames();
   const goBack = useGoBack();
   const { run: serverSave, saving, blocked } = useServerSave();
@@ -185,7 +185,7 @@ function CompanySettingsForm() {
   };
   useSaveShortcut(() => void save(), !saving);
 
-  // Built once and placed per layout: a desktop grid or the phone's stacked pairs.
+  // Built once and placed per layout: desktop section cards or the phone's single column.
   const half = desktop ? undefined : { flex: 1 };
   const stateField = (
     <PickerField label={tr('settings:company.state')} value={INDIAN_STATES.find((s) => s.code === stateCode)?.name} onPress={() => setStateOpen(true)} icon="map-outline" disabled={locks.state} />
@@ -226,9 +226,162 @@ function CompanySettingsForm() {
     />
   );
 
+  const caption = (label: string, nativeID?: string) => (
+    <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }} nativeID={nativeID}>
+      {label}
+    </Text>
+  );
+  const notice = usagePending ? (
+    <Card variant="flat">
+      <SkeletonGroup>
+        <SkeletonText lines={2} />
+      </SkeletonGroup>
+    </Card>
+  ) : posted ? (
+    <Card variant="flat" style={{ flexDirection: 'row', gap: t.spacing.md }}>
+      <Icon name="lock-outline" size={19} color={t.c.muted} />
+      <Text variant="caption" tone="muted" style={{ flex: 1, lineHeight: 18 }}>
+        {tr('settings:company.lockedNotice')}
+      </Text>
+    </Card>
+  ) : null;
+  const nameField = <TextField key="name" label={tr('settings:company.name')} value={name} onChangeText={setName} error={errors.name} required icon="domain" />;
+  const legalNameField = (
+    <TextField key="legal" label={tr('settings:company.legalName')} value={legalName} onChangeText={setLegalName} placeholder={tr('settings:company.legalPlaceholder')} editable={!locks.legalName} />
+  );
+  const emailField = (
+    <TextField key="email" label={tr('settings:company.email')} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" icon="email-outline" error={errors.email} />
+  );
+  const phoneField = <PhoneField key="phone" label={tr('settings:company.phone')} {...phone.field} error={errors.phone} />;
+  const typeField = (
+    <PickerField key="type" label={tr('settings:company.type')} value={tr(`onboarding:businessType.${businessType}` as 'onboarding:businessType.other')} onPress={() => setTypeOpen(true)} icon="storefront-outline" />
+  );
+  const websiteField = <TextField key="web" label={tr('settings:company.website')} value={website} onChangeText={setWebsite} autoCapitalize="none" icon="web" />;
+  const addressField = <TextField label={tr('settings:company.address')} value={line1} onChangeText={setLine1} icon="map-marker-outline" />;
+  const bankHint = (
+    <Text variant="caption" tone="muted" style={{ lineHeight: 18, marginTop: desktop ? undefined : -t.spacing.sm }}>
+      {tr('settings:company.bankHint')}
+    </Text>
+  );
+  const countryField = (
+    <PickerField key="country" label={tr('settings:company.country')} value={country?.name} onPress={() => {}} icon="earth" hint={tr('settings:company.countryFixed')} disabled />
+  );
+  const currencyField = (
+    <PickerField key="currency" label={tr('settings:company.baseCurrency')} value={currency ? `${currency.name} (${currency.code})` : undefined} onPress={() => {}} icon="cash-multiple" disabled />
+  );
+  const fyField = <PickerField key="fy" label={tr('settings:company.fyStarts')} value={months[fyMonth - 1]} onPress={() => setFyOpen(true)} icon="calendar-range" disabled={locks.fiscalYear} />;
+  const registeredSwitch = (
+    <SwitchField
+      label={tr('settings:company.registeredFor', { regime: country?.regime === 'VAT' ? 'VAT' : 'GST' })}
+      value={taxRegistered}
+      onValueChange={setTaxRegistered}
+      disabled={locks.registration}
+    />
+  );
+  const tanField = (
+    <TextField
+      key="tan"
+      label={tr('settings:company.tan')}
+      value={tan}
+      onChangeText={(v) => setTan(v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10))}
+      autoCapitalize="characters"
+      icon="bank-minus"
+      placeholder="MUMA12345B"
+      hint={tr('settings:company.tanHint')}
+      error={errors.tan}
+    />
+  );
+  const lutField = (
+    <TextField
+      key="lut"
+      label={tr('settings:company.lutNumber')}
+      value={lutNumber}
+      onChangeText={(v) => setLutNumber(v.toUpperCase())}
+      autoCapitalize="characters"
+      icon="earth-arrow-right"
+      placeholder="AD270426012345X"
+      hint={tr('settings:company.lutHint')}
+    />
+  );
+  const lutDateField = lutNumber.trim() ? <DateField key="lutDate" label={tr('settings:company.lutValidTill')} value={lutValidTill} onChange={setLutValidTill} /> : null;
+  // Registration details, shown once the business is registered.
+  const taxDetails = taxRegistered ? (
+    <>
+      <TextField
+        label={country?.taxIdLabel ?? tr('onboarding:tax.numberLabel')}
+        value={taxId}
+        onChangeText={(v) => setTaxId(v.toUpperCase())}
+        autoCapitalize="characters"
+        icon="card-account-details-outline"
+        error={errors.taxId}
+        editable={!locks.taxIdentity}
+      />
+      <SwitchField
+        label={tr('settings:company.composition')}
+        description={tr('settings:company.compositionHint')}
+        value={composition}
+        onValueChange={setComposition}
+        disabled={locks.taxIdentity}
+      />
+      {country?.regime === 'GST' ? (
+        <>
+          <View style={{ gap: t.spacing.xs }}>
+            <Text variant="small" tone="muted">
+              {tr('settings:company.returnFrequency')}
+            </Text>
+            <Segmented
+              options={[
+                { value: 'monthly', label: tr('settings:company.returnMonthly') },
+                { value: 'qrmp', label: tr('settings:company.returnQuarterly') },
+              ]}
+              value={returnFrequency}
+              onChange={(v) => setReturnFrequency(v as 'monthly' | 'qrmp')}
+            />
+            <Text variant="micro" tone="muted">
+              {tr('settings:company.returnFrequencyHint')}
+            </Text>
+          </View>
+          {/* Short codes and a date side by side on a desktop; the date shows only with an LUT. */}
+          <FieldGrid items={[tanField, lutField, lutDateField]} />
+        </>
+      ) : null}
+    </>
+  ) : null;
+  const negativeStockSwitch = (
+    <SwitchField
+      label={tr('settings:company.allowNegativeStock')}
+      description={tr('settings:company.allowNegativeStockHint')}
+      value={allowNegativeStock}
+      onValueChange={setAllowNegativeStock}
+    />
+  );
+  const bankRateField = (
+    <TextField
+      key="bankRate"
+      label={tr('settings:company.msmeBankRate')}
+      value={bankRate}
+      onChangeText={setBankRate}
+      keyboardType="decimal-pad"
+      hint={tr('settings:company.msmeBankRateHint')}
+      error={errors.bankRate}
+      icon="percent-outline"
+    />
+  );
+  const toleranceField = (
+    <TextField
+      key="tolerance"
+      label={tr('settings:company.gstr2bTolerance')}
+      value={toleranceDays}
+      onChangeText={setToleranceDays}
+      keyboardType="number-pad"
+      hint={tr('settings:company.gstr2bToleranceHint')}
+      error={errors.toleranceDays}
+      icon="calendar-range"
+    />
+  );
+
   return (
-    // A long form: a wide form's width on a desktop, its Save bar under it.
-    <KeyboardAvoidingView style={desktop ? { flex: 1, width: '100%', maxWidth: WIDE_FORM_MAX_WIDTH } : { flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Stack.Screen options={{ title: tr('nav:title.businessProfile') }} />
 
       <ScrollView
@@ -236,67 +389,74 @@ function CompanySettingsForm() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={SHOW_SCROLLBAR}
       >
-        {usagePending ? (
-          <Card variant="flat">
-            <SkeletonGroup>
-              <SkeletonText lines={2} />
-            </SkeletonGroup>
-          </Card>
-        ) : posted ? (
-          <Card variant="flat" style={{ flexDirection: 'row', gap: t.spacing.md }}>
-            <Icon name="lock-outline" size={19} color={t.c.muted} />
-            <Text variant="caption" tone="muted" style={{ flex: 1, lineHeight: 18 }}>
-              {tr('settings:company.lockedNotice')}
-            </Text>
-          </Card>
-        ) : null}
-        <LogoSection />
-        <FieldRow>
-          <TextField label={tr('settings:company.name')} value={name} onChangeText={setName} error={errors.name} required icon="domain" />
-          <TextField label={tr('settings:company.legalName')} value={legalName} onChangeText={setLegalName} placeholder={tr('settings:company.legalPlaceholder')} editable={!locks.legalName} />
-        </FieldRow>
-        <FieldRow>
-          <TextField label={tr('settings:company.email')} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" icon="email-outline" error={errors.email} />
-          <PhoneField label={tr('settings:company.phone')} {...phone.field} error={errors.phone} />
-        </FieldRow>
-        {/* Type and website pair up on a desktop rather than each leaving half a row empty. */}
-        <FieldGrid
-          items={[
-            <PickerField key="type" label={tr('settings:company.type')} value={tr(`onboarding:businessType.${businessType}` as 'onboarding:businessType.other')} onPress={() => setTypeOpen(true)} icon="storefront-outline" />,
-            <TextField key="web" label={tr('settings:company.website')} value={website} onChangeText={setWebsite} autoCapitalize="none" icon="web" />,
-          ]}
-        />
-
-        <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('settings:company.registeredAddress')}</Text>
-        <TextField label={tr('settings:company.address')} value={line1} onChangeText={setLine1} icon="map-marker-outline" />
-        {/* State, city and PIN share one row on a desktop; a phone keeps state above city and PIN. */}
+        {notice}
         {desktop ? (
-          <FieldRow>
-            {stateField}
-            {cityField}
-            {pinField}
-          </FieldRow>
+          // A desktop uses the page's width: sections as cards, two side by side where they pair up.
+          <>
+            <Columns
+              ratio={[3, 2]}
+              left={
+                <FormSection title={tr('contacts:form.businessDetails')}>
+                  <LogoSection />
+                  <FieldGrid items={[nameField, legalNameField, emailField, phoneField, typeField, websiteField]} />
+                </FormSection>
+              }
+              right={
+                <View style={{ gap: t.spacing.lg }}>
+                  <FormSection title={tr('settings:company.registeredAddress')}>
+                    {addressField}
+                    <FieldGrid items={[stateField, cityField, pinField]} />
+                  </FormSection>
+                  <FormSection title={tr('settings:company.inventory')}>{negativeStockSwitch}</FormSection>
+                </View>
+              }
+            />
+            <View nativeID="bank-and-signature">
+              <FormSection title={tr('settings:company.bankAndSignature')}>
+                {bankHint}
+                <FieldGrid columns={3} items={[accountNameField, upiField, bankNameField, branchField, accountNumberField, ifscField]} />
+                <SignatureSection />
+              </FormSection>
+            </View>
+            <Columns
+              ratio={[3, 2]}
+              left={
+                <FormSection title={tr('settings:company.taxAndFy')}>
+                  <FieldGrid items={[countryField, currencyField, fyField]} />
+                  {registeredSwitch}
+                  {taxDetails}
+                </FormSection>
+              }
+              right={
+                // Stacked: the hints are long and the column is narrow beside the tax card.
+                <FormSection title={tr('settings:company.rules')}>
+                  {bankRateField}
+                  {toleranceField}
+                </FormSection>
+              }
+            />
+          </>
         ) : (
           <>
+            <LogoSection />
+            {nameField}
+            {legalNameField}
+            {emailField}
+            {phoneField}
+            {typeField}
+            {websiteField}
+
+            {caption(tr('settings:company.registeredAddress'))}
+            {addressField}
+            {/* A phone keeps state above city and PIN. */}
             {stateField}
             <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
               {cityField}
               {pinField}
             </View>
-          </>
-        )}
 
-        <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }} nativeID="bank-and-signature">
-          {tr('settings:company.bankAndSignature')}
-        </Text>
-        <Text variant="caption" tone="muted" style={{ lineHeight: 18, marginTop: -t.spacing.sm }}>
-          {tr('settings:company.bankHint')}
-        </Text>
-        {/* A desktop lays the bank fields two to a row; a phone keeps its stacked pairs. */}
-        {desktop ? (
-          <FieldGrid items={[accountNameField, upiField, bankNameField, branchField, accountNumberField, ifscField]} />
-        ) : (
-          <>
+            {caption(tr('settings:company.bankAndSignature'), 'bank-and-signature')}
+            {bankHint}
             {accountNameField}
             <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
               {bankNameField}
@@ -307,119 +467,23 @@ function CompanySettingsForm() {
               {ifscField}
             </View>
             {upiField}
+            <SignatureSection />
+
+            {caption(tr('settings:company.taxAndFy'))}
+            {countryField}
+            {currencyField}
+            {fyField}
+            {registeredSwitch}
+            {taxDetails}
+
+            {caption(tr('settings:company.inventory'))}
+            {negativeStockSwitch}
+
+            {caption(tr('settings:company.rules'))}
+            {bankRateField}
+            {toleranceField}
           </>
         )}
-        <SignatureSection />
-
-        <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('settings:company.taxAndFy')}</Text>
-        <FieldRow>
-          <PickerField label={tr('settings:company.country')} value={country?.name} onPress={() => {}} icon="earth" hint={tr('settings:company.countryFixed')} disabled />
-          <PickerField label={tr('settings:company.baseCurrency')} value={currency ? `${currency.name} (${currency.code})` : undefined} onPress={() => {}} icon="cash-multiple" disabled />
-        </FieldRow>
-        <PickerField label={tr('settings:company.fyStarts')} value={months[fyMonth - 1]} onPress={() => setFyOpen(true)} icon="calendar-range" disabled={locks.fiscalYear} />
-
-        <SwitchField
-          label={tr('settings:company.registeredFor', { regime: country?.regime === 'VAT' ? 'VAT' : 'GST' })}
-          value={taxRegistered}
-          onValueChange={setTaxRegistered}
-          disabled={locks.registration}
-        />
-        {taxRegistered ? (
-          <>
-            <TextField
-              label={country?.taxIdLabel ?? tr('onboarding:tax.numberLabel')}
-              value={taxId}
-              onChangeText={(v) => setTaxId(v.toUpperCase())}
-              autoCapitalize="characters"
-              icon="card-account-details-outline"
-              error={errors.taxId}
-              editable={!locks.taxIdentity}
-            />
-            <SwitchField
-              label={tr('settings:company.composition')}
-              description={tr('settings:company.compositionHint')}
-              value={composition}
-              onValueChange={setComposition}
-              disabled={locks.taxIdentity}
-            />
-            {country?.regime === 'GST' ? (
-              <>
-                <View style={{ gap: t.spacing.xs }}>
-                  <Text variant="small" tone="muted">
-                    {tr('settings:company.returnFrequency')}
-                  </Text>
-                  <Segmented
-                    options={[
-                      { value: 'monthly', label: tr('settings:company.returnMonthly') },
-                      { value: 'qrmp', label: tr('settings:company.returnQuarterly') },
-                    ]}
-                    value={returnFrequency}
-                    onChange={(v) => setReturnFrequency(v as 'monthly' | 'qrmp')}
-                  />
-                  <Text variant="micro" tone="muted">
-                    {tr('settings:company.returnFrequencyHint')}
-                  </Text>
-                </View>
-                {/* Short codes and a date side by side on a desktop; the date column shows only with an LUT. */}
-                <FieldRow>
-                <TextField
-                  label={tr('settings:company.tan')}
-                  value={tan}
-                  onChangeText={(v) => setTan(v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10))}
-                  autoCapitalize="characters"
-                  icon="bank-minus"
-                  placeholder="MUMA12345B"
-                  hint={tr('settings:company.tanHint')}
-                  error={errors.tan}
-                />
-                <TextField
-                  label={tr('settings:company.lutNumber')}
-                  value={lutNumber}
-                  onChangeText={(v) => setLutNumber(v.toUpperCase())}
-                  autoCapitalize="characters"
-                  icon="earth-arrow-right"
-                  placeholder="AD270426012345X"
-                  hint={tr('settings:company.lutHint')}
-                />
-                {lutNumber.trim() ? (
-                  <DateField label={tr('settings:company.lutValidTill')} value={lutValidTill} onChange={setLutValidTill} />
-                ) : null}
-                </FieldRow>
-              </>
-            ) : null}
-          </>
-        ) : null}
-
-        <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('settings:company.inventory')}</Text>
-        <SwitchField
-          label={tr('settings:company.allowNegativeStock')}
-          description={tr('settings:company.allowNegativeStockHint')}
-          value={allowNegativeStock}
-          onValueChange={setAllowNegativeStock}
-        />
-
-        <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('settings:company.rules')}</Text>
-        {/* Two short numbers: side by side on a desktop. */}
-        <FieldRow>
-        <TextField
-          label={tr('settings:company.msmeBankRate')}
-          value={bankRate}
-          onChangeText={setBankRate}
-          keyboardType="decimal-pad"
-          hint={tr('settings:company.msmeBankRateHint')}
-          error={errors.bankRate}
-          icon="percent-outline"
-        />
-        <TextField
-          label={tr('settings:company.gstr2bTolerance')}
-          value={toleranceDays}
-          onChangeText={setToleranceDays}
-          keyboardType="number-pad"
-          hint={tr('settings:company.gstr2bToleranceHint')}
-          error={errors.toleranceDays}
-          icon="calendar-range"
-        />
-        </FieldRow>
 
         {/* Archiving is its own action, kept apart from the form and its Save. */}
         <View style={{ height: 1, backgroundColor: t.c.line, marginTop: t.spacing.xl }} />

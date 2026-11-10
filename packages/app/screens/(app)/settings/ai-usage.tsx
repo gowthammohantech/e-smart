@@ -11,7 +11,7 @@ import { FormActions } from "@esmart/ui/components/ActionBar";
 import { LixiAccessCard } from "../../../features/company/LixiAccessCard";
 import { LoadFailed } from "../../../features/company/LoadFailed";
 import { useSaveShortcut } from "../../../components/useSaveShortcut";
-import { SHOW_SCROLLBAR, WIDE_FORM_MAX_WIDTH, useIsDesktop } from "@esmart/ui/theme/breakpoints";
+import { SHOW_SCROLLBAR, useIsDesktop } from "@esmart/ui/theme/breakpoints";
 import { useServerSave } from "../../../components/useServerSave";
 import { useAiUsage } from "../../../remote/queries";
 import { useAppStore } from "../../../store/appStore";
@@ -59,9 +59,8 @@ function AiUsageScreenBody() {
   useSaveShortcut(() => void save(), owner && !badBudget && !saving);
 
   return (
-    // Left-aligned like the other settings pages; a wide form's width on a desktop.
     <KeyboardAvoidingView
-      style={desktop ? { flex: 1, width: "100%", maxWidth: WIDE_FORM_MAX_WIDTH } : { flex: 1 }}
+      style={{ flex: 1 }}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <Stack.Screen options={{ title: tr("settings:aiUsage.title") }} />
@@ -73,7 +72,9 @@ function AiUsageScreenBody() {
         <Text variant="small" tone="muted">
           {tr("settings:aiUsage.hint")}
         </Text>
-        <Card style={{ gap: t.spacing.md }}>
+        {/* Usage and the budget side by side on a desktop, so the switch sits near its label. */}
+        <View style={desktop ? { flexDirection: "row", alignItems: "flex-start", gap: t.spacing.lg } : { gap: t.spacing.lg }}>
+        <Card style={desktop ? { flex: 1, gap: t.spacing.md } : { gap: t.spacing.md }}>
           {u ? (
             <>
               <Text variant="body" weight="600">
@@ -125,7 +126,7 @@ function AiUsageScreenBody() {
             </SkeletonGroup>
           )}
         </Card>
-        <Card style={{ gap: t.spacing.md }}>
+        <Card style={desktop ? { flex: 1, gap: t.spacing.md } : { gap: t.spacing.md }}>
           <SwitchField
             label={tr("settings:aiUsage.budget")}
             description={tr(
@@ -150,6 +151,7 @@ function AiUsageScreenBody() {
             />
           ) : null}
         </Card>
+        </View>
         {/* How Lixi opens on this device: switches that save as they flip. */}
         <LixiAccessCard />
       </ScrollView>

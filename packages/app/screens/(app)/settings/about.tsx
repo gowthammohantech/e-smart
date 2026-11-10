@@ -8,13 +8,15 @@ import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
 import { Badge } from '@esmart/ui/components/Badge';
 import { ListRow } from '@esmart/ui/components/ListRow';
-import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { Columns } from '@esmart/ui/components/Layout';
 import { appVersion } from '../../../lib/appVersion';
 import { LEGAL } from '../../../lib/legal';
 import { useToast } from '@esmart/ui/components/Toast';
 
 export default function About() {
   const t = useTheme();
+  const desktop = useIsDesktop();
   const { t: tr } = useTranslation(['nav', 'settings']);
   const router = useRouter();
   const { label } = appVersion();
@@ -22,11 +24,8 @@ export default function About() {
   // A phone with no browser or mail app set up can't open these: say so instead of doing nothing.
   const open = (url: string) => () => Linking.openURL(url).catch(() => toast.show(url.replace(/^mailto:/, ''), 'info', { icon: 'link-variant' }));
 
-  return (
-    <View style={{ flex: 1 }}>
-      <Stack.Screen options={{ title: tr('nav:title.about') }} />
-
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40, gap: t.spacing.lg }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
+  const hero = (
+    <>
         <Card style={{ alignItems: 'center', gap: t.spacing.md, paddingVertical: t.spacing.xxl }}>
           <BrandLogo height={64} />
           <Text variant="h3" weight="700">{tr('settings:about.appName')}</Text>
@@ -34,6 +33,10 @@ export default function About() {
           <Text variant="caption" tone="muted" center style={{ maxWidth: 280, lineHeight: 18 }}>{tr('settings:about.pitch')}</Text>
         </Card>
 
+    </>
+  );
+  const details = (
+    <>
         <Card padded={false}>
           <ListRow title={tr('settings:about.version')} icon="information-outline" right={<Text variant="small" tone="muted">{label}</Text>} />
           <ListRow title={tr('settings:about.data')} icon="database-outline" right={<Text variant="small" tone="muted">{tr('settings:about.syncedData')}</Text>} divider={false} />
@@ -52,6 +55,23 @@ export default function About() {
             {tr('settings:about.note')}
           </Text>
         </Card>
+    </>
+  );
+
+  return (
+    <View style={{ flex: 1 }}>
+      <Stack.Screen options={{ title: tr('nav:title.about') }} />
+
+      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40, gap: t.spacing.lg }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
+        {desktop ? (
+          // The app's card beside its details on a desktop, across the page's width.
+          <Columns left={hero} right={<View style={{ gap: t.spacing.lg }}>{details}</View>} />
+        ) : (
+          <>
+            {hero}
+            {details}
+          </>
+        )}
       </ScrollView>
     </View>
   );
