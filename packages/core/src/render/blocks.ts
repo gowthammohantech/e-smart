@@ -6,7 +6,8 @@
  */
 import { BankDetails, BusinessDocument, Company, DocumentKind, EwayBill } from '../types';
 import type { Translate } from '../labels';
-import { formatMoney } from '../lib/format';
+import { formatMoney, formatPercent } from '../lib/format';
+import { cessBreakup } from '../domain/cessBreakup';
 import { formatDate } from '../lib/date';
 import { money } from '../lib/money';
 import { MIN_READABLE_QR_SIZE, qrMatrix, qrSvgString } from '../lib/qr';
@@ -112,6 +113,37 @@ export function bankBlock(doc: BusinessDocument, company: Company | undefined, b
         ${qr}
       </div>
     </div>`;
+}
+
+/**
+ * The cess item by item: each item's share of the cess in the totals, which the rows add up to.
+ * Empty when nothing on the document carries cess.
+ */
+export function cessTable({ bi, doc }: Pick<DocView, 'bi' | 'doc'>): string {
+  const rows = cessBreakup(doc.lines, doc.totals, doc.currency, doc.reverseCharge);
+  if (!rows.length) return '';
+  return `<table class="reimbursements cess-items">
+    <thead>
+      <tr>
+        <th style="width:26px">#</th>
+        <th>${bi('sales:pdf.cessByItem')}</th>
+        <th class="num">${bi('sales:pdf.taxableValue')}</th>
+        <th class="num">${bi('sales:pdf.cessRate')}</th>
+        <th class="num">${bi('sales:pdf.cess')}</th>
+      </tr>
+    </thead>
+    <tbody>${rows
+      .map(
+        (r, i) => `<tr>
+        <td class="num">${i + 1}</td>
+        <td><div class="item">${esc(r.name)}</div>${r.hsnCode ? `<div class="sub">HSN ${esc(r.hsnCode)}</div>` : ''}${r.reverseCharge ? '<div class="sub">Reverse charge: payable by the recipient</div>' : ''}</td>
+        <td class="num">${formatMoney(r.taxable)}</td>
+        <td class="num">${formatPercent(r.cessRate)}</td>
+        <td class="num strong">${formatMoney(r.cess)}</td>
+      </tr>`,
+      )
+      .join('')}</tbody>
+  </table>`;
 }
 
 /** Pure-agent reimbursements sit outside the taxable value (Rule 33), so they get their own table. */

@@ -9,7 +9,7 @@ import { amountInWords } from '../../lib/amountInWords';
 import { unitShortName } from '../../data/masters';
 import { tint } from '../invoiceTemplate';
 import type { DocView } from '../docView';
-import { bankBlock, cancelledStrip, eInvoiceBlock, esc, logoTag, reimbursementTable, signatureTag, SUPPLY_NOTE } from '../blocks';
+import { bankBlock, cancelledStrip, eInvoiceBlock, esc, logoTag, reimbursementTable, cessTable, signatureTag, SUPPLY_NOTE } from '../blocks';
 import { accentText, baseCss, stepRows, titleOf, buyerBlock, consigneeBlock, footLine, headerFacts, hsnTable, leftFoot, onAccent, pageHtml, sellerBlock, titleNotes } from './common';
 
 export function modernLayout(view: DocView, copyLabel: string): string {
@@ -77,7 +77,7 @@ export function modernLayout(view: DocView, copyLabel: string): string {
   </table>
   ${view.reimbursed.length ? reimbursementTable(view) : ''}
   <div class="words"><span class="cap">${bi('sales:pdf.amountChargeable')}</span> <span class="b">${esc(amountInWords(doc.totals.grandTotal))}</span></div>
-  ${hsnTable(view, 'hsn')}
+  ${hsnTable(view, 'hsn')}${cessTable(view)}
   <div class="closing">
     <div class="col">${leftFoot(view, { terms: true })}</div>
     <div class="col">${bank}</div>

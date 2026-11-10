@@ -11,7 +11,7 @@ import { amountInWords } from '../../lib/amountInWords';
 import { unitShortName } from '../../data/masters';
 import { tint } from '../invoiceTemplate';
 import type { DocView, TotalEntry } from '../docView';
-import { bankBlock, cancelledStrip, eInvoiceBlock, esc, logoTag, reimbursementTable, signatureTag, SUPPLY_NOTE } from '../blocks';
+import { bankBlock, cancelledStrip, eInvoiceBlock, esc, logoTag, reimbursementTable, cessTable, signatureTag, SUPPLY_NOTE } from '../blocks';
 import { addressLines, baseCss, pageHtml, stepRows, titleOf, buyerBlock, consigneeBlock, footLine, headerFacts, hsnTable, leftFoot, onAccent, sellerBlock, titleNotes, type Fact } from './common';
 
 export function boxedLayout(view: DocView, variant: 'classic' | 'detailed', copyLabel: string): string {
@@ -125,6 +125,7 @@ export function boxedLayout(view: DocView, variant: 'classic' | 'detailed', copy
   const lf = leftFoot(view, { terms: !detailed });
   const terms = detailed && doc.terms ? `<div class="row pad"><div class="cap">${bi('sales:pdf.terms')}</div><div class="pre">${esc(doc.terms)}</div></div>` : '';
   const einv = eInvoiceBlock(doc, bi, view.ewayBill);
+  const cess = cessTable(view);
 
   const page = `
   ${copyLabel ? `<div class="copy-label">${esc(copyLabel)}</div>` : ''}
@@ -143,7 +144,7 @@ export function boxedLayout(view: DocView, variant: 'classic' | 'detailed', copy
     </table>
     ${view.reimbursed.length ? `<div class="row pad">${reimbursementTable(view)}</div>` : ''}
     <div class="row pad words"><span class="cap">${bi('sales:pdf.amountChargeable')}</span> <span class="b">${esc(amountInWords(doc.totals.grandTotal))}</span><span class="eoe">E. &amp; O.E</span></div>
-    ${hsnTable(view, 'hsn')}
+    ${hsnTable(view, 'hsn')}${cess ? `<div class="row pad">${cess}</div>` : ''}
     ${terms}
     ${einv ? `<div class="row">${einv}</div>` : ''}
     <table class="foot-grid"><tr>

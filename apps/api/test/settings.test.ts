@@ -172,6 +172,62 @@ describe('payment accounts', () => {
     expect(wrong.status).toBe(422);
     expect(wrong.body.issues[0].field).toBe('openingBalance.currency');
   });
+
+  it('prints the account the business profile picks on invoices, and keeps its details in step', async () => {
+    const { token, c } = await ownerWithCompany(t);
+    const body = {
+      name: 'HDFC Current', type: 'bank', currency: 'INR', openingBalance: { minor: 0, currency: 'INR' },
+      accountHolderName: 'Vertex Traders', bankName: 'HDFC Bank', branchName: 'Andheri', accountNumber: '5020 0012 3456', ifsc: 'hdfc0001234', upiId: 'Vertex@OkHdfc',
+    };
+    const badIfsc = await t.post(`${c}/payment-accounts`, { ...body, ifsc: 'HDFC1234' }, { token });
+    expect(badIfsc.status).toBe(422);
+    expect(badIfsc.body.issues[0].field).toMatch(/ifsc$/);
+    const hdfc = await t.post(`${c}/payment-accounts`, body, { token });
+    expect(hdfc.body).toMatchObject({ accountHolderName: 'Vertex Traders', bankName: 'HDFC Bank', branchName: 'Andheri', ifsc: 'HDFC0001234', upiId: 'vertex@okhdfc' });
+
+    // Linking prints the account's own details, whatever else the profile sends.
+    const company = (await t.get(c, { token })).body;
+    const linked = await t.put(c, { ...company, bankDetails: { accountNumber: '111111111', paymentAccountId: hdfc.body.id } }, { token });
+    expect(linked.status).toBe(200);
+    expect(linked.body.bankDetails).toEqual({
+      bankName: 'HDFC Bank', accountName: 'Vertex Traders', accountNumber: '502000123456', ifsc: 'HDFC0001234', branch: 'Andheri', upiId: 'vertex@okhdfc', paymentAccountId: hdfc.body.id,
+    });
+
+    // The account changes: the invoices follow, and the company's version doesn't move (its next save isn't refused).
+    await t.put(`${c}/payment-accounts/${hdfc.body.id}`, { ...hdfc.body, branchName: 'Bandra' }, { token });
+    const after = (await t.get(c, { token })).body;
+    expect(after.bankDetails.branch).toBe('Bandra');
+    expect(after.version).toBe(linked.body.version);
+    // A profile saved with what it last saw (or by an older app) can't put the old details back.
+    const stale = await t.put(c, { ...after, bankDetails: { ...linked.body.bankDetails, paymentAccountId: undefined } }, { token });
+    expect(stale.body.bankDetails).toMatchObject({ branch: 'Bandra', paymentAccountId: hdfc.body.id });
+
+    // Unlinked, the details typed in the profile print again.
+    const unlinked = await t.put(c, { ...stale.body, bankDetails: { bankName: 'SBI', accountNumber: '30001234567', paymentAccountId: '' } }, { token });
+    expect(unlinked.body.bankDetails).toEqual({ bankName: 'SBI', accountNumber: '30001234567' });
+  });
+
+  it('keeps the type of an account that only a transfer has used', async () => {
+    const { token, c } = await ownerWithCompany(t, { plan: 'pro' });
+    t.setNow('2026-09-29T10:00:00Z');
+    const open = { currency: 'INR', openingBalance: { minor: 0, currency: 'INR' } };
+    const hdfc = await t.post(`${c}/payment-accounts`, { ...open, name: 'HDFC', type: 'bank' }, { token });
+    const sbi = await t.post(`${c}/payment-accounts`, { ...open, name: 'SBI', type: 'bank', openingBalance: { minor: 50_000, currency: 'INR' } }, { token });
+    const inr = (minor: number) => ({ minor, currency: 'INR' });
+    const contra = await t.post(
+      `${c}/vouchers`,
+      { kind: 'contra', date: '2026-09-29', lines: [{ account: `pay:${hdfc.body.id}`, debit: inr(10_000), credit: inr(0) }, { account: `pay:${sbi.body.id}`, debit: inr(0), credit: inr(10_000) }] },
+      { token },
+    );
+    expect(contra.status, JSON.stringify(contra.body.issues ?? contra.body)).toBe(201);
+
+    const usage = (await t.get(`${c}/usage`, { token })).body;
+    expect(usage.paymentAccounts[hdfc.body.id].inUse).toBe(true);
+    const retyped = await t.put(`${c}/payment-accounts/${hdfc.body.id}`, { ...hdfc.body, type: 'wallet' }, { token });
+    expect(retyped.status).toBe(422);
+    expect(retyped.body.issues[0].field).toBe('type');
+    expect((await t.del(`${c}/payment-accounts/${sbi.body.id}`, { token })).status).toBe(409);
+  });
 });
 
 describe('a foreign-currency account', () => {

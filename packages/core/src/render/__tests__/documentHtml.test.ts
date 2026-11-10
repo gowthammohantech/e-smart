@@ -129,3 +129,34 @@ describe('quantities on the printed document', () => {
     expect(html).not.toContain('5 NOS');
   });
 });
+
+describe('cess by item on the printed document', () => {
+  const withCess = (lines: DocumentLine[]) => {
+    const doc = invoice({ lines });
+    doc.totals = calculateDocument({
+      lines,
+      currency: 'INR',
+      baseCurrency: 'INR',
+      exchangeRate: 1,
+      documentDiscountMode: 'amount',
+      documentDiscountValue: 0,
+      charges: money(0, 'INR'),
+      applyRoundOff: false,
+      taxCategories: [{ id: 'gst28', name: 'GST 28%', rate: 28 } as never],
+      taxContext: { regime: 'GST', homeStateCode: '27', placeOfSupplyStateCode: '27', registered: true },
+    });
+    return doc;
+  };
+  const cessLine = (id: string, name: string, minor: number): DocumentLine => ({ ...line, id, name, quantity: 1, unitPrice: money(minor, 'INR'), taxCategoryId: 'gst28', taxRate: 28, hsnCode: '2402', gst: { cessRate: 12 } });
+
+  it('lists each item with the value its cess is on and its share', () => {
+    const html = render(withCess([cessLine('a', 'Cigarettes', 100_000), cessLine('b', 'Cigars', 50_000)]), company());
+    const table = html.slice(html.indexOf('Cess by item'));
+    expect(table).toMatch(/Cigarettes[\s\S]*HSN 2402[\s\S]*1,000\.00[\s\S]*12%[\s\S]*120\.00/);
+    expect(table).toMatch(/Cigars[\s\S]*500\.00[\s\S]*12%[\s\S]*60\.00/);
+  });
+
+  it('prints no cess table when nothing carries cess', () => {
+    expect(render(invoice(), company())).not.toContain('Cess by item');
+  });
+});

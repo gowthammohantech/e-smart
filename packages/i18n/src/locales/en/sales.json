@@ -471,6 +471,9 @@
     "amount": "Amount",
     "subtotal": "Subtotal",
     "taxableValue": "Taxable value",
+    "cessByItem": "Cess by item",
+    "cessRate": "Cess rate",
+    "cess": "Cess",
     "roundOff": "Round off",
     "total": "Total",
     "notes": "Notes",
@@ -643,5 +646,10 @@
     "willDeduct": "The customer is expected to deduct {{amount}} and pay {{net}}",
     "rate": "TDS rate (%)",
     "rateHint": "Worked on the value before GST. Leave empty for the section's rate."
+  },
+  "cess": {
+    "itemWise": "Cess by item",
+    "line": "Cess {{rate}} on {{taxable}}",
+    "lineReverseCharge": "Cess {{rate}} on {{taxable}}, paid by the buyer (reverse charge)"
   }
 }

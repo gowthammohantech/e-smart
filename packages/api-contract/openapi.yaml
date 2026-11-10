@@ -634,6 +634,19 @@ paths:
         '409': { $ref: '#/components/responses/Conflict' }
   /companies/{companyId}/logo:
     parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Companies]
+      operationId: getCompanyLogo
+      summary: The logo itself, for documents a device renders (its `logoUri` link expires within the hour, and a page may not load images from storage)
+      responses:
+        '200':
+          description: The image, as uploaded
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+            image/jpeg:
+              schema: { type: string, format: binary }
+        '404': { $ref: '#/components/responses/NotFound' }
     put:
       tags: [Companies]
       operationId: uploadCompanyLogo
@@ -6809,7 +6822,7 @@ components:
         ifsc: { type: string, pattern: '^([A-Za-z]{4}0[A-Za-z0-9]{6})?$', description: Indian Financial System Code }
         branch: { type: string, maxLength: 100 }
         upiId: { type: string, pattern: '^([A-Za-z0-9.\-_]{2,256}@[A-Za-z][A-Za-z0-9]{1,63})?$', description: 'Virtual payment address, e.g. `vertex@okhdfc`' }
-        paymentAccountId: { type: string, maxLength: 40, description: 'The bank payment account these details belong to. Receipts default to it; an empty string unlinks it.' }
+        paymentAccountId: { type: string, maxLength: 40, description: "The bank payment account these details belong to. Receipts default to it; an empty string unlinks it. Linked, the other fields are that account's own (set in payment accounts) and what is sent for them is ignored." }
     Company:
       allOf:
         - $ref: '#/components/schemas/Versioned'
@@ -7053,7 +7066,12 @@ components:
             name: { type: string }
             type: { type: string, enum: [cash, bank, wallet] }
             currency: { type: string }
-            accountNumber: { type: string }
+            accountNumber: { type: string, maxLength: 40 }
+            accountHolderName: { type: string, maxLength: 100, description: 'Name the account is held in, as a customer pays it' }
+            bankName: { type: string, maxLength: 100 }
+            branchName: { type: string, maxLength: 100 }
+            ifsc: { type: string, pattern: '^([A-Za-z]{4}0[A-Za-z0-9]{6})?$', description: Indian Financial System Code }
+            upiId: { type: string, pattern: '^([A-Za-z0-9.\-_]{2,256}@[A-Za-z][A-Za-z0-9]{1,63})?$', description: 'Virtual payment address, e.g. `vertex@okhdfc`' }
             openingBalance: { $ref: '#/components/schemas/Money' }
             openingBalanceDate: { type: string, format: date, description: "The day the opening balance was counted; not after today." }
             openingRate: { type: number, readOnly: true, description: "A foreign-currency account: the opening balance's rate to base on its date, from the company's exchange rates" }

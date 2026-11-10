@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Button } from '@esmart/ui/components/Button';
@@ -14,6 +14,7 @@ import { useServerSave } from '../../../components/useServerSave';
 import { useSaveShortcut } from '../../../components/useSaveShortcut';
 import { useAppStore } from '../../../store/appStore';
 import { useActiveCompany, usePaymentAccounts } from '../../../store/selectors';
+import { bankDetailsOf } from '@esmart/core/domain/paymentAccounts';
 import { useCompanyUsage } from '../../../remote/queries';
 import { profileLocks } from '@esmart/core/domain/companyLock';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
@@ -78,8 +79,6 @@ function CompanySettingsForm() {
   const [returnFrequency, setReturnFrequency] = useState(company?.taxRegistration?.returnFrequency ?? 'monthly');
   const [fyMonth, setFyMonth] = useState(company?.fiscalYearStartMonth ?? 4);
   const [allowNegativeStock, setAllowNegativeStock] = useState(!!company?.allowNegativeStock);
-  const [bankRate, setBankRate] = useState(String(company?.msmeBankRate ?? 5.5));
-  const [toleranceDays, setToleranceDays] = useState(String(company?.gstr2bDateToleranceDays ?? 3));
   const [tan, setTan] = useState(company?.tan ?? '');
   const bank = company?.bankDetails;
   const [bankName, setBankName] = useState(bank?.bankName ?? '');
@@ -93,6 +92,10 @@ function CompanySettingsForm() {
   const [bookAccountId, setBookAccountId] = useState(bank?.paymentAccountId ?? '');
   const [bookAccountOpen, setBookAccountOpen] = useState(false);
   const bookAccount = bankAccounts.find((a) => a.id === bookAccountId);
+  // Linked, the invoices print that account's own details (the server copies them); the fields below
+  // are only for a business that hasn't linked one.
+  const linkedDetails = bookAccount ? bankDetailsOf(bookAccount) : undefined;
+  const router = useRouter();
   const [lutNumber, setLutNumber] = useState(company?.taxRegistration?.lutNumber ?? '');
   // An LUT is filed per financial year, so it runs to the next 31 March by default.
   const [lutValidTill, setLutValidTill] = useState(() => {
@@ -104,27 +107,25 @@ function CompanySettingsForm() {
   const [typeOpen, setTypeOpen] = useState(false);
   const [stateOpen, setStateOpen] = useState(false);
   const [fyOpen, setFyOpen] = useState(false);
-  const [errors, setErrors] = useState<Errors<'name' | 'email' | 'phone' | 'taxId' | 'postalCode' | 'tan' | 'ifsc' | 'accountNumber' | 'upiId' | 'bankRate' | 'toleranceDays'>>({});
+  const [errors, setErrors] = useState<Errors<'name' | 'email' | 'phone' | 'taxId' | 'postalCode' | 'tan' | 'ifsc' | 'accountNumber' | 'upiId'>>({});
 
   const country = COUNTRIES.find((c) => c.code === company?.country);
   const currency = CURRENCIES.find((c) => c.code === company?.baseCurrency);
 
   const save = async () => {
     // In the order the fields sit on the page, so the toast names the first one you'd reach.
-    const next: Errors<'name' | 'email' | 'phone' | 'taxId' | 'postalCode' | 'tan' | 'ifsc' | 'accountNumber' | 'upiId' | 'bankRate' | 'toleranceDays'> = {
+    const next: Errors<'name' | 'email' | 'phone' | 'taxId' | 'postalCode' | 'tan' | 'ifsc' | 'accountNumber' | 'upiId'> = {
       name: required(name, tr('errors:field.businessName')),
       email: validEmail(email),
       phone: phone.error(),
       postalCode: validPostalCode(postalCode, company?.country, stateCode),
       // The same shapes the server checks, said here in words.
-      accountNumber: accountNumber.trim() && !/^(?:[0-9A-Za-z] ?){6,34}$/.test(accountNumber.trim()) ? tr('settings:company.accountNumberInvalid') : undefined,
-      ifsc: ifsc.trim() && !/^[A-Za-z]{4}0[A-Za-z0-9]{6}$/.test(ifsc.trim()) ? tr('settings:company.ifscInvalid') : undefined,
-      upiId: upiId.trim() && !/^[A-Za-z0-9.\-_]{2,256}@[A-Za-z][A-Za-z0-9]{1,63}$/.test(upiId.trim()) ? tr('settings:company.upiInvalid') : undefined,
+      accountNumber: !bookAccount && accountNumber.trim() && !/^(?:[0-9A-Za-z] ?){6,34}$/.test(accountNumber.trim()) ? tr('settings:company.accountNumberInvalid') : undefined,
+      ifsc: !bookAccount && ifsc.trim() && !/^[A-Za-z]{4}0[A-Za-z0-9]{6}$/.test(ifsc.trim()) ? tr('settings:company.ifscInvalid') : undefined,
+      upiId: !bookAccount && upiId.trim() && !/^[A-Za-z0-9.\-_]{2,256}@[A-Za-z][A-Za-z0-9]{1,63}$/.test(upiId.trim()) ? tr('settings:company.upiInvalid') : undefined,
       taxId: taxRegistered && company?.country === 'IN' ? validGstin(taxId) : undefined,
       tan: taxRegistered ? validTan(tan) : undefined,
       // Out of range is said on the field, not quietly swapped for the default.
-      bankRate: bankRate.trim() && !(Number(bankRate) >= 0 && Number(bankRate) <= 50) ? tr('settings:company.msmeBankRateInvalid') : undefined,
-      toleranceDays: toleranceDays.trim() && !(/^\d{1,2}$/.test(toleranceDays.trim()) && Number(toleranceDays) <= 30) ? tr('settings:company.gstr2bToleranceInvalid') : undefined,
     };
     setErrors(next);
     if (hasErrors(next)) {
@@ -147,22 +148,21 @@ function CompanySettingsForm() {
         website: website.trim() || undefined,
         fiscalYearStartMonth: fyMonth,
         allowNegativeStock,
-        // Typed values out of range fall back to the defaults the server also keeps.
-        msmeBankRate: Number(bankRate) >= 0 && Number(bankRate) <= 50 && bankRate.trim() ? Number(bankRate) : 5.5,
-        gstr2bDateToleranceDays: /^\d{1,2}$/.test(toleranceDays.trim()) && Number(toleranceDays) <= 30 ? Number(toleranceDays) : 3,
         // Blank clears it; the server takes an empty TAN as "none".
         tan: tan.trim().toUpperCase(),
-        // Sent whole: an empty field clears it on the server.
-        bankDetails: {
-          bankName: bankName.trim(),
-          accountName: accountName.trim(),
-          accountNumber: accountNumber.trim(),
-          ifsc: ifsc.trim().toUpperCase(),
-          branch: bankBranch.trim(),
-          upiId: upiId.trim(),
-          // An account deleted since it was linked reads as unlinked.
-          paymentAccountId: bookAccount?.id ?? '',
-        },
+        // Linked: the account's own details, which the server copies too. Otherwise sent whole: an
+        // empty field clears it on the server, and an account deleted since it was linked reads as unlinked.
+        bankDetails: bookAccount
+          ? { ...linkedDetails, paymentAccountId: bookAccount.id }
+          : {
+              bankName: bankName.trim(),
+              accountName: accountName.trim(),
+              accountNumber: accountNumber.trim(),
+              ifsc: ifsc.trim().toUpperCase(),
+              branch: bankBranch.trim(),
+              upiId: upiId.trim(),
+              paymentAccountId: '',
+            },
         address: {
           ...company.address,
           line1: line1.trim(),
@@ -233,8 +233,6 @@ function CompanySettingsForm() {
     />
   );
 
-  const digits = (v?: string) => (v ?? '').replace(/\s+/g, '').toUpperCase();
-  const bookAccountMismatch = !!bookAccount?.accountNumber && !!accountNumber.trim() && digits(bookAccount.accountNumber) !== digits(accountNumber);
   const bookAccountField = (
     <View key="bookAccount" style={{ gap: t.spacing.xs }}>
       <PickerField
@@ -245,13 +243,47 @@ function CompanySettingsForm() {
         hint={bankAccounts.length ? tr('settings:company.bookAccountHint') : tr('settings:company.bookAccountEmpty')}
         disabled={!bankAccounts.length}
       />
-      {bookAccountMismatch ? (
-        <Text variant="caption" tone="warn" style={{ lineHeight: 18 }}>
-          {tr('settings:company.bookAccountMismatch', { name: bookAccount.name, number: bookAccount.accountNumber })}
-        </Text>
-      ) : null}
     </View>
   );
+  // Linked: what the invoices print, from the account; changed in Payment accounts.
+  const linkedCard = bookAccount ? (
+    <Card key="linked" variant="flat" style={{ gap: t.spacing.xs }}>
+      <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
+        {tr('settings:company.bookAccountPrints', { name: bookAccount.name })}
+      </Text>
+      {[
+        [tr('settings:company.accountName'), linkedDetails?.accountName || company?.legalName || company?.name],
+        [tr('settings:company.bankName'), [linkedDetails?.bankName, linkedDetails?.branch].filter(Boolean).join(' · ')],
+        [tr('settings:company.accountNumber'), linkedDetails?.accountNumber],
+        [tr('settings:company.ifsc'), linkedDetails?.ifsc],
+        [tr('settings:company.upiId'), linkedDetails?.upiId],
+      ]
+        .filter(([, v]) => !!v)
+        .map(([label, v]) => (
+          <View key={label} style={{ flexDirection: 'row', gap: t.spacing.md }}>
+            <Text variant="caption" tone="muted" style={{ width: 130 }}>
+              {label}
+            </Text>
+            <Text variant="small" weight="600" style={{ flex: 1 }} selectable>
+              {v}
+            </Text>
+          </View>
+        ))}
+      {linkedDetails?.accountNumber || linkedDetails?.upiId ? null : (
+        <Text variant="caption" tone="warn" style={{ lineHeight: 18 }}>
+          {tr('settings:company.bookAccountIncomplete', { name: bookAccount.name })}
+        </Text>
+      )}
+      <Button
+        title={tr('settings:company.bookAccountEdit')}
+        icon="pencil-outline"
+        variant="ghost"
+        size="sm"
+        onPress={() => router.push('/(app)/settings/accounts' as never)}
+        style={{ alignSelf: 'flex-start' }}
+      />
+    </Card>
+  ) : null;
 
   const caption = (label: string, nativeID?: string) => (
     <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }} nativeID={nativeID}>
@@ -382,30 +414,6 @@ function CompanySettingsForm() {
       onValueChange={setAllowNegativeStock}
     />
   );
-  const bankRateField = (
-    <TextField
-      key="bankRate"
-      label={tr('settings:company.msmeBankRate')}
-      value={bankRate}
-      onChangeText={setBankRate}
-      keyboardType="decimal-pad"
-      hint={tr('settings:company.msmeBankRateHint')}
-      error={errors.bankRate}
-      icon="percent-outline"
-    />
-  );
-  const toleranceField = (
-    <TextField
-      key="tolerance"
-      label={tr('settings:company.gstr2bTolerance')}
-      value={toleranceDays}
-      onChangeText={setToleranceDays}
-      keyboardType="number-pad"
-      hint={tr('settings:company.gstr2bToleranceHint')}
-      error={errors.toleranceDays}
-      icon="calendar-range"
-    />
-  );
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -441,27 +449,20 @@ function CompanySettingsForm() {
             <View nativeID="bank-and-signature">
               <FormSection title={tr('settings:company.bankAndSignature')}>
                 {bankHint}
-                <FieldGrid columns={3} items={[bookAccountField, accountNameField, upiField, bankNameField, branchField, accountNumberField, ifscField]} />
+                {bookAccount ? (
+                  <FieldGrid columns={3} items={[bookAccountField]} />
+                ) : (
+                  <FieldGrid columns={3} items={[bookAccountField, accountNameField, upiField, bankNameField, branchField, accountNumberField, ifscField]} />
+                )}
+                {linkedCard}
                 <SignatureSection />
               </FormSection>
             </View>
-            <Columns
-              ratio={[3, 2]}
-              left={
-                <FormSection title={tr('settings:company.taxAndFy')}>
-                  <FieldGrid items={[countryField, currencyField, fyField]} />
-                  {registeredSwitch}
-                  {taxDetails}
-                </FormSection>
-              }
-              right={
-                // Stacked: the hints are long and the column is narrow beside the tax card.
-                <FormSection title={tr('settings:company.rules')}>
-                  {bankRateField}
-                  {toleranceField}
-                </FormSection>
-              }
-            />
+            <FormSection title={tr('settings:company.taxAndFy')}>
+              <FieldGrid items={[countryField, currencyField, fyField]} />
+              {registeredSwitch}
+              {taxDetails}
+            </FormSection>
           </>
         ) : (
           <>
@@ -485,16 +486,22 @@ function CompanySettingsForm() {
             {caption(tr('settings:company.bankAndSignature'), 'bank-and-signature')}
             {bankHint}
             {bookAccountField}
-            {accountNameField}
-            <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
-              {bankNameField}
-              {branchField}
-            </View>
-            <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
-              {accountNumberField}
-              {ifscField}
-            </View>
-            {upiField}
+            {bookAccount ? (
+              linkedCard
+            ) : (
+              <>
+                {accountNameField}
+                <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
+                  {bankNameField}
+                  {branchField}
+                </View>
+                <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
+                  {accountNumberField}
+                  {ifscField}
+                </View>
+                {upiField}
+              </>
+            )}
             <SignatureSection />
 
             {caption(tr('settings:company.taxAndFy'))}
@@ -507,9 +514,6 @@ function CompanySettingsForm() {
             {caption(tr('settings:company.inventory'))}
             {negativeStockSwitch}
 
-            {caption(tr('settings:company.rules'))}
-            {bankRateField}
-            {toleranceField}
           </>
         )}
 
@@ -540,12 +544,7 @@ function CompanySettingsForm() {
         title={tr('settings:company.bookAccount')}
         options={[{ value: '', label: tr('settings:company.bookAccountNone') }, ...bankAccounts.map((a) => ({ value: a.id, label: a.name, trailing: a.accountNumber ? `•••• ${a.accountNumber.slice(-4)}` : undefined }))]}
         value={bookAccountId}
-        onSelect={(id) => {
-          setBookAccountId(id);
-          // Linking an account fills the number customers pay into, when that field is still empty.
-          const picked = bankAccounts.find((a) => a.id === id);
-          if (picked?.accountNumber && !accountNumber.trim()) setAccountNumber(picked.accountNumber);
-        }}
+        onSelect={setBookAccountId}
         searchable={false}
       />
       <SelectSheet visible={fyOpen} onClose={() => setFyOpen(false)} title={tr('settings:company.fyStarts')} options={months.map((m, i) => ({ value: String(i + 1), label: m }))} value={String(fyMonth)} onSelect={(v) => setFyMonth(Number(v))} searchable={false} />

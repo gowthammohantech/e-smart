@@ -23,6 +23,8 @@ import { useToast, type ToastIcon } from '@esmart/ui/components/Toast';
 import { useServerSave } from '../../components/useServerSave';
 import { useSaveOnline } from '../../remote/save';
 import { useSingleFlight } from '../../components/useSingleFlight';
+import { useLogoSrc } from '../../remote/logoSrc';
+import { useCessRows } from './cessRows';
 
 import { BusinessDocument, DocStatus, DocumentKind } from '@esmart/core/types';
 import { tdsSection } from '@esmart/core/data/tdsSections';
@@ -200,12 +202,16 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
   const adjustRoute = `/(app)/receipts/adjust?partyId=${doc.partyId}&documentId=${doc.id}${['purchaseBill', 'supplierDebitNote'].includes(doc.kind) ? '&side=supplier' : ''}`;
 
   const customFields = useAppStore((s) => s.customFields);
+  const logoSrc = useLogoSrc(company);
+  // The cess item by item, under the totals, when anything on it carries cess.
+  const cessRows = useCessRows(doc.lines, doc.totals, doc.currency, doc.reverseCharge);
   const documentHtml = () =>
     buildDocumentHtml({
       t: tr,
       language,
       document: doc,
       company,
+      logoSrc,
       party,
       branch,
       ewayBill,
@@ -704,6 +710,7 @@ ${url}`;
                 : undefined
           }
           itc={itcBreakup}
+          cess={cessRows}
         />
         {/* Capital goods bought on this bill: their cost is in Plant and machinery; the register adds depreciation. */}
         {capitalCost > 0 && !registered ? (
