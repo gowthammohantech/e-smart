@@ -222,7 +222,21 @@
     "createIn": "Create in {{label}}",
     "openPanel": "{{label}} pages",
     "branch": "Branch",
-    "business": "Business"
+    "business": "Business",
+    "dueCard": {
+      "heading": "Next filing",
+      "today": "today",
+      "tomorrow": "tomorrow",
+      "inDays_one": "in {{count}} day",
+      "inDays_other": "in {{count}} days",
+      "overdue_one": "{{count}} day late",
+      "overdue_other": "{{count}} days late",
+      "more_one": "+{{count}} more due",
+      "more_other": "+{{count}} more due",
+      "allFiled": "All filings up to date",
+      "allFiledHint": "Nothing left to file in the next 60 days.",
+      "a11y": "Next filing: {{title}} for {{period}}, {{when}}. Open GST returns."
+    }
   },
   "home": {
     "emptyTitle": "Let's get you started",

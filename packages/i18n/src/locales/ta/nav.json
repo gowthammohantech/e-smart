@@ -222,7 +222,21 @@
     "createIn": "{{label}} — புதியது",
     "openPanel": "{{label}} பக்கங்கள்",
     "branch": "கிளை",
-    "business": "வணிகம்"
+    "business": "வணிகம்",
+    "dueCard": {
+      "heading": "அடுத்த தாக்கல்",
+      "today": "இன்று",
+      "tomorrow": "நாளை",
+      "inDays_one": "{{count}} நாளில்",
+      "inDays_other": "{{count}} நாட்களில்",
+      "overdue_one": "{{count}} நாள் தாமதம்",
+      "overdue_other": "{{count}} நாட்கள் தாமதம்",
+      "more_one": "+ மேலும் {{count}} நிலுவை",
+      "more_other": "+ மேலும் {{count}} நிலுவை",
+      "allFiled": "எல்லா தாக்கல்களும் முடிந்தன",
+      "allFiledHint": "அடுத்த 60 நாட்களில் தாக்கல் செய்ய எதுவும் இல்லை.",
+      "a11y": "அடுத்த தாக்கல்: {{period}}க்கான {{title}}, {{when}}. GST ரிட்டர்ன்களைத் திற."
+    }
   },
   "home": {
     "emptyTitle": "தொடங்கலாம் வாருங்கள்",
