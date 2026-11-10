@@ -609,8 +609,18 @@ export function Sidebar() {
   // wider one stays as it was folded.
   const narrow = breakpoint === 'tablet';
   const [openedOn, setOpenedOn] = useState<string | null>(null);
-  const folded = narrow ? openedOn !== pathname : collapsed;
-  const toggleFolded = narrow ? () => setOpenedOn(folded ? pathname : null) : toggleCollapsed;
+  // Settings brings its own list of pages beside the page, so the sidebar folds to icons for the
+  // visit, whatever it was. It can still be opened by hand there; leaving settings puts it back
+  // as the person keeps it (their saved choice isn't touched).
+  const inSettings = pathname.startsWith('/settings');
+  const [visit, setVisit] = useState({ inSettings, open: false });
+  if (visit.inSettings !== inSettings) setVisit({ inSettings, open: false });
+  const folded = narrow ? openedOn !== pathname : inSettings ? !visit.open : collapsed;
+  const toggleFolded = narrow
+    ? () => setOpenedOn(folded ? pathname : null)
+    : inSettings
+      ? () => setVisit((v) => ({ ...v, open: folded }))
+      : toggleCollapsed;
 
   // The width eases between the two sizes. Going narrower, the labels stay
   // until the sidebar has finished closing; going wider, they appear as it
@@ -631,7 +641,6 @@ export function Sidebar() {
   const compact = folded && settled;
 
   const current = tabForPath(pathname);
-  const inSettings = pathname.startsWith('/settings');
 
   // One section's pages drop down at a time. Arriving in a section opens its
   // list, so you can see where you are; its row's chevron closes it again.
