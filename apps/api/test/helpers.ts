@@ -7,6 +7,7 @@ import { afterAll, beforeEach } from 'vitest';
 import { createDb, createPool, schema } from '@esmart/db';
 import type { Schema } from '@esmart/api-contract';
 import { buildApp } from '../src/app';
+import { asSystem, openDatabases } from '../src/lib/dbScope';
 import { loadConfig } from '../src/config';
 import type { Deps } from '../src/context';
 import { loadOperations, type Operation } from '../src/openapi/spec';
@@ -34,7 +35,12 @@ export type CallOptions = {
 
 export type TestContext = {
   app: FastifyInstance;
+  /**
+   * The test's own access: `db` and `pool` are the database owner, outside row-level security, for
+   * fixtures and assertions. The app itself runs as esmart_app and esmart_system (`appDeps`).
+   */
   deps: Deps;
+  appDeps: Deps;
   providers: Providers;
   /** Pin the clock. */
   setNow: (d: Date | string) => void;
@@ -93,19 +99,39 @@ function validate(schema: object, body: unknown, where: string) {
   }
 }
 
+/** The test database's URL as one of the app's roles (db:roles: on a local database the password is the name). */
+function roleUrl(url: string, role: string): string {
+  const u = new URL(url);
+  u.username = role;
+  u.password = role;
+  return u.toString();
+}
+
 /**
  * A server on the test database, truncated before every test. Call once at
  * the top of a test file.
  */
 export function setupApi(env: Record<string, string> = {}): TestContext {
   const url = process.env.TEST_DATABASE_URL!;
-  const config = loadConfig({ NODE_ENV: 'test', DATABASE_URL: url, LOG_LEVEL: 'silent', DEMO_OTP: 'false', RATE_LIMIT_PER_MINUTE: '100000', AUTH_RATE_LIMIT_PER_MINUTE: '100000', ...env });
+  const config = loadConfig({
+    NODE_ENV: 'test',
+    DATABASE_URL: roleUrl(url, 'esmart_app'),
+    SYSTEM_DATABASE_URL: roleUrl(url, 'esmart_system'),
+    LOG_LEVEL: 'silent',
+    DEMO_OTP: 'false',
+    RATE_LIMIT_PER_MINUTE: '100000',
+    AUTH_RATE_LIMIT_PER_MINUTE: '100000',
+    ...env,
+  });
   const pool = createPool(url, 5);
   const db = createDb(pool);
+  const dbs = openDatabases(config, { max: 5, systemMax: 5 });
   let now: Date | null = null;
   // The simulators keep the test's clock, so a session opened "now" is the pinned now.
-  const providers = createProviders(config, { info: () => {} }, db, () => (now ? new Date(now) : new Date()));
-  const deps: Deps = { db, pool, systemDb: db, systemPool: pool, config, providers, now: () => (now ? new Date(now) : new Date()) };
+  const providers = createProviders(config, { info: () => {} }, dbs.systemDb, () => (now ? new Date(now) : new Date()));
+  const clock = () => (now ? new Date(now) : new Date());
+  const appDeps: Deps = { ...dbs, config, providers, now: clock };
+  const deps: Deps = { ...appDeps, db, pool };
   let app: FastifyInstance | null = null;
   let operations: Operation[] = [];
   let problem: object = {};
@@ -113,6 +139,7 @@ export function setupApi(env: Record<string, string> = {}): TestContext {
 
   const ctx = {
     deps,
+    appDeps,
     providers,
     setNow: (d: Date | string) => {
       now = new Date(d);
@@ -121,7 +148,7 @@ export function setupApi(env: Record<string, string> = {}): TestContext {
 
   beforeEach(async () => {
     if (!app) {
-      app = await buildApp(deps, { logger: false });
+      app = await buildApp(appDeps, { logger: false });
       await app.ready();
       const loaded = await loadOperations();
       operations = loaded.operations;
@@ -139,7 +166,7 @@ export function setupApi(env: Record<string, string> = {}): TestContext {
 
   afterAll(async () => {
     await app?.close();
-    await pool.end();
+    await Promise.all([pool.end(), dbs.pool.end(), dbs.systemPool.end()]);
   });
 
   ctx.call = async (method, url, opts = {}) => {
@@ -162,7 +189,8 @@ export function setupApi(env: Record<string, string> = {}): TestContext {
   ctx.runJobs = async () => {
     const quiet = { info: () => {}, warn: () => {}, error: () => {}, fatal: () => {} };
     // Jobs are queued at the real time; a test that pinned the clock in the past would never see them due.
-    const later = { ...deps, now: () => new Date(Math.max(deps.now().getTime(), Date.now())) };
+    // They run as the worker does: on the system database.
+    const later = { ...asSystem(appDeps), now: () => new Date(Math.max(deps.now().getTime(), Date.now())) };
     const worker = createWorker(later, JOB_HANDLERS, { concurrency: 10, log: quiet });
     let total = 0;
     for (let n = await worker.drainOnce(); n > 0; n = await worker.drainOnce()) total += n;

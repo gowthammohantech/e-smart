@@ -1,5 +1,6 @@
 import pg from 'pg';
 import { runMigrations } from '@esmart/db/migrate';
+import { applyRoles } from '@esmart/db/roles';
 
 /**
  * Recreates the test database and migrates it once per run. Set
@@ -16,6 +17,9 @@ export default async function setup() {
   await client.query(`CREATE DATABASE "${name}"`);
   await client.end();
   await runMigrations(url.toString(), {});
+  // The app runs as esmart_app (row-level security) and esmart_system, as deployed; on a local
+  // database their passwords are their names.
+  await applyRoles(url.toString(), {});
   process.env.TEST_DATABASE_URL = url.toString();
   // The public demo builds itself wherever a scheduled tick runs its job; the suites turn it on themselves when they test it.
   process.env.DEMO_ENABLED ??= 'false';

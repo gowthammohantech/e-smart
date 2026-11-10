@@ -151,6 +151,9 @@ CREATE POLICY "tenant" ON "subscription_events" FOR ALL USING ("company_id" = AN
 ALTER TABLE "subscriptions" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "subscriptions" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE POLICY "tenant" ON "subscriptions" FOR ALL USING ("company_id" = ANY (app_company_ids())) WITH CHECK ("company_id" = ANY (app_company_ids()));--> statement-breakpoint
+ALTER TABLE "tax_categories" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "tax_categories" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
+CREATE POLICY "tenant" ON "tax_categories" FOR ALL USING ("company_id" = ANY (app_company_ids())) WITH CHECK ("company_id" = ANY (app_company_ids()));--> statement-breakpoint
 ALTER TABLE "transporters" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "transporters" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE POLICY "tenant" ON "transporters" FOR ALL USING ("company_id" = ANY (app_company_ids())) WITH CHECK ("company_id" = ANY (app_company_ids()));--> statement-breakpoint

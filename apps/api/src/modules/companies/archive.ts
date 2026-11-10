@@ -27,7 +27,9 @@ export const companyArchiveHandlers = defineHandlers({
     if (!sameName(ctx.body.confirmName, company.name)) {
       throw unprocessable([{ field: 'confirmName', message: `Type the business name, ${company.name}, to archive it`, severity: 'blocking' }], 'NAME_MISMATCH');
     }
-    const [open] = await ctx.db
+    // The account's other businesses, member or not: outside this request's row-level security
+    // scope (one business), so a count on the system database.
+    const [open] = await ctx.deps.systemDb
       .select({ n: sql<number>`count(*)::int` })
       .from(C)
       .where(and(eq(C.accountId, company.accountId), isNull(C.archivedAt), ne(C.id, company.id)));
