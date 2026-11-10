@@ -103,8 +103,8 @@ export function TransportersDesktop() {
     <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('nav:title.transporters') }} />
 
-      {/* A name and an ID per row: the list stops at a width where the chevron stays near them. */}
-      <ScrollView contentContainerStyle={{ paddingHorizontal: t.spacing.lg, paddingBottom: 48, width: '100%', maxWidth: 720 }}>
+      {/* A list page: the list takes the shell's column like the other lists. */}
+      <ScrollView contentContainerStyle={{ paddingHorizontal: t.spacing.lg, paddingBottom: 48, width: '100%' }}>
         {transporters.length === 0 ? (
           <Card padded={false}>
             <EmptyState

@@ -263,13 +263,13 @@ export function Gstr2bView({ mode }: { mode: 'download' | 'reconcile' }) {
         ) : (
           <>
             <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
-              {/* A desktop keeps each picker at a GSTIN's width, so a lone period picker isn't page-wide. */}
+              {/* The pickers share the row; a lone period picker takes all of it rather than leaving a gap. */}
               {gstins.length > 1 ? (
-                <View style={desktop ? { width: 320 } : { flex: 1 }}>
+                <View style={{ flex: 1 }}>
                   <PickerField label="GSTIN" value={gstin ?? undefined} onPress={() => setOpen('gstin')} />
                 </View>
               ) : null}
-              <View style={desktop ? { width: 320 } : { flex: 1 }}>
+              <View style={{ flex: 1 }}>
                 <PickerField label={tr('compliance:gstr2b.period')} value={periodLabel(period)} onPress={() => setOpen('period')} icon="calendar-month-outline" />
               </View>
             </View>
@@ -317,18 +317,14 @@ export function Gstr2bView({ mode }: { mode: 'download' | 'reconcile' }) {
                 <Text variant="caption" tone="muted">
                   {tr('compliance:gstr2b.fetchedAt', { date: formatDate(rec.fetchedAt!) })}
                 </Text>
-                {/* On a desktop the figures and the status totals stop at a width where each amount sits by its label. */}
-                <View style={desktop ? { maxWidth: 480 } : undefined}>
-                  <KeyFigures
-                    rows={[
-                      { label: tr('compliance:gstr2b.claimable'), value: formatMoney(s.claimableTax!), tone: 'good' },
-                      { label: tr('compliance:gstr2b.matchedCount'), value: `${matchedTotal} / ${s.lines}` },
-                      { label: tr('compliance:gstr2b.toReview'), value: String((s.partial ?? 0) + (s.probable ?? 0) + (s.missingInBooks ?? 0)), tone: 'warn' },
-                      { label: tr('compliance:gstr2b.notIn2b'), value: String(s.missingIn2b), tone: s.missingIn2b ? 'bad' : undefined },
-                    ]}
-                  />
-                </View>
-                <View style={desktop ? { maxWidth: 760 } : undefined}>
+                <KeyFigures
+                  rows={[
+                    { label: tr('compliance:gstr2b.claimable'), value: formatMoney(s.claimableTax!), tone: 'good' },
+                    { label: tr('compliance:gstr2b.matchedCount'), value: `${matchedTotal} / ${s.lines}` },
+                    { label: tr('compliance:gstr2b.toReview'), value: String((s.partial ?? 0) + (s.probable ?? 0) + (s.missingInBooks ?? 0)), tone: 'warn' },
+                    { label: tr('compliance:gstr2b.notIn2b'), value: String(s.missingIn2b), tone: s.missingIn2b ? 'bad' : undefined },
+                  ]}
+                />
                 <ReportSection title={tr('compliance:gstr2b.totals')}>
                   <DataTable
                     headers={[tr('compliance:gstr2b.head.status'), tr('compliance:gstr2b.head.count'), tr('compliance:returns.head.taxable'), tr('compliance:returns.head.tax')]}
@@ -340,7 +336,6 @@ export function Gstr2bView({ mode }: { mode: 'download' | 'reconcile' }) {
                     {tr('compliance:gstr2b.totalsNote')}
                   </Text>
                 </ReportSection>
-                </View>
                 {mode === 'download' ? (
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm }}>
                     <Button
@@ -503,7 +498,7 @@ export function Gstr2bView({ mode }: { mode: 'download' | 'reconcile' }) {
                       </Card>
                     ))}
                     {rec.missingIn2b?.length && (filter === 'all' || filter === 'missingIn2b') ? (
-                      <Card style={[{ gap: t.spacing.sm }, desktop ? { maxWidth: 720 } : null]}>
+                      <Card style={{ gap: t.spacing.sm }}>
                         <Text variant="body" weight="600">
                           {tr('compliance:gstr2b.notIn2bTitle', { count: rec.missingIn2b.length })}
                         </Text>

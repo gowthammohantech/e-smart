@@ -34,9 +34,9 @@ export function ImportsView({ accountId }: { accountId: string }) {
   const rows = statements.data ?? [];
   if (!rows.length) return <EmptyState icon="file-upload-outline" title={tr('banking:imports.empty')} message={tr('banking:imports.emptyBody')} />;
   return (
-    // The screen pads a desktop's tab already; the list keeps a readable width there, Undo near the file it undoes.
+    // The screen pads a desktop's tab already; the list spans it like the tab's other views.
     <ScrollView contentContainerStyle={{ padding: desktop ? 0 : t.spacing.lg, gap: t.spacing.md }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
-      <Card padded={false} style={desktop ? { maxWidth: 880 } : undefined}>
+      <Card padded={false}>
         {rows.map((s, i) => (
           <ListRow
             key={s.id}

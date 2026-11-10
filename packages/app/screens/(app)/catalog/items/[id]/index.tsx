@@ -181,10 +181,12 @@ export default function ItemDetail() {
     ) : null}
     </>
   );
+  const pricingAcross = desktop && !(item.trackInventory && hasInventory);
   const pricingBlock = (
     <>
     <Text variant="caption" tone="muted" weight="600" style={{ marginTop: t.spacing.xl, marginBottom: t.spacing.sm, textTransform: 'uppercase', letterSpacing: 0.8 }}>{tr('inventory:detail.pricing')}</Text>
-    <Card style={{ gap: t.spacing.md }}>
+    {/* In a desktop's wide main column the prices are equal cells across the card, not a label and value a page apart. */}
+    <Card style={pricingAcross ? { flexDirection: 'row', flexWrap: 'wrap', columnGap: t.spacing.xxl, rowGap: t.spacing.md } : { gap: t.spacing.md }}>
       {[
         { label: tr('inventory:detail.salePrice'), value: `${formatMoney(item.salePrice)} / ${item.unit}` },
         { label: tr('inventory:form.purchasePrice'), value: `${formatMoney(item.purchasePrice)} / ${item.unit}` },
@@ -194,8 +196,8 @@ export default function ItemDetail() {
           value: formatMoney(multiply(item.salePrice, 1 + (category?.rate ?? 0) / 100)),
         },
       ].map((r) => (
-        <View key={r.label} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-          <Text variant="small" tone="muted">
+        <View key={r.label} style={pricingAcross ? { flex: 1, minWidth: 140, gap: 2 } : { flexDirection: 'row', justifyContent: 'space-between' }}>
+          <Text variant={pricingAcross ? 'caption' : 'small'} tone="muted">
             {r.label}
           </Text>
           <Text variant="small" weight="600">
@@ -348,8 +350,8 @@ export default function ItemDetail() {
                 {item.trackInventory && hasInventory ? pricingBlock : null}
               </>
             }
-            // An untracked item's main column holds only its prices: kept to a readable width.
-            main={<View style={item.trackInventory && hasInventory ? undefined : { maxWidth: 560 }}>{item.trackInventory && hasInventory ? movementsBlock : pricingBlock}</View>}
+            // An untracked item's main column holds only its prices, across the column like the movements would be.
+            main={item.trackInventory && hasInventory ? movementsBlock : pricingBlock}
           />
         ) : (
           <>

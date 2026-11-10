@@ -8,8 +8,7 @@ import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { checkCustomValues, type CustomField, type CustomFieldEntity, type CustomValues } from '@esmart/core/domain/customFields';
 import { SkeletonFormField, SkeletonGroup } from '@esmart/ui/components/Skeleton';
-import { FieldRow } from '@esmart/ui/components/Layout';
-import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { FieldGrid } from '@esmart/ui/components/Layout';
 import { useAppStore } from '../../store/appStore';
 import { useSetupReady } from '../../store/selectors';
 
@@ -49,7 +48,6 @@ export function customFieldErrors(fields: CustomField[], entity: CustomFieldEnti
  */
 export function CustomFieldsSection({ entity, values, onChange, errors }: { entity: CustomFieldEntity; values: CustomValues; onChange: (next: CustomValues) => void; errors?: Record<string, string> }) {
   const t = useTheme();
-  const desktop = useIsDesktop();
   const { t: tr } = useTranslation(['settings']);
   const fields = useCustomFields(entity);
   const setupReady = useSetupReady();
@@ -68,43 +66,46 @@ export function CustomFieldsSection({ entity, values, onChange, errors }: { enti
 
   return (
     <View style={{ gap: t.spacing.md }}>
-      {pairs(desktop, fields.map((f) => {
-        const v = values[f.id];
-        const error = errors?.[f.id];
-        switch (f.kind) {
-          case 'checkbox':
-            // A tick box is never missing (unticked is an answer), so it carries no required mark.
-            return (
-              <View key={f.id} style={{ gap: 4 }}>
-                <SwitchField label={f.label} value={v === true} onValueChange={(on) => set(f.id, on)} />
-                {error ? (
-                  <Text variant="caption" tone="bad">
-                    {error}
-                  </Text>
-                ) : null}
-              </View>
-            );
-          case 'date':
-            return <DateField key={f.id} label={f.label} required={f.required} value={typeof v === 'string' ? v : ''} onChange={(d) => set(f.id, d)} error={error} />;
-          case 'select':
-            // Nothing chosen shows the placeholder, not "Choose" as if it were the value.
-            return <PickerField key={f.id} label={f.label} required={f.required} value={typeof v === 'string' && v ? v : undefined} placeholder={tr('settings:customFields.choose')} onPress={() => setPicking(f)} error={error} />;
-          case 'number':
-            return (
-              <TextField
-                key={f.id}
-                label={f.label}
-                required={f.required}
-                value={v === undefined || v === null ? '' : String(v)}
-                onChangeText={(text) => set(f.id, text === '' ? null : text)}
-                keyboardType="decimal-pad"
-                error={error}
-              />
-            );
-          default:
-            return <TextField key={f.id} label={f.label} required={f.required} value={typeof v === 'string' ? v : ''} onChangeText={(text) => set(f.id, text)} error={error} />;
-        }
-      }))}
+      {/* On a desktop the fields go two to a row (an odd one out takes the whole row); a phone keeps one per row. */}
+      <FieldGrid
+        items={fields.map((f) => {
+          const v = values[f.id];
+          const error = errors?.[f.id];
+          switch (f.kind) {
+            case 'checkbox':
+              // A tick box is never missing (unticked is an answer), so it carries no required mark.
+              return (
+                <View key={f.id} style={{ gap: 4 }}>
+                  <SwitchField label={f.label} value={v === true} onValueChange={(on) => set(f.id, on)} />
+                  {error ? (
+                    <Text variant="caption" tone="bad">
+                      {error}
+                    </Text>
+                  ) : null}
+                </View>
+              );
+            case 'date':
+              return <DateField key={f.id} label={f.label} required={f.required} value={typeof v === 'string' ? v : ''} onChange={(d) => set(f.id, d)} error={error} />;
+            case 'select':
+              // Nothing chosen shows the placeholder, not "Choose" as if it were the value.
+              return <PickerField key={f.id} label={f.label} required={f.required} value={typeof v === 'string' && v ? v : undefined} placeholder={tr('settings:customFields.choose')} onPress={() => setPicking(f)} error={error} />;
+            case 'number':
+              return (
+                <TextField
+                  key={f.id}
+                  label={f.label}
+                  required={f.required}
+                  value={v === undefined || v === null ? '' : String(v)}
+                  onChangeText={(text) => set(f.id, text === '' ? null : text)}
+                  keyboardType="decimal-pad"
+                  error={error}
+                />
+              );
+            default:
+              return <TextField key={f.id} label={f.label} required={f.required} value={typeof v === 'string' ? v : ''} onChangeText={(text) => set(f.id, text)} error={error} />;
+          }
+        })}
+      />
       <SelectSheet
         visible={!!picking}
         onClose={() => setPicking(null)}
@@ -118,22 +119,4 @@ export function CustomFieldsSection({ entity, values, onChange, errors }: { enti
       />
     </View>
   );
-}
-
-/**
- * On a desktop the fields go two to a row, so a short value isn't a box the width of the form and a
- * tick box's switch sits near its label. A phone keeps one per row.
- */
-function pairs(desktop: boolean, nodes: React.ReactElement[]): React.ReactNode {
-  if (!desktop) return nodes;
-  const rows: React.ReactNode[] = [];
-  for (let i = 0; i < nodes.length; i += 2) {
-    rows.push(
-      <FieldRow key={String(nodes[i].key)} columns={2}>
-        {nodes[i]}
-        {nodes[i + 1] ?? null}
-      </FieldRow>,
-    );
-  }
-  return rows;
 }

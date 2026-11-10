@@ -194,7 +194,7 @@ export function ReportDesktop({ report, data }: { report: string; data: ReportDa
           <StatTile label={tr('reports:figure.openDocuments')} value={String(a.outstanding.length)} icon="file-document-multiple-outline" caption={tr('reports:caption.notYetDue', { count: a.outstanding.length - overdueCount })} />
         </Kpis>
         <ReportSection title={tr('reports:detail.aging')}>
-          <Card style={CHART_CARD}>
+          <Card>
             <AgingBars buckets={a.summary.buckets.map((b) => ({ key: b.key, label: b.label, amount: b.amount, count: b.count }))} />
           </Card>
         </ReportSection>
@@ -235,7 +235,7 @@ export function ReportDesktop({ report, data }: { report: string; data: ReportDa
           <StatTile label={tr('reports:figure.outOfStock')} value={String(s.outCount)} tone={s.outCount > 0 ? 'bad' : 'default'} icon="package-variant-remove" caption={tr('reports:caption.nothingOnHand')} />
         </Kpis>
         <ReportSection title={tr('reports:detail.mostValuable')}>
-          <Card style={CHART_CARD}>
+          <Card>
             <RankedBars
               rows={s.rows.slice(0, 8).map((r) => ({ label: r.item.name, value: r.value, sublabel: tr('reports:caption.onHand', { qty: formatQty(r.onHand), unit: r.item.unit }) }))}
               colorFor={colorFor}
@@ -323,7 +323,7 @@ export function ReportDesktop({ report, data }: { report: string; data: ReportDa
           </ReportSection>
         </ReportRow>
         <ReportSection title={tr('reports:detail.byAccount')}>
-          <Card style={CHART_CARD}>
+          <Card>
             <RankedBars rows={p.byAccount} colorFor={colorFor} />
           </Card>
         </ReportSection>
@@ -425,9 +425,6 @@ export function ReportDesktop({ report, data }: { report: string; data: ReportDa
 
   return null;
 }
-
-/** A chart alone on its row: bars that read at a glance rather than across the whole page. */
-const CHART_CARD = { maxWidth: 880 } as const;
 
 /** The headline figures, side by side across the top. */
 function Kpis({ children }: { children: React.ReactNode }) {

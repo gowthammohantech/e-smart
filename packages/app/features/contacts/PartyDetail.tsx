@@ -435,9 +435,8 @@ export function PartyDetail({ party }: { party: Party }) {
         {desktop ? (
           <SplitPane
             sideWidth={340}
-            // The rows' amounts stay near their numbers; the figures sit over the tabs, where each
-            // tile has room (in the side column two or three of them were about 100px each).
-            style={{ maxWidth: 1180 }}
+            // The figures sit over the tabs, where each tile has room (in the side column two or
+            // three of them were about 100px each). The page spans the shell like other detail pages.
             side={
               <>
                 {headerCard}

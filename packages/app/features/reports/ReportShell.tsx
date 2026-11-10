@@ -277,8 +277,8 @@ export function ReportShell({
         contentContainerStyle={desktop ? { padding: t.spacing.lg, paddingBottom: t.spacing.xxxl } : { padding: t.spacing.lg, paddingBottom: 120 }}
         showsVerticalScrollIndicator={SHOW_SCROLLBAR}
       >
-        {/* A paragraph reads at a line's length, not the page's, on a desktop. */}
-        <Card variant="flat" style={[{ marginBottom: t.spacing.lg, gap: 4 }, desktop && { maxWidth: 880 }]}>
+        {/* The basis card spans the page like the tables under it. */}
+        <Card variant="flat" style={{ marginBottom: t.spacing.lg, gap: 4 }}>
           <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('reports:shell.basis')}</Text>
           <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
             {tr('reports:shell.basisFull', basisParams)}

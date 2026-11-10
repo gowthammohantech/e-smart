@@ -69,7 +69,7 @@ export default function CloseBooks() {
         </Card>
         {owner ? (
           <>
-            <DateField label={tr('books:close.through')} value={date} onChange={setDate} maximumDate={new Date()} hint={tr('books:close.throughHint')} containerStyle={desktop ? { maxWidth: 200, width: '100%' } : undefined} />
+            <DateField label={tr('books:close.through')} value={date} onChange={setDate} maximumDate={new Date()} hint={tr('books:close.throughHint')} />
             <Button title={tr('books:close.close')} icon="lock-outline" onPress={() => setAskLock('close')} loading={saving} disabled={blocked || date === company.lockedThroughDate} />
             {company.lockedThroughDate ? (
               <View style={{ gap: t.spacing.sm }}>

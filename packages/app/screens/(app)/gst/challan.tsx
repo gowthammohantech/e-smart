@@ -12,7 +12,7 @@ import { ListRow } from '@esmart/ui/components/ListRow';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { Text } from '@esmart/ui/components/Text';
-import { SHOW_SCROLLBAR, useFieldWidth, useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { formatDate, nowISO, today } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
 import { fromMajor, money } from '@esmart/core/lib/money';
@@ -43,7 +43,6 @@ export default function GstChallanScreen() {
 function ChallanForm() {
   const t = useTheme();
   const desktop = useIsDesktop();
-  const fw = useFieldWidth();
   const router = useRouter();
   const { t: tr } = useTranslation(['compliance', 'books', 'common']);
   const params = useLocalSearchParams<{ igst?: string; cgst?: string; sgst?: string; cess?: string; back?: string }>();
@@ -108,6 +107,9 @@ function ChallanForm() {
     }
   };
 
+  const cinField = <TextField label={tr('compliance:challan.cin')} value={cin} onChangeText={(v) => setCin(v.slice(0, 20))} />;
+  const brnField = <TextField label={tr('compliance:challan.brn')} value={brn} onChangeText={(v) => setBrn(v.slice(0, 40))} />;
+  const dateField = <DateField label={tr('compliance:challan.depositedOn')} value={date} onChange={setDate} maximumDate={new Date()} />;
   const headLabel = (h: Head) => (h === 'cess' ? tr('compliance:returns.head.cess') : h.toUpperCase());
   const rows = recent.rows.slice(0, 10);
   return (
@@ -123,20 +125,28 @@ function ChallanForm() {
             <PickerField label={tr('compliance:challan.paidFrom')} value={accounts.find((a) => a.id === bank)?.name} placeholder={tr('books:transfer.pickAccount')} onPress={() => setPicking(true)} icon="bank-outline" required />
             <TextField label={tr('compliance:challan.cpin')} value={cpin} onChangeText={(v) => setCpin(v.replace(/[^0-9A-Za-z]/g, '').slice(0, 14))} hint={tr('compliance:challan.cpinHint')} required />
           </FieldRow>
-          <View style={{ flexDirection: 'row', gap: t.spacing.md, flexWrap: 'wrap' }}>
-            <View style={{ flex: 1, minWidth: 200 }}>
-              <TextField label={tr('compliance:challan.cin')} value={cin} onChangeText={(v) => setCin(v.slice(0, 20))} />
-            </View>
-            <View style={{ flex: 1, minWidth: 200 }}>
-              <TextField label={tr('compliance:challan.brn')} value={brn} onChangeText={(v) => setBrn(v.slice(0, 40))} />
-            </View>
-          </View>
-          <DateField label={tr('compliance:challan.depositedOn')} value={date} onChange={setDate} maximumDate={new Date()} containerStyle={fw('sm')} />
+          {/* On a desktop the CIN, BRN and date share one row of thirds, so the date has no empty space beside it. */}
+          {desktop ? (
+            <FieldRow>
+              {cinField}
+              {brnField}
+              {dateField}
+            </FieldRow>
+          ) : (
+            <>
+              <View style={{ flexDirection: 'row', gap: t.spacing.md, flexWrap: 'wrap' }}>
+                <View style={{ flex: 1, minWidth: 200 }}>{cinField}</View>
+                <View style={{ flex: 1, minWidth: 200 }}>{brnField}</View>
+              </View>
+              {dateField}
+            </>
+          )}
           {HEADS.map((h) => (
             <FormSection key={h} title={`${headLabel(h)} · ${formatMoney(money(headTotal(h), baseCurrency))}`}>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.md }}>
+              {/* On a desktop the five parts are equal cells across the section. */}
+              <View style={{ flexDirection: 'row', flexWrap: desktop ? 'nowrap' : 'wrap', gap: t.spacing.md }}>
                 {PARTS.map((p) => (
-                  <View key={p} style={desktop ? { width: 200 } : { flexGrow: 1, flexBasis: 140 }}>
+                  <View key={p} style={desktop ? { flex: 1, minWidth: 0 } : { flexGrow: 1, flexBasis: 140 }}>
                     <AmountField label={tr(`compliance:challan.part.${p}`)} value={amounts[h][p]} onChangeValue={(v) => setAmounts((a) => ({ ...a, [h]: { ...a[h], [p]: v } }))} currency={baseCurrency} align="right" />
                   </View>
                 ))}

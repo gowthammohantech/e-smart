@@ -92,10 +92,11 @@ export function ReconciliationView({ accountId, accountName }: { accountId: stri
   return (
     <ScrollView contentContainerStyle={{ padding: desktop ? 0 : t.spacing.lg, paddingBottom: t.spacing.xxxl, gap: t.spacing.md }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
       <View style={{ flexDirection: desktop ? 'row' : 'column', gap: t.spacing.md, alignItems: desktop ? 'flex-end' : 'stretch' }}>
-        <View style={desktop ? { width: 220 } : undefined}>
+        {/* On a desktop the date takes the row up to Export, so it has no empty space beside it. */}
+        <View style={desktop ? { flex: 1 } : undefined}>
           <DateField label={tr('banking:brs.asOf')} value={asOf} onChange={setAsOf} maximumDate={new Date()} />
         </View>
-        <View style={desktop ? { marginLeft: 'auto' } : undefined}>
+        <View>
           <Button title={tr('banking:brs.export')} icon="file-export-outline" variant="ghost" size="sm" onPress={exportCsv} disabled={!r} />
         </View>
       </View>
@@ -151,7 +152,7 @@ export function ReconciliationView({ accountId, accountName }: { accountId: stri
           </ReportRow>
 
           {r.difference ? (
-            <Card style={[{ gap: t.spacing.xs, borderWidth: 1, borderColor: differs ? t.c.bad : t.c.good }, desktop && { maxWidth: 640 }]}>
+            <Card style={{ gap: t.spacing.xs, borderWidth: 1, borderColor: differs ? t.c.bad : t.c.good }}>
               <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: t.spacing.md }}>
                 <Text variant="body" weight="700" style={{ flex: 1 }}>
                   {tr('banking:brs.difference')}

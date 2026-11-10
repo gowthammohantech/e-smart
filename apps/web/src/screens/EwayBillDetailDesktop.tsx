@@ -154,8 +154,8 @@ function EwayBillDesktop({ bill }: { bill: EwayBill }) {
     <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('compliance:ewb.a11yBill', { number: bill.ewayBillNumber }) }} />
 
-      {/* Padded like the other desktop pages, and no wider than its two columns need. */}
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 48, gap: t.spacing.lg, width: '100%', maxWidth: 1180 }}>
+      {/* Padded like the other desktop pages, and across the shell like them. */}
+      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 48, gap: t.spacing.lg, width: '100%' }}>
         {/* The headline: number, status, what can be done next */}
         <Card style={{ padding: t.spacing.xxl, gap: t.spacing.xl }}>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: t.spacing.xl }}>

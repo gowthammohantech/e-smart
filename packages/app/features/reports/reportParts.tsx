@@ -45,11 +45,12 @@ export function KeyFigures({ rows }: { rows: { label: string; value: string; ton
   const inRow = useContext(InRow);
   const desktop = useIsDesktop();
   if (desktop && !inRow) {
-    // On its own across a desktop page, each figure sits under its label, side by side, instead of a label and value a page apart.
+    // On its own across a desktop page, each figure sits under its label in equal cells across the card,
+    // so the card fills the page column like the sections under it instead of a block in one corner.
     return (
-      <Card style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: t.spacing.xxl, rowGap: t.spacing.md, alignSelf: 'flex-start', maxWidth: '100%' }}>
+      <Card style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: t.spacing.xxl, rowGap: t.spacing.md }}>
         {rows.map((r) => (
-          <View key={r.label} style={{ gap: 2, minWidth: 140 }}>
+          <View key={r.label} style={{ gap: 2, flex: 1, minWidth: 140 }}>
             <Text variant="caption" tone="muted">
               {r.label}
             </Text>

@@ -10,8 +10,8 @@ import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { Sheet } from '@esmart/ui/components/Sheet';
 import { Text } from '@esmart/ui/components/Text';
-import { FieldRow, FormContainer } from '@esmart/ui/components/Layout';
-import { DIALOG_WIDTH, SHOW_SCROLLBAR, WIDE_FORM_MAX_WIDTH, useFieldWidth, useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { FieldGrid, FieldRow, FormContainer } from '@esmart/ui/components/Layout';
+import { DIALOG_WIDTH, SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { TDS_SECTIONS } from '@esmart/core/data/tdsSections';
 import { TCS_SECTIONS } from '@esmart/core/data/tcsSections';
 import { accountFor, chartOfAccounts, type Account } from '@esmart/core/domain/ledger/accounts';
@@ -51,7 +51,6 @@ const isBlank = (l: GridLine) => !l.account && !l.amount && !l.narration && !l.c
 export function VoucherForm({ voucher, onSaved, initialKind }: { voucher?: Voucher; onSaved: (id: string) => void; initialKind?: VoucherKind }) {
   const t = useTheme();
   const desktop = useIsDesktop();
-  const fw = useFieldWidth();
   const { t: tr } = useTranslation(['books', 'common']);
   const { run: serverSave, saving, blocked } = useServerSave();
   const company = useActiveCompany();
@@ -176,6 +175,9 @@ export function VoucherForm({ voucher, onSaved, initialKind }: { voucher?: Vouch
     if (res) onSaved(res.id ?? record.id);
   };
 
+  const dateField = <DateField label={tr('books:vouchers.date')} value={date} onChange={setDate} maximumDate={new Date()} />;
+  const referenceField = <TextField label={tr('books:vouchers.reference')} value={reference} onChangeText={setReference} hint={tr('books:vouchers.referenceHint')} icon="pound" />;
+
   // The chart names the accounts and lists the picks; without it they'd read as raw keys or "Pick account".
   if (!loaded) return <LoadingView variant="items-form" keepTitle />;
   return (
@@ -199,7 +201,12 @@ export function VoucherForm({ voucher, onSaved, initialKind }: { voucher?: Vouch
           <Text variant="small" tone="muted">
             {tr(`books:vouchers.kindHint.${kind}`)}
           </Text>
-          <DateField label={tr('books:vouchers.date')} value={date} onChange={setDate} maximumDate={new Date()} containerStyle={fw('sm')} />
+          {/* On a desktop the date and reference share a row above the grid, so neither leaves an empty half. */}
+          {desktop ? (
+            <FieldGrid items={[dateField, referenceField]} />
+          ) : (
+            dateField
+          )}
 
           <VoucherGrid
             lines={lines}
@@ -223,8 +230,7 @@ export function VoucherForm({ voucher, onSaved, initialKind }: { voucher?: Vouch
             </Text>
           ) : null}
 
-          {/* The grid takes the form's width on a desktop; the fields under it keep a form's width. */}
-          <View style={desktop ? { gap: t.spacing.lg, maxWidth: WIDE_FORM_MAX_WIDTH } : { gap: t.spacing.lg }}>
+          <View style={{ gap: t.spacing.lg }}>
             <TextField label={tr('books:vouchers.narration')} value={narration} onChangeText={setNarration} placeholder={tr('books:vouchers.narrationPlaceholder')} multiline />
             {kind === 'tdsChallan' ? (
               <FieldRow columns={3}>
@@ -233,7 +239,7 @@ export function VoucherForm({ voucher, onSaved, initialKind }: { voucher?: Vouch
                 <DateField label={tr('books:vouchers.depositedOn')} value={depositedOn} onChange={setDepositedOn} maximumDate={new Date()} />
               </FieldRow>
             ) : null}
-            <TextField label={tr('books:vouchers.reference')} value={reference} onChangeText={setReference} hint={tr('books:vouchers.referenceHint')} icon="pound" containerStyle={fw('md')} />
+            {desktop ? null : referenceField}
             {lines.some((l) => l.account) ? <Button title={tr('books:templates.save')} icon="content-save-outline" variant="ghost" size="sm" onPress={() => setTemplateName(narration.trim().slice(0, 60))} /> : null}
           </View>
         </ScrollView>

@@ -122,7 +122,7 @@ export default function LowStock() {
             ]}
           />
         ) : (
-        <Card padded={false} style={desktop ? { maxWidth: 720 } : undefined}>
+        <Card padded={false}>
           {loading ? (
             <CardRowsSkeleton kind="list" rows={6} />
           ) : rows.length === 0 ? (

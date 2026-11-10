@@ -89,8 +89,6 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
   const loading = shownList.isLoading || shownList.isPlaceholderData;
   // Until the counts arrive the tiles shimmer rather than read "0".
   const countsLoading = !summary.loaded;
-  // Banners and notes read as one line of text; on a desktop they stop at a readable width.
-  const noteWidth = desktop ? { maxWidth: 720 } : null;
   const statusCell = (label: string, tone: React.ComponentProps<typeof Badge>['tone']) => (
     <Badge label={label} tone={tone} size="sm" />
   );
@@ -153,7 +151,7 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
       )}
 
       {tab === 'eway' && summary.ewayOutstanding && ewayFilter !== 'pending' ? (
-        <Pressable onPress={() => setEwayFilter('pending')} accessibilityRole="button" style={[{ marginTop: t.spacing.md }, noteWidth]}>
+        <Pressable onPress={() => setEwayFilter('pending')} accessibilityRole="button" style={{ marginTop: t.spacing.md }}>
           <Card variant="flat" style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md, borderColor: t.c.warn }}>
             <Icon name="truck-alert-outline" size={20} color={t.c.warn} />
             <Text variant="small" tone="warn" style={{ flex: 1, lineHeight: 18 }}>
@@ -168,7 +166,7 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
         <Pressable
           onPress={() => setEwayFilter('active')}
           accessibilityRole="button"
-          style={[{ marginTop: t.spacing.md }, noteWidth]}
+          style={{ marginTop: t.spacing.md }}
         >
           <Card
             variant="flat"
@@ -189,7 +187,7 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
       ) : null}
 
       {!settings.eInvoiceEnabled && tab === 'eInvoice' ? (
-        <Card variant="flat" style={[{ marginTop: t.spacing.md }, noteWidth]}>
+        <Card variant="flat" style={{ marginTop: t.spacing.md }}>
           <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>{tr('compliance:hub.switchedOff')}</Text>
         </Card>
       ) : null}

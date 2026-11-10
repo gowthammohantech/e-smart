@@ -3,13 +3,13 @@ import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
-import { FIELD_WIDTH, SHOW_SCROLLBAR, useFieldWidth, useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { FIELD_WIDTH, SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { FormActions } from '@esmart/ui/components/ActionBar';
 import { Button } from '@esmart/ui/components/Button';
 import { Card } from '@esmart/ui/components/Card';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { AmountField, Segmented, TextField } from '@esmart/ui/components/Field';
-import { FormContainer } from '@esmart/ui/components/Layout';
+import { FieldGrid, FormContainer } from '@esmart/ui/components/Layout';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { Text } from '@esmart/ui/components/Text';
 import { useToast } from '@esmart/ui/components/Toast';
@@ -34,7 +34,6 @@ type Row = { account: string; months: string[]; open: boolean };
 export function BudgetForm({ budget }: { budget?: Budget }) {
   const t = useTheme();
   const desktop = useIsDesktop();
-  const fw = useFieldWidth();
   const router = useRouter();
   const toast = useToast();
   const { t: tr } = useTranslation(['books', 'common']);
@@ -101,15 +100,22 @@ export function BudgetForm({ budget }: { budget?: Budget }) {
       {/* Wide enough on a desktop for six months to a row under an account. */}
       <FormContainer style={{ maxWidth: desktop ? 1100 : '100%' }}>
         <ScrollView contentContainerStyle={{ padding: t.spacing.lg, gap: t.spacing.lg, paddingBottom: desktop ? t.spacing.xxl : 140 }} showsVerticalScrollIndicator={SHOW_SCROLLBAR} keyboardShouldPersistTaps="handled">
-          <Card style={[{ gap: t.spacing.lg }, desktop && { maxWidth: 720 }]}>
-            <TextField label={tr('books:budgets.name')} value={name} onChangeText={setName} required maxLength={200} containerStyle={fw('lg')} />
-            {budget?.id ? (
-              <Text variant="small" tone="muted">
-                {tr('books:budgets.for', { year: financialYearOf(yearFrom, company.fiscalYearStartMonth).label })}
-              </Text>
-            ) : (
-              <Segmented options={[{ value: fy.start, label: fy.label }, { value: next.start, label: next.label }]} value={yearFrom} onChange={setYearFrom} />
-            )}
+          {/* The card fills the page like the table under it; on a desktop the name and year share a row. */}
+          <Card style={{ gap: t.spacing.lg }}>
+            <FieldGrid
+              items={[
+                <TextField key="name" label={tr('books:budgets.name')} value={name} onChangeText={setName} required maxLength={200} />,
+                budget?.id ? (
+                  <Text key="year" variant="small" tone="muted" style={desktop ? { paddingTop: t.spacing.xl } : undefined}>
+                    {tr('books:budgets.for', { year: financialYearOf(yearFrom, company.fiscalYearStartMonth).label })}
+                  </Text>
+                ) : (
+                  <View key="year" style={desktop ? { paddingTop: t.spacing.xl } : undefined}>
+                    <Segmented options={[{ value: fy.start, label: fy.label }, { value: next.start, label: next.label }]} value={yearFrom} onChange={setYearFrom} />
+                  </View>
+                ),
+              ]}
+            />
           </Card>
           {desktop && rows.length ? (
             // On a desktop the accounts read as one table: the account, its year's figure, then its months six to a row.

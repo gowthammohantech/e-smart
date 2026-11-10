@@ -281,16 +281,14 @@ function EwayBillFormDesktop({ doc }: { doc: BusinessDocument }) {
 
       <FormSection title={tr('compliance:ewb.transportPartB')}>
         {transporters.length ? (
-          // Half the row, over the ID and name it fills in.
-          <FieldRow columns={2}>
-            <PickerField
-              label={tr('compliance:ewb.savedTransporter')}
-              value={transporters.find((x) => x.transporterId === transporterId.trim().toUpperCase())?.name}
-              placeholder={tr('compliance:ewb.pickOrType')}
-              onPress={() => setTransporterOpen(true)}
-              icon="truck-outline"
-            />
-          </FieldRow>
+          // The whole row, over the ID and name it fills in.
+          <PickerField
+            label={tr('compliance:ewb.savedTransporter')}
+            value={transporters.find((x) => x.transporterId === transporterId.trim().toUpperCase())?.name}
+            placeholder={tr('compliance:ewb.pickOrType')}
+            onPress={() => setTransporterOpen(true)}
+            icon="truck-outline"
+          />
         ) : null}
         <FieldRow>
           <TextField
@@ -348,26 +346,25 @@ function EwayBillFormDesktop({ doc }: { doc: BusinessDocument }) {
             {distanceField}
           </FieldRow>
         ) : (
-          <>
-            <FieldRow>
-              <TextField
-                label={tr('compliance:ewb.transportDocNumber')}
-                required
-                value={transportDocNumber}
-                onChangeText={setTransportDocNumber}
-                error={errors.transportDocNumber}
-                placeholder={tr('compliance:ewb.transportDocHint')}
-              />
-              <DateField
-                label={tr('compliance:ewb.transportDocDate')}
-                required
-                value={transportDocDate}
-                onChange={setTransportDocDate}
-                error={errors.transportDocDate}
-              />
-            </FieldRow>
-            <FieldRow columns={2}>{distanceField}</FieldRow>
-          </>
+          // The document number, its date and the distance share one row of thirds.
+          <FieldRow>
+            <TextField
+              label={tr('compliance:ewb.transportDocNumber')}
+              required
+              value={transportDocNumber}
+              onChangeText={setTransportDocNumber}
+              error={errors.transportDocNumber}
+              placeholder={tr('compliance:ewb.transportDocHint')}
+            />
+            <DateField
+              label={tr('compliance:ewb.transportDocDate')}
+              required
+              value={transportDocDate}
+              onChange={setTransportDocDate}
+              error={errors.transportDocDate}
+            />
+            {distanceField}
+          </FieldRow>
         )}
       </FormSection>
     </View>
@@ -416,15 +413,15 @@ function EwayBillFormDesktop({ doc }: { doc: BusinessDocument }) {
 
       <ValidityCard form={form} />
 
-      {inHeader ? null : <Button shortcut="S" title={tr('compliance:ewb.generate')} icon="truck-fast-outline" loading={busy} onPress={submit} style={{ alignSelf: 'flex-end' }} />}
+      {inHeader ? null : <Button shortcut="S" title={tr('compliance:ewb.generate')} icon="truck-fast-outline" loading={busy} onPress={submit} fullWidth />}
     </>
   );
 
   return (
     <>
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: t.spacing.xxxl }} keyboardShouldPersistTaps="handled">
-        {/* The form and its summary stop at a width where pairs of fields read as pairs. */}
-        <SplitPane main={main} side={side} sideWidth={360} style={{ maxWidth: 1180 }} />
+        {/* The form and its summary span the page, like the other two-column forms. */}
+        <SplitPane main={main} side={side} sideWidth={360} />
       </ScrollView>
       <EwayBillFormSheets form={form} />
     </>

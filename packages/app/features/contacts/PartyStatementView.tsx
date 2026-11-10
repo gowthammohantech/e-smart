@@ -76,16 +76,16 @@ export function PartyStatementView({ party }: { party: Party }) {
   const entries = data?.entries ?? [];
   return (
     <ScrollView contentContainerStyle={{ padding: t.spacing.lg, gap: t.spacing.md, paddingBottom: t.spacing.xxxl }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
-      {/* A desktop keeps the dates at a date's width, with the download at the right of the same row. */}
+      {/* The dates share the row, with the download at its right on a desktop. */}
       <View style={{ flexDirection: 'row', gap: t.spacing.md, alignItems: desktop ? 'flex-end' : undefined }}>
-        <View style={desktop ? { width: 200 } : { flex: 1 }}>
+        <View style={{ flex: 1 }}>
           <DateField label={tr('contacts:statement.from')} value={from} onChange={setFrom} maximumDate={new Date()} />
         </View>
-        <View style={desktop ? { width: 200 } : { flex: 1 }}>
+        <View style={{ flex: 1 }}>
           <DateField label={tr('contacts:statement.to')} value={to} onChange={setTo} maximumDate={new Date()} />
         </View>
         {desktop ? (
-          <View style={{ flex: 1, alignItems: 'flex-end' }}>
+          <View>
             <Button title={tr('contacts:statement.download')} icon="file-pdf-box" variant="secondary" onPress={() => void download()} loading={busy} disabled={busy || !data} />
           </View>
         ) : null}
@@ -98,8 +98,9 @@ export function PartyStatementView({ party }: { party: Party }) {
         <EmptyState icon="alert-circle-outline" title={tr('contacts:statement.loadFailed')} message={describeError(statement.error, tr)} actionLabel={tr('common:action.retry')} onAction={() => void statement.refetch()} />
       ) : (
         <>
-          <Card style={[{ flexDirection: 'row', justifyContent: 'space-between' }, desktop ? { maxWidth: 560 } : null]}>
-            <View>
+          {/* On a desktop the opening and closing balances are two equal cells across the full-width card. */}
+          <Card style={[{ flexDirection: 'row', justifyContent: 'space-between' }, desktop && { gap: t.spacing.lg }]}>
+            <View style={desktop ? { flex: 1 } : undefined}>
               <Text variant="caption" tone="muted">
                 {tr('contacts:statement.opening', { date: formatDate(range.from) })}
               </Text>
@@ -107,7 +108,7 @@ export function PartyStatementView({ party }: { party: Party }) {
                 {balance(data?.openingBalance)}
               </Text>
             </View>
-            <View style={{ alignItems: 'flex-end' }}>
+            <View style={desktop ? { flex: 1 } : { alignItems: 'flex-end' }}>
               <Text variant="caption" tone="muted">
                 {tr('contacts:statement.closing', { date: formatDate(range.to) })}
               </Text>

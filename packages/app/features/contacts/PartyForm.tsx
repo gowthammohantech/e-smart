@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, ScrollView, View, ViewStyle } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
-import { FieldRow, FormContainer, FormSection, SplitPane } from '@esmart/ui/components/Layout';
+import { FieldGrid, FieldRow, FormContainer, FormSection, SplitPane } from '@esmart/ui/components/Layout';
 import { Text } from '@esmart/ui/components/Text';
 import { Button } from '@esmart/ui/components/Button';
 import { FormActions } from '@esmart/ui/components/ActionBar';
@@ -353,7 +353,7 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
         />
         {tdsSectionCode ? (
           // Side by side on a phone; a desktop's side column is too narrow for a date beside the
-          // rate, so there the two stack, the rate at a percentage's width.
+          // rate, so there the two stack, each the column's width.
           <View style={desktop ? { gap: t.spacing.lg } : { flexDirection: 'row', gap: t.spacing.md }}>
             <TextField
               label={tr('contacts:form.lowerTdsRate')}
@@ -362,9 +362,9 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
               placeholder="—"
               keyboardType="decimal-pad"
               hint={tr('contacts:form.lowerTds')}
-              containerStyle={desktop ? { maxWidth: 160 } : { flex: 1 }}
+              containerStyle={desktop ? undefined : { flex: 1 }}
             />
-            <View style={desktop ? { maxWidth: 220 } : { flex: 1 }}>
+            <View style={desktop ? undefined : { flex: 1 }}>
               <DateField label={tr('contacts:form.lowerTdsValidTill')} value={certValidTill} onChange={setCertValidTill} />
             </View>
           </View>
@@ -554,11 +554,8 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
         {nameField}
         {contactField}
       </FieldRow>
-      <FieldRow>
-        {registrationField}
-        {/* Holds the column when there's no GSTIN, so the picker keeps its width. */}
-        {gstinField ?? <View />}
-      </FieldRow>
+      {/* With no GSTIN the registration picker takes the whole row rather than leaving an empty half. */}
+      <FieldGrid items={[registrationField, gstinField ?? null]} />
       <FieldRow>
         {phoneField}
         {emailField}
@@ -650,8 +647,8 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      {/* Two columns on a desktop: the details and address beside the terms, no wider than they need. */}
-      <FormContainer wide={desktop} style={desktop ? { maxWidth: 1180 } : undefined}>
+      {/* Two columns on a desktop: the details and address beside the terms, across the page like the other two-column forms. */}
+      <FormContainer wide={desktop} style={desktop ? { maxWidth: '100%' } : undefined}>
         {desktop ? desktopForm : phoneForm}
 
         <FormActions>

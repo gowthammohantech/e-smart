@@ -59,7 +59,6 @@ export function ScanBarcodeDesktop() {
                   placeholder={tr('inventory:scan.barcodePlaceholder')}
                   icon="barcode"
                   autoFocus
-                  containerStyle={{ maxWidth: 420 }}
                 />
                 {code.trim().length > 0 ? (
                   searching ? (
