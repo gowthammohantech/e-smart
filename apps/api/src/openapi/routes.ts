@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import type { OperationId } from '@esmart/api-contract';
 import { RawBody, type Ctx, type Deps, type Handlers, type WebhookHandlers } from '../context';
 import { ApiError, unauthorized } from '../http/errors';
+import { asSystem, withCompanies } from '../lib/dbScope';
 import type { Operation } from './spec';
 
 function makeCtx(deps: Deps, op: Operation, req: Parameters<Parameters<FastifyInstance['route']>[0]['handler']>[0], reply: any): Ctx<OperationId> {
@@ -27,6 +28,24 @@ function makeCtx(deps: Deps, op: Operation, req: Parameters<Parameters<FastifyIn
       return req.company;
     },
   };
+}
+
+/**
+ * Signed-in operations without a company in the path that still need the system database: they
+ * create or close businesses, so the rows they write aren't in the caller's companies yet.
+ */
+const SYSTEM_OPERATIONS = new Set<string>(['createCompany']);
+
+/**
+ * Which database a handler gets (docs/database/rls.md). Public operations (sign-in, invites,
+ * reference data) and the platform console span businesses by design: the system database. Every
+ * other operation runs under row-level security, scoped to the business in its path or, without
+ * one, to the businesses the caller belongs to.
+ */
+function databaseFor(op: Operation, req: { company: { id: string } | null; authUser: { companyIds: string[] } | null }): { system: true } | { system: false; companyIds: string[] } {
+  if (!op.secured || op.platformRoles || SYSTEM_OPERATIONS.has(op.id)) return { system: true };
+  if (req.company) return { system: false, companyIds: [req.company.id] };
+  return { system: false, companyIds: req.authUser?.companyIds ?? [] };
 }
 
 /**
@@ -73,11 +92,13 @@ export function registerRoutes(app: FastifyInstance, deps: Deps, operations: Ope
         if (isWebhook) {
           const handler = webhooks[op.id as keyof WebhookHandlers];
           if (!handler) throw new ApiError(501, 'NOT_IMPLEMENTED', `${op.id} is not implemented yet`);
+          // The business behind a payment or a message is only known from the gateway's id.
+          const system = asSystem(deps);
           await handler({
             req,
             reply,
-            deps,
-            db: deps.db,
+            deps: system,
+            db: system.db,
             rawBody: String((req as { rawBody?: string | Buffer }).rawBody ?? ''),
             body: (req.body ?? {}) as Record<string, unknown>,
             now: deps.now(),
@@ -89,7 +110,10 @@ export function registerRoutes(app: FastifyInstance, deps: Deps, operations: Ope
         const handler = handlers[op.id as OperationId] as ((ctx: Ctx<OperationId>) => Promise<unknown>) | undefined;
         if (!handler) throw new ApiError(501, 'NOT_IMPLEMENTED', `${op.id} is not implemented yet`);
         void reply.status(op.successStatus);
-        const result = await handler(makeCtx(deps, op, req, reply));
+        const target = databaseFor(op, req);
+        const result = target.system
+          ? await handler(makeCtx(asSystem(deps), op, req, reply))
+          : await withCompanies(target.companyIds, () => handler(makeCtx(deps, op, req, reply)));
         if (reply.sent) return reply;
         if (result instanceof RawBody) {
           void reply.type(result.contentType);

@@ -7,8 +7,10 @@ import { ApiError, forbidden, planUpgradeRequired, unauthorized } from '../http/
 import { DEMO_SEED_HEADER, DEMO_SEED_TOKEN } from '../lib/internal';
 import type { AccessClaims } from './sessions';
 
+// The guards decide which businesses a request may open, so they run before any scope exists: on
+// the system database (docs/database/rls.md).
 async function loadUser(deps: Deps, claims: AccessClaims): Promise<AuthUser | null> {
-  const [row] = await deps.db
+  const [row] = await deps.systemDb
     .select({ u: schema.users, revokedAt: schema.deviceSessions.revokedAt, mfaVerifiedAt: schema.deviceSessions.mfaVerifiedAt, suspendedAt: schema.accounts.suspendedAt, isDemo: schema.accounts.isDemo })
     .from(schema.users)
     .innerJoin(schema.deviceSessions, eq(schema.deviceSessions.userId, schema.users.id))
@@ -19,8 +21,8 @@ async function loadUser(deps: Deps, claims: AccessClaims): Promise<AuthUser | nu
   // the same instant; it keeps the rule airtight without relying on that.
   if (row.suspendedAt) throw forbidden('ACCOUNT_SUSPENDED', 'This account has been suspended. Contact support.');
   const [companies, branches] = await Promise.all([
-    deps.db.select({ id: schema.userCompanies.companyId, role: schema.userCompanies.role }).from(schema.userCompanies).where(eq(schema.userCompanies.userId, row.u.id)),
-    deps.db.select({ id: schema.userBranches.branchId }).from(schema.userBranches).where(eq(schema.userBranches.userId, row.u.id)),
+    deps.systemDb.select({ id: schema.userCompanies.companyId, role: schema.userCompanies.role }).from(schema.userCompanies).where(eq(schema.userCompanies.userId, row.u.id)),
+    deps.systemDb.select({ id: schema.userBranches.branchId }).from(schema.userBranches).where(eq(schema.userBranches.userId, row.u.id)),
   ]);
   return {
     id: row.u.id,
@@ -68,14 +70,14 @@ export async function authenticate(app: FastifyInstance, deps: Deps, req: Fastif
 
 /** The company in a path, if the caller may open it. */
 export async function companyFor(deps: Deps, user: AuthUser, companyId: string): Promise<CompanyRow> {
-  const [company] = await deps.db.select().from(schema.companies).where(eq(schema.companies.id, companyId));
+  const [company] = await deps.systemDb.select().from(schema.companies).where(eq(schema.companies.id, companyId));
   // Membership is what grants access. It usually matches the account, but a member invited from another account has no row in their own.
   if (!company || !user.companyIds.includes(companyId)) {
     throw forbidden('COMPANY_ACCESS_DENIED', 'You do not have access to this company');
   }
   if (company.accountId !== user.accountId) {
     // Someone else's business: its account being suspended closes it to its guests too.
-    const [owner] = await deps.db.select({ suspendedAt: schema.accounts.suspendedAt }).from(schema.accounts).where(eq(schema.accounts.id, company.accountId));
+    const [owner] = await deps.systemDb.select({ suspendedAt: schema.accounts.suspendedAt }).from(schema.accounts).where(eq(schema.accounts.id, company.accountId));
     if (owner?.suspendedAt) throw forbidden('ACCOUNT_SUSPENDED', 'This business has been suspended. Contact support.');
   }
   return company;
@@ -127,7 +129,7 @@ export function registerGuards(app: FastifyInstance, deps: Deps) {
       if (here) user.role = here;
       // Branch limits are per business: limits from another business mean nothing here (none here = all branches).
       if (user.branchIds.length) {
-        const here = await deps.db.select({ id: schema.branches.id }).from(schema.branches).where(eq(schema.branches.companyId, companyId));
+        const here = await deps.systemDb.select({ id: schema.branches.id }).from(schema.branches).where(eq(schema.branches.companyId, companyId));
         const own = here.filter((b) => user.branchIds.includes(b.id));
         // Listed against every branch is no limit at all: the books, TDS/TCS and the balance sheet
         // open to them as to someone with no branch limits.
