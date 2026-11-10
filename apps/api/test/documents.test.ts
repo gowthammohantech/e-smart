@@ -2,7 +2,7 @@ import { and, eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { schema } from '@esmart/db';
 import { sha256 } from '../src/lib/crypto';
-import { ownerWithCompany, setupApi } from './helpers';
+import { ownerWithCompany, setupApi, withPaymentPage } from './helpers';
 import { documentRow, invoiceBody, issueInvoice, line, moneySetup, onHand, pdfText } from './money-fixtures';
 
 const t = setupApi();
@@ -433,6 +433,7 @@ describe('documents: output', () => {
     const [stored] = await t.deps.db.select().from(schema.shareLinks).where(eq(schema.shareLinks.documentId, inv.id));
     expect(stored.tokenHash).toBe(sha256(token));
 
+    withPaymentPage(t);
     const link = await t.post(`${m.c}/documents/${inv.id}/payment-link`, { amount: { minor: 100000, currency: 'INR' } }, { token: m.token });
     expect(link.status).toBe(200);
     expect(link.body.upiUri).toContain('am=1000.00');
@@ -445,6 +446,7 @@ describe('documents: output', () => {
   it('sends by WhatsApp, logs the delivery, notifies, and issues a draft quote', async () => {
     const m = await moneySetup(t);
     const inv = await issueInvoice(t, m);
+    withPaymentPage(t);
     const res = await t.post(`${m.c}/documents/${inv.id}/send`, { channel: 'whatsapp', includePaymentLink: true }, { token: m.token });
     expect(res.status).toBe(202);
     const msg = t.providers.outbox.last('whatsapp', '+919800000001');

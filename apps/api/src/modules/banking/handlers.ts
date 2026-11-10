@@ -21,6 +21,7 @@ import { prepare as prepareExpense } from '../expenses/handlers';
 import { assertAccountCovers } from '../expenses/engine';
 import { expensesToWire } from '../expenses/wire';
 import { assertDirectionAllowed, writePayment } from '../payments/engine';
+import { holdIfOverLimit, requestInput } from '../payments/requests';
 import { paymentsToWire } from '../payments/wire';
 import {
   DAY_TOLERANCE,
@@ -431,6 +432,26 @@ export const bankingHandlers = defineHandlers({
     const peek = await findLine(ctx, ctx.db, ctx.params.id);
     const direction = peek.amountMinor > 0 ? 'received' : 'paid';
     assertDirectionAllowed(ctx.company, direction);
+    /** The payment this line is, as the payments API would take it. */
+    const asPayment = (line: typeof peek, account: { id: string; currency: string }) =>
+      ({
+        direction,
+        partyId: body.partyId,
+        date: line.date,
+        amount: money(Math.abs(line.amountMinor), account.currency.trim()),
+        currency: account.currency.trim(),
+        method: body.method ?? 'bank',
+        reference: (line.reference ?? line.description).slice(0, 100) || undefined,
+        accountId: account.id,
+        notes: body.notes,
+        allocations: body.allocations,
+      }) as Schema<'Payment'>;
+    // The same approval rule as any payment made (RULES 6.14): over it, from someone who isn't an
+    // owner or admin, it is kept as a request and the line stays unmatched until it is approved.
+    if (peek.status !== 'matched') {
+      const peekAccount = await bankAccount(ctx.db, ctx.company, peek.accountId);
+      await holdIfOverLimit(ctx.db, ctx.deps, ctx.company, ctx.user, asPayment(peek, peekAccount), ctx.now, ' Match the line to the payment once it is approved.');
+    }
     const out = await ctx.db.transaction(async (tx) => {
       const line = await findLine(ctx, tx, ctx.params.id, true);
       checkIfMatch(ctx.req, line.version);
@@ -441,32 +462,7 @@ export const bankingHandlers = defineHandlers({
       if (party && direction === 'received' && !sellsTo(party.kind)) throw invalid('partyId', `Money came in: ${party.name} needs to be a customer`);
       if (party && direction === 'paid' && !buysFrom(party.kind)) throw invalid('partyId', `Money went out: ${party.name} needs to be a supplier`);
       const cur = account.currency.trim();
-      const payment = await writePayment(
-        tx,
-        ctx.deps,
-        ctx.company,
-        ctx.user,
-        {
-          direction,
-          partyId: body.partyId,
-          date: line.date,
-          amountMinor: Math.abs(line.amountMinor),
-          currency: cur,
-          method: body.method ?? 'bank',
-          reference: (line.reference ?? line.description).slice(0, 100) || null,
-          accountId: account.id,
-          notes: body.notes ?? null,
-          allocations: (body.allocations ?? []).map((a) => ({
-            documentId: a.documentId,
-            amountMinor: a.amount.minor,
-            tdsMinor: a.tdsDeducted?.minor,
-            discountMinor: a.discount?.minor,
-            writeOffMinor: a.writeOff?.minor,
-            currency: a.amount.currency,
-          })),
-        },
-        { now: ctx.now },
-      );
+      const payment = await writePayment(tx, ctx.deps, ctx.company, ctx.user, requestInput(asPayment(line, account)), { now: ctx.now });
       const matched = await matchTo(tx, ctx, line, account, 'payment', payment.id, 'matched to a new payment');
       const [wire] = await paymentsToWire(tx, [payment], ctx.company.baseCurrency.trim());
       return { line: lineToWire(matched.line, cur, { match: matched.record }), payment: wire };

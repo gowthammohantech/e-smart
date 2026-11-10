@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { schema } from '@esmart/db';
-import { setupApi } from './helpers';
+import { setupApi, withPaymentPage } from './helpers';
 import { documentRow, expectMoneyInvariants, issueInvoice, moneySetup, razorpay } from './money-fixtures';
 
 const t = setupApi();
@@ -58,6 +58,7 @@ describe('webhooks: razorpay ordering and refunds', () => {
   async function paidInvoice() {
     const m = await moneySetup(t);
     const inv = await issueInvoice(t, m);
+    withPaymentPage(t);
     const link = await t.post(`${m.c}/documents/${inv.id}/payment-link`, {}, { token: m.token });
     const [pl] = await t.deps.db.select().from(schema.paymentLinks).where(eq(schema.paymentLinks.url, link.body.url));
     expect((await razorpay(t, linkPaid(pl.providerLinkId, inv.totals.grandTotal.minor, 'pay_R1'), { eventId: 'evt_paid' })).status).toBe(200);

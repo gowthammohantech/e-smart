@@ -2,7 +2,7 @@ import { createHmac } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 import { schema } from '@esmart/db';
-import { setupApi } from './helpers';
+import { setupApi, withPaymentPage } from './helpers';
 import { documentRow, expectMoneyInvariants, issueInvoice, moneySetup, razorpay } from './money-fixtures';
 
 const t = setupApi();
@@ -21,6 +21,7 @@ describe('webhooks: razorpay', () => {
   it('rejects a bad signature without touching anything', async () => {
     const m = await moneySetup(t);
     const inv = await issueInvoice(t, m);
+    withPaymentPage(t);
     const link = await t.post(`${m.c}/documents/${inv.id}/payment-link`, {}, { token: m.token });
     const [pl] = await t.deps.db.select().from(schema.paymentLinks).where(eq(schema.paymentLinks.url, link.body.url));
 
@@ -40,6 +41,7 @@ describe('webhooks: razorpay', () => {
     const m = await moneySetup(t);
     await t.deps.db.insert(schema.paymentAccounts).values({ id: 'pac_bank', companyId: m.companyId, name: 'HDFC Current', type: 'bank', currency: 'INR' });
     const inv = await issueInvoice(t, m);
+    withPaymentPage(t);
     const link = await t.post(`${m.c}/documents/${inv.id}/payment-link`, {}, { token: m.token });
     const [pl] = await t.deps.db.select().from(schema.paymentLinks).where(eq(schema.paymentLinks.url, link.body.url));
 
@@ -67,6 +69,7 @@ describe('webhooks: razorpay', () => {
   it('keeps an overpayment through a link as the customer’s advance', async () => {
     const m = await moneySetup(t);
     const inv = await issueInvoice(t, m);
+    withPaymentPage(t);
     const link = await t.post(`${m.c}/documents/${inv.id}/payment-link`, { amount: { minor: 100000, currency: 'INR' } }, { token: m.token });
     const [pl] = await t.deps.db.select().from(schema.paymentLinks).where(eq(schema.paymentLinks.url, link.body.url));
     // Meanwhile the customer paid most of it in cash.

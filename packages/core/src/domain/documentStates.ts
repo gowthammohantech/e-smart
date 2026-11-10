@@ -134,6 +134,32 @@ export function canTransition(kind: DocumentKind, from: DocStatus, to: DocStatus
   return nextStatuses(kind, from).includes(to);
 }
 
+/**
+ * Whether a document standing at `status` can be cancelled. The server checks the same table; it
+ * also refuses one with a live e-way bill, a live IRN or live returns, which the app warns about.
+ * A sent quote, a delivered note, a fulfilled order, a processed return or a paid invoice cannot.
+ */
+export function canCancel(kind: DocumentKind, status: DocStatus): boolean {
+  return status !== 'cancelled' && canTransition(kind, status, 'cancelled');
+}
+
+/**
+ * `canCancel` for a document as the app holds it, with what has been paid against it. Money paid
+ * (or a credit applied) has to come off first, so anything settled by it can't be cancelled. A bill's
+ * own TDS reads as paid from the day it is issued, but no money settled it: cancelling looks past it,
+ * as the server does, so such a bill reads as issued (or overdue).
+ */
+export function canCancelDocument(
+  doc: { kind: DocumentKind; status: DocStatus; dueDate?: string },
+  paid: { paidMinor: number; ownTdsMinor?: number },
+  asOf: string,
+): boolean {
+  const byMoney = paid.paidMinor - (doc.kind === 'invoice' ? 0 : (paid.ownTdsMinor ?? 0));
+  if (byMoney > 0) return false;
+  const from: DocStatus = doc.status === 'paid' || doc.status === 'partiallyPaid' ? (doc.dueDate && doc.dueDate < asOf ? 'overdue' : 'issued') : doc.status;
+  return canCancel(doc.kind, from);
+}
+
 export function initialStatus(kind: DocumentKind): DocStatus {
   if (kind === 'salesReturn' || kind === 'purchaseReturn') return 'requested';
   return 'draft';
@@ -142,6 +168,11 @@ export function initialStatus(kind: DocumentKind): DocStatus {
 /** A finalized document is locked from editing and its number is permanent. */
 export function isFinalized(status: DocStatus): boolean {
   return !['draft', 'requested'].includes(status);
+}
+
+/** Held for an owner or admin: finalising it kept it a draft until they approve it (or send it back). */
+export function isAwaitingApproval(doc: { status: DocStatus; approval?: { status: string } | null }): boolean {
+  return !isFinalized(doc.status) && doc.approval?.status === 'pending';
 }
 
 export function isCancelled(status: DocStatus): boolean {

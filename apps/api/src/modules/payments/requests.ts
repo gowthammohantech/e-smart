@@ -7,7 +7,7 @@ import {
   type CompanyRow,
   type Deps,
 } from "../../context";
-import { conflict, notFound } from "../../http/errors";
+import { ApiError, conflict, notFound } from "../../http/errors";
 import { recordChange, type DbOrTx } from "../../lib/audit";
 import { newId } from "../../lib/ids";
 import { notify, noteMoney } from "../../lib/notify";
@@ -106,6 +106,53 @@ export async function holdPayment(
     entityId: row.id,
   });
   return row;
+}
+
+/**
+ * The one gate every new payment made passes (RULES 6.14): the payments screen, a bank-statement
+ * line recorded as a payment, and Lixi (which calls createPayment). Over the rule, from someone who
+ * isn't an approver, the payment is kept as a request (committed on its own) and 409 PAYMENT_HELD
+ * is thrown, so nothing is recorded. Call it before the transaction that would write the payment.
+ */
+export async function holdIfOverLimit(
+  db: DbOrTx,
+  deps: Deps,
+  company: CompanyRow,
+  user: AuthUser,
+  body: PaymentBody,
+  now: Date,
+  detail = "",
+): Promise<void> {
+  const limit = paymentLimit(company, user, body);
+  if (limit === null || amountInBase(body) <= limit) return;
+  const held = await db.transaction((tx) => holdPayment(tx, deps, company, user, body, now));
+  throw new ApiError(
+    409,
+    "PAYMENT_HELD",
+    `Payments over ${(limit / 100).toFixed(2)} need an owner or admin. This one is waiting for their approval.${detail}`,
+    { requestId: held.id },
+  );
+}
+
+/**
+ * Editing a payment made can't take it over the rule either: someone who isn't an approver may
+ * not raise one past the limit (or above where it already was, when it is already past it).
+ */
+export function assertEditWithinLimit(
+  company: CompanyRow,
+  user: AuthUser,
+  body: PaymentBody,
+  existing: { amountMinor: number; exchangeRate: string | number },
+): void {
+  const limit = paymentLimit(company, user, body);
+  if (limit === null) return;
+  const after = amountInBase(body);
+  const before = Math.round(existing.amountMinor * Number(existing.exchangeRate ?? 1));
+  if (after > limit && after > before)
+    throw conflict(
+      "PAYMENT_NEEDS_APPROVER",
+      `Payments over ${(limit / 100).toFixed(2)} need an owner or admin. Ask one of them to change this payment.`,
+    );
 }
 
 async function toWire(

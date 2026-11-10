@@ -51,4 +51,20 @@ describe('switching modules off', () => {
     expect(on.body.disabledModules).toEqual([]);
     expect((await t.get(`${m.c}/vouchers`, { token: m.token })).status).toBe(200);
   });
+
+  it("refuses a report whose module is switched off, as the module's own routes are", async () => {
+    const m = await moneySetup(t);
+    const company = await t.get(`${m.c}`, { token: m.token });
+    const range = { from: '2026-04-01', to: '2026-09-30' };
+    expect((await t.get(`${m.c}/reports/purchase-summary`, { token: m.token, query: range })).status).toBe(200);
+    const off = await t.put(`${m.c}`, { ...company.body, disabledModules: ['purchases'] }, { token: m.token, headers: { 'if-match': `"v${company.body.version}"` } });
+    expect(off.status).toBe(200);
+    for (const url of [`${m.c}/reports/purchase-summary`, `${m.c}/report-data/purchase-summary`]) {
+      const refused = await t.get(url, { token: m.token, query: range });
+      expect(refused.status, url).toBe(403);
+      expect(refused.body.code).toBe('MODULE_OFF');
+    }
+    // A sales report goes on.
+    expect((await t.get(`${m.c}/reports/sales-summary`, { token: m.token, query: range })).status).toBe(200);
+  });
 });

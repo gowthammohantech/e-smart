@@ -3,12 +3,12 @@ import { track } from '../../analytics/track';
 import type { Schema } from '@esmart/api-contract';
 import { PAYMENT_METHODS } from '@esmart/core/data/masters';
 import { PAYABLE_KINDS, RECEIVABLE_KINDS, isCancelled } from '@esmart/core/domain/documentStates';
-import { FULL_PLAN, hasModule, moduleForReport } from '@esmart/core/domain/plan';
+import { FULL_PLAN, hasModule, moduleEnabled, moduleForReport, type Module } from '@esmart/core/domain/plan';
 import { tdsRegister } from '@esmart/core/domain/tds';
 import type { BusinessDocument } from '@esmart/core/types';
 import { schema } from '@esmart/db';
 import { summarizeAdvances, summarizeDocuments, summarizeExpenses, summarizePayments, summarizeStock, summarizeTax, type ReportFilters } from '@esmart/core/domain/reports';
-import { RawBody, defineHandlers, type Ctx } from '../../context';
+import { RawBody, defineHandlers, type CompanyRow, type Ctx } from '../../context';
 import { forbidden, invalid, planUpgradeRequired } from '../../http/errors';
 import { loadBook, loadVouchers } from '../books/book';
 import { amendmentsForScreen, gstr1ForRange } from '../gst/handlers';
@@ -145,12 +145,24 @@ export async function buildReport(s: Scope, key: ReportKey, q: Query): Promise<R
   }
 }
 
+/**
+ * A report of a module the plan doesn't have needs the upgrade; one the owner switched off (or
+ * something it needs is) is refused as every other switched-off route is, by the router's own words.
+ */
+function assertReportAvailable(company: CompanyRow, key: string) {
+  const module = moduleForReport(key);
+  if (!module) return;
+  if (!hasModule(company.plan, module)) throw planUpgradeRequired(FULL_PLAN, module);
+  if (!moduleEnabled(company.plan, company.disabledModules as Module[], module)) {
+    throw forbidden('MODULE_OFF', `${module} is switched off for this business; an owner can switch it on in Settings`);
+  }
+}
+
 /** Reports: getReport. JSON by default; CSV or PDF when `Accept` asks for one. */
 export const reportsHandlers = defineHandlers({
   async getReportData(ctx) {
     const key = ctx.params.reportKey;
-    const module = moduleForReport(key);
-    if (module && !hasModule(ctx.company.plan, module)) throw planUpgradeRequired(FULL_PLAN, module);
+    assertReportAvailable(ctx.company, key);
     const { from, to, branchId, partyId } = ctx.query;
     if (from > to) throw invalid('from', 'The range starts after it ends');
     // The whole book up to `to`, as the app held it: the core functions apply the range themselves.
@@ -283,8 +295,7 @@ export const reportsHandlers = defineHandlers({
 
   async getReport(ctx) {
     const key = ctx.params.reportKey as ReportKey;
-    const module = moduleForReport(key);
-    if (module && !hasModule(ctx.company.plan, module)) throw planUpgradeRequired(FULL_PLAN, module);
+    assertReportAvailable(ctx.company, key);
     const { from, to, branchId, partyId, currency } = ctx.query;
     if (from > to) throw invalid('from', 'The range starts after it ends');
 

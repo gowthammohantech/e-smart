@@ -456,7 +456,7 @@ async function setUserEnabled(ctx: UserToggleCtx, enable: boolean): Promise<Sche
   const { user, account } = await ctx.db.transaction(async (tx) => {
     const [current] = await tx.select().from(U).where(eq(U.id, ctx.params.userId)).for('update');
     if (!current) throw notFound('User');
-    if (current.platformRole) throw conflict('PLATFORM_OPERATOR', 'Platform operators are managed with db:platform-admin, not here');
+    if (current.platformRole) throw conflict('PLATFORM_OPERATOR', 'This user is a platform operator. Remove their platform role first (Change role), then disable them.');
     if (enable && current.status !== 'disabled') throw conflict('NOT_DISABLED', 'This user is not disabled');
     if (!enable && current.status === 'disabled') throw conflict('ALREADY_DISABLED', 'This user is already disabled');
     const status = enable ? (current.passwordHash ? 'active' : 'invited') : 'disabled';

@@ -3,23 +3,37 @@ import { standardLayout } from './layouts/standard';
 import { boxedLayout } from './layouts/boxed';
 import { modernLayout } from './layouts/modern';
 
+import { esc } from './blocks';
+
 export { upiPayLink } from './blocks';
 export { COPY_LABEL } from './docView';
 export type { CopyKind, DocumentHtmlInput } from './docView';
 
+/**
+ * Which copy this is, as Rule 48 names it: in the page's language, with the English wording after it
+ * when that is another language (as the field labels carry theirs).
+ */
+export function copyLabel(view: Pick<DocView, 't' | 'language'>, copy: CopyKind): string {
+  if (view.language === 'en') return COPY_LABEL[copy];
+  const key = `sales:print.copies.${copy}`;
+  const own = view.t(key);
+  return own && own !== key ? `${own} · ${COPY_LABEL[copy]}` : COPY_LABEL[copy];
+}
+
 /** One copy of the page in the chosen layout. */
 function renderCopy(view: DocView, copy: CopyKind | undefined): string {
+  const label = copy ? copyLabel(view, copy) : '';
   switch (view.tpl.layout) {
     case 'classic':
     case 'detailed':
-      return boxedLayout(view, view.tpl.layout, copy ? COPY_LABEL[copy] : '');
+      return boxedLayout(view, view.tpl.layout, label);
     case 'modern':
-      return modernLayout(view, copy ? COPY_LABEL[copy] : '');
+      return modernLayout(view, label);
     default: {
       // The standard page has always printed the original unlabelled, and the others above its head.
       const html = standardLayout(view);
       return copy && copy !== 'original'
-        ? html.replace('<div class="head">', `<div class="muted" style="text-align:right;font-weight:700">${COPY_LABEL[copy]}</div><div class="head">`)
+        ? html.replace('<div class="head">', `<div class="muted" style="text-align:right;font-weight:700">${esc(label)}</div><div class="head">`)
         : html;
     }
   }

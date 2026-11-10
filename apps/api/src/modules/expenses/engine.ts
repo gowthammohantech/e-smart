@@ -192,30 +192,28 @@ export async function materializeRecurringExpenses(deps: Pick<Deps, 'db'> & Part
   return { created };
 }
 
-/** The columns an occurrence inherits from its template. */
+/**
+ * The columns an occurrence inherits from its template: every one but those
+ * that make it its own record (id, number, date, schedule, version, times)
+ * and the receipt it was scanned from. Taken by exclusion, so a column added
+ * to expenses later (bill-to customer, cost centre, vehicle) carries over
+ * without being listed here.
+ */
 function copyable(t: ExpenseRow) {
-  return {
-    companyId: t.companyId,
-    branchId: t.branchId,
-    categoryId: t.categoryId,
-    supplierId: t.supplierId,
-    amountMinor: t.amountMinor,
-    currency: t.currency,
-    exchangeRate: t.exchangeRate,
-    taxCategoryId: t.taxCategoryId,
-    taxAmountMinor: t.taxAmountMinor,
-    taxInclusive: t.taxInclusive,
-    placeOfSupplyStateCode: t.placeOfSupplyStateCode,
-    supplierGstin: t.supplierGstin,
-    itcEligibility: t.itcEligibility,
-    reverseCharge: t.reverseCharge,
-    accountId: t.accountId,
-    method: t.method,
-    reference: t.reference,
-    notes: t.notes,
-    billable: t.billable,
-    createdBy: t.createdBy,
-  };
+  const {
+    id: _id,
+    number: _number,
+    date: _date,
+    recurrence: _recurrence,
+    nextRecurrenceDate: _next,
+    recurringParentId: _parent,
+    ocrExtractionId: _ocr,
+    version: _version,
+    createdAt: _createdAt,
+    updatedAt: _updatedAt,
+    ...inherited
+  } = t;
+  return inherited;
 }
 
 /** Attachments listed on an expense point back at it (and only those). */

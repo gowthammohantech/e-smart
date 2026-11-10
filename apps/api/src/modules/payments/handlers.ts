@@ -4,12 +4,12 @@ import type { Schema } from '@esmart/api-contract';
 import { RawBody, defineHandlers, type Ctx } from '../../context';
 import { money } from '../../lib/wire';
 import { checkIfMatch, setEtag } from '../../http/etag';
-import { ApiError, notFound } from '../../http/errors';
+import { notFound } from '../../http/errors';
 import { keyset } from '../../http/pagination';
 import { track } from '../../analytics/track';
 import type { DbOrTx } from '../../lib/audit';
 import { deletePayment, assertDirectionAllowed, linkPaymentAttachments, writePayment } from './engine';
-import { amountInBase, holdPayment, paymentLimit, requestInput } from './requests';
+import { assertEditWithinLimit, holdIfOverLimit, requestInput } from './requests';
 import { receiptHtml } from './receipt';
 import { paymentsToWire, type PaymentRow } from './wire';
 
@@ -87,11 +87,7 @@ export const paymentsHandlers = defineHandlers({
   async createPayment(ctx) {
     assertDirectionAllowed(ctx.company, ctx.body.direction, !!ctx.body.refundOf);
     // Over the company's payment rule, from someone who isn't an approver: kept for an owner or admin (RULES 6.14).
-    const limit = paymentLimit(ctx.company, ctx.user, ctx.body);
-    if (limit !== null && amountInBase(ctx.body) > limit) {
-      const held = await ctx.db.transaction((tx) => holdPayment(tx, ctx.deps, ctx.company, ctx.user, ctx.body, ctx.now));
-      throw new ApiError(409, 'PAYMENT_HELD', `Payments over ${(limit / 100).toFixed(2)} need an owner or admin. This one is waiting for their approval.`, { requestId: held.id });
-    }
+    await holdIfOverLimit(ctx.db, ctx.deps, ctx.company, ctx.user, ctx.body, ctx.now);
     const row = await ctx.db.transaction(async (tx) => {
       const created = await writePayment(tx, ctx.deps, ctx.company, ctx.user, inputOf(ctx.body), { now: ctx.now });
       await linkPaymentAttachments(tx, ctx.company.id, created.id, ctx.body.attachmentIds);
@@ -113,6 +109,7 @@ export const paymentsHandlers = defineHandlers({
     const row = await ctx.db.transaction(async (tx) => {
       const current = await findPayment(ctx, tx, ctx.params.id, { lock: true });
       checkIfMatch(ctx.req, current.version);
+      assertEditWithinLimit(ctx.company, ctx.user, ctx.body, current);
       const saved = await writePayment(tx, ctx.deps, ctx.company, ctx.user, inputOf(ctx.body), { now: ctx.now, existing: current });
       await linkPaymentAttachments(tx, ctx.company.id, saved.id, ctx.body.attachmentIds);
       return saved;

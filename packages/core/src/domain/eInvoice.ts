@@ -184,6 +184,8 @@ export function isEInvoiceApplicable(ctx: EInvoiceContext): EInvoiceApplicabilit
 
   const docType = eInvoiceDocTypeFor(doc.kind);
   if (!docType) return no('Only invoices and credit notes are reported');
+  // A financial or commercial note without GST (RULES 6.24) is not a supply: it stays out of GSTR-1, so out of the IRP too.
+  if (doc.noteGst === 'noGst') return no('A note without GST is not reported');
 
   if (doc.status === 'draft' || doc.status === 'requested') {
     return no('The document has not been finalised yet');
@@ -393,6 +395,7 @@ function recomputeTotal(doc: BusinessDocument): number {
     t.documentDiscount.minor +
     t.charges.minor +
     (t.reimbursements?.minor ?? 0) +
+    (t.tcs?.minor ?? 0) +
     t.roundOff.minor
   );
 }

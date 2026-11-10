@@ -70,7 +70,8 @@ export function registerSharePages(app: FastifyInstance, deps: Deps) {
     const locale: LanguageCode = lang === 'ta' ? 'ta' : 'en';
     await deps.db.update(schema.shareLinks).set({ viewCount: sql`${schema.shareLinks.viewCount} + 1`, lastViewedAt: now }).where(eq(schema.shareLinks.id, link.id));
 
-    const owing = doc.kind === 'invoice' && doc.amountPaidMinor < doc.grandTotalMinor && effectiveStatus(doc, today(now)) !== 'paid';
+    // A link minted before the provider changed still leads nowhere without a page to pay on.
+    const owing = deps.providers.payments.hostsPaymentPage && doc.kind === 'invoice' && doc.amountPaidMinor < doc.grandTotalMinor && effectiveStatus(doc, today(now)) !== 'paid';
     const PL = schema.paymentLinks;
     const [pay] = owing
       ? await deps.db

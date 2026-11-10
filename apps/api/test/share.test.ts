@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 import { schema } from '@esmart/db';
-import { setupApi } from './helpers';
+import { setupApi, withPaymentPage } from './helpers';
 import { issueInvoice, moneySetup } from './money-fixtures';
 
 const t = setupApi();
@@ -16,6 +16,19 @@ async function shared() {
 }
 
 const open = (path: string) => t.app.inject({ method: 'GET', url: path });
+
+describe('making a share link', () => {
+  it('is for those who can send the document, not a viewer', async () => {
+    const m = await moneySetup(t);
+    const inv = await issueInvoice(t, m);
+    await t.deps.db.update(schema.users).set({ role: 'viewer' }).where(eq(schema.users.id, m.user.id!));
+    const res = await t.post(`${m.c}/documents/${inv.id}/share-link`, {}, { token: m.token });
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe('ROLE_FORBIDDEN');
+    await t.deps.db.update(schema.users).set({ role: 'sales' }).where(eq(schema.users.id, m.user.id!));
+    expect((await t.post(`${m.c}/documents/${inv.id}/share-link`, {}, { token: m.token })).status).toBe(200);
+  });
+});
 
 describe('public share page', () => {
   it('shows the document to anyone with the link, counts the view, and keeps it private', async () => {
@@ -49,10 +62,29 @@ describe('public share page', () => {
   it('offers the payment link while the invoice is owing', async () => {
     const { m, inv, token } = await shared();
     expect((await open(`/share/${token}`)).body).not.toContain('Pay now');
+    withPaymentPage(t);
     const link = await t.post(`${m.c}/documents/${inv.id}/payment-link`, {}, { token: m.token });
     const page = await open(`/share/${token}`);
     expect(page.body).toContain('Pay now');
     expect(page.body).toContain(link.body.url);
+  });
+
+  it('offers no way to pay online without a payment page behind the link (the simulator)', async () => {
+    const { m, inv, token } = await shared();
+    const link = await t.post(`${m.c}/documents/${inv.id}/payment-link`, {}, { token: m.token });
+    expect(link.status).toBe(409);
+    expect(link.body.code).toBe('ONLINE_PAYMENTS_UNAVAILABLE');
+    const sent = await t.post(`${m.c}/documents/${inv.id}/send`, { channel: 'email', to: ['buyer@example.com'], includePaymentLink: true }, { token: m.token });
+    expect(sent.status).toBe(202);
+    const mail = t.providers.outbox.last('email', 'buyer@example.com');
+    expect(mail?.text).not.toContain('Pay:');
+    expect(mail?.html).not.toContain('Pay now');
+    expect(mail?.text).not.toContain('/pay/');
+    const reminder = await t.post(`${m.c}/receivables/reminders`, { partyId: m.mumbai.id, channel: 'whatsapp' }, { token: m.token });
+    expect(reminder.status).toBe(202);
+    expect(t.providers.outbox.last('whatsapp')?.text).not.toContain('Pay:');
+    expect(await t.deps.db.select().from(schema.paymentLinks)).toHaveLength(0);
+    expect((await open(`/share/${token}`)).body).not.toContain('Pay now');
   });
 
   it('answers the same 404 for an unknown, malformed or expired token', async () => {

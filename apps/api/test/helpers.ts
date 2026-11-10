@@ -159,6 +159,8 @@ export function setupApi(env: Record<string, string> = {}): TestContext {
     }
     now = null;
     providers.outbox.clear();
+    // The simulator has no page to pay on, so it mints no payment links unless a test stands it in for Razorpay.
+    (providers.payments as { hostsPaymentPage: boolean }).hostsPaymentPage = false;
     (providers.compliance as { reset?: () => void }).reset?.();
     (providers.returns as { reset?: () => void }).reset?.();
     await pool.query(`TRUNCATE ${tables.map((t) => `"${t}"`).join(', ')} RESTART IDENTITY CASCADE`);
@@ -205,6 +207,11 @@ export function setupApi(env: Record<string, string> = {}): TestContext {
 }
 
 // ----------------------------------------------------------------- fixtures
+
+/** Stands the payments simulator in for a provider with a hosted payment page (Razorpay), for the rest of the test. */
+export function withPaymentPage(t: TestContext) {
+  (t.providers.payments as { hostsPaymentPage: boolean }).hostsPaymentPage = true;
+}
 
 export const MUMBAI: Schema<'Address'> = { line1: '12 Market Road', city: 'Mumbai', state: 'Maharashtra', stateCode: '27', postalCode: '400001', country: 'IN' };
 export const BENGALURU: Schema<'Address'> = { line1: '4 MG Road', city: 'Bengaluru', state: 'Karnataka', stateCode: '29', postalCode: '560001', country: 'IN' };

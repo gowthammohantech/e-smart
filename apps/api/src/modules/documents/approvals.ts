@@ -54,6 +54,26 @@ export async function decide(tx: DbOrTx, user: AuthUser, row: DocRow, status: 'a
   return updated;
 }
 
+/**
+ * Tells whoever sent the document for approval what was decided, as a payment request's decision does
+ * (RULES 6.14): approved (and issued, under its number), or sent back with the approver's note.
+ * `title` is what the document is called, e.g. "Invoice".
+ */
+export async function notifyDecision(tx: DbOrTx, deps: Deps, decider: AuthUser, row: DocRow, was: Approval, title: string, note?: string): Promise<void> {
+  if (!was?.requestedBy || was.requestedBy === decider.id) return;
+  const what = title.toLowerCase();
+  await notify(tx, deps, {
+    companyId: row.companyId,
+    userId: was.requestedBy,
+    kind: 'system',
+    ...(note === undefined
+      ? { title: `Your ${what} was approved`, body: `${row.number} was approved and issued by ${decider.name}.` }
+      : { title: `Your ${what} was sent back`, body: `${decider.name} sent back your ${what} for ${noteMoney(row.grandTotalMinor, row.currency)}: ${note}` }),
+    entityType: 'document',
+    entityId: row.id,
+  });
+}
+
 /** Documents waiting for a decision, oldest request first. */
 export async function pendingApprovals(db: DbOrTx, companyId: string): Promise<DocRow[]> {
   return db
