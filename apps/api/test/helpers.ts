@@ -105,7 +105,7 @@ export function setupApi(env: Record<string, string> = {}): TestContext {
   let now: Date | null = null;
   // The simulators keep the test's clock, so a session opened "now" is the pinned now.
   const providers = createProviders(config, { info: () => {} }, db, () => (now ? new Date(now) : new Date()));
-  const deps: Deps = { db, pool, config, providers, now: () => (now ? new Date(now) : new Date()) };
+  const deps: Deps = { db, pool, systemDb: db, systemPool: pool, config, providers, now: () => (now ? new Date(now) : new Date()) };
   let app: FastifyInstance | null = null;
   let operations: Operation[] = [];
   let problem: object = {};

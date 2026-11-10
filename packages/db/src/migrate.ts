@@ -25,7 +25,8 @@ export async function runMigrations(url: string, env: Record<string, string | un
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const url = process.env.DATABASE_URL ?? 'postgres://esmart:esmart@localhost:5432/esmart';
+  // The owner role: in a deployment DATABASE_URL is the restricted app role, which can't change the schema.
+  const url = process.env.MIGRATION_DATABASE_URL || process.env.DATABASE_URL || 'postgres://esmart:esmart@localhost:5432/esmart';
   const demo = await runMigrations(url);
   console.log('Migrations and reference data applied.');
   console.log(demo);
