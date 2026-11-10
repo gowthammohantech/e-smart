@@ -39,7 +39,15 @@ export default defineRailway((ctx) => {
     // Production refuses '*': list the web and admin origins in Railway.
     CORS_ORIGINS: preserve(),
     // Secrets stay in Railway: set once, never committed here.
+    // Row-level security (docs/database/rls.md): DATABASE_URL is the request role (esmart_app),
+    // SYSTEM_DATABASE_URL the BYPASSRLS role (esmart_system), MIGRATION_DATABASE_URL the owner.
+    // db:roles sets the two roles' passwords from APP_DB_PASSWORD / SYSTEM_DB_PASSWORD.
     DATABASE_URL: preserve(),
+    SYSTEM_DATABASE_URL: preserve(),
+    MIGRATION_DATABASE_URL: preserve(),
+    APP_DB_PASSWORD: preserve(),
+    SYSTEM_DB_PASSWORD: preserve(),
+    RLS_ENFORCE: preserve(),
     JWT_SECRET: preserve(),
     CREDENTIALS_KEY: preserve(),
     // Production refuses every simulator and log-only provider: each one is
@@ -97,7 +105,8 @@ export default defineRailway((ctx) => {
     // Schema and reference data, applied between build and deploy, then the
     // demo account when SEED_DEMO_ACCOUNT=true. Idempotent: Drizzle skips
     // migrations already applied, and an existing demo account is left alone.
-    preDeploy: 'npm run db:migrate -w @esmart/db',
+    // Then the app's database roles and their grants, on every table including new ones.
+    preDeploy: 'npm run db:migrate -w @esmart/db && npm run db:roles -w @esmart/db',
     healthcheck: '/health',
     healthcheckTimeout: 120,
     env: {

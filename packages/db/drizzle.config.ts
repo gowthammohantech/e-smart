@@ -4,6 +4,6 @@ export default defineConfig({
   dialect: 'postgresql',
   schema: './src/schema.ts',
   out: './migrations',
-  dbCredentials: { url: process.env.DATABASE_URL ?? 'postgres://esmart:esmart@localhost:5432/esmart' },
+  dbCredentials: { url: process.env.MIGRATION_DATABASE_URL || process.env.DATABASE_URL || 'postgres://esmart:esmart@localhost:5432/esmart' },
   casing: 'snake_case',
 });
