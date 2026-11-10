@@ -19,8 +19,8 @@ import { Badge } from '@esmart/ui/components/Badge';
 import { Fab } from '@esmart/ui/components/Fab';
 import { Illustration } from '@esmart/ui/components/Illustration';
 import { Sheet } from '@esmart/ui/components/Sheet';
-import { Button } from '@esmart/ui/components/Button';
-import { Menu, MenuItem, useMenuAnchor } from '@esmart/ui/components/Menu';
+import { Menu, MenuItem } from '@esmart/ui/components/Menu';
+import type { PageActionAnchor } from '@esmart/ui/components/PageHeader';
 import { useBaseCurrency, useCanOpen, useComplianceSummary, useCurrentUser, useDashboardScope, useHasModule, useModuleSet } from '../../../store/selectors';
 import { useHomeHub } from '../../../remote/queries';
 import { money, type Money } from '@esmart/core/lib/money';
@@ -65,8 +65,10 @@ export default function Home() {
   const [actionsOpen, setActionsOpen] = useState(false);
   // Always false in the native apps.
   const desktop = useIsDesktop();
-  // A desktop's Create drops a menu down from its button instead of opening a sheet.
-  const { setAnchor: setCreateAnchor, rect: createRect, open: openCreate, close: closeCreate } = useMenuAnchor();
+  // A desktop's Create sits in the page header and drops a menu down from there instead of opening a sheet.
+  const [createRect, setCreateRect] = useState<PageActionAnchor | null>(null);
+  const closeCreate = () => setCreateRect(null);
+  const openCreate = (anchor?: PageActionAnchor) => (desktop && anchor ? setCreateRect(anchor) : setActionsOpen(true));
 
   const zero = money(0, baseCurrency);
   const monthSales = hub?.salesThisMonth ?? zero;
@@ -165,13 +167,13 @@ export default function Home() {
       ))}
     </Menu>
   ) : null;
-  // On a desktop the button sits on the page, where its menu can drop from it; a phone keeps the round button.
-  const createButton = (
-    <View ref={setCreateAnchor} collapsable={false}>
-      <Button title={tr('reports:home.create')} icon="plus" onPress={openCreate} />
-    </View>
+  // A phone's round button; on a desktop the page header shows it, and passes where it sits for the menu.
+  const fab = (
+    <>
+      <Fab icon="plus" label={tr('reports:home.create')} onPress={openCreate} />
+      {createMenu}
+    </>
   );
-  const fab = desktop ? createMenu : <Fab icon="plus" label={tr('reports:home.create')} onPress={() => setActionsOpen(true)} />;
 
   if (!hub) {
     return (
@@ -190,7 +192,6 @@ export default function Home() {
       <View style={{ flex: 1 }}>
         <AppHeader />
         <Screen>
-          <View style={{ alignItems: 'flex-end', marginBottom: t.spacing.md }}>{createButton}</View>
           <FirstRunDesktop />
         </Screen>
 
@@ -248,7 +249,6 @@ export default function Home() {
               {tr('nav:home.subtitle')}
             </Text>
           </View>
-          {desktop ? createButton : null}
         </View>
 
         {/* Until the business is set up (or the person hides it). */}
@@ -333,7 +333,9 @@ export default function Home() {
           )}
         </StatGrid>
 
+        {/* The charts take the wider share; the lists beside them need less. */}
         <Columns
+          ratio={[3, 2]}
           left={
             <>
               <SectionHeader

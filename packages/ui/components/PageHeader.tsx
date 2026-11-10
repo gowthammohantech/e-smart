@@ -8,10 +8,17 @@ import type { WebPressState } from '../theme/interaction';
 import { Text } from './Text';
 import { Button } from './Button';
 
+/** Where a header button sits in the window: a menu it opens drops down from here. */
+export type PageActionAnchor = { x: number; y: number; width: number; height: number };
+
 export type PageAction = {
   label: string;
   icon?: IconName;
-  onPress: () => unknown;
+  /**
+   * Gets the header button's place when it was pressed, so the action can open a Menu under it
+   * (e.g. "Create" with a list of things to make). Nothing when it ran from its "N" shortcut.
+   */
+  onPress: (anchor?: PageActionAnchor) => unknown;
   /** Working: the button spins and can't be pressed again. */
   loading?: boolean;
   /** "N" runs it. Off for an action that commits something, like raising an e-way bill. */
@@ -62,7 +69,7 @@ export function PageActionsProvider({ children }: { children: React.ReactNode })
 export function usePageAction(action: PageAction | null): boolean {
   const ctx = useContext(PageActionsContext);
   const [owner] = useState(() => ({}));
-  const onPress = useRef(action?.onPress);
+  const onPress = useRef<PageAction['onPress'] | undefined>(action?.onPress);
   useEffect(() => {
     onPress.current = action?.onPress;
   });
@@ -77,7 +84,7 @@ export function usePageAction(action: PageAction | null): boolean {
   useFocusEffect(
     useCallback(() => {
       if (!setSlot || !label) return undefined;
-      setSlot({ action: { label, icon, loading, shortcut, keyHint, tooltip, onPress: () => onPress.current?.() }, owner });
+      setSlot({ action: { label, icon, loading, shortcut, keyHint, tooltip, onPress: (anchor) => onPress.current?.(anchor) }, owner });
       return () => setSlot({ action: null, owner: null });
     }, [setSlot, label, icon, loading, shortcut, keyHint, tooltip, owner]),
   );
@@ -87,6 +94,22 @@ export function usePageAction(action: PageAction | null): boolean {
 
 function useHeaderAction() {
   return useContext(PageActionsContext)?.slot.action ?? null;
+}
+
+/** The page's primary action, measured as it is pressed so a menu can open from it. */
+function HeaderActionButton({ action }: { action: PageAction }) {
+  const [node, setNode] = useState<View | null>(null);
+  // The header is a desktop browser's, so the button is an element to read at once; a callback
+  // measure would hand back a promise and flash the button's spinner.
+  const press = () => {
+    const box = (node as unknown as HTMLElement | null)?.getBoundingClientRect?.();
+    return action.onPress(box ? { x: box.left, y: box.top, width: box.width, height: box.height } : undefined);
+  };
+  return (
+    <View ref={setNode} collapsable={false}>
+      <Button title={action.label} icon={action.icon ?? 'plus'} onPress={press} loading={action.loading} shortcut={action.keyHint} tooltip={action.tooltip} />
+    </View>
+  );
 }
 
 /** Puts the page title on the browser tab, the way a web app names its pages. */
@@ -160,7 +183,7 @@ export function PageHeader({
           ) : null}
         </View>
         {right}
-        {action ? <Button title={action.label} icon={action.icon ?? 'plus'} onPress={action.onPress} loading={action.loading} shortcut={action.keyHint} tooltip={action.tooltip} /> : null}
+        {action ? <HeaderActionButton action={action} /> : null}
       </View>
     </View>
   );

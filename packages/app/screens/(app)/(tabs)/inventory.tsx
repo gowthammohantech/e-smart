@@ -29,6 +29,7 @@ import type { Item } from '@esmart/core/types';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { Cell, DataTable } from '@esmart/ui/components/DataTable';
 import { Menu, MenuItem } from '@esmart/ui/components/Menu';
+import type { PageActionAnchor } from '@esmart/ui/components/PageHeader';
 import { useQueryParams } from '../../../navigation/queryParams';
 import { CardRowsSkeleton, MoreRowsSkeleton } from '../../../components/ScreenSkeleton';
 
@@ -52,13 +53,11 @@ export default function InventoryTab() {
   const setFilter = (f: Filter) => setParams({ filter: f === 'all' ? undefined : f });
   const [actionsOpen, setActionsOpen] = useState(false);
   // On a desktop "New" drops a menu from the header button instead of opening a sheet.
-  const [newMenu, setNewMenu] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+  const [newMenu, setNewMenu] = useState<PageActionAnchor | null>(null);
   const canOpen = useCanOpen();
-  const openNew = () => {
-    // The header button the click came from is the focused element; the menu hangs from it.
-    const el = desktop && typeof document !== 'undefined' ? (document.activeElement as HTMLElement | null) : null;
-    const r = el?.getBoundingClientRect?.();
-    if (r && r.width) setNewMenu({ x: r.left, y: r.top, width: r.width, height: r.height });
+  // The header button passes where it sits, and the menu hangs from it; from the "N" key, the sheet.
+  const openNew = (anchor?: PageActionAnchor) => {
+    if (desktop && anchor) setNewMenu(anchor);
     else setActionsOpen(true);
   };
   const newActions = [

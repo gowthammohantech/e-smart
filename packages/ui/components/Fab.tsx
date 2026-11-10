@@ -8,7 +8,7 @@ import { useTheme } from '../theme/ThemeProvider';
 import { useIsDesktop } from '../theme/breakpoints';
 import type { WebPressState } from '../theme/interaction';
 import { Text } from './Text';
-import { usePageAction } from './PageHeader';
+import { usePageAction, type PageActionAnchor } from './PageHeader';
 
 /** Bottom padding a scrolling list needs so its last row clears a phone FAB (56 tall, 16 up, plus a gap). */
 export const FAB_CLEARANCE = 96;
@@ -21,7 +21,8 @@ export function Fab({
 }: {
   icon?: IconName;
   label?: string;
-  onPress: () => void;
+  /** On a desktop it runs from the page header, which passes the button's place (see PageAction). */
+  onPress: (anchor?: PageActionAnchor) => void;
   bottom?: number;
 }) {
   const t = useTheme();

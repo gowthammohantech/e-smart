@@ -7,9 +7,10 @@ import { Text } from './Text';
 
 /**
  * Two columns side by side on a desktop browser; on a phone the left column
- * simply comes first, so screens keep their mobile reading order.
+ * simply comes first, so screens keep their mobile reading order. `ratio`
+ * shares the width unevenly, e.g. [3, 2] for charts beside a list.
  */
-export function Columns({ left, right }: { left: React.ReactNode; right: React.ReactNode }) {
+export function Columns({ left, right, ratio = [1, 1] }: { left: React.ReactNode; right: React.ReactNode; ratio?: [number, number] }) {
   const t = useTheme();
   const desktop = useIsDesktop();
   if (!desktop) {
@@ -22,8 +23,8 @@ export function Columns({ left, right }: { left: React.ReactNode; right: React.R
   }
   return (
     <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: t.spacing.xl }}>
-      <View style={{ flex: 1, minWidth: 0 }}>{left}</View>
-      <View style={{ flex: 1, minWidth: 0 }}>{right}</View>
+      <View style={{ flex: ratio[0], minWidth: 0 }}>{left}</View>
+      <View style={{ flex: ratio[1], minWidth: 0 }}>{right}</View>
     </View>
   );
 }
