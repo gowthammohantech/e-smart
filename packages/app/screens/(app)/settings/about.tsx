@@ -44,7 +44,7 @@ export default function About() {
 
         <Card padded={false}>
           <ListRow title={tr('settings:about.privacy')} icon="shield-account-outline" chevron onPress={open(LEGAL.privacy)} />
-          <ListRow title={tr('nav:more.entry.privacy')} icon="chart-box-outline" chevron onPress={() => router.push('/settings/privacy')} />
+          <ListRow title={tr('nav:more.entry.privacy')} icon="chart-box-outline" chevron onPress={() => router.push('/settings/profile')} />
           <ListRow title={tr('settings:about.terms')} icon="file-document-outline" chevron onPress={open(LEGAL.terms)} />
           <ListRow title={tr('settings:about.support')} icon="lifebuoy" chevron onPress={open(LEGAL.support)} divider={false} />
         </Card>

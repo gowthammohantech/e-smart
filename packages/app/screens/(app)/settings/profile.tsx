@@ -22,6 +22,9 @@ import { useGoBack } from '../../../navigation/useGoBack';
 import { useSaveShortcut } from '../../../components/useSaveShortcut';
 import { useServerSave } from '../../../components/useServerSave';
 import { DeleteAccountSheet } from '../../../features/session/DeleteAccountSheet';
+import { DevicesSection } from '../../../features/account/DevicesSection';
+import { PrivacySection } from '../../../features/account/PrivacySection';
+import { SecuritySection } from '../../../features/account/SecuritySection';
 
 const ROLE_LABELS = {
   owner: 'auth:invite.roles.owner',
@@ -147,9 +150,17 @@ export default function Profile() {
             {header}
             {fields}
             {businesses}
-            {deleteRow}
           </>
         )}
+        {/* Everything about this person's sign-in lives on the one page: security, where they're signed in, what's shared. */}
+        {desktop ? <Columns left={<SecuritySection />} right={<PrivacySection />} /> : (
+          <>
+            <SecuritySection />
+            <PrivacySection />
+          </>
+        )}
+        <DevicesSection />
+        {desktop ? null : deleteRow}
       </ScrollView>
       <DeleteAccountSheet visible={deleting} onClose={() => setDeleting(false)} />
 
