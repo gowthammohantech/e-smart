@@ -30,6 +30,7 @@ export const privacy: LegalDoc = {
         'Files you attach: receipts, supplier bills and your logo.',
         'Logins to the GST e-invoice and e-way bill portals, if you enter them. They are encrypted and used only to file for you.',
         'Technical data: the devices you sign in from, their IP addresses, and when you were last active, so you can see and sign out your devices.',
+        'Usage data, unless you turn it off (Settings → Privacy and usage data): which screens you open and which features you use, your app version, and crash reports. It is linked to your account and business by an ID only, never with amounts, customer names or tax numbers, and is not collected for the demo.',
       ],
     },
     {
@@ -43,6 +44,7 @@ export const privacy: LegalDoc = {
         'To sign you in and keep your account secure, including codes sent by SMS or WhatsApp.',
         'To send what you ask us to send: invoices, reminders and receipts to your customers.',
         'To answer when you ask for help, and to bill you for a paid plan.',
+        'To see which parts of the app are used and fix what breaks, from the usage data above.',
       ],
     },
     {
@@ -56,6 +58,7 @@ export const privacy: LegalDoc = {
         'A GST Suvidha Provider (Adaequare or Whitebooks), and the government IRP and e-way bill portals: e-invoices, e-way bills and GSTIN lookups you request.',
         'Razorpay: payment links you create and subscription payments.',
         'Anthropic: the questions you ask Lixi, the assistant, with the business data needed to answer them.',
+        'PostHog (servers in the EU): usage data and crash reports, if you share them.',
       ],
     },
     {

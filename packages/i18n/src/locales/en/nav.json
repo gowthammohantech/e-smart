@@ -124,7 +124,8 @@
     "transfer": "Transfer",
     "gstUtilization": "Utilization entry",
     "gstChallan": "GST challan",
-    "gstJournal": "GST journal"
+    "gstJournal": "GST journal",
+    "privacy": "Privacy"
   },
   "tabBadgeA11y": "{{label}}, {{count}} new",
   "more": {
@@ -172,7 +173,8 @@
       "approvalRules": "Approvals",
       "aiUsage": "AI usage",
       "invoiceDesign": "Invoice design",
-      "vehicles": "Vehicles"
+      "vehicles": "Vehicles",
+      "privacy": "Privacy and usage data"
     },
     "signOut": {
       "row": "Sign out",

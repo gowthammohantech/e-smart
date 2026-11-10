@@ -124,7 +124,8 @@
     "transfer": "பணப் பரிமாற்றம்",
     "gstUtilization": "வரவுப் பயன்பாட்டுப் பதிவு",
     "gstChallan": "GST செலுத்துச்சீட்டு",
-    "gstJournal": "GST பேரேட்டுப் பதிவு"
+    "gstJournal": "GST பேரேட்டுப் பதிவு",
+    "privacy": "தனியுரிமை"
   },
   "tabBadgeA11y": "{{label}}, {{count}} புதியவை",
   "more": {
@@ -172,7 +173,8 @@
       "approvalRules": "ஒப்புதல்கள்",
       "aiUsage": "AI பயன்பாடு",
       "invoiceDesign": "விலைப்பட்டியல் வடிவமைப்பு",
-      "vehicles": "வாகனங்கள்"
+      "vehicles": "வாகனங்கள்",
+      "privacy": "தனியுரிமையும் பயன்பாட்டுத் தரவும்"
     },
     "signOut": {
       "row": "வெளியேறு",

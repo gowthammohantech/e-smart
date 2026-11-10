@@ -756,5 +756,12 @@
     "budgetInvalid": "Enter a whole number",
     "save": "Save",
     "saved": "AI budget saved"
+  },
+  "privacy": {
+    "shareUsage": "Share usage data",
+    "shareUsageHint": "Helps us see which screens and features are used and fix crashes. Anonymous usage only — never amounts, customers or tax numbers.",
+    "whatHeading": "What is shared",
+    "what": "Which screens you open and which features you use (an invoice was created, a return was filed), your app version, and crash reports. It is tied to your account and business by an ID, not your name or email, and kept by PostHog in the EU. Turn this off and nothing more is sent.",
+    "demo": "The demo never shares usage data."
   }
 }

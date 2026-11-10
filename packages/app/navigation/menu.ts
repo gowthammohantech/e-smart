@@ -194,6 +194,7 @@ export const SETTINGS: { key: SettingsGroupKey; labelKey: string; pages: MenuPag
       { key: 'profile', labelKey: 'nav:title.yourProfile', icon: 'account-circle-outline', route: '/settings/profile' },
       { key: 'devices', labelKey: 'nav:more.entry.devicesAndSessions', icon: 'cellphone-link', route: '/settings/devices' },
       { key: 'security', labelKey: 'nav:more.entry.security', icon: 'shield-check-outline', route: '/settings/security' },
+      { key: 'privacy', labelKey: 'nav:more.entry.privacy', icon: 'shield-account-outline', route: '/settings/privacy' },
       { key: 'modules', labelKey: 'nav:more.entry.modules', icon: 'toggle-switch-outline', route: '/settings/modules' },
       { key: 'invoiceDesign', labelKey: 'nav:more.entry.invoiceDesign', icon: 'file-document-outline', route: '/settings/invoice-design' },
       { key: 'aiUsage', labelKey: 'nav:more.entry.aiUsage', icon: 'robot-outline', route: '/settings/ai-usage' },

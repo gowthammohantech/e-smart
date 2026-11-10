@@ -1,7 +1,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Linking, ScrollView, View } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { BrandLogo } from '@esmart/ui/components/BrandLogo';
 import { Text } from '@esmart/ui/components/Text';
@@ -16,6 +16,7 @@ import { useToast } from '@esmart/ui/components/Toast';
 export default function About() {
   const t = useTheme();
   const { t: tr } = useTranslation(['nav', 'settings']);
+  const router = useRouter();
   const { label } = appVersion();
   const toast = useToast();
   // A phone with no browser or mail app set up can't open these: say so instead of doing nothing.
@@ -40,6 +41,7 @@ export default function About() {
 
         <Card padded={false}>
           <ListRow title={tr('settings:about.privacy')} icon="shield-account-outline" chevron onPress={open(LEGAL.privacy)} />
+          <ListRow title={tr('nav:more.entry.privacy')} icon="chart-box-outline" chevron onPress={() => router.push('/settings/privacy')} />
           <ListRow title={tr('settings:about.terms')} icon="file-document-outline" chevron onPress={open(LEGAL.terms)} />
           <ListRow title={tr('settings:about.support')} icon="lifebuoy" chevron onPress={open(LEGAL.support)} divider={false} />
         </Card>
