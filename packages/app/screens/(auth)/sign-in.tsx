@@ -10,6 +10,7 @@ import { Button } from '@esmart/ui/components/Button';
 import { Text } from '@esmart/ui/components/Text';
 import { DEMO_LOGIN, remoteSession } from '../../remote';
 import { describeError } from '../../remote/errors';
+import { trackAnonymous } from '../../lib/analytics';
 import { useWelcomeToast } from '../../features/session/useWelcomeToast';
 import { Errors, required, validEmail, hasErrors } from '@esmart/core/lib/validators';
 
@@ -66,8 +67,9 @@ export default function SignIn() {
   const submitEmail = () => signInWith(email, password);
 
   /** "Give it a try": the demo's sign-in fills the form, so it's plain what happens, then goes in. */
-  const tryDemo = () => {
+  const tryDemo = (via: 'button' | 'link' = 'button') => {
     if (busy || !demo) return;
+    trackAnonymous('demo_started', { via });
     setMode('email');
     setEmail(demo.email);
     setPassword(demo.password);
@@ -77,7 +79,7 @@ export default function SignIn() {
   useEffect(() => {
     if (demoParam === '1' && demo && !autoTried.current) {
       autoTried.current = true;
-      tryDemo();
+      tryDemo('link');
     }
     // tryDemo reads the latest state; this runs once when the demo's sign-in arrives.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -181,7 +183,7 @@ export default function SignIn() {
             <Text variant="caption" tone="muted">{tr('auth:signIn.or')}</Text>
             <View style={{ flex: 1, height: 1, backgroundColor: t.c.line }} />
           </View>
-          <Button title={tr('auth:signIn.tryDemo')} variant="secondary" icon="rocket-launch-outline" onPress={tryDemo} disabled={busy} fullWidth />
+          <Button title={tr('auth:signIn.tryDemo')} variant="secondary" icon="rocket-launch-outline" onPress={() => tryDemo('button')} disabled={busy} fullWidth />
           <Text variant="caption" tone="muted" style={{ textAlign: 'center' }}>{tr('auth:signIn.tryDemoHint')}</Text>
         </View>
       ) : null}

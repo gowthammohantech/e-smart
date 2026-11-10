@@ -10,6 +10,7 @@ import { RemoteError } from './errors';
 import { useRemoteMeta } from './meta';
 import { endRefreshSession, loadCompany, refreshNow, refreshSoon } from './refresh';
 import { getTokens, onTokensChange, setTokens } from './tokens';
+import * as analytics from '../lib/analytics';
 import { LEGAL } from '../lib/legal';
 import { unregisterPush } from './push';
 import { MfaCancelled, useMfaGate } from '../features/security/mfaGateStore';
@@ -40,6 +41,7 @@ export function rememberActive() {
   useAppStore.subscribe((s) => {
     const userId = s.session.userId;
     if (!userId || !s.activeCompanyId) return;
+    analytics.setCompany(s.activeCompanyId);
     const now = JSON.stringify({ userId, companyId: s.activeCompanyId, branchId: s.activeBranchId });
     if (now === last) return;
     last = now;
@@ -55,6 +57,7 @@ export function rememberActive() {
 async function open(userId: string, opts: { preferCompanyId?: string; preferBranchId?: string; onboardingComplete?: boolean } = {}) {
   useRemoteMeta.getState().reset();
   const me = await readMe();
+  analytics.identify({ id: userId, demo: me?.demo, shareUsageData: me?.shareUsageData });
   const companies = me?.companies ?? [];
   const has = (id: string | undefined) => !!id && companies.some((c) => c.id === id);
   const saved = await lastActive(userId);
@@ -224,6 +227,7 @@ export async function forgotPassword(email: string) {
 /** Forgets the session and everything loaded for it. */
 function clearLocal() {
   endRefreshSession();
+  analytics.reset();
   useRemoteMeta.getState().reset();
   useAppStore.setState({
     ...emptyData(),

@@ -21,6 +21,8 @@ import { i18nInstance as i18n } from '@esmart/i18n';
 import { ErrorFallback, FallbackArt } from '../components/ErrorFallback';
 import { SaveToasts } from '../components/SaveToasts';
 import { installGlobalErrorHandlers } from '../lib/reporter';
+import { installAnalytics, screen as trackScreen, track } from '../lib/analytics';
+import { routePattern } from '@esmart/core/analytics/events';
 import { usePushNotifications } from '../features/session/usePushNotifications';
 import { MfaGate } from '../features/security/MfaGate';
 import { UpdateGate } from '../features/session/UpdateGate';
@@ -28,6 +30,7 @@ import { UpdateGate } from '../features/session/UpdateGate';
 // The store's actions are wrapped once, before anything renders; then the session (if any) loads.
 installRemote();
 installGlobalErrorHandlers();
+installAnalytics();
 if (API_CONFIGURED) void startUp();
 
 /** A crash anywhere below the root shows this instead of a blank screen. */
@@ -52,6 +55,17 @@ function RootNavigator() {
   const authenticated = useAppStore((s) => s.session.authenticated);
   const onboardingComplete = useAppStore((s) => s.session.onboardingComplete);
   usePushNotifications(hydrated && authenticated && onboardingComplete);
+
+  // Which screens are used, by route pattern only (`/documents/[id]`, never the id itself).
+  const pattern = routePattern(segments as string[]);
+  useEffect(() => {
+    if (!hydrated || !authenticated) return;
+    trackScreen(pattern);
+    const [group, step] = segments as string[];
+    if (group === '(onboarding)' && step) track('onboarding_step_viewed', { step });
+    // segments changes identity on every render; the pattern is what matters.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated, authenticated, pattern]);
 
   useEffect(() => {
     if (!hydrated) return;
