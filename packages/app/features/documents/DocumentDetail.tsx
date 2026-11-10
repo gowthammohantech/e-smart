@@ -338,7 +338,8 @@ ${url}`;
     const hasContact = channel === 'email' ? !!party?.email : !!party?.phone;
     // Email goes from the server wherever it is sent from, so the customer gets the designed
     // email with the PDF and payment links; a browser opening a mail app could only send text.
-    if (!hasContact || (Platform.OS === 'web' && channel === 'whatsapp')) compose(channel);
+    // WhatsApp opens the person's own WhatsApp with the link filled in: WhatsApp Business isn't connected yet.
+    if (!hasContact || channel === 'whatsapp') compose(channel);
     else send(channel);
   };
 

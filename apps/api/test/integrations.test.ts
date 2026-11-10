@@ -93,7 +93,8 @@ describe('integrations', () => {
     }
     const list = await t.get(`${biz.c}/integrations`, { token: biz.token });
     const byId = Object.fromEntries(list.body.data.map((i: { id: string; available: boolean }) => [i.id, i.available]));
-    expect(byId).toMatchObject({ int_drive: false, int_razorpay: false, int_upi: true });
+    // Only the government portals work today; the rest are coming soon.
+    expect(byId).toMatchObject({ int_drive: false, int_razorpay: false, int_upi: false, int_whatsapp: false, int_sms: false, int_tally: false, int_einvoice: true, int_eway: true });
     // Razorpay keys sent directly still connect.
     const keys = await t.post(`${biz.c}/integrations/int_razorpay/connect`, { config: { key_id: 'rzp_test_x', key_secret: 's' } }, { token: biz.token });
     expect(keys.body.integration).toMatchObject({ connected: true, available: true });

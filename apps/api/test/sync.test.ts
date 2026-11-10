@@ -99,7 +99,7 @@ describe('sync pull', () => {
     const { token, c } = await ownerWithCompany(t);
     const second = await createCompany(t, token, { name: 'Second Co' });
     for (const base of [c, `/companies/${second.id}`]) {
-      expect((await t.post(`${base}/integrations/int_sms/connect`, { config: { senderId: 'ELIXIR' } }, { token })).status).toBe(200);
+      expect((await t.post(`${base}/integrations/int_sms/connect`, { config: { senderId: 'ELIXIR', apiKey: 'k' } }, { token })).status).toBe(200);
     }
     const pull = await t.get('/sync/pull', { token });
     const sms = pull.body.changes.filter((ch: { entityId: string }) => ch.entityId === 'int_sms');

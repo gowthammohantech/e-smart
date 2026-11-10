@@ -71,12 +71,12 @@ describe('sms provider: pay4sms', () => {
     expect([...logs, ...debugs].join('\n')).not.toContain('secret-token');
   });
 
-  it('does not send non-OTP SMS; falls back to the outbox', async () => {
+  it('does not send non-OTP SMS and says so; the text goes to the outbox', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
     const { sms, outbox, logs } = setup(env);
 
-    await sms.send('+919876543210', 'Your invoice is ready');
+    await expect(sms.send('+919876543210', 'Your invoice is ready')).rejects.toThrow(/only set up for sign-in codes/);
 
     expect(fetchMock).not.toHaveBeenCalled();
     expect(outbox.last('sms')?.text).toBe('Your invoice is ready');

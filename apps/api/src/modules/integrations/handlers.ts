@@ -77,10 +77,13 @@ const OAUTH: Record<string, (deps: Deps, state: string) => string> = {
 };
 
 /**
- * Connected through a consent screen whose callback isn't built yet: shown as coming soon, and a connect without
- * credentials is refused rather than left half-done. Razorpay keys sent directly still connect.
+ * Only the government portals work today. Everything else is shown as coming soon and a connect without
+ * credentials is refused: switching WhatsApp, SMS, UPI, Tally or Drive on changed nothing (the UPI QR prints
+ * from the business's bank details, Tally export is under Backup and export, and messages go out through the
+ * deployment's own providers). Razorpay keys sent directly still connect.
  */
-const COMING_SOON = new Set(['int_drive', 'int_razorpay']);
+const WORKING = new Set(['int_einvoice', 'int_eway']);
+const COMING_SOON = { has: (id: string) => !WORKING.has(id) };
 
 function integrationToWire(row: IntegrationRow, connected: boolean): Schema<'Integration'> {
   return compact({

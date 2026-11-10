@@ -78,10 +78,11 @@ export function createMessaging(config: Config, outbox: Outbox, log: (msg: strin
       ? {
           async send(to, text, meta) {
             if (meta?.kind !== 'otp') {
-              // DLT: free text would be dropped silently by the operator.
+              // DLT: free text would be dropped silently by the operator, so it isn't sent, and the sender is
+              // told so rather than shown "sent".
               outbox.push({ channel: 'sms', to, text });
               log(`pay4sms: non-OTP SMS not sent, no DLT template registered [sms → ${to}] ${text}`);
-              return { providerMessageId: localId('sms') };
+              throw new Error('SMS is only set up for sign-in codes');
             }
             await sendPay4smsOtp(config.PAY4SMS_TOKEN ?? '', { phone: to, code: meta.code, name: meta.name }, debug);
             return { providerMessageId: localId('pay4sms') };
@@ -193,6 +194,8 @@ export function createMessaging(config: Config, outbox: Outbox, log: (msg: strin
           async send(msg) {
             outbox.push({ channel: 'whatsapp', to: msg.to, text: msg.documentUrl ? `${msg.text}\n${msg.documentUrl}` : msg.text });
             log(`[whatsapp → ${msg.to}] ${msg.text}`);
+            // A live deployment with no WhatsApp account sends nothing: say so rather than "sent".
+            if (config.NODE_ENV === 'production') throw new Error('WhatsApp Business is not connected yet');
             return { providerMessageId: localId('wa') };
           },
         };
