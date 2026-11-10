@@ -421,6 +421,13 @@
       "when": 1794272195423,
       "tag": "0059_analytics_opt_out",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1794292378048,
+      "tag": "0060_invoice_bank_account",
+      "breakpoints": true
     }
   ]
 }

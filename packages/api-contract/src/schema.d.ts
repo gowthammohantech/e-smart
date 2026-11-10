@@ -4793,6 +4793,8 @@ export interface components {
             branch?: string;
             /** @description Virtual payment address, e.g. `vertex@okhdfc` */
             upiId?: string;
+            /** @description The bank payment account these details belong to. Receipts default to it; an empty string unlinks it. */
+            paymentAccountId?: string;
         };
         Company: components["schemas"]["Versioned"] & {
             readonly id?: string;

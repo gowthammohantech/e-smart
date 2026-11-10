@@ -44,7 +44,8 @@ export const companiesHandlers = defineHandlers({
   },
 
   async createCompany(ctx) {
-    const body = ctx.body;
+    // A new business has no payment accounts yet, so its invoice details can't be linked to one.
+    const body = ctx.body.bankDetails?.paymentAccountId ? { ...ctx.body, bankDetails: { ...ctx.body.bankDetails, paymentAccountId: '' } } : ctx.body;
     await validateCompany(ctx.db, body);
     const branches = body.branches?.length
       ? body.branches
@@ -115,6 +116,15 @@ export const companiesHandlers = defineHandlers({
     const next = applyProfileLocks(prev as CoreCompany, { ...ctx.body, id: current.id, accountId: current.accountId, plan: current.plan } as CoreCompany, posted);
     const body = next as unknown as Schema<'Company'>;
     await validateCompany(ctx.db, body);
+    // The account the invoice details belong to must be one of this business's bank accounts.
+    const linked = body.bankDetails?.paymentAccountId?.trim();
+    if (linked) {
+      const [account] = await ctx.db
+        .select({ type: schema.paymentAccounts.type })
+        .from(schema.paymentAccounts)
+        .where(and(eq(schema.paymentAccounts.companyId, current.id), eq(schema.paymentAccounts.id, linked)));
+      if (account?.type !== 'bank') throw unprocessable([{ field: 'bankDetails.paymentAccountId', message: 'Choose one of your bank accounts', severity: 'blocking' }]);
+    }
     // Left out by an app that doesn't know about it: that isn't reopening the books.
     const lockedThroughDate = ctx.body.lockedThroughDate === undefined ? current.lockedThroughDate : ctx.body.lockedThroughDate;
     if (lockedThroughDate !== current.lockedThroughDate && ctx.user.role !== 'owner') throw forbidden('OWNER_ONLY', 'Only an owner can close or reopen the books');

@@ -13,7 +13,7 @@ import { CityField } from '@esmart/ui/components/pickers/CityField';
 import { useServerSave } from '../../../components/useServerSave';
 import { useSaveShortcut } from '../../../components/useSaveShortcut';
 import { useAppStore } from '../../../store/appStore';
-import { useActiveCompany } from '../../../store/selectors';
+import { useActiveCompany, usePaymentAccounts } from '../../../store/selectors';
 import { useCompanyUsage } from '../../../remote/queries';
 import { profileLocks } from '@esmart/core/domain/companyLock';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
@@ -88,6 +88,11 @@ function CompanySettingsForm() {
   const [ifsc, setIfsc] = useState(bank?.ifsc ?? '');
   const [bankBranch, setBankBranch] = useState(bank?.branch ?? '');
   const [upiId, setUpiId] = useState(bank?.upiId ?? '');
+  // The bank account in the books these details belong to: receipts default to it.
+  const bankAccounts = usePaymentAccounts().filter((a) => a.type === 'bank');
+  const [bookAccountId, setBookAccountId] = useState(bank?.paymentAccountId ?? '');
+  const [bookAccountOpen, setBookAccountOpen] = useState(false);
+  const bookAccount = bankAccounts.find((a) => a.id === bookAccountId);
   const [lutNumber, setLutNumber] = useState(company?.taxRegistration?.lutNumber ?? '');
   // An LUT is filed per financial year, so it runs to the next 31 March by default.
   const [lutValidTill, setLutValidTill] = useState(() => {
@@ -155,6 +160,8 @@ function CompanySettingsForm() {
           ifsc: ifsc.trim().toUpperCase(),
           branch: bankBranch.trim(),
           upiId: upiId.trim(),
+          // An account deleted since it was linked reads as unlinked.
+          paymentAccountId: bookAccount?.id ?? '',
         },
         address: {
           ...company.address,
@@ -224,6 +231,26 @@ function CompanySettingsForm() {
       placeholder={UPI_SAMPLE}
       error={errors.upiId}
     />
+  );
+
+  const digits = (v?: string) => (v ?? '').replace(/\s+/g, '').toUpperCase();
+  const bookAccountMismatch = !!bookAccount?.accountNumber && !!accountNumber.trim() && digits(bookAccount.accountNumber) !== digits(accountNumber);
+  const bookAccountField = (
+    <View key="bookAccount" style={{ gap: t.spacing.xs }}>
+      <PickerField
+        label={tr('settings:company.bookAccount')}
+        value={bookAccount ? `${bookAccount.name}${bookAccount.accountNumber ? ` · •••• ${bookAccount.accountNumber.slice(-4)}` : ''}` : tr('settings:company.bookAccountNone')}
+        onPress={() => setBookAccountOpen(true)}
+        icon="bank-transfer-in"
+        hint={bankAccounts.length ? tr('settings:company.bookAccountHint') : tr('settings:company.bookAccountEmpty')}
+        disabled={!bankAccounts.length}
+      />
+      {bookAccountMismatch ? (
+        <Text variant="caption" tone="warn" style={{ lineHeight: 18 }}>
+          {tr('settings:company.bookAccountMismatch', { name: bookAccount.name, number: bookAccount.accountNumber })}
+        </Text>
+      ) : null}
+    </View>
   );
 
   const caption = (label: string, nativeID?: string) => (
@@ -414,7 +441,7 @@ function CompanySettingsForm() {
             <View nativeID="bank-and-signature">
               <FormSection title={tr('settings:company.bankAndSignature')}>
                 {bankHint}
-                <FieldGrid columns={3} items={[accountNameField, upiField, bankNameField, branchField, accountNumberField, ifscField]} />
+                <FieldGrid columns={3} items={[bookAccountField, accountNameField, upiField, bankNameField, branchField, accountNumberField, ifscField]} />
                 <SignatureSection />
               </FormSection>
             </View>
@@ -457,6 +484,7 @@ function CompanySettingsForm() {
 
             {caption(tr('settings:company.bankAndSignature'), 'bank-and-signature')}
             {bankHint}
+            {bookAccountField}
             {accountNameField}
             <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
               {bankNameField}
@@ -505,6 +533,20 @@ function CompanySettingsForm() {
           setStateCode(code);
           if (city && !citiesForState(code).includes(city)) setCity('');
         }}
+      />
+      <SelectSheet
+        visible={bookAccountOpen}
+        onClose={() => setBookAccountOpen(false)}
+        title={tr('settings:company.bookAccount')}
+        options={[{ value: '', label: tr('settings:company.bookAccountNone') }, ...bankAccounts.map((a) => ({ value: a.id, label: a.name, trailing: a.accountNumber ? `•••• ${a.accountNumber.slice(-4)}` : undefined }))]}
+        value={bookAccountId}
+        onSelect={(id) => {
+          setBookAccountId(id);
+          // Linking an account fills the number customers pay into, when that field is still empty.
+          const picked = bankAccounts.find((a) => a.id === id);
+          if (picked?.accountNumber && !accountNumber.trim()) setAccountNumber(picked.accountNumber);
+        }}
+        searchable={false}
       />
       <SelectSheet visible={fyOpen} onClose={() => setFyOpen(false)} title={tr('settings:company.fyStarts')} options={months.map((m, i) => ({ value: String(i + 1), label: m }))} value={String(fyMonth)} onSelect={(v) => setFyMonth(Number(v))} searchable={false} />
     </KeyboardAvoidingView>

@@ -1861,6 +1861,8 @@ export const companies = pgTable("companies", {
 	bankIfsc: varchar("bank_ifsc", { length: 11 }),
 	bankBranch: varchar("bank_branch", { length: 100 }),
 	upiId: varchar("upi_id", { length: 100 }),
+	// The bank payment account those details belong to: customers pay into it, so receipts default to it.
+	bankPaymentAccountId: varchar("bank_payment_account_id", { length: 40 }),
 	// The authorised signatory's signature, printed above that line on documents.
 	signatureAttachmentId: varchar("signature_attachment_id", { length: 40 }),
 	plan: planTier().default('free').notNull(),

@@ -109,14 +109,16 @@ function NewPaymentForm() {
   const [date, setDate] = useState(today());
   const [amountText, setAmountText] = useState('');
   // Start on UPI when there is an account for it, else cash (a cash-only business).
+  // Money received defaults to the bank account the invoices print, where customers were told to pay.
+  const preferredAccountId = direction === 'received' ? company?.bankDetails?.paymentAccountId : undefined;
   const [method, setMethod] = useState<PaymentMethod>(() => (defaultAccountFor('upi', accounts) ? 'upi' : 'cash'));
   // The account follows the method: a bank payment never defaults to cash in hand.
-  const [pickedAccountId, setAccountId] = useState(() => defaultAccountFor(method, accounts)?.id ?? '');
+  const [pickedAccountId, setAccountId] = useState(() => defaultAccountFor(method, accounts, preferredAccountId)?.id ?? '');
   const methodAccounts = accountsForMethod(method, accounts);
   // Re-derived every render, so accounts that load (or change) later are picked up.
   const accountId = methodAccounts.some((a) => a.id === pickedAccountId)
     ? pickedAccountId
-    : (defaultAccountFor(method, accounts)?.id ?? '');
+    : (defaultAccountFor(method, accounts, preferredAccountId)?.id ?? '');
   /** While the user has not typed an amount, it tracks what is ticked below. */
   const [amountFollows, setAmountFollows] = useState(true);
   const [reference, setReference] = useState('');
@@ -1170,7 +1172,7 @@ function NewPaymentForm() {
           onSelect={(v) => {
             setTouched(true);
             setMethod(v as PaymentMethod);
-            setAccountId((current) => accountIdAfterMethodChange(v as PaymentMethod, current, accounts));
+            setAccountId((current) => accountIdAfterMethodChange(v as PaymentMethod, current, accounts, preferredAccountId));
           }}
           searchable={false}
         />

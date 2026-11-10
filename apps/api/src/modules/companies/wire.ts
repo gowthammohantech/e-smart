@@ -15,6 +15,7 @@ export function bankDetailsOf(row: CompanyRow): Schema<'BankDetails'> | undefine
     ifsc: row.bankIfsc,
     branch: row.bankBranch,
     upiId: row.upiId,
+    paymentAccountId: row.bankPaymentAccountId,
   });
   return Object.keys(b).length ? b : undefined;
 }
@@ -111,6 +112,8 @@ function bankColumns(b: Schema<'BankDetails'>) {
     bankIfsc: text(b.ifsc)?.toUpperCase() ?? null,
     bankBranch: text(b.branch),
     upiId: text(b.upiId)?.toLowerCase() ?? null,
+    // Left alone by a client that predates the link; an empty string unlinks it.
+    ...(b.paymentAccountId !== undefined && { bankPaymentAccountId: text(b.paymentAccountId) }),
   };
 }
 

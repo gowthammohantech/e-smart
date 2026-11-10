@@ -26,6 +26,8 @@ export type BankDetails = {
   ifsc?: string;
   branch?: string;
   upiId?: string;
+  /** The bank payment account these details belong to: receipts default to it. */
+  paymentAccountId?: string;
 };
 
 export type Company = {

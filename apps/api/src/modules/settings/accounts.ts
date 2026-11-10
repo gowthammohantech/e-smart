@@ -141,6 +141,9 @@ export const accountHandlers = defineHandlers({
     // balances are in that currency, and past payments used methods the type allows.
     const currencyChanged = ctx.body.currency !== current.currency.trim();
     const typeChanged = ctx.body.type !== current.type;
+    if (typeChanged && ctx.company.bankPaymentAccountId === current.id) {
+      throw unprocessable([{ field: 'type', message: 'Your invoices print this account; pick another under Business profile, bank details first', severity: 'blocking' }]);
+    }
     if (currencyChanged || typeChanged) {
       const used = await firstUse(ctx.db, [
         ['payments', sql`select 1 from payments where account_id = ${current.id} limit 1`],
@@ -185,6 +188,9 @@ export const accountHandlers = defineHandlers({
       ['bank statements', sql`select 1 from bank_statements where account_id = ${current.id} limit 1`],
     ]);
     if (used) throw conflict('PAYMENT_ACCOUNT_IN_USE', `This account has ${used}; it can't be deleted`);
+    if (ctx.company.bankPaymentAccountId === current.id) {
+      throw conflict('PAYMENT_ACCOUNT_IN_USE', 'Your invoices print this account; pick another under Business profile, bank details first');
+    }
     // Contras and journals name it by key with no foreign key; deleting it would leave their lines posting to nothing.
     const named = (await ledgerKeyUse(ctx.db, ctx.company.id, `pay:${current.id}`)) ?? (current.openingBalanceMinor ? 'an opening balance' : null);
     if (named) throw conflict('PAYMENT_ACCOUNT_IN_USE', `This account is on ${named}; it can't be deleted`);

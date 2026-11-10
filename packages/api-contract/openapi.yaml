@@ -6809,6 +6809,7 @@ components:
         ifsc: { type: string, pattern: '^([A-Za-z]{4}0[A-Za-z0-9]{6})?$', description: Indian Financial System Code }
         branch: { type: string, maxLength: 100 }
         upiId: { type: string, pattern: '^([A-Za-z0-9.\-_]{2,256}@[A-Za-z][A-Za-z0-9]{1,63})?$', description: 'Virtual payment address, e.g. `vertex@okhdfc`' }
+        paymentAccountId: { type: string, maxLength: 40, description: 'The bank payment account these details belong to. Receipts default to it; an empty string unlinks it.' }
     Company:
       allOf:
         - $ref: '#/components/schemas/Versioned'

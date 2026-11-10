@@ -1,0 +1,1 @@
+ALTER TABLE "companies" ADD COLUMN "bank_payment_account_id" varchar(40);

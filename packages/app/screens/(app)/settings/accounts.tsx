@@ -36,6 +36,8 @@ export default function AccountSettings() {
   const { run: serverSave, saving } = useServerSave();
 
   const company = useActiveCompany();
+  // The bank account the invoices print (Business profile), where customers pay.
+  const invoiceAccountId = company?.bankDetails?.paymentAccountId;
   const baseCurrency = useBaseCurrency();
   const accounts = usePaymentAccounts();
   const usageQuery = useCompanyUsage();
@@ -167,7 +169,17 @@ export default function AccountSettings() {
               { key: 'name', header: tr('settings:accounts.name'), flex: 2, sortValue: (a) => a.name, render: (a) => <Cell weight="600">{a.name}</Cell> },
               { key: 'type', header: tr('common:table.type'), width: 120, sortValue: (a) => typeLabels[a.type], render: (a) => <Cell tone="muted">{typeLabels[a.type]}</Cell> },
               { key: 'number', header: tr('settings:accounts.number'), width: 180, secondary: true, render: (a) => <Cell tone="muted" mono>{a.accountNumber || '—'}</Cell> },
-              { key: 'default', header: tr('common:table.status'), width: 110, render: (a) => (a.isDefault ? <Badge label={tr('settings:accounts.default')} tone="info" size="sm" /> : null) },
+              {
+                key: 'default',
+                header: tr('common:table.status'),
+                width: 180,
+                render: (a) => (
+                  <View style={{ flexDirection: 'row', gap: 6 }}>
+                    {a.isDefault ? <Badge label={tr('settings:accounts.default')} tone="info" size="sm" /> : null}
+                    {a.id === invoiceAccountId ? <Badge label={tr('settings:accounts.onInvoices')} tone="success" size="sm" /> : null}
+                  </View>
+                ),
+              },
               {
                 key: 'balance',
                 header: tr('settings:accounts.balance'),
@@ -208,6 +220,7 @@ export default function AccountSettings() {
                       </Text>
                     )}
                     {a.isDefault ? <Badge label={tr('settings:accounts.default')} tone="info" size="sm" /> : null}
+                    {a.id === invoiceAccountId ? <Badge label={tr('settings:accounts.onInvoices')} tone="success" size="sm" /> : null}
                   </View>
                 }
                 onPress={() => open(a)}

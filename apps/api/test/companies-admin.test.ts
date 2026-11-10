@@ -140,6 +140,35 @@ describe('company profile', () => {
     const bad = await t.put(c, { ...cleared.body, bankDetails: { ifsc: 'HDFC1234' } }, { token });
     expect(bad.status).toBe(422);
   });
+
+  it('links the invoice bank details to a bank account in the books, and keeps that account while linked', async () => {
+    const { token, c } = await ownerWithCompany(t);
+    const bank = await t.post(`${c}/payment-accounts`, { name: 'HDFC current', type: 'bank', currency: 'INR', accountNumber: '50200012345678', openingBalance: { minor: 0, currency: 'INR' } }, { token });
+    expect(bank.status).toBe(201);
+    const wallet = await t.post(`${c}/payment-accounts`, { name: 'Paytm', type: 'wallet', currency: 'INR', openingBalance: { minor: 0, currency: 'INR' } }, { token });
+    const current = (await t.get(c, { token })).body;
+
+    // Only a bank account of this business can be linked.
+    const notBank = await t.put(c, { ...current, bankDetails: { accountNumber: '50200012345678', paymentAccountId: wallet.body.id } }, { token });
+    expect(notBank.status).toBe(422);
+
+    const linked = await t.put(c, { ...current, bankDetails: { accountNumber: '50200012345678', paymentAccountId: bank.body.id } }, { token });
+    expect(linked.status).toBe(200);
+    expect(linked.body.bankDetails.paymentAccountId).toBe(bank.body.id);
+
+    // An older client that doesn't send the link leaves it as it is.
+    const older = await t.put(c, { ...linked.body, bankDetails: { accountNumber: '50200012345678' } }, { token });
+    expect(older.body.bankDetails.paymentAccountId).toBe(bank.body.id);
+
+    // While invoices print it, the account can't be deleted or stop being a bank account.
+    const del = await t.del(`${c}/payment-accounts/${bank.body.id}`, { token });
+    expect(del.status).toBe(409);
+
+    // Unlinked, it can go.
+    const unlinked = await t.put(c, { ...older.body, bankDetails: { ...older.body.bankDetails, paymentAccountId: '' } }, { token });
+    expect(unlinked.body.bankDetails.paymentAccountId).toBeUndefined();
+    expect((await t.del(`${c}/payment-accounts/${bank.body.id}`, { token })).status).toBe(204);
+  });
 });
 
 describe('branches', () => {

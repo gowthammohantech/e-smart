@@ -26,10 +26,13 @@ export function accountsForMethod(method: PaymentMethod, accounts: PaymentAccoun
   return accounts.filter((a) => types.includes(a.type));
 }
 
-/** The company default when it fits the method, else the first account that does. */
-export function defaultAccountFor(method: PaymentMethod, accounts: PaymentAccount[]): PaymentAccount | undefined {
+/**
+ * The preferred account when it fits the method (money received defaults to the bank account the invoices
+ * print), else the company default when it fits, else the first account that does.
+ */
+export function defaultAccountFor(method: PaymentMethod, accounts: PaymentAccount[], preferredId?: string): PaymentAccount | undefined {
   const fitting = accountsForMethod(method, accounts);
-  return fitting.find((a) => a.isDefault) ?? fitting[0];
+  return (preferredId ? fitting.find((a) => a.id === preferredId) : undefined) ?? fitting.find((a) => a.isDefault) ?? fitting[0];
 }
 
 /** Keep the current account if it still fits the method, otherwise pick the method's default. */
@@ -37,10 +40,11 @@ export function accountIdAfterMethodChange(
   method: PaymentMethod,
   currentId: string,
   accounts: PaymentAccount[],
+  preferredId?: string,
 ): string {
   const fitting = accountsForMethod(method, accounts);
   if (fitting.some((a) => a.id === currentId)) return currentId;
-  return defaultAccountFor(method, accounts)?.id ?? '';
+  return defaultAccountFor(method, accounts, preferredId)?.id ?? '';
 }
 
 /** Can this method settle through this account? (Bank transfers never touch cash in hand.) */
