@@ -95,20 +95,26 @@ export function FieldRow({ children, columns }: { children: React.ReactNode; col
   );
 }
 
+/** Wide enough for three fields to a row; narrower keeps two. */
+const FIELD_GRID_THREE_MIN = 1000;
+
 /**
- * Fields two to a row on a desktop; an odd one out takes the whole row rather than leaving an
- * empty half beside it. Pass the fields that may or may not show as null: only those shown are
- * laid out. A phone stacks them, with no wrapper, in the parent column's spacing.
+ * Fields across rows on a desktop: two to a row, or three when the grid is wide enough (1000px
+ * and more), or `columns` to fix it. A last row that isn't full shares its width between what is
+ * in it, so no field has an empty slot beside it. Pass fields that may not show as null: only
+ * those shown are laid out. A phone stacks them, with no wrapper, in the parent column's spacing.
  */
-export function FieldGrid({ items }: { items: React.ReactNode[] }) {
+export function FieldGrid({ items, columns }: { items: React.ReactNode[]; columns?: 2 | 3 }) {
   const t = useTheme();
   const desktop = useIsDesktop();
+  const [width, setWidth] = React.useState(0);
   const shown = items.filter(Boolean);
   if (!desktop) return <>{shown}</>;
+  const per = columns ?? (width >= FIELD_GRID_THREE_MIN ? 3 : 2);
   const rows: React.ReactNode[][] = [];
-  for (let i = 0; i < shown.length; i += 2) rows.push(shown.slice(i, i + 2));
+  for (let i = 0; i < shown.length; i += per) rows.push(shown.slice(i, i + per));
   return (
-    <View style={{ gap: t.spacing.lg }}>
+    <View style={{ gap: t.spacing.lg }} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
       {rows.map((row, r) => (
         <View key={r} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: t.spacing.lg }}>
           {row.map((node, c) => (

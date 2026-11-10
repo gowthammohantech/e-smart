@@ -25,12 +25,9 @@ export default function WebAppLayout() {
   const desktop = useIsDesktop();
   const wide = useBreakpoint() === 'wide';
   const pathname = usePathname();
-  // Settings pages get their own list of pages beside them (and a narrower,
-  // form-width column); everything else uses the full content width.
+  // Settings pages get their own list of pages beside them; the page itself takes the rest of the
+  // column (the main sidebar folds there, so there is room for each page to lay itself out).
   const inSettings = pathname.startsWith('/settings');
-  // Plan & billing lays its tiers side by side, and invoice design its controls
-  // beside the preview, so they take the full column.
-  const wideSettings = pathname.startsWith('/settings/plan') || pathname.startsWith('/settings/invoice-design');
   usePlanGuard();
 
   const stack = (
@@ -108,7 +105,7 @@ export default function WebAppLayout() {
                 role="main"
                 id={MAIN_ID}
                 tabIndex={-1}
-                style={{ flex: 1, maxWidth: inSettings && !wideSettings ? 880 : undefined, outlineStyle: 'none' } as object}
+                style={{ flex: 1, outlineStyle: 'none' } as object}
               >
                 {stack}
                 <SwitchingOverlay />
