@@ -119,7 +119,7 @@ How TDS and TCS are worked out is in [20 — TDS, reverse charge, credit & adjus
 **What happens**
 - The file covers exactly what's on screen: the same period, branch and contact.
 - The PDF carries the report basis line and the time it was generated.
-- If you close the share sheet, or the file can't be made, you see **Export was cancelled**.
+- Closing the share sheet just closes it. If the file can't be made, you see *Couldn't prepare that file. Try again in a moment.*
 
 *Example (accountant):* Meera wants the tax position for Q2.
 - She opens **Tax summary**, taps **Custom range**, sets 1 Jul – 30 Sep and exports **Excel (.xlsx)**.

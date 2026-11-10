@@ -98,7 +98,7 @@ Use **People › Suppliers › New supplier**, or **Add new supplier** in a purc
   - **Bills are under reverse charge**: for a goods transport agency or an advocate, for example.
   - **TDS section**, and a **Lower deduction certificate (s.197)** with its **Certificate rate (%)** and **Valid till** date.
 
-Tap **Add supplier**. You see *Supplier added*. TDS, reverse charge and MSME are explained in [20](20-tds-rcm-itc.md).
+Tap **Add supplier**. You see *Supplier added*. A **Both** or **Other** contact is saved with **Add contact** and shows *Contact added*. TDS, reverse charge and MSME are explained in [20](20-tds-rcm-itc.md).
 
 ### 8.5 Add another contact (landlord, auditor, transporter)
 
@@ -174,7 +174,7 @@ Go to **Actions › Delete contact**, then confirm **Delete 〈name〉?**.
 
 **Rules & gotchas**
 - Only a contact nothing points at can be deleted. If it has documents, payments, expenses, e-way bills, vouchers or an opening balance, the server refuses: *This party has documents; mark it inactive instead*. Deactivate it instead (8.7).
-- The confirmation says *Their documents stay in your books…*, but a contact with documents can't be deleted at all.
+- When the screen already shows documents, payments or an opening balance, **Delete contact** isn't offered. The confirmation says: *A contact with documents, payments, expenses or an opening balance can't be deleted; mark it inactive instead.*
 
 ### 8.12 Search contacts
 

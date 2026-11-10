@@ -12,7 +12,7 @@ Bill scanning (OCR) reads a photo of a receipt or supplier bill and opens a fill
 
 Where to find them:
 - **Expenses:** 📱 **More › Money › Expenses**. 🖥 **Money › Expenses** in the sidebar. Also **Home › Add expense**.
-- **Scan a bill:** 📱 **Buy › Scan a bill**, or **Scan with OCR instead** on the expense form. 🖥 **Buy › Scan a bill**.
+- **Scan a bill:** 📱 **Buy › Scan a bill**, or **Scan with OCR instead** on the expense form. 🖥 **Buy › Scan a bill**. With OCR switched off in **Settings › Modules**, both are hidden.
 
 ---
 
@@ -101,12 +101,12 @@ In bank reconciliation, an unmatched bank line can be turned into an expense wit
 3. Save. The detail screen shows **Next due**.
 
 **What happens**
-- Every night (just after midnight, India time) the server records each repeating expense that has fallen due, on its own date, with the next number. It copies the category, supplier, amount, tax, account, method, reference and notes. Missed periods are caught up.
+- Every night (just after midnight, India time) the server records each repeating expense that has fallen due, on its own date, with the next number. It copies the category, supplier, amount, tax, account, method, reference, notes, **Bill to** customer, cost centre and vehicle. Missed periods are caught up.
 - If the account doesn't hold enough, that one isn't recorded. You get a notification, *Recurring expense EXP/… not recorded*, and it is recorded on the next run once the account has the money.
 - Changing the expense's date or interval restarts the schedule from the new date.
 
 **Rules & gotchas**
-- The copies don't carry the receipt, the **Bill to** customer, the cost centre or the vehicle. Add those to each copy if you need them.
+- The copies don't carry the receipt. Attach one to each copy if you need it.
 - Nothing repeats for a demo account or an archived business.
 
 ---
@@ -123,7 +123,7 @@ Turn on **Billable to a customer** and pick the customer under **Bill to** (or l
 - **Add category:** a **Category name**, for example *Fuel*. Then **Save**. You see *Category saved*.
 - **Edit:** tap a category to rename it (**Edit category**).
 - Each row shows how many entries use it (*N entries*), or **Not used yet**, and the total.
-- **Delete:** only a category no expense, journal or budget uses. Otherwise the server refuses: *Expenses are filed under this category*. The confirmation text (*Expenses already in this category keep their reference but will show as uncategorised.*) doesn't match this.
+- **Delete:** only a category no expense, journal or budget uses. A category with expenses has no **Delete** in its sheet; one only a journal or budget uses is refused on confirm (*This category is on 〈what〉; it can't be deleted*). The confirmation says: *Only a category no expense, journal or budget uses can be deleted.*
 
 Each category is an expense account in your chart of accounts ([19](19-books.md)).
 

@@ -37,7 +37,7 @@ The user must sign up first. For these tests, make `gowtham@vertextraders.in` a 
 | ADM-016 | Account detail | support | | Open the demo account | Owner, Created, Last active, Companies / users; Companies (plan, subscription, tax ID, onboarded); Users with role and status | happy |
 | ADM-017 | Company detail | support | | Vertex Traders | Legal name, Location, Tax ID, Team members, Onboarded, Created; Subscription (Billing "Manual" with no provider); Documents by type; AI cost; Plan history | happy |
 | ADM-018 | Period end in the past | superadmin | | **Change plan** with Period ends = yesterday (via API) | "The period end must be in the future" | validation |
-| ADM-019 | AI cost | support | Vertex used Lixi this month | Company page › **AI cost** | One row per month: Actions, Tokens in, Tokens out, Cost; header total in USD. Actions match the app's **AI usage** count. On a provider that doesn't report price (Anthropic, OpenAI direct) Cost is $0.00 with tokens filled in | happy |
+| ADM-019 | AI cost | support | Vertex used Lixi this month | Company page › **AI cost** | One row per month: Actions, Tokens in, Tokens out, Cost; header total in USD. Actions match the app's **AI usage** count. On a provider that doesn't report price (Anthropic, OpenAI direct) Cost is estimated from list prices; $0.00 only for a model with no known price | happy |
 
 ### Suspend & users
 
@@ -48,7 +48,7 @@ The user must sign up first. For these tests, make `gowtham@vertextraders.in` a 
 | ADM-022 | Reactivate | superadmin | Suspended | **Reactivate account** → reason → **Reactivate** | Access restored; sessions ended by the suspension stay signed out | happy |
 | ADM-023 | Disable a user | superadmin | | **Users** → Rahul → **Disable** → reason → **Disable user** | Rahul's requests fail with "This user has been disabled" | happy |
 | ADM-024 | Enable | superadmin | ADM-023 | **Enable** → **Enable user** | Rahul can sign in again | happy |
-| ADM-025 | Operators can't be disabled | superadmin | | **Users** → a platform operator | **Change role** only, no Disable button; API 409 if called | permission |
+| ADM-025 | Operators can't be disabled | superadmin | | **Users** → a platform operator | **Change role** only, no Disable button; API 409 `PLATFORM_OPERATOR` "Remove their platform role first (Change role), then disable them." | permission |
 | ADM-026 | Support is read-only | support | | Accounts, Users | No Suspend, Disable, Enable, Make operator or Change role buttons; API 403 if called | permission |
 | ADM-027 | Account with an operator | superadmin | Account that contains Meera (support) | **Suspend account** | "This account has platform operators; remove their platform role first" | edge |
 | ADM-028 | Own role | superadmin | | **Users** → yourself | Shows "You"; no role button; API: "You can't change your own platform role" | permission |
@@ -64,9 +64,9 @@ The user must sign up first. For these tests, make `gowtham@vertextraders.in` a 
 | ADM-033 | Audit log | support | After ADM-011, 020, 022, 023 | **Audit log** | One row per action with When, Action, Target, Reason, By; filter by Target and From/To dates | happy |
 | ADM-034 | Audit is read-only | | | Look for edit or delete | None | edge |
 | ADM-035 | Per-account history | | | Account detail | "Operator actions on this account" lists the same events | happy |
-| ADM-036 | Views are recorded | support | | Open an account, a company, search Users | Audit rows `account.viewed`, `company.viewed`, `users.searched` with reason "Viewed" | edge |
+| ADM-036 | Views are recorded | support | | Open an account, a company, search Users | Audit rows **Viewed account**, **Viewed company**, **Searched users** with reason "Viewed" | edge |
 | ADM-037 | Role changes are recorded | superadmin | ADM-003, and one CLI grant | Audit log, target Users | "Changed platform role" / "Removed platform access" rows for both the console and the CLI change | happy |
-| ADM-038 | Two-step events are recorded | | ADM-007, ADM-008 | Audit log | `mfa.enrolled`, `mfa.failed`, `mfa.verified` rows against the operator | edge |
+| ADM-038 | Two-step events are recorded | | ADM-007, ADM-008 | Audit log | **Set up two-step sign-in**, **Failed two-step sign-in**, **Passed two-step sign-in** rows against the operator | edge |
 
 ### Sessions
 

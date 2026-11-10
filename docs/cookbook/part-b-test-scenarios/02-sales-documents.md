@@ -112,7 +112,7 @@ Sales approvals are tested in the approvals file (see [25 — Approvals](../part
 | SAL-086 | Cancel blocked by a live return | | Invoice with an approved return | Cancel | 409 `DOCUMENT_HAS_RETURNS` "Cancel return CRN/… before cancelling INV/…" | validation |
 | SAL-087 | Cancel reverses stock | | Issued invoice that moved 10 BRG-6203 | Cancel | +10 back at the branch through a reversing movement; the original movement stays | edge |
 | SAL-088 | Transition not allowed (API) | | Paid invoice | `setDocumentStatus` → cancelled | 409 `INVALID_TRANSITION` "A invoice cannot go from paid to cancelled" | validation |
-| SAL-089 | Sent quote can't be cancelled | | Sent quote | **Cancel quotation** → confirm | Server refuses (`INVALID_TRANSITION`); quote stays **Sent** | edge |
+| SAL-089 | Sent quote can't be cancelled | | Sent quote | Open **Actions** | No **Cancel quotation**; nor on a delivered note, fulfilled order, processed return or a paid or partly paid invoice (the server would refuse with `INVALID_TRANSITION`) | edge |
 | SAL-172 | Proforma lifecycle | | | Draft → **Mark as sent** → Accepted → Cancel | Numbered `PI/…`; a sent or accepted proforma can be cancelled | happy |
 | SAL-173 | Paid status can't be set by hand (API) | | Issued invoice | `setDocumentStatus` → paid | Refused with `STATUS_DERIVED` "… is derived from payments and the due date; record a payment instead" | validation |
 
@@ -158,7 +158,7 @@ Sales approvals are tested in the approvals file (see [25 — Approvals](../part
 | SAL-114 | WhatsApp | | Customer has a phone | **Send on WhatsApp** | "Opened in WhatsApp"; 📱 WhatsApp, 🖥 `wa.me/<phone>` with "Invoice INV/… — ₹…" and the share link; nothing sent by the server | happy |
 | SAL-115 | Copy link | | 🖥 | **Copy link** | "Creating a share link…" → "Link copied"; the link downloads the PDF (valid 7 days) | happy |
 | SAL-116 | Open the share page | | Link from SAL-114 | Open it in a private window | The document as printed with **Download PDF**; after cancelling the invoice, the same link shows "This link isn’t available" | happy |
-| SAL-117 | Payment link | | Issued with a balance | **Payment link** | A link is created [sim]; opening it gives no payment page. **Blocked**: Razorpay is coming soon | edge |
+| SAL-117 | No payment link | | Issued with a balance | Open **Actions**; **Send by email**; open the shared page | No **Payment link** action; the email and shared page carry no **Pay now**; the API answers `ONLINE_PAYMENTS_UNAVAILABLE` [sim]. Razorpay is coming soon | edge |
 | SAL-118 | Sharing with no connection | | Network off | **Share PDF** / **Send by email** | Fails with a connection message; nothing queued | edge |
 | SAL-119 | Payment from a draft | | Draft invoice | **Actions › Record payment** | "Issue it first to record a payment." | validation |
 | SAL-120 | Payment on a quote | | Quote | Look for payment | Not offered (a quote has nothing to pay) | edge |
@@ -235,7 +235,7 @@ Sales approvals are tested in the approvals file (see [25 — Approvals](../part
 | TPL-010 | Per-invoice template | Sales | Business default Classic | Invoice preview → **Template** → **Modern** | "This invoice now prints in Modern"; its PDF, email and share page use Modern; other invoices stay Classic | happy |
 | TPL-011 | Back to the default | | TPL-010 | **Template** → **Business default (Classic)** | Prints in Classic again | happy |
 | TPL-012 | Template on an issued or cancelled document | | Cancelled invoice | Change its template | Allowed; only the look changes; audit trail records it | edge |
-| TPL-013 | Copies | | Classic | Preview → **Copy** → each option → **Save as PDF** | Labels "ORIGINAL FOR RECIPIENT", "DUPLICATE FOR TRANSPORTER", "TRIPLICATE FOR SUPPLIER"; **All three** gives three copies in one PDF | happy |
+| TPL-013 | Copies | | Classic | Preview → **Copy** → each option → **Save as PDF** | Labels "ORIGINAL FOR RECIPIENT", "DUPLICATE FOR TRANSPORTER", "TRIPLICATE FOR SUPPLIER" (in Tamil, the Tamil label then the English one); **All three** gives three copies in one PDF | happy |
 | TPL-014 | Standard original has no label | | Standard | Copy **Original for recipient** | No label; Duplicate/Triplicate show the label top right | edge |
 | TPL-015 | Copy isn't saved | | TPL-013 with Triplicate | Close and reopen the preview; email the invoice | Preview back to Original; the email PDF is the original | edge |
 | TPL-016 | Page numbers | | Classic; invoice with 60 lines | **Save as PDF** | Pages numbered; with **All three**, no page numbers | edge |

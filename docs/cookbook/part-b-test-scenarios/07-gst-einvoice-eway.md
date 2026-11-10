@@ -21,7 +21,7 @@ Default: owner, **Vertex Traders**. Turnover is ₹8.4 crore, above the ₹5 cro
 | EIN-009 | Export | | Issued AED invoice to Harbour Supplies FZE | Generate sheet | Supply type Export (with or without tax, depending on the LUT) | happy |
 | EIN-010 | Value-only notes qualify | | Issued credit note and debit note against an invoice to Kumar Electronics | Open each | **Generate IRN** offered; reported as CRN and DBN | happy |
 | EIN-011 | SEZ buyer | | Customer type **SEZ unit or developer**, LUT on file | Generate sheet | Supply type **SEZ without payment of tax**; without an LUT, **SEZ with payment of tax** | edge |
-| EIN-012 | Financial note without GST | | Direct credit note, **Financial note — no GST**, to a registered buyer | Open | Should be not reportable (no GST). **Known issue:** the app offers **Generate IRN** today | edge |
+| EIN-012 | Financial note without GST | | Direct credit note, **Financial note — no GST**, to a registered buyer | Open | **Not applicable** ("A note without GST is not reported"); no **Generate IRN** | edge |
 
 ### E-invoice: validation (portal checks)
 
@@ -39,7 +39,7 @@ All findings are listed at once, with "Fix N problems before reporting."
 | EIN-027 | No buyer email or phone | | | Generate | Warning W002 (not blocking) | edge |
 | EIN-028 | Unknown unit | | Line unit "BOX2" | Generate | Warning W001: reported as OTH | edge |
 | EIN-029 | Duplicate IRN | | IRN already generated for this number | Generate again (API) | 2150 "An IRN already exists for this document number in this financial year" | validation |
-| EIN-030 | Invoice with TCS | | Invoice to a customer under TCS 206C(1) scrap, issued | **Generate IRN** | **Known issue, Not available yet:** blocked by 2182 "The document total does not reconcile with its lines" (the check leaves TCS out of the total). Expected once fixed: passes, TCS sent as other charges | validation |
+| EIN-030 | Invoice with TCS | | Invoice to a customer under TCS 206C(1) scrap, issued | **Generate IRN** | Passes the checks (no 2182); TCS is sent in other charges and the total matches the invoice | validation |
 | EIN-031 | IGST within the state | | Line with IGST on a Maharashtra buyer (edit via API) | Generate | 2172 "IGST is charged on a supply within the state" | validation |
 | EIN-032 | Reimbursement line | | Invoice with a **Reimbursement at cost** line | Generate sheet | Payload carries it as other charges (`OthChrg`), not an item; no HSN needed | edge |
 

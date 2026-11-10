@@ -72,7 +72,7 @@ Date,Narration,Chq/Ref No,Withdrawal Amt,Deposit Amt,Closing Balance
 |---|---|---|---|---|---|---|
 | BNK-001 | Add a bank account | Accountant | | **Payment accounts › Add account**, Bank, "Axis Current", number 4455, opening ₹10,000 | **Account added**; Cash and bank balance up ₹10,000; listed under Bank accounts in the chart | happy |
 | BNK-002 | Dated opening | Owner | | Add a cash account with **Balance as on a date** = 1 Nov 2026 | Saved; a future date can't be picked | edge |
-| BNK-003 | In-use account | Owner | HDFC has payments | Edit HDFC | Type locked; "This account has payments or expenses, so its type can’t change and it can’t be deleted."; no Delete | validation |
+| BNK-003 | In-use account | Owner | HDFC has payments | Edit HDFC | Type and currency locked; "This account has payments or expenses, so its type and currency can’t change and it can’t be deleted."; no Delete | validation |
 | BNK-004 | Viewer | Viewer | | Try **Add account** | Refused by the server | role |
 | BNK-005 | On invoices badge | Owner | **Business profile › Bank & signature › Account in your books** = HDFC | Open Payment accounts | HDFC shows **On invoices** | happy |
 | BNK-006 | Transfer | Owner | Cash ≥ ₹5,000 | **Money › Transfer**, Cash → HDFC ₹5,000 | **Transfer recorded**; contra "Transfer from Cash in hand to HDFC Current" in **Recent transfers** | happy |

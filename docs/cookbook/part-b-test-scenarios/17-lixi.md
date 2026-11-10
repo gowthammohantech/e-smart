@@ -68,5 +68,5 @@ Tests for Lixi: opening it, asking, prepared actions and confirmation, plan and 
 | LIXI-057 | Failed answer isn't counted | Any | Model returns an error | Ask | Count unchanged | edge |
 | LIXI-058 | Month rolls over | Owner | Usage at the limit | Move to the 1st (India time) | Count back to 0; Lixi answers again | edge |
 | LIXI-059 | Bar colours | Owner | | Usage at 50%, 80%, 100% | Blue, amber, red | edge [sim] |
-| LIXI-060 | Cost recorded for operators | Operator | LIXI-010 run | Admin console › company › **AI cost** | This month's row has the actions and tokens; cost filled in only for providers that report it (OpenRouter) | happy |
-| LIXI-061 | Admin changes the budget via API | Admin | | `saveCompany` with `aiMonthlyLimit` | Expected refused (owner only, as the screen says); **today the server accepts it** (see the report) | permission |
+| LIXI-060 | Cost recorded for operators | Operator | LIXI-010 run | Admin console › company › **AI cost** | This month's row has the actions and tokens; cost is OpenRouter's own, or estimated from list prices on Anthropic and OpenAI direct; $0.00 only for a model with no known price | happy |
+| LIXI-061 | Admin changes the budget via API | Admin | | `saveCompany` with `aiMonthlyLimit` | Refused 403 `OWNER_ONLY` "Only an owner can set the monthly AI budget"; the rest of the profile still saves | permission |

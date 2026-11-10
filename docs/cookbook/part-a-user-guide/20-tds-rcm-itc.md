@@ -102,7 +102,7 @@ On a purchase bill from a supplier with a TDS section, the **TDS section** field
 - A credit note or sales return against a TCS invoice gives TCS back in proportion, at the invoice's rate.
 - **Reports › TCS register** lists each invoice and note with TCS; **TCS payable** shows collected, deposited and left by section and month, with the **27EQ quarter rows**. Each month is due within seven days of its end.
 
-**Not available yet:** an invoice with TCS can't be e-invoiced; see [11](11-gst-compliance.md#generate-an-irn).
+An invoice with TCS can be e-invoiced: the TCS travels as other charges; see [11](11-gst-compliance.md#generate-an-irn).
 
 ## Reverse charge
 

@@ -74,7 +74,7 @@ Each template offers only the switches that change its page.
 4. Tap **Print**, or **Save as PDF** (🖥) / **Share PDF** (📱).
 
 **What happens**
-- The copy's label prints at the top right of the page, for example *DUPLICATE FOR TRANSPORTER* (CGST Rule 48). On Standard, the original prints with no label.
+- The copy's label prints at the top right of the page, for example *DUPLICATE FOR TRANSPORTER* (CGST Rule 48). In a Tamil PDF it prints in Tamil with the English wording after it, for example *போக்குவரத்தாளருக்கான இரண்டாம் நகல் · DUPLICATE FOR TRANSPORTER*. On Standard, the original prints with no label.
 - **All three** puts the three copies one after another in one PDF.
 - The copy is for this print only. It isn't saved on the document, and emails and links always carry the original.
 - If the device can't print you see *Printing is not available here*.

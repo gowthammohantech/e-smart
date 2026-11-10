@@ -70,12 +70,12 @@ Nearly everything can be changed later under **Settings**. The exceptions are li
 2. Choose whether to **Include financial year** (*Adds 26-27 to every number and restarts the sequence each year.*).
 3. Check the preview, **Your next invoice will be** `INV/26-27/0001`, then tap **Continue** (or **Skip** to keep the defaults).
 
-**What happens:** Your choices apply to the **invoice** series. Every other document (quotes, proforma invoices, orders, delivery notes, returns, credit and debit notes, purchase documents, payments, receipts, expenses, journals, challans and so on) gets its own series with its own default prefix, for example `QT`, `BILL`, `PAY`, `EXP`, each with the financial year and a yearly restart. Tune each one later under **Settings › Document numbering** ([13 — Settings](13-settings.md)).
+**What happens:** The prefix and start number apply to the **invoice** series. Every other document (quotes, proforma invoices, orders, delivery notes, returns, credit and debit notes, purchase documents, payments, receipts, expenses, journals, challans and so on) gets its own series with its own default prefix, for example `QT`, `BILL`, `PAY`, `EXP`, starting at 1 with a yearly restart, and with the financial year on or off as you chose here. Tune each one later under **Settings › Document numbering** ([13 — Settings](13-settings.md)).
 
 **Rules & gotchas**
 - The year is written short: `26-27` for April 2026 to March 2027.
 - If you will issue e-invoices, keep the whole number at **16 characters or fewer** (the portal's limit). `INV/26-27/0001` is 14.
-- Turning off the financial year here changes the invoice series only; the other series keep it until you change them in Settings.
+- Turning off the financial year here turns it off in every series, not only invoices (*Quotes, purchase bills, payments and expenses each get their own series and prefix, with the financial year set the same way.*).
 
 ---
 

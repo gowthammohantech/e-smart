@@ -24,6 +24,7 @@ Where to find it:
 1. **More › Business setup › Payment accounts**, then **Add account**.
 2. Choose the type: **Bank**, **Cash** or **Wallet**.
 3. Enter the **Account name** (for example *HDFC Current*). A bank account also takes an **Account number**.
+   On Smart Pro and above, pick its **Currency** if it isn't your base currency (for example a USD account). The opening balance is then in that currency.
 4. Enter the **Opening balance**. Turn on **Balance as on a date** to give the day it was counted (**Opening balance as on**; never a future day). Off, it stands at the start of the books.
 5. Turn on **Use as default** if it should be pre-selected when you record payments and expenses.
 6. Tap **Save**. You see **Account added**.
@@ -32,9 +33,9 @@ Where to find it:
 
 **Rules & gotchas**
 - **The type decides which payment methods can use it:** cash takes Cash; a bank takes bank, cheque, card and UPI; a wallet takes UPI and Wallet. See [13](#add-a-bank-cash-or-wallet-account).
-- **An account with payments or expenses** can't change type and can't be deleted: "This account has payments or expenses, so its type can’t change and it can’t be deleted." The last account can't be deleted either.
+- **An account with payments or expenses** can't change type or currency and can't be deleted: "This account has payments or expenses, so its type and currency can’t change and it can’t be deleted." The last account can't be deleted either.
 - **On invoices:** the bank account linked under **Business profile › Bank & signature › Account in your books** shows an **On invoices** badge. Money customers pay against your invoices goes into it by default ([13](13-settings.md)).
-- **Accounts are in your base currency.** A foreign-currency bank account is **Not available yet** in the app.
+- **A foreign-currency account** (Smart Pro and above) converts its opening balance at the rate on file for its date (**Currencies & rates**). With no rate on or before that day it is refused: "No USD→INR rate on or before …; add one in exchange rates first". Balances are shown in your base currency.
 - **No account can pay out more than it holds** (RULES 6.26). A payment, expense or voucher that would take it below zero is refused (`INSUFFICIENT_BALANCE`).
 
 ## Transfer money between cash and bank
@@ -114,7 +115,7 @@ Tap an account. The top shows **Last statement [from] to [to] · bank balance �
 3. What is left over is shown: "₹… left over is held as an advance from the customer" (or "to the supplier"), or **All of it settles what is due**.
 4. Pick **Paid by** (default bank) and add **Notes** if you like. Tap **Record and match**.
 
-The payment takes the line's date, amount and reference, through this bank account, and is matched to it.
+The payment takes the line's date, amount and reference, through this bank account, and is matched to it. A payment made over the business's payment approval rule, by someone who isn't an owner or admin, isn't recorded: it waits for approval like any other payment made ([25](25-approvals.md)), and the line stays in **To explain** until it is approved and you match it.
 
 **Rules & gotchas**
 - **Undo a match:** on **Matched**, open the line's menu and tap **Unmatch**, then confirm **Undo this match?**. The line goes back to **To explain**; the record stays in the books. **Open record** opens the payment, expense or voucher.

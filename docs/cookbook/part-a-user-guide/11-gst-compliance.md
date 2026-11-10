@@ -147,7 +147,8 @@ Invoices are reported as `INV`, credit notes and sales returns as `CRN`, and deb
 - With **Report on finalising** on, step 2 happens automatically when you finalise.
 - **Reimbursements at cost** aren't items on the e-invoice; they travel as other charges, with no HSN. From documents dated **1 December 2026**, freight, packing and similar charges are taxed with the lines and each line's share is sent as its own item.
 - **Once an invoice has an IRN it can't be edited**, even if it is the latest in its series. The detail screen says *"Can't edit: it has an IRN (e-invoice)"*.
-- **Not available yet:** an invoice that collects **TCS** can't be e-invoiced. The portal checks stop it with *"The document total does not reconcile with its lines"*, because the check leaves the TCS out of the total. Report such an invoice on the IRP directly until this is fixed.
+- **TCS** collected on an invoice isn't GST or taxable value: it travels as other charges, so the e-invoice total matches the invoice.
+- A **Financial note — no GST** is not reported: the card says *"A note without GST is not reported"*.
 
 ### Cancel an IRN
 

@@ -123,11 +123,11 @@ Approval rules are set by the owner under **Settings › Approvals**. Approvers 
 |---|---|---|---|---|---|---|
 | APR-001 | Set a rule | Owner | | **Settings › Approvals** → turn on Invoices, **Over** ₹50,000 → **Save** | "Approval rules saved" | happy |
 | APR-002 | Only the owner sets rules | Admin | | Open **Approvals** | "Only an owner can set what needs approval."; switches disabled; API change refused `OWNER_ONLY` | permission |
-| APR-003 | Invoice held | Sales (Rahul) | APR-001 | Invoice of ₹60,000 → **Issue invoice** | Stays a draft with **Waiting for approval** card; no number; not in receivables; owners/admins notified "A document is waiting for your approval" | happy |
+| APR-003 | Invoice held | Sales (Rahul) | APR-001 | Invoice of ₹60,000 → **Issue invoice** | Toast "Sent for approval. The invoice stays a draft…" (not "Invoice finalised"); stays a draft with **Waiting for approval** card; no number; not in receivables; owners/admins notified "A document is waiting for your approval" | happy |
 | APR-004 | Under the amount | Sales | APR-001 | Invoice of ₹40,000 → issue | Issued at once | edge |
 | APR-005 | Approvers don't wait | Admin | APR-001 | Invoice of ₹60,000 → issue | Issued at once | edge |
-| APR-006 | Approve a document | Owner | APR-003 | **Sell › Waiting for approval** → **Approve** | "Approved and issued"; numbered and posted; leaves the list | happy |
-| APR-007 | Send back | Owner | Another held invoice | **Send back** → reason → **Send back** | "Sent back to its creator"; document shows **Sent back** with the reason | happy |
+| APR-006 | Approve a document | Owner | APR-003 | **Sell › Waiting for approval** → **Approve** | "Approved and issued"; numbered and posted; leaves the list; Rahul notified "Your invoice was approved" | happy |
+| APR-007 | Send back | Owner | Another held invoice | **Send back** → reason → **Send back** | "Sent back to its creator"; document shows **Sent back** with the reason; its creator notified "Your invoice was sent back" with the reason | happy |
 | APR-008 | Re-issue after send back | Sales | APR-007 | Change it → **Issue invoice** | Waiting for approval again | happy |
 | APR-009 | Approval that can't issue | Owner | Held invoice over the customer's credit limit, or in a closed period | **Approve** | Error shown; document back to waiting | edge |
 | APR-010 | Change after approval | | Draft approved but not issued (APR-009 case fixed) | Change its amount, then issue as Sales | Asks for approval again | edge |
@@ -145,3 +145,6 @@ Approval rules are set by the owner under **Settings › Approvals**. Approvers 
 | APR-027 | Edit doesn't re-ask | Accountant | Payment of ₹30,000 recorded by the owner | Edit its reference | "Payment updated"; not held | edge |
 | APR-028 | Empty list | Owner | Nothing waiting | Open **Waiting for approval** | "Nothing waiting" with the hint about Settings → Approvals | happy |
 | APR-029 | Foreign-currency payment | Accountant | APR-020; USD supplier | Pay USD 400 at 84 (₹33,600) | Held (measured in base currency) | edge |
+| APR-030 | Kinds follow the plan | Owner / Basic | Aurora | Open **Settings › Approvals** | No Purchase orders, Purchase bills, Supplier debit notes or Payments made; API rule for them refused `MODULE_UNAVAILABLE` | plan |
+| APR-031 | Bank line payment held | Accountant (Meera) | APR-020; a ₹30,000 debit line on HDFC | **Banking › To explain** → **Record payment made** → supplier → **Record and match** | Refused 409 `PAYMENT_HELD`: kept as a payment request ("Match the line to the payment once it is approved"); nothing recorded; the line stays in **To explain** | permission |
+| APR-032 | Edit can't pass the rule | Accountant | APR-020; a ₹10,000 payment she recorded | Edit its amount to ₹30,000 | Refused 409 `PAYMENT_NEEDS_APPROVER`; editing its notes still saves | permission |

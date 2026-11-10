@@ -49,8 +49,10 @@ Default: owner, **Vertex Traders** (Maharashtra, GSTIN `27…`), full plan.
 
 | ID | Scenario | Role / plan | Preconditions | Steps | Expected result | Type |
 |---|---|---|---|---|---|---|
-| FX-101 | USD account opening | Owner | No USD rate | Add a USD bank account with US$1,000 opening | Refused: "No USD→INR rate on or before …" | validation |
+| FX-101 | USD account opening | Owner | No USD rate | Add a bank account, **Currency** USD, US$1,000 opening | Refused: "No USD→INR rate on or before …" | validation |
 | FX-102 | With a rate | | Rate ₹83 on the 1st | Add it again | Balance ₹83,000 in the trial balance and on **Payment accounts** | happy |
+| FX-103 | Edit keeps the currency | | FX-102 | Open the USD account, change its name → **Save** | Still USD; opening US$1,000 | regression |
+| FX-104 | Sales plans | Owner / Basic | | **Add account** | No **Currency** field; the account is in INR | plan |
 | TLY-001 | Tally export | Owner | Demo data | **Backup & export › Tally XML** | Ledgers under Tally groups with GSTINs and openings; Sales, Purchase, Receipt, Payment, Journal vouchers, each balancing | happy |
 | TLY-002 | Import into Tally | | TLY-001 | Tally Prime (education mode): Import masters, then transactions | Imports cleanly; Tally's trial balance equals the app's | happy |
 

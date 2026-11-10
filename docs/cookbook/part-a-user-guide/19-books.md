@@ -114,7 +114,7 @@ The **Books** page lists: **Chart of accounts**, **Journal and contra**, **Cost 
 **Books › Cost centres** (also **Money › Cost centres**) holds projects, departments or sites.
 
 1. Tap **Add cost centre**. Give it a **Name** (for example *Thane site*), a **Kind** (for example *Project*) and, optionally, **Under** another centre. **In use** is on by default.
-2. Tap the save button (it reads **Save account**). You see **Cost centre saved**.
+2. Tap **Save cost centre**. You see **Cost centre saved**.
 
 Once you have one, a **Cost centre** field appears on invoices and bills, on expenses, and on each voucher line. **Profit by cost centre** then shows each centre's income, expenses and profit for a period.
 

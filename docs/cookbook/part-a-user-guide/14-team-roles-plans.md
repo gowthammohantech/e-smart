@@ -137,7 +137,7 @@ GSTR-2B, bank reconciliation, budgets, fixed assets, vouchers and the cash forec
 | Change plan, billing, cancel subscription | ✓⁵ | — | — | — | — |
 
 ¹ Admins can't create, change or remove owners.
-² The screen lets only the owner change it.
+² Only the owner can change it; the server refuses anyone else (`OWNER_ONLY`).
 ³ Only an owner on the account the business belongs to; a guest owner can't. See [28](28-company-archive-and-data.md).
 ⁴ Only during onboarding today; there is no "add a business" button in the app.
 ⁵ Allowed for owners only, but there is no plan-change button in the app today ([Change the plan](#change-the-plan)).

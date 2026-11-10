@@ -34,7 +34,7 @@ Default: owner or accountant, **Vertex Traders** (Pro). The app is online-only: 
 | EXP-024 | Recurring held when short | | Monthly template; account empty on due date | Run `expenses.recur` | Nothing created; notification "Recurring expense EXP/… not recorded"; created on a later run once funded | edge |
 | EXP-025 | Recurring catch-up | | Weekly template, 3 weeks missed | Run `expenses.recur` once | 3 expenses created, one per due date; no duplicates on a rerun | edge |
 | EXP-026 | Delete a recurring template | Owner | EXP-008 | Delete the template | Series stops; occurrences already made stay | happy |
-| EXP-027 | Copies of a recurring expense | | Template with Bill to customer, cost centre and vehicle | Check an occurrence | Category, supplier, amount, tax, account carried; Bill to, cost centre and vehicle **not** carried (known gap) | edge |
+| EXP-027 | Copies of a recurring expense | | Template with Bill to customer, cost centre and vehicle | Check an occurrence | Category, supplier, amount, tax, account, Bill to, cost centre and vehicle carried; the receipt is not | edge |
 | EXP-028 | Reverse charge | | | Tax 18%, **Reverse charge** on, ₹1,000 | "Amount includes tax" hidden; "GST under reverse charge (18%)" on the detail; total paid ₹1,000 | happy |
 | EXP-029 | ITC eligibility | | | Tax 18%, **Input tax credit** "Blocked, section 17(5)" | Saved; tax not counted as claimable input credit | happy |
 | EXP-030 | Supplier GSTIN without a supplier | | | Tax 18%, no supplier | **Supplier's GSTIN** field shown and saved; hidden once a supplier is picked | happy |
@@ -44,7 +44,7 @@ Default: owner or accountant, **Vertex Traders** (Pro). The app is online-only: 
 | EXP-034 | Branch filter | | Two branches; top bar on PUN | Open Expenses | List follows PUN; branch filter can widen it | happy |
 | EXP-035 | Cost centre and vehicle | | One cost centre and one vehicle exist | New expense | **Cost centre** and **Vehicle** fields appear and are saved; absent when none exist | happy |
 | EXP-036 | Categories screen | Accountant | | **More › Business setup › Expense categories** | Starter categories (Rent, Salaries & wages…); "N entries" or "Not used yet"; add and rename work ("Category saved") | happy |
-| EXP-037 | Delete a used category | | Rent has expenses | Delete Rent | Refused: "Expenses are filed under this category" | edge |
+| EXP-037 | Delete a used category | | Rent has expenses | Open Rent | No **Delete** in the sheet. A category only a journal or budget uses is refused on confirm: "This category is on 〈what〉; it can't be deleted" | edge |
 | EXP-038 | Vehicles | Accountant | | **More › Business setup › Vehicles › Add vehicle** `MH12AB1234` → Save; tag a fuel expense | "Vehicle saved"; "Spent this year" shows the expense; delete refused while used | happy |
 | EXP-039 | Expenses switched off | Owner | **Settings › Modules › Expenses** off | Open Money, Buy, Home | Expenses and Scan a bill gone from menus; creating one is refused | edge |
 | EXP-040 | Desktop export | | 🖥 Desktop | Tick rows → **Export CSV** | CSV of the chosen expenses | happy |
@@ -70,5 +70,5 @@ Default: owner or accountant, **Vertex Traders** (Pro). The app is online-only: 
 | OCR-015 | Unchecked fields | | Review with low-confidence fields | **Create expense** without checking | "N fields haven't been checked" → **Check them** returns; going on opens the form | edge |
 | OCR-016 | Bad date | | | Edit the date to `09/11/2026` | "Type the date as YYYY-MM-DD…"; create blocked until fixed | validation |
 | OCR-017 | Rescan | | Review open | **Rescan** | Back to capture | happy |
-| OCR-018 | OCR switched off | Owner | **Settings › Modules › OCR** off (or Expenses off) | Look for **Scan a bill** / **Scan with OCR instead** | **Scan a bill** gone from Buy; `/ocr/capture` refused. Known gap: **Scan with OCR instead** still shows on the expense form | edge |
+| OCR-018 | OCR switched off | Owner | **Settings › Modules › OCR** off (or Expenses off) | Look for **Scan a bill** / **Scan with OCR instead** | **Scan a bill** gone from Buy (phone and sidebar) and **Scan with OCR instead** gone from the expense form; `/ocr/capture` refused | edge |
 | OCR-019 | Simulator (dev only) | | `OCR_PROVIDER=simulator`, web | Upload any image | Sample receipt fields returned | edge |

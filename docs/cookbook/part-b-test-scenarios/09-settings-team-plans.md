@@ -17,7 +17,7 @@ Tests for every settings screen, team management, seat limits, plans and billing
 | SET-010 | Add a branch | Admin / Pro | | **Settings › Branches › Add branch** → name, code, state, PIN | "Branch added" | happy |
 | SET-011 | Branch GSTIN against state | | | GSTIN `29…`, state Maharashtra | "This GSTIN is registered in Karnataka, not the state below" | validation |
 | SET-012 | Primary branch | | | Mark a branch **Primary branch** | Used as the default on new documents | happy |
-| SET-013 | Delete a branch | Admin / Pro | A non-primary branch with no documents, and one with documents | **Delete** → confirm on each | Unused branch: "Branch deleted". Branch with documents: refused, "This branch has 〈what it holds〉". The primary branch: refused, "The primary branch cannot be deleted; make another branch primary first" | edge |
+| SET-013 | Delete a branch | Admin / Pro | A non-primary branch with no documents, and one with documents | **Delete** → confirm on each | Unused branch: "Branch deleted". Branch with documents: refused, "This branch has 〈what it holds〉". The primary branch: no **Delete** in its sheet (the API refuses it: "The primary branch cannot be deleted; make another branch primary first") | edge |
 | SET-014 | Branches on Basic | Owner / Basic | Aurora | Open Branches | Upgrade page (branches need Pro) | plan |
 
 ### Masters
@@ -33,7 +33,7 @@ Tests for every settings screen, team management, seat limits, plans and billing
 | SET-026 | Reset policy | | | **Reset each month** | Sequence restarts each month | edge |
 | SET-027 | Numbering by an accountant | Accountant | | Save numbering | Refused (owner or admin) | permission |
 | SET-028 | Payment account | Accountant | | **Add account** → Wallet "Paytm", opening ₹1,000, **Use as default** | "Account added"; preselected in payments | happy |
-| SET-029 | Delete an account | | | Delete | "Payments already recorded against it keep their reference." | happy |
+| SET-029 | Delete an account | | Account with no payments, expenses, statements, vouchers or opening balance, not the invoice bank account | Delete → confirm | "Account deleted"; an account in use is refused with "This account has payments; it can't be deleted" | happy |
 | SET-030 | Expense categories | Accountant | | Add, rename, delete | Saved and reflected in the expense form | happy |
 
 ### Integrations, backup, audit, devices, about
@@ -158,4 +158,4 @@ Newer permissions (full plan for the books rows):
 | ROLE-040 | Choose a document's print layout (`setDocumentPrintLayout`) | ✓ | ✓ | ✓ | ✓ | ✗ |
 | ROLE-041 | Lixi: ask (`lixiChat`) / confirm a prepared action | ✓ / as role | ✓ / as role | ✓ / as role | ✓ / as role | ✓ / refused by the underlying route |
 | ROLE-042 | Branch-limited person opens the books or the balance sheet | — | — | ✗ if limited (`BOOKS_ALL_BRANCHES`) | ✗ if limited | ✗ if limited |
-| ROLE-043 | Viewer creates a share link / uploads an item image (`createShareLink`, `uploadItemImage`) | ✓ | ✓ | ✓ | ✓ | Expected ✗; **these routes have no role check today** (see the report) |
+| ROLE-043 | Create a share link (`createShareLink`) / upload an item image (`uploadItemImage`) | ✓ / ✓ | ✓ / ✓ | ✓ / ✓ | ✓ / ✗ | ✗ / ✗ |

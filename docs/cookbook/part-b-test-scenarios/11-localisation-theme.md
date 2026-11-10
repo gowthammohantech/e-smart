@@ -28,7 +28,7 @@ The settings live at 📱 **More › Appearance & language**, 🖥 account menu 
 
 | ID | Scenario | Role / plan | Preconditions | Steps | Expected result | Type |
 |---|---|---|---|---|---|---|
-| L10N-020 | Default theme | | Fresh install | Launch | **Light**. **Known bug**: the **Dark** option's hint says "The default look, easy on the eyes indoors.", which is wrong | edge |
+| L10N-020 | Default theme | | Fresh install | Launch | **Light**, whose hint says "The default look, with higher contrast in bright sunlight."; **Dark** says "Easy on the eyes indoors and at night." | edge |
 | L10N-021 | Dark | | | Pick **Dark** | Whole app dark, including charts, status colours, the sidebar and drawers | happy |
 | L10N-022 | Match device | | | Pick **Match device**, then flip the OS theme | Follows the device setting live | happy |
 | L10N-023 | Contrast | | Dark | Status chips (Overdue, Paid), charts and the Preview on the Appearance page | Readable; status colours not reused as chart series colours | edge |

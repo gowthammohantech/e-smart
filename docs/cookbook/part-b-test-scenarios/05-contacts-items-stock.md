@@ -21,7 +21,7 @@ Default: owner, **Vertex Traders** (Pro).
 | CON-011 | Inactive contact | | Zenith Corporate (inactive) | Open the invoice customer picker | Zenith not offered; still listed in People with an "Inactive" badge | edge |
 | CON-012 | Detail tabs | | Kumar Electronics | Open | Phone tabs **Open / Documents / Payments / Details**; "Owes you" with "N open · N overdue"; "Total invoiced" | happy |
 | CON-013 | Call & remind | | Has a phone and an open invoice | **Call**; **Actions › Send payment reminder** | Dialler opens; reminder sheet opens. Reminder action hidden when nothing is owed | happy |
-| CON-014 | Delete a contact in use | Owner | Kumar Electronics has invoices | **Actions › Delete contact** → confirm | Refused: "This party has documents; mark it inactive instead"; contact still listed | edge |
+| CON-014 | Delete a contact in use | Owner | Kumar Electronics has invoices | Open **Actions** | **Delete contact** isn't offered. A use the screen can't see (an expense, a journal) is refused on confirm: "This party has expenses; mark it inactive instead"; contact still listed | edge |
 | CON-015 | Sales role can add and edit | Sales (Rahul) | | Add a customer; try to delete it | Add works; delete refused (owner or admin only) | permission |
 | CON-016 | Viewer read-only | Viewer | | Add a contact | Refused by the server | permission |
 | CON-017 | Suppliers on a sales plan | Owner / Basic | Aurora | Open People | Title "Customers", "Who you sell to"; no Customers / Suppliers / Other switch; type choice has no Supplier or Both | plan |

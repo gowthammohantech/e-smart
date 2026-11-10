@@ -264,7 +264,6 @@ From a finalised document's **Actions** (or the main button for the PDF):
 | **Send by email** | If the customer has an email address, the server emails them a designed message with the business logo, the amount, and buttons to view the document and download the PDF: *On its way to the customer*. Without an email address on file, your own mail app opens with the message filled in. |
 | **Send on WhatsApp** | Your own WhatsApp opens (📱 the app, 🖥 WhatsApp Web) with *Invoice INV/… — ₹…* and a link to the document, addressed to the customer's phone number. You press send. |
 | **Copy link** (🖥) / **Share link** (📱) | A link to the PDF, valid for 7 days (*Link copied*). |
-| **Payment link** | Invoices with a balance only. **Not available yet**: see below. |
 
 **What the customer sees:** the link in an email or WhatsApp message opens the document as printed, with **Download PDF**. The link works for 30 days and stops working at once if the document is cancelled. An expired or withdrawn link shows *This link isn’t available*.
 
@@ -276,7 +275,7 @@ From a finalised document's **Actions** (or the main button for the PDF):
 
 **Not available yet**
 - **WhatsApp Business** sending from the server. WhatsApp always opens your own WhatsApp.
-- **Payment links and Razorpay.** The Razorpay integration is *coming soon*, so the payment link and the **Pay now** button don't lead to a working payment page yet. Record the payment yourself when it arrives (5.12).
+- **Payment links and Razorpay.** The Razorpay integration is *coming soon*. Until it is, there is no **Payment link** action, and emails, reminders, mail drafts and the shared page carry no **Pay now** link. Record the payment yourself when it arrives (5.12).
 
 ### 5.12 Record a payment against an invoice
 
@@ -307,7 +306,7 @@ Cancel those first (see [11 — GST compliance](11-gst-compliance.md)).
 More rules:
 - An invoice with a payment allocated can't be cancelled: *Remove the payments allocated to this document before cancelling it*. Delete the payment first.
 - An invoice with a return or note standing against it can't be cancelled until that is cancelled.
-- Only these can be cancelled: a draft; a sent or accepted proforma; a confirmed sales order; an issued or overdue invoice; a requested or approved return; an issued credit or debit note. A sent quotation, a delivered delivery note, a fulfilled order or a processed return can't be. The app still shows **Cancel** on them, and the server refuses it.
+- Only these can be cancelled: a draft; a sent or accepted proforma; a confirmed sales order; an issued or overdue invoice; a requested or approved return; an issued credit or debit note. A sent quotation, a delivered delivery note, a fulfilled order, a processed return, or anything with money paid against it can't be, and the app doesn't offer **Cancel** on them.
 - Cancelling puts back the stock the document moved, and withdraws its links.
 - Any role except Viewer can cancel.
 

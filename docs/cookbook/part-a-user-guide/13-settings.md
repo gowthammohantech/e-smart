@@ -44,7 +44,7 @@ Settings pages leave the list when your plan doesn't include them, or when the m
 |---|---|
 | Business profile, logo, signature, branches, numbering, custom fields, integrations, backup & export, users | Owner, admin |
 | Modules, archiving a business | Owner only |
-| AI budget | Owner (the app offers it to the owner only) |
+| AI budget | Owner only |
 | Taxes, currencies & rates, payment accounts, expense categories, transporters | Owner, admin, accountant |
 | Audit trail (to read) | Owner, admin, accountant |
 | Your profile, appearance, notification preferences, privacy | Everyone, for themselves |
@@ -204,8 +204,8 @@ Branches keep stock and documents separate by location. Every document records i
 
 **Delete a branch**
 - Tap **Delete**, then confirm **Delete 〈name〉?**. You see **Branch deleted**.
-- Only a branch with nothing recorded against it can be deleted. The server refuses a branch that has documents, payments, expenses, stock movements or users limited to it (*"This branch has 〈what〉"*). The confirm message still says documents "keep their reference"; that is out of date.
-- The primary branch can't be deleted. Make another branch primary first.
+- Only a branch with nothing recorded against it can be deleted. The server refuses a branch that has documents, payments, expenses, stock movements or users limited to it (*"This branch has 〈what〉"*). The confirm message says so: *Only a branch with no documents, payments, expenses, stock or users limited to it can be deleted.*
+- The primary branch can't be deleted, so its sheet has no **Delete**. Make another branch primary first.
 
 **Rules & gotchas**
 - Two branches can't share a name, a code or an address.
@@ -384,7 +384,7 @@ Each module in your plan has a switch:
 **More › Account › Appearance & language.** 🖥 Account menu › **Appearance**.
 
 **Theme**
-- **Match device**, **Dark** or **Light**. **Light** is used unless you choose otherwise; the hint on **Dark** that calls it "The default look" is out of date.
+- **Match device**, **Dark** or **Light**. **Light** is the default (*The default look, with higher contrast in bright sunlight.*); **Dark** is *Easy on the eyes indoors and at night.*
 - **Preview** shows how sample tiles look in the chosen theme.
 
 **Language**

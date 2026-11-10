@@ -39,7 +39,7 @@ Each report is worked out on the server when it opens or a filter changes. The a
 | RPT-030 | PDF | Owner | | **Export › PDF** | 📱 share sheet with the PDF; 🖥 print dialog. Shows the basis line and "Generated…" | happy |
 | RPT-031 | Excel | | | **Excel (.xlsx)** | .xlsx downloads / shares, same rows as on screen | happy |
 | RPT-032 | CSV | | | **Export as CSV** | CSV downloads / shares | happy |
-| RPT-033 | Cancel the export | | 📱 | Dismiss the share sheet | "Export was cancelled" | edge |
+| RPT-033 | Cancel the export | | 📱 | Dismiss the share sheet | Nothing is shown; no error. A file that can't be made shows "Couldn't prepare that file. Try again in a moment." | edge |
 | RPT-034 | Export after the connection drops | | Report loaded; network off | Export PDF | The file is made from the figures already on screen (export is built in the app) | edge |
 | RPT-035 | Viewer can read and export | Viewer | | Open and export | Allowed | permission |
 
@@ -63,6 +63,7 @@ Each report is worked out on the server when it opens or a filter changes. The a
 | RPT-053 | TCS payable with 27EQ rows | Owner / Pro | As RPT-052 | TCS payable | By section and month; **27EQ quarter rows** | happy |
 | RPT-054 | Branch-limited user and the books | Accountant limited to Pune / Pro | | Open TDS payable, TDS receivable, TCS payable | **Limited to some branches** · "The books cover every branch. Ask an owner or admin…" Other reports show Pune only | permission |
 | RPT-055 | Module switched off hides its reports | Owner / Pro | Switch off **Expenses** in Settings › Modules | Reports hub | Expense summary and Profit snapshot leave the list; the hub's profit tiles go. Switch back on → they return | edge |
+| RPT-061 | Switched-off report refused by the server | Owner / Pro | Purchases switched off | `GET /reports/purchase-summary` (or `/report-data/…`) via API | 403 `MODULE_OFF`, as the module's own routes; the sales summary still opens | permission |
 | RPT-056 | Hub figure fails | Owner / Pro | Make the profit request fail (e.g. network off during load) | Open hub | Tiles show "—", not ₹0; **Couldn't load this** card with **Retry** | negative |
 | RPT-057 | Hub on desktop | Owner / Pro | 🖥 wide window | Open hub | Chart and Snapshot side by side; report cards three to a row | happy |
 | RPT-058 | Desktop table | Owner / Pro | 🖥 | Sales summary | Headline figures in a row; sortable table of every invoice | happy |

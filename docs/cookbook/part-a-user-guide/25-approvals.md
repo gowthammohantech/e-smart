@@ -12,7 +12,7 @@ Approvals let an owner decide that large documents and payments need an owner or
 
 **Who decides:** Owners and Admins. They never wait on themselves: anything they issue or pay goes through at once.
 **Who sets the rules:** the Owner only.
-**Plan:** every plan. Payment rules matter only on Smart Pro and above, where payments made are available.
+**Plan:** every plan. Rules for purchase documents and payments made are offered only on Smart Pro and above, with Purchases switched on (payments made need Payables).
 
 ---
 
@@ -27,6 +27,8 @@ Approvals let an owner decide that large documents and payments need an owner or
 3. Turn on a kind and enter the amount in **Over**. *0 holds every one.* The kinds are:
    - Invoices, Credit notes, Purchase orders, Purchase bills, Supplier debit notes, Sales orders, Quotations, Proforma invoices
    - **Payments made**
+
+   Purchase orders, Purchase bills, Supplier debit notes and Payments made are left out on Free and Basic, and when the owner switches Purchases (or Payables, for payments) off. The server refuses such a rule too (`MODULE_UNAVAILABLE`); one set while the module was on is kept, and works again when it is back on.
 4. Tap **Save**. You see *Approval rules saved*.
 
 **Rules & gotchas**
@@ -41,7 +43,7 @@ Approvals let an owner decide that large documents and payments need an owner or
 
 **Steps**
 1. Prepare the document as usual and tap its Finalise button (**Issue invoice**, **Record bill**, **Confirm order**…).
-2. The document stays a draft and goes to the approvers. Its page shows **Waiting for approval**: *Sent for approval on …. An owner or admin approves it, which issues it, or sends it back.*
+2. The document stays a draft and goes to the approvers. You see *Sent for approval. The invoice stays a draft until an owner or admin approves it.* (not *… finalised*), and **Save & send** doesn't send it. Its page shows **Waiting for approval**: *Sent for approval on …. An owner or admin approves it, which issues it, or sends it back.*
 
 **What happens**
 - The owners and admins get a notification: *A document is waiting for your approval*.
@@ -59,6 +61,8 @@ Approvals let an owner decide that large documents and payments need an owner or
    - Tap **Approve**. The document is issued, numbered and posted. You see *Approved and issued*.
    - Tap **Send back**, write *Why is it going back?*, then **Send back**. You see *Sent back to its creator*.
 3. You can also decide from the document's own page, on the **Waiting for approval** card.
+
+**What happens:** whoever sent it for approval gets a notification: *Your invoice was approved* (with its new number), or *Your invoice was sent back* with the approver's note.
 
 **What happens after sending back:** the document shows **Sent back**: *An owner or admin sent this back: …. Change it and issue it again.* Issuing it again sends it for approval again.
 

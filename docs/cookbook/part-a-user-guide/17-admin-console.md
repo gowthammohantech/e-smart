@@ -169,7 +169,7 @@ Opening an account is recorded in the audit log as a view.
 3. Each row is a month: **Actions** (Lixi messages plus server bill scans, as counted against the company's allowance), **Tokens in**, **Tokens out** and **Cost**.
 
 **Rules & gotchas**
-- **Cost is only as good as the model provider's report.** OpenRouter reports a price with each answer, so its cost is filled in. Anthropic and OpenAI direct don't, so their months show tokens with a cost of $0.00. Work their cost out from the tokens.
+- **Cost is the provider's figure or an estimate.** OpenRouter reports a price with each answer, and that is used. Anthropic and OpenAI direct don't, so the server estimates it from their list prices for the common models (Claude, GPT-5, GPT-4.1, GPT-4o). A model it has no price for (a self-hosted model, Groq and so on) shows tokens with a cost of $0.00.
 - The console can't change a company's allowance. The plan sets it, and the owner can only lower it ([16](16-lixi-assistant.md#ai-usage-and-the-monthly-allowance)).
 - **No AI use yet** means nothing has been counted for this company.
 
@@ -212,7 +212,7 @@ What is recorded:
 - opening an account or a company, and searching users (as views);
 - two-step events: setting up an authenticator, codes accepted or refused, recovery codes used, an authenticator reset from the command line.
 
-Some of these show their internal name, for example `account.viewed` or `mfa.verified`, instead of a friendly label.
+Each shows as a plain label, for example **Viewed account**, **Searched users**, **Passed two-step sign-in** or **Used a recovery code**.
 
 ---
 
