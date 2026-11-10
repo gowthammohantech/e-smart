@@ -98,6 +98,33 @@ export function FieldRow({ children, columns }: { children: React.ReactNode; col
 }
 
 /**
+ * Fields two to a row on a desktop; an odd one out takes the whole row rather than leaving an
+ * empty half beside it. Pass the fields that may or may not show as null: only those shown are
+ * laid out. A phone stacks them, with no wrapper, in the parent column's spacing.
+ */
+export function FieldGrid({ items }: { items: React.ReactNode[] }) {
+  const t = useTheme();
+  const desktop = useIsDesktop();
+  const shown = items.filter(Boolean);
+  if (!desktop) return <>{shown}</>;
+  const rows: React.ReactNode[][] = [];
+  for (let i = 0; i < shown.length; i += 2) rows.push(shown.slice(i, i + 2));
+  return (
+    <View style={{ gap: t.spacing.lg }}>
+      {rows.map((row, r) => (
+        <View key={r} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: t.spacing.lg }}>
+          {row.map((node, c) => (
+            <View key={c} style={{ flex: 1, minWidth: 0 }}>
+              {node}
+            </View>
+          ))}
+        </View>
+      ))}
+    </View>
+  );
+}
+
+/**
  * A titled card grouping related fields, for desktop form layouts. `action`
  * sits at the right of the title (e.g. a pair of text links).
  */

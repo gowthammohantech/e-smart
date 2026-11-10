@@ -689,8 +689,7 @@ ${url}`;
   );
   const totalsCard = (
     <>
-      {/* Totals: as wide as the lines above them, the figures at the card's right edge as on a printed invoice. */}
-      <Card style={{ marginTop: t.spacing.md }}>
+      <Card style={{ marginTop: desktop ? 0 : t.spacing.md }}>
         <TotalsPanel
           totals={doc.totals}
           currency={doc.currency}
@@ -1138,13 +1137,14 @@ ${url}`;
                   <View style={{ gap: t.spacing.md }}>
                     {headerCard}
                     {desktopLines}
-                    {totalsCard}
                     {notesCard}
                   </View>
                 }
                 side={
                   <>
                     {paymentCard}
+                    {/* The totals beside the lines, as the editor shows them, rather than a wide card half empty. */}
+                    {totalsCard}
                     {paymentsSection}
                     {complianceSection}
                   </>

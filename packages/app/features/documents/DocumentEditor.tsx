@@ -5,7 +5,7 @@ import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
-import { FieldRow, FormContainer, SplitPane } from '@esmart/ui/components/Layout';
+import { FieldGrid, FieldRow, FormContainer, SplitPane } from '@esmart/ui/components/Layout';
 import { Text } from '@esmart/ui/components/Text';
 import { Button } from '@esmart/ui/components/Button';
 import { Card } from '@esmart/ui/components/Card';
@@ -88,6 +88,7 @@ import { CustomFieldsSection, customFieldErrors, useCustomFields } from '../cust
 import { VehicleField } from '../vehicles/VehicleField';
 
 /** What finalising moves a draft of this kind to. */
+
 export function finaliseTarget(kind: DocumentKind): DocStatus {
   return kind === 'quote' || kind === 'proforma'
     ? 'sent'
@@ -805,9 +806,12 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
 
   /* ---------------------------------------------------------------- */
 
-  const renderParty = () => (
-    <View style={{ gap: t.spacing.lg }}>
+  const renderParty = () => {
+    // Each field once; a phone stacks them in this order, a desktop lays them out as an invoice's head.
+    const partyCard = (
       <Pressable
+        // On a desktop it fills the height of the dates and numbers beside it.
+        style={desktop ? { flex: 1 } : undefined}
         onPress={() => setPartyOpen(true)}
         accessibilityRole="button"
         accessibilityLabel={
@@ -816,7 +820,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
             : tr(isPurchase ? 'sales:editor.selectSupplier' : 'sales:editor.selectCustomer')
         }
       >
-        <Card style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
+        <Card style={[{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }, desktop ? { flex: 1 } : null]}>
           {party ? (
             <>
               <Avatar name={party.name} size={44} />
@@ -858,8 +862,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           <Icon name="chevron-right" size={20} color={t.c.muted} />
         </Card>
       </Pressable>
-
-      <FieldRow>
+    );
+    const dateField = (
       <DateField
         label={tr('common:documentEditor.dateLabel', { kind: kindName })}
         value={draft.date}
@@ -874,8 +878,9 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
         required
         error={dateBeforeSource ?? dateBeforeOpeningStock}
       />
-
-      {kind === 'invoice' || kind === 'purchaseBill' ? (
+    );
+    const dueField =
+      kind === 'invoice' || kind === 'purchaseBill' ? (
         <DateField
           label={tr('sales:editor.dueDate')}
           value={draft.dueDate ?? addDaysISO(draft.date, 30)}
@@ -884,9 +889,9 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           error={dueBeforeDate}
           hint={party ? tr('sales:editor.termsHint', { name: party.name, days: party.paymentTermsDays }) : undefined}
         />
-      ) : null}
-
-      {kind === 'quote' || kind === 'proforma' ? (
+      ) : null;
+    const validField =
+      kind === 'quote' || kind === 'proforma' ? (
         <DateField
           label={tr('sales:editor.validUntil')}
           value={draft.validUntil ?? addDaysISO(draft.date, 15)}
@@ -894,92 +899,28 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           minimumDate={parseDate(draft.date)}
           error={validBeforeDate}
         />
-      ) : null}
-      </FieldRow>
-
-      {desktop ? (
-        // A desktop gives the supplier's number and the reference half the row each, and lays the
-        // bill of entry out three to a row; packed into one cell its inputs were about 100px.
-        <>
-          <FieldRow columns={2}>
-            {isPurchase ? (
-              <TextField
-                label={tr('sales:editor.supplierDocNumber')}
-                value={draft.supplierDocNumber}
-                onChangeText={(supplierDocNumber) => patch({ supplierDocNumber })}
-                placeholder={tr('sales:editor.supplierDocPlaceholder')}
-                icon="pound"
-              />
-            ) : null}
-            <TextField
-              label={tr('sales:editor.reference')}
-              value={draft.reference}
-              onChangeText={(reference) => patch({ reference })}
-              placeholder={tr('sales:editor.referencePlaceholder')}
-              icon="link-variant"
-            />
-          </FieldRow>
-          {kind === 'purchaseBill' && imported ? (
-            <View style={{ gap: t.spacing.sm }}>
-              <Text variant="caption" tone="muted">{tr('purchases:boe.hint')}</Text>
-              <FieldRow>
-                <TextField label={tr('purchases:boe.number')} value={boe.number} onChangeText={(number) => patchBoe({ number })} icon="file-certificate-outline" />
-                <DateField label={tr('purchases:boe.date')} value={boe.date} onChange={(date) => patchBoe({ date })} maximumDate={new Date()} />
-                <TextField label={tr('purchases:boe.port')} value={boe.portCode} onChangeText={(portCode) => patchBoe({ portCode: portCode.toUpperCase() })} maxLength={6} autoCapitalize="characters" icon="ferry" />
-              </FieldRow>
-              <FieldRow>
-                <AmountField label={tr('purchases:boe.assessable')} value={boeAmount(boe.assessableValue)} onChangeValue={(v) => patchBoe({ assessableValue: fromMajor(v || '0', baseCurrency) })} currency={baseCurrency} />
-                <AmountField label={tr('purchases:boe.igst')} value={boeAmount(boe.igst)} onChangeValue={(v) => patchBoe({ igst: fromMajor(v || '0', baseCurrency) })} currency={baseCurrency} />
-                <AmountField label={tr('purchases:boe.cess')} value={boeAmount(boe.cess)} onChangeValue={(v) => patchBoe({ cess: fromMajor(v || '0', baseCurrency) })} currency={baseCurrency} />
-              </FieldRow>
-            </View>
-          ) : null}
-          {kind === 'purchaseBill' && !imported && party?.taxId ? (
-            <SwitchField label={tr('purchases:isd.label')} description={tr('purchases:isd.hint')} value={!!draft.isdInvoice} onValueChange={(isdInvoice) => patch({ isdInvoice })} />
-          ) : null}
-        </>
-      ) : (
-        // A phone stacks them all, as FieldRow adds nothing there.
-        <>
-          {isPurchase ? (
-            <TextField
-              label={tr('sales:editor.supplierDocNumber')}
-              value={draft.supplierDocNumber}
-              onChangeText={(supplierDocNumber) => patch({ supplierDocNumber })}
-              placeholder={tr('sales:editor.supplierDocPlaceholder')}
-              icon="pound"
-            />
-          ) : null}
-          {kind === 'purchaseBill' && imported ? (
-            <View style={{ gap: t.spacing.sm }}>
-              <Text variant="caption" tone="muted">{tr('purchases:boe.hint')}</Text>
-              <TextField label={tr('purchases:boe.number')} value={boe.number} onChangeText={(number) => patchBoe({ number })} icon="file-certificate-outline" />
-              <DateField label={tr('purchases:boe.date')} value={boe.date} onChange={(date) => patchBoe({ date })} maximumDate={new Date()} />
-              <TextField label={tr('purchases:boe.port')} value={boe.portCode} onChangeText={(portCode) => patchBoe({ portCode: portCode.toUpperCase() })} maxLength={6} autoCapitalize="characters" icon="ferry" />
-              <AmountField label={tr('purchases:boe.assessable')} value={boeAmount(boe.assessableValue)} onChangeValue={(v) => patchBoe({ assessableValue: fromMajor(v || '0', baseCurrency) })} currency={baseCurrency} />
-              <AmountField label={tr('purchases:boe.igst')} value={boeAmount(boe.igst)} onChangeValue={(v) => patchBoe({ igst: fromMajor(v || '0', baseCurrency) })} currency={baseCurrency} />
-              <AmountField label={tr('purchases:boe.cess')} value={boeAmount(boe.cess)} onChangeValue={(v) => patchBoe({ cess: fromMajor(v || '0', baseCurrency) })} currency={baseCurrency} />
-            </View>
-          ) : null}
-          {kind === 'purchaseBill' && !imported && party?.taxId ? (
-            <SwitchField label={tr('purchases:isd.label')} description={tr('purchases:isd.hint')} value={!!draft.isdInvoice} onValueChange={(isdInvoice) => patch({ isdInvoice })} />
-          ) : null}
-          <TextField
-            label={tr('sales:editor.reference')}
-            value={draft.reference}
-            onChangeText={(reference) => patch({ reference })}
-            placeholder={tr('sales:editor.referencePlaceholder')}
-            icon="link-variant"
-          />
-        </>
-      )}
-
-      <FieldRow>
-      {branches.length > 1 ? (
-        <PickerField label={tr('sales:editor.branch')} value={branch?.name} onPress={() => setBranchOpen(true)} icon="warehouse" />
-      ) : null}
-
-      {taxContext.regime === 'GST' ? (
+      ) : null;
+    const supplierDocField = isPurchase ? (
+      <TextField
+        label={tr('sales:editor.supplierDocNumber')}
+        value={draft.supplierDocNumber}
+        onChangeText={(supplierDocNumber) => patch({ supplierDocNumber })}
+        placeholder={tr('sales:editor.supplierDocPlaceholder')}
+        icon="pound"
+      />
+    ) : null;
+    const referenceField = (
+      <TextField
+        label={tr('sales:editor.reference')}
+        value={draft.reference}
+        onChangeText={(reference) => patch({ reference })}
+        placeholder={tr('sales:editor.referencePlaceholder')}
+        icon="link-variant"
+      />
+    );
+    const branchField = branches.length > 1 ? <PickerField label={tr('sales:editor.branch')} value={branch?.name} onPress={() => setBranchOpen(true)} icon="warehouse" /> : null;
+    const posField =
+      taxContext.regime === 'GST' ? (
         <PickerField
           label={tr('sales:editor.placeOfSupply')}
           value={
@@ -1003,71 +944,28 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
                 : tr('sales:editor.intraStateHint')
           }
         />
-      ) : null}
-
-      {/* Multi-currency is a full-plan module; a document already in another currency still shows it. */}
-      {hasFx || draft.currency !== baseCurrency ? (
+      ) : null;
+    // Multi-currency is a full-plan module; a document already in another currency still shows it.
+    const currencyField =
+      hasFx || draft.currency !== baseCurrency ? (
         <PickerField
           label={tr('sales:editor.currency')}
           value={`${draft.currency}${draft.currency !== baseCurrency ? ` · 1 ${draft.currency} = ${draft.exchangeRate.toFixed(4)} ${baseCurrency}` : ''}`}
           onPress={() => setCurrencyOpen(true)}
           icon="cash-multiple"
         />
-      ) : null}
-      </FieldRow>
-
-
-      {isNote ? (
-        <FieldRow columns={2}>
-          <PickerField
-            label={tr('sales:editor.noteReason')}
-            value={draft.noteReason ? tr(`domain:noteReason.${draft.noteReason}`) : undefined}
-            onPress={() => setReasonOpen(true)}
-            icon="text-box-outline"
-            hint={tr('sales:editor.noteReasonHint')}
-          />
-        </FieldRow>
-      ) : null}
-
-      {directNote ? (
-        <View style={{ gap: t.spacing.sm }}>
-          <Text variant="small" tone="muted" weight="500">
-            {tr('sales:editor.noteGst.label')}
-          </Text>
-          <Segmented
-            options={[
-              { value: 'withGst', label: tr('sales:editor.noteGst.withGst') },
-              { value: 'noGst', label: tr('sales:editor.noteGst.noGst') },
-            ]}
-            value={draft.noteGst ?? 'withGst'}
-            onChange={(v) => patch({ noteGst: v as 'withGst' | 'noGst' })}
-          />
-          <Text variant="caption" tone="muted">
-            {tr(draft.noteGst === 'noGst' ? 'sales:editor.noteGst.noGstHint' : 'sales:editor.noteGst.withGstHint')}
-          </Text>
-          {draft.noteGst !== 'noGst' ? (
-            <FieldRow>
-              <TextField
-                label={tr(isPurchase ? 'sales:editor.noteGst.originalBill' : 'sales:editor.noteGst.originalInvoice')}
-                value={draft.originalNumber ?? ''}
-                onChangeText={(originalNumber) => patch({ originalNumber })}
-                icon="file-document-outline"
-                maxLength={40}
-              />
-              <DateField
-                label={tr('sales:editor.noteGst.originalDate')}
-                value={draft.originalDate ?? ''}
-                onChange={(originalDate) => patch({ originalDate })}
-                maximumDate={new Date()}
-              />
-            </FieldRow>
-          ) : null}
-        </View>
-      ) : null}
-
-
-      {draft.currency !== baseCurrency ? (
-        <FieldRow>
+      ) : null;
+    const noteReasonField = isNote ? (
+      <PickerField
+        label={tr('sales:editor.noteReason')}
+        value={draft.noteReason ? tr(`domain:noteReason.${draft.noteReason}`) : undefined}
+        onPress={() => setReasonOpen(true)}
+        icon="text-box-outline"
+        hint={tr('sales:editor.noteReasonHint')}
+      />
+    ) : null;
+    const fxField =
+      draft.currency !== baseCurrency ? (
         <TextField
           label={`${tr('common:totals.exchangeRate')} (1 ${draft.currency} → ${baseCurrency})`}
           {...rateText}
@@ -1075,10 +973,127 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           icon="swap-horizontal"
           hint={tr('sales:editor.rateStored')}
         />
-        </FieldRow>
-      ) : null}
-    </View>
-  );
+      ) : null;
+    const isdField =
+      kind === 'purchaseBill' && !imported && party?.taxId ? (
+        <SwitchField label={tr('purchases:isd.label')} description={tr('purchases:isd.hint')} value={!!draft.isdInvoice} onValueChange={(isdInvoice) => patch({ isdInvoice })} />
+      ) : null;
+    const directNoteBlock = directNote ? (
+      <View style={{ gap: t.spacing.sm }}>
+        <Text variant="small" tone="muted" weight="500">
+          {tr('sales:editor.noteGst.label')}
+        </Text>
+        <Segmented
+          options={[
+            { value: 'withGst', label: tr('sales:editor.noteGst.withGst') },
+            { value: 'noGst', label: tr('sales:editor.noteGst.noGst') },
+          ]}
+          value={draft.noteGst ?? 'withGst'}
+          onChange={(v) => patch({ noteGst: v as 'withGst' | 'noGst' })}
+        />
+        <Text variant="caption" tone="muted">
+          {tr(draft.noteGst === 'noGst' ? 'sales:editor.noteGst.noGstHint' : 'sales:editor.noteGst.withGstHint')}
+        </Text>
+        {draft.noteGst !== 'noGst' ? (
+          <FieldRow>
+            <TextField
+              label={tr(isPurchase ? 'sales:editor.noteGst.originalBill' : 'sales:editor.noteGst.originalInvoice')}
+              value={draft.originalNumber ?? ''}
+              onChangeText={(originalNumber) => patch({ originalNumber })}
+              icon="file-document-outline"
+              maxLength={40}
+            />
+            <DateField
+              label={tr('sales:editor.noteGst.originalDate')}
+              value={draft.originalDate ?? ''}
+              onChange={(originalDate) => patch({ originalDate })}
+              maximumDate={new Date()}
+            />
+          </FieldRow>
+        ) : null}
+      </View>
+    ) : null;
+
+    if (!desktop) {
+      return (
+        <View style={{ gap: t.spacing.lg }}>
+          {partyCard}
+          {dateField}
+          {dueField}
+          {validField}
+          {supplierDocField}
+          {kind === 'purchaseBill' && imported ? (
+            <View style={{ gap: t.spacing.sm }}>
+              <Text variant="caption" tone="muted">{tr('purchases:boe.hint')}</Text>
+              <TextField label={tr('purchases:boe.number')} value={boe.number} onChangeText={(number) => patchBoe({ number })} icon="file-certificate-outline" />
+              <DateField label={tr('purchases:boe.date')} value={boe.date} onChange={(date) => patchBoe({ date })} maximumDate={new Date()} />
+              <TextField label={tr('purchases:boe.port')} value={boe.portCode} onChangeText={(portCode) => patchBoe({ portCode: portCode.toUpperCase() })} maxLength={6} autoCapitalize="characters" icon="ferry" />
+              <AmountField label={tr('purchases:boe.assessable')} value={boeAmount(boe.assessableValue)} onChangeValue={(v) => patchBoe({ assessableValue: fromMajor(v || '0', baseCurrency) })} currency={baseCurrency} />
+              <AmountField label={tr('purchases:boe.igst')} value={boeAmount(boe.igst)} onChangeValue={(v) => patchBoe({ igst: fromMajor(v || '0', baseCurrency) })} currency={baseCurrency} />
+              <AmountField label={tr('purchases:boe.cess')} value={boeAmount(boe.cess)} onChangeValue={(v) => patchBoe({ cess: fromMajor(v || '0', baseCurrency) })} currency={baseCurrency} />
+            </View>
+          ) : null}
+          {isdField}
+          {referenceField}
+          {branchField}
+          {posField}
+          {currencyField}
+          {noteReasonField}
+          {directNoteBlock}
+          {fxField}
+        </View>
+      );
+    }
+
+    // A desktop: who on the left, the document's dates and numbers on the right, two to a row;
+    // where it is supplied and in what currency in a row below. A field that would sit alone in
+    // that row joins the right-hand group instead, so no field has an empty half beside it.
+    const head = [dateField, dueField ?? validField ?? noteReasonField, supplierDocField, referenceField].filter(Boolean);
+    let place = [branchField, posField, currencyField, fxField].filter(Boolean);
+    if (place.length === 1) {
+      head.push(...place);
+      place = [];
+    }
+    return (
+      <View style={{ gap: t.spacing.lg }}>
+        <View style={{ flexDirection: 'row', alignItems: 'stretch', gap: t.spacing.lg }}>
+          <View style={{ flex: 1, minWidth: 0 }}>{partyCard}</View>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <FieldGrid items={head} />
+          </View>
+        </View>
+        {place.length === 3 ? (
+          // Branch, place of supply and currency: a third each.
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: t.spacing.lg }}>
+            {place.map((node, i) => (
+              <View key={i} style={{ flex: 1, minWidth: 0 }}>
+                {node}
+              </View>
+            ))}
+          </View>
+        ) : place.length ? (
+          <FieldGrid items={place} />
+        ) : null}
+        {kind === 'purchaseBill' && imported ? (
+          <View style={{ gap: t.spacing.sm }}>
+            <Text variant="caption" tone="muted">{tr('purchases:boe.hint')}</Text>
+            <FieldRow>
+              <TextField label={tr('purchases:boe.number')} value={boe.number} onChangeText={(number) => patchBoe({ number })} icon="file-certificate-outline" />
+              <DateField label={tr('purchases:boe.date')} value={boe.date} onChange={(date) => patchBoe({ date })} maximumDate={new Date()} />
+              <TextField label={tr('purchases:boe.port')} value={boe.portCode} onChangeText={(portCode) => patchBoe({ portCode: portCode.toUpperCase() })} maxLength={6} autoCapitalize="characters" icon="ferry" />
+            </FieldRow>
+            <FieldRow>
+              <AmountField label={tr('purchases:boe.assessable')} value={boeAmount(boe.assessableValue)} onChangeValue={(v) => patchBoe({ assessableValue: fromMajor(v || '0', baseCurrency) })} currency={baseCurrency} />
+              <AmountField label={tr('purchases:boe.igst')} value={boeAmount(boe.igst)} onChangeValue={(v) => patchBoe({ igst: fromMajor(v || '0', baseCurrency) })} currency={baseCurrency} />
+              <AmountField label={tr('purchases:boe.cess')} value={boeAmount(boe.cess)} onChangeValue={(v) => patchBoe({ cess: fromMajor(v || '0', baseCurrency) })} currency={baseCurrency} />
+            </FieldRow>
+          </View>
+        ) : null}
+        {isdField}
+        {directNoteBlock}
+      </View>
+    );
+  };
 
   const renderItems = () => (
     <View style={{ gap: t.spacing.md }}>
@@ -1240,41 +1255,39 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           onValueChange={(reverseCharge) => patch({ reverseCharge })}
         />
       ) : null}
-      {billTds ? (
-        // Half the row on a desktop, lined up with the other half-width fields.
-        <FieldRow>
-        <View style={{ gap: t.spacing.xs }}>
-          <PickerField
-            label={tr('purchases:tds.section')}
-            value={tdsSectionLabel(draft.tdsSection ?? parties.find((p) => p.id === draft.partyId)?.tdsSection)}
-            onPress={() => setTdsOpen(true)}
-            icon="bank-minus"
-            hint={draftTds ? tr('purchases:tds.willKeep', { amount: formatMoney(draftTds.amount), rate: formatPercent(draftTds.rate) }) : tr('purchases:tds.hint')}
-          />
-          {/* Without a TAN nothing is kept back: say so where the section is chosen, with the way to add one. */}
-          {!company?.tan && (draft.tdsSection ?? parties.find((p) => p.id === draft.partyId)?.tdsSection ?? 'none') !== 'none' ? (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm, flexWrap: 'wrap' }}>
-              <Text variant="caption" tone="warn" style={{ flex: 1, minWidth: 180 }}>
-                {tr('purchases:tds.needsTan')}
-              </Text>
-              <Button title={tr('purchases:tds.addTan')} variant="ghost" size="sm" icon="office-building-cog-outline" onPress={() => router.push('/(app)/settings/company')} />
+      {/* TDS kept on a bill, TDS a customer deducts and its rate, TCS on an invoice: two to a row on a desktop. */}
+      <FieldGrid
+        items={[
+          billTds ? (
+            <View style={{ gap: t.spacing.xs }}>
+              <PickerField
+                label={tr('purchases:tds.section')}
+                value={tdsSectionLabel(draft.tdsSection ?? parties.find((p) => p.id === draft.partyId)?.tdsSection)}
+                onPress={() => setTdsOpen(true)}
+                icon="bank-minus"
+                hint={draftTds ? tr('purchases:tds.willKeep', { amount: formatMoney(draftTds.amount), rate: formatPercent(draftTds.rate) }) : tr('purchases:tds.hint')}
+              />
+              {/* Without a TAN nothing is kept back: say so where the section is chosen, with the way to add one. */}
+              {!company?.tan && (draft.tdsSection ?? parties.find((p) => p.id === draft.partyId)?.tdsSection ?? 'none') !== 'none' ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm, flexWrap: 'wrap' }}>
+                  <Text variant="caption" tone="warn" style={{ flex: 1, minWidth: 180 }}>
+                    {tr('purchases:tds.needsTan')}
+                  </Text>
+                  <Button title={tr('purchases:tds.addTan')} variant="ghost" size="sm" icon="office-building-cog-outline" onPress={() => router.push('/(app)/settings/company')} />
+                </View>
+              ) : null}
             </View>
-          ) : null}
-        </View>
-        </FieldRow>
-      ) : null}
-
-      {saleTds ? (
-        <View style={desktop ? { flexDirection: 'row', alignItems: 'flex-start', gap: t.spacing.lg } : { gap: t.spacing.xs }}>
-          <PickerField
-            containerStyle={desktop ? { flex: 1 } : undefined}
-            label={tr('sales:tds.section')}
-            value={tdsSectionLabel(saleSection)}
-            onPress={() => setTdsOpen(true)}
-            icon="bank-plus"
-            hint={expectedTds ? tr('sales:tds.willDeduct', { amount: formatMoney(expectedTds.amount), net: formatMoney(subtract(totals.grandTotal, expectedTds.amount)) }) : tr('sales:tds.hint')}
-          />
-          {saleSection && saleSection !== 'none' ? (
+          ) : null,
+          saleTds ? (
+            <PickerField
+              label={tr('sales:tds.section')}
+              value={tdsSectionLabel(saleSection)}
+              onPress={() => setTdsOpen(true)}
+              icon="bank-plus"
+              hint={expectedTds ? tr('sales:tds.willDeduct', { amount: formatMoney(expectedTds.amount), net: formatMoney(subtract(totals.grandTotal, expectedTds.amount)) }) : tr('sales:tds.hint')}
+            />
+          ) : null,
+          saleTds && saleSection && saleSection !== 'none' ? (
             <TextField
               label={tr('sales:tds.rate')}
               value={draft.tdsRate !== undefined ? String(draft.tdsRate) : ''}
@@ -1286,35 +1299,28 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
               keyboardType="decimal-pad"
               icon="percent-outline"
               hint={tr('sales:tds.rateHint')}
-              containerStyle={desktop ? { flex: 1 } : undefined}
             />
-          ) : desktop ? (
-            // Holds the rate's half of the row, so the section alone isn't the full width.
-            <View style={{ flex: 1 }} />
-          ) : null}
-        </View>
-      ) : null}
-
-      {kind === 'invoice' ? (
-        <FieldRow>
-        <PickerField
-          label={tr('sales:tcs.section')}
-          value={draft.tcsSection && draft.tcsSection !== 'none' ? `${tcsSection(draft.tcsSection)?.label ?? draft.tcsSection} · ${tcsSection(draft.tcsSection)?.nature ?? ''}` : tr('sales:tcs.none')}
-          onPress={() => setTcsOpen(true)}
-          icon="cash-plus"
-          hint={totals.tcs ? tr('sales:tcs.willCollect', { amount: formatMoney(totals.tcs) }) : tr('sales:tcs.hint')}
-        />
-        </FieldRow>
-      ) : null}
+          ) : null,
+          kind === 'invoice' ? (
+            <PickerField
+              label={tr('sales:tcs.section')}
+              value={draft.tcsSection && draft.tcsSection !== 'none' ? `${tcsSection(draft.tcsSection)?.label ?? draft.tcsSection} · ${tcsSection(draft.tcsSection)?.nature ?? ''}` : tr('sales:tcs.none')}
+              onPress={() => setTcsOpen(true)}
+              icon="cash-plus"
+              hint={totals.tcs ? tr('sales:tcs.willCollect', { amount: formatMoney(totals.tcs) }) : tr('sales:tcs.hint')}
+            />
+          ) : null,
+        ]}
+      />
 
       {desktop ? (
-        // Two short pickers share a row; the row is left out when neither shows.
-        hasCostCentres || hasVehicles || draft.costCentreId || draft.vehicleId ? (
-          <FieldRow columns={2}>
-            <CostCentreField value={draft.costCentreId} onChange={(costCentreId) => patch({ costCentreId })} />
-            {VEHICLE_KINDS.includes(kind) ? <VehicleField value={draft.vehicleId} onChange={(vehicleId) => patch({ vehicleId })} /> : null}
-          </FieldRow>
-        ) : null
+        // Each only when it shows: the fields hide themselves when the business has none.
+        <FieldGrid
+          items={[
+            hasCostCentres || draft.costCentreId ? <CostCentreField value={draft.costCentreId} onChange={(costCentreId) => patch({ costCentreId })} /> : null,
+            VEHICLE_KINDS.includes(kind) && (hasVehicles || draft.vehicleId) ? <VehicleField value={draft.vehicleId} onChange={(vehicleId) => patch({ vehicleId })} /> : null,
+          ]}
+        />
       ) : (
         <>
           <CostCentreField value={draft.costCentreId} onChange={(costCentreId) => patch({ costCentreId })} />
