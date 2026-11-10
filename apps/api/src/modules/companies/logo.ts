@@ -1,7 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 import { schema } from '@esmart/db';
-import { defineHandlers, type Ctx, type Deps } from '../../context';
-import { ApiError, invalid, preconditionFailed } from '../../http/errors';
+import { defineHandlers, RawBody, type Ctx, type Deps } from '../../context';
+import { ApiError, invalid, notFound, preconditionFailed } from '../../http/errors';
 import { recordChange, type DbOrTx } from '../../lib/audit';
 import { sha256 } from '../../lib/crypto';
 import { newId } from '../../lib/ids';
@@ -198,6 +198,15 @@ function removeImage(slot: Slot) {
 
 /** Company images: the logo, and the authorised signatory's signature. */
 export const companyImageHandlers = defineHandlers({
+  // Through the API, which the app always reaches: no expiring storage link, and no storage origin the page must allow.
+  async getCompanyLogo(ctx) {
+    const logo = await logoAttachmentOf(ctx.db, ctx.company);
+    const bytes = logo ? await ctx.deps.providers.storage.get(logo.key).catch(() => null) : null;
+    if (!logo || !bytes) throw notFound('Logo');
+    // A new logo is a new attachment (and a new link to it), so the bytes behind this one never change.
+    ctx.reply.header('cache-control', 'private, max-age=3600');
+    return new RawBody(bytes, logo.mime);
+  },
   uploadCompanyLogo: (ctx) => uploadImage('logo')(ctx),
   removeCompanyLogo: (ctx) => removeImage('logo')(ctx),
   uploadCompanySignature: (ctx) => uploadImage('signature')(ctx),

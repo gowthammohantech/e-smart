@@ -53,6 +53,7 @@ export function TotalsPanel({
   compact,
   tds,
   itc,
+  cess,
 }: {
   totals: DocumentTotals;
   /**
@@ -62,6 +63,8 @@ export function TotalsPanel({
   tds?: { label: string; amount: Money; netLabel?: string };
   /** On a purchase: the input tax credit by bucket (eligible, capital goods, reverse charge, blocked, ineligible). */
   itc?: { title: string; rows: { label: string; amount: Money; tone?: 'muted' | 'bad' }[] };
+  /** The cess item by item ("Cess 12% on ₹1,000.00" under each item's name); adds up to the cess lines above. */
+  cess?: { title: string; rows: { key: string; label: string; detail: string; amount: Money }[] };
   currency: string;
   baseCurrency?: string;
   exchangeRate?: number;
@@ -127,6 +130,29 @@ export function TotalsPanel({
           </Text>
           {itc.rows.map((r) => (
             <Row key={r.label} label={r.label} value={formatMoney(r.amount)} tone={r.tone} />
+          ))}
+        </View>
+      ) : null}
+
+      {cess && cess.rows.length ? (
+        <View style={{ gap: 6, marginTop: 4 }}>
+          <Text variant="micro" tone="muted" weight="600">
+            {cess.title}
+          </Text>
+          {cess.rows.map((r) => (
+            <View key={r.key} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+              <View style={{ flexShrink: 1 }}>
+                <Text variant="small" numberOfLines={1}>
+                  {r.label}
+                </Text>
+                <Text variant="micro" tone="muted">
+                  {r.detail}
+                </Text>
+              </View>
+              <Text variant="small" weight="500" style={{ fontVariant: ['tabular-nums'] }}>
+                {formatMoney(r.amount)}
+              </Text>
+            </View>
           ))}
         </View>
       ) : null}

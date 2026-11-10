@@ -866,6 +866,12 @@ export type PaymentAccount = {
   type: 'cash' | 'bank' | 'wallet';
   currency: string;
   accountNumber?: string;
+  /** What a customer needs to pay into it; printed on invoices when it is the company's invoice account. */
+  accountHolderName?: string;
+  bankName?: string;
+  branchName?: string;
+  ifsc?: string;
+  upiId?: string;
   openingBalance: Money;
   /** The day the opening balance was counted (ISO date, not after today). */
   openingBalanceDate?: string;

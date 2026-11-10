@@ -80,6 +80,7 @@ import { useLeaveGuard } from '../../components/useLeaveGuard';
 import { FROM_DOCUMENT, takeHandBack } from '../../navigation/handBack';
 import { tdsForDocument } from '../../store/tds';
 import { useItcBreakup } from './itcBreakup';
+import { useCessRows } from './cessRows';
 import { expectedSaleTds } from '@esmart/core/domain/tds';
 import { panOfGstin } from '@esmart/core/domain/gstin';
 import { CostCentreField } from '../books/CostCentreField';
@@ -389,6 +390,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       ? { label: tr('sales:tds.expectedLabel', { section: tdsSection(expectedTds.section)?.label ?? expectedTds.section, rate: formatPercent(expectedTds.rate) }), amount: expectedTds.amount, netLabel: tr('sales:tds.netReceivable') }
       : undefined;
   const itcBreakup = useItcBreakup({ kind, lines: draft.lines, totals, currency: draft.currency, exchangeRate: draft.exchangeRate, reverseCharge: draft.reverseCharge }, company?.baseCurrency ?? draft.currency);
+  // The cess item by item, under the totals, when anything on it carries cess.
+  const cessRows = useCessRows(draft.lines, totals, draft.currency, draft.reverseCharge);
   const tdsSectionLabel = (code: string | undefined) => (!code || code === 'none' ? tr('purchases:tds.none') : `${tdsSection(code)?.label ?? code} · ${tdsSection(code)?.nature ?? ''}`);
 
   const [step, setStep] = useState(seed?.step ?? 0);
@@ -1238,6 +1241,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
             compact
             tds={tdsRow}
             itc={itcBreakup}
+            cess={cessRows}
           />
         </Card>
       ) : null}
@@ -1488,6 +1492,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
             compact
             tds={tdsRow}
             itc={itcBreakup}
+            cess={cessRows}
           />
         </Card>
       )}
@@ -1539,6 +1544,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           exchangeRate={draft.exchangeRate}
           tds={tdsRow}
           itc={itcBreakup}
+          cess={cessRows}
         />
       </Card>
 

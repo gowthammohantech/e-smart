@@ -5,6 +5,23 @@ import { addressTo, compact, requiredAddressFrom, versioned } from '../../lib/wi
 
 type CompanyRow = typeof schema.companies.$inferSelect;
 type BranchRow = typeof schema.branches.$inferSelect;
+type AccountRow = typeof schema.paymentAccounts.$inferSelect;
+
+/**
+ * The company's bank columns as the bank account its invoices are linked to has them: a copy, so every
+ * renderer keeps reading `bankDetails`.
+ */
+export function invoiceBankColumns(account: AccountRow) {
+  const text = (v?: string | null) => v?.trim() || null;
+  return {
+    bankName: text(account?.bankName),
+    bankAccountName: text(account?.accountHolderName),
+    bankAccountNumber: text(account?.accountNumber)?.replace(/\s+/g, '').toUpperCase().slice(0, 34) ?? null,
+    bankIfsc: text(account?.ifsc)?.toUpperCase() ?? null,
+    bankBranch: text(account?.branchName),
+    upiId: text(account?.upiId)?.toLowerCase() ?? null,
+  };
+}
 
 /** The bank account on a company row, or undefined when none of it is filled in. */
 export function bankDetailsOf(row: CompanyRow): Schema<'BankDetails'> | undefined {

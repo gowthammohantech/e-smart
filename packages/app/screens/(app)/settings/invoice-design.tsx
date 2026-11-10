@@ -30,6 +30,7 @@ import { useAppStore } from '../../../store/appStore';
 import { useActiveCompany, useBranches } from '../../../store/selectors';
 import { useDocumentPages, useDocumentRecord } from '../../../remote/queries';
 import { useSaveShortcut } from '../../../components/useSaveShortcut';
+import { useLogoSrc } from '../../../remote/logoSrc';
 
 /** Colours that print well on white and read on a phone. */
 const ACCENTS = [
@@ -94,12 +95,14 @@ function InvoiceDesignScreenBody() {
   const resolved = resolveTemplate(tpl);
   const layout = resolved.layout;
 
+  const logoSrc = useLogoSrc(company);
   const html = useMemo(
     () =>
       latest
         ? buildDocumentHtml({
             document: latest,
             company,
+            logoSrc,
             party,
             branch: branches.find((b) => b.id === latest.branchId),
             template: tpl,
@@ -109,7 +112,7 @@ function InvoiceDesignScreenBody() {
             language: i18n.language === 'ta' ? 'ta' : 'en',
           })
         : '',
-    [latest, company, party, branches, tpl, tr, i18n.language],
+    [latest, company, logoSrc, party, branches, tpl, tr, i18n.language],
   );
 
   const pickLayout = (l: InvoiceLayout) => set({ layout: l });
