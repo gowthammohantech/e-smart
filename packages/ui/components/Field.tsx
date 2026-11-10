@@ -16,6 +16,7 @@ import {
 import { Icon, type IconName } from './Icon';
 import { type Theme, useTheme } from '../theme/ThemeProvider';
 import { useIsDesktop } from '../theme/breakpoints';
+import { notePickerOpener } from './pickers/pickerOpener';
 import { focusRing, type WebPressState } from '../theme/interaction';
 import { Text } from './Text';
 import { currencyMeta, currencySymbol } from '@esmart/core/lib/currencies';
@@ -503,13 +504,22 @@ export function PickerField({
   const a11y = useFieldA11y({ error, hint, required });
   // aria-required isn't allowed on a button, so a required picker says so in its label.
   const pickerLabel = `${label ?? tr('common:component.select')}${required ? `, ${tr('common:component.required')}` : ''}: ${value ?? placeholder}`;
+  // A desktop notes where the field is as it opens its list, so a short list can drop down under it.
+  const [node, setNode] = useState<View | null>(null);
+  const press = () => {
+    const el = desktop && WEB ? (node as unknown as HTMLElement | null) : null;
+    const box = el?.getBoundingClientRect?.();
+    if (box) notePickerOpener({ x: box.left, y: box.top, width: box.width, height: box.height, element: el });
+    onPress();
+  };
   return (
     <FieldShell label={label} error={error} hint={hint} required={required} style={containerStyle} messageId={a11y.messageId}>
       {/* The clear button sits beside the field's button, not inside it: on
           web each is a <button>, and a button can't contain another. */}
       <View>
       <Pressable
-        onPress={onPress}
+        ref={setNode}
+        onPress={press}
         disabled={disabled}
         accessibilityRole="button"
         accessibilityState={{ disabled: !!disabled }}

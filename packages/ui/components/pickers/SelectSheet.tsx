@@ -11,6 +11,8 @@ import { Button } from '../Button';
 import { useToast } from '../Toast';
 import { useKeepScrollWhileOpen } from '../ScrollKeep';
 import { DIALOG_WIDTH, useIsDesktop } from '../../theme/breakpoints';
+import { Menu, MenuItem } from '../Menu';
+import { claimPickerOpener, clearPickerOpener, usePickerOpener } from './pickerOpener';
 import type { WebPressState } from '../../theme/interaction';
 
 export type SelectOption = {
@@ -35,6 +37,14 @@ function ToastCapture({ intoRef }: { intoRef: React.MutableRefObject<ReturnType<
     intoRef.current = toast;
   }, [intoRef, toast]);
   return null;
+}
+
+/** The most options a desktop shows as a dropdown under its field; more get the searchable drawer. */
+const DROPDOWN_MAX_OPTIONS = 12;
+
+/** A creatable list always needs the search box — it is where the new value is typed. */
+function showSearchFor(count: number, searchable: boolean, creatable: boolean, remote: boolean) {
+  return searchable && (count > 6 || creatable || remote);
 }
 
 /**
@@ -104,8 +114,33 @@ export function SelectSheet({
     onClose();
   };
 
-  // A creatable list always needs the search box — it is where the new value is typed.
-  const showSearch = searchable && (options.length > 6 || !!onCreate || !!onQueryChange);
+  // A desktop drops a short, plain list down under the field it was opened from, as a web select
+  // does, rather than opening a dialog: up to a dozen options, which a select shows without a
+  // search box. Anything longer, typed into, ticked, with a footer or with rows to explain keeps
+  // the sheet. Opened from somewhere other than a picker field, there is nothing to hang from.
+  const opener = usePickerOpener();
+  const dropdown =
+    desktop &&
+    visible &&
+    !!opener &&
+    options.length <= DROPDOWN_MAX_OPTIONS &&
+    !onCreate &&
+    !onQueryChange &&
+    !multiple &&
+    !footer &&
+    options.every((o) => !o.disabled && !o.blocked);
+  useEffect(() => {
+    if (dropdown) claimPickerOpener();
+  }, [dropdown]);
+  const closeDropdown = () => {
+    const field = opener?.element;
+    clearPickerOpener();
+    close();
+    // Back to the field, so the keyboard carries on from there.
+    field?.focus?.();
+  };
+
+  const showSearch = showSearchFor(options.length, searchable, !!onCreate, !!onQueryChange);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -143,6 +178,47 @@ export function SelectSheet({
       </Text>
     </Pressable>
   ) : null;
+
+  if (dropdown && opener) {
+    return (
+      <Menu anchor={opener} onClose={closeDropdown} width={Math.min(Math.max(opener.width, 220), DIALOG_WIDTH.sm)} maxHeight={360}>
+        {subtitle ? (
+          <Text variant="caption" tone="muted" style={{ paddingHorizontal: t.spacing.lg, paddingVertical: t.spacing.xs }}>
+            {subtitle}
+          </Text>
+        ) : null}
+        {options.length === 0 && loading ? (
+          <ActivityIndicator color={t.c.muted} style={{ padding: t.spacing.md }} />
+        ) : options.length === 0 ? (
+          <Text variant="small" tone="muted" style={{ paddingHorizontal: t.spacing.lg, paddingVertical: t.spacing.sm }}>
+            {emptyMessage ?? tr('common:component.noMatches')}
+          </Text>
+        ) : (
+          options.map((o) => (
+            <MenuItem
+              key={o.value}
+              icon={o.icon}
+              leading={o.leading}
+              label={o.label}
+              description={o.description}
+              selected={o.value === value}
+              trailing={
+                o.trailing ? (
+                  <Text variant="caption" tone="muted">
+                    {o.trailing}
+                  </Text>
+                ) : undefined
+              }
+              onPress={() => {
+                onSelect?.(o.value);
+                closeDropdown();
+              }}
+            />
+          ))
+        )}
+      </Menu>
+    );
+  }
 
   return (
     <Sheet

@@ -21,6 +21,7 @@ import { useTheme } from '../theme/ThemeProvider';
 import { DRAWER_WIDTH, FORM_MAX_WIDTH, useIsDesktop } from '../theme/breakpoints';
 import { Text } from './Text';
 import { ToastProvider } from './Toast';
+import { clearPickerOpener } from './pickers/pickerOpener';
 
 type Props = {
   visible: boolean;
@@ -102,7 +103,11 @@ export function Sheet({
       enter.start();
       // A second run while this one is still going (the sheet re-rendered as it opened) must stop
       // this one first: stopping it later stops the shared values, freezing the new run mid-slide.
-      return () => enter.stop();
+      return () => {
+        enter.stop();
+        // Closed: the picker field it was opened from is done with (see pickerOpener).
+        clearPickerOpener();
+      };
     } else {
       translate.setValue(700);
       fade.setValue(0);
