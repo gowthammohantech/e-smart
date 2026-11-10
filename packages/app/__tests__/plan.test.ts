@@ -1,4 +1,4 @@
-import { canOpen, hasModule, moduleForPath, moduleSetFor } from '@esmart/core/domain/plan';
+import { approvalKindAvailable, canOpen, hasModule, moduleForPath, moduleSetFor } from '@esmart/core/domain/plan';
 import { nextStepRoute, onboardingSteps } from '../store/onboardingStore';
 
 // Hoisted above the imports by Jest, so the store gets the mock.
@@ -8,6 +8,19 @@ jest.mock('@react-native-async-storage/async-storage', () =>
 );
 
 describe('plan tiers', () => {
+  it('offers approval rules only for kinds whose module is on', () => {
+    for (const kind of ['purchaseOrder', 'purchaseBill', 'supplierDebitNote', 'payment']) {
+      expect(approvalKindAvailable('basic', [], kind)).toBe(false);
+      expect(approvalKindAvailable('free', [], kind)).toBe(false);
+      expect(approvalKindAvailable('pro', [], kind)).toBe(true);
+    }
+    expect(approvalKindAvailable('basic', [], 'invoice')).toBe(true);
+    expect(approvalKindAvailable('pro', ['purchases'], 'purchaseBill')).toBe(false);
+    // Payments made are the payables side, which goes off with purchases.
+    expect(approvalKindAvailable('pro', ['purchases'], 'payment')).toBe(false);
+    expect(approvalKindAvailable('pro', ['payables'], 'purchaseBill')).toBe(true);
+  });
+
   it('gives Free and Basic the sales set, Pro and Business the full one', () => {
     expect(moduleSetFor('free')).toBe('sales');
     expect(moduleSetFor('basic')).toBe('sales');

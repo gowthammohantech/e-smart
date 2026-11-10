@@ -72,7 +72,6 @@ export default function LixiChat({ onClose, initialAsk }: LixiChatProps = {}) {
   /** Only a browser shows the composer focused; the phone keeps its look. */
   const [composerFocused, setComposerFocused] = useState(false);
   const [thinking, setThinking] = useState(false);
-  const [pending, setPending] = useState<Extract<LixiAction, { type: 'route' }> | null>(null);
   // A write the server's Lixi prepared; nothing happens until it is confirmed.
   const [action, setAction] = useState<PendingLixiAction | null>(null);
   const scroll = useRef<ScrollView>(null);
@@ -101,7 +100,6 @@ export default function LixiChat({ onClose, initialAsk }: LixiChatProps = {}) {
     chat.current += 1;
     setMessages([]);
     setAction(null);
-    setPending(null);
   };
 
   /** Another go at a question, unless asking again can't help (the month's allowance is used, or asking too fast). */
@@ -173,8 +171,6 @@ export default function LixiChat({ onClose, initialAsk }: LixiChatProps = {}) {
 
   const act = (a: LixiAction) => {
     if (a.type === 'ask') return send(a.question ?? a.label);
-    // Opening a form that could write to the books is confirmed first.
-    if (a.type === 'route' && a.confirm) return setPending(a);
     router.push((a.type === 'document' ? detailRouteFor(a.kind, a.id) : a.route) as never);
   };
 
@@ -412,18 +408,6 @@ export default function LixiChat({ onClose, initialAsk }: LixiChatProps = {}) {
         </Pressable>
       </View>
 
-      <ConfirmDialog
-        visible={!!pending}
-        title={pending?.confirm ?? ''}
-        message={tr('lixi:ui.openOnlyNote')}
-        confirmLabel={tr('lixi:ui.open')}
-        onCancel={() => setPending(null)}
-        onConfirm={() => {
-          const route = pending?.route;
-          setPending(null);
-          if (route) router.push(route as never);
-        }}
-      />
       <ConfirmDialog
         visible={!!action}
         title={action?.summary ?? ''}

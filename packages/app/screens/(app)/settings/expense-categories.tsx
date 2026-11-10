@@ -176,8 +176,9 @@ export default function ExpenseCategorySettings() {
               }}
             saving={saving}
                         deleteLabel={tr('settings:categories.delete')}
+            // A category with expenses filed under it is refused by the server: not offered.
             onDelete={
-              editing?.id
+              editing?.id && !totals[editing.id]?.count
                 ? () => {
                   const c = editing;
                   setEditing(null);

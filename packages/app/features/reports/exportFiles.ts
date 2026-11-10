@@ -41,3 +41,8 @@ export async function deliverPdf(fileName: string, html: string): Promise<void> 
   file.write(base64, { encoding: 'base64' });
   await Sharing.shareAsync(file.uri, { mimeType: 'application/pdf', dialogTitle: fileName, UTI: 'com.adobe.pdf' });
 }
+
+/** Whether a failed export was the person backing out (an aborted share), not a failure. */
+export function isUserCancel(err: unknown): boolean {
+  return typeof err === 'object' && err !== null && (err as { name?: unknown }).name === 'AbortError';
+}

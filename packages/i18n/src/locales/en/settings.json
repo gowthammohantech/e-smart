@@ -129,18 +129,20 @@
     "openingBalanceDateHint": "The day this balance was counted. It can’t be a future date.",
     "useDefault": "Use as default",
     "useDefaultHint": "Pre-selected when recording payments and expenses.",
-    "deleteMessage": "Payments already recorded against it keep their reference. This cannot be undone.",
+    "deleteMessage": "Only an account with no payments, expenses, bank statements, vouchers or opening balance can be deleted, and not the one your invoices print. This cannot be undone.",
     "deleted": "Account deleted",
     "cashAndBank": "Cash and bank balance",
     "cashCaption": "Opening balances plus everything recorded since",
     "typeBank": "Bank",
     "typeCash": "Cash",
     "typeWallet": "Wallet",
-    "inUse": "This account has payments or expenses, so its type can’t change and it can’t be deleted.",
+    "inUse": "This account has payments or expenses, so its type and currency can’t change and it can’t be deleted.",
     "updated": "Account updated",
     "added": "Account added",
     "editTitle": "Edit account",
     "deleteTitle": "Delete {{name}}?",
+    "currency": "Currency",
+    "currencyHint": "The opening balance is in this currency and is converted at the rate on file for its date (Currencies & rates).",
     "openingOnDate": "Balance as on a date",
     "openingOnDateHint": "Off: the balance stands at the start of the books. On: it stands on the day you pick.",
     "balance": "Balance"
@@ -159,7 +161,7 @@
     "phone": "Phone",
     "primaryBranch": "Primary branch",
     "primaryHint": "Used as the default on new documents.",
-    "deleteMessage": "Documents already recorded against this branch keep their reference. This cannot be undone.",
+    "deleteMessage": "Only a branch with no documents, payments, expenses, stock or users limited to it can be deleted. This cannot be undone.",
     "deleted": "Branch deleted",
     "gstin": "GSTIN",
     "gstinHint": "Leave blank if this branch uses the company GSTIN.",
@@ -417,7 +419,7 @@
     "save": "Save",
     "name": "Category name",
     "namePlaceholder": "e.g. Fuel",
-    "deleteMessage": "Expenses already in this category keep their reference but will show as uncategorised.",
+    "deleteMessage": "Only a category no expense, journal or budget uses can be deleted. This cannot be undone.",
     "saved": "Category saved",
     "deleted": "Category deleted",
     "entries_one": "{{count}} entry",
@@ -480,9 +482,9 @@
     "mode": {
       "systemHint": "Follows your phone’s light or dark setting.",
       "dark": "Dark",
-      "darkHint": "The default look, easy on the eyes indoors.",
+      "darkHint": "Easy on the eyes indoors and at night.",
       "light": "Light",
-      "lightHint": "Higher contrast in bright sunlight."
+      "lightHint": "The default look, with higher contrast in bright sunlight."
     }
   },
   "integrations": {

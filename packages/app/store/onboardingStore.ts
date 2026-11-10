@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Address, PlanTier } from '@esmart/core/types';
+import { Address, NumberingSeries, PlanTier } from '@esmart/core/types';
 import { today } from '@esmart/core/lib/date';
 import { DEFAULT_DIAL_CODE } from '@esmart/core/lib/phone';
 
@@ -133,6 +133,18 @@ export function nextStepRoute(key: OnboardingStepKey, plan: PlanTier) {
   const steps = onboardingSteps(plan);
   const next = steps[steps.indexOf(key) + 1];
   return (next ? `/(onboarding)/${next}` : '/(onboarding)/done') as `/(onboarding)/${OnboardingStepKey | 'done'}`;
+}
+
+/**
+ * The numbering choices of onboarding applied to the series made at setup: the invoice series
+ * takes the prefix and start number, and every series takes the format (financial year on or
+ * off), keeping its own prefix. Returns only the series that change.
+ */
+export function onboardingSeries(series: NumberingSeries[], draft: Pick<OnboardingDraft, 'invoicePrefix' | 'invoiceNextNumber' | 'includeFiscalYear'>): NumberingSeries[] {
+  return series.flatMap((s) => {
+    if (s.kind === 'invoice') return [{ ...s, prefix: draft.invoicePrefix || 'INV', nextNumber: Number(draft.invoiceNextNumber) || 1, includeFiscalYear: draft.includeFiscalYear }];
+    return s.includeFiscalYear === draft.includeFiscalYear ? [] : [{ ...s, includeFiscalYear: draft.includeFiscalYear }];
+  });
 }
 
 export { today };

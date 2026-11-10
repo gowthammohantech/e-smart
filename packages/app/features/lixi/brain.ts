@@ -13,8 +13,8 @@ import type { LanguageCode } from '@esmart/i18n/config';
  * questions). Every answer comes from the server's model (remote.ts), which
  * reads the books through the API; there is no on-device fallback.
  *
- * Lixi never writes to the books. Anything that opens a form which would,
- * carries a `confirm` prompt the chat asks before navigating.
+ * Lixi never writes to the books on its own: a write comes back as a pending action the user
+ * confirms (remote.ts); a route action only opens a screen.
  */
 
 export type LixiContext = {
@@ -56,7 +56,7 @@ export const liveDeps = (): LixiDeps => ({ t: i18n.t, lang: (i18n.language as La
 export type LixiStat = { label: string; value: string; tone?: 'good' | 'warn' | 'bad' };
 
 export type LixiAction =
-  | { type: 'route'; label: string; route: string; icon?: string; confirm?: string }
+  | { type: 'route'; label: string; route: string; icon?: string }
   | { type: 'document'; label: string; kind: DocumentKind; id: string }
   | { type: 'ask'; label: string; question?: string };
 

@@ -265,6 +265,7 @@
     "asset": "Fixed asset"
   },
   "costCentres": {
+    "save": "Save cost centre",
     "add": "Add cost centre",
     "edit": "Edit cost centre",
     "saved": "Cost centre saved",

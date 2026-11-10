@@ -12,11 +12,12 @@ import { Text } from '@esmart/ui/components/Text';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { documentKindLabel } from '@esmart/core/labels';
 import { fromMajor, toMajor } from '@esmart/core/lib/money';
+import { approvalKindAvailable } from '@esmart/core/domain/plan';
 import type { DocumentKind } from '@esmart/core/types';
 import { CardGrid } from '../../../features/settings/CardGrid';
 import { useServerSave } from '../../../components/useServerSave';
 import { useAppStore } from '../../../store/appStore';
-import { useActiveCompany, useBaseCurrency, useCurrentUser } from '../../../store/selectors';
+import { useActiveCompany, useBaseCurrency, useCurrentUser, useDisabledModules, usePlan } from '../../../store/selectors';
 
 /** The kinds worth holding for approval: what commits the business to money. */
 const KINDS: (DocumentKind | 'payment')[] = ['invoice', 'creditNote', 'purchaseOrder', 'purchaseBill', 'supplierDebitNote', 'salesOrder', 'quote', 'proforma', 'payment'];
@@ -34,6 +35,11 @@ function ApprovalRulesScreenBody() {
   const { t: tr } = useTranslation(['settings', 'domain']);
   const company = useActiveCompany();
   const currency = useBaseCurrency();
+  const plan = usePlan();
+  const disabledModules = useDisabledModules();
+  // Only what the plan has and the owner hasn't switched off: no purchase documents or payments made
+  // on the sales plans. A rule kept from when a module was on is saved back as it is, hidden.
+  const kinds = KINDS.filter((k) => approvalKindAvailable(plan, disabledModules, k));
   const owner = useCurrentUser()?.role === 'owner';
   const saveCompany = useAppStore((s) => s.saveCompany);
   const { run: serverSave, saving } = useServerSave();
@@ -77,7 +83,7 @@ function ApprovalRulesScreenBody() {
         {desktop ? (
           // A tile per document kind across the page, so each switch and amount sits near its label.
           <CardGrid per="auto">
-            {KINDS.map((k) => (
+            {kinds.map((k) => (
               <Card key={k} style={{ flex: 1, gap: t.spacing.sm }}>
                 {rule(k)}
               </Card>
@@ -85,7 +91,7 @@ function ApprovalRulesScreenBody() {
           </CardGrid>
         ) : (
           <Card style={{ gap: t.spacing.md }}>
-            {KINDS.map((k) => (
+            {kinds.map((k) => (
               <View key={k} style={{ gap: t.spacing.sm }}>
                 {rule(k)}
               </View>

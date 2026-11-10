@@ -76,7 +76,6 @@
     "clearFilters": "வடிகட்டிகளை நீக்கு",
     "statusSection": "நிலை",
     "loadMore": "மேலும் ஏற்று",
-    "waiting": "ஒத்திசைக்கக் காத்திருக்கிறது",
     "tileCount_one": "{{count}} ஆவணம்",
     "tileCount_other": "{{count}} ஆவணங்கள்",
     "searchShort": "{{kind}} தேடு",
@@ -92,6 +91,7 @@
   },
   "documentEditor": {
     "finalised": "{{kind}} இறுதி செய்யப்பட்டது",
+    "sentForApproval": "ஒப்புதலுக்கு அனுப்பப்பட்டது. உரிமையாளர் அல்லது நிர்வாகி ஒப்புதல் அளிக்கும் வரை {{kind}} வரைவாகவே இருக்கும்.",
     "savedDraft": "வரைவாகச் சேமிக்கப்பட்டது",
     "dateLabel": "{{kind}} தேதி",
     "numberLabel": "{{kind}} எண்",

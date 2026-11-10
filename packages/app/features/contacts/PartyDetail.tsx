@@ -403,7 +403,11 @@ export function PartyDetail({ party }: { party: Party }) {
             : []),
         ]
       : [{ label: tr('nav:title.newPurchaseBill'), icon: 'cart-outline' as const, onPress: () => router.push(`/(app)/purchases/bills/new?partyId=${party.id}`) }]),
-    { label: tr('contacts:detail.deleteContact'), icon: 'trash-can-outline' as const, destructive: true, onPress: () => setConfirmDelete(true) },
+    // The server refuses a contact with documents, payments or an opening balance; when this screen already
+    // sees one, delete isn't offered. Anything it can't see (expenses, journals) comes back as the server's reason.
+    ...(billCount > 0 || partyPayments.length > 0 || (party.openingBalance?.minor ?? 0) !== 0
+      ? []
+      : [{ label: tr('contacts:detail.deleteContact'), icon: 'trash-can-outline' as const, destructive: true, onPress: () => setConfirmDelete(true) }]),
   ];
 
   return (

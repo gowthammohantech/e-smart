@@ -16,7 +16,7 @@ import { setLocalLogo, uploadLogo } from '../../remote/logo';
 import { saveOnline } from '../../remote/save';
 import { api } from '../../remote/api';
 import { describeError } from '../../remote/errors';
-import { useOnboardingStore } from '../../store/onboardingStore';
+import { onboardingSeries, useOnboardingStore } from '../../store/onboardingStore';
 import { COUNTRIES } from '@esmart/core/data/masters';
 import { joinPhone } from '@esmart/core/lib/phone';
 
@@ -93,18 +93,9 @@ export default function Done() {
         },
       });
 
-      // Apply the numbering choices to the newly created invoice series.
-      const series = useAppStore
-        .getState()
-        .numberingSeries.find((s) => s.companyId === companyId && s.kind === 'invoice');
-      if (series) {
-        saveNumberingSeries({
-          ...series,
-          prefix: draft.invoicePrefix || 'INV',
-          nextNumber: Number(draft.invoiceNextNumber) || 1,
-          includeFiscalYear: draft.includeFiscalYear,
-        });
-      }
+      // The numbering choices go to every series made at setup (see onboardingSeries).
+      const made = useAppStore.getState().numberingSeries.filter((s) => s.companyId === companyId);
+      for (const s of onboardingSeries(made, draft)) saveNumberingSeries(s);
       return companyId;
     });
     void numberingSeries;

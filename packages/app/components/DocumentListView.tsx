@@ -308,7 +308,7 @@ export function DocumentListView({
         width: 170,
         render: (d) => (
           <View style={{ gap: 2, maxWidth: '100%' }}>
-            <Cell weight="600">{d.status === 'draft' && d.number.endsWith('-DRAFT') ? tr('common:documentList.draftNumber') : d.number || tr('common:documentList.waiting')}</Cell>
+            <Cell weight="600">{!d.number || (d.status === 'draft' && d.number.endsWith('-DRAFT')) ? tr('common:documentList.draftNumber') : d.number}</Cell>
             {/* A bill is looked up by the supplier's own number as often as by ours. */}
             {d.supplierDocNumber ? <Cell tone="muted">{tr('sales:detail.theirNumber', { number: d.supplierDocNumber })}</Cell> : null}
           </View>

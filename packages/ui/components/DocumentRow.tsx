@@ -31,8 +31,8 @@ export function DocumentRow({
 }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['common']);
-  // A draft's placeholder number (INVOICE-DRAFT) reads as "Draft".
-  const number = document.status === 'draft' && document.number.endsWith('-DRAFT') ? tr('common:documentList.draftNumber') : document.number;
+  // A draft's placeholder number (INVOICE-DRAFT), or none at all, reads as "Draft".
+  const number = !document.number || (document.status === 'draft' && document.number.endsWith('-DRAFT')) ? tr('common:documentList.draftNumber') : document.number;
 
   return (
     <Pressable

@@ -26,7 +26,7 @@ import { useSingleFlight } from '../../components/useSingleFlight';
 
 import { BusinessDocument, DocStatus, DocumentKind } from '@esmart/core/types';
 import { tdsSection } from '@esmart/core/data/tdsSections';
-import { NOTE_SOURCE, RECEIVABLE_KINDS, STATUS_TONE, canTransition, conversionBlock, isFinalized, isPayableDocument, nextStatuses } from '@esmart/core/domain/documentStates';
+import { NOTE_SOURCE, RECEIVABLE_KINDS, STATUS_TONE, canCancelDocument, conversionBlock, isAwaitingApproval, isFinalized, isPayableDocument, nextStatuses } from '@esmart/core/domain/documentStates';
 import { documentKindLabel, paymentMethodLabel, statusLabel } from '@esmart/core/labels';
 import { outstandingOf } from '@esmart/core/domain/receivables';
 import { OUTBOUND_KINDS, shortfallsAgainst } from '@esmart/core/domain/stockLedger';
@@ -232,7 +232,6 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
             icon: 'file-pdf-box',
           },
         );
-        if ((doc.kind === 'quote' || doc.kind === 'proforma') && doc.status === 'draft') setDocumentStatus(doc.id, 'sent');
       } catch {
         // The toast has said what went wrong.
       } finally {
@@ -281,7 +280,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
     const owing = isPayable && doc.kind === 'invoice' && outstanding.minor > 0;
     const [links, pay] = await Promise.all([
       shareLinks(doc.companyId, doc.id),
-      // No gateway on this server: the email goes without a pay link.
+      // No page to pay on (no gateway on this server): the server refuses, and the email goes without a pay link.
       owing ? paymentLink(doc.companyId, doc.id).catch(() => undefined) : undefined,
     ]);
     const business = company?.name ?? '';
@@ -448,9 +447,18 @@ ${url}`;
 
   // Over the customer's credit limit the server refuses an invoice; the person may accept that and issue it anyway.
   const [creditRefusal, setCreditRefusal] = useState<{ status: DocStatus; message: string; reason: string } | null>(null);
+  // Over an approval rule's amount the server keeps a finalised draft for an owner or admin: say that, not "finalised".
+  const doneToast = (message: string, detail?: string) => {
+    const now = useAppStore.getState().documents.find((d) => d.id === doc.id);
+    if (now && isAwaitingApproval(now)) toast.show(tr('common:documentEditor.sentForApproval', { kind: kindName }), 'info', { icon: 'clipboard-clock-outline', detail });
+    else toast.show(message, 'success', { icon: 'flag-checkered', detail, varies: true });
+  };
+
   const applyStatus = async (s: DocStatus, message: string, overrideCreditLimit = false) => {
     if (!overrideCreditLimit && doc.kind !== 'invoice') {
-      void serverSave(() => setDocumentStatus(doc.id, s), message, { icon: 'flag-checkered', detail: shownNumber, varies: true });
+      void serverSave(() => setDocumentStatus(doc.id, s)).then((res) => {
+        if (res) doneToast(message, shownNumber);
+      });
       return;
     }
     const res = await saveOnline(() => setDocumentStatus(doc.id, s, overrideCreditLimit ? { overrideCreditLimit: true } : undefined));
@@ -471,7 +479,7 @@ ${url}`;
       toast.show(tr('common:save.unreachable'), 'error');
       return;
     }
-    toast.show(message, 'success', { icon: 'flag-checkered', detail: doc.number, varies: true });
+    doneToast(message, doc.number);
   };
 
   // Finalise asks once, then finalises; the status list is for anything else.
@@ -1012,14 +1020,8 @@ ${url}`;
                 success: tr(Platform.OS === 'web' ? 'common:documentDetail.linkCopied' : 'sales:detail.linkReady'),
                 icon: 'link-variant',
               }) },
-          ...(doc.kind === 'invoice' && outstanding.minor > 0
-            ? [{ label: tr('sales:detail.paymentLink'), icon: 'credit-card-outline' as const, onPress: () =>
-                    runRemote(async () => handOverLink((await paymentLink(doc.companyId, doc.id)).url), {
-                      loading: tr('sales:detail.creatingLink'),
-                      success: tr(Platform.OS === 'web' ? 'common:documentDetail.linkCopied' : 'sales:detail.linkReady'),
-                      icon: 'credit-card-outline',
-                    }) }]
-            : []),
+          // No "Payment link" here: online payments (Razorpay) are coming soon, and the server mints no link
+          // until there is a page to pay on. A mail draft still carries one where the server makes it (mailtoLink).
           ...(editable
             ? [{ label: tr('sales:detail.edit'), icon: 'pencil-outline' as const, onPress: openEditor }]
             : editHint
@@ -1060,8 +1062,9 @@ ${url}`;
       });
     } },
     ...(transitions.length ? [{ label: tr('common:documentDetail.changeStatus'), icon: 'swap-vertical' as const, onPress: openStatus }] : []),
-    // A draft quote can be withdrawn too, where its kind allows that.
-    ...(doc.status !== 'cancelled' && (isFinalized(doc.status) || canTransition(doc.kind, doc.status, 'cancelled'))
+    // Only where the server would allow it: not a sent quote, a delivered note, a fulfilled order, a
+    // processed return, or anything money has been paid against.
+    ...(canCancelDocument(doc, { paidMinor: isPayable ? paid.minor : 0, ownTdsMinor: doc.tds?.amount.minor }, today())
       ? [{ label: tr('common:documentDetail.cancelKind', { kind: kindName }), icon: 'close-octagon-outline' as const, danger: true, onPress: () => {
           setActionsOpen(false);
           // The server refuses while the e-way bill or the IRN is live (in that

@@ -84,7 +84,7 @@
     "includeFy": "Include financial year",
     "nextWillBe": "Your next invoice will be",
     "includeFyHint": "Adds {{fy}} to every number and restarts the sequence each year.",
-    "seriesNote": "Quotes, purchase bills, payments and expenses each get their own series with matching settings. You can tune them individually in Settings → Numbering."
+    "seriesNote": "Quotes, purchase bills, payments and expenses each get their own series and prefix, with the financial year set the same way. You can tune them individually in Settings → Numbering."
   },
   "branches": {
     "title": "Locations",

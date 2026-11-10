@@ -22,7 +22,7 @@ import { usePartyRecord, usePartySearch } from '../../remote/queries';
 import { useDebounced } from '../../components/useDebounced';
 import { ReportFilters } from '@esmart/core/domain/reports';
 import { DIALOG_WIDTH, SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
-import { deliverFile, deliverPdf } from './exportFiles';
+import { deliverFile, deliverPdf, isUserCancel } from './exportFiles';
 import { presetParam, useQueryParams } from '../../navigation/queryParams';
 import { ReportTable, XLSX_MIME, exportName, tableHtml, toCsv, xlsxBytes } from './reportTable';
 import { ReportSkeleton } from '../../components/ScreenSkeleton';
@@ -153,8 +153,11 @@ export function ReportShell({
       if (format === 'pdf') await deliverPdf(`${name}.pdf`, tableHtml(title, basisLine(), table, i18n.language));
       else if (format === 'xlsx') await deliverFile(`${name}.xlsx`, xlsxBytes(title, table), XLSX_MIME);
       else await deliverFile(`${name}.csv`, new TextEncoder().encode(toCsv(table)), 'text/csv');
-    } catch {
-      toast.show(tr('reports:shell.exportCancelled'), 'info', { icon: 'file-cancel-outline' });
+    } catch (err) {
+      // Neither the share sheet nor the print dialog fails when it is dismissed, so this is a real
+      // failure; only an AbortError (a share the person backed out of) reads as cancelled.
+      if (isUserCancel(err)) toast.show(tr('reports:shell.exportCancelled'), 'info', { icon: 'file-cancel-outline' });
+      else toast.show(tr('reports:shell.exportFailed'), 'error', { icon: 'file-alert-outline' });
     }
   };
 

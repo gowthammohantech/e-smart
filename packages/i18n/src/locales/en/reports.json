@@ -250,7 +250,7 @@
     "tds26q": {
       "title": "Form 26Q deductees",
       "description": "Deductee-wise TDS with PAN and challan, ready for the return",
-      "basis": "Supplier bills and notes with TDS, dated in the period. Export it for the return preparation utility. TDS kept back on a payment names no section, so deduct it on the bill to report it here."
+      "basis": "Supplier bills and notes with TDS, and payments made that kept TDS back under a section, dated in the period. Export it for the return preparation utility. An older payment that named no section is not listed here."
     },
     "tdsChallans": {
       "title": "TDS challans",
