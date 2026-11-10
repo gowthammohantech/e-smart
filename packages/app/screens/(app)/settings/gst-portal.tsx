@@ -10,7 +10,7 @@ import { Card } from '@esmart/ui/components/Card';
 import { TextField } from '@esmart/ui/components/Field';
 import { Text } from '@esmart/ui/components/Text';
 import { useToast } from '@esmart/ui/components/Toast';
-import { SHOW_SCROLLBAR, WIDE_FORM_MAX_WIDTH, useFieldWidth, useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, WIDE_FORM_MAX_WIDTH, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { formatDate } from '@esmart/core/lib/date';
 import { api } from '../../../remote/api';
 import { describeError } from '../../../remote/errors';
@@ -83,7 +83,6 @@ function GstPortalSettingsBody() {
       load();
     });
   const desktop = useIsDesktop();
-  const fw = useFieldWidth();
   const disconnect = (gstin: string) =>
     run(gstin, () => api.DELETE('/companies/{companyId}/gst/portal-sessions/{gstin}', { params: { path: { ...path, gstin } } }), () => {
       toast.show(tr('settings:gstPortal.disconnected'), 'success', { icon: 'link-variant-off' });
@@ -144,10 +143,10 @@ function GstPortalSettingsBody() {
                 </>
               ) : (
                 <>
-                  <TextField label={tr('settings:gstPortal.username')} value={f.username} onChangeText={(username) => patch(s.gstin!, { username })} autoCapitalize="none" icon="account-key-outline" containerStyle={fw('md')} />
+                  <TextField label={tr('settings:gstPortal.username')} value={f.username} onChangeText={(username) => patch(s.gstin!, { username })} autoCapitalize="none" icon="account-key-outline" />
                   {f.sent ? (
                     <>
-                      <TextField label={tr('settings:gstPortal.otp')} value={f.otp} onChangeText={(otp) => patch(s.gstin!, { otp: otp.replace(/\D/g, '').slice(0, 6) })} keyboardType="number-pad" maxLength={6} icon="message-lock-outline" hint={tr('settings:gstPortal.otpHint')} containerStyle={fw('md')} />
+                      <TextField label={tr('settings:gstPortal.otp')} value={f.otp} onChangeText={(otp) => patch(s.gstin!, { otp: otp.replace(/\D/g, '').slice(0, 6) })} keyboardType="number-pad" maxLength={6} icon="message-lock-outline" hint={tr('settings:gstPortal.otpHint')} />
                       <Button title={tr('settings:gstPortal.connect')} onPress={() => void connect(s.gstin!)} disabled={f.otp.length !== 6} loading={busy === s.gstin} />
                     </>
                   ) : (

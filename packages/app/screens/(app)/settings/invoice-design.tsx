@@ -244,12 +244,12 @@ function InvoiceDesignScreenBody() {
             </Card>
           </View>
           {previewLoading ? (
-            <SkeletonGroup style={desktop ? { flex: 1, minWidth: 0, maxWidth: 820 } : undefined}>
+            <SkeletonGroup style={desktop ? { flex: 1, minWidth: 0 } : undefined}>
               <Skeleton height={desktop ? 720 : 420} radius={t.radius.lg} />
             </SkeletonGroup>
           ) : html ? (
-            // About an A4 page wide at most: a wider window doesn't stretch the invoice past what prints.
-            <Card padded={false} style={[{ height: desktop ? 900 : 720, overflow: 'hidden' }, desktop ? { flex: 1, minWidth: 0, maxWidth: 820 } : null]}>
+            // The preview fills the rest of the page column, so it ends at the page's right edge.
+            <Card padded={false} style={[{ height: desktop ? 900 : 720, overflow: 'hidden' }, desktop ? { flex: 1, minWidth: 0 } : null]}>
               <HtmlPreview html={html} style={{ flex: 1 }} />
             </Card>
           ) : (

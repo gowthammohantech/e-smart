@@ -18,7 +18,7 @@ import { useAppStore } from '../../../store/appStore';
 import { useBranches, useComplianceSettings, useNumberingSeries } from '../../../store/selectors';
 import { today, financialYearOf } from '@esmart/core/lib/date';
 import { E_INVOICE_DOC_NUMBER_MAX, sanitizePrefix } from '@esmart/core/lib/validators';
-import { SHOW_SCROLLBAR, useFieldWidth, useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { useSaveShortcut } from '../../../components/useSaveShortcut';
 import { useServerSave } from '../../../components/useServerSave';
 
@@ -93,7 +93,6 @@ export default function NumberingSettings() {
   // Ctrl+S (⌘+S) does what Save does, while the form is open.
   useSaveShortcut(save, !!editing);
   const desktop = useIsDesktop();
-  const fw = useFieldWidth();
 
   return (
     <View style={{ flex: 1 }}>
@@ -163,7 +162,6 @@ export default function NumberingSettings() {
             onChangeText={(v) => setPadding(v.replace(/[^0-9]/g, '').slice(0, 1))}
             keyboardType="number-pad"
             hint={tr('settings:numbering.digitsHint')}
-            containerStyle={fw('sm')}
           />
 
           <SwitchField
@@ -181,7 +179,7 @@ export default function NumberingSettings() {
             onValueChange={setIncludeBranch}
             disabled={branches.length < 2}
           />
-          <PickerField label={tr('settings:numbering.resetPolicy')} value={tr(RESET_LABELS[resetPolicy])} onPress={() => setResetOpen(true)} icon="restart" containerStyle={fw('md')} />
+          <PickerField label={tr('settings:numbering.resetPolicy')} value={tr(RESET_LABELS[resetPolicy])} onPress={() => setResetOpen(true)} icon="restart" />
         </View>
       </Sheet>
 

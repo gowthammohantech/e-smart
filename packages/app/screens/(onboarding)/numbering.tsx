@@ -10,15 +10,14 @@ import { Text } from '@esmart/ui/components/Text';
 import { nextStepRoute, onboardingSteps, stepIndex, useOnboardingStore } from '../../store/onboardingStore';
 import { financialYearOf, today } from '@esmart/core/lib/date';
 import { E_INVOICE_DOC_NUMBER_MAX, sanitizePrefix } from '@esmart/core/lib/validators';
-import { useFieldWidth } from '@esmart/ui/theme/breakpoints';
 
 export default function NumberingStep() {
   const t = useTheme();
   const { t: tr } = useTranslation(['onboarding', 'settings']);
   const router = useRouter();
   const { draft, set } = useOnboardingStore();
-  // A prefix and a start number are a few characters: a desktop keeps them short, side by side.
-  const short = useFieldWidth()('sm') ?? { flex: 1 };
+  // A prefix and a start number side by side, each half the row.
+  const short = { flex: 1 };
 
   const fy = financialYearOf(today(), draft.fiscalYearStartMonth);
   const seq = String(Number(draft.invoiceNextNumber) || 1).padStart(4, '0');

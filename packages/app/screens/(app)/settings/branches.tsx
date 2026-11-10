@@ -26,7 +26,8 @@ import { Errors, hasErrors, validGstin, validPostalCode } from '@esmart/core/lib
 import { normalizeGstin } from '@esmart/core/domain/gstin';
 import { INDIAN_STATES, stateName } from '@esmart/core/data/masters';
 import { citiesForState } from '@esmart/core/data/cities';
-import { SHOW_SCROLLBAR, useFieldWidth, useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { FieldGrid } from '@esmart/ui/components/Layout';
 import { useGstinLookup, type GstinDetails } from '../../../features/gstin/useGstinLookup';
 import { useSaveShortcut } from '../../../components/useSaveShortcut';
 import { SheetActions } from '../../../features/company/SheetActions';
@@ -36,7 +37,6 @@ export default function BranchSettings() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const desktop = useIsDesktop();
-  const fw = useFieldWidth();
   const { t: tr } = useTranslation(['nav', 'settings', 'errors']);
   const { run: serverSave, saving } = useServerSave();
 
@@ -313,22 +313,28 @@ export default function BranchSettings() {
             icon="map-outline"
             disabled={locked}
           />
-          <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
+          {/* The grid's gap on a desktop, so code and city line up with PIN and phone below. */}
+          <View style={{ flexDirection: 'row', gap: desktop ? t.spacing.lg : t.spacing.md }}>
             <TextField label={tr('settings:branches.code')} value={code} onChangeText={(v) => setCode(v.toUpperCase().slice(0, 5))} placeholder="PUN" autoCapitalize="characters" error={errors.code} containerStyle={{ flex: 1 }} editable={!locked} />
             <CityField label={tr('settings:branches.city')} value={city} onChange={setCity} stateCode={stateCode} containerStyle={{ flex: 1 }} disabled={locked} />
           </View>
-          <TextField
-            label={tr('settings:branches.pin')}
-            value={postalCode}
-            onChangeText={(v) => setPostalCode(v.replace(/[^0-9]/g, '').slice(0, 6))}
-            placeholder="411001"
-            keyboardType="number-pad"
-            icon="mailbox-outline"
-            error={errors.postalCode}
-            editable={!locked}
-            containerStyle={fw('sm')}
+          {/* PIN and phone pair up on a desktop. */}
+          <FieldGrid
+            items={[
+              <TextField
+                key="pin"
+                label={tr('settings:branches.pin')}
+                value={postalCode}
+                onChangeText={(v) => setPostalCode(v.replace(/[^0-9]/g, '').slice(0, 6))}
+                placeholder="411001"
+                keyboardType="number-pad"
+                icon="mailbox-outline"
+                error={errors.postalCode}
+                editable={!locked}
+              />,
+              <PhoneField key="phone" label={tr('settings:branches.phone')} {...phone.field} error={errors.phone} disabled={locked} />,
+            ]}
           />
-          <PhoneField label={tr('settings:branches.phone')} {...phone.field} error={errors.phone} disabled={locked} />
           <SwitchField label={tr('settings:branches.primaryBranch')} description={tr('settings:branches.primaryHint')} value={isPrimary} onValueChange={setIsPrimary} disabled={locked} />
         </View>
       </Sheet>

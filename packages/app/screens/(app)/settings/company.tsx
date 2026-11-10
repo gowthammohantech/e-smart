@@ -17,7 +17,7 @@ import { useActiveCompany } from '../../../store/selectors';
 import { useCompanyUsage } from '../../../remote/queries';
 import { profileLocks } from '@esmart/core/domain/companyLock';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
-import { FieldRow } from '@esmart/ui/components/Layout';
+import { FieldGrid, FieldRow } from '@esmart/ui/components/Layout';
 import { Card } from '@esmart/ui/components/Card';
 import { Icon } from '@esmart/ui/components/Icon';
 import { BUSINESS_TYPES, COUNTRIES, INDIAN_STATES } from '@esmart/core/data/masters';
@@ -25,7 +25,7 @@ import { citiesForState } from '@esmart/core/data/cities';
 import { CURRENCIES } from '@esmart/core/lib/currencies';
 import { monthNames } from '@esmart/core/lib/date';
 import { Errors, hasErrors, required, validEmail, validGstin, validPostalCode, validTan } from '@esmart/core/lib/validators';
-import { SHOW_SCROLLBAR, WIDE_FORM_MAX_WIDTH, useFieldWidth, useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, WIDE_FORM_MAX_WIDTH, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { useGoBack } from '../../../navigation/useGoBack';
 import { LogoSection } from '../../../features/company/LogoSection';
 import { SignatureSection } from '../../../features/company/SignatureSection';
@@ -45,7 +45,6 @@ export default function CompanySettings() {
 function CompanySettingsForm() {
   const t = useTheme();
   const desktop = useIsDesktop();
-  const fw = useFieldWidth();
   const { t: tr } = useTranslation(['nav', 'settings', 'onboarding', 'errors']);
   const months = monthNames();
   const goBack = useGoBack();
@@ -186,6 +185,47 @@ function CompanySettingsForm() {
   };
   useSaveShortcut(() => void save(), !saving);
 
+  // Built once and placed per layout: a desktop grid or the phone's stacked pairs.
+  const half = desktop ? undefined : { flex: 1 };
+  const stateField = (
+    <PickerField label={tr('settings:company.state')} value={INDIAN_STATES.find((s) => s.code === stateCode)?.name} onPress={() => setStateOpen(true)} icon="map-outline" disabled={locks.state} />
+  );
+  const cityField = <CityField label={tr('settings:company.city')} value={city} onChange={setCity} stateCode={stateCode} containerStyle={half} />;
+  const pinField = (
+    <TextField label="PIN" value={postalCode} onChangeText={setPostalCode} keyboardType="number-pad" maxLength={company?.country === 'IN' ? 6 : undefined} error={errors.postalCode} containerStyle={half} />
+  );
+  const accountNameField = <TextField key="accName" label={tr('settings:company.accountName')} value={accountName} onChangeText={setAccountName} icon="account-outline" placeholder={name} />;
+  const bankNameField = <TextField key="bank" label={tr('settings:company.bankName')} value={bankName} onChangeText={setBankName} icon="bank-outline" containerStyle={half} />;
+  const branchField = <TextField key="branch" label={tr('settings:company.branchName')} value={bankBranch} onChangeText={setBankBranch} containerStyle={half} />;
+  const accountNumberField = (
+    <TextField key="accNo" label={tr('settings:company.accountNumber')} value={accountNumber} onChangeText={setAccountNumber} keyboardType="number-pad" error={errors.accountNumber} containerStyle={half} />
+  );
+  const ifscField = (
+    <TextField
+      key="ifsc"
+      label={tr('settings:company.ifsc')}
+      value={ifsc}
+      onChangeText={(v) => setIfsc(v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 11))}
+      autoCapitalize="characters"
+      placeholder="HDFC0001234"
+      error={errors.ifsc}
+      containerStyle={half}
+    />
+  );
+  const upiField = (
+    <TextField
+      key="upi"
+      label={tr('settings:company.upiId')}
+      value={upiId}
+      onChangeText={(v) => setUpiId(v.trim())}
+      autoCapitalize="none"
+      keyboardType="email-address"
+      icon="qrcode"
+      placeholder={UPI_SAMPLE}
+      error={errors.upiId}
+    />
+  );
+
   return (
     // A long form: a wide form's width on a desktop, its Save bar under it.
     <KeyboardAvoidingView style={desktop ? { flex: 1, width: '100%', maxWidth: WIDE_FORM_MAX_WIDTH } : { flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -215,21 +255,36 @@ function CompanySettingsForm() {
           <TextField label={tr('settings:company.name')} value={name} onChangeText={setName} error={errors.name} required icon="domain" />
           <TextField label={tr('settings:company.legalName')} value={legalName} onChangeText={setLegalName} placeholder={tr('settings:company.legalPlaceholder')} editable={!locks.legalName} />
         </FieldRow>
-        <PickerField label={tr('settings:company.type')} value={tr(`onboarding:businessType.${businessType}` as 'onboarding:businessType.other')} onPress={() => setTypeOpen(true)} icon="storefront-outline" containerStyle={fw('md')} />
-
         <FieldRow>
           <TextField label={tr('settings:company.email')} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" icon="email-outline" error={errors.email} />
           <PhoneField label={tr('settings:company.phone')} {...phone.field} error={errors.phone} />
         </FieldRow>
-        <TextField label={tr('settings:company.website')} value={website} onChangeText={setWebsite} autoCapitalize="none" icon="web" containerStyle={fw('lg')} />
+        {/* Type and website pair up on a desktop rather than each leaving half a row empty. */}
+        <FieldGrid
+          items={[
+            <PickerField key="type" label={tr('settings:company.type')} value={tr(`onboarding:businessType.${businessType}` as 'onboarding:businessType.other')} onPress={() => setTypeOpen(true)} icon="storefront-outline" />,
+            <TextField key="web" label={tr('settings:company.website')} value={website} onChangeText={setWebsite} autoCapitalize="none" icon="web" />,
+          ]}
+        />
 
         <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('settings:company.registeredAddress')}</Text>
         <TextField label={tr('settings:company.address')} value={line1} onChangeText={setLine1} icon="map-marker-outline" />
-        <PickerField label={tr('settings:company.state')} value={INDIAN_STATES.find((s) => s.code === stateCode)?.name} onPress={() => setStateOpen(true)} icon="map-outline" disabled={locks.state} containerStyle={fw('md')} />
-        <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
-          <CityField label={tr('settings:company.city')} value={city} onChange={setCity} stateCode={stateCode} containerStyle={{ flex: 1 }} />
-          <TextField label="PIN" value={postalCode} onChangeText={setPostalCode} keyboardType="number-pad" maxLength={company?.country === 'IN' ? 6 : undefined} error={errors.postalCode} containerStyle={{ flex: 1 }} />
-        </View>
+        {/* State, city and PIN share one row on a desktop; a phone keeps state above city and PIN. */}
+        {desktop ? (
+          <FieldRow>
+            {stateField}
+            {cityField}
+            {pinField}
+          </FieldRow>
+        ) : (
+          <>
+            {stateField}
+            <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
+              {cityField}
+              {pinField}
+            </View>
+          </>
+        )}
 
         <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }} nativeID="bank-and-signature">
           {tr('settings:company.bankAndSignature')}
@@ -237,41 +292,23 @@ function CompanySettingsForm() {
         <Text variant="caption" tone="muted" style={{ lineHeight: 18, marginTop: -t.spacing.sm }}>
           {tr('settings:company.bankHint')}
         </Text>
-        <TextField label={tr('settings:company.accountName')} value={accountName} onChangeText={setAccountName} icon="account-outline" placeholder={name} containerStyle={fw('lg')} />
-        <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
-          <TextField label={tr('settings:company.bankName')} value={bankName} onChangeText={setBankName} icon="bank-outline" containerStyle={{ flex: 1 }} />
-          <TextField label={tr('settings:company.branchName')} value={bankBranch} onChangeText={setBankBranch} containerStyle={{ flex: 1 }} />
-        </View>
-        <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
-          <TextField
-            label={tr('settings:company.accountNumber')}
-            value={accountNumber}
-            onChangeText={setAccountNumber}
-            keyboardType="number-pad"
-            error={errors.accountNumber}
-            containerStyle={{ flex: 1 }}
-          />
-          <TextField
-            label={tr('settings:company.ifsc')}
-            value={ifsc}
-            onChangeText={(v) => setIfsc(v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 11))}
-            autoCapitalize="characters"
-            placeholder="HDFC0001234"
-            error={errors.ifsc}
-            containerStyle={{ flex: 1 }}
-          />
-        </View>
-        <TextField
-          label={tr('settings:company.upiId')}
-          value={upiId}
-          onChangeText={(v) => setUpiId(v.trim())}
-          autoCapitalize="none"
-          keyboardType="email-address"
-          icon="qrcode"
-          placeholder={UPI_SAMPLE}
-          error={errors.upiId}
-          containerStyle={fw('lg')}
-        />
+        {/* A desktop lays the bank fields two to a row; a phone keeps its stacked pairs. */}
+        {desktop ? (
+          <FieldGrid items={[accountNameField, upiField, bankNameField, branchField, accountNumberField, ifscField]} />
+        ) : (
+          <>
+            {accountNameField}
+            <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
+              {bankNameField}
+              {branchField}
+            </View>
+            <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
+              {accountNumberField}
+              {ifscField}
+            </View>
+            {upiField}
+          </>
+        )}
         <SignatureSection />
 
         <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('settings:company.taxAndFy')}</Text>
@@ -279,7 +316,7 @@ function CompanySettingsForm() {
           <PickerField label={tr('settings:company.country')} value={country?.name} onPress={() => {}} icon="earth" hint={tr('settings:company.countryFixed')} disabled />
           <PickerField label={tr('settings:company.baseCurrency')} value={currency ? `${currency.name} (${currency.code})` : undefined} onPress={() => {}} icon="cash-multiple" disabled />
         </FieldRow>
-        <PickerField label={tr('settings:company.fyStarts')} value={months[fyMonth - 1]} onPress={() => setFyOpen(true)} icon="calendar-range" disabled={locks.fiscalYear} containerStyle={fw('sm')} />
+        <PickerField label={tr('settings:company.fyStarts')} value={months[fyMonth - 1]} onPress={() => setFyOpen(true)} icon="calendar-range" disabled={locks.fiscalYear} />
 
         <SwitchField
           label={tr('settings:company.registeredFor', { regime: country?.regime === 'VAT' ? 'VAT' : 'GST' })}
@@ -297,7 +334,6 @@ function CompanySettingsForm() {
               icon="card-account-details-outline"
               error={errors.taxId}
               editable={!locks.taxIdentity}
-              containerStyle={fw('md')}
             />
             <SwitchField
               label={tr('settings:company.composition')}
@@ -324,8 +360,8 @@ function CompanySettingsForm() {
                     {tr('settings:company.returnFrequencyHint')}
                   </Text>
                 </View>
-                {/* Short codes and a date: side by side on a desktop. */}
-                <FieldRow columns={3}>
+                {/* Short codes and a date side by side on a desktop; the date column shows only with an LUT. */}
+                <FieldRow>
                 <TextField
                   label={tr('settings:company.tan')}
                   value={tan}

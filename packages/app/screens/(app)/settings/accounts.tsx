@@ -21,7 +21,7 @@ import { useCompanyUsage } from '../../../remote/queries';
 import { formatMoney } from '@esmart/core/lib/format';
 import { fromMajor, money, toMajor } from '@esmart/core/lib/money';
 import { uid } from '@esmart/core/lib/id';
-import { SHOW_SCROLLBAR, STAT_TILE_MAX_WIDTH, useFieldWidth, useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { useSaveShortcut } from '../../../components/useSaveShortcut';
 import { SheetActions } from '../../../features/company/SheetActions';
 import { useServerSave } from '../../../components/useServerSave';
@@ -31,7 +31,6 @@ export default function AccountSettings() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const desktop = useIsDesktop();
-  const fw = useFieldWidth();
   const { t: tr } = useTranslation(['nav', 'settings']);
   const { run: serverSave, saving } = useServerSave();
 
@@ -113,10 +112,10 @@ export default function AccountSettings() {
     <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('nav:title.paymentAccounts') }} />
 
-      {/* The add button sits in the page header on a desktop, so no room is kept for a bottom bar. */}
+      {/* The add button sits in the page header on a desktop, so no room is kept for a bottom bar.
+          The total and the list both fill the page column, so they share one right edge. */}
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: desktop ? t.spacing.xxl : 120 + insets.bottom }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
-        {/* One figure: a tile's width on a desktop, not the whole column. */}
-        <Card style={{ gap: 5, paddingVertical: t.spacing.xl, maxWidth: desktop ? STAT_TILE_MAX_WIDTH : undefined }}>
+        <Card style={{ gap: 5, paddingVertical: t.spacing.xl }}>
           <Text variant="caption" tone="muted">{tr('settings:accounts.cashAndBank')}</Text>
           {balancesPending ? (
             <SkeletonGroup style={{ paddingVertical: 4 }}>
@@ -205,7 +204,7 @@ export default function AccountSettings() {
           {type === 'bank' ? (
             <TextField label={tr('settings:accounts.number')} value={accountNumber} onChangeText={setAccountNumber} placeholder="XXXX1234" icon="pound" />
           ) : null}
-          <AmountField label={tr('settings:accounts.openingBalance')} value={openingBalance} onChangeValue={setOpeningBalance} currency={baseCurrency} containerStyle={fw('md')} />
+          <AmountField label={tr('settings:accounts.openingBalance')} value={openingBalance} onChangeValue={setOpeningBalance} currency={baseCurrency} />
           {/* The day the balance was counted; never a future day. Off, it stands at the start of the books. */}
           <SwitchField
             label={tr('settings:accounts.openingOnDate')}
@@ -220,7 +219,6 @@ export default function AccountSettings() {
               onChange={setOpeningBalanceDate}
               maximumDate={new Date()}
               hint={tr('settings:accounts.openingBalanceDateHint')}
-              containerStyle={fw('md')}
             />
           ) : null}
           <SwitchField label={tr('settings:accounts.useDefault')} description={tr('settings:accounts.useDefaultHint')} value={isDefault} onValueChange={setIsDefault} />

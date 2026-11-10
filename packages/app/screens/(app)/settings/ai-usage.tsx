@@ -11,7 +11,7 @@ import { FormActions } from "@esmart/ui/components/ActionBar";
 import { LixiAccessCard } from "../../../features/company/LixiAccessCard";
 import { LoadFailed } from "../../../features/company/LoadFailed";
 import { useSaveShortcut } from "../../../components/useSaveShortcut";
-import { SHOW_SCROLLBAR, WIDE_FORM_MAX_WIDTH, useFieldWidth, useIsDesktop } from "@esmart/ui/theme/breakpoints";
+import { SHOW_SCROLLBAR, WIDE_FORM_MAX_WIDTH, useIsDesktop } from "@esmart/ui/theme/breakpoints";
 import { useServerSave } from "../../../components/useServerSave";
 import { useAiUsage } from "../../../remote/queries";
 import { useAppStore } from "../../../store/appStore";
@@ -50,7 +50,6 @@ function AiUsageScreenBody() {
   const badBudget =
     capped && (!Number.isFinite(budgetValue) || (budgetValue ?? 0) < 0);
   const desktop = useIsDesktop();
-  const fw = useFieldWidth();
   const save = () =>
     serverSave(
       () => saveCompany({ ...company, aiMonthlyLimit: budgetValue }),
@@ -148,7 +147,6 @@ function AiUsageScreenBody() {
               error={
                 badBudget ? tr("settings:aiUsage.budgetInvalid") : undefined
               }
-              containerStyle={fw("sm")}
             />
           ) : null}
         </Card>

@@ -154,24 +154,38 @@ export default function TaxSettings() {
         </Card>
 
         {regime === 'GST' ? (
-          // Label and value stay within reach of each other on a wide screen.
-          <Card style={{ marginTop: t.spacing.lg, gap: t.spacing.md, maxWidth: desktop ? 640 : undefined }}>
+          // Fills the page column like the list above; on a desktop the three rules sit side by side
+          // as equal cells rather than a label/value block stretched across the width.
+          <Card style={{ marginTop: t.spacing.lg, gap: t.spacing.md }}>
             <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('settings:taxes.howApplied')}</Text>
-            {[
-              { label: tr('settings:taxes.applied.intraState'), value: tr('settings:taxes.applied.intraStateValue') },
-              { label: tr('settings:taxes.applied.interState'), value: tr('settings:taxes.applied.interStateValue') },
-              { label: tr('settings:taxes.applied.rounding'), value: tr('settings:taxes.applied.roundingValue') },
-            ].map((r) => (
-              <View key={r.label} style={{ flexDirection: 'row', justifyContent: 'space-between', gap: t.spacing.md }}>
-                <Text variant="small" tone="muted" style={{ flexShrink: 0 }}>
-                  {r.label}
-                </Text>
-                {/* A long value wraps in its own column, right-aligned, instead of under the label. */}
-                <Text variant="small" weight="600" style={{ flex: 1, textAlign: 'right' }}>
-                  {r.value}
-                </Text>
-              </View>
-            ))}
+            <View style={desktop ? { flexDirection: 'row', gap: t.spacing.lg } : { gap: t.spacing.md }}>
+              {[
+                { label: tr('settings:taxes.applied.intraState'), value: tr('settings:taxes.applied.intraStateValue') },
+                { label: tr('settings:taxes.applied.interState'), value: tr('settings:taxes.applied.interStateValue') },
+                { label: tr('settings:taxes.applied.rounding'), value: tr('settings:taxes.applied.roundingValue') },
+              ].map((r) =>
+                desktop ? (
+                  <View key={r.label} style={{ flex: 1, minWidth: 0, gap: 4 }}>
+                    <Text variant="small" tone="muted">
+                      {r.label}
+                    </Text>
+                    <Text variant="small" weight="600">
+                      {r.value}
+                    </Text>
+                  </View>
+                ) : (
+                  <View key={r.label} style={{ flexDirection: 'row', justifyContent: 'space-between', gap: t.spacing.md }}>
+                    <Text variant="small" tone="muted" style={{ flexShrink: 0 }}>
+                      {r.label}
+                    </Text>
+                    {/* A long value wraps in its own column, right-aligned, instead of under the label. */}
+                    <Text variant="small" weight="600" style={{ flex: 1, textAlign: 'right' }}>
+                      {r.value}
+                    </Text>
+                  </View>
+                ),
+              )}
+            </View>
           </Card>
         ) : null}
       </ScrollView>

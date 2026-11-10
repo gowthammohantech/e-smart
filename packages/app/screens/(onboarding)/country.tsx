@@ -34,31 +34,29 @@ export default function CountryStep() {
       currentStep={stepIndex('country', draft.plan)}
       onPrimary={() => router.push(nextStepRoute('country', draft.plan))}
     >
-      {/* On a desktop the country takes one column, lined up with the pair below it. */}
-      <FieldRow columns={2}>
-      <PickerField
-        label={tr('onboarding:country.country')}
-        value={country?.name}
-        onPress={() => setCountryOpen(true)}
-        icon="earth"
-        required
-      />
-      </FieldRow>
+      {/* Country, currency and year start share one row on a desktop. */}
       <FieldRow>
-      <PickerField
-        label={tr('onboarding:country.baseCurrency')}
-        value={currency ? `${currency.name} (${currency.symbol})` : undefined}
-        onPress={() => setCurrencyOpen(true)}
-        icon="cash-multiple"
-        required
-        hint={tr('onboarding:country.currencyHint')}
-      />
-      <PickerField
-        label={tr('onboarding:country.fyStarts')}
-        value={monthNames()[draft.fiscalYearStartMonth - 1]}
-        onPress={() => setFyOpen(true)}
-        icon="calendar-range"
-      />
+        <PickerField
+          label={tr('onboarding:country.country')}
+          value={country?.name}
+          onPress={() => setCountryOpen(true)}
+          icon="earth"
+          required
+        />
+        <PickerField
+          label={tr('onboarding:country.baseCurrency')}
+          value={currency ? `${currency.name} (${currency.symbol})` : undefined}
+          onPress={() => setCurrencyOpen(true)}
+          icon="cash-multiple"
+          required
+          hint={tr('onboarding:country.currencyHint')}
+        />
+        <PickerField
+          label={tr('onboarding:country.fyStarts')}
+          value={monthNames()[draft.fiscalYearStartMonth - 1]}
+          onPress={() => setFyOpen(true)}
+          icon="calendar-range"
+        />
       </FieldRow>
 
       <Card variant="flat" style={{ gap: t.spacing.sm }}>

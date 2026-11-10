@@ -48,7 +48,7 @@ export default function BrandSettings() {
       <Stack.Screen options={{ title: tr('nav:title.brands') }} />
 
       {/* A short list: kept within reach of its chevrons on a desktop, where the add button sits in the page header. */}
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: desktop ? t.spacing.xxl : 120 + insets.bottom, maxWidth: desktop ? 640 : undefined }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
+      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: desktop ? t.spacing.xxl : 120 + insets.bottom }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         {brands.length ? (
           <Card padded={false}>
             {brands.map((b, i) => (

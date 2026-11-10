@@ -18,7 +18,7 @@ import { citiesForState } from '@esmart/core/data/cities';
 import { normalizeGstin } from '@esmart/core/domain/gstin';
 import { validGstin, validPostalCode } from '@esmart/core/lib/validators';
 import { FieldRow } from '@esmart/ui/components/Layout';
-import { useFieldWidth, useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
 
 export default function BranchesStep() {
   const t = useTheme();
@@ -26,7 +26,6 @@ export default function BranchesStep() {
   const router = useRouter();
   const { draft, set } = useOnboardingStore();
   const desktop = useIsDesktop();
-  const fw = useFieldWidth();
 
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
@@ -172,7 +171,6 @@ export default function BranchesStep() {
           icon="card-account-details-outline"
           error={gstin.length === 15 ? gstinError : undefined}
           hint={tr('settings:branches.gstinHint')}
-          containerStyle={fw('md')}
         />
         <View style={desktop ? { flexDirection: 'row', justifyContent: 'flex-end' } : undefined}>
           <Button title={tr('onboarding:branches.add')} variant="secondary" icon="plus" onPress={add} disabled={!canAdd} />

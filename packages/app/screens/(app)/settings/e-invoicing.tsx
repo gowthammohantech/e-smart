@@ -19,7 +19,8 @@ import { useActiveCompany, useBaseCurrency, useComplianceSettings, useCompliance
 import { LoadingView } from '../../../components/LoadingView';
 import { Skeleton, SkeletonGroup } from '@esmart/ui/components/Skeleton';
 import { fromMajor, toMajor } from '@esmart/core/lib/money';
-import { SHOW_SCROLLBAR, WIDE_FORM_MAX_WIDTH, useFieldWidth, useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, WIDE_FORM_MAX_WIDTH, useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { FieldGrid } from '@esmart/ui/components/Layout';
 import { useSaveShortcut } from '../../../components/useSaveShortcut';
 import { useServerSave } from '../../../components/useServerSave';
 
@@ -42,7 +43,6 @@ function EInvoicingForm() {
   const { run: serverSave, saving } = useServerSave();
   // Always false in the native apps, so the desktop header action only ever reaches a browser.
   const desktop = useIsDesktop();
-  const fw = useFieldWidth();
 
   const stored = useComplianceSettings();
   const currency = useBaseCurrency();
@@ -187,30 +187,35 @@ function EInvoicingForm() {
 
         <View style={{ height: t.spacing.md }} />
 
-        <AmountField
-          label={tr('compliance:settings.turnover')}
-          value={turnover}
-          onChangeValue={setTurnover}
-          currency={currency}
-          hint={tr('compliance:settings.turnoverHint')}
-          containerStyle={fw('md')}
-        />
-        <AmountField
-          label={tr('compliance:settings.mandatoryAbove')}
-          value={threshold}
-          onChangeValue={setThreshold}
-          currency={currency}
-          hint={tr('compliance:settings.mandatoryHint')}
-          containerStyle={fw('md')}
-        />
-        <TextField
-          label={tr('compliance:settings.window')}
-          value={String(draft.reportingWindowDays)}
-          onChangeText={(v) => patch({ reportingWindowDays: Number(v) || 0 })}
-          keyboardType="number-pad"
-          suffix={tr('settings:eInvoicing.daysSuffix')}
-          hint={tr('compliance:settings.windowHint')}
-          containerStyle={fw('md')}
+        {/* Two to a row on a desktop; the odd one takes the whole row. */}
+        <FieldGrid
+          items={[
+            <AmountField
+              key="turnover"
+              label={tr('compliance:settings.turnover')}
+              value={turnover}
+              onChangeValue={setTurnover}
+              currency={currency}
+              hint={tr('compliance:settings.turnoverHint')}
+            />,
+            <AmountField
+              key="threshold"
+              label={tr('compliance:settings.mandatoryAbove')}
+              value={threshold}
+              onChangeValue={setThreshold}
+              currency={currency}
+              hint={tr('compliance:settings.mandatoryHint')}
+            />,
+            <TextField
+              key="window"
+              label={tr('compliance:settings.window')}
+              value={String(draft.reportingWindowDays)}
+              onChangeText={(v) => patch({ reportingWindowDays: Number(v) || 0 })}
+              keyboardType="number-pad"
+              suffix={tr('settings:eInvoicing.daysSuffix')}
+              hint={tr('compliance:settings.windowHint')}
+            />,
+          ]}
         />
 
         <SectionLabel>{tr('compliance:settings.portalCredentials')}</SectionLabel>
@@ -232,15 +237,19 @@ function EInvoicingForm() {
           <Text variant="caption" tone={isSaved ? 'good' : 'muted'} weight="600">
             {isSaved ? tr('compliance:settings.loginSaved', { username: savedUsername }) : tr('compliance:settings.loginNotSaved')}
           </Text>
+          {/* Username and password side by side on a desktop. */}
+          <FieldGrid
+            items={[
           <TextField
+            key="user"
             label={tr(portal === 'einvoice' ? 'compliance:settings.einvoiceUsername' : 'compliance:settings.ewayUsername')}
             value={login.username}
             onChangeText={(v) => setLogin({ username: v })}
             autoCapitalize="none"
             autoCorrect={false}
-            containerStyle={fw('md')}
-          />
+          />,
           <TextField
+            key="pass"
             label={tr(portal === 'einvoice' ? 'compliance:settings.einvoicePassword' : 'compliance:settings.ewayPassword')}
             value={login.password}
             onChangeText={(v) => setLogin({ password: v })}
@@ -249,7 +258,8 @@ function EInvoicingForm() {
             secureTextEntry
             autoCapitalize="none"
             autoCorrect={false}
-            containerStyle={fw('md')}
+          />,
+            ]}
           />
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm, marginTop: t.spacing.xs }}>
             <Button title={tr('compliance:settings.testConnection')} variant="secondary" icon="lan-connect" loading={credBusy === 'test'} onPress={() => void testConnection()} />
@@ -281,37 +291,44 @@ function EInvoicingForm() {
 
         <View style={{ height: t.spacing.md }} />
 
-        <AmountField
-          label={tr('compliance:settings.requiredAbove')}
-          value={ewayThreshold}
-          onChangeValue={setEwayThreshold}
-          currency={currency}
-          hint={tr('compliance:settings.requiredHint')}
-          containerStyle={fw('md')}
+        {/* Two to a row on a desktop; the odd one takes the whole row. */}
+        <FieldGrid
+          items={[
+            <AmountField
+              key="ewayThreshold"
+              label={tr('compliance:settings.requiredAbove')}
+              value={ewayThreshold}
+              onChangeValue={setEwayThreshold}
+              currency={currency}
+              hint={tr('compliance:settings.requiredHint')}
+            />,
+            <PickerField
+              key="transporter"
+              label={tr('compliance:settings.defaultTransporter')}
+              value={
+                draft.defaultTransporterId
+                  ? `${draft.defaultTransporterName || transporters.find((x) => x.transporterId === draft.defaultTransporterId)?.name || ''} · ${formatGstin(draft.defaultTransporterId)}`.replace(/^ · /, '')
+                  : undefined
+              }
+              placeholder={tr('settings:eInvoicing.noTransporter')}
+              onPress={() => setTransporterOpen(true)}
+              icon="truck-outline"
+              hint={transporters.length ? tr('settings:eInvoicing.transporterHint') : tr('settings:eInvoicing.noTransportersHint')}
+              clearable={!!draft.defaultTransporterId}
+              onClear={() => patch({ defaultTransporterId: undefined, defaultTransporterName: undefined })}
+            />,
+            <TextField
+              key="distance"
+              label={tr('compliance:settings.defaultDistance')}
+              value={String(draft.defaultDistanceKm)}
+              onChangeText={(v) => patch({ defaultDistanceKm: Number(v) || 0 })}
+              keyboardType="number-pad"
+              suffix={tr('compliance:ewb.km')}
+            />,
+          ]}
         />
-        <PickerField
-          label={tr('compliance:settings.defaultTransporter')}
-          value={
-            draft.defaultTransporterId
-              ? `${draft.defaultTransporterName || transporters.find((x) => x.transporterId === draft.defaultTransporterId)?.name || ''} · ${formatGstin(draft.defaultTransporterId)}`.replace(/^ · /, '')
-              : undefined
-          }
-          placeholder={tr('settings:eInvoicing.noTransporter')}
-          onPress={() => setTransporterOpen(true)}
-          icon="truck-outline"
-          hint={transporters.length ? tr('settings:eInvoicing.transporterHint') : tr('settings:eInvoicing.noTransportersHint')}
-          clearable={!!draft.defaultTransporterId}
-          onClear={() => patch({ defaultTransporterId: undefined, defaultTransporterName: undefined })}
-          containerStyle={fw('lg')}
-        />
-        <TextField
-          label={tr('compliance:settings.defaultDistance')}
-          value={String(draft.defaultDistanceKm)}
-          onChangeText={(v) => patch({ defaultDistanceKm: Number(v) || 0 })}
-          keyboardType="number-pad"
-          suffix={tr('compliance:ewb.km')}
-          containerStyle={fw('sm')}
-        />
+        {/* The grid has no bottom spacing of its own; a desktop keeps the mode label off the last field. */}
+        {desktop ? <View style={{ height: t.spacing.md }} /> : null}
 
         <View style={{ gap: t.spacing.sm, marginBottom: t.spacing.md }}>
           <Text variant="caption" tone="muted" weight="600">{tr('compliance:settings.defaultMode')}</Text>

@@ -15,7 +15,7 @@ import { ListRow } from '@esmart/ui/components/ListRow';
 import { useAppStore } from '../../../store/appStore';
 import { useCompanies, useCurrentUser } from '../../../store/selectors';
 import { Errors, hasErrors, required, validEmail } from '@esmart/core/lib/validators';
-import { SHOW_SCROLLBAR, WIDE_FORM_MAX_WIDTH, useFieldWidth, useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, WIDE_FORM_MAX_WIDTH, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { FieldRow } from '@esmart/ui/components/Layout';
 import type { UserRole } from '@esmart/core/types';
 import { useGoBack } from '../../../navigation/useGoBack';
@@ -34,7 +34,6 @@ const ROLE_LABELS = {
 export default function Profile() {
   const t = useTheme();
   const desktop = useIsDesktop();
-  const fw = useFieldWidth();
   const { t: tr } = useTranslation(['nav', 'settings', 'auth', 'onboarding']);
   const goBack = useGoBack();
   const { run: serverSave, saving } = useServerSave();
@@ -89,7 +88,7 @@ export default function Profile() {
         <TextField label={tr('settings:profile.name')} value={name} onChangeText={setName} icon="account-outline" error={errors.name} required />
         <TextField label={tr('settings:profile.email')} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" icon="email-outline" error={errors.email} required />
         </FieldRow>
-        <PhoneField label={tr('settings:profile.phone')} {...phone.field} icon="cellphone" error={errors.phone} containerStyle={fw('md')} />
+        <PhoneField label={tr('settings:profile.phone')} {...phone.field} icon="cellphone" error={errors.phone} />
 
         <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('settings:profile.yourBusinesses')}</Text>
         <Card padded={false}>

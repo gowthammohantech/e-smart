@@ -53,7 +53,7 @@ export default function VehicleSettings() {
     <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('settings:vehicles.title') }} />
       {/* A short list: kept within reach of its chevrons on a desktop, where the add button sits in the page header. */}
-      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, gap: t.spacing.md, paddingBottom: desktop ? t.spacing.xxl : 120 + insets.bottom, maxWidth: desktop ? 640 : undefined }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
+      <ScrollView contentContainerStyle={{ padding: t.spacing.lg, gap: t.spacing.md, paddingBottom: desktop ? t.spacing.xxl : 120 + insets.bottom }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <Text variant="small" tone="muted">
           {tr('settings:vehicles.hint', { fy: fy.label })}
         </Text>
