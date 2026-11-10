@@ -9,6 +9,7 @@ import { Card } from '@esmart/ui/components/Card';
 import { Badge } from '@esmart/ui/components/Badge';
 import { PrimaryActionBar } from '@esmart/ui/components/ActionBar';
 import { ListRow } from '@esmart/ui/components/ListRow';
+import { Cell, DataTable } from '@esmart/ui/components/DataTable';
 import { Sheet } from '@esmart/ui/components/Sheet';
 import { AmountField, Segmented, SwitchField, TextField } from '@esmart/ui/components/Field';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
@@ -31,7 +32,7 @@ export default function AccountSettings() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const desktop = useIsDesktop();
-  const { t: tr } = useTranslation(['nav', 'settings']);
+  const { t: tr } = useTranslation(['nav', 'settings', 'common']);
   const { run: serverSave, saving } = useServerSave();
 
   const company = useActiveCompany();
@@ -67,6 +68,10 @@ export default function AccountSettings() {
   );
 
   const totalCash = Object.values(balances).reduce((a, b) => a + b, 0);
+  // Bank, cash and wallet each summed, for the cells beside the total on a desktop.
+  const typeTotals = (['bank', 'cash', 'wallet'] as const)
+    .filter((type) => accounts.some((a) => a.type === type))
+    .map((type) => ({ type, total: accounts.filter((a) => a.type === type).reduce((sum, a) => sum + (balances[a.id] ?? 0), 0) }));
 
   // Once money has gone through an account it stays, and so does its type: past
   // payments used methods the type allows. The server refuses both too.
@@ -115,49 +120,102 @@ export default function AccountSettings() {
       {/* The add button sits in the page header on a desktop, so no room is kept for a bottom bar.
           The total and the list both fill the page column, so they share one right edge. */}
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: desktop ? t.spacing.xxl : 120 + insets.bottom }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
-        <Card style={{ gap: 5, paddingVertical: t.spacing.xl }}>
-          <Text variant="caption" tone="muted">{tr('settings:accounts.cashAndBank')}</Text>
-          {balancesPending ? (
-            <SkeletonGroup style={{ paddingVertical: 4 }}>
-              <Skeleton height={28} width={160} />
-            </SkeletonGroup>
-          ) : (
-            <Text variant="h1" weight="700" tone={totalCash >= 0 ? 'default' : 'bad'}>
-              {formatMoney(money(totalCash, baseCurrency))}
-            </Text>
-          )}
-          <Text variant="caption" tone="muted">{tr('settings:accounts.cashCaption')}</Text>
+        <Card style={{ paddingVertical: t.spacing.xl, ...(desktop ? { flexDirection: 'row', gap: t.spacing.xl } : null) }}>
+          <View style={{ gap: 5, ...(desktop ? { flex: 2, minWidth: 0 } : null) }}>
+            <Text variant="caption" tone="muted">{tr('settings:accounts.cashAndBank')}</Text>
+            {balancesPending ? (
+              <SkeletonGroup style={{ paddingVertical: 4 }}>
+                <Skeleton height={28} width={160} />
+              </SkeletonGroup>
+            ) : (
+              <Text variant="h1" weight="700" tone={totalCash >= 0 ? 'default' : 'bad'}>
+                {formatMoney(money(totalCash, baseCurrency))}
+              </Text>
+            )}
+            <Text variant="caption" tone="muted">{tr('settings:accounts.cashCaption')}</Text>
+          </View>
+          {/* A desktop fills the rest of the row with the total by kind, as equal cells. */}
+          {desktop
+            ? typeTotals.map((x) => (
+                <View key={x.type} style={{ flex: 1, minWidth: 0, gap: 5, paddingLeft: t.spacing.lg, borderLeftWidth: 1, borderLeftColor: t.c.line }}>
+                  <Text variant="caption" tone="muted">{typeLabels[x.type]}</Text>
+                  {balancesPending ? (
+                    <SkeletonGroup style={{ paddingVertical: 2 }}>
+                      <Skeleton height={20} width={110} />
+                    </SkeletonGroup>
+                  ) : (
+                    <Text variant="h3" weight="700" tone={x.total >= 0 ? 'default' : 'bad'}>
+                      {formatMoney(money(x.total, baseCurrency))}
+                    </Text>
+                  )}
+                </View>
+              ))
+            : null}
         </Card>
 
         <View style={{ height: t.spacing.lg }} />
 
-        <Card padded={false}>
-          {accounts.map((a, i) => (
-            <ListRow
-              key={a.id}
-              title={a.name}
-              subtitle={a.accountNumber ?? typeLabels[a.type]}
-              icon={a.type === 'cash' ? 'cash' : a.type === 'wallet' ? 'wallet-outline' : 'bank-outline'}
-              divider={i < accounts.length - 1}
-              right={
-                <View style={{ alignItems: 'flex-end', gap: 4 }}>
-                  {balancesPending ? (
+        {desktop ? (
+          // A desktop lists the accounts as a table: kind, number and running balance.
+          <DataTable
+            scroll={false}
+            rows={accounts}
+            rowKey={(a) => a.id}
+            rowLabel={(a) => a.name}
+            onRowPress={open}
+            columns={[
+              { key: 'name', header: tr('settings:accounts.name'), flex: 2, sortValue: (a) => a.name, render: (a) => <Cell weight="600">{a.name}</Cell> },
+              { key: 'type', header: tr('common:table.type'), width: 120, sortValue: (a) => typeLabels[a.type], render: (a) => <Cell tone="muted">{typeLabels[a.type]}</Cell> },
+              { key: 'number', header: tr('settings:accounts.number'), width: 180, secondary: true, render: (a) => <Cell tone="muted" mono>{a.accountNumber || '—'}</Cell> },
+              { key: 'default', header: tr('common:table.status'), width: 110, render: (a) => (a.isDefault ? <Badge label={tr('settings:accounts.default')} tone="info" size="sm" /> : null) },
+              {
+                key: 'balance',
+                header: tr('settings:accounts.balance'),
+                width: 180,
+                align: 'right',
+                sortValue: (a) => balances[a.id] ?? 0,
+                render: (a) =>
+                  balancesPending ? (
                     <SkeletonGroup>
                       <Skeleton height={14} width={72} />
                     </SkeletonGroup>
                   ) : (
-                    <Text variant="small" weight="700">
+                    <Cell weight="700" mono tone={(balances[a.id] ?? 0) < 0 ? 'bad' : 'default'}>
                       {formatMoney(money(balances[a.id] ?? 0, baseCurrency))}
-                    </Text>
-                  )}
-                  {a.isDefault ? <Badge label={tr('settings:accounts.default')} tone="info" size="sm" /> : null}
-                </View>
-              }
-              onPress={() => open(a)}
-              chevron
-            />
-          ))}
-        </Card>
+                    </Cell>
+                  ),
+              },
+            ]}
+          />
+        ) : (
+          <Card padded={false}>
+            {accounts.map((a, i) => (
+              <ListRow
+                key={a.id}
+                title={a.name}
+                subtitle={a.accountNumber ?? typeLabels[a.type]}
+                icon={a.type === 'cash' ? 'cash' : a.type === 'wallet' ? 'wallet-outline' : 'bank-outline'}
+                divider={i < accounts.length - 1}
+                right={
+                  <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                    {balancesPending ? (
+                      <SkeletonGroup>
+                        <Skeleton height={14} width={72} />
+                      </SkeletonGroup>
+                    ) : (
+                      <Text variant="small" weight="700">
+                        {formatMoney(money(balances[a.id] ?? 0, baseCurrency))}
+                      </Text>
+                    )}
+                    {a.isDefault ? <Badge label={tr('settings:accounts.default')} tone="info" size="sm" /> : null}
+                  </View>
+                }
+                onPress={() => open(a)}
+                chevron
+              />
+            ))}
+          </Card>
+        )}
       </ScrollView>
 
       <PrimaryActionBar title={tr('settings:accounts.add')} icon="plus" onPress={() => open()} />

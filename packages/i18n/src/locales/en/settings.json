@@ -136,7 +136,8 @@
     "editTitle": "Edit account",
     "deleteTitle": "Delete {{name}}?",
     "openingOnDate": "Balance as on a date",
-    "openingOnDateHint": "Off: the balance stands at the start of the books. On: it stands on the day you pick."
+    "openingOnDateHint": "Off: the balance stands at the start of the books. On: it stands on the day you pick.",
+    "balance": "Balance"
   },
   "branches": {
     "none": "No branches yet",
@@ -173,7 +174,8 @@
     "upgradeToAdd": "Your plan includes one branch. Upgrade to add more branches.",
     "onlyName": "On your plan only the branch name can be changed here. The address, GSTIN and phone come from Business profile and update with it.",
     "docCount_one": "{{count}} document",
-    "docCount_other": "{{count}} documents"
+    "docCount_other": "{{count}} documents",
+    "documents": "Documents"
   },
   "taxes": {
     "none": "No tax rates",
@@ -206,7 +208,8 @@
       "roundingValue": "Half-up to the paisa, then the document total to the rupee"
     },
     "editTitle": "Edit tax rate",
-    "deleteTitle": "Delete {{name}}?"
+    "deleteTitle": "Delete {{name}}?",
+    "timesUsed": "Times used"
   },
   "about": {
     "build": "Version {{version}}",
@@ -279,7 +282,11 @@
     "sourceProvider": "Provider",
     "sourceManual": "Manual",
     "deleteTitle": "Delete the {{code}} rate from {{date}}?",
-    "deleteMessage": "Documents already saved keep the rate they used. New ones on or after this date use the rate before it."
+    "deleteMessage": "Documents already saved keep the rate they used. New ones on or after this date use the rate before it.",
+    "rate": "Rate",
+    "source": "Source",
+    "trend": "Trend",
+    "onRecord": "On record"
   },
   "transporters": {
     "none": "No transporters yet",
@@ -357,7 +364,8 @@
     "resendIn": "Resend in {{seconds}}s",
     "sendInvite": "Send invitation",
     "guestNote": "This person has their own Elixir Books account. To change their access, remove them and invite them again.",
-    "removeTitle": "Remove {{name}}?"
+    "removeTitle": "Remove {{name}}?",
+    "lastActiveHeading": "Last active"
   },
   "profile": {
     "name": "Name",
@@ -391,7 +399,11 @@
     "value": "Value",
     "empty": "(empty)",
     "count_one": "{{count}} event · append-only, newest first",
-    "count_other": "{{count}} events · append-only, newest first"
+    "count_other": "{{count}} events · append-only, newest first",
+    "by": "By",
+    "event": "Event",
+    "changes": "Changes",
+    "device": "Device"
   },
   "categories": {
     "add": "Add category",
@@ -406,7 +418,8 @@
     "entries_other": "{{count}} entries",
     "unused": "Not used yet",
     "editTitle": "Edit category",
-    "deleteTitle": "Delete {{name}}?"
+    "deleteTitle": "Delete {{name}}?",
+    "entriesHeading": "Entries"
   },
   "itemCategories": {
     "add": "Add category",
@@ -740,7 +753,10 @@
     "delete": "Delete vehicle",
     "deleteTitle": "Delete {{registration}}?",
     "deleteMessage": "Only a vehicle on no expense or document can be deleted; mark it not in use instead.",
-    "deleted": "Vehicle deleted"
+    "deleted": "Vehicle deleted",
+    "spent": "Spent this year",
+    "expenses": "Expenses",
+    "documents": "Documents"
   },
   "aiUsage": {
     "title": "AI usage",

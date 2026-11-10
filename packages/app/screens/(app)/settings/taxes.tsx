@@ -9,6 +9,7 @@ import { Card } from '@esmart/ui/components/Card';
 import { Badge } from '@esmart/ui/components/Badge';
 import { PrimaryActionBar } from '@esmart/ui/components/ActionBar';
 import { ListRow } from '@esmart/ui/components/ListRow';
+import { Cell, DataTable } from '@esmart/ui/components/DataTable';
 import { Sheet } from '@esmart/ui/components/Sheet';
 import { TextField } from '@esmart/ui/components/Field';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
@@ -33,7 +34,7 @@ export default function TaxSettings() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const desktop = useIsDesktop();
-  const { t: tr } = useTranslation(['nav', 'settings', 'errors']);
+  const { t: tr } = useTranslation(['nav', 'settings', 'errors', 'common']);
   const { run: serverSave, saving } = useServerSave();
 
   const company = useActiveCompany();
@@ -119,39 +120,71 @@ export default function TaxSettings() {
           </Text>
         </Card>
 
-        <Card padded={false}>
-          {categories.length === 0 ? (
-            <EmptyState icon="percent-outline" title={tr('settings:taxes.none')} compact />
-          ) : (
-            categories.map((c, i) => (
-              <ListRow
-                key={c.id}
-                title={c.name}
-                subtitle={c.description}
-                // The use count waits for the server; the date is known already.
-                meta={
-                  usagePending
-                    ? `${tr('settings:taxes.effectiveFrom')} ${formatDate(c.effectiveFrom)}`
-                    : tr('settings:taxes.rowMeta', { date: formatDate(c.effectiveFrom), count: usageOf(c.id) })
-                }
-                icon="percent-outline"
-                divider={i < categories.length - 1}
-                right={
-                  <View style={{ alignItems: 'flex-end', gap: 4 }}>
-                    <Badge label={formatPercent(c.rate)} tone={c.rate === 0 ? 'neutral' : 'info'} />
-                    {usagePending ? (
-                      <SkeletonGroup>
-                        <Skeleton height={10} width={56} radius={4} />
-                      </SkeletonGroup>
-                    ) : null}
-                  </View>
-                }
-                onPress={() => open(c)}
-                chevron
-              />
-            ))
-          )}
-        </Card>
+        {desktop && categories.length ? (
+          // A desktop lists the rates as a table: rate, the day it starts, and how often it's been used.
+          <DataTable
+            scroll={false}
+            rows={categories}
+            rowKey={(c) => c.id}
+            rowLabel={(c) => `${c.name}, ${formatPercent(c.rate)}`}
+            onRowPress={open}
+            columns={[
+              { key: 'name', header: tr('settings:taxes.name'), flex: 1, sortValue: (c) => c.name, render: (c) => <Cell weight="600">{c.name}</Cell> },
+              { key: 'description', header: tr('settings:taxes.description'), flex: 2, secondary: true, render: (c) => <Cell tone="muted">{c.description || '—'}</Cell> },
+              { key: 'rate', header: tr('common:table.tax'), width: 110, sortValue: (c) => c.rate, render: (c) => <Badge label={formatPercent(c.rate)} tone={c.rate === 0 ? 'neutral' : 'info'} size="sm" /> },
+              { key: 'from', header: tr('settings:taxes.effectiveFrom'), width: 150, sortValue: (c) => c.effectiveFrom, render: (c) => <Cell tone="muted">{formatDate(c.effectiveFrom)}</Cell> },
+              {
+                key: 'used',
+                header: tr('settings:taxes.timesUsed'),
+                width: 140,
+                align: 'right',
+                sortValue: (c) => usageOf(c.id),
+                render: (c) =>
+                  usagePending ? (
+                    <SkeletonGroup>
+                      <Skeleton height={12} width={32} radius={4} />
+                    </SkeletonGroup>
+                  ) : (
+                    <Cell mono>{String(usageOf(c.id))}</Cell>
+                  ),
+              },
+            ]}
+          />
+        ) : (
+          <Card padded={false}>
+            {categories.length === 0 ? (
+              <EmptyState icon="percent-outline" title={tr('settings:taxes.none')} compact />
+            ) : (
+              categories.map((c, i) => (
+                <ListRow
+                  key={c.id}
+                  title={c.name}
+                  subtitle={c.description}
+                  // The use count waits for the server; the date is known already.
+                  meta={
+                    usagePending
+                      ? `${tr('settings:taxes.effectiveFrom')} ${formatDate(c.effectiveFrom)}`
+                      : tr('settings:taxes.rowMeta', { date: formatDate(c.effectiveFrom), count: usageOf(c.id) })
+                  }
+                  icon="percent-outline"
+                  divider={i < categories.length - 1}
+                  right={
+                    <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                      <Badge label={formatPercent(c.rate)} tone={c.rate === 0 ? 'neutral' : 'info'} />
+                      {usagePending ? (
+                        <SkeletonGroup>
+                          <Skeleton height={10} width={56} radius={4} />
+                        </SkeletonGroup>
+                      ) : null}
+                    </View>
+                  }
+                  onPress={() => open(c)}
+                  chevron
+                />
+              ))
+            )}
+          </Card>
+        )}
 
         {regime === 'GST' ? (
           // Fills the page column like the list above; on a desktop the three rules sit side by side

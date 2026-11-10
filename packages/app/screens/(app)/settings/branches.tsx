@@ -9,6 +9,7 @@ import { Card } from '@esmart/ui/components/Card';
 import { Badge } from '@esmart/ui/components/Badge';
 import { PrimaryActionBar } from '@esmart/ui/components/ActionBar';
 import { ListRow } from '@esmart/ui/components/ListRow';
+import { Cell, DataTable } from '@esmart/ui/components/DataTable';
 import { Sheet } from '@esmart/ui/components/Sheet';
 import { PhoneField, PickerField, TextField, SwitchField, usePhoneInput } from '@esmart/ui/components/Field';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
@@ -37,7 +38,7 @@ export default function BranchSettings() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const desktop = useIsDesktop();
-  const { t: tr } = useTranslation(['nav', 'settings', 'errors']);
+  const { t: tr } = useTranslation(['nav', 'settings', 'errors', 'common']);
   const { run: serverSave, saving } = useServerSave();
 
   const company = useActiveCompany();
@@ -212,38 +213,71 @@ export default function BranchSettings() {
           ) : null}
         </Card>
 
-        <Card padded={false}>
-          {branches.length === 0 ? (
-            <EmptyState icon="warehouse" title={tr('settings:branches.none')} compact />
-          ) : (
-            branches.map((b, i) => (
-              <ListRow
-                key={b.id}
-                title={b.name}
-                // The GSTIN first, where it isn't cut off; the street is on the branch itself.
-                subtitle={[b.gstin, b.code, b.address.city].filter(Boolean).join(' · ')}
-                meta={usagePending ? undefined : tr('settings:branches.docCount', { count: docCount(b.id) })}
-                icon={b.isPrimary ? 'office-building-outline' : 'warehouse'}
-                divider={i < branches.length - 1}
-                right={
+        {desktop && branches.length ? (
+          // A desktop lists branches as a table: code, GSTIN, place and how many documents each has.
+          <DataTable
+            scroll={false}
+            rows={branches}
+            rowKey={(b) => b.id}
+            rowLabel={(b) => b.name}
+            onRowPress={open}
+            columns={[
+              { key: 'name', header: tr('settings:branches.name'), flex: 2, sortValue: (b) => b.name, render: (b) => <Cell weight="600">{b.name}</Cell> },
+              { key: 'code', header: tr('settings:branches.code'), width: 100, render: (b) => <Cell tone="muted">{b.code || '—'}</Cell> },
+              { key: 'gstin', header: tr('settings:branches.gstin'), width: 190, render: (b) => <Cell mono>{b.gstin || '—'}</Cell> },
+              { key: 'city', header: tr('settings:branches.city'), flex: 1, secondary: true, sortValue: (b) => b.address.city, render: (b) => <Cell tone="muted">{[b.address.city, b.address.state].filter(Boolean).join(', ') || '—'}</Cell> },
+              { key: 'status', header: tr('common:table.status'), width: 110, render: (b) => (b.isPrimary ? <Badge label={tr('settings:branches.primary')} tone="info" size="sm" /> : null) },
+              {
+                key: 'documents',
+                header: tr('settings:branches.documents'),
+                width: 130,
+                align: 'right',
+                sortValue: (b) => docCount(b.id),
+                render: (b) =>
                   usagePending ? (
-                    <View style={{ alignItems: 'flex-end', gap: 4 }}>
-                      {b.isPrimary ? <Badge label={tr('settings:branches.primary')} tone="info" size="sm" /> : null}
-                      {/* The document count, not known yet. */}
-                      <SkeletonGroup>
-                        <Skeleton height={10} width={64} radius={4} />
-                      </SkeletonGroup>
-                    </View>
-                  ) : b.isPrimary ? (
-                    <Badge label={tr('settings:branches.primary')} tone="info" size="sm" />
-                  ) : undefined
-                }
-                onPress={() => open(b)}
-                chevron
-              />
-            ))
-          )}
-        </Card>
+                    <SkeletonGroup>
+                      <Skeleton height={12} width={32} radius={4} />
+                    </SkeletonGroup>
+                  ) : (
+                    <Cell mono>{String(docCount(b.id))}</Cell>
+                  ),
+              },
+            ]}
+          />
+        ) : (
+          <Card padded={false}>
+            {branches.length === 0 ? (
+              <EmptyState icon="warehouse" title={tr('settings:branches.none')} compact />
+            ) : (
+              branches.map((b, i) => (
+                <ListRow
+                  key={b.id}
+                  title={b.name}
+                  // The GSTIN first, where it isn't cut off; the street is on the branch itself.
+                  subtitle={[b.gstin, b.code, b.address.city].filter(Boolean).join(' · ')}
+                  meta={usagePending ? undefined : tr('settings:branches.docCount', { count: docCount(b.id) })}
+                  icon={b.isPrimary ? 'office-building-outline' : 'warehouse'}
+                  divider={i < branches.length - 1}
+                  right={
+                    usagePending ? (
+                      <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                        {b.isPrimary ? <Badge label={tr('settings:branches.primary')} tone="info" size="sm" /> : null}
+                        {/* The document count, not known yet. */}
+                        <SkeletonGroup>
+                          <Skeleton height={10} width={64} radius={4} />
+                        </SkeletonGroup>
+                      </View>
+                    ) : b.isPrimary ? (
+                      <Badge label={tr('settings:branches.primary')} tone="info" size="sm" />
+                    ) : undefined
+                  }
+                  onPress={() => open(b)}
+                  chevron
+                />
+              ))
+            )}
+          </Card>
+        )}
       </ScrollView>
 
       <PrimaryActionBar

@@ -11,6 +11,7 @@ import { Sheet } from '@esmart/ui/components/Sheet';
 import { TextField } from '@esmart/ui/components/Field';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
+import { Cell, DataTable } from '@esmart/ui/components/DataTable';
 import type { Brand } from '@esmart/core/types';
 import { uid } from '@esmart/core/lib/id';
 import { DIALOG_WIDTH, SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
@@ -47,9 +48,19 @@ export default function BrandSettings() {
     <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('nav:title.brands') }} />
 
-      {/* A short list: kept within reach of its chevrons on a desktop, where the add button sits in the page header. */}
+      {/* The add button sits in the page header on a desktop, so no room is kept for a bottom bar. */}
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: desktop ? t.spacing.xxl : 120 + insets.bottom }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
-        {brands.length ? (
+        {brands.length && desktop ? (
+          // A desktop lists brands as a table across the page.
+          <DataTable
+            scroll={false}
+            rows={brands}
+            rowKey={(b) => b.id}
+            rowLabel={(b) => b.name}
+            onRowPress={open}
+            columns={[{ key: 'name', header: tr('settings:brands.name'), render: (b) => <Cell weight="600">{b.name}</Cell>, sortValue: (b) => b.name }]}
+          />
+        ) : brands.length ? (
           <Card padded={false}>
             {brands.map((b, i) => (
               <ListRow key={b.id} title={b.name} icon="star-circle-outline" divider={i < brands.length - 1} onPress={() => open(b)} chevron />

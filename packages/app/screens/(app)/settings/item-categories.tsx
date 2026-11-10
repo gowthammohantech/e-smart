@@ -12,6 +12,7 @@ import { TextField } from '@esmart/ui/components/Field';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { Text } from '@esmart/ui/components/Text';
+import { Cell, DataTable } from '@esmart/ui/components/DataTable';
 import type { ItemCategory } from '@esmart/core/types';
 import { uid } from '@esmart/core/lib/id';
 import { DIALOG_WIDTH, SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
@@ -53,9 +54,31 @@ export default function ItemCategorySettings() {
     <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('nav:title.itemCategories') }} />
 
-      {/* A short list: kept within reach of its chevrons on a desktop, where the add button sits in the page header. */}
+      {/* The add button sits in the page header on a desktop, so no room is kept for a bottom bar. */}
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: desktop ? t.spacing.xxl : 120 + insets.bottom }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
-        {categories.length ? (
+        {categories.length && desktop ? (
+          // A desktop lists the categories as a table across the page.
+          <DataTable
+            scroll={false}
+            rows={categories}
+            rowKey={(c) => c.id}
+            rowLabel={(c) => c.name}
+            onRowPress={open}
+            columns={[
+              {
+                key: 'name',
+                header: tr('settings:itemCategories.name'),
+                sortValue: (c) => c.name,
+                render: (c) => (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm, alignSelf: 'stretch', minWidth: 0 }}>
+                    <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: c.color }} />
+                    <Cell weight="600">{c.name}</Cell>
+                  </View>
+                ),
+              },
+            ]}
+          />
+        ) : categories.length ? (
           <Card padded={false}>
             {categories.map((c, i) => (
               <ListRow

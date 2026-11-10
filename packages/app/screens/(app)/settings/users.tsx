@@ -11,6 +11,8 @@ import { Button } from '@esmart/ui/components/Button';
 import { PrimaryActionBar } from '@esmart/ui/components/ActionBar';
 import { Avatar } from '@esmart/ui/components/Avatar';
 import { ListRow } from '@esmart/ui/components/ListRow';
+import { Cell, DataTable } from '@esmart/ui/components/DataTable';
+import { FieldGrid } from '@esmart/ui/components/Layout';
 import { Sheet } from '@esmart/ui/components/Sheet';
 import { PickerField, TextField } from '@esmart/ui/components/Field';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
@@ -171,39 +173,81 @@ export default function UserSettings() {
 
       {/* The invite button sits in the page header on a desktop, so no room is kept for a bottom bar. */}
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: desktop ? t.spacing.xxl : 120 + insets.bottom }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
-        <Card padded={false}>
-          {!ready ? <CardRowsSkeleton kind="list" rows={3} /> : users.map((u, i) => (
-            <ListRow
-              key={u.id}
-              title={u.name}
-              subtitle={u.email}
-              meta={u.lastActiveAt ? tr('settings:users.lastActive', { when: formatRelative(u.lastActiveAt.slice(0, 10)) }) : u.status === 'invited' ? tr('settings:users.invitePending') : undefined}
-              left={<Avatar name={u.name} size={40} color={u.avatarColor} />}
-              divider={i < users.length - 1}
-              right={
-                <View style={{ alignItems: 'flex-end', gap: 4 }}>
-                  <Badge label={ROLES.find((r) => r.value === u.role)?.label ?? u.role} tone={u.role === 'owner' ? 'info' : 'neutral'} size="sm" />
-                  {u.status === 'invited' ? <Badge label={tr('settings:users.invited')} tone="warning" size="sm" /> : null}
-                </View>
-              }
-              onPress={() => open(u)}
-              chevron
-            />
-          ))}
-        </Card>
+        {desktop ? (
+          // A desktop lists the team as a table: email, role, invite state and when last seen.
+          <DataTable
+            scroll={false}
+            loading={!ready}
+            rows={ready ? users : []}
+            rowKey={(u) => u.id}
+            rowLabel={(u) => u.name}
+            onRowPress={open}
+            columns={[
+              {
+                key: 'name',
+                header: tr('settings:users.name'),
+                flex: 2,
+                sortValue: (u) => u.name,
+                render: (u) => (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm, alignSelf: 'stretch', minWidth: 0 }}>
+                    <Avatar name={u.name} size={28} color={u.avatarColor} />
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Cell weight="600">{u.name}</Cell>
+                    </View>
+                  </View>
+                ),
+              },
+              { key: 'email', header: tr('settings:users.email'), flex: 2, sortValue: (u) => u.email, render: (u) => <Cell tone="muted">{u.email}</Cell> },
+              { key: 'role', header: tr('settings:users.role'), width: 140, sortValue: (u) => u.role, render: (u) => <Badge label={ROLES.find((r) => r.value === u.role)?.label ?? u.role} tone={u.role === 'owner' ? 'info' : 'neutral'} size="sm" /> },
+              { key: 'status', header: tr('common:table.status'), width: 120, render: (u) => (u.status === 'invited' ? <Badge label={tr('settings:users.invited')} tone="warning" size="sm" /> : null) },
+              {
+                key: 'lastActive',
+                header: tr('settings:users.lastActiveHeading'),
+                width: 170,
+                secondary: true,
+                sortValue: (u) => u.lastActiveAt ?? '',
+                render: (u) => <Cell tone="muted">{u.lastActiveAt ? formatRelative(u.lastActiveAt.slice(0, 10)) : u.status === 'invited' ? tr('settings:users.invitePending') : '—'}</Cell>,
+              },
+            ]}
+          />
+        ) : (
+          <Card padded={false}>
+            {!ready ? <CardRowsSkeleton kind="list" rows={3} /> : users.map((u, i) => (
+              <ListRow
+                key={u.id}
+                title={u.name}
+                subtitle={u.email}
+                meta={u.lastActiveAt ? tr('settings:users.lastActive', { when: formatRelative(u.lastActiveAt.slice(0, 10)) }) : u.status === 'invited' ? tr('settings:users.invitePending') : undefined}
+                left={<Avatar name={u.name} size={40} color={u.avatarColor} />}
+                divider={i < users.length - 1}
+                right={
+                  <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                    <Badge label={ROLES.find((r) => r.value === u.role)?.label ?? u.role} tone={u.role === 'owner' ? 'info' : 'neutral'} size="sm" />
+                    {u.status === 'invited' ? <Badge label={tr('settings:users.invited')} tone="warning" size="sm" /> : null}
+                  </View>
+                }
+                onPress={() => open(u)}
+                chevron
+              />
+            ))}
+          </Card>
+        )}
 
         <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6, marginTop: t.spacing.xl, marginBottom: t.spacing.sm }}>{tr('settings:users.rolesHeading')}</Text>
+        {/* On a desktop the roles sit side by side, a few to a row, rather than one long column. */}
         <Card style={{ gap: t.spacing.md }}>
-          {ROLES.map((r) => (
-            <View key={r.value} style={{ gap: 3 }}>
-              <Text variant="small" weight="600">
-                {r.label}
-              </Text>
-              <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
-                {r.description}
-              </Text>
-            </View>
-          ))}
+          <FieldGrid
+            items={ROLES.map((r) => (
+              <View key={r.value} style={{ gap: 3 }}>
+                <Text variant="small" weight="600">
+                  {r.label}
+                </Text>
+                <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
+                  {r.description}
+                </Text>
+              </View>
+            ))}
+          />
         </Card>
       </ScrollView>
 

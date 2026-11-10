@@ -11,6 +11,7 @@ import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { SheetActions } from '../../../features/company/SheetActions';
 import { PrimaryActionBar } from '@esmart/ui/components/ActionBar';
 import { ListRow } from '@esmart/ui/components/ListRow';
+import { Cell, DataTable } from '@esmart/ui/components/DataTable';
 import { Sheet } from '@esmart/ui/components/Sheet';
 import { PickerField, TextField } from '@esmart/ui/components/Field';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
@@ -32,7 +33,7 @@ export default function CurrencySettings() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const desktop = useIsDesktop();
-  const { t: tr } = useTranslation(['nav', 'settings']);
+  const { t: tr } = useTranslation(['nav', 'settings', 'common']);
   const sourceLabel = (source: ExchangeRate['source']) => (source === 'provider' ? tr('settings:currencies.sourceProvider') : tr('settings:currencies.sourceManual'));
   const { run: serverSave, saving } = useServerSave();
 
@@ -107,45 +108,80 @@ export default function CurrencySettings() {
 
         <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6, marginTop: t.spacing.xl, marginBottom: t.spacing.sm }}>{tr('settings:currencies.rates')}</Text>
 
-        <Card padded={false}>
-          {pairs.length === 0 ? (
-            <EmptyState icon="currency-usd-off" title={tr('settings:currencies.none')} message={tr('settings:currencies.noneBody')} compact />
-          ) : (
-            pairs.map((p, i) => (
-              <ListRow
-                key={p.code}
-                title={`1 ${p.code} = ${p.latest.rate.toFixed(4)} ${baseCurrency}`}
-                subtitle={currencyMeta(p.code).name}
-                meta={tr('settings:currencies.pairMeta', { date: formatDate(p.latest.effectiveFrom), count: p.history.length })}
-                icon="swap-horizontal"
-                divider={i < pairs.length - 1}
-                right={
-                  <View style={{ alignItems: 'flex-end', gap: 4 }}>
-                    <Sparkline values={p.history.map((h) => h.rate)} width={54} height={20} />
-                    <Badge label={sourceLabel(p.latest.source)} tone={p.latest.source === 'provider' ? 'success' : 'neutral'} size="sm" />
-                  </View>
-                }
-                onPress={() => open(p.latest)}
-                chevron
-              />
-            ))
+        {desktop && pairs.length ? (
+          // A desktop lists the latest rate per currency as a table, its trend and source beside it.
+          <DataTable
+            scroll={false}
+            rows={pairs}
+            rowKey={(p) => p.code}
+            rowLabel={(p) => `1 ${p.code} = ${p.latest.rate.toFixed(4)} ${baseCurrency}`}
+            onRowPress={(p) => open(p.latest)}
+            columns={[
+              { key: 'currency', header: tr('settings:currencies.currency'), flex: 2, sortValue: (p) => p.code, render: (p) => <Cell weight="600">{`${p.code} · ${currencyMeta(p.code).name}`}</Cell> },
+              { key: 'rate', header: tr('settings:currencies.rate'), width: 200, align: 'right', sortValue: (p) => p.latest.rate, render: (p) => <Cell weight="600" mono>{`${p.latest.rate.toFixed(4)} ${baseCurrency}`}</Cell> },
+              { key: 'from', header: tr('settings:currencies.effectiveFrom'), width: 150, sortValue: (p) => p.latest.effectiveFrom, render: (p) => <Cell tone="muted">{formatDate(p.latest.effectiveFrom)}</Cell> },
+              { key: 'count', header: tr('settings:currencies.onRecord'), width: 110, align: 'right', secondary: true, render: (p) => <Cell mono>{String(p.history.length)}</Cell> },
+              { key: 'trend', header: tr('settings:currencies.trend'), width: 110, secondary: true, render: (p) => <Sparkline values={p.history.map((h) => h.rate)} width={72} height={20} /> },
+              { key: 'source', header: tr('settings:currencies.source'), width: 120, render: (p) => <Badge label={sourceLabel(p.latest.source)} tone={p.latest.source === 'provider' ? 'success' : 'neutral'} size="sm" /> },
+            ]}
+          />
+        ) : (
+          <Card padded={false}>
+            {pairs.length === 0 ? (
+              <EmptyState icon="currency-usd-off" title={tr('settings:currencies.none')} message={tr('settings:currencies.noneBody')} compact />
+            ) : (
+              pairs.map((p, i) => (
+                <ListRow
+                  key={p.code}
+                  title={`1 ${p.code} = ${p.latest.rate.toFixed(4)} ${baseCurrency}`}
+                  subtitle={currencyMeta(p.code).name}
+                  meta={tr('settings:currencies.pairMeta', { date: formatDate(p.latest.effectiveFrom), count: p.history.length })}
+                  icon="swap-horizontal"
+                  divider={i < pairs.length - 1}
+                  right={
+                    <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                      <Sparkline values={p.history.map((h) => h.rate)} width={54} height={20} />
+                      <Badge label={sourceLabel(p.latest.source)} tone={p.latest.source === 'provider' ? 'success' : 'neutral'} size="sm" />
+                    </View>
+                  }
+                  onPress={() => open(p.latest)}
+                  chevron
+                />
+              ))
           )}
         </Card>
+        )}
 
         <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6, marginTop: t.spacing.xl, marginBottom: t.spacing.sm }}>{tr('settings:currencies.history')}</Text>
-        <Card padded={false}>
-          {rates.slice(0, 12).map((r, i) => (
-            <ListRow
-              key={r.id}
-              title={`${r.from} → ${r.to}`}
-              subtitle={tr('settings:currencies.historyRow', { rate: r.rate.toFixed(4), date: formatDate(r.effectiveFrom) })}
-              icon="history"
-              divider={i < Math.min(rates.length, 12) - 1}
-              right={<Badge label={sourceLabel(r.source)} tone="neutral" size="sm" />}
-              onPress={() => open(r)}
-            />
-          ))}
-        </Card>
+        {desktop ? (
+          <DataTable
+            scroll={false}
+            rows={rates.slice(0, 12)}
+            rowKey={(r) => r.id}
+            rowLabel={(r) => `${r.from} → ${r.to}, ${r.rate.toFixed(4)}`}
+            onRowPress={open}
+            columns={[
+              { key: 'pair', header: tr('settings:currencies.currency'), flex: 2, render: (r) => <Cell weight="600">{`${r.from} → ${r.to}`}</Cell> },
+              { key: 'rate', header: tr('settings:currencies.rate'), width: 200, align: 'right', render: (r) => <Cell mono>{r.rate.toFixed(4)}</Cell> },
+              { key: 'from', header: tr('settings:currencies.effectiveFrom'), width: 150, render: (r) => <Cell tone="muted">{formatDate(r.effectiveFrom)}</Cell> },
+              { key: 'source', header: tr('settings:currencies.source'), width: 120, render: (r) => <Badge label={sourceLabel(r.source)} tone="neutral" size="sm" /> },
+            ]}
+          />
+        ) : (
+          <Card padded={false}>
+            {rates.slice(0, 12).map((r, i) => (
+              <ListRow
+                key={r.id}
+                title={`${r.from} → ${r.to}`}
+                subtitle={tr('settings:currencies.historyRow', { rate: r.rate.toFixed(4), date: formatDate(r.effectiveFrom) })}
+                icon="history"
+                divider={i < Math.min(rates.length, 12) - 1}
+                right={<Badge label={sourceLabel(r.source)} tone="neutral" size="sm" />}
+                onPress={() => open(r)}
+              />
+            ))}
+          </Card>
+        )}
       </ScrollView>
 
       <PrimaryActionBar title={tr('settings:currencies.add')} icon="plus" onPress={() => open()} />

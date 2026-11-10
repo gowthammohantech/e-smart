@@ -11,6 +11,8 @@ import { Sheet } from '@esmart/ui/components/Sheet';
 import { TextField } from '@esmart/ui/components/Field';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { Text } from '@esmart/ui/components/Text';
+import { Icon } from '@esmart/ui/components/Icon';
+import { Cell, DataTable } from '@esmart/ui/components/DataTable';
 import { ExpenseCategory } from '@esmart/core/types';
 import { useAppStore } from '../../../store/appStore';
 import { useActiveCompany, useBaseCurrency, useExpenseCategories } from '../../../store/selectors';
@@ -27,7 +29,7 @@ export default function ExpenseCategorySettings() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const desktop = useIsDesktop();
-  const { t: tr } = useTranslation(['nav', 'settings', 'errors']);
+  const { t: tr } = useTranslation(['nav', 'settings', 'errors', 'common']);
   const { run: serverSave, saving } = useServerSave();
 
   const company = useActiveCompany();
@@ -61,37 +63,93 @@ export default function ExpenseCategorySettings() {
     <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('nav:title.expenseCategories') }} />
 
-      {/* A short list: kept within reach of its chevrons on a desktop, where the add button sits in the page header. */}
+      {/* The add button sits in the page header on a desktop, so no room is kept for a bottom bar. */}
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: desktop ? t.spacing.xxl : 120 + insets.bottom }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
-        <Card padded={false}>
-          {categories.map((c, i) => {
-            const stat = totals[c.id];
-            return (
-              <ListRow
-                key={c.id}
-                title={c.name}
-                subtitle={usagePending ? undefined : stat ? tr('settings:categories.entries', { count: stat.count }) : tr('settings:categories.unused')}
-                icon={c.icon as never}
-                iconColor={c.color}
-                divider={i < categories.length - 1}
-                right={
+        {desktop ? (
+          // A desktop lists the categories as a table: name, how often used, and the total spent.
+          <DataTable
+            scroll={false}
+            rows={categories}
+            rowKey={(c) => c.id}
+            rowLabel={(c) => c.name}
+            onRowPress={open}
+            columns={[
+              {
+                key: 'name',
+                header: tr('settings:categories.name'),
+                flex: 2,
+                sortValue: (c) => c.name,
+                render: (c) => (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm, alignSelf: 'stretch', minWidth: 0 }}>
+                    <Icon name={c.icon as never} size={18} color={c.color} />
+                    <Cell weight="600">{c.name}</Cell>
+                  </View>
+                ),
+              },
+              {
+                key: 'entries',
+                header: tr('settings:categories.entriesHeading'),
+                width: 160,
+                sortValue: (c) => totals[c.id]?.count ?? 0,
+                render: (c) =>
                   usagePending ? (
-                    <SkeletonGroup style={{ alignItems: 'flex-end', gap: 4 }}>
-                      <Skeleton height={14} width={64} />
-                      <Skeleton height={10} width={44} radius={4} />
+                    <SkeletonGroup>
+                      <Skeleton height={12} width={56} radius={4} />
                     </SkeletonGroup>
-                  ) : stat ? (
-                    <Text variant="small" weight="600">
-                      {formatMoney(money(stat.total, baseCurrency))}
-                    </Text>
-                  ) : undefined
-                }
-                onPress={() => open(c)}
-                chevron
-              />
-            );
-          })}
-        </Card>
+                  ) : (
+                    <Cell tone="muted">{totals[c.id] ? tr('settings:categories.entries', { count: totals[c.id].count }) : tr('settings:categories.unused')}</Cell>
+                  ),
+              },
+              {
+                key: 'total',
+                header: tr('common:table.total'),
+                width: 180,
+                align: 'right',
+                sortValue: (c) => totals[c.id]?.total ?? 0,
+                render: (c) =>
+                  usagePending ? (
+                    <SkeletonGroup>
+                      <Skeleton height={14} width={72} />
+                    </SkeletonGroup>
+                  ) : (
+                    <Cell weight="600" mono>
+                      {totals[c.id] ? formatMoney(money(totals[c.id].total, baseCurrency)) : '—'}
+                    </Cell>
+                  ),
+              },
+            ]}
+          />
+        ) : (
+          <Card padded={false}>
+            {categories.map((c, i) => {
+              const stat = totals[c.id];
+              return (
+                <ListRow
+                  key={c.id}
+                  title={c.name}
+                  subtitle={usagePending ? undefined : stat ? tr('settings:categories.entries', { count: stat.count }) : tr('settings:categories.unused')}
+                  icon={c.icon as never}
+                  iconColor={c.color}
+                  divider={i < categories.length - 1}
+                  right={
+                    usagePending ? (
+                      <SkeletonGroup style={{ alignItems: 'flex-end', gap: 4 }}>
+                        <Skeleton height={14} width={64} />
+                        <Skeleton height={10} width={44} radius={4} />
+                      </SkeletonGroup>
+                    ) : stat ? (
+                      <Text variant="small" weight="600">
+                        {formatMoney(money(stat.total, baseCurrency))}
+                      </Text>
+                    ) : undefined
+                  }
+                  onPress={() => open(c)}
+                  chevron
+                />
+              );
+            })}
+          </Card>
+        )}
       </ScrollView>
 
       <PrimaryActionBar title={tr('settings:categories.add')} icon="plus" onPress={() => open()} />

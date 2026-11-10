@@ -11,7 +11,8 @@ import { Segmented, SwitchField, TextField } from '@esmart/ui/components/Field';
 import { ListRow } from '@esmart/ui/components/ListRow';
 import { Sheet } from '@esmart/ui/components/Sheet';
 import { Text } from '@esmart/ui/components/Text';
-import { FormContainer } from '@esmart/ui/components/Layout';
+import { Cell, DataTable } from '@esmart/ui/components/DataTable';
+import { Icon } from '@esmart/ui/components/Icon';
 import { DRAWER_WIDTH, SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { uid } from '@esmart/core/lib/id';
 import type { CustomField, CustomFieldEntity, CustomFieldKind } from '@esmart/core/domain/customFields';
@@ -29,7 +30,7 @@ export default function CustomFieldsScreen() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const desktop = useIsDesktop();
-  const { t: tr } = useTranslation(['settings']);
+  const { t: tr } = useTranslation(['settings', 'common']);
   const [entity, setEntity] = useState<CustomFieldEntity>('document');
   const fields = useCustomFields(entity, true);
   const companyId = useAppStore((s) => s.activeCompanyId);
@@ -54,7 +55,7 @@ export default function CustomFieldsScreen() {
   };
 
   return (
-    <FormContainer wide>
+    <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('settings:customFields.title') }} />
       {/* The add button sits in the page header on a desktop, so no room is kept for a bottom bar. */}
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: desktop ? t.spacing.xxl : 120 + insets.bottom, gap: t.spacing.lg }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
@@ -62,7 +63,25 @@ export default function CustomFieldsScreen() {
           {tr('settings:customFields.hint')}
         </Text>
         <Segmented options={ENTITIES.map((e) => ({ value: e, label: tr(`settings:customFields.entity.${e}`) }))} value={entity} onChange={(v) => setEntity(v as CustomFieldEntity)} />
-        {fields.length ? (
+        {fields.length && desktop ? (
+          // A desktop lists the fields as a table: kind, whether required and printed, and status.
+          <DataTable
+            scroll={false}
+            rows={fields}
+            rowKey={(f) => f.id}
+            rowLabel={(f) => f.label}
+            onRowPress={open}
+            columns={[
+              { key: 'label', header: tr('settings:customFields.label'), flex: 2, render: (f) => <Cell weight="600">{f.label}</Cell> },
+              { key: 'kind', header: tr('common:table.type'), width: 140, render: (f) => <Cell tone="muted">{tr(`settings:customFields.kind.${f.kind}`)}</Cell> },
+              { key: 'required', header: tr('settings:customFields.required'), width: 120, align: 'center', render: (f) => (f.required ? <Icon name="check" size={18} color={t.c.muted} /> : <Cell tone="muted">—</Cell>) },
+              ...(entity === 'item'
+                ? []
+                : [{ key: 'printed', header: tr('settings:customFields.printed'), width: 200, align: 'center' as const, render: (f: CustomField) => (f.showOnPdf ? <Icon name="check" size={18} color={t.c.muted} /> : <Cell tone="muted">—</Cell>) }]),
+              { key: 'status', header: tr('common:table.status'), width: 120, render: (f) => <Badge label={f.status === 'inactive' ? tr('settings:customFields.inactive') : tr('settings:customFields.active')} tone={f.status === 'inactive' ? 'neutral' : 'success'} size="sm" /> },
+            ]}
+          />
+        ) : fields.length ? (
           <Card padded={false}>
             {fields.map((f, i) => (
               <ListRow
@@ -146,6 +165,6 @@ export default function CustomFieldsScreen() {
           await serverSave(() => removeField(f.id), tr('settings:customFields.deleted'), { icon: 'delete-outline', detail: f.label });
         }}
       />
-    </FormContainer>
+    </View>
   );
 }

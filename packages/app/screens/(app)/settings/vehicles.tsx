@@ -14,6 +14,7 @@ import { SwitchField, TextField } from '@esmart/ui/components/Field';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { Text } from '@esmart/ui/components/Text';
+import { Cell, DataTable } from '@esmart/ui/components/DataTable';
 import { DIALOG_WIDTH, SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { financialYearOf, today } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
@@ -33,7 +34,7 @@ export default function VehicleSettings() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const desktop = useIsDesktop();
-  const { t: tr } = useTranslation(['settings', 'errors']);
+  const { t: tr } = useTranslation(['settings', 'errors', 'common']);
   const { run: serverSave, saving } = useServerSave();
   const company = useActiveCompany();
   const vehicles = useVehicles(true);
@@ -52,12 +53,39 @@ export default function VehicleSettings() {
   return (
     <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('settings:vehicles.title') }} />
-      {/* A short list: kept within reach of its chevrons on a desktop, where the add button sits in the page header. */}
+      {/* The add button sits in the page header on a desktop, so no room is kept for a bottom bar. */}
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, gap: t.spacing.md, paddingBottom: desktop ? t.spacing.xxl : 120 + insets.bottom }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <Text variant="small" tone="muted">
           {tr('settings:vehicles.hint', { fy: fy.label })}
         </Text>
-        {vehicles.length ? (
+        {vehicles.length && desktop ? (
+          // A desktop lists vehicles as a table: what each has cost this year and what it carried.
+          <DataTable
+            scroll={false}
+            rows={vehicles}
+            rowKey={(v) => v.id}
+            rowLabel={(v) => v.registration}
+            onRowPress={setEditing}
+            columns={[
+              { key: 'registration', header: tr('settings:vehicles.registration'), width: 200, sortValue: (v) => v.registration, render: (v) => <Cell weight="600">{v.registration}</Cell> },
+              { key: 'name', header: tr('common:table.name'), flex: 2, sortValue: (v) => v.name ?? '', render: (v) => <Cell tone="muted">{v.name || '—'}</Cell> },
+              { key: 'status', header: tr('common:table.status'), width: 130, render: (v) => <Badge label={v.status === 'inactive' ? tr('settings:vehicles.inactive') : tr('settings:vehicles.active')} tone={v.status === 'inactive' ? 'neutral' : 'success'} size="sm" /> },
+              { key: 'documents', header: tr('settings:vehicles.documents'), width: 130, align: 'right', sortValue: (v) => spendOf(v.id)?.documentCount ?? 0, render: (v) => <Cell mono>{spend.isPending ? '…' : String(spendOf(v.id)?.documentCount ?? 0)}</Cell> },
+              { key: 'expenses', header: tr('settings:vehicles.expenses'), width: 120, align: 'right', secondary: true, sortValue: (v) => spendOf(v.id)?.expenseCount ?? 0, render: (v) => <Cell mono>{spend.isPending ? '…' : String(spendOf(v.id)?.expenseCount ?? 0)}</Cell> },
+              {
+                key: 'spent',
+                header: tr('settings:vehicles.spent'),
+                width: 170,
+                align: 'right',
+                sortValue: (v) => spendOf(v.id)?.expenses.minor ?? 0,
+                render: (v) => {
+                  const s = spendOf(v.id);
+                  return <Cell weight="600" mono>{spend.isPending ? '…' : s ? formatMoney(s.expenses) : '—'}</Cell>;
+                },
+              },
+            ]}
+          />
+        ) : vehicles.length ? (
           <Card padded={false}>
             {vehicles.map((v, i) => {
               const s = spendOf(v.id);
