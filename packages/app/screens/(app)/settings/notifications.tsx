@@ -8,12 +8,13 @@ import { Card } from '@esmart/ui/components/Card';
 import { Button } from '@esmart/ui/components/Button';
 import { SwitchField } from '@esmart/ui/components/Field';
 import { useToast } from '@esmart/ui/components/Toast';
-import { SHOW_SCROLLBAR, WIDE_FORM_MAX_WIDTH, useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { api } from '../../../remote/api';
 import { describeError } from '../../../remote/errors';
 import { ensurePushRegistered, pushPermission, type PushPermission } from '../../../remote/push';
 import { SkeletonGroup, SkeletonRows } from '@esmart/ui/components/Skeleton';
 import { LoadFailed } from '../../../features/company/LoadFailed';
+import { CardGrid } from '../../../features/settings/CardGrid';
 
 /** The kinds a person can mute, in the order they matter to a business. */
 const KINDS = ['paymentReceived', 'invoiceOverdue', 'compliance', 'lowStock', 'system'] as const;
@@ -55,56 +56,77 @@ export default function NotificationSettings() {
     });
   };
 
+  const permissionCard =
+    permission === null ? (
+      <Card>
+        <SkeletonGroup>
+          <SkeletonRows rows={1} kind="list" icon={false} />
+        </SkeletonGroup>
+      </Card>
+    ) : permission !== 'granted' ? (
+      <Card style={{ gap: t.spacing.sm }}>
+        <Text variant="body" weight="600">
+          {tr(permission === 'unavailable' ? 'settings:notifications.unavailableTitle' : 'settings:notifications.offTitle')}
+        </Text>
+        <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
+          {tr(permission === 'unavailable' ? (Platform.OS === 'web' ? 'settings:notifications.web' : 'settings:notifications.unavailable') : permission === 'denied' ? 'settings:notifications.denied' : 'settings:notifications.off')}
+        </Text>
+        {permission === 'undetermined' ? <Button title={tr('settings:notifications.turnOn')} onPress={() => void ensurePushRegistered({ ask: true }).then(refresh)} /> : null}
+        {permission === 'denied' ? <Button title={tr('settings:notifications.openSettings')} variant="secondary" onPress={() => void Linking.openSettings()} /> : null}
+      </Card>
+    ) : null;
+
+  // Until the preferences are back the switches aren't shown "off"; a failure offers a retry.
+  const switchesCard = muted ? (
+    <Card style={{ gap: t.spacing.md }}>
+      {KINDS.map((kind) => (
+        <SwitchField key={kind} label={tr(`settings:notifications.kind.${kind}`)} value={!muted.includes(kind)} onValueChange={(on) => toggle(kind, on)} />
+      ))}
+    </Card>
+  ) : loadFailed ? (
+    <Card padded={false}>
+      <LoadFailed
+        onRetry={() => {
+          setLoadFailed(false);
+          setAttempt((n) => n + 1);
+        }}
+        compact
+      />
+    </Card>
+  ) : (
+    <Card>
+      <SkeletonGroup>
+        <SkeletonRows rows={KINDS.length} kind="list" />
+      </SkeletonGroup>
+    </Card>
+  );
+
+  const note = (
+    <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
+      {tr('settings:notifications.inApp')}
+    </Text>
+  );
+
   return (
-    // A form's width on a desktop, so each switch and value stays near its label.
-    <View style={desktop ? { flex: 1, width: '100%', maxWidth: WIDE_FORM_MAX_WIDTH } : { flex: 1 }}>
+    <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('nav:title.notifications') }} />
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40, gap: t.spacing.lg }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
-        {permission === null ? (
-          <Card>
-            <SkeletonGroup>
-              <SkeletonRows rows={1} kind="list" icon={false} />
-            </SkeletonGroup>
-          </Card>
-        ) : permission !== 'granted' ? (
-          <Card style={{ gap: t.spacing.sm }}>
-            <Text variant="body" weight="600">
-              {tr(permission === 'unavailable' ? 'settings:notifications.unavailableTitle' : 'settings:notifications.offTitle')}
-            </Text>
-            <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
-              {tr(permission === 'unavailable' ? (Platform.OS === 'web' ? 'settings:notifications.web' : 'settings:notifications.unavailable') : permission === 'denied' ? 'settings:notifications.denied' : 'settings:notifications.off')}
-            </Text>
-            {permission === 'undetermined' ? <Button title={tr('settings:notifications.turnOn')} onPress={() => void ensurePushRegistered({ ask: true }).then(refresh)} /> : null}
-            {permission === 'denied' ? <Button title={tr('settings:notifications.openSettings')} variant="secondary" onPress={() => void Linking.openSettings()} /> : null}
-          </Card>
-        ) : null}
-        {/* Until the preferences are back the switches aren't shown "off"; a failure offers a retry. */}
-        {muted ? (
-          <Card style={{ gap: t.spacing.md }}>
-            {KINDS.map((kind) => (
-              <SwitchField key={kind} label={tr(`settings:notifications.kind.${kind}`)} value={!muted.includes(kind)} onValueChange={(on) => toggle(kind, on)} />
-            ))}
-          </Card>
-        ) : loadFailed ? (
-          <Card padded={false}>
-            <LoadFailed
-              onRetry={() => {
-                setLoadFailed(false);
-                setAttempt((n) => n + 1);
-              }}
-              compact
-            />
-          </Card>
+        {desktop ? (
+          // Switches in a half-width card keep each one near its label; the phone's status sits beside them.
+          <CardGrid>
+            {switchesCard}
+            <View style={{ gap: t.spacing.lg }}>
+              {permissionCard}
+              {note}
+            </View>
+          </CardGrid>
         ) : (
-          <Card>
-            <SkeletonGroup>
-              <SkeletonRows rows={KINDS.length} kind="list" />
-            </SkeletonGroup>
-          </Card>
+          <>
+            {permissionCard}
+            {switchesCard}
+            {note}
+          </>
         )}
-        <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
-          {tr('settings:notifications.inApp')}
-        </Text>
       </ScrollView>
     </View>
   );

@@ -13,7 +13,8 @@ import { useUiStore } from '../../../store/uiStore';
 import { AppLanguage, SUPPORTED_LANGUAGES } from '@esmart/i18n/config';
 import { fromMajor } from '@esmart/core/lib/money';
 import { useBaseCurrency } from '../../../store/selectors';
-import { SHOW_SCROLLBAR, WIDE_FORM_MAX_WIDTH, useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { CardGrid } from '../../../features/settings/CardGrid';
 
 const MODES = [
   { value: 'system', label: 'settings:language.matchDevice', description: 'settings:appearance.mode.systemHint', icon: 'cellphone-cog' },
@@ -103,47 +104,70 @@ export default function Appearance() {
   const language = useUiStore((s) => s.language);
   const setLanguage = useUiStore((s) => s.setLanguage);
 
+  const sectionLabel = (label: string) => (
+    <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>
+      {label}
+    </Text>
+  );
+
+  const themeCard = (
+    <Card padded={false}>
+      {MODES.map((m, i) => (
+        <RadioRow
+          key={m.value}
+          label={tr(m.label)}
+          description={tr(m.description)}
+          icon={m.icon}
+          active={themeMode === m.value}
+          last={i === MODES.length - 1}
+          onPress={() => setThemeMode(m.value)}
+        />
+      ))}
+    </Card>
+  );
+
+  const languageSection = (
+    <>
+      {sectionLabel(tr('settings:language.sectionLabel'))}
+      <Card padded={false}>
+        {LANGUAGE_OPTIONS.map((o, i) => (
+          <RadioRow
+            key={o.value}
+            label={o.value === 'system' ? tr('settings:language.matchDevice') : o.label}
+            description={o.value === 'system' ? tr('settings:language.matchDeviceHint') : o.description}
+            icon={o.icon}
+            active={language === o.value}
+            last={i === LANGUAGE_OPTIONS.length - 1}
+            onPress={() => setLanguage(o.value)}
+          />
+        ))}
+      </Card>
+      <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
+        {tr('settings:language.note')}
+      </Text>
+    </>
+  );
+
   return (
-    // A form's width on a desktop, so each switch and value stays near its label.
-    <View style={desktop ? { flex: 1, width: '100%', maxWidth: WIDE_FORM_MAX_WIDTH } : { flex: 1 }}>
+    <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('nav:title.appearance') }} />
 
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40, gap: t.spacing.lg }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
-        <Card padded={false}>
-          {MODES.map((m, i) => (
-            <RadioRow
-              key={m.value}
-              label={tr(m.label)}
-              description={tr(m.description)}
-              icon={m.icon}
-              active={themeMode === m.value}
-              last={i === MODES.length - 1}
-              onPress={() => setThemeMode(m.value)}
-            />
-          ))}
-        </Card>
-
-        <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>
-          {tr('settings:language.sectionLabel')}
-        </Text>
-
-        <Card padded={false}>
-          {LANGUAGE_OPTIONS.map((o, i) => (
-            <RadioRow
-              key={o.value}
-              label={o.value === 'system' ? tr('settings:language.matchDevice') : o.label}
-              description={o.value === 'system' ? tr('settings:language.matchDeviceHint') : o.description}
-              icon={o.icon}
-              active={language === o.value}
-              last={i === LANGUAGE_OPTIONS.length - 1}
-              onPress={() => setLanguage(o.value)}
-            />
-          ))}
-        </Card>
-
-        <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
-          {tr('settings:language.note')}
-        </Text>
+        {desktop ? (
+          // Theme beside language, so each check mark stays near its option.
+          <CardGrid>
+            <View style={{ gap: t.spacing.lg }}>
+              {sectionLabel(tr('nav:title.appearance'))}
+              {themeCard}
+            </View>
+            <View style={{ gap: t.spacing.lg }}>{languageSection}</View>
+          </CardGrid>
+        ) : (
+          <>
+            {themeCard}
+            {languageSection}
+          </>
+        )}
 
         <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('settings:appearance.preview')}</Text>
 

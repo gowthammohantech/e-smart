@@ -122,7 +122,8 @@ function InvoiceDesignScreenBody() {
           {tr('settings:invoiceDesign.hint')}
         </Text>
         <View style={desktop ? { flexDirection: 'row', alignItems: 'flex-start', gap: t.spacing.xl } : { gap: t.spacing.lg }}>
-          <View style={[{ gap: t.spacing.lg }, desktop ? { width: 380 } : null]}>
+          {/* Controls take two parts of the page to the preview's three, so both grow with the window. */}
+          <View style={[{ gap: t.spacing.lg }, desktop ? { flex: 2, minWidth: 0 } : null]}>
             <Card style={{ gap: t.spacing.md }}>
               <View style={{ gap: t.spacing.xxs }}>
                 <Text variant="body" weight="600">
@@ -244,12 +245,12 @@ function InvoiceDesignScreenBody() {
             </Card>
           </View>
           {previewLoading ? (
-            <SkeletonGroup style={desktop ? { flex: 1, minWidth: 0 } : undefined}>
+            <SkeletonGroup style={desktop ? { flex: 3, minWidth: 0 } : undefined}>
               <Skeleton height={desktop ? 720 : 420} radius={t.radius.lg} />
             </SkeletonGroup>
           ) : html ? (
             // The preview fills the rest of the page column, so it ends at the page's right edge.
-            <Card padded={false} style={[{ height: desktop ? 900 : 720, overflow: 'hidden' }, desktop ? { flex: 1, minWidth: 0 } : null]}>
+            <Card padded={false} style={[{ height: desktop ? 900 : 720, overflow: 'hidden' }, desktop ? { flex: 3, minWidth: 0 } : null]}>
               <HtmlPreview html={html} style={{ flex: 1 }} />
             </Card>
           ) : (

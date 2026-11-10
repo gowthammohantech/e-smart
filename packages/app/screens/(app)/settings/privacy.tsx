@@ -8,11 +8,12 @@ import { Card } from '@esmart/ui/components/Card';
 import { ListRow } from '@esmart/ui/components/ListRow';
 import { SwitchField } from '@esmart/ui/components/Field';
 import { useToast } from '@esmart/ui/components/Toast';
-import { SHOW_SCROLLBAR, WIDE_FORM_MAX_WIDTH, useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { SkeletonGroup, SkeletonRows } from '@esmart/ui/components/Skeleton';
 import { api } from '../../../remote/api';
 import { describeError } from '../../../remote/errors';
 import { LoadFailed } from '../../../features/company/LoadFailed';
+import { CardGrid } from '../../../features/settings/CardGrid';
 import { setOptedOut } from '../../../lib/analytics';
 import { LEGAL } from '../../../lib/legal';
 import { useAppStore } from '../../../store/appStore';
@@ -51,43 +52,61 @@ export default function PrivacySettings() {
       });
   };
 
+  const shareCard = demo ? (
+    <Card>
+      <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>{tr('settings:privacy.demo')}</Text>
+    </Card>
+  ) : share !== null ? (
+    <Card style={{ gap: t.spacing.sm }}>
+      <SwitchField label={tr('settings:privacy.shareUsage')} value={share} onValueChange={toggle} />
+      <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>{tr('settings:privacy.shareUsageHint')}</Text>
+    </Card>
+  ) : loadFailed ? (
+    <Card padded={false}>
+      <LoadFailed
+        onRetry={() => {
+          setLoadFailed(false);
+          setAttempt((n) => n + 1);
+        }}
+        compact
+      />
+    </Card>
+  ) : (
+    <Card>
+      <SkeletonGroup>
+        <SkeletonRows rows={1} kind="list" />
+      </SkeletonGroup>
+    </Card>
+  );
+
+  const about = (
+    <>
+      <Card variant="flat" style={{ gap: t.spacing.sm }}>
+        <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('settings:privacy.whatHeading')}</Text>
+        <Text variant="caption" tone="muted" style={{ lineHeight: 19 }}>{tr('settings:privacy.what')}</Text>
+      </Card>
+      <Card padded={false}>
+        <ListRow title={tr('settings:about.privacy')} icon="shield-account-outline" chevron onPress={() => void Linking.openURL(LEGAL.privacy).catch(() => toast.show(LEGAL.privacy, 'info', { icon: 'link-variant' }))} divider={false} />
+      </Card>
+    </>
+  );
+
   return (
-    <View style={desktop ? { flex: 1, width: '100%', maxWidth: WIDE_FORM_MAX_WIDTH } : { flex: 1 }}>
+    <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('nav:title.privacy') }} />
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: 40, gap: t.spacing.lg }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
-        {demo ? (
-          <Card>
-            <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>{tr('settings:privacy.demo')}</Text>
-          </Card>
-        ) : share !== null ? (
-          <Card style={{ gap: t.spacing.sm }}>
-            <SwitchField label={tr('settings:privacy.shareUsage')} value={share} onValueChange={toggle} />
-            <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>{tr('settings:privacy.shareUsageHint')}</Text>
-          </Card>
-        ) : loadFailed ? (
-          <Card padded={false}>
-            <LoadFailed
-              onRetry={() => {
-                setLoadFailed(false);
-                setAttempt((n) => n + 1);
-              }}
-              compact
-            />
-          </Card>
+        {desktop ? (
+          // The switch in a half-width card stays near its label; what is shared sits beside it.
+          <CardGrid>
+            {shareCard}
+            <View style={{ gap: t.spacing.lg }}>{about}</View>
+          </CardGrid>
         ) : (
-          <Card>
-            <SkeletonGroup>
-              <SkeletonRows rows={1} kind="list" />
-            </SkeletonGroup>
-          </Card>
+          <>
+            {shareCard}
+            {about}
+          </>
         )}
-        <Card variant="flat" style={{ gap: t.spacing.sm }}>
-          <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('settings:privacy.whatHeading')}</Text>
-          <Text variant="caption" tone="muted" style={{ lineHeight: 19 }}>{tr('settings:privacy.what')}</Text>
-        </Card>
-        <Card padded={false}>
-          <ListRow title={tr('settings:about.privacy')} icon="shield-account-outline" chevron onPress={() => void Linking.openURL(LEGAL.privacy).catch(() => toast.show(LEGAL.privacy, 'info', { icon: 'link-variant' }))} divider={false} />
-        </Card>
       </ScrollView>
     </View>
   );

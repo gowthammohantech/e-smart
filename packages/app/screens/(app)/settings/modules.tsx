@@ -6,11 +6,11 @@ import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Card } from '@esmart/ui/components/Card';
 import { SwitchField } from '@esmart/ui/components/Field';
 import { Text } from '@esmart/ui/components/Text';
-import { FormContainer } from '@esmart/ui/components/Layout';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
-import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { MODULE_DEPENDS, MODULES, dependentsOf, hasModule, type Module } from '@esmart/core/domain/plan';
 import { moduleLabel } from '@esmart/core/labels';
+import { CardGrid } from '../../../features/settings/CardGrid';
 import { useServerSave } from '../../../components/useServerSave';
 import { useAppStore } from '../../../store/appStore';
 import { useActiveCompany, useCurrentUser, useDisabledModules, usePlan } from '../../../store/selectors';
@@ -21,6 +21,7 @@ import { useActiveCompany, useCurrentUser, useDisabledModules, usePlan } from '.
  */
 export default function ModulesScreen() {
   const t = useTheme();
+  const desktop = useIsDesktop();
   const { t: tr } = useTranslation(['settings', 'domain']);
   const company = useActiveCompany();
   const plan = usePlan();
@@ -42,30 +43,43 @@ export default function ModulesScreen() {
     void serverSave(() => saveCompany({ ...company, disabledModules: [...next].sort() }), tr(on ? 'settings:modules.on' : 'settings:modules.off', { module: moduleLabel(tr, module) }), { icon: 'toggle-switch-outline' });
   };
 
+  const moduleSwitch = (m: Module) => {
+    const needs = (MODULE_DEPENDS[m] ?? []).map((d) => moduleLabel(tr, d));
+    const takes = dependentsOf(m).filter((d) => inPlan.includes(d)).map((d) => moduleLabel(tr, d));
+    return (
+      <SwitchField
+        label={moduleLabel(tr, m)}
+        description={[tr(`settings:modules.about.${m}`), needs.length ? tr('settings:modules.needs', { list: needs.join(', ') }) : '', takes.length ? tr('settings:modules.takes', { list: takes.join(', ') }) : ''].filter(Boolean).join(' ')}
+        value={!disabled.includes(m)}
+        onValueChange={(on) => (on ? toggle(m, true) : setConfirmOff(m))}
+        disabled={!owner || saving}
+      />
+    );
+  };
+
   return (
-    <FormContainer>
+    <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('settings:modules.title') }} />
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, gap: t.spacing.lg }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <Text variant="small" tone="muted">
           {tr(owner ? 'settings:modules.hint' : 'settings:modules.ownerOnly')}
         </Text>
-        <Card style={{ gap: t.spacing.sm }}>
-          {inPlan.map((m) => {
-            const needs = (MODULE_DEPENDS[m] ?? []).map((d) => moduleLabel(tr, d));
-            const takes = dependentsOf(m).filter((d) => inPlan.includes(d)).map((d) => moduleLabel(tr, d));
-            return (
-              <View key={m}>
-                <SwitchField
-                  label={moduleLabel(tr, m)}
-                  description={[tr(`settings:modules.about.${m}`), needs.length ? tr('settings:modules.needs', { list: needs.join(', ') }) : '', takes.length ? tr('settings:modules.takes', { list: takes.join(', ') }) : ''].filter(Boolean).join(' ')}
-                  value={!disabled.includes(m)}
-                  onValueChange={(on) => (on ? toggle(m, true) : setConfirmOff(m))}
-                  disabled={!owner || saving}
-                />
-              </View>
-            );
-          })}
-        </Card>
+        {desktop ? (
+          // A tile per module across the page, so each switch sits near its name.
+          <CardGrid per="auto">
+            {inPlan.map((m) => (
+              <Card key={m} style={{ flex: 1 }}>
+                {moduleSwitch(m)}
+              </Card>
+            ))}
+          </CardGrid>
+        ) : (
+          <Card style={{ gap: t.spacing.sm }}>
+            {inPlan.map((m) => (
+              <View key={m}>{moduleSwitch(m)}</View>
+            ))}
+          </Card>
+        )}
       </ScrollView>
       <ConfirmDialog
         visible={!!confirmOff}
@@ -84,6 +98,6 @@ export default function ModulesScreen() {
           if (m) toggle(m, false);
         }}
       />
-    </FormContainer>
+    </View>
   );
 }

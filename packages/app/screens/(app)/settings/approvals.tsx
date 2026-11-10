@@ -9,11 +9,11 @@ import { useSaveShortcut } from '../../../components/useSaveShortcut';
 import { Card } from '@esmart/ui/components/Card';
 import { AmountField, SwitchField } from '@esmart/ui/components/Field';
 import { Text } from '@esmart/ui/components/Text';
-import { FormContainer } from '@esmart/ui/components/Layout';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { documentKindLabel } from '@esmart/core/labels';
 import { fromMajor, toMajor } from '@esmart/core/lib/money';
 import type { DocumentKind } from '@esmart/core/types';
+import { CardGrid } from '../../../features/settings/CardGrid';
 import { useServerSave } from '../../../components/useServerSave';
 import { useAppStore } from '../../../store/appStore';
 import { useActiveCompany, useBaseCurrency, useCurrentUser } from '../../../store/selectors';
@@ -56,25 +56,42 @@ function ApprovalRulesScreenBody() {
   const desktop = useIsDesktop();
   useSaveShortcut(() => void save(), owner && !saving);
 
+  const rule = (k: DocumentKind | 'payment') => {
+    const on = rules[k] !== undefined && rules[k] !== null;
+    return (
+      <>
+        <SwitchField label={k === 'payment' ? tr('settings:approvals.payments') : documentKindLabel(tr, k, 2)} value={on} onValueChange={(v) => setRules({ ...rules, [k]: v ? '0' : null })} disabled={!owner} />
+        {on ? <AmountField label={tr('settings:approvals.over')} value={rules[k] ?? ''} onChangeValue={(v) => setRules({ ...rules, [k]: v })} currency={currency} hint={tr('settings:approvals.overHint')} /> : null}
+      </>
+    );
+  };
+
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-    <FormContainer>
+    <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('settings:approvals.title') }} />
       <ScrollView contentContainerStyle={{ padding: t.spacing.lg, gap: t.spacing.lg }} showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
         <Text variant="small" tone="muted">
           {tr(owner ? 'settings:approvals.hint' : 'settings:approvals.ownerOnly')}
         </Text>
-        <Card style={{ gap: t.spacing.md }}>
-          {KINDS.map((k) => {
-            const on = rules[k] !== undefined && rules[k] !== null;
-            return (
+        {desktop ? (
+          // A tile per document kind across the page, so each switch and amount sits near its label.
+          <CardGrid per="auto">
+            {KINDS.map((k) => (
+              <Card key={k} style={{ flex: 1, gap: t.spacing.sm }}>
+                {rule(k)}
+              </Card>
+            ))}
+          </CardGrid>
+        ) : (
+          <Card style={{ gap: t.spacing.md }}>
+            {KINDS.map((k) => (
               <View key={k} style={{ gap: t.spacing.sm }}>
-                <SwitchField label={k === 'payment' ? tr('settings:approvals.payments') : documentKindLabel(tr, k, 2)} value={on} onValueChange={(v) => setRules({ ...rules, [k]: v ? '0' : null })} disabled={!owner} />
-                {on ? <AmountField label={tr('settings:approvals.over')} value={rules[k] ?? ''} onChangeValue={(v) => setRules({ ...rules, [k]: v })} currency={currency} hint={tr('settings:approvals.overHint')} /> : null}
+                {rule(k)}
               </View>
-            );
-          })}
-        </Card>
+            ))}
+          </Card>
+        )}
       </ScrollView>
       {/* Saved from the bar under the form, as every settings screen with typed input is. */}
       {owner ? (
@@ -83,7 +100,7 @@ function ApprovalRulesScreenBody() {
           size={desktop ? undefined : 'lg'} />
         </FormActions>
       ) : null}
-    </FormContainer>
+    </View>
     </KeyboardAvoidingView>
   );
 }
