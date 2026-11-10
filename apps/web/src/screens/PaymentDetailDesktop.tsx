@@ -6,6 +6,7 @@ import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { focusRing, type WebPressState } from '@esmart/ui/theme/interaction';
 import { Text } from '@esmart/ui/components/Text';
+import { useBreakpoint } from '@esmart/ui/theme/breakpoints';
 import { Card } from '@esmart/ui/components/Card';
 import { Button } from '@esmart/ui/components/Button';
 import { Avatar } from '@esmart/ui/components/Avatar';
@@ -31,6 +32,9 @@ import { useGoBack } from '@esmart/app/navigation/useGoBack';
 type Allocation = { documentId: string; documentNumber: string; documentKind?: DocumentKind; amount: ReturnType<typeof money> };
 
 /** A small label over a value, for the facts along the top. */
+/** The record, the party and the notes, beside what the payment settled. */
+const SIDE_WIDTH = 360;
+
 function Fact({ label, value }: { label: string; value: string }) {
   return (
     <View style={{ flex: 1, minWidth: 140, gap: 4 }}>
@@ -84,6 +88,7 @@ export function PaymentDetailDesktop() {
   // A refund names the receipt it paid back; fetched so its number shows.
   const refundOf = usePaymentRecord(payment?.refundOf).data;
   const { sharePdf, adjustAdvance, pdfBusy, adjusting } = usePaymentActions(payment);
+  const stacked = useBreakpoint() === 'tablet';
 
   if (!payment && remote.isLoading) return <LoadingView />;
   if (!payment) {
@@ -139,9 +144,9 @@ export function PaymentDetailDesktop() {
         }}
       />
 
-      {/* The same side gutter as every other page, held to a readable width: the facts and amounts
-          don't drift a page apart on a wide screen. */}
-      <ScrollView contentContainerStyle={{ paddingHorizontal: t.spacing.lg, paddingBottom: 48, gap: t.spacing.lg, width: '100%', maxWidth: 1100 + 2 * t.spacing.lg }}>
+      {/* The same side gutter as every other page, across the page's full column so every card ends
+          level with the header's buttons. */}
+      <ScrollView contentContainerStyle={{ paddingHorizontal: t.spacing.lg, paddingBottom: 48, gap: t.spacing.lg, width: '100%' }}>
         {/* The headline: amount, who, and the facts that identify it */}
         <Card style={{ padding: t.spacing.xxl, gap: t.spacing.xl }}>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: t.spacing.xl }}>
@@ -180,9 +185,10 @@ export function PaymentDetailDesktop() {
           </View>
         </Card>
 
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.lg, alignItems: 'flex-start' }}>
+        {/* What it settled beside a fixed side column; a narrow window (icon-only sidebar) stacks them, each the full width. */}
+        <View style={stacked ? { gap: t.spacing.lg } : { flexDirection: 'row', gap: t.spacing.lg, alignItems: 'flex-start' }}>
           {/* What it settled */}
-          <View style={{ flexGrow: 3, flexBasis: 420, gap: t.spacing.md, minWidth: 0 }}>
+          <View style={{ flex: stacked ? undefined : 1, gap: t.spacing.md, minWidth: 0 }}>
             <SectionTitle>{tr('sales:payment.appliedTo')}</SectionTitle>
             {payment.allocations.length === 0 ? (
               <Card padded={false}>
@@ -301,7 +307,7 @@ export function PaymentDetailDesktop() {
           </View>
 
           {/* The record, the party and the notes */}
-          <View style={{ flexGrow: 1, flexBasis: 320, maxWidth: 400, gap: t.spacing.lg, minWidth: 0 }}>
+          <View style={{ width: stacked ? undefined : SIDE_WIDTH, gap: t.spacing.lg, minWidth: 0 }}>
             <View style={{ gap: t.spacing.md }}>
               <SectionTitle>{tr('sales:detail.tabDetails')}</SectionTitle>
               <Card style={{ gap: t.spacing.md }}>

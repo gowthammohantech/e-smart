@@ -128,8 +128,8 @@ export default function ApprovalsScreen() {
   };
 
   return (
-    // A desktop caps the list so Reject and Approve sit near what they decide on.
-    <View style={[{ flex: 1 }, desktop ? { width: "100%", maxWidth: 880 } : null]}>
+    // The page's full column on a desktop, like every other list.
+    <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr("sales:approval.title") }} />
       {pending.isLoading || requests.isLoading ? (
         <View style={{ padding: t.spacing.lg }}>

@@ -252,8 +252,9 @@ export default function ExpenseDetail() {
           }}
         />
         <ScrollView
-          // Held to a readable width: the details beside their side column, or the wide form width when stacked.
-          contentContainerStyle={{ paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.xxxl, width: '100%', maxWidth: (stacked ? WIDE_FORM_MAX_WIDTH : WIDE_FORM_MAX_WIDTH + 340 + t.spacing.xl) + 2 * t.spacing.lg }}
+          // The details and their side column take the page's full column, so they end level with the
+          // header's buttons; stacked, they keep the wide form width.
+          contentContainerStyle={{ paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.xxxl, width: '100%', maxWidth: stacked ? WIDE_FORM_MAX_WIDTH + 2 * t.spacing.lg : undefined }}
           showsVerticalScrollIndicator={SHOW_SCROLLBAR}
         >
           {stacked ? (

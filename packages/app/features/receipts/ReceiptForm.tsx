@@ -11,7 +11,7 @@ import { FormActions } from '@esmart/ui/components/ActionBar';
 import { AmountField, PickerField, TextField } from '@esmart/ui/components/Field';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
-import { FieldRow, FormContainer } from '@esmart/ui/components/Layout';
+import { FieldGrid, FieldRow, FormContainer } from '@esmart/ui/components/Layout';
 import { useToast } from '@esmart/ui/components/Toast';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { accountFor, chartOfAccounts, type Account } from '@esmart/core/domain/ledger/accounts';
@@ -33,6 +33,7 @@ import { describeError } from '../../remote/errors';
 import { useActiveCompany, useBaseCurrency, useDefaultBranchId, useParties } from '../../store/selectors';
 import { useAccountName, useGroupName } from '../books/names';
 import { CostCentreField } from '../books/CostCentreField';
+import { useCostCentres } from '../../store/books';
 
 const CASH: LedgerGroup[] = ['cashInHand', 'bankAccounts'];
 const INCOME: LedgerGroup[] = ['indirectIncomes', 'directIncomes'];
@@ -177,13 +178,15 @@ export function ReceiptForm({ voucher, onSaved }: { voucher?: Voucher; onSaved: 
   const amountField = <AmountField label={tr('books:receipts.amount')} value={amount} onChangeValue={setAmount} currency={baseCurrency} size={desktop ? 'md' : 'lg'} required autoFocus={!voucher} />;
   // A post-dated cheque or a receipt booked ahead is allowed, as on a payment.
   const dateField = <DateField label={tr('books:vouchers.date')} value={date} onChange={setDate} />;
+  // The cost centre field shows nothing until the business has one; known here so the grid can pair what shows.
+  const hasCostCentres = useCostCentres().length > 0 || !!costCentreId;
   const referenceField = <TextField label={tr('books:vouchers.reference')} value={reference} onChangeText={setReference} placeholder={tr('books:receipts.referencePlaceholder')} icon="pound" />;
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <FormContainer wide>
         <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: t.spacing.xxxl, gap: t.spacing.lg }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
-          {/* A desktop pairs the short fields: amount with date, party with who it's from, reference with cost centre. */}
+          {/* A desktop pairs the short fields: amount with date, the source with where it went. */}
           {desktop ? (
             <FieldRow>
               {amountField}
@@ -197,30 +200,32 @@ export function ReceiptForm({ voucher, onSaved }: { voucher?: Voucher; onSaved: 
             <PickerField label={tr('books:receipts.into')} value={label(into)} placeholder={tr('books:receipts.pickInto')} onPress={() => setPicking('into')} icon="bank-outline" required />
           </FieldRow>
           {desktop ? null : dateField}
-          <FieldRow>
-          <PickerField
-            label={tr('books:receipts.party')}
-            value={party?.name}
-            placeholder={tr('books:receipts.partyPlaceholder')}
-            onPress={() => setPicking('party')}
-            icon="account-outline"
-            clearable
-            onClear={() => setPartyId(undefined)}
-          />
-          {!partyId ? <TextField label={tr('books:receipts.from')} value={from} onChangeText={setFrom} placeholder={tr('books:receipts.fromPlaceholder')} icon="account-question-outline" /> : null}
-          </FieldRow>
-          {desktop ? (
-            // Reference first: the cost centre field is often hidden, and its empty slot then sits at the right.
-            <FieldRow columns={2}>
-              {referenceField}
-              <CostCentreField value={costCentreId} onChange={setCostCentreId} />
-            </FieldRow>
-          ) : (
-            <>
-              <CostCentreField value={costCentreId} onChange={setCostCentreId} />
-              {referenceField}
-            </>
-          )}
+          {(() => {
+            const partyField = (
+              <PickerField
+                label={tr('books:receipts.party')}
+                value={party?.name}
+                placeholder={tr('books:receipts.partyPlaceholder')}
+                onPress={() => setPicking('party')}
+                icon="account-outline"
+                clearable
+                onClear={() => setPartyId(undefined)}
+              />
+            );
+            const fromField = !partyId ? <TextField label={tr('books:receipts.from')} value={from} onChangeText={setFrom} placeholder={tr('books:receipts.fromPlaceholder')} icon="account-question-outline" /> : null;
+            const costCentreField = hasCostCentres ? <CostCentreField value={costCentreId} onChange={setCostCentreId} /> : null;
+            // A desktop pairs whichever of these show, two to a row; an odd one out takes the row.
+            return desktop ? (
+              <FieldGrid items={[partyField, fromField, referenceField, costCentreField]} />
+            ) : (
+              <>
+                {partyField}
+                {fromField}
+                {costCentreField}
+                {referenceField}
+              </>
+            );
+          })()}
           <TextField label={tr('books:vouchers.narration')} value={narration} onChangeText={setNarration} placeholder={tr('books:vouchers.narrationPlaceholder')} multiline />
           <Card variant="flat" style={{ gap: t.spacing.md }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>

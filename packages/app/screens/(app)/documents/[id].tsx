@@ -33,8 +33,8 @@ import { useDocumentRecord } from '../../../remote/queries';
 import { LoadingView } from '../../../components/LoadingView';
 import { useAppStore } from '../../../store/appStore';
 
-/** A desktop's template and copy pickers: sized to their values, not half the screen each. */
-const PICKER_DESKTOP = { width: 280 };
+/** The sheet of paper's width on a desktop; the template and copy pickers above it share the same width. */
+const PAPER_WIDTH = 860;
 
 export default function DocumentPreview() {
   const t = useTheme();
@@ -169,8 +169,6 @@ export default function DocumentPreview() {
       {/* How this one prints: its template (saved on it) and which copy (only for this print). */}
       <View
         style={{
-          flexDirection: 'row',
-          gap: t.spacing.md,
           paddingHorizontal: t.spacing.lg,
           paddingVertical: t.spacing.sm,
           backgroundColor: t.c.paper,
@@ -178,15 +176,17 @@ export default function DocumentPreview() {
           borderBottomColor: t.c.line,
         }}
       >
-        <PickerField
-          label={tr('sales:print.template')}
-          value={layoutName(shownLayout)}
-          icon="file-document-edit-outline"
-          onPress={() => setPicking('layout')}
-          disabled={savingLayout}
-          containerStyle={desktop ? PICKER_DESKTOP : { flex: 1 }}
-        />
-        <PickerField label={tr('sales:print.copy')} value={tr(`sales:print.copies.${copy}`)} icon="content-copy" onPress={() => setPicking('copy')} containerStyle={desktop ? PICKER_DESKTOP : { flex: 1 }} />
+        <View style={[{ flexDirection: 'row', gap: t.spacing.md }, desktop ? { width: '100%', maxWidth: PAPER_WIDTH, alignSelf: 'center' } : null]}>
+          <PickerField
+            label={tr('sales:print.template')}
+            value={layoutName(shownLayout)}
+            icon="file-document-edit-outline"
+            onPress={() => setPicking('layout')}
+            disabled={savingLayout}
+            containerStyle={{ flex: 1 }}
+          />
+          <PickerField label={tr('sales:print.copy')} value={tr(`sales:print.copies.${copy}`)} icon="content-copy" onPress={() => setPicking('copy')} containerStyle={{ flex: 1 }} />
+        </View>
       </View>
       <SelectSheet
         visible={picking === 'layout'}
@@ -222,7 +222,7 @@ export default function DocumentPreview() {
       {desktop ? (
         // A desktop shows the page as a sheet of paper on the canvas.
         <View style={{ flex: 1, backgroundColor: t.c.canvas, padding: t.spacing.xl, alignItems: 'center' }}>
-          <View style={[{ flex: 1, width: '100%', maxWidth: 860, borderRadius: t.radius.sm, overflow: 'hidden' }, t.shadow.card]}>
+          <View style={[{ flex: 1, width: '100%', maxWidth: PAPER_WIDTH, borderRadius: t.radius.sm, overflow: 'hidden' }, t.shadow.card]}>
             <HtmlPreview html={html} />
           </View>
         </View>

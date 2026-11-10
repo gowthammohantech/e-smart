@@ -38,8 +38,6 @@ export default function PurchasesTab() {
   const { t: tr } = useTranslation(['purchases', 'common', 'nav', 'reports']);
   const router = useRouter();
   const desktop = useIsDesktop();
-  // A desktop keeps lists of rows to a readable width, not the value 1000px from its name.
-  const listCap = desktop ? { maxWidth: 880 } : undefined;
 
   const baseCurrency = useBaseCurrency();
   const withExpenses = useHasModule('expenses');
@@ -117,7 +115,7 @@ export default function PurchasesTab() {
       <HubTiles tiles={tiles} />
 
       <SectionHeader title={tr('purchases:hub.recentBills')} action={tr('nav:shell.viewAll')} onAction={() => router.push('/(app)/purchases/bills')} />
-      <Card padded={false} style={listCap}>
+      <Card padded={false}>
         {recent.length === 0 ? (
           <EmptyState
             illustration="no-documents"

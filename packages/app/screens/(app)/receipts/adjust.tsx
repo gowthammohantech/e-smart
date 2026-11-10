@@ -13,7 +13,7 @@ import { Columns, FormContainer, FormSection } from '@esmart/ui/components/Layou
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { Text } from '@esmart/ui/components/Text';
 import { useToast } from '@esmart/ui/components/Toast';
-import { SHOW_SCROLLBAR, WIDE_FORM_MAX_WIDTH, useFieldWidth, useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { formatDate } from '@esmart/core/lib/date';
 import { formatMoney, toAmountInput } from '@esmart/core/lib/format';
 import { fromMajor, money, type Money } from '@esmart/core/lib/money';
@@ -37,7 +37,6 @@ type Side = 'customer' | 'supplier';
 export default function AdjustAdvances() {
   const t = useTheme();
   const desktop = useIsDesktop();
-  const fw = useFieldWidth();
   const router = useRouter();
   const toast = useToast();
   const { t: tr } = useTranslation(['books', 'common', 'domain']);
@@ -146,34 +145,43 @@ export default function AdjustAdvances() {
   return (
     <View style={{ flex: 1 }}>
       <Stack.Screen options={{ title: tr('books:adjust.title') }} />
-      {/* Two lists side by side on a desktop: wider than a form, but not so wide an amount sits far from its number. */}
-      <FormContainer style={{ maxWidth: 960 }}>
+      {/* Two lists side by side on a desktop, across the page's full column; the intro and the party
+          sit side by side above them, so nothing stretches alone across it. */}
+      <FormContainer style={desktop ? { maxWidth: '100%' } : undefined}>
         <ScrollView contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: t.spacing.xxxl, gap: t.spacing.lg }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={SHOW_SCROLLBAR}>
-          <Text variant="small" tone="muted" style={desktop ? { maxWidth: WIDE_FORM_MAX_WIDTH } : undefined}>
-            {tr('books:adjust.intro')}
-          </Text>
-          {partyPending ? (
-            <View style={{ gap: 6 }}>
-              <Skeleton height={12} width={80} radius={4} />
-              <Skeleton height={44} radius={t.radius.md} />
-            </View>
-          ) : (
-          <PickerField label={tr('books:adjust.party')} value={party?.name} placeholder={tr('books:adjust.pickParty')} onPress={() => setPicking(true)} icon="account-outline" required containerStyle={fw('lg')} />
-          )}
-          {party?.kind === 'both' ? (
-            <Segmented
-              options={[
-                { value: 'customer' as Side, label: tr('books:adjust.customerSide') },
-                { value: 'supplier' as Side, label: tr('books:adjust.supplierSide') },
-              ]}
-              value={sideChoice}
-              onChange={(v) => {
-                setSide(v);
-                setCreditKey(null);
-                setAmounts({});
-              }}
-            />
-          ) : null}
+          <Columns
+            left={
+              <Text variant="small" tone="muted">
+                {tr('books:adjust.intro')}
+              </Text>
+            }
+            right={
+              <View style={{ gap: t.spacing.lg }}>
+                {partyPending ? (
+                  <View style={{ gap: 6 }}>
+                    <Skeleton height={12} width={80} radius={4} />
+                    <Skeleton height={44} radius={t.radius.md} />
+                  </View>
+                ) : (
+                  <PickerField label={tr('books:adjust.party')} value={party?.name} placeholder={tr('books:adjust.pickParty')} onPress={() => setPicking(true)} icon="account-outline" required />
+                )}
+                {party?.kind === 'both' ? (
+                  <Segmented
+                    options={[
+                      { value: 'customer' as Side, label: tr('books:adjust.customerSide') },
+                      { value: 'supplier' as Side, label: tr('books:adjust.supplierSide') },
+                    ]}
+                    value={sideChoice}
+                    onChange={(v) => {
+                      setSide(v);
+                      setCreditKey(null);
+                      setAmounts({});
+                    }}
+                  />
+                ) : null}
+              </View>
+            }
+          />
 
           {!partyId ? null : partyPending || data.isLoading ? (
             <ListSkeleton kind="list" rows={4} />
@@ -226,7 +234,7 @@ export default function AdjustAdvances() {
                             selected: !!amounts[o.documentId],
                             warn: serviceAdvance(chosen) && goodsOnly(o.documentId) ? tr('books:adjust.notService') : undefined,
                             extra: chosen ? (
-                              <AmountField label={tr('books:adjust.amountFor', { number: o.number })} value={amounts[o.documentId] ?? ''} onChangeValue={(v) => setAmounts((a) => ({ ...a, [o.documentId]: v }))} currency={baseCurrency} containerStyle={fw('md')} />
+                              <AmountField label={tr('books:adjust.amountFor', { number: o.number })} value={amounts[o.documentId] ?? ''} onChangeValue={(v) => setAmounts((a) => ({ ...a, [o.documentId]: v }))} currency={baseCurrency} />
                             ) : null,
                           },
                         ),

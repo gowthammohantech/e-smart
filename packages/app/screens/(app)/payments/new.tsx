@@ -5,7 +5,7 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
-import { FieldRow, FormContainer, FormSection, SplitPane } from '@esmart/ui/components/Layout';
+import { FieldGrid, FieldRow, FormContainer, FormSection, SplitPane } from '@esmart/ui/components/Layout';
 import { FormActions } from '@esmart/ui/components/ActionBar';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
@@ -55,7 +55,7 @@ import {
 import { describeError } from '../../../remote/errors';
 import { adjustAdvancesFor, loadForAdvances, queryClient, useOpenDocuments, usePartyRecord, usePartySearch, useServerAccountBalances } from '../../../remote/queries';
 import { useDebounced } from '../../../components/useDebounced';
-import { SHOW_SCROLLBAR, WIDE_FORM_MAX_WIDTH, useBreakpoint, useFieldWidth } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, useBreakpoint } from '@esmart/ui/theme/breakpoints';
 import { useGoBack } from '../../../navigation/useGoBack';
 
 
@@ -86,7 +86,6 @@ function NewPaymentForm() {
   // Always 'phone' in the native apps, so the desktop layout only ever reaches a browser.
   const breakpoint = useBreakpoint();
   const desktop = breakpoint !== 'phone';
-  const fw = useFieldWidth();
 
   const params = useLocalSearchParams<{ direction?: string; partyId?: string; documentId?: string; advance?: string }>();
   // Paying suppliers is part of payables, which the Sales plan leaves out.
@@ -513,8 +512,14 @@ function NewPaymentForm() {
   // Every block is built once and placed twice: stacked in one column on a
   // phone, grouped into cards across two columns on a desktop browser.
   const partyCard = (
-    <Pressable onPress={() => setPartyOpen(true)} accessibilityRole="button" accessibilityLabel={tr('sales:payment.selectContact')}>
-      <Card style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
+    <Pressable
+      // On a desktop it fills the height of the amount and date beside it, like an invoice's head.
+      style={desktop ? { flex: 1 } : undefined}
+      onPress={() => setPartyOpen(true)}
+      accessibilityRole="button"
+      accessibilityLabel={tr('sales:payment.selectContact')}
+    >
+      <Card style={[{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }, desktop ? { flex: 1 } : null]}>
         {partyPending ? (
           <>
             <Skeleton height={42} width={42} radius={21} />
@@ -559,23 +564,6 @@ function NewPaymentForm() {
       </Card>
     </Pressable>
   );
-  // On a desktop the contact is one field among the others rather than a card of its own.
-  const partyField = partyPending ? (
-    <View style={{ gap: 6 }}>
-      <Skeleton height={12} width={80} radius={4} />
-      <Skeleton height={44} radius={t.radius.md} />
-    </View>
-  ) : (
-    <PickerField
-      label={tr(direction === 'received' ? 'common:table.customer' : 'common:table.supplier')}
-      value={party?.name}
-      onPress={() => setPartyOpen(true)}
-      icon="account-search-outline"
-      hint={party && open.isSuccess ? tr('sales:payment.openDocuments', { count: outstanding.length }) : undefined}
-      required
-    />
-  );
-
   // Large on a phone, where it is the screen's focus; field-sized on a desktop so it lines up in its row.
   const amountField = (size?: 'lg') => (
     <AmountField
@@ -907,30 +895,35 @@ function NewPaymentForm() {
   const hasTaxFields = (direction === 'received' && unallocated.minor > 0) || keepsTds || advanceTds.minor > 0 || canAdvance;
   const taxFields = (
     <>
-      {direction === 'received' && unallocated.minor > 0 ? (
-        <AmountField
-          label={tr('sales:payment.advanceTds')}
-          value={advanceTdsText}
-          onChangeValue={setAdvanceTdsText}
-          currency={currency}
-          hint={tr('sales:payment.advanceTdsHint')}
-          containerStyle={fw('md')}
-        />
-      ) : null}
+      {/* The TDS amount and its section share a row on a desktop; either alone takes the row. */}
+      <FieldGrid
+        items={[
+          direction === 'received' && unallocated.minor > 0 ? (
+            <AmountField
+              label={tr('sales:payment.advanceTds')}
+              value={advanceTdsText}
+              onChangeValue={setAdvanceTdsText}
+              currency={currency}
+              hint={tr('sales:payment.advanceTdsHint')}
+            />
+          ) : null,
+          keepsTds || advanceTds.minor > 0 ? (
+            <PickerField
+              label={tr('sales:payment.tdsSection')}
+              value={tdsSectionPicked ? `${tdsSection(tdsSectionPicked)?.label ?? tdsSectionPicked} · ${tdsSection(tdsSectionPicked)?.nature ?? ''}` : undefined}
+              placeholder={tr('sales:payment.tdsSectionPick')}
+              onPress={() => setAdvanceSheet('tds')}
+              icon="percent-outline"
+              hint={tr('sales:payment.tdsSectionHint')}
+              required={needsTdsSection}
+              // Said here rather than leaving Save greyed out with no reason.
+              error={needsTdsSection && !tdsSectionPicked ? tr('sales:payment.tdsSectionRequired') : undefined}
+            />
+          ) : null,
+        ]}
+      />
       {keepsTds || advanceTds.minor > 0 ? (
         <>
-          <PickerField
-            label={tr('sales:payment.tdsSection')}
-            value={tdsSectionPicked ? `${tdsSection(tdsSectionPicked)?.label ?? tdsSectionPicked} · ${tdsSection(tdsSectionPicked)?.nature ?? ''}` : undefined}
-            placeholder={tr('sales:payment.tdsSectionPick')}
-            onPress={() => setAdvanceSheet('tds')}
-            icon="percent-outline"
-            hint={tr('sales:payment.tdsSectionHint')}
-            containerStyle={fw('lg')}
-            required={needsTdsSection}
-            // Said here rather than leaving Save greyed out with no reason.
-            error={needsTdsSection && !tdsSectionPicked ? tr('sales:payment.tdsSectionRequired') : undefined}
-          />
           <SelectSheet
             visible={advanceSheet === 'tds'}
             onClose={() => setAdvanceSheet(null)}
@@ -1036,24 +1029,16 @@ function NewPaymentForm() {
 
   const details = (
     <FormSection title={tr('sales:payment.details')}>
-      <FieldRow>
-        {partyField}
-        {dateField}
-      </FieldRow>
-      <FieldRow>
-        {amountField()}
-        {currencyField}
-      </FieldRow>
-      <FieldRow>
-        {methodField}
-        {accountField}
-      </FieldRow>
+      {/* Who on the left, filling the height of the amount and date beside it; the rest two to a row below. */}
+      <View style={{ flexDirection: 'row', alignItems: 'stretch', gap: t.spacing.lg }}>
+        <View style={{ flex: 1, minWidth: 0 }}>{partyCard}</View>
+        <View style={{ flex: 1, minWidth: 0, gap: t.spacing.lg }}>
+          {amountField()}
+          {dateField}
+        </View>
+      </View>
+      <FieldGrid items={[methodField, accountField, currencyField, referenceField, rateField]} />
       {addAccountLink}
-      <FieldRow>
-        {referenceField}
-        {/* Holds the column when there's no settlement rate, so reference keeps its width. */}
-        {rateField ?? <View />}
-      </FieldRow>
     </FormSection>
   );
   const allocation = (
@@ -1117,9 +1102,9 @@ function NewPaymentForm() {
       style={{ flex: 1 }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      {/* A wide desktop holds the form at a readable width with its side column beside it, not across
-          the whole page; a narrow one (icon-only sidebar) stacks it in the wide form width. */}
-      <FormContainer wide style={breakpoint === 'desktop' || breakpoint === 'wide' ? { maxWidth: WIDE_FORM_MAX_WIDTH + SIDE_WIDTH + t.spacing.xl + 2 * t.spacing.lg } : undefined}>
+      {/* A wide desktop lays the form and its side column across the page's full column, so they end
+          level with the page header; a narrow one (icon-only sidebar) stacks it in the wide form width. */}
+      <FormContainer wide style={breakpoint === 'desktop' || breakpoint === 'wide' ? { maxWidth: '100%' } : undefined}>
         <Stack.Screen options={{ title: direction === 'received' ? (params.advance === '1' ? tr('sales:payment.advanceReceipt') : tr('common:quickAction.receivePayment')) : tr('sales:payment.makePayment') }} />
 
         {desktop ? desktopForm : phoneForm}

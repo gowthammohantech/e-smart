@@ -203,8 +203,8 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
     return (
       <View style={{ flex: 1 }}>
         <ScrollView
-          // Held to a readable width, so a document's amount isn't a page away from its number.
-          contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: t.spacing.xxxl, gap: t.spacing.lg, width: '100%', maxWidth: 1180 + 2 * t.spacing.lg }}
+          // The page's full column: the tiles, the aging and the list all end level with the header's button.
+          contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: t.spacing.xxxl, gap: t.spacing.lg, width: '100%' }}
           showsVerticalScrollIndicator={SHOW_SCROLLBAR}
         >
           <StatGrid>
@@ -230,7 +230,7 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
             />
           </StatGrid>
 
-          {sideAging ? null : <View style={{ maxWidth: 720 }}>{agingCard}</View>}
+          {sideAging ? null : agingCard}
           <SplitPane main={list} side={sideAging ? agingCard : undefined} sideWidth={340} />
         </ScrollView>
 

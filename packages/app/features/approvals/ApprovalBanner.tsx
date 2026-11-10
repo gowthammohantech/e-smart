@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
-import { useFieldWidth, useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { Button } from '@esmart/ui/components/Button';
 import { Card } from '@esmart/ui/components/Card';
 import { TextField } from '@esmart/ui/components/Field';
@@ -50,7 +50,6 @@ export function useApprovalActions() {
 export function ApprovalBanner({ doc }: { doc: BusinessDocument }) {
   const t = useTheme();
   const desktop = useIsDesktop();
-  const fw = useFieldWidth();
   const toast = useToast();
   const { t: tr } = useTranslation(['sales']);
   const user = useCurrentUser();
@@ -87,7 +86,7 @@ export function ApprovalBanner({ doc }: { doc: BusinessDocument }) {
       {approval.status === 'pending' && canDecide ? (
         rejecting ? (
           <View style={{ gap: t.spacing.sm }}>
-            <TextField label={tr('sales:approval.why')} value={note} onChangeText={setNote} multiline containerStyle={fw('lg')} />
+            <TextField label={tr('sales:approval.why')} value={note} onChangeText={setNote} multiline />
             {/* A desktop keeps the pair at its own width at the right; a phone splits the row. */}
             <View style={{ flexDirection: 'row', gap: t.spacing.sm, justifyContent: desktop ? 'flex-end' : undefined }}>
               <Button title={tr('sales:approval.cancel')} variant="ghost" onPress={() => setRejecting(false)} style={desktop ? undefined : { flex: 1 }} />

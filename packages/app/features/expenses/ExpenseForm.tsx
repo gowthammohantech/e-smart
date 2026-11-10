@@ -7,7 +7,7 @@ import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
-import { FieldRow, FormContainer, FormSection, SplitPane } from '@esmart/ui/components/Layout';
+import { FieldGrid, FieldRow, FormContainer, FormSection, SplitPane } from '@esmart/ui/components/Layout';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
 import { Button } from '@esmart/ui/components/Button';
@@ -43,7 +43,7 @@ import {
   useDefaultBranchId,
   useTaxCategories,
 } from '../../store/selectors';
-import { SHOW_SCROLLBAR, WIDE_FORM_MAX_WIDTH, useBreakpoint } from '@esmart/ui/theme/breakpoints';
+import { SHOW_SCROLLBAR, useBreakpoint } from '@esmart/ui/theme/breakpoints';
 import { useGoBack } from '../../navigation/useGoBack';
 
 /** The desktop side column (summary, receipt). */
@@ -404,6 +404,7 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
     </>
   );
   const hasReceipt = !!receiptUri || keptIds.length > 0;
+  const inSide = breakpoint === 'desktop' || breakpoint === 'wide';
   const receiptCard = (
     <Card variant="flat" style={{ gap: t.spacing.md }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
@@ -425,13 +426,14 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
           </Text>
         </View>
       </View>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm }}>
+      {/* In the narrow side column of a wide desktop the buttons stack, each the column's width. */}
+      <View style={inSide ? { gap: t.spacing.sm } : { flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm }}>
         {/* A browser has no camera to hand; the file picker covers it. */}
         {Platform.OS !== 'web' ? (
           <Button title={tr('purchases:form.takePhoto')} icon="camera-outline" size="sm" variant="secondary" onPress={() => void attachReceipt('camera')} />
         ) : null}
-        <Button title={tr('purchases:form.choosePhoto')} icon="image-outline" size="sm" variant="secondary" onPress={() => void attachReceipt('library')} />
-        {hasReceipt ? <Button title={tr('purchases:form.removeReceipt')} icon="trash-can-outline" size="sm" variant="ghost" onPress={removeReceipt} /> : null}
+        <Button title={tr('purchases:form.choosePhoto')} icon="image-outline" size="sm" variant="secondary" onPress={() => void attachReceipt('library')} fullWidth={inSide} />
+        {hasReceipt ? <Button title={tr('purchases:form.removeReceipt')} icon="trash-can-outline" size="sm" variant="ghost" onPress={removeReceipt} fullWidth={inSide} /> : null}
       </View>
     </Card>
   );
@@ -535,18 +537,13 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
   );
   const tax = (
     <FormSection title={tr('purchases:form.tax')}>
-      <FieldRow>
-        {taxField}
-        {/* The switch sits level with the picker's box rather than its label. */}
-        {taxRate > 0 ? <View style={{ paddingTop: 22 }}>{inclusiveField}</View> : null}
-      </FieldRow>
+      {/* With no tax the picker takes the row; the switch sits level with the picker's box rather than its label. */}
+      <FieldGrid items={[taxField, taxRate > 0 ? <View style={{ paddingTop: 22 }}>{inclusiveField}</View> : null]} />
       {taxRate > 0 ? (
         <>
           {reverseChargeField}
-          <FieldRow>
-            {itcField}
-            {gstinField}
-          </FieldRow>
+          {/* The GSTIN is asked only without a supplier; the ITC picker then has the row to itself. */}
+          <FieldGrid items={[itcField, gstinField]} />
         </>
       ) : null}
     </FormSection>
@@ -609,9 +606,9 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      {/* A wide desktop holds the form at a readable width with its side column beside it, not across
-          the whole page; a narrow one (icon-only sidebar) stacks it in the wide form width. */}
-      <FormContainer wide={desktop} style={breakpoint === 'desktop' || breakpoint === 'wide' ? { maxWidth: WIDE_FORM_MAX_WIDTH + SIDE_WIDTH + t.spacing.xl + 2 * t.spacing.lg } : undefined}>
+      {/* A wide desktop lays the form and its side column across the page's full column, so they end
+          level with the page header's buttons; a narrow one (icon-only sidebar) stacks it in the wide form width. */}
+      <FormContainer wide={desktop} style={breakpoint === 'desktop' || breakpoint === 'wide' ? { maxWidth: '100%' } : undefined}>
         {desktop ? desktopForm : phoneForm}
 
         {desktop ? (

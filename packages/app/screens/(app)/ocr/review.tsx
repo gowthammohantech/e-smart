@@ -20,7 +20,7 @@ import { formatMoney, formatPercent, formatQty } from '@esmart/core/lib/format';
 import { fromMajor, money } from '@esmart/core/lib/money';
 import { useBaseCurrency } from '../../../store/selectors';
 import { SHOW_SCROLLBAR, WIDE_FORM_MAX_WIDTH, useBreakpoint } from '@esmart/ui/theme/breakpoints';
-import { FieldRow, FormSection, SplitPane } from '@esmart/ui/components/Layout';
+import { FieldGrid, FormSection, SplitPane } from '@esmart/ui/components/Layout';
 
 function confidenceTone(c: number): 'success' | 'warning' | 'danger' {
   if (c >= 0.9) return 'success';
@@ -170,8 +170,6 @@ export default function OcrReview() {
   );
 
   if (desktop) {
-    const fieldPairs: (typeof result.fields)[] = [];
-    for (let i = 0; i < result.fields.length; i += 2) fieldPairs.push(result.fields.slice(i, i + 2));
     const headerCell = (label: string, style: object) => (
       <Text variant="micro" tone="muted" weight="700" numberOfLines={1} style={{ textTransform: 'uppercase', letterSpacing: 0.6, ...style }}>
         {label}
@@ -198,14 +196,8 @@ export default function OcrReview() {
         </View>
 
         <FormSection title={tr('inventory:ocr.extractedFields')}>
-          {fieldPairs.map((pair) => (
-            // Two columns even when the last row has one field, so it keeps its width.
-            <FieldRow key={pair.map((f) => f.key).join('-')} columns={2}>
-              {pair.map((f) => (
-                <ReviewField key={f.key} f={f} />
-              ))}
-            </FieldRow>
-          ))}
+          {/* Two to a row; an odd last field takes the whole row. */}
+          <FieldGrid items={result.fields.map((f) => <ReviewField key={f.key} f={f} />)} />
         </FormSection>
 
         {result.lines.length > 0 ? (
@@ -294,8 +286,9 @@ export default function OcrReview() {
           }}
         />
         <ScrollView
-          // The fields at a form's width beside the photo, not stretched across a wide screen.
-          contentContainerStyle={{ paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.xxxl, width: '100%', maxWidth: (stacked ? WIDE_FORM_MAX_WIDTH : WIDE_FORM_MAX_WIDTH + sideWidth + t.spacing.xl) + 2 * t.spacing.lg }}
+          // The fields beside the photo across the page's full column, ending level with the header's
+          // buttons; stacked, they keep the wide form width.
+          contentContainerStyle={{ paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.xxxl, width: '100%', maxWidth: stacked ? WIDE_FORM_MAX_WIDTH + 2 * t.spacing.lg : undefined }}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={SHOW_SCROLLBAR}
         >

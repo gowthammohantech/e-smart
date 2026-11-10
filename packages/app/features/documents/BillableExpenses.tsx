@@ -62,8 +62,8 @@ export function BillableExpenses({ partyId, currency, documentId, lines, onAdd }
         {tr('sales:reimburse.body')}
       </Text>
       {open.map((e) => (
-        // A desktop keeps Add beside its expense, not across the editor's column.
-        <View key={e.id} style={[{ gap: t.spacing.xs }, desktop ? { maxWidth: 560 } : null]}>
+        // A list row across the card: the expense on the left, Add at the right edge.
+        <View key={e.id} style={{ gap: t.spacing.xs }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: t.spacing.md }}>
             <Text variant="small" style={{ flex: 1 }} numberOfLines={1}>
               {`${e.number} · ${formatDate(e.date)} · ${formatMoney(e.amount)}`}

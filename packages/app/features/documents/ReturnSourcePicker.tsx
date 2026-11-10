@@ -169,7 +169,8 @@ function SourceList({ kind }: { kind: AgainstSource }) {
           {tr(isReturn ? (purchase ? 'sales:returnPicker.purchaseHint' : 'sales:returnPicker.salesHint') : `sales:notePicker.hint.${kind}`)}
         </Text>
         <View style={{ flexDirection: 'row', gap: t.spacing.sm, alignItems: 'center', flexWrap: 'wrap' }}>
-          <View style={desktop ? { width: 420, maxWidth: '100%' } : { flex: 1, minWidth: 220 }}>
+          {/* The search takes what the party button leaves of the row, so it ends level with the list. */}
+          <View style={{ flex: 1, minWidth: 220 }}>
             <SearchBar value={query} onChangeText={setQuery} placeholder={tr('sales:returnPicker.search')} />
           </View>
           {partyId && !partyName && partyRecord.isLoading ? (
