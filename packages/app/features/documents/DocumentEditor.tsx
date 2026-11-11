@@ -54,7 +54,9 @@ import {
   useDocument,
   useTaxCategories,
   useVehicles,
+  usePlan,
 } from '../../store/selectors';
+import { saleTdsOnPlan } from '@esmart/core/domain/plan';
 import { useCostCentres } from '../../store/books';
 import {
   DraftState,
@@ -358,7 +360,9 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   const billTds = kind === 'purchaseBill' || kind === 'supplierDebitNote';
   const takesTds = !!company?.tan && billTds;
   // On an invoice: TDS the customer will deduct (RULES 4.14). Shown, never taken off the GST invoice value.
-  const saleTds = kind === 'invoice';
+  // Not on the Free plan, where the invoice neither asks for it nor sends a section.
+  const plan = usePlan();
+  const saleTds = kind === 'invoice' && saleTdsOnPlan(plan);
   const fx = draft.currency === company?.baseCurrency ? 1 : draft.exchangeRate || 1;
   // The server counts the deductee's year so far; the device's own figure is the fallback while it answers or offline.
   const serverTds = useTdsPreview(

@@ -65,6 +65,16 @@ describe('TDS the customer will deduct from an invoice (RULES 4.14)', () => {
     const q = (await t.get(`${m.c}/report-data/tds-26q`, { token: m.token, query: FY })).body;
     expect(q.deductees).toEqual([]);
   });
+
+  it('expects none on the Free plan, whether the invoice or the customer names a section', async () => {
+    const m = await moneySetup(t, 'free');
+    await t.deps.db.update(schema.parties).set({ tdsSection: '194JB' }).where(eq(schema.parties.id, m.mumbai.id));
+    const sent = await t.post(`${m.c}/documents`, invoiceBody(m, { tdsSection: '194JB', status: 'issued' }), { token: m.token });
+    expect(sent.status).toBe(201);
+    expect(sent.body.tdsExpected).toBeUndefined();
+    const fromParty = await t.post(`${m.c}/documents`, invoiceBody(m, { status: 'issued' }), { token: m.token });
+    expect(fromParty.body.tdsExpected).toBeUndefined();
+  });
 });
 
 describe('TCS given back on a credit note (G7), and the TCS reports', () => {
