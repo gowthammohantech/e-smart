@@ -63,6 +63,7 @@
     "documentCurrency": "ஆவண நாணயம்",
     "posHint": "IGST-ஆ அல்லது CGST + SGST-ஆ என்பதைத் தீர்மானிக்கும்",
     "partySearch": "உங்கள் தொடர்புகளில் தேடுங்கள், அல்லது புதியதைச் சேருங்கள்",
+    "partyContact": "தொடர்பு",
     "discountOnTotal": "மொத்தத்தில் தள்ளுபடி",
     "total": "மொத்தம்",
     "roundOffAuto": "தானியங்கி",

@@ -63,6 +63,7 @@
     "documentCurrency": "Document currency",
     "posHint": "Decides whether IGST or CGST + SGST applies",
     "partySearch": "Search your contacts or add a new one",
+    "partyContact": "Contact",
     "discountOnTotal": "Discount on total",
     "total": "Total",
     "roundOffAuto": "Auto",
