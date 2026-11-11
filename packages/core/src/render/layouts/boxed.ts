@@ -21,23 +21,26 @@ export function boxedLayout(view: DocView, variant: 'classic' | 'detailed', copy
   const detailed = variant === 'detailed';
   const logo = tpl.showLogo ? logoTag(view.logoSrc ?? company?.logoUri, company?.name) : '';
 
-  // The particulars, two to a row as the reference formats set them.
+  // The particulars in a strip across the page under the title, four to a row. Stacked beside the
+  // parties they never matched their height, and ship-to on or off left one side half empty.
   const facts = headerFacts(view);
-  const pairs: Fact[][] = [];
-  for (let i = 0; i < facts.length; i += 2) pairs.push(facts.slice(i, i + 2));
+  const FACTS_PER_ROW = 4;
+  const factRows: Fact[][] = [];
+  for (let i = 0; i < facts.length; i += FACTS_PER_ROW) factRows.push(facts.slice(i, i + FACTS_PER_ROW));
   const factCell = (f?: Fact) => (f ? `<td><div class="flabel">${f.label}</div><div class="${f.strong ? 'b' : ''}">${f.value}</div></td>` : '<td></td>');
-  const factGrid = `<table class="facts">${pairs.map((p) => `<tr>${factCell(p[0])}${factCell(p[1])}</tr>`).join('')}</table>`;
+  const factGrid = `<table class="facts">${factRows.map((r) => `<tr>${Array.from({ length: FACTS_PER_ROW }, (_, i) => factCell(r[i])).join('')}</tr>`).join('')}</table>`;
 
+  // The parties side by side, so a row is only as tall as its longest address: seller and buyer,
+  // the consignee beside them when shipped to; with dispatch-from as well, from over to in two rows.
+  const seller = sellerBlock(view);
+  const buyer = `<div class="cap">${bi('sales:pdf.buyerBillTo')}</div>${buyerBlock(view)}`;
+  const consignee = tpl.showShipTo ? `<div class="cap">${bi('sales:pdf.consigneeShipTo')}</div>${consigneeBlock(view)}` : '';
   const dispatchFrom =
     tpl.showShipTo && detailed
-      ? `<div class="cell"><div class="cap">${bi('sales:pdf.dispatchFrom')}</div><div class="pname">${esc(company?.name)}${view.branch?.name ? ` – ${esc(view.branch.name)}` : ''}</div>${addressLines(view.sellerAddress)}${view.sellerTaxId ? `<div><span class="b">GSTIN:</span> ${esc(view.sellerTaxId)}</div>` : ''}</div>`
+      ? `<div class="cap">${bi('sales:pdf.dispatchFrom')}</div><div class="pname">${esc(company?.name)}${view.branch?.name ? ` – ${esc(view.branch.name)}` : ''}</div>${addressLines(view.sellerAddress)}${view.sellerTaxId ? `<div><span class="b">GSTIN:</span> ${esc(view.sellerTaxId)}</div>` : ''}`
       : '';
-
-  const left = `
-      <div class="cell">${sellerBlock(view)}</div>
-      <div class="cell"><div class="cap">${bi('sales:pdf.buyerBillTo')}</div>${buyerBlock(view)}</div>
-      ${tpl.showShipTo ? `<div class="cell"><div class="cap">${bi('sales:pdf.consigneeShipTo')}</div>${consigneeBlock(view)}</div>` : ''}`;
-  const right = `${factGrid}${dispatchFrom}`;
+  const partyRows = dispatchFrom ? [[seller, buyer], [dispatchFrom, consignee]] : [[seller, buyer, consignee].filter(Boolean)];
+  const parties = `<table class="parties">${partyRows.map((r) => `<tr>${r.map((c) => `<td style="width:${(100 / r.length).toFixed(2)}%">${c}</td>`).join('')}</tr>`).join('')}</table>`;
 
   // Items. Classic: amount is quantity times rate, the taxes follow under the lines.
   // Detailed: each line carries its discount, taxable value, tax and total.
@@ -137,7 +140,8 @@ export function boxedLayout(view: DocView, variant: 'classic' | 'detailed', copy
       <div class="logo-slot"></div>
     </div>
     ${titleNotes(view)}
-    <table class="hdr"><tr><td class="half">${left}</td><td class="half">${right}</td></tr></table>
+    ${factGrid}
+    ${parties}
     <table class="items">
       <thead>${head}</thead>
       <tbody>${rows}${stepRows(steps, cols - 2)}${totalRow}</tbody>
@@ -170,17 +174,15 @@ export function boxedLayout(view: DocView, variant: 'classic' | 'detailed', copy
   .titlebar .logo-slot { flex: 1; display: flex; }
   .titlebar.right .logo-slot:first-child { justify-content: flex-end; }
   .title { font-size: 1.55em; font-weight: 700; text-align: center; padding: 0 8px; letter-spacing: 0.3px; }
-  .hdr { border-bottom: 1px solid ${line}; }
-  .hdr .half { width: 50%; padding: 0; }
-  .hdr .half + .half { border-left: 1px solid ${line}; }
-  .cell { padding: 4px 8px; }
-  .cell + .cell { border-top: 1px solid ${line}; }
   .pname { font-weight: 700; font-size: 1.08em; }
   .gstin { margin-top: 2px; }
-  .facts td { width: 50%; padding: 3px 8px; border-bottom: 1px solid ${line}; }
+  .facts { table-layout: fixed; }
+  .facts td { width: 25%; padding: 3px 8px; border-bottom: 1px solid ${line}; overflow-wrap: anywhere; }
   .facts td + td { border-left: 1px solid ${line}; }
-  .facts tr:last-child td { border-bottom: 0; }
-  .facts + .cell { border-top: 1px solid ${line}; }
+  .parties { table-layout: fixed; border-bottom: 1px solid ${line}; }
+  .parties td { padding: 4px 8px; overflow-wrap: anywhere; }
+  .parties td + td { border-left: 1px solid ${line}; }
+  .parties tr + tr td { border-top: 1px solid ${line}; }
   .flabel { color: #4A5468; font-size: 0.92em; }
   .items th { background: ${accent}; color: ${ink}; padding: 5px 5px; font-weight: 700; font-size: 0.92em; border: 1px solid ${line}; text-align: left; }
   .items th.num { text-align: right; } .items th.ctr { text-align: center; }
