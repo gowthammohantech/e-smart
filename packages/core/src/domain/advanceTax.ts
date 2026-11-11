@@ -56,7 +56,9 @@ export const advanceInterState = (homeState: string | undefined, placeOfSupply: 
 
 export function advanceTaxEvents(p: Payment, homeState: string | undefined, documentDate: (id: string) => string | undefined): AdvanceEvent[] {
   const at = p.advanceTax;
-  if (!at || p.direction !== 'received' || !(at.rate > 0)) return [];
+  // On reverse charge the recipient pays the GST, on the advance too: the business owes none, posts none
+  // and reports none in table 11; the invoice later raised against it charges none either.
+  if (!at || at.reverseCharge || p.direction !== 'received' || !(at.rate > 0)) return [];
   const rate = p.exchangeRate || 1;
   const base = (minor: number) => Math.round(minor * rate);
   // Invoices raised on or before the receipt were settled, not paid in advance; an invoice the

@@ -107,7 +107,7 @@ export function SetupChecklist() {
                 </Text>
                 {!s.done ? (
                   <Text variant="caption" tone="muted" numberOfLines={2}>
-                    {tr(`reports:home.step.${s.key}.body` as 'reports:home.step.invoice.body')}
+                    {tr(`reports:home.step.${s.bodyKey ?? `${s.key}.body`}` as 'reports:home.step.invoice.body')}
                   </Text>
                 ) : null}
               </View>

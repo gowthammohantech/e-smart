@@ -1,2 +1,3 @@
+-- contract: not a removal. The index is rebuilt in the next statement with account_id added (a match is unique per bank account, 54359e0d); nothing stops using it, so a rollback still finds it.
 DROP INDEX "bank_statement_lines_match_idx";--> statement-breakpoint
 CREATE UNIQUE INDEX "bank_statement_lines_match_idx" ON "bank_statement_lines" USING btree ("company_id","account_id","match_type","match_id") WHERE "bank_statement_lines"."match_id" IS NOT NULL;

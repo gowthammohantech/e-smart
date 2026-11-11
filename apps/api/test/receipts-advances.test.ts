@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { schema } from '@esmart/db';
 import { loadAdvanceEvents } from '../src/modules/gst/advances';
 import { setupApi } from './helpers';
-import { line, moneySetup, type Money } from './money-fixtures';
+import { line, moneySetup, pdfText, type Money } from './money-fixtures';
 
 const t = setupApi();
 beforeEach(() => t.setNow('2026-09-29T10:00:00Z'));
@@ -62,6 +62,35 @@ describe('advance receipts for services', () => {
     const again = await t.get(`${m.c}/gst/gstr1`, { token: m.token, query: { period: '092026' } });
     // ₹12,000 at 18% inclusive: ₹1,830.51 of tax.
     expect(again.body.advances.received.find((r: { placeOfSupply: string }) => r.placeOfSupply === '27')).toMatchObject({ taxable: inr(1_016_949), cgst: inr(91_526), sgst: inr(91_525) });
+  });
+});
+
+describe('an advance for a service on reverse charge', () => {
+  it('owes no GST on the advance, reports none in table 11, and its voucher says tax is payable on reverse charge', async () => {
+    const m = await moneySetup(t);
+    await registered(m);
+    const adv = await t.post(
+      `${m.c}/payments`,
+      { direction: 'received', partyId: m.mumbai.id, date: '2026-09-15', amount: inr(1_180_000), currency: 'INR', method: 'cash', accountId: m.cash.id, advanceTax: { taxCategoryId: m.gst(18), placeOfSupplyStateCode: '27', hsn: '998311', reverseCharge: true } },
+      { token: m.token },
+    );
+    expect(adv.status).toBe(201);
+    expect(adv.body.advanceTax).toMatchObject({ rate: 18, reverseCharge: true });
+    const sep = await t.get(`${m.c}/gst/gstr1`, { token: m.token, query: { period: '092026' } });
+    expect(sep.body.advances.received).toEqual([]);
+    expect(await tb(m, 'sys:gstOnAdvances')).toEqual(inr(0));
+    const voucher = pdfText((await t.get(`${m.c}/payments/${adv.body.id}/receipt`, { token: m.token })).raw);
+    expect(voucher).toContain('RECEIPT VOUCHER');
+    expect(voucher).toContain('Tax payable on reverse charge: Yes');
+
+    // The same advance without the flag owes the tax, as before.
+    const taxed = await t.post(
+      `${m.c}/payments`,
+      { direction: 'received', partyId: m.mumbai.id, date: '2026-09-16', amount: inr(1_180_000), currency: 'INR', method: 'cash', accountId: m.cash.id, advanceTax: { taxCategoryId: m.gst(18), placeOfSupplyStateCode: '27', hsn: '998311' } },
+      { token: m.token },
+    );
+    expect(taxed.body.advanceTax.reverseCharge).toBeUndefined();
+    expect(await tb(m, 'sys:gstOnAdvances')).toEqual(inr(180_000));
   });
 });
 

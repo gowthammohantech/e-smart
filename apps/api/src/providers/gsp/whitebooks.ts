@@ -60,6 +60,7 @@ const PATHS = {
   generateEwayBill: '/einvoice/type/GENERATE_EWAYBILL/version/V1_03',
   gstinDetails: '/einvoice/type/GSTNDETAILS/version/V1_03',
   taxpayerSearch: '/public/search',
+  standaloneAuthenticate: '/ewaybillapi/v1.03/authenticate',
   standaloneGenerate: '/ewaybillapi/v1.03/ewayapi/genewaybill',
   standalonePartB: '/ewaybillapi/v1.03/ewayapi/vehewb',
   standaloneExtend: '/ewaybillapi/v1.03/ewayapi/extendvalidity',
@@ -75,6 +76,8 @@ const STANDALONE_EWAYBILL_IRP = 'NIC1';
 
 /** NIC's "distance too high" (4038) and "too high or low" (4013): the pincodes it holds disagree with the distance given. */
 const DISTANCE_REFUSED = ['4038', '4013'] as const;
+/** The same refusal from the standalone e-way bill API. */
+const STANDALONE_DISTANCE_REFUSED = '702';
 
 /** `status_cd` when the portal did what was asked. A string, as Whitebooks sends it. */
 const SUCCESS = '1';
@@ -99,7 +102,7 @@ interface WhitebooksEnvelope {
   readonly status_desc?: unknown;
   readonly data?: unknown;
   readonly info?: unknown;
-  readonly error?: { errorCode?: unknown; errorMessage?: unknown } | null;
+  readonly error?: { errorCode?: unknown; errorMessage?: unknown } | readonly unknown[] | null;
 }
 
 const ENVELOPE_KEYS = ['irp', 'status_cd', 'status_desc', 'data', 'info'] as const;
@@ -142,6 +145,8 @@ export class WhitebooksGateway implements GspGateway {
   readonly gateway = 'whitebooks' as const;
 
   private readonly sessions = new Map<string, Session>();
+  /** When each taxpayer's standalone e-way bill login lapses. */
+  private readonly ewaybillSessions = new Map<string, number>();
   private sandboxBuyer: Promise<PartyBlock> | null = null;
 
   constructor(
@@ -262,7 +267,45 @@ export class WhitebooksGateway implements GspGateway {
   }
 
   /** A call to the standalone e-way bill API: application pair and GSTIN on every call, no taxpayer session. */
-  private async standalone<T>(creds: PortalCredentials, path: string, body: unknown) {
+  private async standalone<T>(creds: PortalCredentials, path: string, body: unknown): Promise<WhitebooksEnvelope> {
+    try {
+      await this.ewaybillLogin(creds);
+      return await this.standaloneCall<T>(creds, path, body);
+    } catch (error) {
+      // The gateway forgot the session (expired, or the sandbox restarted): log in afresh and try once more.
+      if (!(error instanceof GspRequestError) || !/token/i.test(error.message)) throw error;
+      this.ewaybillSessions.delete(this.sessionKey(creds));
+      await this.ewaybillLogin(creds);
+      return this.standaloneCall<T>(creds, path, body);
+    }
+  }
+
+  /**
+   * The standalone e-way bill API keeps its own login, held by the gateway against GSTIN + username + IP and
+   * unrelated to the e-invoice token: without it every call is refused "Invalid authentication token".
+   */
+  private async ewaybillLogin(creds: PortalCredentials): Promise<void> {
+    const key = this.sessionKey(creds);
+    const until = this.ewaybillSessions.get(key);
+    if (until !== undefined && until - GSP_TOKEN_EXPIRY_SKEW_MS > this.clock()) return;
+    const account = whitebooksAccount(this.config);
+    const app = this.application('EWAYBILL', creds);
+    const envelope = await this.transport.get<unknown>({
+      baseUrl: this.baseUrl(),
+      path: PATHS.standaloneAuthenticate,
+      token: '',
+      query: { email: account.email },
+      headers: { ...this.applicationHeaders(app, account), username: creds.username, password: creds.password, gstin: creds.gstin },
+    });
+    const reply = envelope as unknown as WhitebooksEnvelope;
+    if (refused(reply)) {
+      this.log(`Whitebooks refused the e-way bill portal login for GSTIN ${creds.gstin}: ${describe(reply, 'no reason given')}`);
+      throw new GspAuthError('The GST portal refused the stored e-way bill login. Check the e-way bill username and password.');
+    }
+    this.ewaybillSessions.set(key, this.clock() + GSP_TOKEN_FALLBACK_TTL_SECONDS * 1000);
+  }
+
+  private async standaloneCall<T>(creds: PortalCredentials, path: string, body: unknown): Promise<WhitebooksEnvelope> {
     const account = whitebooksAccount(this.config);
     const app = this.application('EWAYBILL', creds);
     const envelope = await this.transport.post<T>({
@@ -274,7 +317,11 @@ export class WhitebooksGateway implements GspGateway {
       body,
     });
     const reply = envelope as unknown as WhitebooksEnvelope;
-    if (refused(reply)) throw this.refusal(reply, creds);
+    if (refused(reply)) {
+      // Raw body in the log: the toast only carries what `describe` could read.
+      this.log(`Whitebooks refused a standalone e-way bill call to ${path} for GSTIN ${creds.gstin}: ${JSON.stringify(reply).slice(0, 1000)}`);
+      throw this.refusal(reply, creds);
+    }
     return reply;
   }
 
@@ -354,8 +401,23 @@ export class WhitebooksGateway implements GspGateway {
           reply = await send({ ...req.payload, transDistance: 0 });
         }
       } else {
-        const { payload } = req;
-        reply = await this.standalone(login, PATHS.standaloneGenerate, nativeEwayBillBody({ ...payload, docNo: sandboxDocNo(this.config, login.gstin, payload.docNo, payload.docDate, req.companyId) }));
+        // No IRN to carry the facts, so the portal checks the whole bill itself — and the sandbox knows only its own
+        // register: the real customer's GSTIN is refused as an invalid consignee (212), and the distance between
+        // the real pincodes as not matching the sandbox buyer's (702). Same remedy as the IRN path: the registered
+        // test buyer stands in, and 0 (the portal works the distance out) is the retry.
+        const party = await this.sandboxParty(login, req.payload.toGstin);
+        const payload = {
+          ...req.payload,
+          docNo: sandboxDocNo(this.config, login.gstin, req.payload.docNo, req.payload.docDate, req.companyId),
+          ...(party ? { toGstin: String(party.Gstin), toTrdName: String(party.LglNm), toAddr1: String(party.Addr1), toAddr2: party.Addr2 ? String(party.Addr2) : undefined, toPlace: String(party.Loc), toPincode: Number(party.Pin), toStateCode: String(party.Stcd) } : {}),
+        };
+        const generate = (p: typeof payload) => this.standalone(login, PATHS.standaloneGenerate, nativeEwayBillBody(p));
+        try {
+          reply = await generate(payload);
+        } catch (error) {
+          if (!(party && error instanceof GspRequestError && hasErrorCode(error.envelope, STANDALONE_DISTANCE_REFUSED))) throw error;
+          reply = await generate({ ...payload, transDistance: 0 });
+        }
       }
       return ewayBillResult(readRecord<EwbRecord>(reply), req) ?? incomplete('e-way bill number');
     });
@@ -404,17 +466,23 @@ export class WhitebooksGateway implements GspGateway {
    * invoice, PDF and audit trail are not.
    */
   private async withSandboxBuyer<P extends { BuyerDtls: { Gstin: string; Pos: string } }>(creds: PortalCredentials, payload: P): Promise<P> {
+    const party = await this.sandboxParty(creds, payload.BuyerDtls.Gstin);
+    return party ? { ...payload, BuyerDtls: { ...party, Pos: payload.BuyerDtls.Pos } } : payload;
+  }
+
+  /** The sandbox buyer's registration in place of `gstin`, or null when no substitution applies (switched off, or no buyer GSTIN). */
+  private async sandboxParty(creds: PortalCredentials, gstin: string | undefined): Promise<PartyBlock | null> {
     const sandboxGstin = this.config.TAXATION_SANDBOX_BUYER_GSTIN;
     // B2C carries no buyer GSTIN and is never e-invoiced; nothing to substitute.
-    if (!sandboxGstin || !payload.BuyerDtls.Gstin || payload.BuyerDtls.Gstin === 'URP') return payload;
+    if (!sandboxGstin || !gstin || gstin === 'URP') return null;
     // The promise is the memo, so two filings in flight share one lookup; a failed one is forgotten.
     this.sandboxBuyer ??= this.fetchParty(creds, sandboxGstin).catch((error) => {
       this.sandboxBuyer = null;
       throw error;
     });
     const party = await this.sandboxBuyer;
-    this.log(`Filing with sandbox buyer ${sandboxGstin} in place of ${payload.BuyerDtls.Gstin}`);
-    return { ...payload, BuyerDtls: { ...party, Pos: payload.BuyerDtls.Pos } };
+    this.log(`Filing with sandbox buyer ${sandboxGstin} in place of ${gstin}`);
+    return party;
   }
 
   /** NIC's "Get GSTIN details" under Whitebooks' spelling, as a `BuyerDtls` block. */
@@ -448,7 +516,7 @@ export class WhitebooksGateway implements GspGateway {
     });
     const body = envelope as unknown as WhitebooksEnvelope;
     // Read BEFORE the record: a not-found body carries `error` and no `data`.
-    if (asCode(body.error?.errorCode) === NOT_FOUND_CODE) return null;
+    if (isRecord(body.error) && asCode(body.error.errorCode) === NOT_FOUND_CODE) return null;
     const record = (body as { data?: unknown }).data;
     return isRecord(record) && Object.keys(record).length > 0 ? record : null;
   }
@@ -512,21 +580,38 @@ type WbError = { code: string | null; text: string };
  */
 function nicErrors(body: WhitebooksEnvelope): WbError[] {
   const raw = typeof body.status_desc === 'string' ? body.status_desc.trim() : '';
-  if (!raw) return [];
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return [];
+  let parsed: unknown = null;
+  if (raw) {
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return [];
+    }
   }
+  // The standalone e-way bill API sends the array as `error` itself, with the code repeated as the message.
+  if (!Array.isArray(parsed) && Array.isArray(body.error)) parsed = body.error;
   if (!Array.isArray(parsed)) return [];
   return parsed.flatMap((entry): WbError[] => {
     if (!isRecord(entry)) return [];
-    const text = firstString(entry.errorMessage, entry.ErrorMessage);
     const code = asCode(entry.errorCode ?? entry.ErrorCode);
+    let text = firstString(entry.errorMessage, entry.ErrorMessage, entry.errorDesc);
+    if (code !== null && (text === null || text === code)) text = EWAYBILL_ERROR_TEXT[code] ?? text;
     return text === null && code === null ? [] : [{ code, text: text ?? '' }];
   });
 }
+
+/** The wording behind the bare codes the standalone e-way bill API answers with (NIC's error list). */
+const EWAYBILL_ERROR_TEXT: Readonly<Record<string, string>> = {
+  '212': 'Invalid consignee GSTIN',
+  '216': 'Invalid HSN code',
+  '283': 'An HSN code of at least 6 digits is mandatory for this taxpayer',
+  '303': 'Vehicle number is required',
+  '359': 'The portal user GSTIN must match the from-GSTIN for an outward supply',
+  '604': 'An e-way bill is already generated for this document number',
+  '611': 'Invalid document type for the supply type',
+  '702': 'The distance given does not match the pincodes',
+  '820': 'The document date is more than 180 days old',
+};
 
 /** `'Duplicate IRN (2150)'`, or the plain `status_desc`, or the fallback. */
 function describe(body: WhitebooksEnvelope, fallback: string): string {
@@ -534,9 +619,11 @@ function describe(body: WhitebooksEnvelope, fallback: string): string {
     .map((e) => (e.text === '' ? (e.code ?? '') : e.code === null ? e.text : `${e.text} (${e.code})`))
     .filter(Boolean)
     .join('; ');
-  if (described) return described;
+  // The portal sometimes adds a plain sentence beside the codes (`info`); it often says more than the code does.
+  const sentence = typeof body.info === 'string' ? body.info.replace(/^[\s,]+/, '').trim() : '';
+  if (described) return sentence ? `${described}. ${sentence}` : described;
   const raw = typeof body.status_desc === 'string' ? body.status_desc.trim() : '';
-  return raw || fallback;
+  return raw || sentence || fallback;
 }
 
 /** Pulls the registration a `DUPIRN` info block names out of a refusal body. */

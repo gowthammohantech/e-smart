@@ -28,8 +28,10 @@ export function LixiPanel() {
   return (
     // Clipped, so the shut panel parked past the right edge never scrolls the page sideways.
     <View pointerEvents="box-none" style={[StyleSheet.absoluteFill, { overflow: 'hidden', zIndex: 50 }]}>
-      <Animated.View pointerEvents={open ? 'auto' : 'none'} style={[StyleSheet.absoluteFill, { backgroundColor: t.c.overlay, opacity: lixiPanelProgress }]}>
-        <Pressable style={{ flex: 1, cursor: 'default' } as object} onPress={closeLixiPanel} accessibilityLabel={tr('common:component.close')} />
+      {/* A click target for the mouse only: the panel's own close button and Escape serve the keyboard and
+          screen readers, so the scrim is neither labelled nor in the Tab order. */}
+      <Animated.View aria-hidden pointerEvents={open ? 'auto' : 'none'} style={[StyleSheet.absoluteFill, { backgroundColor: t.c.overlay, opacity: lixiPanelProgress }]}>
+        <Pressable style={{ flex: 1, cursor: 'default' } as object} onPress={closeLixiPanel} focusable={false} accessible={false} />
       </Animated.View>
       <Animated.View
         // Shut, the chat is out of reach of the keyboard and screen readers too.

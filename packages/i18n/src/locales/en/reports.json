@@ -50,7 +50,9 @@
       },
       "bank": {
         "title": "Add bank details and signature",
-        "body": "Where customers pay, with a UPI QR, and your signature on invoices."
+        "body": "Where customers pay, with a UPI QR, and your signature on invoices.",
+        "needsSignature": "Bank details are in. Add your signature to finish.",
+        "needsAccount": "Your signature is in. Add a bank account or UPI ID to finish."
       }
     },
     "invoice": "Invoice",

@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
+import { KeyboardAvoidingView, Platform, ScrollView, View, type LayoutChangeEvent } from 'react-native';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Button } from '@esmart/ui/components/Button';
@@ -51,6 +51,20 @@ function CompanySettingsForm() {
   const goBack = useGoBack();
   const { run: serverSave, saving, blocked } = useServerSave();
   const toast = useToast();
+
+  // Opened for one part of the profile (`?section=tax|bank`, from Home's setup steps): scroll to it.
+  // It follows the section for a moment while what is above it (the lock notice, the logo) settles.
+  const { section } = useLocalSearchParams<{ section?: string }>();
+  const scrollRef = useRef<ScrollView>(null);
+  const [openedAt] = useState(() => Date.now());
+  const gap = t.spacing.lg;
+  const onSectionLayout = useCallback(
+    (e: LayoutChangeEvent) => {
+      if (Date.now() - openedAt < 2500) scrollRef.current?.scrollTo({ y: Math.max(0, e.nativeEvent.layout.y - gap), animated: true });
+    },
+    [openedAt, gap],
+  );
+  const anchor = (key: 'tax' | 'bank') => (section === key ? onSectionLayout : undefined);
 
   const company = useActiveCompany();
   const saveCompany = useAppStore((s) => s.saveCompany);
@@ -420,6 +434,7 @@ function CompanySettingsForm() {
       <Stack.Screen options={{ title: tr('nav:title.businessProfile') }} />
 
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: t.spacing.xxxl, gap: t.spacing.lg }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={SHOW_SCROLLBAR}
@@ -446,7 +461,7 @@ function CompanySettingsForm() {
                 </View>
               }
             />
-            <View nativeID="bank-and-signature">
+            <View nativeID="bank-and-signature" onLayout={anchor('bank')}>
               <FormSection title={tr('settings:company.bankAndSignature')}>
                 {bankHint}
                 {bookAccount ? (
@@ -458,11 +473,13 @@ function CompanySettingsForm() {
                 <SignatureSection />
               </FormSection>
             </View>
-            <FormSection title={tr('settings:company.taxAndFy')}>
-              <FieldGrid items={[countryField, currencyField, fyField]} />
-              {registeredSwitch}
-              {taxDetails}
-            </FormSection>
+            <View onLayout={anchor('tax')}>
+              <FormSection title={tr('settings:company.taxAndFy')}>
+                <FieldGrid items={[countryField, currencyField, fyField]} />
+                {registeredSwitch}
+                {taxDetails}
+              </FormSection>
+            </View>
           </>
         ) : (
           <>
@@ -483,7 +500,7 @@ function CompanySettingsForm() {
               {pinField}
             </View>
 
-            {caption(tr('settings:company.bankAndSignature'), 'bank-and-signature')}
+            <View onLayout={anchor('bank')}>{caption(tr('settings:company.bankAndSignature'), 'bank-and-signature')}</View>
             {bankHint}
             {bookAccountField}
             {bookAccount ? (
@@ -504,7 +521,7 @@ function CompanySettingsForm() {
             )}
             <SignatureSection />
 
-            {caption(tr('settings:company.taxAndFy'))}
+            <View onLayout={anchor('tax')}>{caption(tr('settings:company.taxAndFy'))}</View>
             {countryField}
             {currencyField}
             {fyField}
