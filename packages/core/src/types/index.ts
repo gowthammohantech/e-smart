@@ -842,9 +842,11 @@ export type Payment = {
   fxGainLoss?: Money;
   /**
    * An advance received for services carries GST when received (s.13(2)): the rate and place of
-   * supply it is taxed at. Advances for goods carry none (notification 66/2017).
+   * supply it is taxed at. Advances for goods carry none (notification 66/2017). `reverseCharge`: the
+   * service is one the recipient pays GST on (s.9(3)/(4)), so the business owes none on the advance and
+   * its receipt voucher says so (Rule 50).
    */
-  advanceTax?: { taxCategoryId: string; rate: number; placeOfSupplyStateCode: string; hsn?: string; cessRate?: number };
+  advanceTax?: { taxCategoryId: string; rate: number; placeOfSupplyStateCode: string; hsn?: string; cessRate?: number; reverseCharge?: boolean };
   /** On money received: TDS the customer deducted from an advance, before any invoice (under `tdsSection`). */
   advanceTds?: Money;
   /** On money paid: the TDS section of what its allocations kept back (26Q). */

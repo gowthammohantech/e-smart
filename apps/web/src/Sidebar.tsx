@@ -105,6 +105,7 @@ function NavItem({
   dropsDown,
   onHoverIn,
   onHoverOut,
+  onToggle,
 }: {
   icon: IconName;
   label: string;
@@ -120,6 +121,8 @@ function NavItem({
   dropsDown?: boolean;
   onHoverIn?: (rect: Rect) => void;
   onHoverOut?: () => void;
+  /** Its own arrow, beside the row: shows or hides the pages without going anywhere. */
+  onToggle?: () => void;
 }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['nav']);
@@ -179,9 +182,37 @@ function NavItem({
         )}
         {badge ? <BadgePill value={badge} floating={compact} /> : null}
         {opensPanel && !compact ? (
-          <Icon name={dropsDown && expanded ? 'chevron-down' : 'chevron-right'} size={16} color={expanded ? t.c.text : t.c.muted} />
+          // With its own arrow button the row keeps the room for it; the button sits over it below.
+          onToggle ? <View style={{ width: 16 }} /> : <Icon name={dropsDown && expanded ? 'chevron-down' : 'chevron-right'} size={16} color={expanded ? t.c.text : t.c.muted} />
         ) : null}
       </Pressable>
+      {/* Beside the row's button, not inside it: on the web each is a <button>, and one can't hold another. */}
+      {onToggle && opensPanel && !compact ? (
+        <Pressable
+          onPress={onToggle}
+          hitSlop={4}
+          accessibilityRole="button"
+          accessibilityLabel={tr(expanded ? 'nav:shell.hidePages' : 'nav:shell.showPages', { label })}
+          accessibilityState={{ expanded }}
+          style={(state) => {
+            const { pressed, hovered, focused } = state as WebPressState;
+            return {
+              position: 'absolute',
+              right: t.spacing.xs,
+              top: (ROW_HEIGHT - 28) / 2,
+              width: 28,
+              height: 28,
+              borderRadius: t.radius.sm,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: pressed || hovered ? t.c.mutedSoft : 'transparent',
+              ...focusRing(t, focused),
+            };
+          }}
+        >
+          <Icon name={dropsDown && expanded ? 'chevron-down' : 'chevron-right'} size={16} color={expanded ? t.c.text : t.c.muted} />
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -605,6 +636,7 @@ function rollUp(pages: MenuPage[], badges: ReturnType<typeof useMenuBadges>): Ba
 export function Sidebar() {
   const t = useTheme();
   const { t: tr } = useTranslation(['nav', 'reports']);
+  const router = useRouter();
   const pathname = usePathname();
   const plan = usePlan();
   const disabled = useDisabledModules();
@@ -731,13 +763,23 @@ export function Sidebar() {
                     // Open, the pages show their own badges.
                     badge={open && !compact ? undefined : rollUp(pages, badges)}
                     dropsDown={!compact}
+                    onToggle={pages.length > 0 && !compact ? () => setDropped({ tab: open ? null : tab.name, at: current }) : undefined}
                     {...(pages.length > 0
                       ? {
                           expanded: open,
                           onPress: (rect: Rect) => {
                             setTip(null);
                             if (!compact) {
-                              setDropped({ tab: open ? null : tab.name, at: current });
+                              // The name goes to the section's overview and shows its pages; the arrow beside it
+                              // (onToggle) only shows or hides them. Without an overview the plan can open, the
+                              // name toggles as the arrow does.
+                              const hub = tabPath(tab.name);
+                              if (!canOpen(plan, hub, disabled)) {
+                                setDropped({ tab: open ? null : tab.name, at: current });
+                                return;
+                              }
+                              setDropped({ tab: tab.name, at: current });
+                              if (pathname !== hub) leaveGuarded(() => router.navigate(appHref(hub) as never));
                               return;
                             }
                             setPanel(

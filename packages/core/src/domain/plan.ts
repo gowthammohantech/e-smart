@@ -100,6 +100,14 @@ export function nextInvoicePlan(tier: PlanTier): PlanTier | null {
   return PLANS.slice(at + 1).find((p) => INVOICE_LIMITS[p.key] === null)?.key ?? null;
 }
 
+/**
+ * Whether an invoice notes the TDS its customer will deduct (RULES 4.14). Not on Free: the field and
+ * the expected figure are for the paid plans, which also follow the TDS through to receipts.
+ */
+export function saleTdsOnPlan(tier: PlanTier): boolean {
+  return tier !== 'free';
+}
+
 export function userLimit(tier: PlanTier): number | null {
   return USER_LIMITS[tier];
 }

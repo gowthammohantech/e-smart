@@ -6419,6 +6419,8 @@ export interface components {
                 hsn?: string;
                 /** @description Cess on the advance, percent of its value; the amount received includes it */
                 cessRate?: number;
+                /** @description The service is one the recipient pays GST on (reverse charge): no GST is owed on the advance, none goes to GSTR-1 table 11, and the receipt voucher says the tax is payable on reverse charge (Rule 50) */
+                reverseCharge?: boolean;
             };
             /** @description On money received: TDS the customer deducted from an advance before any invoice, under `tdsSection`. It credits the customer as money would, so it adds to the advance. */
             advanceTds?: components["schemas"]["Money"];

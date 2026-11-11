@@ -95,7 +95,7 @@ export default function Home() {
   };
 
   const attention: AttentionItem[] = ([
-    { icon: 'alert-circle-outline', label: tr('reports:home.attn.overdueInvoices'), count: receivable?.overdueCount ?? 0, route: '/(app)/receivables', tone: 'danger' },
+    { icon: 'alert-circle-outline', label: tr('reports:home.attn.overdueInvoices'), count: receivable?.overdueCount ?? 0, route: '/(app)/sales/invoices?status=overdue', tone: 'danger' },
     { icon: 'file-document-outline', label: tr('reports:home.attn.draftInvoices'), count: hub?.draftInvoices ?? 0, route: '/(app)/sales/invoices?status=draft', tone: 'warning' },
     { icon: 'file-percent-outline', label: tr('reports:home.attn.openQuotes'), count: hub?.openQuotes ?? 0, route: '/(app)/sales/quotes', tone: 'info' },
     { icon: 'package-variant', label: tr('reports:home.attn.lowStock'), count: hub?.lowStockCount ?? 0, route: '/(app)/inventory/low-stock', tone: 'warning' },

@@ -1,0 +1,1 @@
+ALTER TABLE "payments" ADD COLUMN "advance_reverse_charge" boolean DEFAULT false NOT NULL;

@@ -10,6 +10,8 @@ export type SetupStep = {
   icon: IconName;
   route: string;
   done: boolean;
+  /** In place of the step's own body: what is left when part of it is done. reports:home.step.<bodyKey> */
+  bodyKey?: 'bank.needsSignature' | 'bank.needsAccount';
 };
 
 /**
@@ -30,6 +32,8 @@ export function useSetupSteps(): { steps: SetupStep[]; doneCount: number; comple
   const teamReady = useListsReady();
 
   const reg = company?.taxRegistration;
+  const hasBank = !!(company?.bankDetails?.accountNumber || company?.bankDetails?.upiId);
+  const hasSignature = !!company?.signatureUri;
   const all: SetupStep[] = [
     {
       key: 'profile',
@@ -40,15 +44,18 @@ export function useSetupSteps(): { steps: SetupStep[]; doneCount: number; comple
     {
       key: 'gst',
       icon: 'percent-outline',
-      route: '/(app)/settings/company',
+      // Each opens the business profile at its own section, not at the top of the page.
+      route: '/(app)/settings/company?section=tax',
       // Registered with a GSTIN on file, or chosen as not registered.
       done: !!reg && (!reg.registered || !!reg.identifier),
     },
     {
       key: 'bank',
       icon: 'bank-outline',
-      route: '/(app)/settings/company',
-      done: !!(company?.bankDetails?.accountNumber || company?.bankDetails?.upiId) && !!company?.signatureUri,
+      route: '/(app)/settings/company?section=bank',
+      done: hasBank && hasSignature,
+      // Half done reads as half done: a linked bank account still needs the signature, and the other way round.
+      bodyKey: hasBank && !hasSignature ? 'bank.needsSignature' : hasSignature && !hasBank ? 'bank.needsAccount' : undefined,
     },
     { key: 'customer', icon: 'account-plus-outline', route: '/(app)/contacts/customers/new', done: (counts?.customers ?? 0) > 0 },
     { key: 'item', icon: 'tag-plus-outline', route: '/(app)/catalog/items/new', done: (counts?.items ?? 0) > 0 },

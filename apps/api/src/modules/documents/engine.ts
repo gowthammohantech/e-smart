@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray, lte, ne, notInArray } from 'drizzle-orm';
 import { vehicleIssues } from '../settings/vehicles';
-import { partyTcsSection, tcsRateFor } from '@esmart/core/data/tcsSections';
+import { partyTcsSection, tcsAskedOn, tcsRateFor } from '@esmart/core/data/tcsSections';
 import { OPENING_KINDS } from '@esmart/core/domain/documentStates';
 import type { CustomValues } from '@esmart/core/domain/customFields';
 import { cleanCustomValues } from '../settings/customFields';
@@ -9,7 +9,7 @@ import { buysFrom, sellsTo } from '@esmart/core/domain/partyKinds';
 import { NOTE_KINDS, PURCHASE_KINDS, initialStatus, isPayableDocument } from '@esmart/core/domain/documentStates';
 import { resolveRate } from '@esmart/core/domain/fx';
 import { calculateDocument, calculateLine } from '@esmart/core/domain/lineCalc';
-import { FULL_PLAN, hasModule } from '@esmart/core/domain/plan';
+import { FULL_PLAN, hasModule, saleTdsOnPlan } from '@esmart/core/domain/plan';
 import { OTHER_COUNTRY_CODE } from '@esmart/core/domain/stateCodes';
 import { buildTaxContext } from '@esmart/core/domain/taxEngine';
 import { addDaysISO } from '@esmart/core/lib/date';
@@ -564,7 +564,8 @@ export async function prepareDocument(
   let totals = calculateDocument(calcInput);
   // TCS the seller collects on an invoice under its section (s.206C), worked on the price with GST.
   let tcsCode = f.tcsSection === undefined ? (partyTcsSection(party!) ?? null) : f.tcsSection;
-  let tcsRate = f.kind === 'invoice' ? tcsRateFor(tcsCode, !!(party!.pan || party!.taxId), totals.grandTotalBase.minor) : 0;
+  // From TCS_ENDS_ON an invoice collects none, whatever section was sent or the customer has on file.
+  let tcsRate = f.kind === 'invoice' && tcsAskedOn(f.date) ? tcsRateFor(tcsCode, !!(party!.pan || party!.taxId), totals.grandTotalBase.minor) : 0;
   // A credit note or return against an invoice that collected TCS gives it back in proportion: at the
   // invoice's rate and under its section, on the note's own value (RULES 6.13, pending CA).
   if ((f.kind === 'creditNote' || f.kind === 'salesReturn') && f.sourceDocumentId) {
@@ -581,8 +582,9 @@ export async function prepareDocument(
   const baseMinor = Math.round(totals.taxableAmount.minor * exchangeRate!);
   if (f.kind === 'purchaseBill' || f.kind === 'supplierDebitNote') {
     tds = await tdsOn(db, company, party!, tdsSectionFor(company, party!, f.tdsSection), f.date, baseMinor, { documentId: opts.documentId });
-  } else if (f.kind === 'invoice') {
+  } else if (f.kind === 'invoice' && saleTdsOnPlan(company.plan)) {
     // TDS the customer will deduct (RULES 4.14): expected only, never posted, and the total is unchanged.
+    // Not on the Free plan, where the invoice doesn't ask for it.
     const section = f.tdsSection === 'none' ? null : (f.tdsSection ?? party!.tdsSection ?? null);
     const expected = expectedSaleTds({ section, rate: f.tdsRate, sellerPan: panOfGstin(company.taxIdentifier ?? undefined) || undefined, date: f.date, baseMinor });
     if (expected) tds = expected;

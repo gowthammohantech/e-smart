@@ -43,6 +43,7 @@ export function printablePage(title: string, company: CompanyRow, body: string):
  */
 async function advanceVoucher(db: DbOrTx, company: CompanyRow, p: Schema<'Payment'>, party: { name: string; taxId: string | null; billingLine1: string; billingCity: string } | undefined): Promise<string> {
   if (p.direction !== 'received' || !p.advanceTax) return '';
+  if (p.advanceTax.reverseCharge) return reverseChargeVoucher(company, p, party);
   const [received] = (await loadAdvanceEvents(db, company, p.date)).filter((e) => e.paymentId === p.id && e.kind === 'received');
   if (!received) return '';
   const base = company.baseCurrency.trim();
@@ -66,12 +67,35 @@ async function advanceVoucher(db: DbOrTx, company: CompanyRow, p: Schema<'Paymen
 }
 
 /**
+ * The receipt voucher for an advance on a service the recipient pays GST on (reverse charge): the
+ * advance, the rate the recipient pays at and the place of supply, no tax charged, and Rule 50(f)'s
+ * "tax payable on reverse charge: Yes".
+ */
+function reverseChargeVoucher(company: CompanyRow, p: Schema<'Payment'>, party: { name: string; taxId: string | null; billingLine1: string; billingCity: string } | undefined): string {
+  const at = p.advanceTax!;
+  const m = (minor: number) => formatMoney({ minor, currency: company.baseCurrency.trim() });
+  const pos = INDIAN_STATES.find((s) => s.code === at.placeOfSupplyStateCode)?.name ?? at.placeOfSupplyStateCode;
+  const value = p.amount.minor + (p.advanceTds?.minor ?? 0);
+  return `
+  <h1 style="margin-top:24px">RECEIPT VOUCHER</h1>
+  <div class="muted">Advance received for services: CGST Act s.31(3)(d), Rule 50</div>
+  <p>Recipient: <span class="strong">${esc(party?.name)}</span>${party?.taxId ? `, GSTIN ${esc(party.taxId)}` : ''}${party?.billingLine1 ? `<br/>${esc([party.billingLine1, party.billingCity].filter(Boolean).join(', '))}` : ''}</p>
+  <p>Place of supply: <span class="strong">${esc(pos)} (${esc(at.placeOfSupplyStateCode)})</span>${at.hsn ? `<br/>SAC: <span class="strong">${esc(at.hsn)}</span>` : ''}</p>
+  <table><thead><tr><th>Advance for services</th><th class="num">Amount</th></tr></thead><tbody>
+    <tr><td>Value of the advance</td><td class="num">${m(value)}</td></tr>
+    <tr><td>GST @ ${at.rate}%: payable by the recipient on reverse charge</td><td class="num">${m(0)}</td></tr>
+    <tr><td class="strong">Advance received</td><td class="num strong">${m(value)}</td></tr>
+  </tbody></table>
+  <p class="muted">Tax payable on reverse charge: Yes. The recipient pays the GST on this advance; none is charged here.</p>`;
+}
+
+/**
  * The refund voucher (CGST Rule 51) for money paid back out of an advance: the receipt voucher it
  * refers to, the recipient, the amount refunded and, on a service advance, the tax it takes back.
  */
 async function refundVoucher(db: DbOrTx, company: CompanyRow, p: Schema<'Payment'>, party: { name: string; taxId: string | null; billingLine1: string; billingCity: string } | undefined): Promise<string> {
   if (!p.refundOf) return '';
-  const [receipt] = await db.select({ number: schema.payments.number, date: schema.payments.date }).from(schema.payments).where(eq(schema.payments.id, p.refundOf));
+  const [receipt] = await db.select({ number: schema.payments.number, date: schema.payments.date, reverseCharge: schema.payments.advanceReverseCharge }).from(schema.payments).where(eq(schema.payments.id, p.refundOf));
   const [refunded] = (await loadAdvanceEvents(db, company, p.date)).filter((e) => e.kind === 'refunded' && e.refundId === p.id);
   const base = company.baseCurrency.trim();
   const m = (minor: number) => formatMoney({ minor, currency: base });
@@ -91,7 +115,7 @@ async function refundVoucher(db: DbOrTx, company: CompanyRow, p: Schema<'Payment
     ${refunded ? `<tr><td>Value of the advance refunded (taxable)</td><td class="num">${m(refunded.taxable)}</td></tr>${taxRows}` : ''}
     <tr><td class="strong">Amount refunded</td><td class="num strong">${formatMoney(p.amount)}</td></tr>
   </tbody></table>
-  <p class="muted">Tax payable on reverse charge: No.</p>`;
+  <p class="muted">Tax payable on reverse charge: ${receipt?.reverseCharge ? 'Yes' : 'No'}.</p>`;
 }
 
 /** The printed receipt for a payment. */
