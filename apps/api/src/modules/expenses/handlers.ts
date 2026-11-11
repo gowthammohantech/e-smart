@@ -89,7 +89,7 @@ export async function prepare(ctx: AnyCtx, db: DbOrTx, body: Schema<'Expense'>, 
 
   const [account] = await db.select().from(schema.paymentAccounts).where(and(eq(schema.paymentAccounts.companyId, companyId), eq(schema.paymentAccounts.id, body.accountId)));
   if (!account) blocking('accountId', 'No such payment account in this company');
-  else if (!accountFitsMethod(body.method, { ...account, currency: account.currency.trim(), accountNumber: account.accountNumber ?? undefined, openingBalance: money(account.openingBalanceMinor, account.currency.trim()), openingBalanceDate: account.openingBalanceDate ?? undefined, openingRate: Number(account.openingRate) })) {
+  else if (!accountFitsMethod(body.method, account)) {
     blocking('accountId', `A ${body.method} expense cannot be paid from a ${account.type} account`);
   }
 

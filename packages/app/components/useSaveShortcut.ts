@@ -18,7 +18,8 @@ export function useSaveShortcut(onSave: () => void, enabled = true, onSaveAnothe
     useCallback(() => {
       if (Platform.OS !== 'web' || typeof document === 'undefined') return undefined;
       const onKey = (e: KeyboardEvent) => {
-        if (e.key.toLowerCase() !== 's' || !(e.ctrlKey || e.metaKey) || e.altKey) return;
+        // Browser autofill fires keydown events with no `key`.
+        if (e.key?.toLowerCase() !== 's' || !(e.ctrlKey || e.metaKey) || e.altKey) return;
         const another = e.shiftKey ? latest.current.onSaveAnother : undefined;
         if (e.shiftKey && !another) return;
         e.preventDefault();

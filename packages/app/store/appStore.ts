@@ -56,9 +56,21 @@ import { documentAuditSnapshot } from '@esmart/core/domain/auditDiff';
 import { expenseCategories as defaultExpenseCategories } from '@esmart/core/data/masters';
 import { allocateAdvances, creditedTo, settledBy, statusForOutstanding } from '@esmart/core/domain/receivables';
 import { expectedTdsForDocument, tdsForDocument } from './tds';
-import { accountFitsMethod } from '@esmart/core/domain/paymentAccounts';
+import { accountFitsMethod, bankDetailsOf } from '@esmart/core/domain/paymentAccounts';
 import { applyProfileLocks } from '@esmart/core/domain/companyLock';
 import { buildTaxContext } from '@esmart/core/domain/taxEngine';
+
+/**
+ * Companies whose invoices are linked to bank account `id`, with its details copied in again (as the
+ * server does when the account is saved); `account` null (it's gone) unlinks it and keeps what printed.
+ */
+function followInvoiceAccount(companies: Company[], id: string, account: PaymentAccount | null): Company[] {
+  return companies.map((c) =>
+    c.bankDetails?.paymentAccountId === id
+      ? { ...c, bankDetails: account ? { ...bankDetailsOf(account), paymentAccountId: id } : { ...c.bankDetails, paymentAccountId: undefined } }
+      : c,
+  );
+}
 
 export type AppData = {
   accountId: string;
@@ -764,9 +776,12 @@ export const useAppStore = create<AppState>()(
             paymentAccounts: acc.isDefault
               ? next.map((a) => (a.companyId === acc.companyId ? { ...a, isDefault: a.id === acc.id } : a))
               : next,
+            // The account its invoices print: their bank details follow it, as on the server.
+            companies: followInvoiceAccount(get().companies, acc.id, acc),
           });
         },
-        removePaymentAccount: (id) => set({ paymentAccounts: get().paymentAccounts.filter((a) => a.id !== id) }),
+        removePaymentAccount: (id) =>
+          set({ paymentAccounts: get().paymentAccounts.filter((a) => a.id !== id), companies: followInvoiceAccount(get().companies, id, null) }),
         saveExchangeRate: (rate) => {
           const exists = get().exchangeRates.some((r) => r.id === rate.id);
           set({

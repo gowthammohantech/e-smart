@@ -1,39 +1,59 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Animated, View } from 'react-native';
+import { Animated, Pressable, StyleSheet, View } from 'react-native';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import LixiChat from '@esmart/app/screens/(app)/lixi';
-import { LIXI_PANEL_WIDTH, closeLixiPanel, lixiPanelWidth, useLixiPanel } from '../lixiPanel';
+import { LIXI_PANEL_WIDTH, closeLixiPanel, lixiPanelProgress, useLixiPanel } from '../lixiPanel';
 
 /**
- * Lixi as a panel on the right edge of the desktop shell. It sits in the
- * shell's row, so the page beside it narrows as it opens; nothing is covered.
- * The chat stays mounted while the panel is shut, so closing it doesn't lose
+ * Lixi as a drawer over the right edge of the desktop shell. It slides in on top
+ * of the page, which keeps its width; a click on the dimmed page or Escape shuts
+ * it. The chat stays mounted while the panel is shut, so closing it doesn't lose
  * the conversation.
  */
 export function LixiPanel() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['nav']);
+  const { t: tr } = useTranslation(['nav', 'common']);
   const { open, ask, nonce } = useLixiPanel();
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !e.defaultPrevented) closeLixiPanel();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open]);
+
   return (
-    <Animated.View
-      // Shut, the chat is out of reach of the keyboard and screen readers too.
-      pointerEvents={open ? 'auto' : 'none'}
-      aria-hidden={!open}
-      role="complementary"
-      aria-label={tr('nav:shell.assistant')}
-      style={{
-        width: lixiPanelWidth,
-        overflow: 'hidden',
-        backgroundColor: t.c.bg,
-        borderLeftWidth: open ? 1 : 0,
-        borderLeftColor: t.c.line,
-      }}
-    >
-      {/* Fixed width, so the chat slides in rather than reflowing as it opens. */}
-      <View style={{ width: LIXI_PANEL_WIDTH, flex: 1 }}>
+    // Clipped, so the shut panel parked past the right edge never scrolls the page sideways.
+    <View pointerEvents="box-none" style={[StyleSheet.absoluteFill, { overflow: 'hidden', zIndex: 50 }]}>
+      <Animated.View pointerEvents={open ? 'auto' : 'none'} style={[StyleSheet.absoluteFill, { backgroundColor: t.c.overlay, opacity: lixiPanelProgress }]}>
+        <Pressable style={{ flex: 1, cursor: 'default' } as object} onPress={closeLixiPanel} accessibilityLabel={tr('common:component.close')} />
+      </Animated.View>
+      <Animated.View
+        // Shut, the chat is out of reach of the keyboard and screen readers too.
+        pointerEvents={open ? 'auto' : 'none'}
+        aria-hidden={!open}
+        role="complementary"
+        aria-label={tr('nav:shell.assistant')}
+        style={[
+          {
+            position: 'absolute',
+            top: 0,
+            bottom: 0,
+            right: 0,
+            width: LIXI_PANEL_WIDTH,
+            backgroundColor: t.c.bg,
+            borderLeftWidth: 1,
+            borderLeftColor: t.c.line,
+            transform: [{ translateX: lixiPanelProgress.interpolate({ inputRange: [0, 1], outputRange: [LIXI_PANEL_WIDTH + 40, 0] }) }],
+          },
+          t.shadow.sheet,
+        ]}
+      >
         <LixiChat key={nonce} onClose={closeLixiPanel} initialAsk={ask} />
-      </View>
-    </Animated.View>
+      </Animated.View>
+    </View>
   );
 }

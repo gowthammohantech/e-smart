@@ -100,7 +100,8 @@ export function DeleteAccountSheet({ visible, onClose }: { visible: boolean; onC
         <Button title={busy ? tr('settings:deleteAccount.deleting') : tr('settings:deleteAccount.confirm')} variant="danger" onPress={submit} disabled={!ready} fullWidth />
       }
     >
-      <View style={{ gap: t.spacing.md }}>
+      {/* Sheet leaves the body's inset to its content: in line with the title and the footer. */}
+      <View style={{ paddingHorizontal: t.spacing.lg, paddingTop: t.spacing.sm, gap: t.spacing.md }}>
         <Text variant="body">{tr('settings:deleteAccount.what')}</Text>
         <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
           {tr('settings:deleteAccount.retention')}

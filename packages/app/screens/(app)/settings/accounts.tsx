@@ -31,6 +31,9 @@ import { paymentAccountFromForm } from '../../../features/settings/paymentAccoun
 import { useServerSave } from '../../../components/useServerSave';
 import { Skeleton, SkeletonGroup } from '@esmart/ui/components/Skeleton';
 
+/** A sample UPI ID for the field's placeholder: an address, the same in every language. */
+const UPI_SAMPLE = 'business@okhdfc';
+
 export default function AccountSettings() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
@@ -59,6 +62,13 @@ export default function AccountSettings() {
   const [currencyOpen, setCurrencyOpen] = useState(false);
   const hasFx = useHasModule('fx');
   const [accountNumber, setAccountNumber] = useState('');
+  // What a customer needs to pay into it; printed on invoices when the business profile picks this account.
+  const [holderName, setHolderName] = useState('');
+  const [bankName, setBankName] = useState('');
+  const [branchName, setBranchName] = useState('');
+  const [ifsc, setIfsc] = useState('');
+  const [upiId, setUpiId] = useState('');
+  const [errors, setErrors] = useState<{ ifsc?: string; upiId?: string }>({});
   const [openingBalance, setOpeningBalance] = useState('');
   // Blank: the balance stands at the start of the books. A date: it stands on that day.
   const [openingBalanceDate, setOpeningBalanceDate] = useState<string | undefined>(undefined);
@@ -83,8 +93,18 @@ export default function AccountSettings() {
     .map((type) => ({ type, total: accounts.filter((a) => a.type === type).reduce((sum, a) => sum + (balances[a.id] ?? 0), 0) }));
 
   // Once money has gone through an account it stays, and so does its type: past
-  // payments used methods the type allows. The server refuses both too.
-  const inUse = !!editing?.id && (usage?.paymentAccounts[editing.id]?.inUse ?? true);
+  // payments used methods the type allows. The server refuses both too. What's on this
+  // device counts as well: the server's answer may be from before the last entry, or out of reach.
+  const payments = useAppStore((s) => s.payments);
+  const expenses = useAppStore((s) => s.expenses);
+  const vouchers = useAppStore((s) => s.vouchers);
+  const usedHere = (id: string) =>
+    payments.some((p) => p.accountId === id) ||
+    expenses.some((e) => e.accountId === id) ||
+    vouchers.some((v) => v.lines.some((l) => l.account === `pay:${id}`));
+  const inUse = !!editing?.id && ((usage?.paymentAccounts[editing.id]?.inUse ?? true) || usedHere(editing.id));
+  // The business profile prints this account's details on invoices.
+  const onInvoices = !!editing?.id && invoiceAccountId === editing.id;
 
   const open = (a?: PaymentAccount) => {
     setEditing(a ?? ({ id: '', companyId: company.id, name: '', type: 'bank', currency: baseCurrency, openingBalance: money(0, baseCurrency), isDefault: false } as PaymentAccount));
@@ -92,6 +112,12 @@ export default function AccountSettings() {
     setType(a?.type ?? 'bank');
     setCurrency(a?.currency ?? baseCurrency);
     setAccountNumber(a?.accountNumber ?? '');
+    setHolderName(a?.accountHolderName ?? '');
+    setBankName(a?.bankName ?? '');
+    setBranchName(a?.branchName ?? '');
+    setIfsc(a?.ifsc ?? '');
+    setUpiId(a?.upiId ?? '');
+    setErrors({});
     setOpeningBalance(a ? String(toMajor(a.openingBalance)) : '');
     setOpeningBalanceDate(a?.openingBalanceDate);
     setIsDefault(a?.isDefault ?? false);
@@ -99,11 +125,27 @@ export default function AccountSettings() {
 
   const save = async () => {
     if (!editing || !name.trim()) return;
-    const account = paymentAccountFromForm(
-      editing,
-      { name, type, currency, accountNumber, openingBalance, openingBalanceDate, isDefault },
-      { id: editing.id || uid('acc'), companyId: company.id },
-    );
+    // The same shapes the server checks, said here in words.
+    const next = {
+      ifsc: type === 'bank' && ifsc.trim() && !/^[A-Za-z]{4}0[A-Za-z0-9]{6}$/.test(ifsc.trim()) ? tr('settings:company.ifscInvalid') : undefined,
+      upiId: type === 'bank' && upiId.trim() && !/^[A-Za-z0-9.\-_]{2,256}@[A-Za-z][A-Za-z0-9]{1,63}$/.test(upiId.trim()) ? tr('settings:company.upiInvalid') : undefined,
+    };
+    setErrors(next);
+    if (next.ifsc || next.upiId) return;
+    const text = (v: string) => v.trim() || undefined;
+    const account = {
+      ...paymentAccountFromForm(
+        editing,
+        { name, type, currency, accountNumber, openingBalance, openingBalanceDate, isDefault },
+        { id: editing.id || uid('acc'), companyId: company.id },
+      ),
+      // Only a bank account prints on invoices (it is what customers pay into), so only it keeps these.
+      accountHolderName: type === 'bank' ? text(holderName) : undefined,
+      bankName: type === 'bank' ? text(bankName) : undefined,
+      branchName: type === 'bank' ? text(branchName) : undefined,
+      ifsc: type === 'bank' ? text(ifsc)?.toUpperCase() : undefined,
+      upiId: type === 'bank' ? text(upiId)?.toLowerCase() : undefined,
+    };
     // The sheet stays open until the server has it, so a refusal can be fixed here.
     const res = await serverSave(
       () => savePaymentAccount(account),
@@ -268,14 +310,50 @@ export default function AccountSettings() {
               ]}
               value={type}
               onChange={(v) => setType(v as PaymentAccount['type'])}
-              disabled={inUse}
+              disabled={inUse || onInvoices}
             />
-            {inUse ? <Text variant="caption" tone="muted">{tr('settings:accounts.inUse')}</Text> : null}
+            {inUse ? <Text variant="caption" tone="muted">{tr('settings:accounts.inUse')}</Text> : onInvoices ? <Text variant="caption" tone="muted">{tr('settings:accounts.onInvoicesType')}</Text> : null}
           </View>
           <TextField label={tr('settings:accounts.name')} value={name} onChangeText={setName} placeholder={tr('settings:accounts.namePlaceholder')} icon="bank-outline" required />
-          {type === 'bank' ? (
-            <TextField label={tr('settings:accounts.number')} value={accountNumber} onChangeText={setAccountNumber} placeholder="XXXX1234" icon="pound" />
-          ) : null}
+          {type !== 'bank' ? null : (
+            <>
+              <View style={{ gap: 2 }}>
+                <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>
+                  {tr('settings:accounts.payDetails')}
+                </Text>
+                <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
+                  {onInvoices ? tr('settings:accounts.payDetailsOnInvoices') : tr('settings:accounts.payDetailsHint')}
+                </Text>
+              </View>
+              <TextField label={tr('settings:company.accountName')} value={holderName} onChangeText={setHolderName} icon="account-outline" placeholder={company.legalName || company.name} />
+              <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
+                <TextField label={tr('settings:company.bankName')} value={bankName} onChangeText={setBankName} icon="bank-outline" containerStyle={{ flex: 1 }} />
+                <TextField label={tr('settings:company.branchName')} value={branchName} onChangeText={setBranchName} containerStyle={{ flex: 1 }} />
+              </View>
+              <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
+                <TextField label={tr('settings:accounts.number')} value={accountNumber} onChangeText={setAccountNumber} keyboardType="number-pad" icon="pound" containerStyle={{ flex: 1 }} />
+                <TextField
+                  label={tr('settings:company.ifsc')}
+                  value={ifsc}
+                  onChangeText={(v) => setIfsc(v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 11))}
+                  autoCapitalize="characters"
+                  placeholder="HDFC0001234"
+                  error={errors.ifsc}
+                  containerStyle={{ flex: 1 }}
+                />
+              </View>
+              <TextField
+                label={tr('settings:company.upiId')}
+                value={upiId}
+                onChangeText={(v) => setUpiId(v.trim())}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                icon="qrcode"
+                placeholder={UPI_SAMPLE}
+                error={errors.upiId}
+              />
+            </>
+          )}
           {/* Shown on a full plan, or for an account already in another currency. Fixed once money has gone through it. */}
           {hasFx || currency !== baseCurrency ? (
             <PickerField

@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Icon } from '@esmart/ui/components/Icon';
+import { Icon, type IconName } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { FieldGrid, FieldRow, FormContainer, SplitPane } from '@esmart/ui/components/Layout';
 import { Text } from '@esmart/ui/components/Text';
@@ -15,13 +15,14 @@ import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { TotalsPanel } from '@esmart/ui/components/TotalsPanel';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { useToast, useToastClearance } from '@esmart/ui/components/Toast';
-import { AmountField, PickerField, QuantityStepper, Segmented, SwitchField, TextField } from '@esmart/ui/components/Field';
+import { AmountField, FieldShell, PickerField, QuantityStepper, Segmented, SwitchField, TextField } from '@esmart/ui/components/Field';
+import { focusRing, type WebPressState } from '@esmart/ui/theme/interaction';
 import { useDecimalText } from '../../components/useDecimalText';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { Avatar } from '@esmart/ui/components/Avatar';
 
-import { DocStatus, DocumentKind, DocumentLine, NoteReason, Party } from '@esmart/core/types';
+import { Address, DocStatus, DocumentKind, DocumentLine, NoteReason, Party } from '@esmart/core/types';
 import { NOTE_KINDS, PURCHASE_KINDS, isAwaitingApproval, isFinalized } from '@esmart/core/domain/documentStates';
 import { TDS_SECTIONS, tdsSection } from '@esmart/core/data/tdsSections';
 import { TCS_SECTIONS, partyTcsSection, tcsRateFor, tcsSection } from '@esmart/core/data/tcsSections';
@@ -81,6 +82,7 @@ import { FROM_DOCUMENT, takeHandBack } from '../../navigation/handBack';
 import { tdsForDocument } from '../../store/tds';
 import { useItcBreakup } from './itcBreakup';
 import { lineRateLabel } from './lineRate';
+import { useCessRows } from './cessRows';
 import { expectedSaleTds } from '@esmart/core/domain/tds';
 import { panOfGstin } from '@esmart/core/domain/gstin';
 import { CostCentreField } from '../books/CostCentreField';
@@ -186,7 +188,7 @@ function PrefillItemFetch({ id, onSettled }: { id: string; onSettled: (id: strin
 
 function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }: EditorProps) {
   const t = useTheme();
-  const { t: tr } = useTranslation(['common', 'domain', 'sales', 'purchases']);
+  const { t: tr } = useTranslation(['common', 'domain', 'sales', 'purchases', 'contacts']);
   const router = useRouter();
   const toast = useToast();
   // The phone footer (total and buttons) is tall; a toast sits above it.
@@ -390,6 +392,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       ? { label: tr('sales:tds.expectedLabel', { section: tdsSection(expectedTds.section)?.label ?? expectedTds.section, rate: formatPercent(expectedTds.rate) }), amount: expectedTds.amount, netLabel: tr('sales:tds.netReceivable') }
       : undefined;
   const itcBreakup = useItcBreakup({ kind, lines: draft.lines, totals, currency: draft.currency, exchangeRate: draft.exchangeRate, reverseCharge: draft.reverseCharge }, company?.baseCurrency ?? draft.currency);
+  // The cess item by item, under the totals, when anything on it carries cess.
+  const cessRows = useCessRows(draft.lines, totals, draft.currency, draft.reverseCharge);
   const tdsSectionLabel = (code: string | undefined) => (!code || code === 'none' ? tr('purchases:tds.none') : `${tdsSection(code)?.label ?? code} · ${tdsSection(code)?.nature ?? ''}`);
 
   const [step, setStep] = useState(seed?.step ?? 0);
@@ -815,36 +819,111 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   /* ---------------------------------------------------------------- */
 
   const renderParty = () => {
+    const partyA11y = party
+      ? tr(isPurchase ? 'sales:editor.changeSupplier' : 'sales:editor.changeCustomer')
+      : tr(isPurchase ? 'sales:editor.selectSupplier' : 'sales:editor.selectCustomer');
+    const partyDetails = party ? (
+      <>
+        <Avatar name={party.name} size={44} />
+        <View style={{ flex: 1, gap: 3 }}>
+          <Text variant="body" weight="600">
+            {party.name}
+          </Text>
+          <Text variant="caption" tone="muted" numberOfLines={1}>
+            {party.taxId ?? party.phone ?? party.email ?? party.code}
+          </Text>
+          <View style={{ flexDirection: 'row', gap: 5, marginTop: 2 }}>
+            <Badge label={tr('sales:editor.termsBadge', { days: party.paymentTermsDays })} tone="neutral" size="sm" />
+            {party.currency !== baseCurrency ? <Badge label={party.currency} tone="info" size="sm" /> : null}
+          </View>
+        </View>
+      </>
+    ) : null;
     // Each field once; a phone stacks them in this order, a desktop lays them out as an invoice's head.
-    const partyCard = (
-      <Pressable
-        // On a desktop it fills the height of the dates and numbers beside it.
-        style={desktop ? { flex: 1 } : undefined}
-        onPress={() => setPartyOpen(true)}
-        accessibilityRole="button"
-        accessibilityLabel={
-          party
-            ? tr(isPurchase ? 'sales:editor.changeSupplier' : 'sales:editor.changeCustomer')
-            : tr(isPurchase ? 'sales:editor.selectSupplier' : 'sales:editor.selectCustomer')
-        }
-      >
-        <Card style={[{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }, desktop ? { flex: 1 } : null]}>
+    // A desktop gives the party the page's whole width, as the bill-to block of an invoice: empty, a
+    // slim dashed bar to pick one into; picked, who they are beside where it is billed and shipped to.
+    type PartyLine = { text: string; icon?: IconName };
+    const addressLines = (a?: Address): PartyLine[] =>
+      a?.line1 ? [a.line1, a.line2, [a.city, a.postalCode].filter(Boolean).join(' – '), a.state].filter((l): l is string => !!l).map((text) => ({ text })) : [];
+    const billTo = addressLines(party?.billingAddress);
+    const shipTo = addressLines(party?.shippingAddress);
+    const sameAddress = shipTo.map((l) => l.text).join() === billTo.map((l) => l.text).join();
+    const contact: PartyLine[] = [];
+    if (party?.phone) contact.push({ text: party.phone, icon: 'phone-outline' });
+    if (party?.email) contact.push({ text: party.email, icon: 'email-outline' });
+    const partyColumns = [
+      billTo.length ? { label: tr('contacts:form.billingAddress'), lines: billTo } : null,
+      shipTo.length && !sameAddress ? { label: tr('contacts:form.shippingAddress'), lines: shipTo } : null,
+      contact.length ? { label: tr('sales:editor.partyContact'), lines: contact } : null,
+    ].filter((c): c is { label: string; lines: PartyLine[] } => !!c);
+    const partyCard = desktop ? (
+      <FieldShell label={tr(isPurchase ? 'common:table.supplier' : 'common:table.customer')} required>
+        <Pressable
+          style={(state) => {
+            const { hovered, pressed, focused } = state as WebPressState;
+            return [
+              {
+                flexDirection: 'row',
+                alignItems: party ? 'stretch' : 'center',
+                gap: t.spacing.lg,
+                borderRadius: t.radius.md,
+                borderWidth: party ? 1 : 1.5,
+                borderStyle: party ? 'solid' : 'dashed',
+                borderColor: hovered || pressed ? t.c.primary : t.c.inputBorder,
+                backgroundColor: !party && (hovered || pressed) ? t.c.chip : t.c.paper,
+                paddingHorizontal: t.spacing.lg,
+                paddingVertical: party ? t.spacing.lg : t.spacing.md,
+              } as const,
+              focusRing(t, focused),
+            ];
+          }}
+          onPress={() => setPartyOpen(true)}
+          accessibilityRole="button"
+          accessibilityLabel={partyA11y}
+        >
           {party ? (
             <>
-              <Avatar name={party.name} size={44} />
-              <View style={{ flex: 1, gap: 3 }}>
-                <Text variant="body" weight="600">
-                  {party.name}
-                </Text>
-                <Text variant="caption" tone="muted" numberOfLines={1}>
-                  {party.taxId ?? party.phone ?? party.email ?? party.code}
-                </Text>
-                <View style={{ flexDirection: 'row', gap: 5, marginTop: 2 }}>
-                  <Badge label={tr('sales:editor.termsBadge', { days: party.paymentTermsDays })} tone="neutral" size="sm" />
-                  {party.currency !== baseCurrency ? <Badge label={party.currency} tone="info" size="sm" /> : null}
+              <View style={{ flex: 1.3, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>{partyDetails}</View>
+              {partyColumns.map((c) => (
+                <View key={c.label} style={{ flex: 1, minWidth: 0, gap: 3, paddingLeft: t.spacing.lg, borderLeftWidth: 1, borderLeftColor: t.c.line }}>
+                  <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                    {c.label}
+                  </Text>
+                  {c.lines.map((l, i) => (
+                    <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      {l.icon ? <Icon name={l.icon} size={14} color={t.c.muted} /> : null}
+                      <Text variant="small" numberOfLines={1} style={{ flex: 1 }}>
+                        {l.text}
+                      </Text>
+                    </View>
+                  ))}
                 </View>
+              ))}
+              <View style={{ justifyContent: 'center' }}>
+                <Icon name="chevron-right" size={20} color={t.c.muted} />
               </View>
             </>
+          ) : (
+            <>
+              <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: t.c.chip, alignItems: 'center', justifyContent: 'center' }}>
+                <Icon name="account-plus-outline" size={20} color={t.c.primary} />
+              </View>
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text variant="body" weight="600" tone="primary">
+                  {tr(isPurchase ? 'sales:editor.selectSupplier' : 'sales:editor.selectCustomer')}
+                </Text>
+                <Text variant="caption" tone="muted">{tr('sales:editor.partySearch')}</Text>
+              </View>
+              <Icon name="chevron-right" size={20} color={t.c.muted} />
+            </>
+          )}
+        </Pressable>
+      </FieldShell>
+    ) : (
+      <Pressable onPress={() => setPartyOpen(true)} accessibilityRole="button" accessibilityLabel={partyA11y}>
+        <Card style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
+          {party ? (
+            partyDetails
           ) : (
             <>
               <View
@@ -1053,35 +1132,24 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       );
     }
 
-    // A desktop: who on the left, the document's dates and numbers on the right, two to a row;
-    // where it is supplied and in what currency in a row below. A field that would sit alone in
-    // that row joins the right-hand group instead, so no field has an empty half beside it.
-    const head = [dateField, dueField ?? validField ?? noteReasonField, supplierDocField, referenceField].filter(Boolean);
-    let place = [branchField, posField, currencyField, fxField].filter(Boolean);
-    if (place.length === 1) {
-      head.push(...place);
-      place = [];
-    }
+    // A desktop: who across the top, then the document's dates and numbers and where it is supplied,
+    // in rows of equal columns: three to a row, or four when that leaves no row short.
+    const fields = [dateField, dueField ?? validField ?? noteReasonField, supplierDocField, referenceField, branchField, posField, currencyField, fxField].filter(Boolean);
+    const perRow = fields.length % 3 === 0 || fields.length % 4 !== 0 ? 3 : 4;
+    const fieldRows: React.ReactNode[][] = [];
+    for (let i = 0; i < fields.length; i += perRow) fieldRows.push(fields.slice(i, i + perRow));
     return (
       <View style={{ gap: t.spacing.lg }}>
-        <View style={{ flexDirection: 'row', alignItems: 'stretch', gap: t.spacing.lg }}>
-          <View style={{ flex: 1, minWidth: 0 }}>{partyCard}</View>
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <FieldGrid items={head} />
-          </View>
-        </View>
-        {place.length === 3 ? (
-          // Branch, place of supply and currency: a third each.
-          <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: t.spacing.lg }}>
-            {place.map((node, i) => (
+        {partyCard}
+        {fieldRows.map((row, r) => (
+          <View key={r} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: t.spacing.lg }}>
+            {Array.from({ length: perRow }, (_, i) => (
               <View key={i} style={{ flex: 1, minWidth: 0 }}>
-                {node}
+                {row[i] ?? null}
               </View>
             ))}
           </View>
-        ) : place.length ? (
-          <FieldGrid items={place} />
-        ) : null}
+        ))}
         {kind === 'purchaseBill' && imported ? (
           <View style={{ gap: t.spacing.sm }}>
             <Text variant="caption" tone="muted">{tr('purchases:boe.hint')}</Text>
@@ -1246,6 +1314,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
             compact
             tds={tdsRow}
             itc={itcBreakup}
+            cess={cessRows}
           />
         </Card>
       ) : null}
@@ -1496,6 +1565,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
             compact
             tds={tdsRow}
             itc={itcBreakup}
+            cess={cessRows}
           />
         </Card>
       )}
@@ -1547,6 +1617,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           exchangeRate={draft.exchangeRate}
           tds={tdsRow}
           itc={itcBreakup}
+          cess={cessRows}
         />
       </Card>
 

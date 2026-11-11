@@ -18,7 +18,7 @@ import { companyArchiveHandlers } from './archive';
 import { branchHandlers } from './branches';
 import { createNumberingSeries, logCompanyDefaults, seedCompanyDefaults } from './defaults';
 import { companyImageHandlers, companyWithImages } from './logo';
-import { branchToWire, companyColumns, companyToWire } from './wire';
+import { branchToWire, companyColumns, companyToWire, invoiceBankColumns } from './wire';
 
 /** GSTIN check digit, and the reference data the foreign keys need. */
 async function validateCompany(db: DbOrTx, body: { country: string; baseCurrency: string; taxRegistration?: { regime: string; identifier?: string } }) {
@@ -152,10 +152,11 @@ export const companiesHandlers = defineHandlers({
       if (ctx.user.role !== 'owner') throw forbidden('OWNER_ONLY', 'Only an owner can change how stock is costed');
       if (lockedThroughDate) throw conflict('PERIOD_LOCKED', `The books are closed through ${lockedThroughDate}; stock costing changes every period's stock value, so reopen them first`);
     }
+    const invoiceAccount = await linkedBankColumns(ctx.db, current, body.bankDetails?.paymentAccountId);
     const row = await ctx.db.transaction(async (tx) => {
       const [updated] = await tx
         .update(schema.companies)
-        .set({ ...companyColumns(body), lockedThroughDate, perpetualStockFrom, stockCosting, disabledModules, approvalRules, version: current.version + 1, updatedAt: ctx.now })
+        .set({ ...companyColumns(body), ...invoiceAccount, lockedThroughDate, perpetualStockFrom, stockCosting, disabledModules, approvalRules, version: current.version + 1, updatedAt: ctx.now })
         .where(and(eq(schema.companies.id, current.id), eq(schema.companies.version, current.version)))
         .returning();
       if (!updated) throw preconditionFailed();
@@ -201,6 +202,22 @@ export const companiesHandlers = defineHandlers({
   ...companyArchiveHandlers,
   ...branchHandlers,
 });
+
+/**
+ * A business whose invoice details are linked to a bank account prints that account's own details:
+ * the bank columns are a copy of them, so a profile save (with whatever it last saw, or details typed
+ * the old way) can't make the invoices disagree with the account. `sent` is the link in the body:
+ * undefined keeps the current one, '' unlinks (the typed details in the body then apply).
+ */
+async function linkedBankColumns(db: DbOrTx, current: typeof schema.companies.$inferSelect, sent: string | undefined) {
+  const id = sent === undefined ? current.bankPaymentAccountId : sent.trim();
+  if (!id) return {};
+  const A = schema.paymentAccounts;
+  const [account] = await db.select().from(A).where(and(eq(A.companyId, current.id), eq(A.id, id)));
+  // Gone since it was linked: stop following it, and keep what was printed.
+  if (!account) return { bankPaymentAccountId: null };
+  return { ...invoiceBankColumns(account), bankPaymentAccountId: account.id };
+}
 
 /** Any document past draft counts as posted, as in the app. */
 async function hasPostedEntries(db: DbOrTx, companyId: string): Promise<boolean> {

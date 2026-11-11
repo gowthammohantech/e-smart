@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, ScrollView, View } from 'react-native';
+import { Pressable, ScrollView, View, useWindowDimensions } from 'react-native';
 import { Stack } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Icon } from '@esmart/ui/components/Icon';
@@ -30,6 +30,7 @@ import { useAppStore } from '../../../store/appStore';
 import { useActiveCompany, useBranches } from '../../../store/selectors';
 import { useDocumentPages, useDocumentRecord } from '../../../remote/queries';
 import { useSaveShortcut } from '../../../components/useSaveShortcut';
+import { useLogoSrc } from '../../../remote/logoSrc';
 
 /** Colours that print well on white and read on a phone. */
 const ACCENTS = [
@@ -75,6 +76,11 @@ function InvoiceDesignScreenBody() {
   const t = useTheme();
   // A desktop puts the controls beside the preview, so a change shows without scrolling.
   const desktop = useIsDesktop();
+  // Side by side only when the preview still gets a whole A4 page's width beside the controls; a laptop
+  // stacks them. The preview is as tall as the window allows, so it never runs past the screen.
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const sideBySide = desktop && windowWidth >= 1500;
+  const previewHeight = desktop ? Math.max(560, Math.min(900, windowHeight - 160)) : 720;
   const { t: tr, i18n } = useTranslation(['settings']);
   const company = useActiveCompany();
   const branches = useBranches();
@@ -94,12 +100,14 @@ function InvoiceDesignScreenBody() {
   const resolved = resolveTemplate(tpl);
   const layout = resolved.layout;
 
+  const logoSrc = useLogoSrc(company);
   const html = useMemo(
     () =>
       latest
         ? buildDocumentHtml({
             document: latest,
             company,
+            logoSrc,
             party,
             branch: branches.find((b) => b.id === latest.branchId),
             template: tpl,
@@ -109,7 +117,7 @@ function InvoiceDesignScreenBody() {
             language: i18n.language === 'ta' ? 'ta' : 'en',
           })
         : '',
-    [latest, company, party, branches, tpl, tr, i18n.language],
+    [latest, company, logoSrc, party, branches, tpl, tr, i18n.language],
   );
 
   const pickLayout = (l: InvoiceLayout) => set({ layout: l });
@@ -121,9 +129,9 @@ function InvoiceDesignScreenBody() {
         <Text variant="small" tone="muted">
           {tr('settings:invoiceDesign.hint')}
         </Text>
-        <View style={desktop ? { flexDirection: 'row', alignItems: 'flex-start', gap: t.spacing.xl } : { gap: t.spacing.lg }}>
+        <View style={sideBySide ? { flexDirection: 'row', alignItems: 'flex-start', gap: t.spacing.xl } : { gap: t.spacing.lg }}>
           {/* Controls take two parts of the page to the preview's three, so both grow with the window. */}
-          <View style={[{ gap: t.spacing.lg }, desktop ? { flex: 2, minWidth: 0 } : null]}>
+          <View style={[{ gap: t.spacing.lg }, sideBySide ? { flex: 2, minWidth: 380, maxWidth: 520 } : null]}>
             <Card style={{ gap: t.spacing.md }}>
               <View style={{ gap: t.spacing.xxs }}>
                 <Text variant="body" weight="600">
@@ -145,8 +153,8 @@ function InvoiceDesignScreenBody() {
                       accessibilityState={{ selected: picked, checked: picked }}
                       accessibilityLabel={`${name}. ${tr(`settings:invoiceDesign.layouts.${l}.description`)}`}
                       style={({ pressed }) => ({
-                        // Two to a row on a phone, four across the desktop panel's two rows.
-                        flexBasis: '47%',
+                        // Two to a row; one beside the preview, where the column is narrow.
+                        flexBasis: sideBySide ? '100%' : '47%',
                         flexGrow: 1,
                         flexDirection: 'row',
                         gap: t.spacing.sm,
@@ -245,12 +253,12 @@ function InvoiceDesignScreenBody() {
             </Card>
           </View>
           {previewLoading ? (
-            <SkeletonGroup style={desktop ? { flex: 3, minWidth: 0 } : undefined}>
-              <Skeleton height={desktop ? 720 : 420} radius={t.radius.lg} />
+            <SkeletonGroup style={sideBySide ? { flex: 3, minWidth: 0 } : undefined}>
+              <Skeleton height={previewHeight} radius={t.radius.lg} />
             </SkeletonGroup>
           ) : html ? (
             // The preview fills the rest of the page column, so it ends at the page's right edge.
-            <Card padded={false} style={[{ height: desktop ? 900 : 720, overflow: 'hidden' }, desktop ? { flex: 3, minWidth: 0 } : null]}>
+            <Card padded={false} style={[{ height: previewHeight, overflow: 'hidden' }, sideBySide ? { flex: 3, minWidth: 0 } : null]}>
               <HtmlPreview html={html} style={{ flex: 1 }} />
             </Card>
           ) : (

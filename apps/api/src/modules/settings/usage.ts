@@ -30,7 +30,7 @@ export const usageHandlers = defineHandlers({
     const A = schema.paymentAccounts;
     const tally = (table: typeof schema.parties | typeof schema.items | typeof schema.stockMovements | typeof schema.auditEvents) => ctx.db.select({ n: count() }).from(table).where(eq(table.companyId, companyId));
 
-    const [[parties], [customers], [items], [movements], [audit], byBranch, [posted], [invoices], [payments], byCategory, itemTaxes, docTaxes, accounts, paidThrough, spentFrom] = await Promise.all([
+    const [[parties], [customers], [items], [movements], [audit], byBranch, [posted], [invoices], [payments], byCategory, itemTaxes, docTaxes, accounts, paidThrough, spentFrom, movedThrough, statements] = await Promise.all([
       tally(schema.parties),
       ctx.db.select({ n: count() }).from(schema.parties).where(and(eq(schema.parties.companyId, companyId), inArray(schema.parties.kind, ['customer', 'both']))),
       tally(schema.items),
@@ -55,10 +55,16 @@ export const usageHandlers = defineHandlers({
       ctx.db.select().from(A).where(eq(A.companyId, companyId)),
       ctx.db.selectDistinct({ id: PAY.accountId }).from(PAY).where(eq(PAY.companyId, companyId)),
       ctx.db.selectDistinct({ id: X.accountId }).from(X).where(eq(X.companyId, companyId)),
+      // Transfers, GST challans and journals move money through an account as `pay:<id>` voucher lines.
+      ctx.db
+        .selectDistinct({ id: sql<string>`substr(l->>'account', 5)` })
+        .from(sql`${schema.vouchers}, jsonb_array_elements(${schema.vouchers.lines}) as l`)
+        .where(and(eq(schema.vouchers.companyId, companyId), sql`l->>'account' like 'pay:%'`)),
+      ctx.db.selectDistinct({ id: schema.bankStatements.accountId }).from(schema.bankStatements).where(eq(schema.bankStatements.companyId, companyId)),
     ]);
 
     const balances = await paymentAccountBalances(ctx.db, companyId, accounts);
-    const used = new Set([...paidThrough, ...spentFrom].map((r) => r.id));
+    const used = new Set([...paidThrough, ...spentFrom, ...movedThrough, ...statements].map((r) => r.id));
     const taxUse: Record<string, number> = {};
     for (const r of [...itemTaxes, ...docTaxes]) if (r.id) taxUse[r.id] = (taxUse[r.id] ?? 0) + Number(r.n);
 

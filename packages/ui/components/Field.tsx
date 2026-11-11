@@ -200,6 +200,9 @@ export function TextField({
           style={[
             {
               flex: 1,
+              // A web input won't shrink below its default width otherwise, so at a high zoom it pushed the
+              // show/hide eye (or the suffix) out of the box.
+              minWidth: 0,
               color: t.c.text,
               fontSize: t.fontSize.body,
               paddingVertical: multiline ? t.spacing.md : t.spacing.sm,
@@ -227,6 +230,7 @@ export function TextField({
             accessibilityRole="button"
             accessibilityLabel={tr(revealed ? 'common:component.hidePassword' : 'common:component.showPassword')}
             hitSlop={8}
+            style={{ flexShrink: 0 }}
           >
             <Icon name={!revealed ? 'eye-off-outline' : 'eye-outline'} size={20} color={t.c.muted} />
           </Pressable>

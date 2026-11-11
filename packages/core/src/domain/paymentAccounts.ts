@@ -1,4 +1,28 @@
-import { Expense, Payment, PaymentAccount, PaymentMethod, Voucher } from '../types';
+import { BankDetails, Expense, Payment, PaymentAccount, PaymentMethod, Voucher } from '../types';
+
+/**
+ * The bank details a payment account prints on invoices, as the server copies them onto the
+ * company: undefined for a cash account or one with nothing a customer could pay into.
+ */
+export function bankDetailsOf(account: PaymentAccount | null | undefined): BankDetails | undefined {
+  if (!account || account.type === 'cash') return undefined;
+  const text = (v?: string) => v?.trim() || undefined;
+  const out: BankDetails = {
+    bankName: text(account.bankName),
+    accountName: text(account.accountHolderName),
+    accountNumber: text(account.accountNumber)?.replace(/\s+/g, '').toUpperCase(),
+    ifsc: text(account.ifsc)?.toUpperCase(),
+    branch: text(account.branchName),
+    upiId: text(account.upiId)?.toLowerCase(),
+  };
+  for (const k of Object.keys(out) as (keyof BankDetails)[]) if (out[k] === undefined) delete out[k];
+  return Object.keys(out).length ? out : undefined;
+}
+
+/** Whether an account has what a customer needs to pay into it: an account number or a UPI ID. */
+export function canPrintOnInvoices(account: PaymentAccount): boolean {
+  return account.type !== 'cash' && !!(account.accountNumber?.trim() || account.upiId?.trim());
+}
 
 /**
  * Which kinds of account a payment method can settle through. Money paid by
@@ -48,7 +72,7 @@ export function accountIdAfterMethodChange(
 }
 
 /** Can this method settle through this account? (Bank transfers never touch cash in hand.) */
-export function accountFitsMethod(method: PaymentMethod, account: PaymentAccount | undefined): boolean {
+export function accountFitsMethod(method: PaymentMethod, account: Pick<PaymentAccount, 'type'> | undefined): boolean {
   return !!account && accountTypesFor(method).includes(account.type);
 }
 

@@ -475,7 +475,8 @@ export interface paths {
             };
             cookie?: never;
         };
-        get?: never;
+        /** The logo itself, for documents a device renders (its `logoUri` link expires within the hour, and a page may not load images from storage) */
+        get: operations["getCompanyLogo"];
         put: operations["uploadCompanyLogo"];
         post?: never;
         delete: operations["removeCompanyLogo"];
@@ -4793,7 +4794,7 @@ export interface components {
             branch?: string;
             /** @description Virtual payment address, e.g. `vertex@okhdfc` */
             upiId?: string;
-            /** @description The bank payment account these details belong to. Receipts default to it; an empty string unlinks it. */
+            /** @description The bank payment account these details belong to. Receipts default to it; an empty string unlinks it. Linked, the other fields are that account's own (set in payment accounts) and what is sent for them is ignored. */
             paymentAccountId?: string;
         };
         Company: components["schemas"]["Versioned"] & {
@@ -5056,6 +5057,14 @@ export interface components {
             type: "cash" | "bank" | "wallet";
             currency: string;
             accountNumber?: string;
+            /** @description Name the account is held in, as a customer pays it */
+            accountHolderName?: string;
+            bankName?: string;
+            branchName?: string;
+            /** @description Indian Financial System Code */
+            ifsc?: string;
+            /** @description Virtual payment address, e.g. `vertex@okhdfc` */
+            upiId?: string;
             openingBalance: components["schemas"]["Money"];
             /**
              * Format: date
@@ -8248,6 +8257,30 @@ export interface operations {
                 };
             };
             409: components["responses"]["Conflict"];
+        };
+    };
+    getCompanyLogo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The image, as uploaded */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                    "image/jpeg": string;
+                };
+            };
+            404: components["responses"]["NotFound"];
         };
     };
     uploadCompanyLogo: {

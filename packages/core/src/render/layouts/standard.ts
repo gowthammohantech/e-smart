@@ -6,7 +6,7 @@ import { unitShortName } from '../../data/masters';
 import { shownCessRate } from '../../domain/lineCalc';
 import { tint } from '../invoiceTemplate';
 import type { DocView } from '../docView';
-import { addressBlock, bankBlock, cancelledStrip, eInvoiceBlock, esc, logoTag, NOTE_REASON, printedCustomFields, reimbursementTable, signatureTag, SUPPLY_NOTE } from '../blocks';
+import { addressBlock, bankBlock, cancelledStrip, eInvoiceBlock, esc, logoTag, NOTE_REASON, printedCustomFields, reimbursementTable, cessTable, signatureTag, SUPPLY_NOTE } from '../blocks';
 
 /**
  * The standard page: the app's own design, and what every business printed before it could choose
@@ -186,7 +186,7 @@ export function standardLayout(view: DocView): string {
   ${reimbursementTable(view)}
 
   <table class="totals"><tbody>${totalRows}</tbody></table>
-  <div class="words"><span class="cap">${bi('sales:pdf.amountInWords')}</span> ${esc(amountInWords(doc.totals.grandTotal))}</div>
+  <div class="words"><span class="cap">${bi('sales:pdf.amountInWords')}</span> ${esc(amountInWords(doc.totals.grandTotal))}</div>${cessTable(view)}
 
   ${eInvoiceBlock(doc, bi, ewayBill)}
 

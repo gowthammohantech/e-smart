@@ -342,6 +342,12 @@ export const paymentAccounts = pgTable("payment_accounts", {
 	type: paymentAccountType().notNull(),
 	currency: char({ length: 3 }).notNull(),
 	accountNumber: varchar("account_number", { length: 40 }),
+	// What a customer needs to pay into it, printed on invoices when it is the business's invoice account.
+	accountHolderName: varchar("account_holder_name", { length: 100 }),
+	bankName: varchar("bank_name", { length: 100 }),
+	branchName: varchar("branch_name", { length: 100 }),
+	ifsc: varchar({ length: 11 }),
+	upiId: varchar("upi_id", { length: 100 }),
 	openingBalanceMinor: bigint("opening_balance_minor", { mode: "number" }).default(0).notNull(),
 	openingBalanceDate: date("opening_balance_date"),
 	// A foreign-currency account: its opening balance's rate to base on that day, so totals in base agree everywhere.
@@ -1870,6 +1876,7 @@ export const companies = pgTable("companies", {
 	bankBranch: varchar("bank_branch", { length: 100 }),
 	upiId: varchar("upi_id", { length: 100 }),
 	// The bank payment account those details belong to: customers pay into it, so receipts default to it.
+	// Linked, the columns above are a copy of that account's details, kept in step when it changes.
 	bankPaymentAccountId: varchar("bank_payment_account_id", { length: 40 }),
 	// The authorised signatory's signature, printed above that line on documents.
 	signatureAttachmentId: varchar("signature_attachment_id", { length: 40 }),

@@ -30,6 +30,7 @@ import { applyEntity } from '../../../remote/apply';
 import { LayoutThumb } from '../../../features/documents/LayoutThumb';
 import { describeError } from '../../../remote/errors';
 import { useDocumentRecord } from '../../../remote/queries';
+import { useLogoSrc } from '../../../remote/logoSrc';
 import { LoadingView } from '../../../components/LoadingView';
 import { useAppStore } from '../../../store/appStore';
 
@@ -63,6 +64,7 @@ export default function DocumentPreview() {
   const [savingLayout, setSavingLayout] = useState(false);
 
   const customFields = useAppStore((s) => s.customFields);
+  const logoSrc = useLogoSrc(company);
   const html = useMemo(
     () =>
       doc
@@ -71,6 +73,7 @@ export default function DocumentPreview() {
             language,
             document: doc,
             company,
+            logoSrc,
             party,
             branch: branches.find((b) => b.id === doc.branchId),
             ewayBill,
@@ -80,7 +83,7 @@ export default function DocumentPreview() {
             copy,
           })
         : '',
-    [doc, company, party, branches, ewayBill, source, against, customFields, copy, tr, language],
+    [doc, company, logoSrc, party, branches, ewayBill, source, against, customFields, copy, tr, language],
   );
 
   if (!doc && remote.isLoading) return <LoadingView variant="page" title={tr('nav:title.preview')} />;

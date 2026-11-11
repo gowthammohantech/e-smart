@@ -12,6 +12,7 @@ import { newId } from '../../lib/ids';
 import { audit, firstUse } from './shared';
 import { ledgerKeyUse } from '../books/usage';
 import { paymentAccountToWire } from './wire';
+import { invoiceBankColumns } from '../companies/wire';
 
 const A = schema.paymentAccounts;
 type AccountRow = typeof A.$inferSelect;
@@ -86,18 +87,57 @@ async function validate(db: DbOrTx, body: Schema<'PaymentAccount'>, today: strin
   }
   const [cur] = await db.select().from(schema.currencies).where(eq(schema.currencies.code, body.currency));
   if (!cur) issues.push({ field: 'currency', message: `Unknown currency ${body.currency}`, severity: 'blocking' });
+  // The same shapes the business profile checked when these were typed there.
+  if (body.type === 'bank' && body.ifsc?.trim() && !/^[A-Za-z]{4}0[A-Za-z0-9]{6}$/.test(body.ifsc.trim())) {
+    issues.push({ field: 'ifsc', message: 'An IFSC is 4 letters, a 0, then 6 letters or digits', severity: 'blocking' });
+  }
+  if (body.type !== 'cash' && body.upiId?.trim() && !/^[A-Za-z0-9.\-_]{2,256}@[A-Za-z][A-Za-z0-9]{1,63}$/.test(body.upiId.trim())) {
+    issues.push({ field: 'upiId', message: 'A UPI ID looks like name@bank', severity: 'blocking' });
+  }
   if (issues.length) throw unprocessable(issues);
 }
 
 function columns(body: Schema<'PaymentAccount'>) {
+  const text = (v?: string) => v?.trim() || null;
+  // A cash account has no bank details; a wallet keeps only its holder and UPI ID.
+  const bank = body.type === 'bank';
   return {
     name: body.name.trim(),
     type: body.type,
     currency: body.currency,
-    accountNumber: body.accountNumber ?? null,
+    accountNumber: text(body.accountNumber),
+    accountHolderName: body.type === 'cash' ? null : text(body.accountHolderName),
+    bankName: bank ? text(body.bankName) : null,
+    branchName: bank ? text(body.branchName) : null,
+    ifsc: bank ? (text(body.ifsc)?.toUpperCase() ?? null) : null,
+    upiId: body.type === 'cash' ? null : (text(body.upiId)?.toLowerCase() ?? null),
     openingBalanceMinor: body.openingBalance.minor,
     openingBalanceDate: body.openingBalanceDate ?? null,
   };
+}
+
+/** What has moved money through an account, if anything: then its type and currency are fixed. */
+function accountUse(db: DbOrTx, id: string) {
+  return firstUse(db, [
+    ['payments', sql`select 1 from payments where account_id = ${id} limit 1`],
+    ['expenses', sql`select 1 from expenses where account_id = ${id} limit 1`],
+    // Transfers, GST challans and journals carry it as a `pay:<id>` voucher line.
+    ['transfers or journals', sql`select 1 from vouchers v, jsonb_array_elements(v.lines) l where l->>'account' = ${`pay:${id}`} limit 1`],
+    ['bank statements', sql`select 1 from bank_statements where account_id = ${id} limit 1`],
+  ]);
+}
+
+/**
+ * The company whose invoices are linked to this account keeps a copy of its details: bring the copy
+ * in step. (The linked account can't be deleted or change type.) The company's version is left
+ * alone: the copy is derived, and bumping it would fail the next profile save.
+ */
+async function syncInvoiceBank(tx: DbOrTx, companyId: string, account: AccountRow, now: Date) {
+  const C = schema.companies;
+  await tx
+    .update(C)
+    .set({ ...invoiceBankColumns(account), updatedAt: now })
+    .where(and(eq(C.id, companyId), eq(C.bankPaymentAccountId, account.id)));
 }
 
 /** One default per company: making this one the default clears the others. */
@@ -145,10 +185,7 @@ export const accountHandlers = defineHandlers({
       throw unprocessable([{ field: 'type', message: 'Your invoices print this account; pick another under Business profile, bank details first', severity: 'blocking' }]);
     }
     if (currencyChanged || typeChanged) {
-      const used = await firstUse(ctx.db, [
-        ['payments', sql`select 1 from payments where account_id = ${current.id} limit 1`],
-        ['expenses', sql`select 1 from expenses where account_id = ${current.id} limit 1`],
-      ]);
+      const used = await accountUse(ctx.db, current.id);
       if (used) {
         const issues: Issue[] = [];
         if (currencyChanged) issues.push({ field: 'currency', message: `This account has ${used}; its currency can't change`, severity: 'blocking' });
@@ -173,6 +210,7 @@ export const accountHandlers = defineHandlers({
         before: paymentAccountToWire(current, current.openingBalanceMinor),
         after: paymentAccountToWire(updated, updated.openingBalanceMinor),
       });
+      await syncInvoiceBank(tx, ctx.company.id, updated, ctx.now);
       return updated;
     });
     setEtag(ctx.reply, row.version);
@@ -182,11 +220,7 @@ export const accountHandlers = defineHandlers({
   async removePaymentAccount(ctx) {
     const current = await findAccount(ctx.db, ctx.company.id, ctx.params.id);
     checkIfMatch(ctx.req, current.version);
-    const used = await firstUse(ctx.db, [
-      ['payments', sql`select 1 from payments where account_id = ${current.id} limit 1`],
-      ['expenses', sql`select 1 from expenses where account_id = ${current.id} limit 1`],
-      ['bank statements', sql`select 1 from bank_statements where account_id = ${current.id} limit 1`],
-    ]);
+    const used = await accountUse(ctx.db, current.id);
     if (used) throw conflict('PAYMENT_ACCOUNT_IN_USE', `This account has ${used}; it can't be deleted`);
     if (ctx.company.bankPaymentAccountId === current.id) {
       throw conflict('PAYMENT_ACCOUNT_IN_USE', 'Your invoices print this account; pick another under Business profile, bank details first');

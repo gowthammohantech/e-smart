@@ -93,6 +93,14 @@ export function Gstr2bView({ mode }: { mode: 'download' | 'reconcile' }) {
   // Until the GSTINs are known, "no GSTIN" isn't said; until a period's 2B comes, the last one's isn't shown.
   const [gstinsLoaded, setGstinsLoaded] = useState(false);
   const [loadState, setLoadState] = useState<'loading' | 'failed' | 'done'>('loading');
+  // Another period or GSTIN: what was on screen belongs to the last one, so it clears as this one loads.
+  const scope = `${gstin}|${period}|${company.id}`;
+  const [shownScope, setShownScope] = useState(scope);
+  if (shownScope !== scope) {
+    setShownScope(scope);
+    setRec(null);
+    setLoadState('loading');
+  }
   // Claiming books the credit for the period: it is asked first.
   const [askClaim, setAskClaim] = useState(false);
 
@@ -126,9 +134,6 @@ export function Gstr2bView({ mode }: { mode: 'download' | 'reconcile' }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gstin, period, company.id]);
   useEffect(() => {
-    // Another period or GSTIN: what was on screen belongs to the last one.
-    setRec(null);
-    setLoadState('loading');
     void load();
   }, [load]);
 

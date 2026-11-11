@@ -15,16 +15,15 @@ let state: PanelState = { open: false, nonce: 0 };
 const listeners = new Set<() => void>();
 
 /**
- * The panel's current width, animated. The panel draws itself with it and the
- * page beside it takes whatever is left, so opening Lixi squeezes the page
- * rather than covering it.
+ * How far open the panel is, 0 (shut) to 1, animated. The panel slides in over
+ * the page with it and the scrim behind it fades in, so the page keeps its width.
  */
-export const lixiPanelWidth = new Animated.Value(0);
+export const lixiPanelProgress = new Animated.Value(0);
 
 function set(next: PanelState) {
   state = next;
-  Animated.timing(lixiPanelWidth, {
-    toValue: next.open ? LIXI_PANEL_WIDTH : 0,
+  Animated.timing(lixiPanelProgress, {
+    toValue: next.open ? 1 : 0,
     duration: 260,
     easing: Easing.out(Easing.cubic),
     useNativeDriver: false,
