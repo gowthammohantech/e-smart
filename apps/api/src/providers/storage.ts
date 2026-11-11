@@ -48,15 +48,16 @@ export class MemoryStorage implements StorageProvider {
   private url(method: 'PUT' | 'GET', key: string, ttl: number, extra = ''): SignedUrl {
     const exp = Math.floor(Date.now() / 1000) + ttl;
     const q = new URLSearchParams({ exp: String(exp), sig: this.sign(method, key, exp, extra) });
-    if (extra) q.set('ct', extra);
+    // A GET's `extra` is the download's filename; a PUT's is the content type.
+    if (extra) q.set(method === 'GET' ? 'fn' : 'ct', extra);
     return { url: `${this.baseUrl}/v1/_storage/${encodeURIComponent(key)}?${q}`, method, headers: method === 'PUT' ? { 'content-type': extra } : {}, expiresAt: new Date(exp * 1000) };
   }
 
   async uploadUrl(key: string, contentType: string, ttlSeconds = DEFAULT_TTL) {
     return this.url('PUT', key, ttlSeconds, contentType);
   }
-  async downloadUrl(key: string, opts: { ttlSeconds?: number } = {}) {
-    return this.url('GET', key, opts.ttlSeconds ?? DEFAULT_TTL);
+  async downloadUrl(key: string, opts: { ttlSeconds?: number; filename?: string } = {}) {
+    return this.url('GET', key, opts.ttlSeconds ?? DEFAULT_TTL, opts.filename ?? '');
   }
   async put(key: string, body: Buffer, contentType: string) {
     this.objects.set(key, { body, contentType });
@@ -79,7 +80,7 @@ export class MemoryStorage implements StorageProvider {
   /** The routes the signed URLs point at. Registered only in memory mode. */
   routes(app: FastifyInstance) {
     app.addContentTypeParser('*', { parseAs: 'buffer' }, (_req, body, done) => done(null, body));
-    type Q = { exp: string; sig: string; ct?: string };
+    type Q = { exp: string; sig: string; ct?: string; fn?: string };
     app.put<{ Params: { key: string }; Querystring: Q }>('/v1/_storage/:key', async (req, reply) => {
       const { exp, sig, ct = '' } = req.query;
       if (!this.verify('PUT', req.params.key, Number(exp), sig, ct)) return reply.status(403).send();
@@ -87,10 +88,12 @@ export class MemoryStorage implements StorageProvider {
       return reply.status(200).send();
     });
     app.get<{ Params: { key: string }; Querystring: Q }>('/v1/_storage/:key', async (req, reply) => {
-      const { exp, sig } = req.query;
-      if (!this.verify('GET', req.params.key, Number(exp), sig)) return reply.status(403).send();
+      const { exp, sig, fn = '' } = req.query;
+      if (!this.verify('GET', req.params.key, Number(exp), sig, fn)) return reply.status(403).send();
       const o = this.objects.get(req.params.key);
       if (!o) return reply.status(404).send();
+      // A named download is a file to save, as the S3 and Azure links are: it never opens in the tab.
+      if (fn) void reply.header('content-disposition', `attachment; filename="${fn.replace(/[^\w.\- ]+/g, '_')}"`);
       return reply.type(o.contentType).send(o.body);
     });
   }

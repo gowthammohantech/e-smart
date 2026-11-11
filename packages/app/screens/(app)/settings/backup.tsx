@@ -93,9 +93,6 @@ function BackupExportBody() {
   const doExport = async (format: ExportFormat) => {
     setConfirmExport(null);
     setBusy(true);
-    // A browser only opens a new tab straight from the tap; one opened after the server answers is
-    // blocked as a popup. So the tab opens now and is pointed at the download once it is ready.
-    const win = Platform.OS === 'web' ? (globalThis as unknown as { open?: (u: string, t: string) => { location: { href: string }; close: () => void } | null }).open?.('', '_blank') ?? null : null;
     try {
       const url = await toast.promise(exportCompany(company.id, format), {
         loading: tr('settings:backup.preparing'),
@@ -103,11 +100,19 @@ function BackupExportBody() {
         error: (err) => describeError(err, tr),
         icon: 'database-export-outline',
       });
-      if (win) win.location.href = url;
-      else await Linking.openURL(url);
+      if (Platform.OS === 'web') {
+        // The link is an attachment, so a link clicked in this page downloads the file and stays on it:
+        // no extra tab is opened.
+        const a = document.createElement('a');
+        a.href = url;
+        a.rel = 'noopener';
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      } else await Linking.openURL(url);
     } catch {
       // The toast has said what went wrong.
-      win?.close();
     } finally {
       setBusy(false);
     }
