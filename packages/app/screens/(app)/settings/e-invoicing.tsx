@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
@@ -87,6 +87,23 @@ function EInvoicingForm() {
   const login = { username: edits[portal].username ?? savedUsername, password: edits[portal].password };
   const setLogin = (over: Partial<{ username: string; password: string }>) =>
     setEdits((e) => ({ ...e, [portal]: { ...e[portal], ...over } }));
+
+  // Arriving from Integrations (`?portal=`) scrolls down to the portal credentials, which sit below the fold.
+  const scrollRef = useRef<ScrollView>(null);
+  const credRef = useRef<View>(null);
+  useEffect(() => {
+    if (!params.portal) return undefined;
+    const id = setTimeout(() => {
+      const inner = (scrollRef.current as unknown as { getInnerViewNode?: () => unknown } | null)?.getInnerViewNode?.();
+      if (!credRef.current || !inner) return;
+      (credRef.current as unknown as { measureLayout: (n: unknown, ok: (x: number, y: number) => void, fail: () => void) => void }).measureLayout(
+        inner,
+        (_x, y) => scrollRef.current?.scrollTo({ y: Math.max(0, y - t.spacing.lg), animated: true }),
+        () => undefined,
+      );
+    }, 150);
+    return () => clearTimeout(id);
+  }, [params.portal, t.spacing.lg]);
 
   const [credBusy, setCredBusy] = useState<'save' | 'test' | null>(null);
   const [credMessage, setCredMessage] = useState<{ tone: 'good' | 'bad'; text: string } | null>(null);
@@ -214,7 +231,7 @@ function EInvoicingForm() {
     </>
   );
   const credentialsSection = (
-    <>
+    <View ref={credRef} collapsable={false}>
         <SectionLabel>{tr('compliance:settings.portalCredentials')}</SectionLabel>
         <Card style={{ gap: t.spacing.sm }}>
           <Segmented
@@ -268,7 +285,7 @@ function EInvoicingForm() {
           ) : null}
         </Card>
 
-    </>
+    </View>
   );
   const ewaySection = (
     <>
@@ -398,6 +415,7 @@ function EInvoicingForm() {
       <Stack.Screen options={{ title: tr('nav:title.eInvoicingAndEWayBill') }} />
 
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={{ padding: t.spacing.lg, paddingBottom: t.spacing.xxxl }}
         showsVerticalScrollIndicator={SHOW_SCROLLBAR}
         keyboardShouldPersistTaps="handled"
