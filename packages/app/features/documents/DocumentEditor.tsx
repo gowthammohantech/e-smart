@@ -25,7 +25,7 @@ import { Avatar } from '@esmart/ui/components/Avatar';
 import { Address, DocStatus, DocumentKind, DocumentLine, NoteReason, Party } from '@esmart/core/types';
 import { NOTE_KINDS, PURCHASE_KINDS, isAwaitingApproval, isFinalized } from '@esmart/core/domain/documentStates';
 import { TDS_SECTIONS, tdsSection } from '@esmart/core/data/tdsSections';
-import { TCS_SECTIONS, partyTcsSection, tcsRateFor, tcsSection } from '@esmart/core/data/tcsSections';
+import { TCS_SECTIONS, partyTcsSection, tcsAskedOn, tcsRateFor, tcsSection } from '@esmart/core/data/tcsSections';
 import { documentKindLabel } from '@esmart/core/labels';
 import { resolveRate } from '@esmart/core/domain/fx';
 import { buildTaxContext } from '@esmart/core/domain/taxEngine';
@@ -322,7 +322,9 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
 
   // TCS on an invoice (s.206C): the section's rate, higher for a buyer with no PAN, over the 206C(1F) threshold only.
   const tcsRateOfDraft = useCallback(
-    (d: { tcsSection?: string; partyId?: string | null }, totalBaseMinor: number) => {
+    (d: { tcsSection?: string; partyId?: string | null; date?: string }, totalBaseMinor: number) => {
+      // Not asked from TCS_ENDS_ON: none is collected on an invoice dated then or later.
+      if (!tcsAskedOn(d.date)) return 0;
       const buyer = parties.find((p) => p.id === d.partyId);
       return tcsRateFor(d.tcsSection, !!(buyer?.pan || buyer?.taxId), totalBaseMinor);
     },
@@ -692,7 +694,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       tdsSection: billTds || saleTds ? draft.tdsSection : undefined,
       tdsRate: saleTds && draft.tdsSection && draft.tdsSection !== 'none' ? draft.tdsRate : undefined,
       // `none` is sent as itself: unset on a new invoice would take the customer's section.
-      tcsSection: kind === 'invoice' ? draft.tcsSection : undefined,
+      // From TCS_ENDS_ON it is 'none' outright, so the server doesn't take the customer's section either.
+      tcsSection: kind === 'invoice' ? (tcsAskedOn(draft.date) ? draft.tcsSection : 'none') : undefined,
       costCentreId: draft.costCentreId,
       customFields: draft.customFields,
       vehicleId: draft.vehicleId,
@@ -1378,7 +1381,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
               hint={tr('sales:tds.rateHint')}
             />
           ) : null,
-          kind === 'invoice' ? (
+          kind === 'invoice' && tcsAskedOn(draft.date) ? (
             <PickerField
               label={tr('sales:tcs.section')}
               value={draft.tcsSection && draft.tcsSection !== 'none' ? `${tcsSection(draft.tcsSection)?.label ?? draft.tcsSection} · ${tcsSection(draft.tcsSection)?.nature ?? ''}` : tr('sales:tcs.none')}

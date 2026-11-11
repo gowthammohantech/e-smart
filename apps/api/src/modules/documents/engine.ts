@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray, lte, ne, notInArray } from 'drizzle-orm';
 import { vehicleIssues } from '../settings/vehicles';
-import { partyTcsSection, tcsRateFor } from '@esmart/core/data/tcsSections';
+import { partyTcsSection, tcsAskedOn, tcsRateFor } from '@esmart/core/data/tcsSections';
 import { OPENING_KINDS } from '@esmart/core/domain/documentStates';
 import type { CustomValues } from '@esmart/core/domain/customFields';
 import { cleanCustomValues } from '../settings/customFields';
@@ -564,7 +564,8 @@ export async function prepareDocument(
   let totals = calculateDocument(calcInput);
   // TCS the seller collects on an invoice under its section (s.206C), worked on the price with GST.
   let tcsCode = f.tcsSection === undefined ? (partyTcsSection(party!) ?? null) : f.tcsSection;
-  let tcsRate = f.kind === 'invoice' ? tcsRateFor(tcsCode, !!(party!.pan || party!.taxId), totals.grandTotalBase.minor) : 0;
+  // From TCS_ENDS_ON an invoice collects none, whatever section was sent or the customer has on file.
+  let tcsRate = f.kind === 'invoice' && tcsAskedOn(f.date) ? tcsRateFor(tcsCode, !!(party!.pan || party!.taxId), totals.grandTotalBase.minor) : 0;
   // A credit note or return against an invoice that collected TCS gives it back in proportion: at the
   // invoice's rate and under its section, on the note's own value (RULES 6.13, pending CA).
   if ((f.kind === 'creditNote' || f.kind === 'salesReturn') && f.sourceDocumentId) {

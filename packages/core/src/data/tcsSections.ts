@@ -42,6 +42,18 @@ export const TCS_SECTIONS: TcsSection[] = [
   s('luxuryGoods', '206C(1F) luxury goods', 'Notified luxury goods sold for over ₹10 lakh', 1, { singleThresholdMinor: 10_00_000_00 }),
 ];
 
+/**
+ * The first invoice date TCS is no longer asked for. A product decision taken for the 1 April 2025
+ * change: invoices dated before it keep the section and collect as before; from it on, an invoice
+ * neither offers a section nor collects, whatever the customer has on file.
+ */
+export const TCS_ENDS_ON = '2025-04-01';
+
+/** Whether an invoice of this date (YYYY-MM-DD) asks for TCS. */
+export function tcsAskedOn(date: string | undefined | null): boolean {
+  return !!date && date < TCS_ENDS_ON;
+}
+
 export function tcsSection(code: string | undefined | null): TcsSection | undefined {
   return TCS_SECTIONS.find((x) => x.code === code);
 }

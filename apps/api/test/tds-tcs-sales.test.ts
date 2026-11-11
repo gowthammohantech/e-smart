@@ -8,6 +8,8 @@ const t = setupApi();
 
 const inr = (minor: number) => ({ minor, currency: 'INR' });
 const FY = { from: '2026-04-01', to: '2027-03-31' };
+/** TCS is asked only on invoices dated before 1 April 2025 (TCS_ENDS_ON), so its reports read FY 2024-25. */
+const TCS_FY = { from: '2024-04-01', to: '2025-03-31' };
 
 /** The fixture pins its own day; these run on 6 November 2026, after the reverse-charge cutover. */
 async function setup() {
@@ -68,11 +70,11 @@ describe('TDS the customer will deduct from an invoice (RULES 4.14)', () => {
 describe('TCS given back on a credit note (G7), and the TCS reports', () => {
   it('reverses TCS at the invoice rate under its section, shows it negative, and a challan clears TCS payable', async () => {
     const m = await setup();
-    const inv = await t.post(`${m.c}/documents`, invoiceBody(m, { partyId: m.bengaluru.id, date: '2026-10-10', tcsSection: 'scrap', status: 'issued' }), { token: m.token });
+    const inv = await t.post(`${m.c}/documents`, invoiceBody(m, { partyId: m.bengaluru.id, date: '2025-03-10', tcsSection: 'scrap', status: 'issued' }), { token: m.token });
     expect(inv.body.totals.tcs).toEqual(inr(2_400));
     const cn = await t.post(
       `${m.c}/documents`,
-      { kind: 'creditNote', partyId: m.bengaluru.id, sourceDocumentId: inv.body.id, date: '2026-10-20', currency: 'INR', noteReason: 'discount', lines: [line(m.gst(18), { name: 'Rate difference', quantity: 1, unitPrice: inr(50_000) })], status: 'issued' },
+      { kind: 'creditNote', partyId: m.bengaluru.id, sourceDocumentId: inv.body.id, date: '2025-03-20', currency: 'INR', noteReason: 'discount', lines: [line(m.gst(18), { name: 'Rate difference', quantity: 1, unitPrice: inr(50_000) })], status: 'issued' },
       { token: m.token },
     );
     expect(cn.status).toBe(201);
@@ -82,7 +84,7 @@ describe('TCS given back on a credit note (G7), and the TCS reports', () => {
     let row = await trialRow(m);
     expect(row('sys:tcsPayable:scrap')).toBe(-1_800);
 
-    const register = (await t.get(`${m.c}/report-data/tcs-register`, { token: m.token, query: FY })).body.rows;
+    const register = (await t.get(`${m.c}/report-data/tcs-register`, { token: m.token, query: TCS_FY })).body.rows;
     expect(register.map((r: { kind: string; tcsMinor: number; baseMinor: number }) => [r.kind, r.baseMinor, r.tcsMinor])).toEqual([
       ['invoice', 236_000, 2_400],
       ['creditNote', -59_000, -600],
@@ -92,16 +94,16 @@ describe('TCS given back on a credit note (G7), and the TCS reports', () => {
     await t.deps.db.update(schema.paymentAccounts).set({ openingBalanceMinor: 1_000_000 }).where(eq(schema.paymentAccounts.id, m.cash.id));
     const challan = await t.post(
       `${m.c}/vouchers`,
-      { kind: 'tdsChallan', date: '2026-11-05', lines: [{ account: 'sys:tcsPayable:scrap', debit: inr(1_800), credit: inr(0) }, { account: `pay:${m.cash.id}`, debit: inr(0), credit: inr(1_800) }] },
+      { kind: 'tdsChallan', date: '2025-03-25', lines: [{ account: 'sys:tcsPayable:scrap', debit: inr(1_800), credit: inr(0) }, { account: `pay:${m.cash.id}`, debit: inr(0), credit: inr(1_800) }] },
       { token: m.token },
     );
     expect(challan.status).toBe(201);
     row = await trialRow(m);
     expect(row('sys:tcsPayable:scrap')).toBe(0);
 
-    const payable = (await t.get(`${m.c}/report-data/tcs-payable`, { token: m.token, query: FY })).body;
-    expect(payable.months).toEqual([expect.objectContaining({ section: 'scrap', month: '2026-10', collectedMinor: 1_800, depositedMinor: 1_800, balanceMinor: 0, dueDate: '2026-11-07' })]);
-    expect(payable.quarters).toEqual([expect.objectContaining({ section: 'scrap', quarter: 'FY 2026-27 Q3', collectees: 1, documents: 2, tcsMinor: 1_800 })]);
+    const payable = (await t.get(`${m.c}/report-data/tcs-payable`, { token: m.token, query: TCS_FY })).body;
+    expect(payable.months).toEqual([expect.objectContaining({ section: 'scrap', month: '2025-03', collectedMinor: 1_800, depositedMinor: 1_800, balanceMinor: 0, dueDate: '2025-04-07' })]);
+    expect(payable.quarters).toEqual([expect.objectContaining({ section: 'scrap', quarter: 'FY 2024-25 Q4', collectees: 1, documents: 2, tcsMinor: 1_800 })]);
   });
 });
 
