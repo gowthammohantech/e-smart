@@ -10,6 +10,7 @@ import { FormActions } from '@esmart/ui/components/ActionBar';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
 import { Badge } from '@esmart/ui/components/Badge';
+import { PartyPickerBox } from '../../../features/contacts/PartyPickerBox';
 import { Button } from '@esmart/ui/components/Button';
 import { Avatar } from '@esmart/ui/components/Avatar';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
@@ -516,15 +517,20 @@ function NewPaymentForm() {
 
   // Every block is built once and placed twice: stacked in one column on a
   // phone, grouped into cards across two columns on a desktop browser.
-  const partyCard = (
-    <Pressable
-      // On a desktop it fills the height of the amount and date beside it, like an invoice's head.
-      style={desktop ? { flex: 1 } : undefined}
-      onPress={() => setPartyOpen(true)}
-      accessibilityRole="button"
+  // A desktop: the customer or supplier across the form's width, as on the invoice (PartyPickerBox).
+  const partyCard = desktop ? (
+    <PartyPickerBox
+      label={tr(direction === 'received' ? 'common:table.customer' : 'common:table.supplier')}
+      party={party ?? undefined}
+      pending={partyPending}
+      emptyTitle={tr(direction === 'received' ? 'sales:editor.selectCustomer' : 'sales:editor.selectSupplier')}
       accessibilityLabel={tr('sales:payment.selectContact')}
-    >
-      <Card style={[{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }, desktop ? { flex: 1 } : null]}>
+      onPress={() => setPartyOpen(true)}
+      badges={party && open.isSuccess ? <Badge label={tr('sales:payment.openDocuments', { count: outstanding.length })} tone={outstanding.length ? 'warning' : 'neutral'} size="sm" /> : null}
+    />
+  ) : (
+    <Pressable onPress={() => setPartyOpen(true)} accessibilityRole="button" accessibilityLabel={tr('sales:payment.selectContact')}>
+      <Card style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
         {partyPending ? (
           <>
             <Skeleton height={42} width={42} radius={21} />
@@ -1040,15 +1046,9 @@ function NewPaymentForm() {
 
   const details = (
     <FormSection title={tr('sales:payment.details')}>
-      {/* Who on the left, filling the height of the amount and date beside it; the rest two to a row below. */}
-      <View style={{ flexDirection: 'row', alignItems: 'stretch', gap: t.spacing.lg }}>
-        <View style={{ flex: 1, minWidth: 0 }}>{partyCard}</View>
-        <View style={{ flex: 1, minWidth: 0, gap: t.spacing.lg }}>
-          {amountField()}
-          {dateField}
-        </View>
-      </View>
-      <FieldGrid items={[methodField, accountField, currencyField, referenceField, rateField]} />
+      {/* Who across the top, as on the invoice; the amount, date and the rest two to a row below. */}
+      {partyCard}
+      <FieldGrid items={[amountField(), dateField, methodField, accountField, currencyField, referenceField, rateField]} />
       {addAccountLink}
     </FormSection>
   );

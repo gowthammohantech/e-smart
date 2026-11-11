@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Icon, type IconName } from '@esmart/ui/components/Icon';
+import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { FieldGrid, FieldRow, FormContainer, SplitPane } from '@esmart/ui/components/Layout';
 import { Text } from '@esmart/ui/components/Text';
@@ -15,14 +15,13 @@ import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { TotalsPanel } from '@esmart/ui/components/TotalsPanel';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { useToast, useToastClearance } from '@esmart/ui/components/Toast';
-import { AmountField, FieldShell, PickerField, QuantityStepper, Segmented, SwitchField, TextField } from '@esmart/ui/components/Field';
-import { focusRing, type WebPressState } from '@esmart/ui/theme/interaction';
+import { AmountField, PickerField, QuantityStepper, Segmented, SwitchField, TextField } from '@esmart/ui/components/Field';
 import { useDecimalText } from '../../components/useDecimalText';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { Avatar } from '@esmart/ui/components/Avatar';
 
-import { Address, DocStatus, DocumentKind, DocumentLine, NoteReason, Party } from '@esmart/core/types';
+import { DocStatus, DocumentKind, DocumentLine, NoteReason, Party } from '@esmart/core/types';
 import { NOTE_KINDS, PURCHASE_KINDS, isAwaitingApproval, isFinalized } from '@esmart/core/domain/documentStates';
 import { TDS_SECTIONS, tdsSection } from '@esmart/core/data/tdsSections';
 import { TCS_SECTIONS, partyTcsSection, tcsAskedOn, tcsRateFor, tcsSection } from '@esmart/core/data/tcsSections';
@@ -57,6 +56,7 @@ import {
   usePlan,
 } from '../../store/selectors';
 import { saleTdsOnPlan } from '@esmart/core/domain/plan';
+import { PartyPickerBox } from '../contacts/PartyPickerBox';
 import { useCostCentres } from '../../store/books';
 import {
   DraftState,
@@ -846,86 +846,24 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
         </View>
       </>
     ) : null;
-    // Each field once; a phone stacks them in this order, a desktop lays them out as an invoice's head.
-    // A desktop gives the party the page's whole width, as the bill-to block of an invoice: empty, a
-    // slim dashed bar to pick one into; picked, who they are beside where it is billed and shipped to.
-    type PartyLine = { text: string; icon?: IconName };
-    const addressLines = (a?: Address): PartyLine[] =>
-      a?.line1 ? [a.line1, a.line2, [a.city, a.postalCode].filter(Boolean).join(' – '), a.state].filter((l): l is string => !!l).map((text) => ({ text })) : [];
-    const billTo = addressLines(party?.billingAddress);
-    const shipTo = addressLines(party?.shippingAddress);
-    const sameAddress = shipTo.map((l) => l.text).join() === billTo.map((l) => l.text).join();
-    const contact: PartyLine[] = [];
-    if (party?.phone) contact.push({ text: party.phone, icon: 'phone-outline' });
-    if (party?.email) contact.push({ text: party.email, icon: 'email-outline' });
-    const partyColumns = [
-      billTo.length ? { label: tr('contacts:form.billingAddress'), lines: billTo } : null,
-      shipTo.length && !sameAddress ? { label: tr('contacts:form.shippingAddress'), lines: shipTo } : null,
-      contact.length ? { label: tr('sales:editor.partyContact'), lines: contact } : null,
-    ].filter((c): c is { label: string; lines: PartyLine[] } => !!c);
+    // Each field once; a phone stacks them in this order, a desktop lays them out as an invoice's head,
+    // the party across its whole width (PartyPickerBox, shared with the payment form).
     const partyCard = desktop ? (
-      <FieldShell label={tr(isPurchase ? 'common:table.supplier' : 'common:table.customer')} required>
-        <Pressable
-          style={(state) => {
-            const { hovered, pressed, focused } = state as WebPressState;
-            return [
-              {
-                flexDirection: 'row',
-                alignItems: party ? 'stretch' : 'center',
-                gap: t.spacing.lg,
-                borderRadius: t.radius.md,
-                borderWidth: party ? 1 : 1.5,
-                borderStyle: party ? 'solid' : 'dashed',
-                borderColor: hovered || pressed ? t.c.primary : t.c.inputBorder,
-                backgroundColor: !party && (hovered || pressed) ? t.c.chip : t.c.paper,
-                paddingHorizontal: t.spacing.lg,
-                paddingVertical: party ? t.spacing.lg : t.spacing.md,
-              } as const,
-              focusRing(t, focused),
-            ];
-          }}
-          onPress={() => setPartyOpen(true)}
-          accessibilityRole="button"
-          accessibilityLabel={partyA11y}
-        >
-          {party ? (
+      <PartyPickerBox
+        label={tr(isPurchase ? 'common:table.supplier' : 'common:table.customer')}
+        party={party ?? undefined}
+        emptyTitle={tr(isPurchase ? 'sales:editor.selectSupplier' : 'sales:editor.selectCustomer')}
+        accessibilityLabel={partyA11y}
+        onPress={() => setPartyOpen(true)}
+        badges={
+          party ? (
             <>
-              <View style={{ flex: 1.3, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>{partyDetails}</View>
-              {partyColumns.map((c) => (
-                <View key={c.label} style={{ flex: 1, minWidth: 0, gap: 3, paddingLeft: t.spacing.lg, borderLeftWidth: 1, borderLeftColor: t.c.line }}>
-                  <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                    {c.label}
-                  </Text>
-                  {c.lines.map((l, i) => (
-                    <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      {l.icon ? <Icon name={l.icon} size={14} color={t.c.muted} /> : null}
-                      <Text variant="small" numberOfLines={1} style={{ flex: 1 }}>
-                        {l.text}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-              ))}
-              <View style={{ justifyContent: 'center' }}>
-                <Icon name="chevron-right" size={20} color={t.c.muted} />
-              </View>
+              <Badge label={tr('sales:editor.termsBadge', { days: party.paymentTermsDays })} tone="neutral" size="sm" />
+              {party.currency !== baseCurrency ? <Badge label={party.currency} tone="info" size="sm" /> : null}
             </>
-          ) : (
-            <>
-              <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: t.c.chip, alignItems: 'center', justifyContent: 'center' }}>
-                <Icon name="account-plus-outline" size={20} color={t.c.primary} />
-              </View>
-              <View style={{ flex: 1, gap: 2 }}>
-                <Text variant="body" weight="600" tone="primary">
-                  {tr(isPurchase ? 'sales:editor.selectSupplier' : 'sales:editor.selectCustomer')}
-                </Text>
-                <Text variant="caption" tone="muted">{tr('sales:editor.partySearch')}</Text>
-              </View>
-              <Icon name="chevron-right" size={20} color={t.c.muted} />
-            </>
-          )}
-        </Pressable>
-      </FieldShell>
+          ) : null
+        }
+      />
     ) : (
       <Pressable onPress={() => setPartyOpen(true)} accessibilityRole="button" accessibilityLabel={partyA11y}>
         <Card style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
