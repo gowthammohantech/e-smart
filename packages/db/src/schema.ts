@@ -1230,6 +1230,8 @@ export const payments = pgTable("payments", {
 	// The advance's SAC (or HSN) and cess rate, for GSTR-1 table 11 and the receipt voucher (Rule 50).
 	advanceHsn: varchar("advance_hsn", { length: 8 }),
 	advanceCessRate: numeric("advance_cess_rate", { precision: 6, scale:  3 }),
+	// The advance is for a service the recipient pays GST on (reverse charge): no GST is owed on it here.
+	advanceReverseCharge: boolean("advance_reverse_charge").default(false).notNull(),
 	// On money received: TDS the customer deducted from an advance, before any invoice (under tds_section).
 	tdsMinor: bigint("tds_minor", { mode: "number" }).default(0).notNull(),
 	// Money paid back to a customer out of an advance they paid: the receipt it refunds (Rule 51).

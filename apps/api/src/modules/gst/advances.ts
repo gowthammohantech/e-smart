@@ -41,7 +41,7 @@ export async function loadAdvanceEvents(db: DbOrTx, company: CompanyRow, to: str
       amount: { minor: r.amountMinor, currency },
       exchangeRate: Number(r.exchangeRate),
       allocations: allocations.filter((a) => a.paymentId === r.id).map((a) => ({ documentId: a.documentId, documentNumber: a.documentNumber, amount: { minor: a.amountMinor, currency } })),
-      advanceTax: { taxCategoryId: r.advanceTaxCategoryId!, rate: Number(r.advanceTaxRate), placeOfSupplyStateCode: r.advancePlaceOfSupply!, hsn: r.advanceHsn ?? undefined, cessRate: r.advanceCessRate != null ? Number(r.advanceCessRate) : undefined },
+      advanceTax: { taxCategoryId: r.advanceTaxCategoryId!, rate: Number(r.advanceTaxRate), placeOfSupplyStateCode: r.advancePlaceOfSupply!, hsn: r.advanceHsn ?? undefined, cessRate: r.advanceCessRate != null ? Number(r.advanceCessRate) : undefined, reverseCharge: r.advanceReverseCharge },
       advanceTds: r.tdsMinor ? { minor: r.tdsMinor, currency } : undefined,
       refunds: refunds.filter((f) => f.of === r.id).map((f) => ({ paymentId: f.id, date: f.date, amount: { minor: f.amountMinor, currency } })),
     } as Payment;

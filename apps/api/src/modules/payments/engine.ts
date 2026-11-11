@@ -69,7 +69,7 @@ export type PaymentInput = {
   accountId: string;
   notes?: string | null;
   /** An advance for services, taxed when received at this category's rate and place of supply. */
-  advanceTax?: { taxCategoryId: string; placeOfSupplyStateCode: string; hsn?: string; cessRate?: number } | null;
+  advanceTax?: { taxCategoryId: string; placeOfSupplyStateCode: string; hsn?: string; cessRate?: number; reverseCharge?: boolean } | null;
   /** On money received: TDS the customer deducted from an advance, not tied to an invoice. Credits them as money does. */
   advanceTdsMinor?: number;
   /** Money paid back to a customer out of this advance receipt (a refund voucher, Rule 51). */
@@ -321,6 +321,7 @@ export async function writePayment(
     advancePlaceOfSupply: advance?.placeOfSupplyStateCode ?? null,
     advanceHsn: advance?.hsn?.trim() || null,
     advanceCessRate: advance?.cessRate ? String(advance.cessRate) : null,
+    advanceReverseCharge: !!advance?.reverseCharge,
     tdsMinor: input.direction === 'received' ? Math.max(advanceTds, 0) : 0,
     refundOfPaymentId: refundOf,
     // Paid: what was kept back (26Q). Received: what the customer deducted, so it reaches that section's receivable (26AS).

@@ -70,7 +70,7 @@ export async function paymentsToWire(db: DbOrTx, rows: PaymentRow[], baseCurrenc
       unallocated: money(r.unallocatedMinor, currency),
       fxGainLoss: maybeMoney(r.fxGainLossMinor, baseCurrency),
       advanceTax: r.advanceTaxCategoryId
-        ? compact({ taxCategoryId: r.advanceTaxCategoryId, rate: Number(r.advanceTaxRate), placeOfSupplyStateCode: r.advancePlaceOfSupply!, hsn: r.advanceHsn ?? undefined, cessRate: r.advanceCessRate != null && Number(r.advanceCessRate) > 0 ? Number(r.advanceCessRate) : undefined })
+        ? compact({ taxCategoryId: r.advanceTaxCategoryId, rate: Number(r.advanceTaxRate), placeOfSupplyStateCode: r.advancePlaceOfSupply!, hsn: r.advanceHsn ?? undefined, cessRate: r.advanceCessRate != null && Number(r.advanceCessRate) > 0 ? Number(r.advanceCessRate) : undefined, reverseCharge: r.advanceReverseCharge || undefined })
         : undefined,
       advanceTds: r.tdsMinor ? money(r.tdsMinor, currency) : undefined,
       refundOf: r.refundOfPaymentId ?? undefined,

@@ -132,6 +132,8 @@ function NewPaymentForm() {
   const [advanceSac, setAdvanceSac] = useState('');
   const [advanceCess, setAdvanceCess] = useState(0);
   const cessText = useDecimalText(advanceCess, setAdvanceCess);
+  /** A service the recipient pays GST on (reverse charge): no GST is owed on the advance here. */
+  const [advanceRcm, setAdvanceRcm] = useState(false);
   /** TDS the customer deducted from an advance, before any invoice. */
   const [advanceTdsText, setAdvanceTdsText] = useState('');
   const [advanceSheet, setAdvanceSheet] = useState<'tax' | 'pos' | 'tds' | null>(null);
@@ -278,10 +280,11 @@ function NewPaymentForm() {
   const advanceTds = direction === 'received' ? fromMajor(advanceTdsText || '0', currency) : zero(currency);
   const advanceTax =
     canAdvance && serviceAdvance && advanceTaxCategory && !goodsSac
-      ? { taxCategoryId: advanceTaxCategory.id, rate: advanceTaxCategory.rate, placeOfSupplyStateCode: pos ?? '97', ...(sac && { hsn: sac }), ...(advanceCess > 0 && { cessRate: advanceCess }) }
+      ? { taxCategoryId: advanceTaxCategory.id, rate: advanceTaxCategory.rate, placeOfSupplyStateCode: pos ?? '97', ...(sac && { hsn: sac }), ...(advanceCess > 0 && { cessRate: advanceCess }), ...(advanceRcm && { reverseCharge: true }) }
       : null;
   // The tax inside what was received (and what the customer kept back as TDS), shown as it is typed.
-  const advanceSplit = advanceTax ? advanceTaxSplit(Math.round((unallocated.minor + advanceTds.minor) * (exchangeRate || 1)), advanceTax.rate, advanceCess, advanceInterState(homeState, pos)) : null;
+  // None on reverse charge: the recipient pays it.
+  const advanceSplit = advanceTax && !advanceRcm ? advanceTaxSplit(Math.round((unallocated.minor + advanceTds.minor) * (exchangeRate || 1)), advanceTax.rate, advanceCess, advanceInterState(homeState, pos)) : null;
   const overAllocated = unallocated.minor < 0;
 
   /**
@@ -965,7 +968,13 @@ function NewPaymentForm() {
                 />
                 <TextField label={tr('sales:payment.advanceCess')} {...cessText} keyboardType="decimal-pad" placeholder="0" />
               </FieldRow>
+              <SwitchField label={tr('sales:payment.advanceReverseCharge')} description={tr('sales:payment.advanceReverseChargeHint')} value={advanceRcm} onValueChange={setAdvanceRcm} />
             </>
+          ) : null}
+          {advanceTax && advanceRcm ? (
+            <Text variant="caption" tone="muted">
+              {tr('sales:payment.advanceRcmNote', { rate: advanceTax.rate })}
+            </Text>
           ) : null}
           {advanceTax && advanceSplit ? (
             <Text variant="caption" tone="muted">
