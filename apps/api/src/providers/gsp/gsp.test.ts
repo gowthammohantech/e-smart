@@ -458,18 +458,29 @@ describe('Whitebooks', () => {
     expect(t.calls[1].body).not.toHaveProperty('TrnDocNO');
   });
 
+  it('logs in to the standalone e-way bill API once, then raises a bill with no IRN', async () => {
+    const t = fakeTransport({
+      '/ewaybillapi/v1.03/authenticate': () => ok({}),
+      '/ewaybillapi/v1.03/ewayapi/genewaybill': () => ok({ ewayBillNo: 171012272464, ewayBillDate: '02/09/2026 10:15:00 PM', validUpto: '04/09/2026 11:59:00 PM' }),
+    });
+    const gateway = new WhitebooksGateway(whitebooksConfig(), t.transport);
+    await gateway.submitEwayBill(creds, { payload: ewb, vehicleType: 'regular', now: NOW });
+    await gateway.submitEwayBill(creds, { payload: ewb, vehicleType: 'regular', now: NOW });
+    expect(t.calls.map((c) => c.path)).toEqual(['/ewaybillapi/v1.03/authenticate', '/ewaybillapi/v1.03/ewayapi/genewaybill', '/ewaybillapi/v1.03/ewayapi/genewaybill']);
+  });
+
   it('cancels an e-way bill through the standalone API with no taxpayer session', async () => {
-    const t = fakeTransport({ '/ewaybillapi/v1.03/ewayapi/canewb': () => ok({ ewayBillNo: '151012328603', cancelDate: '07/09/2026 02:56:00 PM' }) });
+    const t = fakeTransport({ '/ewaybillapi/v1.03/authenticate': () => ok({}), '/ewaybillapi/v1.03/ewayapi/canewb': () => ok({ ewayBillNo: '151012328603', cancelDate: '07/09/2026 02:56:00 PM' }) });
     const result = await new WhitebooksGateway(whitebooksConfig(), t.transport).cancelEwayBill(creds, { ewayBillNumber: '151012328603', reasonCode: '2', now: NOW });
     expect(result).toEqual({ ok: true, cancelledAt: '2026-09-07T09:26:00.000Z', reason: 'Order cancelled' });
-    expect(t.calls).toHaveLength(1);
-    expect(t.calls[0].headers).toEqual({ client_id: 'EWBS-app', client_secret: 'EWBS-secret', ip_address: '203.0.113.7', gstin: '29AAGCB1286Q000', username: 'api_user' });
-    expect(t.calls[0].query).toEqual({ email: 'accounts@example.test', irp: 'NIC1' });
-    expect(t.calls[0].body).toEqual({ ewbNo: 151012328603, cancelRsnCode: 2 });
+    expect(t.calls).toHaveLength(2);
+    expect(t.calls[1].headers).toEqual({ client_id: 'EWBS-app', client_secret: 'EWBS-secret', ip_address: '203.0.113.7', gstin: '29AAGCB1286Q000', username: 'api_user' });
+    expect(t.calls[1].query).toEqual({ email: 'accounts@example.test', irp: 'NIC1' });
+    expect(t.calls[1].body).toEqual({ ewbNo: 151012328603, cancelRsnCode: 2 });
   });
 
   it('does not count an e-way bill cancellation without a cancel date', async () => {
-    const t = fakeTransport({ '/ewaybillapi/v1.03/ewayapi/canewb': () => ok({}) });
+    const t = fakeTransport({ '/ewaybillapi/v1.03/authenticate': () => ok({}), '/ewaybillapi/v1.03/ewayapi/canewb': () => ok({}) });
     const result = await new WhitebooksGateway(whitebooksConfig(), t.transport).cancelEwayBill(creds, { ewayBillNumber: '151012328603', reasonCode: '2', now: NOW });
     expect(result).toMatchObject({ ok: false, errors: [{ code: 'GSP_INCOMPLETE' }] });
   });
