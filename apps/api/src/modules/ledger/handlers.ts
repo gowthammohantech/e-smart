@@ -133,12 +133,14 @@ export const ledgerHandlers = defineHandlers({
         )
         .limit(1);
       if (recent) return;
+      // Links only where they lead to a page the customer can pay on.
+      const withLinks = (body.includePaymentLink ?? true) && ctx.deps.providers.payments.hostsPaymentPage;
       const lines: string[] = [];
       let total = 0;
       for (const d of docs) {
         const owed = d.grandTotalMinor - d.amountPaidMinor;
         total += owed;
-        const pay = (body.includePaymentLink ?? true) ? await paymentLinkFor(tx, ctx.deps, ctx.company, ctx.user, d, ctx.now) : null;
+        const pay = withLinks ? await paymentLinkFor(tx, ctx.deps, ctx.company, ctx.user, d, ctx.now) : null;
         const due = d.dueDate ? `, due ${d.dueDate}${effectiveStatus(d, asOf) === 'overdue' ? ' (overdue)' : ''}` : '';
         lines.push(`${d.number}: ${fmt(owed, d.currency.trim())}${due}${pay ? ` Pay: ${pay.url}` : ''}`);
       }
@@ -173,7 +175,7 @@ export const ledgerHandlers = defineHandlers({
         partyId: party.id,
         documentId: docs.length === 1 ? docs[0].id : null,
         message: text,
-        includePaymentLink: body.includePaymentLink ?? true,
+        includePaymentLink: withLinks,
         provider: body.channel,
         providerMessageId,
         status,

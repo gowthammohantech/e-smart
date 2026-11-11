@@ -8,7 +8,7 @@
  */
 
 /** Bump when the dataset changes: every environment rebuilds the demo on its next check. */
-export const PUBLIC_DEMO_SEED_VERSION = 1;
+export const PUBLIC_DEMO_SEED_VERSION = 2;
 
 /** Rebuilt at least this often, so "overdue", "this month" and the period pickers stay current. */
 export const PUBLIC_DEMO_REFRESH_DAYS = 7;

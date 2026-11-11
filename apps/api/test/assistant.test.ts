@@ -47,7 +47,8 @@ describe('AnthropicAssistant', () => {
       routes: ['/(app)/receivables'],
     });
 
-    expect(reply).toEqual({ ...final, usage: { model: 'claude-opus-5-5', inputTokens: 20, outputTokens: 20, costUsd: null } });
+    // Anthropic sends no price: estimated from the list price ($4 in, $20 out per million).
+    expect(reply).toEqual({ ...final, usage: { model: 'claude-opus-5-5', inputTokens: 20, outputTokens: 20, costUsd: expect.closeTo((20 * 4 + 20 * 20) / 1e6, 12) } });
     expect(calls).toEqual(['get_receivables']);
     const [first, second] = api.requests;
     expect(first.headers.get('anthropic-beta')).toContain('server-side-fallback-2026-07-01');
@@ -185,10 +186,13 @@ describe('OpenAICompatibleAssistant', () => {
     expect(api.requests[0].headers.get('x-title')).toBe('Elixir Books');
   });
 
-  it('reports tokens with no cost when the server leaves cost out, and no usage when it says nothing', async () => {
+  it('estimates the cost when the server leaves it out, records none for a model it has no price for, and no usage when it says nothing', async () => {
     const req = { history: [{ role: 'user' as const, text: 'hi' }], context: '', tools, execute: async (): Promise<ToolOutcome> => ({ ok: true, value: {} }), routes: [] };
-    const counted = fakeOpenAI([{ ...completion({ content: '{"text":"Hi"}' }, 'stop'), usage: { prompt_tokens: 10, completion_tokens: 2 } }]);
-    expect((await new OpenAICompatibleAssistant(oaiConfig, counted.fetch).reply(req)).usage).toEqual({ model: 'gpt-5-mini', inputTokens: 10, outputTokens: 2, costUsd: null });
+    // OpenAI direct: gpt-5-mini at $0.25 in ($0.025 cached), $2 out per million.
+    const counted = fakeOpenAI([{ ...completion({ content: '{"text":"Hi"}' }, 'stop'), usage: { prompt_tokens: 1000, completion_tokens: 2, prompt_tokens_details: { cached_tokens: 800 } } }]);
+    expect((await new OpenAICompatibleAssistant(oaiConfig, counted.fetch).reply(req)).usage).toEqual({ model: 'gpt-5-mini', inputTokens: 1000, outputTokens: 2, costUsd: expect.closeTo((200 * 0.25 + 800 * 0.025 + 2 * 2) / 1e6, 12) });
+    const unpriced = fakeOpenAI([{ ...completion({ content: '{"text":"Hi"}' }, 'stop'), model: 'llama-3.3-70b-versatile', usage: { prompt_tokens: 10, completion_tokens: 2 } }]);
+    expect((await new OpenAICompatibleAssistant(oaiConfig, unpriced.fetch).reply(req)).usage).toEqual({ model: 'llama-3.3-70b-versatile', inputTokens: 10, outputTokens: 2, costUsd: null });
     const silent = fakeOpenAI([completion({ content: '{"text":"Hi"}' }, 'stop')]);
     expect((await new OpenAICompatibleAssistant(oaiConfig, silent.fetch).reply(req)).usage).toBeUndefined();
   });

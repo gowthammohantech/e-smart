@@ -11,20 +11,23 @@ import { PrimaryActionBar } from '@esmart/ui/components/ActionBar';
 import { ListRow } from '@esmart/ui/components/ListRow';
 import { Cell, DataTable } from '@esmart/ui/components/DataTable';
 import { Sheet } from '@esmart/ui/components/Sheet';
-import { AmountField, Segmented, SwitchField, TextField } from '@esmart/ui/components/Field';
+import { AmountField, PickerField, Segmented, SwitchField, TextField } from '@esmart/ui/components/Field';
+import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
+import { CURRENCIES } from '@esmart/core/lib/currencies';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { today } from '@esmart/core/lib/date';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { PaymentAccount } from '@esmart/core/types';
 import { useAppStore } from '../../../store/appStore';
-import { useActiveCompany, useBaseCurrency, usePaymentAccounts } from '../../../store/selectors';
+import { useActiveCompany, useBaseCurrency, useHasModule, usePaymentAccounts } from '../../../store/selectors';
 import { useCompanyUsage } from '../../../remote/queries';
 import { formatMoney } from '@esmart/core/lib/format';
-import { fromMajor, money, toMajor } from '@esmart/core/lib/money';
+import { money, toMajor } from '@esmart/core/lib/money';
 import { uid } from '@esmart/core/lib/id';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { useSaveShortcut } from '../../../components/useSaveShortcut';
 import { SheetActions } from '../../../features/company/SheetActions';
+import { paymentAccountFromForm } from '../../../features/settings/paymentAccountForm';
 import { useServerSave } from '../../../components/useServerSave';
 import { Skeleton, SkeletonGroup } from '@esmart/ui/components/Skeleton';
 
@@ -54,6 +57,10 @@ export default function AccountSettings() {
   const [confirmDelete, setConfirmDelete] = useState<PaymentAccount | null>(null);
   const [name, setName] = useState('');
   const [type, setType] = useState<PaymentAccount['type']>('bank');
+  // An account keeps the currency it was made in; another currency is a full-plan (fx) choice.
+  const [currency, setCurrency] = useState(baseCurrency);
+  const [currencyOpen, setCurrencyOpen] = useState(false);
+  const hasFx = useHasModule('fx');
   const [accountNumber, setAccountNumber] = useState('');
   // What a customer needs to pay into it; printed on invoices when the business profile picks this account.
   const [holderName, setHolderName] = useState('');
@@ -103,6 +110,7 @@ export default function AccountSettings() {
     setEditing(a ?? ({ id: '', companyId: company.id, name: '', type: 'bank', currency: baseCurrency, openingBalance: money(0, baseCurrency), isDefault: false } as PaymentAccount));
     setName(a?.name ?? '');
     setType(a?.type ?? 'bank');
+    setCurrency(a?.currency ?? baseCurrency);
     setAccountNumber(a?.accountNumber ?? '');
     setHolderName(a?.accountHolderName ?? '');
     setBankName(a?.bankName ?? '');
@@ -126,22 +134,17 @@ export default function AccountSettings() {
     if (next.ifsc || next.upiId) return;
     const text = (v: string) => v.trim() || undefined;
     const account = {
-      ...editing,
-      id: editing.id || uid('acc'),
-      companyId: company.id,
-      name: name.trim(),
-      type,
-      currency: baseCurrency,
-      accountNumber: accountNumber.trim() || undefined,
+      ...paymentAccountFromForm(
+        editing,
+        { name, type, currency, accountNumber, openingBalance, openingBalanceDate, isDefault },
+        { id: editing.id || uid('acc'), companyId: company.id },
+      ),
       // Only a bank account prints on invoices (it is what customers pay into), so only it keeps these.
       accountHolderName: type === 'bank' ? text(holderName) : undefined,
       bankName: type === 'bank' ? text(bankName) : undefined,
       branchName: type === 'bank' ? text(branchName) : undefined,
       ifsc: type === 'bank' ? text(ifsc)?.toUpperCase() : undefined,
       upiId: type === 'bank' ? text(upiId)?.toLowerCase() : undefined,
-      openingBalance: fromMajor(openingBalance || '0', baseCurrency),
-      openingBalanceDate,
-      isDefault,
     };
     // The sheet stays open until the server has it, so a refusal can be fixed here.
     const res = await serverSave(
@@ -153,7 +156,7 @@ export default function AccountSettings() {
   };
 
   // Ctrl+S (⌘+S) does what Save does, while the form is open.
-  useSaveShortcut(save, !!editing);
+  useSaveShortcut(save, !!editing && !currencyOpen);
 
   return (
     <View style={{ flex: 1 }}>
@@ -351,7 +354,18 @@ export default function AccountSettings() {
               />
             </>
           )}
-          <AmountField label={tr('settings:accounts.openingBalance')} value={openingBalance} onChangeValue={setOpeningBalance} currency={baseCurrency} />
+          {/* Shown on a full plan, or for an account already in another currency. Fixed once money has gone through it. */}
+          {hasFx || currency !== baseCurrency ? (
+            <PickerField
+              label={tr('settings:accounts.currency')}
+              value={currency}
+              onPress={() => setCurrencyOpen(true)}
+              icon="cash-multiple"
+              disabled={inUse}
+              hint={currency !== baseCurrency ? tr('settings:accounts.currencyHint') : undefined}
+            />
+          ) : null}
+          <AmountField label={tr('settings:accounts.openingBalance')} value={openingBalance} onChangeValue={setOpeningBalance} currency={currency} />
           {/* The day the balance was counted; never a future day. Off, it stands at the start of the books. */}
           <SwitchField
             label={tr('settings:accounts.openingOnDate')}
@@ -371,6 +385,15 @@ export default function AccountSettings() {
           <SwitchField label={tr('settings:accounts.useDefault')} description={tr('settings:accounts.useDefaultHint')} value={isDefault} onValueChange={setIsDefault} />
         </View>
       </Sheet>
+
+      <SelectSheet
+        visible={currencyOpen}
+        onClose={() => setCurrencyOpen(false)}
+        title={tr('settings:accounts.currency')}
+        options={CURRENCIES.map((c) => ({ value: c.code, label: `${c.name} (${c.code})`, trailing: c.symbol }))}
+        value={currency}
+        onSelect={setCurrency}
+      />
 
       <ConfirmDialog
         visible={!!confirmDelete}

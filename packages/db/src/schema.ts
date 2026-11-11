@@ -841,6 +841,8 @@ export const shareLinks = pgTable("share_links", {
 	createdBy: varchar("created_by", { length: 40 }).notNull(),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
 }, (table): PgTableExtraConfigValue[] => [
+	// Row-level security (0061) filters every read of this table by it.
+	index("share_links_company_id_idx").using("btree", table.companyId.asc().nullsLast()),
 	foreignKey({
 			columns: [table.companyId],
 			foreignColumns: [companies.id],
@@ -951,6 +953,8 @@ export const documentTaxComponents = pgTable("document_tax_components", {
 	rate: numeric({ precision: 6, scale:  3 }).notNull(),
 	amountMinor: bigint("amount_minor", { mode: "number" }).notNull(),
 }, (table): PgTableExtraConfigValue[] => [
+	// Row-level security (0061) filters every read of this table by it.
+	index("document_tax_components_tax_line_id_idx").using("btree", table.taxLineId.asc().nullsLast()),
 	foreignKey({
 			columns: [table.taxLineId],
 			foreignColumns: [documentTaxLines.id],
@@ -1012,6 +1016,8 @@ export const paymentLinks = pgTable("payment_links", {
 	createdBy: varchar("created_by", { length: 40 }).notNull(),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
 }, (table): PgTableExtraConfigValue[] => [
+	// Row-level security (0061) filters every read of this table by it.
+	index("payment_links_company_id_idx").using("btree", table.companyId.asc().nullsLast()),
 	foreignKey({
 			columns: [table.companyId],
 			foreignColumns: [companies.id],
@@ -1430,6 +1436,8 @@ export const ocrLines = pgTable("ocr_lines", {
 	confidence: numeric({ precision: 4, scale:  3 }).notNull(),
 	matchedItemId: varchar("matched_item_id", { length: 40 }),
 }, (table): PgTableExtraConfigValue[] => [
+	// Row-level security (0061) filters every read of this table by it.
+	index("ocr_lines_extraction_id_idx").using("btree", table.extractionId.asc().nullsLast()),
 	foreignKey({
 			columns: [table.extractionId],
 			foreignColumns: [ocrExtractions.id],
@@ -1964,6 +1972,8 @@ export const subscriptionEvents = pgTable("subscription_events", {
 	webhookEventId: varchar("webhook_event_id", { length: 40 }),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
 }, (table): PgTableExtraConfigValue[] => [
+	// Row-level security (0061) filters every read of this table by it.
+	index("subscription_events_company_id_idx").using("btree", table.companyId.asc().nullsLast()),
 	foreignKey({
 			columns: [table.companyId],
 			foreignColumns: [companies.id],
@@ -2156,6 +2166,8 @@ export const userCompanies = pgTable("user_companies", {
 	/** The role in this business when it differs from the user's own (someone invited from another account). */
 	role: userRole(),
 }, (table): PgTableExtraConfigValue[] => [
+	// Row-level security (0061) filters every read of this table by it.
+	index("user_companies_company_id_idx").using("btree", table.companyId.asc().nullsLast()),
 	foreignKey({
 			columns: [table.userId],
 			foreignColumns: [users.id],
@@ -2350,6 +2362,8 @@ export const complianceAttempts = pgTable("compliance_attempts", {
 	settledAt: timestamp("settled_at", { withTimezone: true, mode: 'date' }),
 	lastError: text("last_error"),
 }, (table): PgTableExtraConfigValue[] => [
+	// Row-level security (0061) filters every read of this table by it.
+	index("compliance_attempts_company_id_idx").using("btree", table.companyId.asc().nullsLast()),
 	index("compliance_attempts_pending_idx").using("btree", table.status.asc().nullsLast(), table.startedAt.asc().nullsLast()),
 	// One open attempt per document and operation: a second generate waits for the first to settle.
 	uniqueIndex("compliance_attempts_open_idx").using("btree", table.documentId.asc().nullsLast(), table.operation.asc().nullsLast()).where(sql`${table.status} = 'pending'`),
@@ -2561,6 +2575,8 @@ export const creditApplications = pgTable("credit_applications", {
 	createdBy: varchar("created_by", { length: 40 }).notNull(),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
 }, (table): PgTableExtraConfigValue[] => [
+	// Row-level security (0061) filters every read of this table by it.
+	index("credit_applications_company_id_idx").using("btree", table.companyId.asc().nullsLast()),
 	uniqueIndex("credit_applications_note_id_document_id_idx").using("btree", table.noteId.asc().nullsLast(), table.documentId.asc().nullsLast()),
 	index("credit_applications_document_id_idx").using("btree", table.documentId.asc().nullsLast()),
 	foreignKey({
@@ -2722,6 +2738,8 @@ export const bankStatements = pgTable("bank_statements", {
 	createdBy: varchar("created_by", { length: 40 }).notNull(),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
 }, (table): PgTableExtraConfigValue[] => [
+	// Row-level security (0061) filters every read of this table by it.
+	index("bank_statements_company_id_idx").using("btree", table.companyId.asc().nullsLast()),
 	index("bank_statements_account_id_to_date_idx").using("btree", table.accountId.asc().nullsLast(), table.toDate.asc().nullsLast()),
 	foreignKey({
 			columns: [table.companyId],

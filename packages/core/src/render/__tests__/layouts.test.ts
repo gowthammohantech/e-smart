@@ -137,6 +137,13 @@ describe('copies', () => {
     expect(text(render('classic'))).not.toContain('ORIGINAL');
   });
 
+  it('print in the page’s language, with the Rule 48 wording after it', () => {
+    const ta = { t: i18n.getFixedT('ta', null), language: 'ta' as const };
+    expect(text(render('classic', { ...ta, copy: 'original' }))).toContain('பெறுநருக்கான அசல் · ORIGINAL FOR RECIPIENT');
+    expect(text(render('modern', { ...ta, copy: 'duplicate' }))).toContain('போக்குவரத்தாளருக்கான இரண்டாம் நகல் · DUPLICATE FOR TRANSPORTER');
+    expect(render('standard', { ...ta, copy: 'triplicate' })).toContain('விநியோகிப்பாளருக்கான மூன்றாம் நகல் · TRIPLICATE FOR SUPPLIER</div><div class="head">');
+  });
+
   it('leave the standard original unlabelled and put the others above its head, as before', () => {
     expect(render('standard', { copy: 'original' })).toBe(render('standard'));
     expect(render('standard', { copy: 'triplicate' })).toContain('<div class="muted" style="text-align:right;font-weight:700">TRIPLICATE FOR SUPPLIER</div><div class="head">');

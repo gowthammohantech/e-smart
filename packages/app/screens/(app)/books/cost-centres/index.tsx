@@ -97,7 +97,7 @@ export default function CostCentres() {
         title={editing?.id ? tr('books:costCentres.edit') : tr('books:costCentres.add')}
         // A drawer on a desktop, beside the list it adds to.
         desktopAs="drawer"
-        footer={<Button title={tr('books:accounts.save')} onPress={() => void save()} loading={saving} disabled={blocked || !name.trim()} />}
+        footer={<Button title={tr('books:costCentres.save')} onPress={() => void save()} loading={saving} disabled={blocked || !name.trim()} />}
       >
         <View style={{ padding: t.spacing.lg, gap: t.spacing.lg }}>
           <TextField label={tr('books:costCentres.name')} value={name} onChangeText={setName} placeholder={tr('books:costCentres.namePlaceholder')} required />

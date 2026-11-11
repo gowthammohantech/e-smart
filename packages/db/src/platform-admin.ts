@@ -88,7 +88,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     console.error('Usage: npm run db:platform-admin -w @esmart/db -- --email you@example.com [--role superadmin|support|none] [--reset-mfa]');
     process.exit(1);
   }
-  const url = process.env.DATABASE_URL ?? 'postgres://esmart:esmart@localhost:5432/esmart';
+  const url = process.env.MIGRATION_DATABASE_URL || process.env.DATABASE_URL || 'postgres://esmart:esmart@localhost:5432/esmart';
   try {
     if (values['reset-mfa']) await resetMfa(url, values.email);
     else await setPlatformRole(url, values.email, values.role as PlatformRoleArg);

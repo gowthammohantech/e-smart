@@ -53,8 +53,9 @@ services:
     build: { context: ., dockerfile: docker/Dockerfile, target: api }
     env_file: apps/api/.env
     environment:
-      DATABASE_URL: postgres://esmart:esmart@postgres:5432/${API_DB_NAME:-esmart_site}
-    command: ['npm', 'run', 'db:migrate', '-w', '@esmart/db']
+      MIGRATION_DATABASE_URL: postgres://esmart:esmart@postgres:5432/${API_DB_NAME:-esmart_site}
+    # Schema first, then the app's two roles and their grants (docs/database/rls.md).
+    command: ['sh', '-c', 'npm run db:migrate -w @esmart/db && npm run db:roles -w @esmart/db']
     depends_on:
       postgres: { condition: service_healthy }
 
@@ -63,7 +64,9 @@ services:
     build: { context: ., dockerfile: docker/Dockerfile, target: api }
     env_file: apps/api/.env
     environment:
-      DATABASE_URL: postgres://esmart:esmart@postgres:5432/${API_DB_NAME:-esmart_site}
+      # Requests under row-level security; jobs, webhooks and sign-in as the system role.
+      DATABASE_URL: postgres://esmart_app:esmart_app@postgres:5432/${API_DB_NAME:-esmart_site}
+      SYSTEM_DATABASE_URL: postgres://esmart_system:esmart_system@postgres:5432/${API_DB_NAME:-esmart_site}
       HOST: 0.0.0.0
       PORT: 4000
     ports: ['4000:4000']

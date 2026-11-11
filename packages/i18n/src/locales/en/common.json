@@ -76,7 +76,6 @@
     "clearFilters": "Clear filters",
     "statusSection": "Status",
     "loadMore": "Load more",
-    "waiting": "Waiting to sync",
     "tileCount_one": "{{count}} document",
     "tileCount_other": "{{count}} documents",
     "searchShort": "Search {{kind, lowercase}}",
@@ -92,6 +91,7 @@
   },
   "documentEditor": {
     "finalised": "{{kind}} finalised",
+    "sentForApproval": "Sent for approval. The {{kind, lowercase}} stays a draft until an owner or admin approves it.",
     "savedDraft": "Saved as draft",
     "dateLabel": "{{kind}} date",
     "numberLabel": "{{kind}} number",

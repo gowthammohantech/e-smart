@@ -119,6 +119,8 @@ export async function paymentLinkFor(
   now: Date,
   amountMinor?: number,
 ): Promise<typeof schema.paymentLinks.$inferSelect> {
+  // No page a customer could pay on (the simulator): a link would lead nowhere.
+  if (!deps.providers.payments.hostsPaymentPage) throw conflict('ONLINE_PAYMENTS_UNAVAILABLE', 'Online payments are not available yet; record the payment when it arrives');
   const status = effectiveStatus(row, today(now));
   if (row.kind !== 'invoice' || ['draft', 'cancelled', 'paid'].includes(status)) {
     throw conflict('DOCUMENT_NOT_PAYABLE', 'Payment links are for issued invoices with an amount outstanding');

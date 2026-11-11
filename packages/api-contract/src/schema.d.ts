@@ -6820,7 +6820,7 @@ export interface components {
                 actions: number;
                 inputTokens: number;
                 outputTokens: number;
-                /** @description As the provider reported it; 0 where it reports none (Anthropic, most non-OpenRouter servers) */
+                /** @description As the provider reported it (OpenRouter), else estimated from list prices for known Anthropic and OpenAI models; 0 for a model with no known price (self-hosted, Groq and so on) */
                 costUsd: number;
             }[];
         };

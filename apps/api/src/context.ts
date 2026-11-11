@@ -7,8 +7,18 @@ import type { Providers } from './providers';
 import type { Operation, PlatformRole, Role } from './openapi/spec';
 
 export type Deps = {
+  /**
+   * Row-level security applies: inside a request it sees only that request's companies, outside
+   * one it sees no company rows (docs/database/rls.md). Background jobs get the system db here.
+   */
   db: Db;
   pool: pg.Pool;
+  /**
+   * Bypasses row-level security. Only for work that has to span companies or runs before a company
+   * is known: sign-in, invites, share links, webhooks, the platform console, jobs.
+   */
+  systemDb: Db;
+  systemPool: pg.Pool;
   config: Config;
   providers: Providers;
   /** The time, injectable so tests can pin it. */

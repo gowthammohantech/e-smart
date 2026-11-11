@@ -4,6 +4,7 @@ import { schema } from '@esmart/db';
 import { recordAiCost } from '../src/lib/aiUsage';
 import { setupApi } from './helpers';
 import { moneySetup } from './money-fixtures';
+import { joinTeam } from './team-helpers';
 
 const t = setupApi();
 const ask = (m: { c: string; token: string }) => t.post(`${m.c}/lixi/messages`, { messages: [{ role: 'user', text: 'who owes me money?' }] }, { token: m.token });
@@ -33,6 +34,18 @@ describe('AI allowance', () => {
     const raised = (await t.get(m.c, { token: m.token })).body;
     await t.put(m.c, { ...raised, aiMonthlyLimit: 1_000_000 }, { token: m.token });
     expect((await t.get(`${m.c}/ai-usage`, { token: m.token })).body.limit).toBe(1500);
+  });
+
+  it('lets only an owner set the monthly AI budget', async () => {
+    const m = await moneySetup(t);
+    const admin = await joinTeam(t, m.token, { role: 'admin', companyIds: [m.companyId] });
+    const company = (await t.get(m.c, { token: admin.token })).body;
+    const set = await t.put(m.c, { ...company, aiMonthlyLimit: 5 }, { token: admin.token });
+    expect(set.status).toBe(403);
+    expect(set.body.code).toBe('OWNER_ONLY');
+    // The rest of the profile is still theirs to save, the budget sent back as it was.
+    expect((await t.put(m.c, { ...company, name: 'Renamed Traders' }, { token: admin.token })).status).toBe(200);
+    expect((await t.get(m.c, { token: m.token })).body.aiMonthlyLimit ?? null).toBeNull();
   });
 
   it("records what each Lixi answer cost, apart from the allowance's count", async () => {

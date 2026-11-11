@@ -24,7 +24,8 @@ function dump(databaseUrl: string): Promise<Buffer> {
  */
 export async function backupDatabase(deps: Pick<Deps, 'config' | 'providers' | 'now'>): Promise<{ key: string; bytes: number; removed: number }> {
   const now = deps.now();
-  const body = await dump(deps.config.DATABASE_URL);
+  // The system role: BYPASSRLS, so the dump holds every business, not none.
+  const body = await dump(deps.config.SYSTEM_DATABASE_URL || deps.config.DATABASE_URL);
   if (body.length < 1024) throw new Error(`pg_dump produced only ${body.length} bytes`);
   const key = `${PREFIX}${now.toISOString().slice(0, 10)}.dump`;
   await deps.providers.storage.put(key, body, 'application/octet-stream');

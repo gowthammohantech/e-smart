@@ -1,5 +1,6 @@
 import { and, asc, eq, inArray, isNotNull, isNull, ne } from 'drizzle-orm';
 import { applyProfileLocks } from '@esmart/core/domain/companyLock';
+import { approvalKindAvailable, moduleForApprovalKind, type Module } from '@esmart/core/domain/plan';
 import { isValidGstin, normalizeGstin } from '@esmart/core/domain/gstin';
 import type { Company as CoreCompany } from '@esmart/core/types';
 import { schema } from '@esmart/db';
@@ -132,6 +133,17 @@ export const companiesHandlers = defineHandlers({
     if (JSON.stringify(disabledModules) !== JSON.stringify([...(current.disabledModules as string[])].sort()) && ctx.user.role !== 'owner') throw forbidden('OWNER_ONLY', 'Only an owner can switch modules on or off');
     const approvalRules = ctx.body.approvalRules === undefined ? current.approvalRules : ctx.body.approvalRules.filter((r, i, all) => all.findIndex((x) => x.kind === r.kind) === i);
     if (JSON.stringify(approvalRules) !== JSON.stringify(current.approvalRules) && ctx.user.role !== 'owner') throw forbidden('OWNER_ONLY', 'Only an owner can set what needs approval');
+    // A rule for what the plan doesn't have, or the owner switched off, can't be set; one kept from
+    // when the module was on goes back as it was, and works again when the module does.
+    const kept = (current.approvalRules as { kind: string; overMinor: number }[] | null) ?? [];
+    const unavailable = ((approvalRules as { kind: string; overMinor: number }[] | null) ?? []).filter(
+      (r) => !approvalKindAvailable(current.plan, disabledModules as Module[], r.kind) && !kept.some((k) => k.kind === r.kind && k.overMinor === r.overMinor),
+    );
+    if (unavailable.length) throw unprocessable(unavailable.map((r) => ({ field: 'approvalRules', message: `${r.kind} approvals need the ${moduleForApprovalKind(r.kind)} module, which this business doesn't have on`, severity: 'blocking' as const })), 'MODULE_UNAVAILABLE');
+    // The AI budget is the owner's to set, as the screen says (left out by an older app: unchanged).
+    if (ctx.body.aiMonthlyLimit !== undefined && (ctx.body.aiMonthlyLimit ?? null) !== (current.aiMonthlyLimit ?? null) && ctx.user.role !== 'owner') {
+      throw forbidden('OWNER_ONLY', 'Only an owner can set the monthly AI budget');
+    }
     const perpetualStockFrom = ctx.body.perpetualStockFrom === undefined ? current.perpetualStockFrom : ctx.body.perpetualStockFrom;
     if (perpetualStockFrom !== current.perpetualStockFrom) checkPerpetualFrom(ctx.user.role, current.fiscalYearStartMonth, lockedThroughDate, current.perpetualStockFrom, perpetualStockFrom);
     const stockCosting = ctx.body.stockCosting ?? (current.stockCosting as 'average' | 'fifo');

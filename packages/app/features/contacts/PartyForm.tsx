@@ -272,7 +272,9 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
     const savedMessage =
       kind === 'customer'
         ? tr(party ? 'contacts:form.customerUpdated' : 'contacts:form.customerAdded')
-        : tr(party ? 'contacts:form.supplierUpdated' : 'contacts:form.supplierAdded');
+        : kind === 'supplier'
+          ? tr(party ? 'contacts:form.supplierUpdated' : 'contacts:form.supplierAdded')
+          : tr(party ? 'contacts:form.contactUpdated' : 'contacts:form.contactAdded');
     const res = await serverSave(() => saveParty(record), savedMessage, { icon: 'account-check-outline', detail: record.name });
     if (!res) return;
     const id = res.id ?? record.id;
@@ -483,7 +485,9 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
     ? tr('settings:profile.save')
     : kind === 'customer'
       ? tr('common:quickAction.addCustomer')
-      : tr('contacts:form.addSupplier');
+      : kind === 'supplier'
+        ? tr('contacts:form.addSupplier')
+        : tr('contacts:hub.addContact');
 
   const phoneHeading = (title: string) => (
     <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6, marginTop: t.spacing.sm }}>{title}</Text>

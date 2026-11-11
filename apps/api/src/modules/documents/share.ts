@@ -4,6 +4,7 @@ import type { LanguageCode } from '@esmart/i18n/config';
 import { schema } from '@esmart/db';
 import type { Deps } from '../../context';
 import { sha256 } from '../../lib/crypto';
+import { withCompanies } from '../../lib/dbScope';
 import { esc } from '../payments/receipt';
 import { effectiveStatus, today } from './lifecycle';
 import { pdfFilename, renderDocumentHtml, renderDocumentPdf } from './outbound';
@@ -31,12 +32,15 @@ const GONE = `<!doctype html><html lang="en"><head><meta charset="utf-8"/><meta 
 
 const gone = (reply: FastifyReply) => secure(reply).status(404).type('text/html; charset=utf-8').send(GONE);
 
-/** The link's document, if a customer may see it now. */
+/**
+ * The link's document, if a customer may see it now. The token is all there is to go on, so the
+ * lookup runs on the system database; everything after it is scoped to the link's business.
+ */
 async function resolve(deps: Deps, token: string) {
   if (!/^[\w-]{20,64}$/.test(token)) return null;
   const now = deps.now();
   const L = schema.shareLinks;
-  const [hit] = await deps.db
+  const [hit] = await deps.systemDb
     .select({ link: L, doc: schema.documents, company: schema.companies, suspendedAt: schema.accounts.suspendedAt })
     .from(L)
     .innerJoin(schema.documents, eq(schema.documents.id, L.documentId))
@@ -58,11 +62,16 @@ export function registerSharePages(app: FastifyInstance, deps: Deps) {
   app.get<{ Params: { token: string }; Querystring: { lang?: string } }>('/share/:token', { config: { rateLimit } }, async (req, reply) => {
     const found = await resolve(deps, req.params.token);
     if (!found) return gone(reply);
+    return withCompanies([found.company.id], () => sharePage(found, req.params.token, req.query.lang, reply));
+  });
+
+  async function sharePage(found: NonNullable<Awaited<ReturnType<typeof resolve>>>, token: string, lang: string | undefined, reply: FastifyReply) {
     const { link, doc, company, now } = found;
-    const locale: LanguageCode = req.query.lang === 'ta' ? 'ta' : 'en';
+    const locale: LanguageCode = lang === 'ta' ? 'ta' : 'en';
     await deps.db.update(schema.shareLinks).set({ viewCount: sql`${schema.shareLinks.viewCount} + 1`, lastViewedAt: now }).where(eq(schema.shareLinks.id, link.id));
 
-    const owing = doc.kind === 'invoice' && doc.amountPaidMinor < doc.grandTotalMinor && effectiveStatus(doc, today(now)) !== 'paid';
+    // A link minted before the provider changed still leads nowhere without a page to pay on.
+    const owing = deps.providers.payments.hostsPaymentPage && doc.kind === 'invoice' && doc.amountPaidMinor < doc.grandTotalMinor && effectiveStatus(doc, today(now)) !== 'paid';
     const PL = schema.paymentLinks;
     const [pay] = owing
       ? await deps.db
@@ -75,19 +84,19 @@ export function registerSharePages(app: FastifyInstance, deps: Deps) {
 
     const html = await renderDocumentHtml(deps.db, deps, company, doc, { now, locale });
     const bar = `<div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin:0 0 16px;font-family:system-ui,-apple-system,sans-serif">
-<a href="${esc(`${req.params.token}/pdf`)}" style="padding:8px 14px;border:1px solid #d1d1d6;border-radius:8px;color:#1c1c1e;text-decoration:none">Download PDF</a>
+<a href="${esc(`${token}/pdf`)}" style="padding:8px 14px;border:1px solid #d1d1d6;border-radius:8px;color:#1c1c1e;text-decoration:none">Download PDF</a>
 ${pay ? `<a href="${esc(pay.url)}" rel="noopener noreferrer" style="padding:8px 14px;border-radius:8px;background:#0a7c4a;color:#fff;text-decoration:none;font-weight:600">Pay now</a>` : ''}
 </div>`;
     const page = html
       .replace('<head>', '<head>\n<meta name="robots" content="noindex, nofollow"/>')
       .replace(/<body([^>]*)>/, `<body$1>\n${bar}`);
     return secure(reply).type('text/html; charset=utf-8').send(page);
-  });
+  }
 
   app.get<{ Params: { token: string }; Querystring: { lang?: string } }>('/share/:token/pdf', { config: { rateLimit } }, async (req, reply) => {
     const found = await resolve(deps, req.params.token);
     if (!found) return gone(reply);
-    const pdf = await renderDocumentPdf(deps.db, deps, found.company, found.doc, { now: found.now, locale: req.query.lang === 'ta' ? 'ta' : 'en' });
+    const pdf = await withCompanies([found.company.id], () => renderDocumentPdf(deps.db, deps, found.company, found.doc, { now: found.now, locale: req.query.lang === 'ta' ? 'ta' : 'en' }));
     return secure(reply).type('application/pdf').header('content-disposition', `inline; filename="${pdfFilename(found.doc.number)}"`).send(pdf);
   });
 }

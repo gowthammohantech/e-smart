@@ -13,7 +13,7 @@ import { AmountField, PickerField, Segmented, SwitchField, TextField , QuantityS
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { DocumentLine, GstFlags, TaxCategory } from '@esmart/core/types';
 import { formatMoney, formatPercent } from '@esmart/core/lib/format';
-import { fromMajor, toMajor } from '@esmart/core/lib/money';
+import { fromMajor, subtract, toMajor } from '@esmart/core/lib/money';
 import { calculateLine } from '@esmart/core/domain/lineCalc';
 import { validHsn } from '@esmart/core/lib/validators';
 import { TaxContext } from '@esmart/core/domain/taxEngine';
@@ -313,7 +313,12 @@ function LineEditorForm({
             { label: tr('sales:line.grossAmount'), value: formatMoney(preview.gross) },
             { label: tr('sales:line.discount'), value: `− ${formatMoney(preview.discount)}` },
             { label: tr('common:totals.taxableValue'), value: formatMoney(preview.taxable) },
-            { label: tr('sales:line.taxWithRate', { rate: formatPercent(category?.rate ?? 0) }), value: formatMoney(preview.taxAmount) },
+            ...(preview.cessAmount.minor
+              ? [
+                  { label: tr('sales:line.gstWithRate', { rate: formatPercent(rate) }), value: formatMoney(subtract(preview.taxAmount, preview.cessAmount)) },
+                  { label: tr('sales:line.cessWithRate', { rate: formatPercent(preview.cessRate) }), value: formatMoney(preview.cessAmount) },
+                ]
+              : [{ label: tr('sales:line.taxWithRate', { rate: formatPercent(category?.rate ?? 0) }), value: formatMoney(preview.taxAmount) }]),
           ].map((r) => (
             <View key={r.label} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
               <Text variant="caption" tone="muted">

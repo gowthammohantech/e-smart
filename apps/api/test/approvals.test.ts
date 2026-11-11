@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { and, eq } from 'drizzle-orm';
+import { schema } from '@esmart/db';
 import { setupApi } from './helpers';
 import { invoiceBody, moneySetup } from './money-fixtures';
 import { joinTeam } from './team-helpers';
@@ -35,6 +37,11 @@ describe('approvals', () => {
     expect(approved.body.approval).toMatchObject({ status: 'approved', decidedBy: m.user.id });
     expect((await t.get(`${m.c}/approvals`, { token: m.token })).body.data).toEqual([]);
     expect((await t.post(`${m.c}/documents/${big.body.id}/approve`, {}, { token: m.token })).body.code).toBe('NOT_AWAITING_APPROVAL');
+    // The clerk who sent it hears it went through, as with a payment.
+    const told = await t.deps.db.select().from(schema.notifications).where(and(eq(schema.notifications.userId, clerk.user.id!), eq(schema.notifications.entityId, big.body.id)));
+    expect(told).toHaveLength(1);
+    expect(told[0]).toMatchObject({ title: 'Your invoice was approved', entityType: 'document' });
+    expect(told[0].body).toContain(approved.body.number);
   });
 
   it('sends a rejected one back as a draft, and waits again when it is issued again', async () => {
@@ -45,6 +52,9 @@ describe('approvals', () => {
     const doc = await t.post(`${m.c}/documents`, invoiceBody(m, { status: 'issued' }), { token: clerk.token });
     const rejected = await t.post(`${m.c}/documents/${doc.body.id}/reject`, { note: 'Wrong rate' }, { token: m.token });
     expect(rejected.body).toMatchObject({ status: 'draft', approval: { status: 'rejected', note: 'Wrong rate' } });
+    const [told] = await t.deps.db.select().from(schema.notifications).where(and(eq(schema.notifications.userId, clerk.user.id!), eq(schema.notifications.entityId, doc.body.id)));
+    expect(told).toMatchObject({ title: 'Your invoice was sent back', entityType: 'document' });
+    expect(told.body).toContain('Wrong rate');
     const again = await t.post(`${m.c}/documents/${doc.body.id}/finalize`, {}, { token: clerk.token });
     expect(again.body.document).toMatchObject({ status: 'draft', approval: { status: 'pending' } });
     // An owner issuing it never waits.
@@ -112,5 +122,64 @@ describe('payment approvals (RULES 6.14)', () => {
     expect(noRate.body.code).toBe('PAYMENT_HELD');
     // With its rate it is judged at that rate ($10 at 85 = ₹850, under the rule).
     expect((await usd(1_000, { exchangeRate: 85 })).body.code).not.toBe('PAYMENT_HELD');
+  });
+
+  it('holds a payment made recorded from a bank line, and an edit past the rule, the same way', async () => {
+    const m = await moneySetup(t);
+    t.setNow('2026-09-29T10:00:00Z');
+    const inr = (minor: number) => ({ minor, currency: 'INR' });
+    const acct = await t.post(`${m.c}/payment-accounts`, { name: 'HDFC current', type: 'bank', currency: 'INR', openingBalance: inr(1_000_000) }, { token: m.token });
+    await t.post(`${m.c}/payment-accounts/${acct.body.id}/bank-statements`, { fileName: 's.csv', lines: [{ date: '2026-09-28', description: 'NEFT RENT', amount: inr(-300_000) }, { date: '2026-09-28', description: 'NEFT TEA', amount: inr(-20_000) }] }, { token: m.token });
+    const company = await t.get(`${m.c}`, { token: m.token });
+    await t.put(`${m.c}`, { ...company.body, approvalRules: [{ kind: 'payment', overMinor: 100_000 }] }, { token: m.token, headers: { 'if-match': `"v${company.body.version}"` } });
+    const clerk = await joinTeam(t, m.token, { role: 'accountant', companyIds: [m.companyId] });
+    const lines = async () => (await t.get(`${m.c}/payment-accounts/${acct.body.id}/bank-lines`, { token: m.token })).body.data as any[];
+    const rent = (await lines()).find((l) => l.description === 'NEFT RENT');
+    const tea = (await lines()).find((l) => l.description === 'NEFT TEA');
+
+    // Over the rule: kept as a request, no payment, the line still unmatched.
+    const held = await t.post(`${m.c}/bank-lines/${rent.id}/payment`, { partyId: m.supplier!.id }, { token: clerk.token });
+    expect(held.status).toBe(409);
+    expect(held.body.code).toBe('PAYMENT_HELD');
+    expect((await t.get(`${m.c}/payments`, { token: m.token, query: { direction: 'paid' } })).body.data).toEqual([]);
+    expect((await lines()).find((l) => l.id === rent.id).status).toBe('unmatched');
+    const [request] = (await t.get(`${m.c}/payment-requests`, { token: m.token })).body.data;
+    expect(request).toMatchObject({ id: held.body.requestId, amount: inr(300_000), payment: { direction: 'paid', accountId: acct.body.id, date: '2026-09-28' } });
+    const approved = await t.post(`${m.c}/payment-requests/${request.id}/approve`, {}, { token: m.token });
+    expect(approved.body.payment).toMatchObject({ direction: 'paid', amount: inr(300_000), accountId: acct.body.id });
+
+    // Under it: recorded and matched at once. Raising it past the rule afterwards is refused.
+    const small = await t.post(`${m.c}/bank-lines/${tea.id}/payment`, { partyId: m.supplier!.id }, { token: clerk.token });
+    expect(small.status, small.raw).toBe(201);
+    const p = small.body.payment;
+    const raised = await t.put(`${m.c}/payments/${p.id}`, { ...p, amount: inr(200_000) }, { token: clerk.token, headers: { 'if-match': `"v${p.version}"` } });
+    expect(raised.body.code).toBe('PAYMENT_NEEDS_APPROVER');
+    const noted = await t.put(`${m.c}/payments/${p.id}`, { ...p, notes: 'Office tea' }, { token: clerk.token, headers: { 'if-match': `"v${p.version}"` } });
+    expect(noted.status, noted.raw).toBe(200);
+  });
+
+  it('refuses rules for purchase documents or payments made where the plan or the owner has them off', async () => {
+    const m = await moneySetup(t, 'basic');
+    const company = await t.get(`${m.c}`, { token: m.token });
+    const put = (body: object, version: number) => t.put(`${m.c}`, body, { token: m.token, headers: { 'if-match': `"v${version}"` } });
+    for (const kind of ['purchaseBill', 'purchaseOrder', 'supplierDebitNote', 'payment']) {
+      const res = await put({ ...company.body, approvalRules: [{ kind, overMinor: 1 }] }, company.body.version);
+      expect(res.status).toBe(422);
+      expect(res.body.code).toBe('MODULE_UNAVAILABLE');
+    }
+    // The sales side's own kinds are on every plan.
+    expect((await put({ ...company.body, approvalRules: [{ kind: 'invoice', overMinor: 1 }] }, company.body.version)).status).toBe(200);
+
+    // On a full plan, a rule set while purchases were on is kept when they are switched off, but can't change.
+    const full = await moneySetup(t);
+    const fullCo = await t.get(`${full.c}`, { token: full.token });
+    const fullPut = (body: object, version: number) => t.put(`${full.c}`, body, { token: full.token, headers: { 'if-match': `"v${version}"` } });
+    const set = await fullPut({ ...fullCo.body, approvalRules: [{ kind: 'purchaseBill', overMinor: 100 }] }, fullCo.body.version);
+    expect(set.status).toBe(200);
+    const off = await fullPut({ ...set.body, disabledModules: ['purchases'] }, set.body.version);
+    expect(off.status).toBe(200);
+    expect(off.body.approvalRules).toEqual([{ kind: 'purchaseBill', overMinor: 100 }]);
+    const changed = await fullPut({ ...off.body, approvalRules: [{ kind: 'purchaseBill', overMinor: 200 }] }, off.body.version);
+    expect(changed.body.code).toBe('MODULE_UNAVAILABLE');
   });
 });

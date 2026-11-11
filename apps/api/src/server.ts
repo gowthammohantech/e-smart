@@ -1,15 +1,17 @@
-import { createDb, createPool } from '@esmart/db';
 import { buildApp } from './app';
 import { loadConfig } from './config';
 import { startBackground } from './jobs';
 import { createProviders } from './providers';
 import { reportError, setErrorReporter } from './lib/reporter';
+import { checkRequestRole, openDatabases } from './lib/dbScope';
 
 const config = loadConfig();
-const pool = createPool(config.DATABASE_URL);
-const db = createDb(pool);
-const providers = createProviders(config, console, db);
-const deps = { db, pool, config, providers, now: () => new Date() };
+const { pool, db, systemPool, systemDb } = openDatabases(config);
+// Row-level security protects nothing if requests connect as a role that skips it.
+await checkRequestRole(pool, config, console);
+// The GSTIN and PIN code lookups read known details across every business, by design.
+const providers = createProviders(config, console, systemDb);
+const deps = { db, pool, systemDb, systemPool, config, providers, now: () => new Date() };
 const app = await buildApp(deps);
 
 // Crashes and 500s also go to PostHog error tracking, anonymously: the error, the route and the
@@ -29,7 +31,7 @@ async function shutdown(signal: string) {
   await app.close();
   // Events still queued for PostHog go out before the process ends.
   await providers.analytics.shutdown().catch(() => {});
-  await pool.end();
+  await Promise.all([pool.end(), systemPool.end()]);
   process.exit(0);
 }
 // A promise nobody awaited: log it and carry on, as one failed background task shouldn't stop the API.

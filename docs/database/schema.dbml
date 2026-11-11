@@ -11,7 +11,8 @@
 //   Where a row has a single currency column, all its *_minor columns use it.
 // - Mutable business rows carry version (optimistic concurrency, If-Match),
 //   created_at and updated_at. Timestamps are timestamptz in UTC; dates are date.
-// - Every business table carries company_id. Queries are always tenant-scoped.
+// - Every business table carries company_id (or follows a parent that does). Queries are always
+//   tenant-scoped, and row-level security enforces it in Postgres too (docs/database/rls.md).
 // - Derived values (party balance, stock on hand, paid/partiallyPaid/overdue,
 //   e-way bill `expired`) are computed, never set by clients.
 // =====================================================================

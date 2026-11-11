@@ -98,7 +98,12 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
-      DATABASE_URL: postgres://esmart:esmart@localhost:5432/esmart_e2e
+      # The API runs as deployed: requests under row-level security, cross-business work as the
+      # system role. Migrations, db:roles and the e2e scripts' own checks use the owner.
+      MIGRATION_DATABASE_URL: postgres://esmart:esmart@localhost:5432/esmart_e2e
+      DATABASE_URL: postgres://esmart_app:esmart_app@localhost:5432/esmart_e2e
+      SYSTEM_DATABASE_URL: postgres://esmart_system:esmart_system@localhost:5432/esmart_e2e
+      RLS_ENFORCE: 'true'
       E2E_DATABASE_URL: postgres://esmart:esmart@localhost:5432/esmart_e2e
       SEED_DEMO_ACCOUNT: 'true'
       DEMO_ACCOUNT_EMAIL: e2e@vertextraders.in
@@ -113,6 +118,7 @@ jobs:
       - run: npm ci
       - run: npx playwright-core install --with-deps chromium
       - run: npm run db:migrate -w @esmart/db
+      - run: npm run db:roles -w @esmart/db
       - name: Start the API on 4100
         run: |
           PORT=4100 LOG_LEVEL=warn WORKER=inline npx tsx apps/api/src/server.ts > api.log 2>&1 &

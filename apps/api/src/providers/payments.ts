@@ -38,6 +38,11 @@ export type SubscriptionCheckout = { subscriptionId: string; checkoutUrl: string
  */
 export interface PaymentsProvider {
   readonly name: 'simulator' | 'razorpay';
+  /**
+   * Whether a payment link leads to a page a customer can pay on. Razorpay's do; the simulator's
+   * `/pay/:id` has no page behind it, so no link is minted, sent or shown while it is the provider.
+   */
+  readonly hostsPaymentPage: boolean;
   /** Public key the app's in-app checkout needs. */
   readonly keyId: string;
   createPaymentLink(req: PaymentLinkRequest): Promise<PaymentLink>;
@@ -60,6 +65,8 @@ const major = (minor: number) => (minor / 100).toFixed(2);
 
 class SimulatorPayments implements PaymentsProvider {
   readonly name = 'simulator' as const;
+  /** Nothing serves `/pay/:id`. Tests switch this on to stand in for Razorpay's hosted page. */
+  hostsPaymentPage = false;
   readonly keyId: string;
   readonly verifyWebhookSignature: PaymentsProvider['verifyWebhookSignature'];
 
@@ -95,6 +102,7 @@ type RazorpayError = { error?: { code?: string; description?: string } };
 
 class RazorpayPayments implements PaymentsProvider {
   readonly name = 'razorpay' as const;
+  readonly hostsPaymentPage = true;
   readonly keyId: string;
   readonly verifyWebhookSignature: PaymentsProvider['verifyWebhookSignature'];
   /**

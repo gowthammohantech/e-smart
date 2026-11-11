@@ -113,6 +113,8 @@
     "customerUpdated": "Customer updated",
     "supplierAdded": "Supplier added",
     "supplierUpdated": "Supplier updated",
+    "contactAdded": "Contact added",
+    "contactUpdated": "Contact updated",
     "openingSide": {
       "dr": "They owe you (Dr)",
       "cr": "You owe them (Cr)"
@@ -126,7 +128,7 @@
     "noDocuments": "No documents yet",
     "noPayments": "No payments yet",
     "actions": "Actions",
-    "deleteMessage": "Their documents stay in your books, but the contact is removed from your list. This cannot be undone.",
+    "deleteMessage": "A contact with documents, payments, expenses or an opening balance can't be deleted; mark it inactive instead. This cannot be undone.",
     "delete": "Delete",
     "reminderQueued": "Reminder queued for WhatsApp",
     "deleted": "Contact deleted",

@@ -13,7 +13,7 @@ import { countLabel } from '@esmart/core/lib/format';
 import { TABS, tabForPath, tabPath, type TabName } from '@esmart/app/navigation/tabs';
 import { appHref, section, type MenuPage, type PageGroup, type SidebarGroup } from '@esmart/app/navigation/menu';
 import { useMenuBadges } from '@esmart/app/navigation/moreGroups';
-import { usePlan } from '@esmart/app/store/selectors';
+import { useDisabledModules, usePlan } from '@esmart/app/store/selectors';
 // A page swap the open form can't see coming; it asks first when there are unsaved changes.
 import { leaveGuarded } from '@esmart/app/components/useLeaveGuard';
 import { SIDEBAR_COMPACT_WIDTH, SIDEBAR_WIDTH, sidebarWidth as width, useSidebarCollapsed } from './sidebarState';
@@ -307,9 +307,12 @@ function PanelItem({
   );
 }
 
-/** A section's pages the plan opens, split into lists by category and the actions (Scan a bill). */
-function sectionLayout(tab: TabName, plan: ReturnType<typeof usePlan>) {
-  const pages = section(tab).pages.filter((p) => canOpen(plan, p.route));
+/**
+ * A section's pages the plan opens and the owner hasn't switched off (settings › Modules), split
+ * into lists by category and the actions (Scan a bill, which goes with the OCR module).
+ */
+function sectionLayout(tab: TabName, plan: ReturnType<typeof usePlan>, disabled: ReturnType<typeof useDisabledModules>) {
+  const pages = section(tab).pages.filter((p) => canOpen(plan, p.route, disabled));
   const columns: { group: PageGroup | null; pages: MenuPage[] }[] = [];
   pages
     .filter((p) => !p.action)
@@ -331,8 +334,9 @@ function SectionDropdown({ tab, pathname }: { tab: TabName; pathname: string }) 
   const t = useTheme();
   const { t: tr } = useTranslation(['nav', 'reports']);
   const plan = usePlan();
+  const disabled = useDisabledModules();
   const badges = useMenuBadges();
-  const { columns, actions } = sectionLayout(tab, plan);
+  const { columns, actions } = sectionLayout(tab, plan, disabled);
   const name = tr(`nav:tab.${tab}` as 'nav:tab.index');
   const hub: MenuPage = { key: `hub-${tab}`, labelKey: '', icon: 'view-dashboard-outline', route: tabPath(tab) };
   return (
@@ -409,13 +413,14 @@ function SectionPanel({
   const { t: tr } = useTranslation(['nav', 'reports']);
   const router = useRouter();
   const plan = usePlan();
+  const disabled = useDisabledModules();
   const badges = useMenuBadges();
   const window = useWindowDimensions();
   const panel = useRef<View>(null);
   const [height, setHeight] = useState(0);
 
   const name = tr(`nav:tab.${tab}` as 'nav:tab.index');
-  const { columns, actions } = sectionLayout(tab, plan);
+  const { columns, actions } = sectionLayout(tab, plan, disabled);
   // Four categories sit two by two; up to three sit side by side.
   const across = columns.length <= 3 ? columns.length : 2;
   const top = Math.max(8, Math.min(rect.y - 6, window.height - height - 8));
@@ -589,8 +594,8 @@ function rollUp(pages: MenuPage[], badges: ReturnType<typeof useMenuBadges>): Ba
 }
 
 /**
- * The desktop replacement for the tab bar: the pages you visited last, then
- * the sections in bands. A section's pages drop down under it, one section
+ * The desktop replacement for the tab bar: the sections in bands, under the
+ * home logo. A section's pages drop down under it, one section
  * at a time, under their category headings; a closed row carries their
  * badges. Folded to icons, hovering a row shows its name and a section opens
  * its pages in a panel beside the sidebar. The business and branch,
@@ -602,6 +607,7 @@ export function Sidebar() {
   const { t: tr } = useTranslation(['nav', 'reports']);
   const pathname = usePathname();
   const plan = usePlan();
+  const disabled = useDisabledModules();
   const badges = useMenuBadges();
   const breakpoint = useBreakpoint();
   const [collapsed, toggleCollapsed] = useSidebarCollapsed();
@@ -713,7 +719,7 @@ export function Sidebar() {
               {group.tabs.map((tab) => {
                 const active = current === tab.name && !inSettings;
                 const label = labelFor(tab.name);
-                const pages = section(tab.name).pages.filter((p) => canOpen(plan, p.route));
+                const pages = section(tab.name).pages.filter((p) => canOpen(plan, p.route, disabled));
                 const open = compact ? panel?.tab === tab.name && panel.on === pathname : dropped.tab === tab.name;
                 return (
                   <React.Fragment key={tab.name}>

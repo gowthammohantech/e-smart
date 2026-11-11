@@ -291,6 +291,9 @@ describe('users', () => {
     const res = await t.post(`/admin/users/${admin.user.id}/disable`, REASON, { token: admin.token });
     expect(res.status).toBe(409);
     expect(res.body.code).toBe('PLATFORM_OPERATOR');
+    // The console manages operators now; the refusal says how, not the command line.
+    expect(res.body.detail).toContain('Remove their platform role');
+    expect(res.body.detail).not.toContain('db:platform-admin');
   });
 });
 

@@ -16,7 +16,18 @@ const Env = z.object({
   HOST: z.string().default('0.0.0.0'),
   PORT: z.coerce.number().int().default(4000),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
+  /**
+   * The role API requests run as. Row-level security applies to it, so it should be `esmart_app`
+   * (docs/database/rls.md). Until it is switched over, a superuser here still works, unenforced.
+   */
   DATABASE_URL: z.string().default('postgres://esmart:esmart@localhost:5432/esmart'),
+  /**
+   * The BYPASSRLS role (`esmart_system`) for work that spans companies: jobs, webhooks, the platform
+   * console, sign-in, share links, backups. Unset: DATABASE_URL.
+   */
+  SYSTEM_DATABASE_URL: z.string().optional(),
+  /** Refuse to start when DATABASE_URL's role skips row-level security (superuser or BYPASSRLS). */
+  RLS_ENFORCE: bool.default(false),
   /** Where the API is reachable from outside; used in share links and upload URLs. */
   PUBLIC_BASE_URL: z.string().default('http://localhost:4000'),
   /** The web app, for links people open: password resets and invitations. */

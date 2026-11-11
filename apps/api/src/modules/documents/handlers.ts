@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, exists, getTableColumns, gte, ilike, inArray, lte, ne, notInArray, or, sql, type SQL } from 'drizzle-orm';
-import { decide, needsApproval, pendingApprovals, sendForApproval, type Approval } from './approvals';
-import { NOTE_SOURCE, PAYABLE_KINDS, SALES_KINDS, canTransition, conversionBlock, isFinalized, isPayableDocument, nextStatuses } from '@esmart/core/domain/documentStates';
+import { decide, needsApproval, notifyDecision, pendingApprovals, sendForApproval, type Approval } from './approvals';
+import { NOTE_SOURCE, PAYABLE_KINDS, SALES_KINDS, canCancel, canTransition, conversionBlock, isFinalized, isPayableDocument, nextStatuses } from '@esmart/core/domain/documentStates';
 import { hasModule } from '@esmart/core/domain/plan';
 import type { DocStatus, DocumentKind } from '@esmart/core/types';
 import { schema } from '@esmart/db';
@@ -265,7 +265,7 @@ async function changeStatus(ctx: AnyCtx, id: string, target: DocStatus, reason?:
     const from = statusBefore(locked, target, ctx.now);
     // Before the transition: a fully credited invoice reads as paid, which would hide the reason.
     if (target === 'cancelled') await assertNoLiveReturns(tx, locked);
-    if (!canTransition(locked.kind, from, target)) throw conflict('INVALID_TRANSITION', `A ${locked.kind} cannot go from ${from} to ${target}`);
+    if (!(target === 'cancelled' ? canCancel(locked.kind, from) : canTransition(locked.kind, from, target))) throw conflict('INVALID_TRANSITION', `A ${locked.kind} cannot go from ${from} to ${target}`);
     if (target === 'cancelled') {
       assertPeriodOpen(ctx.company, locked.date);
       // Money allocated to it, not what it reads as paid: a bill's own TDS counts as paid from the start.
@@ -575,6 +575,8 @@ export const documentsHandlers = defineHandlers({
         .where(and(eq(D.id, current.id), eq(D.version, decided.version)));
       throw e;
     }
+    // Whoever sent it hears that it went through, as with a payment (RULES 6.14).
+    await notifyDecision(ctx.db, ctx.deps, ctx.user, row, current.approval as Approval, EMAIL_TITLES[row.kind]);
     setEtag(ctx.reply, row.version);
     return toWire(ctx, row);
   },
@@ -582,7 +584,12 @@ export const documentsHandlers = defineHandlers({
   async rejectDocument(ctx) {
     const current = await findDocument(ctx, ctx.db, ctx.params.id);
     if ((current.approval as Approval | null)?.status !== 'pending') throw conflict('NOT_AWAITING_APPROVAL', `${current.number} is not waiting for approval`);
-    const row = await ctx.db.transaction((tx) => decide(tx, ctx.user, current, 'rejected', ctx.now, ctx.body.note.trim()));
+    const note = ctx.body.note.trim();
+    const row = await ctx.db.transaction(async (tx) => {
+      const decided = await decide(tx, ctx.user, current, 'rejected', ctx.now, note);
+      await notifyDecision(tx, ctx.deps, ctx.user, decided, current.approval as Approval, EMAIL_TITLES[current.kind], note);
+      return decided;
+    });
     setEtag(ctx.reply, row.version);
     return toWire(ctx, row);
   },
@@ -744,7 +751,7 @@ export const documentsHandlers = defineHandlers({
     const from = statusBefore(current, target, ctx.now);
     // Before the transition: a fully credited invoice reads as paid, which would hide the reason.
     if (target === 'cancelled') await assertNoLiveReturns(ctx.db, current);
-    if (!canTransition(current.kind, from, target)) throw conflict('INVALID_TRANSITION', `A ${current.kind} cannot go from ${from} to ${target}`);
+    if (!(target === 'cancelled' ? canCancel(current.kind, from) : canTransition(current.kind, from, target))) throw conflict('INVALID_TRANSITION', `A ${current.kind} cannot go from ${from} to ${target}`);
 
     const row = !isFinalized(current.status) && isFinalized(target) && target !== 'cancelled' ? await finalizeDraft(ctx, current.id, target, { overrideCreditLimit: ctx.body.overrideCreditLimit }) : await changeStatus(ctx, current.id, target, ctx.body.reason);
     setEtag(ctx.reply, row.version);
@@ -822,8 +829,8 @@ export const documentsHandlers = defineHandlers({
     if (canTransition(row.kind, effectiveStatus(row, today(ctx.now)), 'sent')) {
       row = isFinalized(row.status) ? await changeStatus(ctx, row.id, 'sent') : await finalizeDraft(ctx, row.id, 'sent');
     }
-    // A payment link only makes sense for an invoice that still has money owing.
-    const payable = row.kind === 'invoice' && !['draft', 'cancelled', 'paid'].includes(effectiveStatus(row, today(ctx.now)));
+    // A payment link only makes sense for an invoice that still has money owing, and only where it leads to a page to pay on.
+    const payable = ctx.deps.providers.payments.hostsPaymentPage && row.kind === 'invoice' && !['draft', 'cancelled', 'paid'].includes(effectiveStatus(row, today(ctx.now)));
 
     const { messageId, queued, text, html, inline, pdfUrl } = await ctx.db.transaction(async (tx) => {
       // One send of a document at a time: a second (a double tap, another device) waits here,

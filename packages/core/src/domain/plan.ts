@@ -233,3 +233,23 @@ export function canOpen(tier: PlanTier, route: string, disabled?: readonly Modul
   const module = moduleForPath(pathname);
   return !module || moduleEnabled(tier, disabled, module);
 }
+
+/** Approval-rule kinds of the buying side, and the module each needs: purchase documents, and payments made. */
+const APPROVAL_KIND_MODULES: Record<string, Module> = {
+  purchaseOrder: 'purchases',
+  purchaseBill: 'purchases',
+  supplierDebitNote: 'purchases',
+  // The payment rule holds money paid out only (received never waits), which is the payables side.
+  payment: 'payables',
+};
+
+/** The module an approval rule's kind belongs to, or null when every plan has it. */
+export function moduleForApprovalKind(kind: string): Module | null {
+  return APPROVAL_KIND_MODULES[kind] ?? null;
+}
+
+/** Whether a company can hold this kind for approval: its module is in the plan and switched on. */
+export function approvalKindAvailable(tier: PlanTier, disabled: readonly Module[] | null | undefined, kind: string): boolean {
+  const module = moduleForApprovalKind(kind);
+  return !module || moduleEnabled(tier, disabled, module);
+}

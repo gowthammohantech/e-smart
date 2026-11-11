@@ -37,6 +37,7 @@ import { usePartyRecord, usePartySearch, useServerAccountBalances } from '../../
 import { useDebounced } from '../../components/useDebounced';
 import {
   useBaseCurrency,
+  useCanOpen,
   useExpenseCategories,
   useParties,
   usePaymentAccounts,
@@ -68,6 +69,8 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
   const t = useTheme();
   const { t: tr } = useTranslation(['domain', 'purchases', 'common', 'settings', 'inventory']);
   const router = useRouter();
+  // Scanning is the OCR module's: not offered when the plan lacks it or the owner switched it off.
+  const canScan = useCanOpen()('/ocr/capture');
   const goBack = useGoBack();
   const toast = useToast();
   const { run: serverSave, saving, blocked, release: releaseSave } = useServerSave();
@@ -437,7 +440,7 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
       </View>
     </Card>
   );
-  const scanButton = (
+  const scanButton = canScan ? (
     <Button
       title={tr('purchases:form.scanInstead')}
       variant="ghost"
@@ -445,7 +448,7 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
       onPress={() => router.push('/(app)/ocr/capture')}
       fullWidth
     />
-  );
+  ) : null;
   const submitTitle = expense ? tr('settings:profile.save') : tr('purchases:form.recordExpense');
 
   const phoneForm = (

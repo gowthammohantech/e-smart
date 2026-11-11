@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 import { schema } from '@esmart/db';
-import { setupApi } from './helpers';
+import { setupApi, withPaymentPage } from './helpers';
 import { invoiceBody, issueInvoice, moneySetup, pdfText } from './money-fixtures';
 
 const t = setupApi();
@@ -59,6 +59,7 @@ describe('ledger', () => {
     const m = await moneySetup(t);
     const a = await issueInvoice(t, m);
     const b = await issueInvoice(t, m);
+    withPaymentPage(t);
     const res = await t.post(`${m.c}/receivables/reminders`, { partyId: m.mumbai.id, channel: 'whatsapp' }, { token: m.token });
     expect(res.status).toBe(202);
     const msg = t.providers.outbox.last('whatsapp', '+919800000001');

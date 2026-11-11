@@ -1,109 +1,107 @@
 # 02 — Onboarding: setting up your business
 
-Onboarding runs straight after sign-up, and again whenever a signed-in user has no business set up yet.
-- It takes about two minutes. The progress bar shows the current step (*Step 2 of 5 · Country*).
-- Nearly everything can be changed later under **More › Settings**. The exceptions are listed in [13 — Settings](13-settings.md): once you post entries, the legal name, state, financial year and GST registration are locked, and the country and base currency are fixed once the business has transactions.
+Onboarding runs straight after sign-up, and again whenever a signed-in user's setup isn't finished on the server.
+- It takes about two minutes. The progress line shows where you are (*Step 1 of 3 · Tax*).
+- What you type is kept on this device, so a refresh or a relaunch halfway through brings you back to the same answers. Nothing is created on the server until the last screen.
+- 🖥 On a desktop, a rail on the left (**Set up your business**, *Signed in as …*) lists the steps and ticks them off; you can click back to a finished step.
+- **Sign out** is at the top of every step.
 
-The steps are **Business → Country → Tax → Numbering → Branches**.
-- On a **sales plan** (Free, Smart Basic), **Country** and **Branches** are skipped. The app assumes India, INR, a financial year starting in April, and a single head office.
-- On a **full plan** (Smart Pro, Smart Business) you see all five steps.
+The steps are **Tax → Business → Numbering**, then the done screen. Every plan sees the same three steps.
+- **Country** isn't asked: the app is sold in India only for now, so every business starts with India, INR and a financial year starting in April. The year can be changed later in **Settings**.
+- **Branches** aren't asked: every new business starts on **Free**, which has one location, the head office. Add branches from **Settings › Branches** after upgrading (see [13 — Settings](13-settings.md)).
+
+Nearly everything can be changed later under **Settings**. The exceptions are listed in [13 — Settings](13-settings.md): once you post entries, the legal name, state, financial year and GST registration are locked.
 
 ---
 
-### 2.1 Step 1: Business
+### 2.1 Step 1: Tax
 
-**Goal:** The details that appear on every invoice and quote you send.
+**Goal:** Tell the app whether, and how, you are GST-registered. A GSTIN fills in the next step for you.
+
+**Steps**
+1. **Tax registration** (*You can change any of this later under Settings.*). Set **I'm registered for GST** (*Turn this off if you invoice without tax.*):
+   - **On:** you charge GST.
+   - **Off:** *Your invoices will be raised without a tax breakdown. You can register later without losing any history.*
+2. If registered, type the GSTIN in **GSTIN**. Spaces and dashes are dropped and letters made capital. *The first two digits set your home state for CGST/SGST vs IGST.*
+3. Once the GSTIN is valid, the app looks it up on the GST portal:
+   - *Fetching the registered details…*
+   - *Verified on the GST portal, and its details filled in*: the business name, legal name, address, state, city and PIN code are copied into the next step. You can still edit them.
+   - *… on the GST portal* (for example a cancelled registration), *The GST portal has no taxpayer with this GSTIN*, or *Couldn't reach the GST portal; fill the details in yourself*.
+4. Turn on **Composition scheme** if you file under it (*invoices will not show a tax breakdown*).
+5. Look at **Default tax slabs**: GST 0%, 5%, 12%, 18% and 28%. *These are created for you. Add or edit slabs any time in Settings → Taxes.*
+6. Tap **Continue**, or **Skip**.
+
+**Rules & gotchas**
+- The GSTIN is checked for shape and for its check digit:
+  - *GSTIN should look like 27AABCV1234F1ZO*
+  - *This GSTIN fails its check digit — look for a typo*
+- **Skip** with registration on but no valid GSTIN turns registration off, so nothing half-made is saved. You can register later.
+- Going back to Tax doesn't fill the business details again for the same GSTIN.
+
+---
+
+### 2.2 Step 2: Business
+
+**Goal:** The details that appear on every invoice and quote you send (*This appears on every invoice and quote you send.*).
 
 **Steps**
 1. **Add your logo (optional)**: a PNG or JPEG of up to 5 MB. Use **Change** or **Remove** to swap it.
 2. **Business name** (required), for example *Vertex Traders*.
 3. **Legal name**, *As registered (optional)*, for example *Vertex Traders Pvt Ltd*.
 4. **Business type**: Retail shop, Wholesale / Trading, Services, Freelancer / Professional, Distributor, Manufacturer, Restaurant / Café, or Other.
-5. **Plan**:
-   - **Buy & sell** (full plan): *Sales, purchases, stock and expenses, with GST compliance.*
-   - **Sell** (sales plan): *Sales with GST compliance. Upgrade any time for purchases and stock.*
-6. **Address**, **City**, **State** (required) and **PIN code**.
+5. **Plan** shows **Free**, with *Sales with GST compliance. Upgrade any time for purchases and stock.* You can't pick another plan here; upgrade later from **Plan & billing** ([14](14-team-roles-plans.md)).
+6. **Address**, **State** (required), **City** (required) and **PIN code**.
 7. **Business email** and **Business phone** (optional).
 8. Tap **Continue**.
 
 **Rules & gotchas**
 - **State** matters: *Used to decide CGST/SGST vs IGST on your invoices.*
 - The PIN code must match the state. Otherwise you see *PIN code 400001 is in Maharashtra, not Karnataka. Check the PIN code or the state.*
+- Logo messages: *That image is over 5 MB. Choose a smaller one.* and *Use a PNG or JPEG image.*
 
 ---
 
-### 2.2 Step 2: Country *(full plans only)*
+### 2.3 Step 3: Numbering
 
-**Goal:** Choose the tax rules, currency and financial year.
-
-**Steps**
-1. **Country**: India gives you the GST pack, which covers GSTIN validation, the CGST/SGST/IGST split, HSN/SAC codes, e-invoice and e-way bill.
-2. **Base currency**: *Every report is presented in this currency.* You can still raise individual documents in another currency.
-3. **Financial year starts**: April for India.
-
----
-
-### 2.3 Step 3: Tax
-
-**Goal:** Tell the app whether, and how, you are GST-registered.
-
-**Steps**
-1. Set **I'm registered for GST**:
-   - **On:** you charge GST.
-   - **Off:** you invoice without tax. *Your invoices will be raised without a tax breakdown. You can register later without losing any history.*
-2. If registered, enter the GSTIN in **Tax number**. *The first two digits set your home state for CGST/SGST vs IGST.*
-3. Turn on **Composition scheme** if you file under it. Invoices will then not show a tax breakdown.
-4. Review **Default tax slabs**. *These are created for you. Add or edit slabs any time in Settings → Taxes.*
-
-**Rules & gotchas**
-- The GSTIN is checked for shape and for its check digit. Possible messages:
-  - *GSTIN should look like 27AABCV1234F1ZO*
-  - *This GSTIN fails its check digit — look for a typo*
-
----
-
-### 2.4 Step 4: Numbering
-
-**Goal:** Choose how your invoices are numbered.
+**Goal:** Choose how your invoices are numbered (*Finalised numbers are never reused, so pick a format you're happy with.*).
 
 **Steps**
 1. Set the **Prefix** (default `INV`) and **Start from** (default `1`).
-2. Choose whether to **Include financial year**. When on, the year is added to every number (for example `INV/2026-27/0001`) and the sequence restarts each April.
-3. Check the preview, **Your next invoice will be …**, then tap **Continue**.
+2. Choose whether to **Include financial year** (*Adds 26-27 to every number and restarts the sequence each year.*).
+3. Check the preview, **Your next invoice will be** `INV/26-27/0001`, then tap **Continue** (or **Skip** to keep the defaults).
 
-**What happens:** Quotes, sales orders, delivery notes, returns, purchase orders, goods receipts, purchase bills, payments and expenses each get their own series with matching settings. That makes 11 series in all. You can tune each one later under **Settings › Document numbering** (see [13 — Settings](13-settings.md)).
+**What happens:** The prefix and start number apply to the **invoice** series. Every other document (quotes, proforma invoices, orders, delivery notes, returns, credit and debit notes, purchase documents, payments, receipts, expenses, journals, challans and so on) gets its own series with its own default prefix, for example `QT`, `BILL`, `PAY`, `EXP`, starting at 1 with a yearly restart, and with the financial year on or off as you chose here. Tune each one later under **Settings › Document numbering** ([13 — Settings](13-settings.md)).
 
 **Rules & gotchas**
-- *Finalised numbers are never reused, so pick a format you're happy with.*
-- If you will issue e-invoices, keep the whole number at **16 characters or fewer** (the portal's limit). `INV/2026-27/0001` is exactly 16.
+- The year is written short: `26-27` for April 2026 to March 2027.
+- If you will issue e-invoices, keep the whole number at **16 characters or fewer** (the portal's limit). `INV/26-27/0001` is 14.
+- Turning off the financial year here turns it off in every series, not only invoices (*Quotes, purchase bills, payments and expenses each get their own series and prefix, with the financial year set the same way.*).
 
 ---
 
-### 2.5 Step 5: Branches *(full plans only)*
+### 2.4 Done
 
-**Goal:** Add other shops or warehouses.
-
-**Steps**
-1. Your **Head office** is already there as the **Primary location** (*created automatically*).
-2. To add another, tap **Add branch** and enter a **Branch name** (for example *Pune warehouse*), a **Code** (for example `PUN`) and the **City**.
-3. Tap **Finish setup**. You can skip this step entirely.
-
----
-
-### 2.6 Done
-
-**{Business} is ready.** *Tax slabs, numbering and your first location are all set up.*
+**{Business} is ready.** *Tax slabs, numbering and your first location are all set up.* Below are three tips: **Add your customers**, **Add products or services**, **Raise your first invoice**.
 
 Choose one:
-- **Create my first invoice**: opens a new invoice (see [05 — Sales](05-sales.md)).
-- **Go to dashboard**: opens Home, which shows a three-step *First steps* checklist: add a customer, add a product or service, create your first invoice.
+- **Create my first invoice**: creates the business and opens a new invoice (see [05 — Sales](05-sales.md)).
+- **Go to dashboard**: creates the business and opens **Home**, with its setup checklist ([04](04-home-dashboard.md#46-first-steps-for-a-new-business)).
 
-**What onboarding created for you**
-- The business, and its primary branch.
-- The 11 numbering series.
-- Default GST rates.
+You see *Your business is ready*.
+
+**What onboarding creates for you**
+- The business on the **Free** plan, and one branch, **Head office** (code `HO`), at the business address.
+- A numbering series for every document type (23 in all).
+- The GST tax slabs (or *No tax* if not registered).
 - Default expense categories.
-- A default payment account.
+- A **Cash** payment account, set as the default.
+- E-invoice and e-way bill settings with their defaults, and backup settings.
+
+**Rules & gotchas**
+- The business is created only when you tap one of the two buttons, and only once, however many times you tap.
+- It needs a connection. Without one the save fails with a message and you stay on the done screen; nothing half-made is left behind. Try again once you are online.
+- If the logo upload fails, the business is still created; add the logo again from **Business profile**.
+- After this screen the on-device draft is cleared.
 
 ---
 
@@ -111,14 +109,15 @@ Choose one:
 
 | Field | Value |
 |---|---|
-| Business name / Legal name | Vertex Traders / Vertex Traders Pvt Ltd |
-| Business type | Wholesale / Trading |
-| Plan | Buy & sell |
-| State / PIN | Maharashtra / 400050 |
 | GSTIN | `27AABCV1234F1ZO` (27 = Maharashtra, so sales to Karnataka take IGST) |
-| Numbering | `INV`, start 1, include financial year → `INV/2026-27/0001` |
-| Branches | Head office (MUM) and Pune — Warehouse (PUN) |
+| Business name / Legal name | Vertex Traders / Vertex Traders Pvt Ltd (filled from the GSTIN, then checked) |
+| Business type | Wholesale / Trading |
+| State / PIN | Maharashtra / 400050 |
+| Numbering | `INV`, start 1, include financial year → `INV/26-27/0001` |
+| After upgrading to Pro | Add Pune — Warehouse (`PUN`) under **Settings › Branches** |
 
 ### Not available yet
 
-- **Adding a second business from inside the app.** The app has no "add business" button; extra businesses come from onboarding on a new account or are set up on the server. Switching between businesses you already have works (see [03 — Finding your way around](03-navigation.md)).
+- **Choosing a paid plan during onboarding.** Every business starts on Free; upgrade afterwards.
+- **A country other than India**, and **branches during onboarding** (see above).
+- **Adding a second business from inside the app.** There is no "add business" button; extra businesses come from onboarding on a new account or are set up on the server. Switching between businesses you already have works ([03](03-navigation.md)).

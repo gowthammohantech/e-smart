@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { formatMoney } from '@esmart/core/lib/format';
 import { LIXI_DEFAULT_MODELS, isOpenRouter, lixiModels, type Config } from '../config';
+import { estimateCostUsd } from './modelPrices';
 
 /**
  * The model behind Lixi. The provider only talks to the model; which tools
@@ -17,7 +18,7 @@ export type ToolOutcome = { ok: true; value: unknown } | { ok: false; error: { s
 
 export type AssistantAction = { type: 'route' | 'ask' | 'document'; label: string; value: string; documentKind: string };
 export type AssistantStat = { label: string; value: string };
-/** What a reply cost, summed over every model call it took. `costUsd` is null when the server doesn't say. */
+/** What a reply cost, summed over every model call it took: the server's figure, else estimated from list prices (modelPrices); null for a model neither covers. */
 export type AssistantUsage = { model: string; inputTokens: number; outputTokens: number; costUsd: number | null };
 export type AssistantReply = { text: string; stats: AssistantStat[]; actions: AssistantAction[]; usage?: AssistantUsage };
 
@@ -216,7 +217,10 @@ export class AnthropicAssistant implements AssistantProvider {
         tool_choice: last ? { type: 'none' } : { type: 'auto' },
         messages,
       });
-      usage.add(response.model, response.usage.input_tokens + (response.usage.cache_read_input_tokens ?? 0) + (response.usage.cache_creation_input_tokens ?? 0), response.usage.output_tokens, null);
+      const u = response.usage;
+      // Anthropic doesn't send a price: estimated from its list prices (modelPrices), cache reads and writes at theirs.
+      const cost = estimateCostUsd(response.model, { input: u.input_tokens, output: u.output_tokens, cacheRead: u.cache_read_input_tokens ?? 0, cacheWrite: u.cache_creation_input_tokens ?? 0 });
+      usage.add(response.model, u.input_tokens + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0), u.output_tokens, cost);
 
       if (response.stop_reason === 'refusal') return usage.on({ text: "I can't help with that one.", stats: [], actions: [] });
       if (response.stop_reason === 'pause_turn') {
@@ -259,8 +263,8 @@ type OaiMessage =
   | { role: 'assistant'; content: string | null; tool_calls?: OaiToolCall[] }
   | { role: 'tool'; tool_call_id: string; content: string };
 type OaiChoice = { finish_reason: string | null; message: { content?: string | null; refusal?: string | null; tool_calls?: OaiToolCall[] } };
-/** `cost` is OpenRouter's, in US dollars; other servers leave it out. */
-type OaiUsage = { prompt_tokens?: number; completion_tokens?: number; cost?: number };
+/** `cost` is OpenRouter's, in US dollars; other servers leave it out. `cached_tokens` are part of `prompt_tokens`. */
+type OaiUsage = { prompt_tokens?: number; completion_tokens?: number; cost?: number; prompt_tokens_details?: { cached_tokens?: number } };
 type OaiCompletion = { model?: string; choices?: OaiChoice[]; usage?: OaiUsage };
 
 const BUILT_IN_MODELS = new Set<string>(Object.values(LIXI_DEFAULT_MODELS));
@@ -343,7 +347,13 @@ export class OpenAICompatibleAssistant implements AssistantProvider {
         }
       }
       const { choice, model, usage: used } = answer;
-      if (used) usage.add(model, used.prompt_tokens ?? 0, used.completion_tokens ?? 0, typeof used.cost === 'number' ? used.cost : null);
+      if (used) {
+        // OpenRouter says what it cost; OpenAI direct doesn't, so a model in the price table is estimated.
+        const cached = used.prompt_tokens_details?.cached_tokens ?? 0;
+        const prompt = used.prompt_tokens ?? 0;
+        const cost = typeof used.cost === 'number' ? used.cost : estimateCostUsd(model, { input: Math.max(0, prompt - cached), output: used.completion_tokens ?? 0, cacheRead: cached });
+        usage.add(model, prompt, used.completion_tokens ?? 0, cost);
+      }
       const { message } = choice;
 
       if (message.refusal) return usage.on({ text: "I can't help with that one.", stats: [], actions: [] });

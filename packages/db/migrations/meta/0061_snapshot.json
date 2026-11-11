@@ -1,5 +1,5 @@
 {
-  "id": "a926884e-c640-4b81-804c-7abcc74a1c98",
+  "id": "d1f2d9d1-1554-45de-8b7b-5b7fdd5db14e",
   "prevId": "ffb3c255-1789-43a3-be75-065199026fd4",
   "version": "7",
   "dialect": "postgresql",
@@ -933,6 +933,21 @@
         }
       },
       "indexes": {
+        "bank_statements_company_id_idx": {
+          "name": "bank_statements_company_id_idx",
+          "columns": [
+            {
+              "expression": "company_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "bank_statements_account_id_to_date_idx": {
           "name": "bank_statements_account_id_to_date_idx",
           "columns": [
@@ -2346,6 +2361,21 @@
         }
       },
       "indexes": {
+        "compliance_attempts_company_id_idx": {
+          "name": "compliance_attempts_company_id_idx",
+          "columns": [
+            {
+              "expression": "company_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "compliance_attempts_pending_idx": {
           "name": "compliance_attempts_pending_idx",
           "columns": [
@@ -2930,6 +2960,21 @@
         }
       },
       "indexes": {
+        "credit_applications_company_id_idx": {
+          "name": "credit_applications_company_id_idx",
+          "columns": [
+            {
+              "expression": "company_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "credit_applications_note_id_document_id_idx": {
           "name": "credit_applications_note_id_document_id_idx",
           "columns": [
@@ -3629,7 +3674,23 @@
           "notNull": true
         }
       },
-      "indexes": {},
+      "indexes": {
+        "document_tax_components_tax_line_id_idx": {
+          "name": "document_tax_components_tax_line_id_idx",
+          "columns": [
+            {
+              "expression": "tax_line_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "document_tax_components_tax_line_id_fkey": {
           "name": "document_tax_components_tax_line_id_fkey",
@@ -9052,7 +9113,23 @@
           "notNull": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "ocr_lines_extraction_id_idx": {
+          "name": "ocr_lines_extraction_id_idx",
+          "columns": [
+            {
+              "expression": "extraction_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "ocr_lines_extraction_id_fkey": {
           "name": "ocr_lines_extraction_id_fkey",
@@ -9681,36 +9758,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "account_holder_name": {
-          "name": "account_holder_name",
-          "type": "varchar(100)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "bank_name": {
-          "name": "bank_name",
-          "type": "varchar(100)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "branch_name": {
-          "name": "branch_name",
-          "type": "varchar(100)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "ifsc": {
-          "name": "ifsc",
-          "type": "varchar(11)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "upi_id": {
-          "name": "upi_id",
-          "type": "varchar(100)",
-          "primaryKey": false,
-          "notNull": false
-        },
         "opening_balance_minor": {
           "name": "opening_balance_minor",
           "type": "bigint",
@@ -10038,7 +10085,23 @@
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "payment_links_company_id_idx": {
+          "name": "payment_links_company_id_idx",
+          "columns": [
+            {
+              "expression": "company_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "payment_links_company_id_fkey": {
           "name": "payment_links_company_id_fkey",
@@ -11138,7 +11201,23 @@
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "share_links_company_id_idx": {
+          "name": "share_links_company_id_idx",
+          "columns": [
+            {
+              "expression": "company_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "share_links_company_id_fkey": {
           "name": "share_links_company_id_fkey",
@@ -11567,7 +11646,23 @@
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "subscription_events_company_id_idx": {
+          "name": "subscription_events_company_id_idx",
+          "columns": [
+            {
+              "expression": "company_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "subscription_events_company_id_fkey": {
           "name": "subscription_events_company_id_fkey",
@@ -12302,7 +12397,23 @@
           "notNull": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "user_companies_company_id_idx": {
+          "name": "user_companies_company_id_idx",
+          "columns": [
+            {
+              "expression": "company_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "user_companies_user_id_fkey": {
           "name": "user_companies_user_id_fkey",

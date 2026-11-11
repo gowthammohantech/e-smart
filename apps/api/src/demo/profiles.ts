@@ -36,6 +36,8 @@ export type ItemSpec = {
   rawMaterial?: boolean;
   capitalGoods?: boolean;
   exempt?: boolean;
+  /** Compensation cess rate on top of GST (aerated drinks, tobacco, motor cars). */
+  cess?: number;
 };
 
 export type PartySpec = {
@@ -196,7 +198,7 @@ export const PROFILES: Profile[] = [
       { sku: 'PC-SHMP-340', name: 'Herbal shampoo 340 ml', unit: 'PCS', sale: 245, purchase: 186, gst: 18, hsn: '330510', stock: 12, reorder: 30, category: 'Personal care', brand: 'Dabur' },
       { sku: 'PC-HONEY-500', name: 'Honey 500 g', unit: 'PCS', sale: 230, purchase: 172, gst: 5, hsn: '040900', stock: 90, reorder: 25, category: 'Groceries', brand: 'Dabur' },
       { sku: 'HH-DET-1', name: 'Detergent powder 1 kg', unit: 'PCS', sale: 140, purchase: 108, gst: 18, hsn: '340220', stock: 260, reorder: 60, category: 'Household', brand: 'Surf Excel' },
-      { sku: 'BV-COLA-2', name: 'Cola 2 L', unit: 'PCS', sale: 95, purchase: 70, gst: 28, hsn: '220210', stock: 140, reorder: 40, category: 'Beverages' },
+      { sku: 'BV-COLA-2', name: 'Cola 2 L', unit: 'PCS', sale: 95, purchase: 70, gst: 28, cess: 12, hsn: '220210', stock: 140, reorder: 40, category: 'Beverages' },
       { sku: 'GR-RICE-25', name: 'Ponni rice 25 kg', unit: 'PCS', sale: 1450, purchase: 1240, gst: 5, hsn: '100630', stock: 6, reorder: 15, category: 'Groceries' },
     ],
     customers: [

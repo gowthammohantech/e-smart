@@ -4,6 +4,7 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { CallToolRequestSchema, ListToolsRequestSchema, type CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { authenticate, companyFor } from '../auth/guards';
 import type { Deps } from '../context';
+import { withCompanies } from '../lib/dbScope';
 import { confirm, propose } from './confirm';
 import { jsonSchemaOf, runRead, TOOLS, ToolError, toolByName, type ToolCtx } from './tools';
 
@@ -103,7 +104,8 @@ export function registerMcp(app: FastifyInstance, deps: Deps) {
       void server.close();
     });
     await server.connect(transport);
-    await transport.handleRequest(req.raw, reply.raw, req.body);
+    // Row-level security: the tools see this business only (docs/database/rls.md).
+    await withCompanies([company.id], () => transport.handleRequest(req.raw, reply.raw, req.body));
   });
 
   // Stateless: there is no session to stream from or to end.

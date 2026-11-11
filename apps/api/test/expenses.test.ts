@@ -254,6 +254,23 @@ describe('expenses', () => {
     expect(orphans.every((o) => o.recurringParentId === null)).toBe(true);
   });
 
+  it('carries the bill-to customer, cost centre and vehicle over to each occurrence', async () => {
+    const m = await funded();
+    const [cat] = await categories(m);
+    const site = await t.post(`${m.c}/cost-centres`, { name: 'Thane site' }, { token: m.token });
+    const van = await t.post(`${m.c}/vehicles`, { registration: 'TN09AB1234', name: 'Delivery van' }, { token: m.token });
+    const tpl = await t.post(
+      `${m.c}/expenses`,
+      expense(m, cat.id, { date: '2026-08-31', recurrence: 'monthly', billable: true, customerId: m.mumbai.id, costCentreId: site.body.id, vehicleId: van.body.id }),
+      { token: m.token },
+    );
+    expect(tpl.status).toBe(201);
+    expect((await materializeRecurringExpenses(t.deps, '2026-09-30')).created).toHaveLength(1);
+    const E = schema.expenses;
+    const [occ] = await t.deps.db.select().from(E).where(eq(E.recurringParentId, tpl.body.id));
+    expect(occ).toMatchObject({ date: '2026-09-30', billable: true, customerId: m.mumbai.id, costCentreId: site.body.id, vehicleId: van.body.id, recurrence: 'none', version: 1 });
+  });
+
   it('refuses an expense the account can\'t pay, as payments are refused (RULES 6.26)', async () => {
     const m = await moneySetup(t);
     const [cat] = await categories(m);

@@ -196,6 +196,18 @@ describe('catalog', () => {
     expect(res.status).toBe(403);
     expect(res.body.code).toBe('ROLE_FORBIDDEN');
   });
+
+  it('keeps viewers and sales from changing an item image', async () => {
+    const { token, c, item, user } = await setup();
+    const created = await t.post(`${c}/items`, item(), { token });
+    const png = multipart('photo.png', 'image/png', Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex'));
+    for (const role of ['viewer', 'sales'] as const) {
+      await t.deps.db.update(schema.users).set({ role }).where(eq(schema.users.id, user.id!));
+      const res = await t.put(`${c}/items/${created.body.id}/image`, png.body, { token, headers: png.headers });
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe('ROLE_FORBIDDEN');
+    }
+  });
 });
 
 describe('items import', () => {

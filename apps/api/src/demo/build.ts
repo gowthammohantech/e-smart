@@ -250,7 +250,7 @@ export async function buildBusiness(api: DemoApi, p: Profile, ctx: BuildContext)
         hsnCode: s.hsn,
         trackInventory: goods && !s.capitalGoods,
         ...(goods && !s.capitalGoods && { openingStock: s.stock ?? 0, openingStockDate: opened, reorderLevel: s.reorder ?? 0 }),
-        ...((s.exempt || s.capitalGoods) && { gst: { ...(s.exempt && { supplyType: 'exempt' }), ...(s.capitalGoods && { capitalGoods: true }) } }),
+        ...((s.exempt || s.capitalGoods || (s.cess && p.registered)) && { gst: { ...(s.exempt && { supplyType: 'exempt' }), ...(s.capitalGoods && { capitalGoods: true }), ...(s.cess && p.registered && { cessRate: s.cess }) } }),
         ...(s.category && { categoryId: catIds.get(s.category) ?? null }),
         ...(s.brand && { brandId: brandIds.get(s.brand) ?? null }),
         customFields: goods && !s.rawMaterial ? { [warrantyField]: r.pick([6, 12, 24]) } : {},
@@ -949,8 +949,7 @@ export async function buildBusiness(api: DemoApi, p: Profile, ctx: BuildContext)
       await api.put(`${c}/compliance-settings`, { eInvoiceEnabled: !!p.traits.einvoice, annualTurnover: inr(72000000), ewayBillEnabled: !!p.traits.eway, ...(transporter && { defaultTransporterId: transporter.gstin, defaultTransporterName: transporter.name }), defaultDistanceKm: 180 });
       await api.put(`${c}/compliance-settings/credentials`, { portal: 'both', username: `${p.key}_api`, password: 'sandbox-pass-1' });
       const recent = invoices.filter((d) => d.date >= day(20) && d.currency === 'INR');
-      // TCS invoices are left out: the IRP schema carries TCS as other charges, which the app's check doesn't count yet.
-      const b2bInv = recent.filter((d) => b2b.some((x) => x.id === d.partyId && !x.spec.tcs));
+      const b2bInv = recent.filter((d) => b2b.some((x) => x.id === d.partyId));
       if (p.traits.einvoice) {
         for (const d of b2bInv.slice(0, 3)) await api.post(`${c}/documents/${d.id}/e-invoice`).catch((e) => ctx.log(`e-invoice skipped: ${String(e).slice(0, 700)}`));
         if (b2bInv[2]) await api.post(`${c}/documents/${b2bInv[2].id}/e-invoice/cancel`, { reasonCode: 2, remark: 'Data entry mistake' }).catch(() => undefined);

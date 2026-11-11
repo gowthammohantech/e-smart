@@ -936,7 +936,7 @@ export async function seedDemoFromEnv(db: Db, { reset = false, env = process.env
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const url = process.env.DATABASE_URL ?? 'postgres://esmart:esmart@localhost:5432/esmart';
+  const url = process.env.MIGRATION_DATABASE_URL || process.env.DATABASE_URL || 'postgres://esmart:esmart@localhost:5432/esmart';
   const pool = createPool(url, 1);
   try {
     console.log(await seedDemoFromEnv(createDb(pool), { reset: process.argv.includes('--reset') }));

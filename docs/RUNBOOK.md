@@ -64,12 +64,16 @@ There are two copies:
    - A separate bucket, with credentials the API can't use to delete, is safer than the same bucket. Until then the dumps share the uploads bucket.
 
 ### Restoring to a point in time
-- Use Railway, in the database's Backups tab: restore it into a **new** database, check it, then point `DATABASE_URL` at it.
+- Use Railway, in the database's Backups tab: restore it into a **new** database, check it, run `db:roles` against it, then point `MIGRATION_DATABASE_URL`, `DATABASE_URL` (as `esmart_app`) and `SYSTEM_DATABASE_URL` (as `esmart_system`) at it.
 - Never restore over the live database.
 
 ### Restoring a dump into staging
 ```bash
 pg_restore --clean --if-exists --no-owner --no-privileges -d "$STAGING_DATABASE_URL" 2026-11-03.dump
+```
+Then grant the app's roles access again, because `--no-privileges` leaves the grants out (docs/database/rls.md):
+```bash
+MIGRATION_DATABASE_URL="$STAGING_DATABASE_URL" npm run db:roles -w @esmart/db
 ```
 
 ### The restore drill (quarterly)

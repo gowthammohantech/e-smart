@@ -23,7 +23,7 @@ import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { Avatar } from '@esmart/ui/components/Avatar';
 
 import { Address, DocStatus, DocumentKind, DocumentLine, NoteReason, Party } from '@esmart/core/types';
-import { NOTE_KINDS, PURCHASE_KINDS, isFinalized } from '@esmart/core/domain/documentStates';
+import { NOTE_KINDS, PURCHASE_KINDS, isAwaitingApproval, isFinalized } from '@esmart/core/domain/documentStates';
 import { TDS_SECTIONS, tdsSection } from '@esmart/core/data/tdsSections';
 import { TCS_SECTIONS, partyTcsSection, tcsRateFor, tcsSection } from '@esmart/core/data/tcsSections';
 import { documentKindLabel } from '@esmart/core/labels';
@@ -81,6 +81,7 @@ import { useLeaveGuard } from '../../components/useLeaveGuard';
 import { FROM_DOCUMENT, takeHandBack } from '../../navigation/handBack';
 import { tdsForDocument } from '../../store/tds';
 import { useItcBreakup } from './itcBreakup';
+import { lineRateLabel } from './lineRate';
 import { useCessRows } from './cessRows';
 import { expectedSaleTds } from '@esmart/core/domain/tds';
 import { panOfGstin } from '@esmart/core/domain/gstin';
@@ -734,22 +735,28 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       return;
     }
     const id = res.id ?? res.result;
+    // Over an approval rule's amount the server keeps it a draft for an owner or admin: it isn't finalised yet.
+    const saved = useAppStore.getState().documents.find((d) => d.id === id);
+    const held = finalize && !!saved && isAwaitingApproval(saved);
+    const issued = finalize && !held;
     // An issued invoice can still be put right while it is the latest (RULES 6.23), so the toast offers
     // that; an issued bill is usually paid next, so its toast offers that.
-    const issuedInvoice = kind === 'invoice' && (finalize || editingIssued);
+    const issuedInvoice = kind === 'invoice' && (issued || editingIssued);
     toast.show(
       editingIssued
         ? tr('common:documentEditor.updatedIssued', { kind: kindName })
-        : finalize
-          ? tr('common:documentEditor.finalised', { kind: kindName })
-          : tr('common:documentEditor.savedDraft'),
-      'success',
+        : held
+          ? tr('common:documentEditor.sentForApproval', { kind: kindName })
+          : finalize
+            ? tr('common:documentEditor.finalised', { kind: kindName })
+            : tr('common:documentEditor.savedDraft'),
+      held ? 'info' : 'success',
       {
-        icon: finalize || editingIssued ? 'file-check-outline' : 'content-save-outline',
+        icon: held ? 'clipboard-clock-outline' : finalize || editingIssued ? 'file-check-outline' : 'content-save-outline',
         detail: [party?.name, formatMoney(totals.grandTotal)].filter(Boolean).join(' · '),
         action: issuedInvoice
           ? { label: tr('common:toast.editInvoice'), onPress: () => router.push(`${detailRouteFor(kind, id)}/edit` as never) }
-          : finalize && kind === 'purchaseBill'
+          : issued && kind === 'purchaseBill'
             ? {
                 label: tr('common:toast.paySupplier'),
                 onPress: () => router.push(`/(app)/payments/new?direction=paid&partyId=${draft.partyId}&documentId=${id}` as never),
@@ -761,7 +768,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
     await leaveGuard.release();
     if (onSaved) onSaved(id);
     // Sent from the detail screen, the same way its own Send by email does it.
-    else router.replace(`${detailRouteFor(kind, id)}${finalize && sendAfter ? '?send=email' : ''}` as never);
+    // A held draft isn't sent: it goes out once it is approved and issued.
+    else router.replace(`${detailRouteFor(kind, id)}${issued && sendAfter ? '?send=email' : ''}` as never);
   };
 
   const finalizeLocal = (id: string) => {
@@ -1250,7 +1258,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
                       {line.name || tr('sales:editor.untitledLine')}
                     </Text>
                     <View style={{ flexDirection: 'row', gap: 5 }}>
-                      <Badge label={formatPercent(line.taxRate)} tone="neutral" size="sm" />
+                      <Badge label={lineRateLabel(line)} tone="neutral" size="sm" />
                       {line.taxInclusive ? <Badge label={tr('sales:editor.inclusive')} tone="info" size="sm" /> : null}
                       {line.hsnCode ? <Badge label={`HSN ${line.hsnCode}`} tone="neutral" size="sm" /> : null}
                     </View>
@@ -1876,7 +1884,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
                   value: l.id,
                   label: l.name,
                   description: `${formatQty(l.quantity)} ${unitShortName(l.unit)} × ${formatMoney(l.unitPrice)}`,
-                  trailing: formatPercent(l.taxRate),
+                  trailing: lineRateLabel(l),
                 }))
               : itemOptions.map((i) => ({
                   value: i.id,

@@ -1254,3 +1254,51 @@ describe('e-invoice with charges taxed with the lines (RULES 1.10)', () => {
     expect(p.ValDtls.OthChrg).toBe(200);
   });
 });
+
+describe('e-invoice for an invoice that collects TCS (s.206C)', () => {
+  const lines = [line({ id: 'a' })];
+  const withTcs = (chargesMajor: string, applyRoundOff = false) => {
+    const charges = fromMajor(chargesMajor, 'INR');
+    const totals = calculateDocument({
+      lines, currency: 'INR', baseCurrency: 'INR', exchangeRate: 1, documentDiscountMode: 'percent', documentDiscountValue: 0, charges,
+      applyRoundOff, taxCategories: [], taxContext: { regime: 'GST', registered: true, homeStateCode: '27', placeOfSupplyStateCode: '29' },
+      date: '2026-09-15', tcsRate: 1,
+    });
+    return invoice({ date: '2026-09-15', lines, charges, totals });
+  };
+  const reconciles = (p: ReturnType<typeof buildIrpPayload>) => {
+    const v = p.ValDtls;
+    expect(v.AssVal + v.CgstVal + v.SgstVal + v.IgstVal + v.CesVal + v.OthChrg - v.Discount + v.RndOffAmt).toBeCloseTo(v.TotInvVal, 2);
+  };
+
+  it('passes the total check and sends the TCS as other charges', () => {
+    const doc = withTcs('0');
+    expect(doc.totals.tcs?.minor).toBeGreaterThan(0);
+    expect(validateEInvoice(ctx({ document: doc })).filter((i) => i.code === '2182')).toEqual([]);
+    const p = buildIrpPayload(ctx({ document: doc }));
+    expect(p.ValDtls.OthChrg).toBe(doc.totals.tcs!.minor / 100);
+    reconciles(p);
+  });
+
+  it('adds the TCS to the other charges already on the invoice', () => {
+    const doc = withTcs('250', true);
+    expect(validateEInvoice(ctx({ document: doc })).filter((i) => i.code === '2182')).toEqual([]);
+    const p = buildIrpPayload(ctx({ document: doc }));
+    expect(p.ValDtls.OthChrg).toBe(250 + doc.totals.tcs!.minor / 100);
+    reconciles(p);
+  });
+});
+
+describe('e-invoice and notes without GST (RULES 6.24)', () => {
+  it('does not offer an IRN for a financial credit or debit note to a registered buyer', () => {
+    (['creditNote', 'debitNote'] as const).forEach((kind) => {
+      const result = isEInvoiceApplicable(ctx({ document: invoice({ kind, noteGst: 'noGst' }) }));
+      expect(result.applicable).toBe(false);
+      expect(result.reason).toMatch(/without GST/i);
+    });
+  });
+
+  it('still reports a note with GST', () => {
+    expect(isEInvoiceApplicable(ctx({ document: invoice({ kind: 'creditNote', noteGst: 'withGst' }) })).docType).toBe('CRN');
+  });
+});
