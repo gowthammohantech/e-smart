@@ -605,6 +605,7 @@ function rollUp(pages: MenuPage[], badges: ReturnType<typeof useMenuBadges>): Ba
 export function Sidebar() {
   const t = useTheme();
   const { t: tr } = useTranslation(['nav', 'reports']);
+  const router = useRouter();
   const pathname = usePathname();
   const plan = usePlan();
   const disabled = useDisabledModules();
@@ -738,6 +739,10 @@ export function Sidebar() {
                             setTip(null);
                             if (!compact) {
                               setDropped({ tab: open ? null : tab.name, at: current });
+                              // Opening a section also goes to its overview (not when the plan can't open it, or
+                              // you're on it); closing one only folds its list.
+                              const hub = tabPath(tab.name);
+                              if (!open && pathname !== hub && canOpen(plan, hub, disabled)) leaveGuarded(() => router.navigate(appHref(hub) as never));
                               return;
                             }
                             setPanel(
