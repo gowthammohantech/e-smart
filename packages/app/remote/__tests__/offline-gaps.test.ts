@@ -152,13 +152,4 @@ describe('entries that depend on each other', () => {
     expect(actions().convertDocument(order(inv.lines[0], '2026-09-21'), 'invoice', undefined, [order(inv.lines[1], '2026-09-22')])).toBe('');
   });
 
-  it('B2: keeps the chosen numbering when a pending company is edited', () => {
-    const companyId = actions().createCompany({ ...actions().companies[0], name: 'New Co' } as never);
-    const series = actions().numberingSeries.find((s) => s.companyId === companyId && s.kind === 'invoice')!;
-    actions().saveNumberingSeries({ ...series, prefix: 'NC', nextNumber: 101 });
-    const company = actions().companies.find((c) => c.id === companyId)!;
-    actions().saveCompany({ ...company, name: 'Newer Co' });
-    expect(queue()[0].body).toMatchObject({ name: 'Newer Co', numberingSeries: [{ kind: 'invoice', prefix: 'NC' }] });
-  });
-
 });

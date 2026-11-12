@@ -50,10 +50,9 @@ import { Money, zero } from '@esmart/core/lib/money';
 import { nowISO, today } from '@esmart/core/lib/date';
 import { uid } from '@esmart/core/lib/id';
 import { calculateDocument } from '@esmart/core/domain/lineCalc';
-import { DEFAULT_PREFIXES, SERIES_KINDS, formatNumber } from '@esmart/core/domain/numbering';
+import { formatNumber } from '@esmart/core/domain/numbering';
 import { CREDIT_KINDS, PURCHASE_KINDS, canMerge, conversionBlock, initialStatus, isFinalized, isPayableDocument } from '@esmart/core/domain/documentStates';
 import { documentAuditSnapshot } from '@esmart/core/domain/auditDiff';
-import { expenseCategories as defaultExpenseCategories } from '@esmart/core/data/masters';
 import { allocateAdvances, creditedTo, settledBy, statusForOutstanding } from '@esmart/core/domain/receivables';
 import { expectedTdsForDocument, tdsForDocument } from './tds';
 import { accountFitsMethod, bankDetailsOf } from '@esmart/core/domain/paymentAccounts';
@@ -171,7 +170,6 @@ type Actions = {
   forgetCompany: (companyId: string) => void;
   saveCompany: (company: Company) => void;
   setPlan: (companyId: string, plan: PlanTier) => void;
-  createCompany: (partial: Omit<Company, 'id' | 'accountId' | 'createdAt'>) => string;
   saveBranch: (branch: Branch) => void;
   removeBranch: (id: string) => void;
   saveUser: (user: User) => void;
@@ -330,11 +328,6 @@ export type ExtendEwayBillInput = {
 };
 
 const emptySession: Session = { userId: null, authenticated: false, onboardingComplete: false };
-
-/** Default expense categories for a new company, with ids unique to it. */
-function starterExpenseCategories(companyId: string): ExpenseCategory[] {
-  return defaultExpenseCategories(companyId).map((c) => ({ ...c, id: uid('exc') }));
-}
 
 /**
  * The books as the server last sent them, in memory only: nothing is kept on the device. Signing in
@@ -595,61 +588,6 @@ export const useAppStore = create<AppState>()(
           if (!company || company.plan === plan) return;
           set({ companies: get().companies.map((c) => (c.id === companyId ? { ...c, plan } : c)) });
           audit('updated', 'company', companyId, `Plan changed to ${plan}`);
-        },
-        createCompany: (partial) => {
-          const id = uid('cmp');
-          const company: Company = { ...partial, id, accountId: get().accountId, createdAt: nowISO() };
-          const branch: Branch = {
-            id: uid('brn'),
-            companyId: id,
-            name: 'Head office',
-            code: 'HO',
-            address: partial.address,
-            gstin: partial.taxRegistration?.registered ? partial.taxRegistration.identifier : undefined,
-            isPrimary: true,
-          };
-          const kinds = SERIES_KINDS;
-          const prefixes = DEFAULT_PREFIXES;
-          const series: NumberingSeries[] = kinds.map((kind) => ({
-            id: uid('series'),
-            companyId: id,
-            kind,
-            prefix: prefixes[kind],
-            nextNumber: 1,
-            padding: 4,
-            includeFiscalYear: true,
-            includeBranchCode: false,
-            resetPolicy: 'yearly',
-          }));
-          const taxes: TaxCategory[] = [0, 5, 12, 18, 28].map((rate) => ({
-            id: uid('tax'),
-            companyId: id,
-            name: rate === 0 ? 'GST 0% (Exempt)' : `GST ${rate}%`,
-            rate,
-            type: 'GST',
-            // In force since GST began, as the server sets them up: back-dated documents can use them.
-            effectiveFrom: '2017-07-01',
-          }));
-          const account: PaymentAccount = {
-            id: uid('acc'),
-            companyId: id,
-            name: 'Cash in hand',
-            type: 'cash',
-            currency: partial.baseCurrency,
-            openingBalance: zero(partial.baseCurrency),
-            isDefault: true,
-          };
-          set({
-            companies: [...get().companies, company],
-            branches: [...get().branches, branch],
-            numberingSeries: [...get().numberingSeries, ...series],
-            taxCategories: [...get().taxCategories, ...taxes],
-            paymentAccounts: [...get().paymentAccounts, account],
-            expenseCategories: [...get().expenseCategories, ...starterExpenseCategories(id)],
-            activeCompanyId: id,
-            activeBranchId: branch.id,
-          });
-          return id;
         },
         saveBranch: (branch) => {
           const exists = get().branches.some((b) => b.id === branch.id);
