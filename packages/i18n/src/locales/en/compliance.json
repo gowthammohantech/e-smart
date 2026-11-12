@@ -229,7 +229,26 @@
       "cancelled": "Cancelled",
       "net": "Net",
       "cess": "Cess",
-      "original": "Original"
+      "original": "Original",
+      "section": "Particulars",
+      "tables": "Table",
+      "records": "Records",
+      "totalTax": "Total tax"
+    },
+    "summary": "Summary",
+    "summaryHint": "Open a section to see what it holds.",
+    "section": {
+      "b2b": "B2B invoices",
+      "b2cl": "B2C (large) invoices",
+      "b2cs": "B2C (small) invoices",
+      "exp": "Export invoices",
+      "cdnr": "Credit / debit notes (registered)",
+      "cdnur": "Credit / debit notes (unregistered)",
+      "nil": "Nil rated, exempt and non-GST",
+      "at": "Advances received and adjusted",
+      "hsn": "HSN-wise summary",
+      "docs": "Documents issued",
+      "amend": "Amendments"
     },
     "rateSummary": "Rate-wise summary",
     "rateSummaryNote": "Every rate across B2B, B2CL, B2CS, EXP, CDNR and CDNUR, net of credit notes.",
