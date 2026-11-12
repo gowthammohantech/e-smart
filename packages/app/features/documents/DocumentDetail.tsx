@@ -28,7 +28,7 @@ import { useCessRows } from './cessRows';
 
 import { BusinessDocument, DocStatus, DocumentKind } from '@esmart/core/types';
 import { tdsSection } from '@esmart/core/data/tdsSections';
-import { NOTE_SOURCE, RECEIVABLE_KINDS, STATUS_TONE, canCancelDocument, conversionBlock, isAwaitingApproval, isFinalized, isPayableDocument, nextStatuses } from '@esmart/core/domain/documentStates';
+import { NOTE_SOURCE, RECEIVABLE_KINDS, STATUS_TONE, canCancelDocument, canMerge, conversionBlock, isAwaitingApproval, isFinalized, isPayableDocument, nextStatuses } from '@esmart/core/domain/documentStates';
 import { documentKindLabel, paymentMethodLabel, statusLabel } from '@esmart/core/labels';
 import { outstandingOf } from '@esmart/core/domain/receivables';
 import { OUTBOUND_KINDS, shortfallsAgainst } from '@esmart/core/domain/stockLedger';
@@ -51,7 +51,7 @@ import {
   useParty,
   usePayments,
 } from '../../store/selectors';
-import { queryClient, useDocumentRecord, useEwayBillRecord, usePartyRecord, useStockAvailable, useStockMovedBy } from '../../remote/queries';
+import { fetchDocumentRecord, queryClient, useDocumentRecord, useEwayBillRecord, usePartyRecord, useStockAvailable, useStockMovedBy } from '../../remote/queries';
 import { detailRouteFor, finaliseActionLabel, listRouteFor } from './DocumentEditor';
 import { useCustomFields } from '../customFields/CustomFieldsSection';
 import { ComplianceCard } from '../compliance/ComplianceCard';
@@ -69,6 +69,7 @@ import { deliverFile } from '../reports/exportFiles';
 import { documentPdf, paymentLink, pdfFileName, pdfLink, removeCreditApplication, sendDocument, shareLink, shareLinks, type SendChannel } from '../../remote/documents';
 import { describeError } from '../../remote/errors';
 import { RecurrenceSheet } from './RecurrenceSheet';
+import { MergeSourcesSheet, type MergeSource } from './MergeSourcesSheet';
 import { ensurePushRegistered } from '../../remote/push';
 import { useGoBack } from '../../navigation/useGoBack';
 import { useItcBreakup } from './itcBreakup';
@@ -100,6 +101,14 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
   // The server's own view of this one: what it still owes (credit notes and returns off) and what was made from it.
   const recordQuery = useDocumentRecord(doc.id);
   const record = recordQuery.data;
+  // Each document it was made from: the source, then any merged in with it (several orders into one challan).
+  const sourceLinks = [
+    ...(sourceDoc ? [{ id: sourceDoc.id, kind: sourceDoc.kind, number: sourceDoc.number, date: sourceDoc.date }] : []),
+    ...(doc.mergedSourceIds ?? []).flatMap((id) => {
+      const d = record?.linkedDocuments?.find((x) => x.id === id);
+      return d?.kind && d.number && d.date ? [{ id, kind: d.kind, number: d.number, date: d.date }] : [];
+    }),
+  ];
   // Until the server's copy lands, what it owes and what was made from it would be worked out from
   // whatever the device happens to hold, which can be wrong: those wait for it.
   const recordPending = !record && recordQuery.isFetching;
@@ -218,7 +227,8 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
       ewayBill,
       // Returns and notes name the invoice or bill they're against; an invoice the order or challan it came from.
       source: NOTE_SOURCE[doc.kind] ? sourceDoc : undefined,
-      origin: !NOTE_SOURCE[doc.kind] && sourceDoc ? { number: sourceDoc.number, date: sourceDoc.date, kind: sourceDoc.kind } : undefined,
+      // Made from several, the header names them all, dated from the first, as the server's PDF does.
+      origin: !NOTE_SOURCE[doc.kind] && sourceDoc ? { number: sourceLinks.map((s) => s.number).join(', '), date: sourceDoc.date, kind: sourceDoc.kind } : undefined,
       customFields,
     });
 
@@ -365,19 +375,48 @@ ${url}`;
     sendNow.current?.('email');
   }, [sendParam, doc.status, router]);
 
-  const convert = async (target: DocumentKind) => {
+  // The party's others that can go into the same challan, invoice, receipt or bill, as the server says.
+  const mergeable = record?.mergeableWith ?? [];
+  const [mergeTarget, setMergeTarget] = useState<DocumentKind | null>(null);
+  const merging = useSingleFlight();
+
+  const convert = async (target: DocumentKind, alsoFrom: string[] = [], picked = false) => {
     setActionsOpen(false);
     // A return or note against several lines picks which, as from the Returns or Notes list: one way to make them.
     if (NOTE_SOURCE[target] && doc.lines.length > 1) {
       router.push(`${listRouteFor(target)}/new?partyId=${doc.partyId}&sourceId=${doc.id}` as never);
       return;
     }
-    const res = await serverSave(() => convertDocument(doc.id, target), tr('common:documentDetail.createdDraft', { kind: documentKindLabel(tr, target, 1) }), {
+    // Others of the party's could go in too: choose them first.
+    if (!picked && canMerge(doc.kind, target) && mergeable.length) {
+      setMergeTarget(target);
+      return;
+    }
+    const numbers = [doc.number, ...mergeable.filter((d) => alsoFrom.includes(d.id!)).map((d) => d.number)].join(', ');
+    const res = await serverSave(() => convertDocument(doc.id, target, undefined, alsoFrom), tr('common:documentDetail.createdDraft', { kind: documentKindLabel(tr, target, 1) }), {
       icon: 'file-replace-outline',
-      detail: tr('sales:detail.fromDocument', { number: doc.number }),
+      detail: tr('sales:detail.fromDocument', { number: numbers }),
     });
-    if (res?.result) router.push(detailRouteFor(target, res.id ?? res.result) as never);
+    if (res?.result) {
+      setMergeTarget(null);
+      router.push(detailRouteFor(target, res.id ?? res.result) as never);
+    }
   };
+
+  /** The device copies their lines, so the others come in whole before the draft is made from them all. */
+  const convertMerged = (target: DocumentKind, alsoFrom: string[]) =>
+    merging.run(
+      async () => {
+        try {
+          await Promise.all(alsoFrom.map((id) => fetchDocumentRecord(doc.companyId, id)));
+        } catch (err) {
+          toast.show(describeError(err, tr), 'error');
+          return;
+        }
+        await convert(target, alsoFrom, true);
+      },
+      { hold: true },
+    );
 
   const offered: { target: DocumentKind; label: string; icon: IconName }[] =
     doc.kind === 'quote' || doc.kind === 'proforma'
@@ -515,18 +554,19 @@ ${url}`;
               {formatDate(doc.date)}
               {branch ? ` · ${branch.name}` : ''}
             </Text>
-            {sourceDoc ? (
+            {sourceLinks.map((s) => (
               <Pressable
-                onPress={() => router.push(detailRouteFor(sourceDoc.kind, sourceDoc.id) as never)}
+                key={s.id}
+                onPress={() => router.push(detailRouteFor(s.kind, s.id) as never)}
                 accessibilityRole="link"
                 style={{ flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', marginTop: 2 }}
               >
                 <Icon name="link-variant" size={14} color={t.c.primary} />
                 <Text variant="caption" tone="primary" weight="600">
-                  {tr('sales:detail.against', { kind: documentKindLabel(tr, sourceDoc.kind, 1), number: sourceDoc.number })}
+                  {tr('sales:detail.against', { kind: documentKindLabel(tr, s.kind, 1), number: s.number })}
                 </Text>
               </Pressable>
-            ) : null}
+            ))}
           </View>
           <View style={{ alignItems: 'flex-end', gap: 6 }}>
             <StatusBadge status={doc.status} />
@@ -1204,6 +1244,20 @@ ${url}`;
       )}
 
       <RecurrenceSheet doc={doc} visible={recurrenceOpen} onClose={() => setRecurrenceOpen(false)} />
+      {/* Mounted while open, so each time starts with only this one ticked. */}
+      {mergeTarget ? (
+        <MergeSourcesSheet
+          visible
+          onClose={() => setMergeTarget(null)}
+          kind={doc.kind as MergeSource}
+          partyName={party?.name ?? ''}
+          current={{ id: doc.id, number: doc.number, date: doc.date, total: doc.totals.grandTotal }}
+          candidates={mergeable.map((d) => ({ id: d.id!, number: d.number ?? '', date: d.date!, total: d.grandTotal as Money | undefined }))}
+          createLabel={offered.find((o) => o.target === mergeTarget)?.label ?? documentKindLabel(tr, mergeTarget, 1)}
+          busy={merging.busy}
+          onCreate={(alsoFrom) => void convertMerged(mergeTarget, alsoFrom)}
+        />
+      ) : null}
 
       {desktop ? (
         <Menu anchor={actionsRect} onClose={closeActionsMenu} align="right" width={menuKind === 'status' ? 240 : 280}>

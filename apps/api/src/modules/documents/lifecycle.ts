@@ -1,6 +1,6 @@
-import { and, desc, eq, gt, gte, inArray, lt, ne, notInArray, or, sql, type SQL } from 'drizzle-orm';
+import { and, arrayOverlaps, desc, eq, gt, gte, inArray, lt, ne, notInArray, or, sql, type SQL } from 'drizzle-orm';
 import { businessDate, creditNoteDeadline } from '@esmart/core/lib/date';
-import { INVOICE_LIMITS, nextInvoicePlan } from '@esmart/core/domain/plan';
+import { INVOICE_LIMITS, hasModule, nextInvoicePlan } from '@esmart/core/domain/plan';
 import { CREDIT_KINDS, NOTE_KINDS, NOTE_SOURCE, PAYABLE_KINDS, isFinalized, isPayableDocument } from '@esmart/core/domain/documentStates';
 import { statusForOutstanding } from '@esmart/core/domain/receivables';
 import { MOVEMENT_SIGN, signedQuantity, stockMapOn } from '@esmart/core/domain/stockLedger';
@@ -121,27 +121,32 @@ async function netPosted(tx: DbOrTx, referenceIds: string[]) {
 
 /**
  * Has the stock for this invoice (bill) already moved on a delivery note
- * (goods receipt) in its chain? Either one it was converted from, or one
- * raised from the same order. Then the invoice must not move it again.
+ * (goods receipt) in its chain? Either one it was converted from (or merged
+ * from, with others), or one raised from the same order. Then the invoice
+ * must not move it again.
  */
 async function movedUpstream(tx: DbOrTx, row: DocRow): Promise<boolean> {
   const pair = row.kind === 'invoice' ? { via: 'delivery', order: 'salesOrder' } : row.kind === 'purchaseBill' ? { via: 'goodsReceipt', order: 'purchaseOrder' } : null;
   if (!pair) return false;
   const via: string[] = [];
   const orders: string[] = [];
-  let sourceId = row.sourceDocumentId;
-  for (let depth = 0; sourceId && depth < 10; depth++) {
-    const [src] = await tx.select({ id: D.id, kind: D.kind, sourceDocumentId: D.sourceDocumentId }).from(D).where(eq(D.id, sourceId));
-    if (!src) break;
-    if (src.kind === pair.via) via.push(src.id);
-    if (src.kind === pair.order) orders.push(src.id);
-    sourceId = src.sourceDocumentId;
+  // Back through every source, level by level: a merged document has several.
+  const seen = new Set<string>();
+  let frontier = [row.sourceDocumentId, ...(row.mergedSourceIds ?? [])].filter((id): id is string => !!id);
+  for (let depth = 0; frontier.length && depth < 10; depth++) {
+    frontier.forEach((id) => seen.add(id));
+    const sources = await tx.select({ id: D.id, kind: D.kind, sourceDocumentId: D.sourceDocumentId, mergedSourceIds: D.mergedSourceIds }).from(D).where(inArray(D.id, frontier));
+    for (const src of sources) {
+      if (src.kind === pair.via) via.push(src.id);
+      if (src.kind === pair.order) orders.push(src.id);
+    }
+    frontier = [...new Set(sources.flatMap((s) => [s.sourceDocumentId, ...s.mergedSourceIds]))].filter((id): id is string => !!id && !seen.has(id));
   }
   if (orders.length) {
     const siblings = await tx
       .select({ id: D.id })
       .from(D)
-      .where(and(inArray(D.sourceDocumentId, orders), eq(D.kind, pair.via as DocumentKind)));
+      .where(and(or(inArray(D.sourceDocumentId, orders), arrayOverlaps(D.mergedSourceIds, orders)), eq(D.kind, pair.via as DocumentKind)));
     via.push(...siblings.map((s) => s.id));
   }
   return (await netPosted(tx, via)).some((r) => Number(r.net) !== 0);
@@ -191,6 +196,14 @@ function receiptUnitCost(row: DocRow, l: typeof schema.documentLines.$inferSelec
   return (taxable.minor + lost) / quantity;
 }
 
+/**
+ * Whether stock may not go below zero: unless the business allows it, on a plan that keeps stock.
+ * A plan without stock (Free, Basic) has no such setting to turn off, so it never refuses a sale.
+ */
+function checksStock(company: CompanyRow): boolean {
+  return !company.allowNegativeStock && hasModule(company.plan, 'inventory');
+}
+
 export async function postStock(tx: DbOrTx, company: CompanyRow, row: DocRow, actorId: string): Promise<number> {
   const type = movementTypeFor(row.kind);
   if (!type) return 0;
@@ -235,7 +248,7 @@ export async function postStock(tx: DbOrTx, company: CompanyRow, row: DocRow, ac
         createdBy: actorId,
       };
     });
-  if (values.length && MOVEMENT_SIGN[type] < 0 && !company.allowNegativeStock) {
+  if (values.length && MOVEMENT_SIGN[type] < 0 && checksStock(company)) {
     const need = new Map<string, number>();
     for (const v of values) need.set(v.itemId, (need.get(v.itemId) ?? 0) + Math.abs(Number(v.quantity)));
     // Only stock there on the document date counts, and never more than the lowest it
@@ -276,7 +289,7 @@ export async function reverseStock(tx: DbOrTx, company: CompanyRow, row: DocRow,
   if (!open.length) return 0;
   // Taking back stock this document brought in: it may have been sold since.
   const incoming = open.filter((r) => Number(r.net) > 0);
-  if (incoming.length && !company.allowNegativeStock) {
+  if (incoming.length && checksStock(company)) {
     const ids = [...new Set(incoming.map((r) => r.itemId))].sort();
     const items = await tx.select().from(schema.items).where(and(eq(schema.items.companyId, row.companyId), inArray(schema.items.id, ids))).orderBy(schema.items.id).for('update');
     const ledger = await tx.select({ itemId: M.itemId, branchId: M.branchId, type: M.type, quantity: M.quantity, date: M.date }).from(M).where(and(eq(M.companyId, row.companyId), inArray(M.itemId, ids)));

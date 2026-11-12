@@ -90,6 +90,7 @@
     "importHint": "Import from abroad — no GST on the supplier's bill (IGST is paid at customs).",
     "itemBeforeOpeningStock": "{{name}}'s opening stock is dated {{date}}. Date this document {{date}} or later to add it.",
     "dateBeforeOpeningStock": "Can't be before {{date}}, the opening stock date of {{name}}",
+    "taxBeforeStart": "{{name}} applies from {{date}}: date it on or after then, or pick another tax for the line",
     "beforeDocDate": "Can't be before the document date, {{date}}",
     "defaultTerms": "Goods once sold will not be taken back. Interest @18% p.a. on overdue amounts.",
     "selectCustomer": "Select customer",
@@ -532,6 +533,24 @@
     "declaration": "Declaration",
     "customerSeal": "Customer's seal and signature",
     "computerGenerated": "This is a computer-generated invoice"
+  },
+  "merge": {
+    "title": {
+      "salesOrder": "Combine sales orders",
+      "delivery": "Combine delivery notes",
+      "purchaseOrder": "Combine purchase orders",
+      "goodsReceipt": "Combine goods receipts"
+    },
+    "hint": {
+      "salesOrder": "{{party}}’s other open orders can go on the same delivery note. Tick the ones to include: their lines follow this order’s.",
+      "delivery": "{{party}}’s other delivery notes not yet invoiced can go on the same invoice. Tick the ones to include: their lines follow this note’s. The stock has already gone out on the notes, so the invoice doesn’t move it again.",
+      "purchaseOrder": "Other open purchase orders to {{party}} can be received on the same goods receipt. Tick the ones that came in together: their lines follow this order’s.",
+      "goodsReceipt": "Other goods receipts from {{party}} not yet billed can go on the same bill. Tick the ones it covers: their lines follow this receipt’s. The stock came in on the receipts, so the bill doesn’t add it again."
+    },
+    "thisOne": "This one",
+    "picked_one": "{{count}} document into one",
+    "picked_other": "{{count}} documents into one",
+    "fetching": "Getting their lines…"
   },
   "returnPicker": {
     "salesHint": "Pick the invoice being returned. Its lines are copied into the return, where you can reduce quantities or remove lines.",

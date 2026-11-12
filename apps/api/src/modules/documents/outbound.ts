@@ -1,4 +1,4 @@
-import { and, eq, gt } from 'drizzle-orm';
+import { and, eq, gt, inArray } from 'drizzle-orm';
 import { NOTE_SOURCE } from '@esmart/core/domain/documentStates';
 import { i18nInstance as i18n } from '@esmart/i18n';
 import type { LanguageCode } from '@esmart/i18n/config';
@@ -56,9 +56,13 @@ export async function renderDocumentHtml(
   const [doc] = await documentsToWire(db, [row], opts.now, company.baseCurrency.trim());
   const [party] = await db.select().from(schema.parties).where(eq(schema.parties.id, row.partyId));
   const [branch] = await db.select().from(schema.branches).where(eq(schema.branches.id, row.branchId));
-  const [source] = row.sourceDocumentId
-    ? await db.select({ number: schema.documents.number, date: schema.documents.date, kind: schema.documents.kind }).from(schema.documents).where(eq(schema.documents.id, row.sourceDocumentId))
+  const sourceIds = row.sourceDocumentId ? [row.sourceDocumentId, ...(row.mergedSourceIds ?? [])] : [];
+  const sources = sourceIds.length
+    ? await db.select({ id: schema.documents.id, number: schema.documents.number, date: schema.documents.date, kind: schema.documents.kind }).from(schema.documents).where(inArray(schema.documents.id, sourceIds))
     : [];
+  // Made from several orders or challans: the header names them all, dated from the first.
+  const ordered = sourceIds.map((id) => sources.find((s) => s.id === id)).filter((s) => !!s);
+  const source = ordered[0] && { ...ordered[0], number: ordered.map((s) => s.number).join(', ') };
   const eway = row.currentEwayBillId ? await db.select().from(schema.ewayBills).where(eq(schema.ewayBills.id, row.currentEwayBillId)) : [];
   const language: LanguageCode = opts.locale ?? 'en';
   const coreBranch: Branch | undefined = branch

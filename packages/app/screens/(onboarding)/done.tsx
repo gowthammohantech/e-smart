@@ -13,11 +13,13 @@ import { Card } from '@esmart/ui/components/Card';
 import { Illustration } from '@esmart/ui/components/Illustration';
 import { useAppStore } from '../../store/appStore';
 import { setLocalLogo, uploadLogo } from '../../remote/logo';
-import { saveOnline } from '../../remote/save';
+import { createBusiness as createOnServer } from '../../remote/companies';
+import { uuid } from '../../remote/uuid';
 import { api } from '../../remote/api';
 import { describeError } from '../../remote/errors';
 import { onboardingSeries, useOnboardingStore } from '../../store/onboardingStore';
 import { COUNTRIES } from '@esmart/core/data/masters';
+import { DEFAULT_PREFIXES, SERIES_KINDS, defaultSeries } from '@esmart/core/domain/numbering';
 import { joinPhone } from '@esmart/core/lib/phone';
 
 const NEXT_STEPS: { icon: IconName; labelKey: string; bodyKey: string }[] = [
@@ -36,9 +38,8 @@ export default function Done() {
   const { draft, reset } = useOnboardingStore();
   const [busy, setBusy] = useState(false);
 
-  const createCompany = useAppStore((s) => s.createCompany);
-  const numberingSeries = useAppStore((s) => s.numberingSeries);
-  const saveNumberingSeries = useAppStore((s) => s.saveNumberingSeries);
+  // One key for this setup: a retry after a dropped connection gets the business already made, not a second.
+  const [idempotencyKey] = useState(uuid);
 
   // Read at once, not after a re-render: a double tap would create the business twice.
   const finished = useRef(false);
@@ -66,49 +67,52 @@ export default function Done() {
 
   const createBusiness = async (): Promise<boolean> => {
     const country = COUNTRIES.find((c) => c.code === draft.country);
-
-    // One save: the business, then its invoice numbering, which goes once the server has made the business.
-    const res = await saveOnline(() => {
-      const companyId = createCompany({
-        name: draft.name || tr('onboarding:done.defaultName'),
-        legalName: draft.legalName || undefined,
-        logoUri: draft.logoUri,
-        businessType: draft.businessType,
-        // Free only for now, whatever an older saved draft says.
-        plan: 'free',
-        country: draft.country,
-        baseCurrency: draft.baseCurrency,
-        address: draft.address,
-        email: draft.email || undefined,
-        phone: joinPhone(draft.phoneDialCode, draft.phone) || undefined,
-        fiscalYearStartMonth: draft.fiscalYearStartMonth,
-        taxRegistration: {
-          regime: country?.regime ?? 'NONE',
-          identifier: (draft.taxRegistered && draft.taxIdentifier.trim()) || undefined,
-          identifierLabel: country?.taxIdLabel ?? tr('onboarding:done.defaultTaxLabel'),
-          // Registered needs the number to go with it; a draft left switched on without one isn't.
-          registered: draft.taxRegistered && !!draft.taxIdentifier.trim(),
-          compositionScheme: draft.compositionScheme,
-          placeOfSupplyStateCode: draft.address.stateCode,
+    // The numbering chosen at setup, over the defaults the server starts every business with.
+    const series = onboardingSeries(SERIES_KINDS.map((kind) => defaultSeries('', kind, DEFAULT_PREFIXES[kind])), draft).map(({ kind, prefix, nextNumber, padding, includeFiscalYear, includeBranchCode, resetPolicy }) => ({
+      kind,
+      prefix,
+      nextNumber,
+      padding,
+      includeFiscalYear,
+      includeBranchCode,
+      resetPolicy,
+    }));
+    // Straight to the server, which makes the business (on the Free plan) with its setup; it opens here once made.
+    let companyId: string;
+    try {
+      companyId = await createOnServer(
+        {
+          name: draft.name || tr('onboarding:done.defaultName'),
+          legalName: draft.legalName || undefined,
+          businessType: draft.businessType,
+          country: draft.country,
+          baseCurrency: draft.baseCurrency,
+          address: draft.address,
+          email: draft.email || undefined,
+          phone: joinPhone(draft.phoneDialCode, draft.phone) || undefined,
+          fiscalYearStartMonth: draft.fiscalYearStartMonth,
+          taxRegistration: {
+            regime: country?.regime ?? 'NONE',
+            identifier: (draft.taxRegistered && draft.taxIdentifier.trim()) || undefined,
+            identifierLabel: country?.taxIdLabel ?? tr('onboarding:done.defaultTaxLabel'),
+            // Registered needs the number to go with it; a draft left switched on without one isn't.
+            registered: draft.taxRegistered && !!draft.taxIdentifier.trim(),
+            compositionScheme: draft.compositionScheme,
+            placeOfSupplyStateCode: draft.address.stateCode,
+          },
         },
-      });
-
-      // The numbering choices go to every series made at setup (see onboardingSeries).
-      const made = useAppStore.getState().numberingSeries.filter((s) => s.companyId === companyId);
-      for (const s of onboardingSeries(made, draft)) saveNumberingSeries(s);
-      return companyId;
-    });
-    void numberingSeries;
-    if (res.outcome !== 'saved' || !res.id) {
+        series,
+        idempotencyKey,
+      );
+    } catch (err) {
       finished.current = false;
       setBusy(false);
-      toast.show(res.outcome === 'refused' ? tr('common:save.refused', { reason: res.error }) : tr('common:save.unreachable'), 'error');
+      toast.show(describeError(err, tr) || tr('common:save.unreachable'), 'error');
       return false;
     }
-    created.current = res.id;
+    created.current = companyId;
     // The logo goes up once the business is on the server; one that fails can be added again in the profile.
     if (draft.logoUri) {
-      const companyId = res.id;
       setLocalLogo(companyId, draft.logoUri);
       void uploadLogo(companyId, draft.logoUri).catch(() => {
         setLocalLogo(companyId, undefined);

@@ -148,6 +148,38 @@ export function findTaxCategory(
   return categories.find((c) => c.id === id);
 }
 
-export function rateOf(categories: TaxCategory[], id: string | undefined): number {
-  return findTaxCategory(categories, id)?.rate ?? 0;
+export function rateOf(categories: TaxCategory[], id: string | undefined, date?: string): number {
+  const c = findTaxCategory(categories, id);
+  return c ? taxRateOn(c, date) : 0;
+}
+
+/**
+ * A category's rate on `date`: its rate from `effectiveFrom` on, and before that the last of its
+ * earlier rates (`history`) to have started by then. No date, or nothing earlier on record, is
+ * today's rate. The server charges a document the same way.
+ */
+export function taxRateOn(category: Pick<TaxCategory, 'rate' | 'effectiveFrom' | 'history'>, date: string | undefined): number {
+  if (!date || !category.effectiveFrom || category.effectiveFrom <= date) return category.rate;
+  let best: { effectiveFrom: string; rate: number } | undefined;
+  for (const h of category.history ?? []) if (h.effectiveFrom <= date && (!best || h.effectiveFrom > best.effectiveFrom)) best = h;
+  return best?.rate ?? category.rate;
+}
+
+/**
+ * Whether a category may be charged on `date`: it is in force from its first rate's day (its
+ * effective date, or the earliest of its earlier rates). A tax that starts later can't be picked
+ * on a document or expense dated before it.
+ */
+export function taxAvailableOn(category: Pick<TaxCategory, 'effectiveFrom' | 'history'>, date: string | undefined): boolean {
+  if (!date || !category.effectiveFrom) return true;
+  const start = (category.history ?? []).reduce((a, h) => (h.effectiveFrom < a ? h.effectiveFrom : a), category.effectiveFrom);
+  return start <= date;
+}
+
+/** Every category at its rate on `date`, for a form that charges as of that day. */
+export function taxCategoriesOn<T extends TaxCategory>(categories: T[], date: string | undefined): T[] {
+  return categories.map((c) => {
+    const rate = taxRateOn(c, date);
+    return rate === c.rate ? c : { ...c, rate };
+  });
 }

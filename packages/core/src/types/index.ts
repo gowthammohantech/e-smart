@@ -280,8 +280,11 @@ export type TaxCategory = {
   rate: number;
   type: TaxType;
   hsnCode?: string;
+  /** The day `rate` applies from. A document dated before it charges the rate it had then (`history`). */
   effectiveFrom: string;
   description?: string;
+  /** The rates it had before `effectiveFrom`, each from its own day: see `taxRateOn`. */
+  history?: { effectiveFrom: string; rate: number }[];
 };
 
 export type TaxComponent = {
@@ -471,6 +474,8 @@ export type BusinessDocument = {
   attachmentIds: string[];
   /** Links between documents, e.g. invoice created from quote q_1. */
   sourceDocumentId?: string;
+  /** Made from several documents at once (orders into one challan, challans into one invoice): the others, after `sourceDocumentId`. */
+  mergedSourceIds?: string[];
   /** Why a credit or debit note was raised. */
   noteReason?: NoteReason;
   /**

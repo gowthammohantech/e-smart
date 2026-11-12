@@ -1,5 +1,5 @@
 import React, { createContext, useContext } from 'react';
-import { ScrollView, StyleProp, View, ViewStyle } from 'react-native';
+import { Pressable, ScrollView, StyleProp, View, ViewStyle } from 'react-native';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { useBreakpoint, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { Cell, DataTable as UiDataTable, TABLE_PAGE_SIZE } from '@esmart/ui/components/DataTable';
@@ -160,6 +160,10 @@ export function DataTable({
   strong,
   paged = false,
   tone,
+  onRowPress,
+  rowLabel,
+  subtitles,
+  firstWidth,
 }: {
   headers: string[];
   rows: (string | number)[][];
@@ -176,6 +180,14 @@ export function DataTable({
   paged?: boolean;
   /** A body cell's colour: a favourable variance green, an overrun red. */
   tone?: (row: number, column: number) => 'good' | 'bad' | 'warn' | undefined;
+  /** A row that opens something (its detail, its document): pressed by its index in `rows`. */
+  onRowPress?: (row: number) => void;
+  /** What a pressable row is called to a screen reader. */
+  rowLabel?: (row: number) => string;
+  /** A muted second line under a row's first cell, e.g. the return's table numbers under a section. */
+  subtitles?: (string | undefined)[];
+  /** On a desktop, the first column's own width, for long names a share of the row would cut short. */
+  firstWidth?: number;
 }) {
   const t = useTheme();
   const desktop = useIsDesktop();
@@ -195,16 +207,31 @@ export function DataTable({
         columns={headers.map((h, i) => ({
           key: String(i),
           header: h,
-          flex: flexOf(i),
+          ...(i === 0 && firstWidth ? { width: firstWidth } : { flex: flexOf(i) }),
           align: isNum(i) ? ('right' as const) : ('left' as const),
-          render: (row: { cells: (string | number)[]; index: number }) => (
-            <Cell weight={strongSet.has(row.index) ? '700' : i === 0 ? '600' : undefined} mono={isNum(i)} tone={tone?.(row.index, i)}>
-              {row.cells[i]}
-            </Cell>
-          ),
+          render: (row: { cells: (string | number)[]; index: number }) => {
+            const cell = (
+              <Cell weight={strongSet.has(row.index) ? '700' : i === 0 ? '600' : undefined} mono={isNum(i)} tone={tone?.(row.index, i)}>
+                {row.cells[i]}
+              </Cell>
+            );
+            const sub = i === 0 ? subtitles?.[row.index] : undefined;
+            return sub ? (
+              <View style={{ gap: 2, minWidth: 0, alignSelf: 'stretch' }}>
+                {cell}
+                <Text variant="caption" tone="muted" numberOfLines={1}>
+                  {sub}
+                </Text>
+              </View>
+            ) : (
+              cell
+            );
+          },
         }))}
         rows={rows.map((cells, index) => ({ cells, index }))}
         rowKey={(row) => String(row.index)}
+        onRowPress={onRowPress ? (row) => onRowPress(row.index) : undefined}
+        rowLabel={rowLabel ? (row) => rowLabel(row.index) : undefined}
         footer={
           total
             ? Object.fromEntries(
@@ -253,10 +280,15 @@ export function DataTable({
       {bodyRows.map((row, ri) => {
         const isTotal = !!total && ri === bodyRows.length - 1;
         const bold = isTotal || strongSet.has(ri);
+        const press = onRowPress && !isTotal ? () => onRowPress(ri) : undefined;
         return (
-          <View
+          <Pressable
             key={ri}
-            style={{
+            disabled={!press}
+            onPress={press}
+            accessibilityRole={press ? 'button' : undefined}
+            accessibilityLabel={press ? rowLabel?.(ri) : undefined}
+            style={({ pressed }) => ({
               flexDirection: 'row',
               gap: t.spacing.sm,
               paddingHorizontal: t.spacing.lg,
@@ -264,25 +296,39 @@ export function DataTable({
               borderBottomWidth: ri < bodyRows.length - 1 && !(total && ri === bodyRows.length - 2) ? 0.5 : 0,
               borderBottomColor: t.c.line,
               ...(isTotal ? { borderTopWidth: 1, borderTopColor: t.c.line, backgroundColor: t.c.card2 } : null),
-            }}
+              ...(press && pressed ? { backgroundColor: t.c.card2 } : null),
+            })}
           >
-            {row.map((cell, ci) => (
-              <Text
-                key={ci}
-                variant="caption"
-                weight={bold ? '700' : ci === 0 ? '600' : '500'}
-                tone={isTotal ? undefined : tone?.(ri, ci)}
-                style={{
-                  flex: flexOf(ci),
-                  textAlign: isNum(ci) ? 'right' : 'left',
-                  fontVariant: isNum(ci) ? ['tabular-nums'] : undefined,
-                }}
-                numberOfLines={1}
-              >
-                {cell}
-              </Text>
-            ))}
-          </View>
+            {row.map((cell, ci) => {
+              const text = (
+                <Text
+                  key={ci}
+                  variant="caption"
+                  weight={bold ? '700' : ci === 0 ? '600' : '500'}
+                  tone={isTotal ? undefined : tone?.(ri, ci)}
+                  style={{
+                    flex: flexOf(ci),
+                    textAlign: isNum(ci) ? 'right' : 'left',
+                    fontVariant: isNum(ci) ? ['tabular-nums'] : undefined,
+                  }}
+                  numberOfLines={1}
+                >
+                  {cell}
+                </Text>
+              );
+              const sub = ci === 0 && !isTotal ? subtitles?.[ri] : undefined;
+              return sub ? (
+                <View key={ci} style={{ flex: flexOf(ci), gap: 2 }}>
+                  {text}
+                  <Text variant="micro" tone="muted" numberOfLines={1}>
+                    {sub}
+                  </Text>
+                </View>
+              ) : (
+                text
+              );
+            })}
+          </Pressable>
         );
       })}
     </View>

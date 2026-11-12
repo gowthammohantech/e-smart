@@ -11,6 +11,7 @@ import type { AuthUser, CompanyRow, Deps } from '../../context';
 import { conflict, planUpgradeRequired, preconditionFailed, unprocessable, type Issue } from '../../http/errors';
 import { recordChange, type DbOrTx } from '../../lib/audit';
 import { newId } from '../../lib/ids';
+import { categoryOn } from '../../lib/taxRates';
 import { assignNumber } from '../../lib/numbering';
 import { notify, noteMoney } from '../../lib/notify';
 import { rateToBase } from '../documents/engine';
@@ -253,11 +254,12 @@ export async function writePayment(
   if (advance) {
     if (input.direction !== 'received') blocking('advanceTax', 'Only money received is an advance taxed on receipt');
     if (!/^\d{2}$/.test(advance.placeOfSupplyStateCode)) blocking('advanceTax.placeOfSupplyStateCode', 'A two-digit state code');
-    const T = schema.taxCategories;
-    const [tax] = await tx.select({ rate: T.rate }).from(T).where(and(eq(T.companyId, company.id), eq(T.id, advance.taxCategoryId)));
-    if (!tax) blocking('advanceTax.taxCategoryId', 'No such tax category in this company');
-    else if (!(Number(tax.rate) > 0)) blocking('advanceTax.taxCategoryId', 'An advance taxed at 0% carries no tax; leave it off');
-    else advanceTaxRate = existing?.advanceTaxCategoryId === advance.taxCategoryId && existing.advanceTaxRate && existing.date === input.date ? existing.advanceTaxRate : String(tax.rate);
+    // The category's rate on the day the advance came in, not one it takes later.
+    const onDate = await categoryOn(tx, company.id, advance.taxCategoryId, input.date);
+    if (!onDate) blocking('advanceTax.taxCategoryId', 'No such tax category in this company');
+    else if (!onDate.available) blocking('advanceTax.taxCategoryId', `${onDate.name} applies from ${onDate.effectiveFrom}; the receipt is dated ${input.date}`);
+    else if (!(onDate.rate > 0)) blocking('advanceTax.taxCategoryId', 'An advance taxed at 0% carries no tax; leave it off');
+    else advanceTaxRate = existing?.advanceTaxCategoryId === advance.taxCategoryId && existing.advanceTaxRate && existing.date === input.date ? existing.advanceTaxRate : String(onDate.rate);
     const hsn = advance.hsn?.trim();
     if (hsn && !/^\d{4,8}$/.test(hsn)) blocking('advanceTax.hsn', 'A SAC or HSN of 4 to 8 digits');
     // Advances for goods carry no GST (notification 66/2017): only a service's SAC (99…) is taxed on receipt.
