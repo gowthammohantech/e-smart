@@ -90,6 +90,7 @@
     "importHint": "Import from abroad — no GST on the supplier's bill (IGST is paid at customs).",
     "itemBeforeOpeningStock": "{{name}}'s opening stock is dated {{date}}. Date this document {{date}} or later to add it.",
     "dateBeforeOpeningStock": "Can't be before {{date}}, the opening stock date of {{name}}",
+    "taxBeforeStart": "{{name}} applies from {{date}}: date it on or after then, or pick another tax for the line",
     "beforeDocDate": "Can't be before the document date, {{date}}",
     "defaultTerms": "Goods once sold will not be taken back. Interest @18% p.a. on overdue amounts.",
     "selectCustomer": "Select customer",

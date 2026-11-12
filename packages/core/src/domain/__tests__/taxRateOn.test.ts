@@ -1,4 +1,4 @@
-import { rateOf, taxCategoriesOn, taxRateOn } from '../taxEngine';
+import { rateOf, taxAvailableOn, taxCategoriesOn, taxRateOn } from '../taxEngine';
 import type { TaxCategory } from '../../types';
 
 // 18% from 2017, cut to 12% from 1 Oct 2026, then to 5% from 1 Dec 2026.
@@ -14,6 +14,20 @@ const gst: TaxCategory = {
     { effectiveFrom: '2026-10-01', rate: 12 },
   ],
 };
+
+describe('taxAvailableOn: a tax can be charged only from the day it starts', () => {
+  it('refuses a new tax before its effective date, and takes it from that day on', () => {
+    const fresh = { effectiveFrom: '2027-01-01' };
+    expect(taxAvailableOn(fresh, '2026-12-31')).toBe(false);
+    expect(taxAvailableOn(fresh, '2027-01-01')).toBe(true);
+    expect(taxAvailableOn(fresh, undefined)).toBe(true);
+  });
+
+  it('keeps a tax whose rate changed available before the change, at its earlier rate', () => {
+    expect(taxAvailableOn(gst, '2026-11-15')).toBe(true);
+    expect(taxAvailableOn(gst, '2017-06-30')).toBe(false);
+  });
+});
 
 describe('taxRateOn: a category charges the rate in force on the date', () => {
   it('takes the current rate from its effective date on', () => {

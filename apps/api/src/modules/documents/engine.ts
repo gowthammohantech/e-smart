@@ -11,7 +11,7 @@ import { resolveRate } from '@esmart/core/domain/fx';
 import { calculateDocument, calculateLine } from '@esmart/core/domain/lineCalc';
 import { FULL_PLAN, hasModule, saleTdsOnPlan } from '@esmart/core/domain/plan';
 import { OTHER_COUNTRY_CODE } from '@esmart/core/domain/stateCodes';
-import { buildTaxContext, taxRateOn } from '@esmart/core/domain/taxEngine';
+import { buildTaxContext, taxAvailableOn, taxRateOn } from '@esmart/core/domain/taxEngine';
 import { addDaysISO } from '@esmart/core/lib/date';
 import type { Branch, Company, DocumentKind, DocumentLine, DocumentTotals, GstFlags, Party, TaxCategory } from '@esmart/core/types';
 import { schema } from '@esmart/db';
@@ -470,6 +470,10 @@ export async function prepareDocument(
   const coreLines: DocumentLine[] = lines.map((l, i) => {
     const category = categories.find((c) => c.id === l.taxCategoryId);
     if (!category) blocking(`lines[${i}].taxCategoryId`, 'No such tax category in this company');
+    // A tax that starts later can't be charged on a document dated before it.
+    else if (!taxAvailableOn({ ...category, history: histories.get(category.id) }, f.date)) {
+      blocking(`lines[${i}].taxCategoryId`, `${category.name} applies from ${category.effectiveFrom}; the document is dated ${f.date}`);
+    }
     const item = l.itemId ? items.find((it) => it.id === l.itemId) : undefined;
     if (l.itemId && !item) blocking(`lines[${i}].itemId`, 'No such item in this company');
     // An item has stock from the day its opening stock was counted, not before.

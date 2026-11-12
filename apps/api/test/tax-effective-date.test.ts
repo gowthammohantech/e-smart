@@ -57,3 +57,36 @@ describe('tax effective date: a rate changed from a date charges the old rate be
     expect((await expenseOn(m, '2026-10-05')).taxAmount.minor).toBe(1071);
   });
 });
+
+describe('tax effective date: a new tax can be charged only from the day it starts', () => {
+  it('refuses it on an invoice, an expense or an advance dated before then, and takes it from that day', async () => {
+    const m = await moneySetup(t);
+    await fundCash(t, m);
+    const created = await t.post(`${m.c}/tax-categories`, { name: 'GST 40%', rate: 40, type: 'GST', effectiveFrom: '2026-10-01' }, { token: m.token });
+    expect(created.status).toBe(201);
+    const tax = created.body.id as string;
+    const line = { name: 'Aerated drink', quantity: 1, unit: 'NOS', unitPrice: inr(10000), taxCategoryId: tax };
+
+    const early = await t.post(`${m.c}/documents`, { kind: 'invoice', partyId: m.mumbai.id, date: '2026-09-29', currency: 'INR', lines: [line] }, { token: m.token });
+    expect(early.status).toBe(422);
+    expect(early.body.issues).toEqual([expect.objectContaining({ field: 'lines[0].taxCategoryId', message: 'GST 40% applies from 2026-10-01; the document is dated 2026-09-29' })]);
+
+    const [cat] = await t.deps.db.select().from(schema.expenseCategories).where(eq(schema.expenseCategories.companyId, m.companyId));
+    const expense = await t.post(`${m.c}/expenses`, { categoryId: cat.id, date: '2026-09-20', amount: inr(10000), currency: 'INR', accountId: m.cash.id, method: 'cash', taxCategoryId: tax }, { token: m.token });
+    expect(expense.status).toBe(422);
+    expect(expense.body.issues[0]).toMatchObject({ field: 'taxCategoryId', message: 'GST 40% applies from 2026-10-01; the expense is dated 2026-09-20' });
+
+    const advance = await t.post(
+      `${m.c}/payments`,
+      { direction: 'received', partyId: m.mumbai.id, date: '2026-09-25', amount: inr(140_000), currency: 'INR', method: 'cash', accountId: m.cash.id, advanceTax: { taxCategoryId: tax, placeOfSupplyStateCode: '27', hsn: '998311' } },
+      { token: m.token },
+    );
+    expect(advance.status).toBe(422);
+    expect(advance.body.issues[0].field).toBe('advanceTax.taxCategoryId');
+
+    t.setNow('2026-10-05T10:00:00Z');
+    const onTime = await t.post(`${m.c}/documents`, { kind: 'invoice', partyId: m.mumbai.id, date: '2026-10-01', currency: 'INR', lines: [line] }, { token: m.token });
+    expect(onTime.status).toBe(201);
+    expect(onTime.body.lines[0].taxRate).toBe(40);
+  });
+});

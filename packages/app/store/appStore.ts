@@ -627,7 +627,8 @@ export const useAppStore = create<AppState>()(
             name: rate === 0 ? 'GST 0% (Exempt)' : `GST ${rate}%`,
             rate,
             type: 'GST',
-            effectiveFrom: today(),
+            // In force since GST began, as the server sets them up: back-dated documents can use them.
+            effectiveFrom: '2017-07-01',
           }));
           const account: PaymentAccount = {
             id: uid('acc'),

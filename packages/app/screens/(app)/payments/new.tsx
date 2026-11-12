@@ -39,7 +39,7 @@ import { daysBetween, formatDate, today } from '@esmart/core/lib/date';
 import { Money, fromMajor, money, subtract, zero } from '@esmart/core/lib/money';
 import { uid } from '@esmart/core/lib/id';
 import { DEFAULT_ADVANCE_RATE, advanceInterState, advanceTaxSplit } from '@esmart/core/domain/advanceTax';
-import { homeStateCode, taxCategoriesOn } from '@esmart/core/domain/taxEngine';
+import { homeStateCode, taxAvailableOn, taxCategoriesOn } from '@esmart/core/domain/taxEngine';
 
 import { useAppStore } from '../../../store/appStore';
 import {
@@ -268,7 +268,7 @@ function NewPaymentForm() {
   );
   const unallocated = subtract(amount, allocatedTotal);
   // Each at its rate on the receipt's date: the server taxes the advance at that day's rate.
-  const taxed = taxCategoriesOn(taxCategories, date).filter((c) => c.rate > 0);
+  const taxed = taxCategoriesOn(taxCategories, date).filter((c) => c.rate > 0 && taxAvailableOn(c, date));
   // A rate not known is 18% (RULES 8.12).
   const advanceTaxCategory = taxed.find((c) => c.id === advanceTaxId) ?? taxed.find((c) => c.rate === DEFAULT_ADVANCE_RATE) ?? taxed[0];
   // Memoised: called while rendering, the compiler would take `company` as changed by it and skip this screen.

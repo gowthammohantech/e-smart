@@ -13,7 +13,7 @@ import { keyset } from '../../http/pagination';
 import { track } from '../../analytics/track';
 import { recordChange, type DbOrTx } from '../../lib/audit';
 import { newId } from '../../lib/ids';
-import { categoryRateOn } from '../../lib/taxRates';
+import { categoryOn } from '../../lib/taxRates';
 import { assignNumber } from '../../lib/numbering';
 import { rateToBase } from '../documents/engine';
 import { assertPeriodOpen } from '../documents/lifecycle';
@@ -102,9 +102,10 @@ export async function prepare(ctx: AnyCtx, db: DbOrTx, body: Schema<'Expense'>, 
   let rate = 0;
   if (body.taxCategoryId) {
     // The rate in force on the expense's date: a rate changed later doesn't reach back to it.
-    const onDate = await categoryRateOn(db, companyId, body.taxCategoryId, body.date);
-    if (onDate === undefined) blocking('taxCategoryId', 'No such tax category in this company');
-    else rate = onDate;
+    const onDate = await categoryOn(db, companyId, body.taxCategoryId, body.date);
+    if (!onDate) blocking('taxCategoryId', 'No such tax category in this company');
+    else if (!onDate.available) blocking('taxCategoryId', `${onDate.name} applies from ${onDate.effectiveFrom}; the expense is dated ${body.date}`);
+    else rate = onDate.rate;
   }
 
   let branchId = body.branchId ?? current?.branchId ?? null;

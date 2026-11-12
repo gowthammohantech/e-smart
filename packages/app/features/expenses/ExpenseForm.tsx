@@ -24,10 +24,10 @@ import { useLeaveGuard } from '../../components/useLeaveGuard';
 import { Expense, ItcEligibility, PaymentMethod, RecurrenceFrequency } from '@esmart/core/types';
 import { PAYMENT_METHODS } from '@esmart/core/data/masters';
 import { accountIdAfterMethodChange, accountsForMethod, defaultAccountFor } from '@esmart/core/domain/paymentAccounts';
-import { rateOf } from '@esmart/core/domain/taxEngine';
+import { rateOf, taxAvailableOn, taxCategoriesOn } from '@esmart/core/domain/taxEngine';
 import { paymentMethodLabel } from '@esmart/core/labels';
 import { formatMoney, formatPercent } from '@esmart/core/lib/format';
-import { addDaysISO, today } from '@esmart/core/lib/date';
+import { addDaysISO, formatDate, today } from '@esmart/core/lib/date';
 import { fromMajor, money, subtract, toMajor, zero , inclusiveTax, percent } from '@esmart/core/lib/money';
 import { uid } from '@esmart/core/lib/id';
 import { uploadAttachment } from '../../remote/attachments';
@@ -68,7 +68,7 @@ export type ExpenseInitial = {
 
 export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?: ExpenseInitial }) {
   const t = useTheme();
-  const { t: tr } = useTranslation(['domain', 'purchases', 'common', 'settings', 'inventory']);
+  const { t: tr } = useTranslation(['domain', 'purchases', 'common', 'settings', 'inventory', 'sales']);
   const router = useRouter();
   // Scanning is the OCR module's: not offered when the plan lacks it or the owner switched it off.
   const canScan = useCanOpen()('/ocr/capture');
@@ -171,6 +171,9 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
   const amount = fromMajor(amountText || '0', baseCurrency);
   // The rate in force on the expense's date, as the server charges it.
   const taxRate = rateOf(taxCategories, taxCategoryId ?? undefined, date);
+  // A tax that starts later can't be charged on an expense dated before it (the server refuses it too).
+  const pickedTax = taxCategories.find((c) => c.id === taxCategoryId);
+  const taxBeforeStart = pickedTax && !taxAvailableOn(pickedTax, date) ? tr('sales:editor.taxBeforeStart', { name: pickedTax.name, date: formatDate(pickedTax.effectiveFrom) }) : undefined;
   // Under reverse charge the supplier's price has no GST in it: the business pays that tax to the government.
   const inclusive = taxInclusive && !reverseCharge;
   const taxAmount = taxRate > 0 ? (inclusive ? inclusiveTax(amount, taxRate) : percent(amount, taxRate)) : zero(baseCurrency);
@@ -224,6 +227,7 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
       setAccountError(shortMessage());
       return;
     }
+    if (taxBeforeStart) return;
 
     // A new photo takes the place of what was there; otherwise what's kept stays.
     const attachmentIds = receiptUri ? [] : [...keptIds];
@@ -370,6 +374,7 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
       value={taxCategoryId ? `${taxCategories.find((c) => c.id === taxCategoryId)?.name}` : tr('purchases:form.noTax')}
       onPress={() => setTaxOpen(true)}
       icon="percent-outline"
+      error={taxBeforeStart}
       clearable
       onClear={() => setTaxCategoryId(null)}
     />
@@ -726,7 +731,10 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
           visible={taxOpen}
           onClose={() => setTaxOpen(false)}
           title={tr('purchases:form.tax')}
-          options={taxCategories.map((c) => ({ value: c.id, label: c.name, trailing: formatPercent(c.rate) }))}
+          // Only the taxes in force on the expense's date, each at its rate then.
+          options={taxCategoriesOn(taxCategories, date)
+            .filter((c) => taxAvailableOn(c, date))
+            .map((c) => ({ value: c.id, label: c.name, trailing: formatPercent(c.rate) }))}
           value={taxCategoryId}
           onSelect={setTaxCategoryId}
           searchable={false}

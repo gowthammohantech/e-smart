@@ -165,6 +165,17 @@ export function taxRateOn(category: Pick<TaxCategory, 'rate' | 'effectiveFrom' |
   return best?.rate ?? category.rate;
 }
 
+/**
+ * Whether a category may be charged on `date`: it is in force from its first rate's day (its
+ * effective date, or the earliest of its earlier rates). A tax that starts later can't be picked
+ * on a document or expense dated before it.
+ */
+export function taxAvailableOn(category: Pick<TaxCategory, 'effectiveFrom' | 'history'>, date: string | undefined): boolean {
+  if (!date || !category.effectiveFrom) return true;
+  const start = (category.history ?? []).reduce((a, h) => (h.effectiveFrom < a ? h.effectiveFrom : a), category.effectiveFrom);
+  return start <= date;
+}
+
 /** Every category at its rate on `date`, for a form that charges as of that day. */
 export function taxCategoriesOn<T extends TaxCategory>(categories: T[], date: string | undefined): T[] {
   return categories.map((c) => {
