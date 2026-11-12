@@ -217,7 +217,7 @@ export function DataTable({
             );
             const sub = i === 0 ? subtitles?.[row.index] : undefined;
             return sub ? (
-              <View style={{ gap: 2, minWidth: 0 }}>
+              <View style={{ gap: 2, minWidth: 0, alignSelf: 'stretch' }}>
                 {cell}
                 <Text variant="caption" tone="muted" numberOfLines={1}>
                   {sub}

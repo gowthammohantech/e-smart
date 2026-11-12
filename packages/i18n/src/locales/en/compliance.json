@@ -233,10 +233,14 @@
       "section": "Particulars",
       "tables": "Table",
       "records": "Records",
-      "totalTax": "Total tax"
+      "totalTax": "Total tax",
+      "invoiceValue": "Invoice value"
     },
     "summary": "Summary",
     "summaryHint": "Open a section to see what it holds.",
+    "backToSummary": "GSTR-1 summary",
+    "openDocumentHint": "Open a document to see it in full.",
+    "unknownSection": "No such section of GSTR-1",
     "section": {
       "b2b": "B2B invoices",
       "b2cl": "B2C (large) invoices",

@@ -1,14 +1,13 @@
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { PickerField } from '@esmart/ui/components/Field';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { Text } from '@esmart/ui/components/Text';
-import { Card } from '@esmart/ui/components/Card';
-import { EmptyState } from '@esmart/ui/components/EmptyState';
-import { ReportShell, useReportScope, ReportFailed, failedQuery } from '../../../features/reports/ReportShell';
+import { ReportShell, reportTable, useReportScope, ReportFailed, failedQuery } from '../../../features/reports/ReportShell';
+import { useQueryParams } from '../../../navigation/queryParams';
 import { deliverFile } from '../../../features/reports/exportFiles';
 import { gstr1Json } from '../../../remote/exports';
 import { DataTable, KeyFigures, ReportSection } from '../../../features/reports/reportParts';
@@ -56,12 +55,23 @@ export default function Gstr1Report() {
   );
   const summary = remote.data ?? emptySummary;
 
-  const { totals, detail } = useGstr1Sections(summary);
-  // The section opened from the summary, whose rows show under it.
-  const [view, setView] = useState<Gstr1Section>('b2b');
-  const shown = detail(view);
-  const exportRows = shown.exportRows;
+  const { totals } = useGstr1Sections(summary);
   const rates = useMemo(() => gstr1RateSummary(summary, baseCurrency), [summary, baseCurrency]);
+  // A section opens on its own page, for the same month and branch: the query string carries them.
+  const router = useRouter();
+  const [query] = useQueryParams();
+  const openSection = (section: Gstr1Section) => router.push({ pathname: '/(app)/gst/gstr1/[section]', params: { ...query, section } } as never);
+  /** The summary as a file: a line per section, as on the screen. Each section's page exports its own rows. */
+  const exportRows = () =>
+    reportTable(
+      ['Particulars', 'Section', 'Table', 'Records', 'Taxable value', 'IGST', 'CGST', 'SGST', 'Cess', 'Total tax'],
+      totals.map((r) => {
+        const meta = GSTR1_SECTIONS.find((x) => x.value === r.section);
+        const major = (minor: number | null) => (minor === null ? '' : minor / 100);
+        const tax = r.igst === null ? null : (r.igst ?? 0) + (r.cgst ?? 0) + (r.sgst ?? 0) + (r.cess ?? 0);
+        return [tr(`compliance:gstr1.section.${r.section}`), meta?.label ?? r.section, meta?.tables ?? '', r.records, major(r.taxable), major(r.igst), major(r.cgst), major(r.sgst), major(r.cess), major(tax)];
+      }),
+    );
 
   const m = (minor: number | null) => (minor === null ? '—' : formatMoney(money(minor, baseCurrency)));
   const taxHeads = ['IGST', 'CGST', 'SGST', tr('compliance:gstr1.col.cess')];
@@ -149,8 +159,7 @@ export default function Gstr1Report() {
             widths={[2.4, 0.6, 1.1, 1, 1, 1, 0.7, 1]}
             kinds={['text', 'num', 'num', 'num', 'num', 'num', 'num', 'num']}
             minWidth={980}
-            strong={[totals.findIndex((r) => r.section === view)]}
-            onRowPress={(i) => setView(totals[i].section)}
+            onRowPress={(i) => openSection(totals[i].section)}
             rowLabel={(i) => sectionName(totals[i].section)}
           />
           <Text variant="caption" tone="muted" style={{ marginTop: t.spacing.sm, lineHeight: 18 }}>
@@ -173,31 +182,8 @@ export default function Gstr1Report() {
                 {tr('compliance:gstr1.rateSummaryNote')}
               </Text>
             </ReportSection>
-            <View style={{ height: t.spacing.lg }} />
           </>
         ) : null}
-
-        <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
-          {shown.note}
-        </Text>
-
-        <View style={{ height: t.spacing.md }} />
-
-        {shown.count === 0 ? (
-          <Card padded={false}>
-            <EmptyState
-              illustration="no-documents"
-              icon="file-send-outline"
-              title={tr('compliance:gstr1.emptyTable')}
-              message={view === 'amend' ? tr('compliance:gstr1.emptyAmendBody') : tr('compliance:gstr1.emptyTableBody')}
-              compact
-            />
-          </Card>
-        ) : (
-          <ReportSection title={`${sectionName(view)} · ${tr('compliance:gstr1.rows', { count: shown.count })}`}>
-            <DataTable headers={shown.headers} rows={shown.rows} widths={shown.widths} minWidth={shown.minWidth} kinds={shown.kinds} paged />
-          </ReportSection>
-        )}
         </>
         )}
       </ReportShell>

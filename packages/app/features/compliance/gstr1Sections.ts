@@ -4,6 +4,7 @@ import { NIL_SUPPLY_LABELS, consolidateB2cs, type Gstr1Row, type Gstr1Summary, t
 import type { AmendTable } from '@esmart/core/domain/gstr1Amend';
 import type { DocumentKind } from '@esmart/core/types';
 import { formatMoney, formatPercent, formatQty } from '@esmart/core/lib/format';
+import { formatDate } from '@esmart/core/lib/date';
 import { money, toMajor } from '@esmart/core/lib/money';
 import { reportTable } from '../reports/ReportShell';
 import { periodLabel } from './periods';
@@ -52,6 +53,10 @@ export type SectionDetail = {
   note: string;
   /** The document a row is, where it is one (B2B, B2CL, EXP, CDNR, CDNUR). */
   documents: ({ id: string; kind: DocumentKind } | undefined)[];
+  /** Under a document's number: its date, party and GSTIN or place of supply. */
+  subtitles?: string[];
+  /** The section's totals, under its rows. */
+  total?: string[];
   exportRows: () => ReturnType<typeof reportTable>;
 };
 
@@ -162,6 +167,7 @@ export function useGstr1Sections(summary: Gstr1Summary) {
         return {
           headers: [tr('compliance:gstr1.col.table'), tr('compliance:gstr1.col.pos'), tr('compliance:gstr1.col.rate'), tr('compliance:gstr1.col.taxable'), ...taxHeads],
           rows: advanceRows.map((r) => [r.table, r.placeOfSupply, formatPercent(r.rate), m(r.taxable), ...taxCells(r.igst, r.cgst, r.sgst, r.cess)]),
+          total: [tr('common:table.total'), '', '', m(sum(advanceRows, (r) => r.taxable)), ...taxCells(sum(advanceRows, (r) => r.igst), sum(advanceRows, (r) => r.cgst), sum(advanceRows, (r) => r.sgst), sum(advanceRows, (r) => r.cess))],
           widths: [1.4, 1.1, 0.6, 1.1, 1, 1, 1, 0.8],
           kinds: [T, T, N, N, N, N, N, N],
           minWidth: 760,
@@ -178,6 +184,7 @@ export function useGstr1Sections(summary: Gstr1Summary) {
         return {
           headers: [tr('compliance:gstr1.col.pos'), tr('compliance:gstr1.col.supply'), tr('compliance:gstr1.col.rate'), tr('compliance:gstr1.col.taxable'), ...taxHeads],
           rows: b2cs.map((l) => [l.placeOfSupplyName, l.supplyType, formatPercent(l.rate), formatMoney(l.taxableValue), ...taxCells(l.igst.minor, l.cgst.minor, l.sgst.minor, l.cess.minor)]),
+          total: [tr('common:table.total'), '', '', m(sum(b2cs, (l) => l.taxableValue.minor)), ...taxCells(sum(b2cs, (l) => l.igst.minor), sum(b2cs, (l) => l.cgst.minor), sum(b2cs, (l) => l.sgst.minor), sum(b2cs, (l) => l.cess.minor))],
           widths: [1.4, 1.1, 0.6, 1.1, 1, 1, 1, 0.8],
           kinds: [T, T, N, N, N, N, N, N],
           minWidth: 760,
@@ -194,6 +201,15 @@ export function useGstr1Sections(summary: Gstr1Summary) {
         return {
           headers: ['HSN', tr('compliance:gstr1.col.qty'), tr('compliance:gstr1.col.taxable'), ...taxHeads, tr('common:table.total')],
           rows: summary.hsn.map((h) => [h.hsnCode, formatQty(h.quantity), formatMoney(h.taxableValue), ...taxCells(h.igst.minor, h.cgst.minor, h.sgst.minor, h.cess.minor), formatMoney(h.totalValue)]),
+          // Under each code, what it is and the unit it is counted in.
+          subtitles: summary.hsn.map((h) => [h.description, h.unit].filter(Boolean).join(' · ')),
+          total: [
+            tr('common:table.total'),
+            '',
+            m(sum(summary.hsn, (h) => h.taxableValue.minor)),
+            ...taxCells(sum(summary.hsn, (h) => h.igst.minor), sum(summary.hsn, (h) => h.cgst.minor), sum(summary.hsn, (h) => h.sgst.minor), sum(summary.hsn, (h) => h.cess.minor)),
+            m(sum(summary.hsn, (h) => h.totalValue.minor)),
+          ],
           widths: [1.1, 0.7, 1.1, 1, 1, 1, 0.8, 1.1],
           kinds: [T, N, N, N, N, N, N, N],
           minWidth: 760,
@@ -210,6 +226,7 @@ export function useGstr1Sections(summary: Gstr1Summary) {
         return {
           headers: [tr('compliance:gstr1.col.supply'), tr('compliance:gstr1.col.nilRated'), tr('compliance:gstr1.col.exempt'), tr('compliance:gstr1.col.nonGst')],
           rows: summary.nil.map((n) => [tr(`compliance:gstr1.nil.${n.supplyType}`), formatMoney(n.nilRated), formatMoney(n.exempt), formatMoney(n.nonGst)]),
+          total: [tr('common:table.total'), m(sum(summary.nil, (n) => n.nilRated.minor)), m(sum(summary.nil, (n) => n.exempt.minor)), m(sum(summary.nil, (n) => n.nonGst.minor))],
           widths: [1.4, 1.2, 0.8, 0.8],
           kinds: [T, N, N, N],
           minWidth: 480,
@@ -226,6 +243,7 @@ export function useGstr1Sections(summary: Gstr1Summary) {
         return {
           headers: [tr('compliance:gstr1.col.nature'), tr('compliance:gstr1.col.series'), tr('common:table.total'), tr('compliance:gstr1.col.cancelled'), tr('compliance:gstr1.col.net')],
           rows: summary.docs.map((d) => [tr(NATURE_KEY[d.nature]), `${d.from} – ${d.to}`, String(d.total), String(d.cancelled), String(d.total - d.cancelled)]),
+          total: [tr('common:table.total'), '', String(sum(summary.docs, (d) => d.total)), String(sum(summary.docs, (d) => d.cancelled)), String(sum(summary.docs, (d) => d.total - d.cancelled))],
           widths: [1.4, 1.2, 0.8, 0.8, 0.8],
           kinds: [T, T, N, N, N],
           minWidth: 560,
@@ -245,6 +263,10 @@ export function useGstr1Sections(summary: Gstr1Summary) {
             ...amendRows.map(({ table, r }) => [table, `${r.originalNumber} · ${periodLabel(r.originalPeriod)}`, shortGstin(r.gstin) ?? r.placeOfSupplyName, formatPercent(r.rate), f(r.taxableValue), ...taxCells(r.igst.minor, r.cgst.minor, r.sgst.minor, r.cess.minor)]),
             ...b2csa.map(({ originalPeriod, l }) => ['B2CSA', periodLabel(originalPeriod), l.placeOfSupplyName, formatPercent(l.rate), formatMoney(l.taxableValue), ...taxCells(l.igst.minor, l.cgst.minor, l.sgst.minor, l.cess.minor)]),
           ],
+          total: (() => {
+            const lines = [...amendRows.map((a) => a.r), ...b2csa.map((b) => b.l)];
+            return [tr('common:table.total'), '', '', '', m(sum(lines, (l) => l.taxableValue.minor)), ...taxCells(sum(lines, (l) => l.igst.minor), sum(lines, (l) => l.cgst.minor), sum(lines, (l) => l.sgst.minor), sum(lines, (l) => l.cess.minor))];
+          })(),
           widths: [0.8, 1.6, 1.1, 0.6, 1.1, 1, 1, 1, 0.8],
           kinds: [T, T, T, N, N, N, N, N, N],
           minWidth: 760,
@@ -263,11 +285,20 @@ export function useGstr1Sections(summary: Gstr1Summary) {
       default: {
         const rows = summary[view];
         return {
-          headers: [tr('compliance:gstr1.col.document'), view === 'b2b' || view === 'cdnr' ? 'GSTIN' : tr('compliance:gstr1.col.pos'), tr('compliance:gstr1.col.rate'), tr('compliance:gstr1.col.taxable'), ...taxHeads],
-          rows: rows.map((r) => [r.number, shortGstin(r.gstin) ?? r.placeOfSupply, formatPercent(r.rate), formatMoney(r.taxableValue), ...taxCells(r.igst.minor, r.cgst.minor, r.sgst.minor, r.cess.minor)]),
-          widths: [1.4, 1.1, 0.6, 1.1, 1, 1, 1, 0.8],
-          kinds: [T, T, N, N, N, N, N, N],
-          minWidth: 760,
+          headers: [tr('compliance:gstr1.col.document'), tr('compliance:gstr1.col.rate'), tr('compliance:gstr1.col.taxable'), ...taxHeads, tr('compliance:gstr1.col.invoiceValue')],
+          rows: rows.map((r) => [r.number, formatPercent(r.rate), formatMoney(r.taxableValue), ...taxCells(r.igst.minor, r.cgst.minor, r.sgst.minor, r.cess.minor), formatMoney(r.invoiceValue)]),
+          // Each document says when, who and (registered) their GSTIN or (not) the place of supply.
+          subtitles: rows.map((r) => [formatDate(r.date), r.partyName, r.gstin ?? r.placeOfSupplyName].filter(Boolean).join(' · ')),
+          total: [
+            tr('common:table.total'),
+            '',
+            m(sum(rows, (r) => r.taxableValue.minor)),
+            ...taxCells(sum(rows, (r) => r.igst.minor), sum(rows, (r) => r.cgst.minor), sum(rows, (r) => r.sgst.minor), sum(rows, (r) => r.cess.minor)),
+            '',
+          ],
+          widths: [2.2, 0.6, 1.1, 1, 1, 1, 0.8, 1.1],
+          kinds: [T, N, N, N, N, N, N, N],
+          minWidth: 960,
           count: rows.length,
           note: `${label} — ${tr(`compliance:gstr1.table.${view}`)}`,
           documents: rows.map((r) => ({ id: r.documentId, kind: r.kind })),
