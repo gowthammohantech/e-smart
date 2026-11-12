@@ -10,7 +10,7 @@ import { describeGspError, hasErrorCode, parsePortalDateAny, parsePortalDateTime
 import { resolveGspGateway } from './provider-name';
 import { toGstinRecord } from './taxpayer';
 import { GspRequestError, type GspRequest, type GspTransport } from './transport';
-import { sandboxDocNo, WhitebooksGateway } from './whitebooks';
+import { resplitTax, sandboxDocNo, WhitebooksGateway } from './whitebooks';
 
 const NOW = '2026-09-02T10:00:00.000Z';
 
@@ -526,6 +526,19 @@ describe('Whitebooks', () => {
 
     const missing = fakeTransport({ '/public/search': () => ({ error: { errorCode: 'FO8000' } }) as unknown as GspEnvelope });
     expect(await new WhitebooksGateway(whitebooksConfig(), missing.transport).lookupTaxpayer('27AAGCB1286Q2Z3')).toBeNull();
+  });
+});
+
+describe('sandbox buyer tax split', () => {
+  it('turns IGST into CGST + SGST when the test buyer is in the seller’s state', () => {
+    expect(resplitTax({ fromStateCode: '29', toStateCode: '29', cgstValue: 0, sgstValue: 0, igstValue: 90000 })).toEqual({ cgstValue: 45000, sgstValue: 45000, igstValue: 0 });
+  });
+  it('keeps the total when the halves do not divide evenly', () => {
+    const t = resplitTax({ fromStateCode: '29', toStateCode: '29', cgstValue: 0, sgstValue: 0, igstValue: 0.05 });
+    expect(t.cgstValue + t.sgstValue).toBeCloseTo(0.05, 2);
+  });
+  it('turns CGST + SGST into IGST when the test buyer is in another state', () => {
+    expect(resplitTax({ fromStateCode: '29', toStateCode: '33', cgstValue: 450, sgstValue: 450, igstValue: 0 })).toEqual({ cgstValue: 0, sgstValue: 0, igstValue: 900 });
   });
 });
 

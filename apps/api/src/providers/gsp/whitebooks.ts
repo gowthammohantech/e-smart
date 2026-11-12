@@ -411,6 +411,10 @@ export class WhitebooksGateway implements GspGateway {
           docNo: sandboxDocNo(this.config, login.gstin, req.payload.docNo, req.payload.docDate, req.companyId),
           ...(party ? { toGstin: String(party.Gstin), toTrdName: String(party.LglNm), toAddr1: String(party.Addr1), toAddr2: party.Addr2 ? String(party.Addr2) : undefined, toPlace: String(party.Loc), toPincode: Number(party.Pin), toStateCode: String(party.Stcd) } : {}),
         };
+        // The test buyer sits in a state of its own, so the bill can flip between intra- and inter-state, and NIC
+        // refuses IGST on an intra-state bill (218, with 623) and CGST/SGST on an inter-state one. The same tax is
+        // re-split to match; the total does not move.
+        if (party) Object.assign(payload, resplitTax(payload));
         const generate = (p: typeof payload) => this.standalone(login, PATHS.standaloneGenerate, nativeEwayBillBody(p));
         try {
           reply = await generate(payload);
@@ -522,6 +526,14 @@ export class WhitebooksGateway implements GspGateway {
   }
 }
 
+/** The bill's tax as CGST + SGST when it is intra-state, as IGST when it is not; the amount is unchanged. */
+export function resplitTax(p: { fromStateCode: string; toStateCode: string; cgstValue: number; sgstValue: number; igstValue: number }): { cgstValue: number; sgstValue: number; igstValue: number } {
+  const tax = p.cgstValue + p.sgstValue + p.igstValue;
+  if (Number(p.fromStateCode) !== Number(p.toStateCode)) return { cgstValue: 0, sgstValue: 0, igstValue: tax };
+  const half = Math.round((tax / 2) * 100) / 100;
+  return { cgstValue: half, sgstValue: Math.round((tax - half) * 100) / 100, igstValue: 0 };
+}
+
 /**
  * **Sandbox only.** Every tester shares the sandbox GSTIN `29AAGCB1286Q000`, and NIC keys an IRN (and an
  * e-way bill) on GSTIN + document number + year. A document called `INV/26-27/0003` has therefore usually
@@ -604,6 +616,8 @@ function nicErrors(body: WhitebooksEnvelope): WbError[] {
 const EWAYBILL_ERROR_TEXT: Readonly<Record<string, string>> = {
   '212': 'Invalid consignee GSTIN',
   '216': 'Invalid HSN code',
+  '218': 'Invalid tax rate for an intra-state bill (IGST is not allowed)',
+  '219': 'Invalid tax rate for an inter-state bill (CGST/SGST is not allowed)',
   '283': 'An HSN code of at least 6 digits is mandatory for this taxpayer',
   '303': 'Vehicle number is required',
   '359': 'The portal user GSTIN must match the from-GSTIN for an outward supply',
