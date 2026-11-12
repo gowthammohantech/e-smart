@@ -537,12 +537,14 @@
     "title": {
       "salesOrder": "Combine sales orders",
       "delivery": "Combine delivery notes",
-      "purchaseOrder": "Combine purchase orders"
+      "purchaseOrder": "Combine purchase orders",
+      "goodsReceipt": "Combine goods receipts"
     },
     "hint": {
       "salesOrder": "{{party}}’s other open orders can go on the same delivery note. Tick the ones to include: their lines follow this order’s.",
       "delivery": "{{party}}’s other delivery notes not yet invoiced can go on the same invoice. Tick the ones to include: their lines follow this note’s. The stock has already gone out on the notes, so the invoice doesn’t move it again.",
-      "purchaseOrder": "Other open purchase orders to {{party}} can be received on the same goods receipt. Tick the ones that came in together: their lines follow this order’s."
+      "purchaseOrder": "Other open purchase orders to {{party}} can be received on the same goods receipt. Tick the ones that came in together: their lines follow this order’s.",
+      "goodsReceipt": "Other goods receipts from {{party}} not yet billed can go on the same bill. Tick the ones it covers: their lines follow this receipt’s. The stock came in on the receipts, so the bill doesn’t add it again."
     },
     "thisOne": "This one",
     "picked_one": "{{count}} document into one",

@@ -171,6 +171,49 @@ describe('merge conversions: purchase orders into one goods receipt', () => {
   });
 });
 
+describe('merge conversions: goods receipts into one purchase bill', () => {
+  it('bills several GRNs on one purchase bill, which adds no stock again', async () => {
+    const m = await moneySetup(t);
+    const itemId = await m.item();
+    const grn = (name: string, quantity: number, date: string) =>
+      made(m, 'goodsReceipt', name, { partyId: m.supplier!.id, status: 'received', date, lines: [line(m.gst(18), { name, itemId, quantity })] });
+    const first = await grn('Rods', 4, '2026-09-10');
+    const second = await grn('More rods', 6, '2026-09-15');
+    expect(await onHand(t, itemId)).toBe(10);
+
+    const detail = await t.get(`${m.c}/documents/${first.id}`, { token: m.token });
+    expect(ids(detail.body.mergeableWith)).toEqual([second.id]);
+
+    const bill = await convert(m, first, 'purchaseBill', [second]);
+    expect(bill.status).toBe(201);
+    expect(bill.body).toMatchObject({ kind: 'purchaseBill', sourceDocumentId: first.id, mergedSourceIds: [second.id] });
+    expect(names(bill.body)).toEqual(['Rods', 'More rods']);
+    const patched = await t.patch(`${m.c}/documents/${bill.body.id}`, { ...invoiceBody(m, { kind: 'purchaseBill', partyId: m.supplier!.id, lines: bill.body.lines }), supplierDocNumber: 'KS/2026/118' }, { token: m.token });
+    expect(patched.status).toBe(200);
+    const issued = await t.post(`${m.c}/documents/${bill.body.id}/finalize`, {}, { token: m.token });
+    expect(issued.status).toBe(200);
+    expect(issued.body.document.totals.grandTotal.minor).toBe(10 * 100000 * 1.18);
+    // The receipts brought the stock in; the bill leaves it.
+    expect(await onHand(t, itemId)).toBe(10);
+    expect((await convert(m, second, 'purchaseBill')).body.code).toBe('ALREADY_CONVERTED');
+  });
+
+  it('a bill from a GRN merged from purchase orders adds no stock either', async () => {
+    const m = await moneySetup(t);
+    const itemId = await m.item();
+    const po = (name: string) => made(m, 'purchaseOrder', name, { partyId: m.supplier!.id, lines: [line(m.gst(18), { name, itemId, quantity: 3 })] });
+    const a = await po('Rods');
+    const b = await po('Bolts');
+    const grn = await convert(m, a, 'goodsReceipt', [b]);
+    expect((await t.post(`${m.c}/documents/${grn.body.id}/finalize`, {}, { token: m.token })).status).toBe(200);
+    expect(await onHand(t, itemId)).toBe(6);
+    const bill = await convert(m, grn.body, 'purchaseBill');
+    await t.patch(`${m.c}/documents/${bill.body.id}`, { ...invoiceBody(m, { kind: 'purchaseBill', partyId: m.supplier!.id, lines: bill.body.lines }), supplierDocNumber: 'KS/2026/119' }, { token: m.token });
+    expect((await t.post(`${m.c}/documents/${bill.body.id}/finalize`, {}, { token: m.token })).status).toBe(200);
+    expect(await onHand(t, itemId)).toBe(6);
+  });
+});
+
 describe('merge conversions: refusals', () => {
   it('an order straight to an invoice goes one at a time', async () => {
     const m = await moneySetup(t);
