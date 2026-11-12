@@ -132,6 +132,45 @@ describe('merge conversions: delivery notes into one invoice', () => {
   });
 });
 
+describe('merge conversions: purchase orders into one goods receipt', () => {
+  it('receives several of a supplier’s open orders on one GRN, which takes the stock in once', async () => {
+    const m = await moneySetup(t);
+    const itemId = await m.item();
+    const po = (name: string, quantity: number, date: string, over: Record<string, unknown> = {}) =>
+      made(m, 'purchaseOrder', name, { partyId: m.supplier!.id, date, lines: [line(m.gst(18), { name, itemId, quantity })], ...over });
+    const first = await po('Rods', 4, '2026-09-10');
+    const second = await po('More rods', 6, '2026-09-15');
+    // A customer's order is not the supplier's.
+    await made(m, 'salesOrder', 'Rods');
+
+    const detail = await t.get(`${m.c}/documents/${first.id}`, { token: m.token });
+    expect(ids(detail.body.mergeableWith)).toEqual([second.id]);
+
+    const grn = await convert(m, first, 'goodsReceipt', [second]);
+    expect(grn.status).toBe(201);
+    expect(grn.body).toMatchObject({ kind: 'goodsReceipt', partyId: m.supplier!.id, sourceDocumentId: first.id, mergedSourceIds: [second.id] });
+    expect(names(grn.body)).toEqual(['Rods', 'More rods']);
+    expect((await t.post(`${m.c}/documents/${grn.body.id}/finalize`, {}, { token: m.token })).status).toBe(200);
+    expect(await onHand(t, itemId)).toBe(10);
+
+    for (const order of [first, second]) {
+      const again = await convert(m, order, 'goodsReceipt');
+      expect(again.body.code).toBe('ALREADY_CONVERTED');
+      const d = await t.get(`${m.c}/documents/${order.id}`, { token: m.token });
+      expect(ids(d.body.linkedDocuments)).toContain(grn.body.id);
+    }
+  });
+
+  it('a purchase order goes straight to a bill one at a time', async () => {
+    const m = await moneySetup(t);
+    const a = await made(m, 'purchaseOrder', 'Rods', { partyId: m.supplier!.id });
+    const b = await made(m, 'purchaseOrder', 'Bolts', { partyId: m.supplier!.id });
+    const res = await convert(m, a, 'purchaseBill', [b]);
+    expect(res.status).toBe(422);
+    expect(res.body.code).toBe('INVALID_MERGE');
+  });
+});
+
 describe('merge conversions: refusals', () => {
   it('an order straight to an invoice goes one at a time', async () => {
     const m = await moneySetup(t);
