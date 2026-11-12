@@ -24,6 +24,7 @@ import { useLeaveGuard } from '../../components/useLeaveGuard';
 import { Expense, ItcEligibility, PaymentMethod, RecurrenceFrequency } from '@esmart/core/types';
 import { PAYMENT_METHODS } from '@esmart/core/data/masters';
 import { accountIdAfterMethodChange, accountsForMethod, defaultAccountFor } from '@esmart/core/domain/paymentAccounts';
+import { rateOf } from '@esmart/core/domain/taxEngine';
 import { paymentMethodLabel } from '@esmart/core/labels';
 import { formatMoney, formatPercent } from '@esmart/core/lib/format';
 import { addDaysISO, today } from '@esmart/core/lib/date';
@@ -168,7 +169,8 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
   };
 
   const amount = fromMajor(amountText || '0', baseCurrency);
-  const taxRate = taxCategories.find((c) => c.id === taxCategoryId)?.rate ?? 0;
+  // The rate in force on the expense's date, as the server charges it.
+  const taxRate = rateOf(taxCategories, taxCategoryId ?? undefined, date);
   // Under reverse charge the supplier's price has no GST in it: the business pays that tax to the government.
   const inclusive = taxInclusive && !reverseCharge;
   const taxAmount = taxRate > 0 ? (inclusive ? inclusiveTax(amount, taxRate) : percent(amount, taxRate)) : zero(baseCurrency);

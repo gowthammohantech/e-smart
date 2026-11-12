@@ -280,8 +280,11 @@ export type TaxCategory = {
   rate: number;
   type: TaxType;
   hsnCode?: string;
+  /** The day `rate` applies from. A document dated before it charges the rate it had then (`history`). */
   effectiveFrom: string;
   description?: string;
+  /** The rates it had before `effectiveFrom`, each from its own day: see `taxRateOn`. */
+  history?: { effectiveFrom: string; rate: number }[];
 };
 
 export type TaxComponent = {

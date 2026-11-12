@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, lte, ne, notInArray } from 'drizzle-orm';
+import { and, eq, inArray, lte, ne, notInArray } from 'drizzle-orm';
 import { vehicleIssues } from '../settings/vehicles';
 import { partyTcsSection, tcsAskedOn, tcsRateFor } from '@esmart/core/data/tcsSections';
 import { OPENING_KINDS } from '@esmart/core/domain/documentStates';
@@ -11,7 +11,7 @@ import { resolveRate } from '@esmart/core/domain/fx';
 import { calculateDocument, calculateLine } from '@esmart/core/domain/lineCalc';
 import { FULL_PLAN, hasModule, saleTdsOnPlan } from '@esmart/core/domain/plan';
 import { OTHER_COUNTRY_CODE } from '@esmart/core/domain/stateCodes';
-import { buildTaxContext } from '@esmart/core/domain/taxEngine';
+import { buildTaxContext, taxRateOn } from '@esmart/core/domain/taxEngine';
 import { addDaysISO } from '@esmart/core/lib/date';
 import type { Branch, Company, DocumentKind, DocumentLine, DocumentTotals, GstFlags, Party, TaxCategory } from '@esmart/core/types';
 import { schema } from '@esmart/db';
@@ -20,6 +20,7 @@ import type { CompanyRow } from '../../context';
 import { conflict, planUpgradeRequired, unprocessable, type Issue } from '../../http/errors';
 import type { DbOrTx } from '../../lib/audit';
 import { newId } from '../../lib/ids';
+import { taxHistories } from '../../lib/taxRates';
 import { gstColumns, gstFlagsFrom, iso, requiredAddressFrom } from '../../lib/wire';
 import { tdsOn, tdsSectionFor } from '../../lib/tds';
 import { expectedSaleTds } from '@esmart/core/domain/tds';
@@ -463,12 +464,8 @@ export async function prepareDocument(
     for (const s of stored) returned.set(s.itemId ?? s.name, Number(s.taxRate));
   }
   // A category changed since the document's date charged its earlier rate then.
-  const history = await db
-    .select()
-    .from(schema.taxCategoryRates)
-    .where(and(inArray(schema.taxCategoryRates.taxCategoryId, categories.map((c) => c.id)), lte(schema.taxCategoryRates.effectiveFrom, f.date)))
-    .orderBy(desc(schema.taxCategoryRates.effectiveFrom));
-  const rateOn = (c: (typeof categories)[number]) => (c.effectiveFrom > f.date ? (history.find((h) => h.taxCategoryId === c.id)?.rate ?? c.rate) : c.rate);
+  const histories = await taxHistories(db, categories.filter((c) => c.effectiveFrom > f.date).map((c) => c.id));
+  const rateOn = (c: (typeof categories)[number]) => taxRateOn({ ...c, history: histories.get(c.id) }, f.date);
 
   const coreLines: DocumentLine[] = lines.map((l, i) => {
     const category = categories.find((c) => c.id === l.taxCategoryId);

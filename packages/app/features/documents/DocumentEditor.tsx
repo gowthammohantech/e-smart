@@ -27,7 +27,7 @@ import { TDS_SECTIONS, tdsSection } from '@esmart/core/data/tdsSections';
 import { TCS_SECTIONS, partyTcsSection, tcsAskedOn, tcsRateFor, tcsSection } from '@esmart/core/data/tcsSections';
 import { documentKindLabel } from '@esmart/core/labels';
 import { resolveRate } from '@esmart/core/domain/fx';
-import { buildTaxContext } from '@esmart/core/domain/taxEngine';
+import { buildTaxContext, taxCategoriesOn } from '@esmart/core/domain/taxEngine';
 import { OTHER_COUNTRY_CODE } from '@esmart/core/domain/stateCodes';
 import { CURRENCIES } from '@esmart/core/lib/currencies';
 import { formatMoney, formatPercent, formatQty } from '@esmart/core/lib/format';
@@ -210,7 +210,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   const hasInventory = useHasModule('inventory');
   const hasPos = useHasModule('pos');
   const branches = useBranches();
-  const taxCategories = useTaxCategories();
+  // Every category with its rates over time; the form charges them as of the draft's date (below).
+  const allTaxCategories = useTaxCategories();
   const exchangeRates = useExchangeRates();
   const isPurchase = PURCHASE_KINDS.includes(kind);
   const parties = useParties(isPurchase ? 'supplier' : 'customer');
@@ -279,6 +280,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
     const p = prefill.partyId ? parties.find((x) => x.id === prefill.partyId) : undefined;
     const item = prefill.itemId ? items.find((i) => i.id === prefill.itemId) : undefined;
     // A scanned line the server matched to an item starts from that item, so it moves stock.
+    // Lines start at the rates in force on the date they are for.
+    const taxCategories = taxCategoriesOn(allTaxCategories, base.date);
     const scanned = (prefill.lines ?? []).map((l) => {
       const matched = l.itemId ? items.find((i) => i.id === l.itemId) : undefined;
       return {
@@ -337,11 +340,14 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   const { draft, setDraft, patch, addLine, updateLine, removeLine, setCurrency, setPricesIncludeTax, totals } = useDocumentDraft({
     kind,
     baseCurrency,
-    taxCategories,
+    taxCategories: allTaxCategories,
     taxContext: draftTaxContext,
     initial: initialDraft ?? seed?.draft,
     tcsRate: kind === 'invoice' ? tcsRateOfDraft : kind === 'creditNote' || kind === 'salesReturn' ? tcsRateOfNote : undefined,
   });
+
+  // Each category at its rate on the draft's date: a line added now charges what was in force then.
+  const taxCategories = useMemo(() => taxCategoriesOn(allTaxCategories, draft.date), [allTaxCategories, draft.date]);
 
   // A note raised against no one invoice or bill (?direct=1): it chooses its GST treatment.
   const directNote = isNote && !draft.sourceDocumentId;

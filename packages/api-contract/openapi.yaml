@@ -6982,8 +6982,18 @@ components:
             rate: { type: number, minimum: 0, maximum: 999.999, description: 'Combined percentage, split at calculation time. Up to 100, or 999.999 for CESS' }
             type: { type: string, enum: [GST, CGST, SGST, IGST, VAT, CESS, NONE] }
             hsnCode: { type: string }
-            effectiveFrom: { type: string, format: date }
+            effectiveFrom: { type: string, format: date, description: 'The day `rate` applies from. A document or expense dated before it is charged the rate in force then (history).' }
             description: { type: string }
+            history:
+              type: array
+              readOnly: true
+              description: The rates it had before effectiveFrom, oldest first, each from its own day
+              items:
+                type: object
+                required: [effectiveFrom, rate]
+                properties:
+                  effectiveFrom: { type: string, format: date }
+                  rate: { type: number }
     ExpenseCategory:
       allOf:
         - $ref: '#/components/schemas/Versioned'

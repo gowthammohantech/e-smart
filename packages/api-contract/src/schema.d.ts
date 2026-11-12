@@ -4983,9 +4983,18 @@ export interface components {
             /** @enum {string} */
             type: "GST" | "CGST" | "SGST" | "IGST" | "VAT" | "CESS" | "NONE";
             hsnCode?: string;
-            /** Format: date */
+            /**
+             * Format: date
+             * @description The day `rate` applies from. A document or expense dated before it is charged the rate in force then (history).
+             */
             effectiveFrom: string;
             description?: string;
+            /** @description The rates it had before effectiveFrom, oldest first, each from its own day */
+            readonly history?: {
+                /** Format: date */
+                effectiveFrom: string;
+                rate: number;
+            }[];
         };
         ExpenseCategory: components["schemas"]["Versioned"] & {
             readonly id?: string;

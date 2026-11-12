@@ -148,6 +148,27 @@ export function findTaxCategory(
   return categories.find((c) => c.id === id);
 }
 
-export function rateOf(categories: TaxCategory[], id: string | undefined): number {
-  return findTaxCategory(categories, id)?.rate ?? 0;
+export function rateOf(categories: TaxCategory[], id: string | undefined, date?: string): number {
+  const c = findTaxCategory(categories, id);
+  return c ? taxRateOn(c, date) : 0;
+}
+
+/**
+ * A category's rate on `date`: its rate from `effectiveFrom` on, and before that the last of its
+ * earlier rates (`history`) to have started by then. No date, or nothing earlier on record, is
+ * today's rate. The server charges a document the same way.
+ */
+export function taxRateOn(category: Pick<TaxCategory, 'rate' | 'effectiveFrom' | 'history'>, date: string | undefined): number {
+  if (!date || !category.effectiveFrom || category.effectiveFrom <= date) return category.rate;
+  let best: { effectiveFrom: string; rate: number } | undefined;
+  for (const h of category.history ?? []) if (h.effectiveFrom <= date && (!best || h.effectiveFrom > best.effectiveFrom)) best = h;
+  return best?.rate ?? category.rate;
+}
+
+/** Every category at its rate on `date`, for a form that charges as of that day. */
+export function taxCategoriesOn<T extends TaxCategory>(categories: T[], date: string | undefined): T[] {
+  return categories.map((c) => {
+    const rate = taxRateOn(c, date);
+    return rate === c.rate ? c : { ...c, rate };
+  });
 }
