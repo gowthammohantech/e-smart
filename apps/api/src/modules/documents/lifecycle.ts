@@ -1,6 +1,6 @@
 import { and, arrayOverlaps, desc, eq, gt, gte, inArray, lt, ne, notInArray, or, sql, type SQL } from 'drizzle-orm';
 import { businessDate, creditNoteDeadline } from '@esmart/core/lib/date';
-import { INVOICE_LIMITS, nextInvoicePlan } from '@esmart/core/domain/plan';
+import { INVOICE_LIMITS, hasModule, nextInvoicePlan } from '@esmart/core/domain/plan';
 import { CREDIT_KINDS, NOTE_KINDS, NOTE_SOURCE, PAYABLE_KINDS, isFinalized, isPayableDocument } from '@esmart/core/domain/documentStates';
 import { statusForOutstanding } from '@esmart/core/domain/receivables';
 import { MOVEMENT_SIGN, signedQuantity, stockMapOn } from '@esmart/core/domain/stockLedger';
@@ -196,6 +196,14 @@ function receiptUnitCost(row: DocRow, l: typeof schema.documentLines.$inferSelec
   return (taxable.minor + lost) / quantity;
 }
 
+/**
+ * Whether stock may not go below zero: unless the business allows it, on a plan that keeps stock.
+ * A plan without stock (Free, Basic) has no such setting to turn off, so it never refuses a sale.
+ */
+function checksStock(company: CompanyRow): boolean {
+  return !company.allowNegativeStock && hasModule(company.plan, 'inventory');
+}
+
 export async function postStock(tx: DbOrTx, company: CompanyRow, row: DocRow, actorId: string): Promise<number> {
   const type = movementTypeFor(row.kind);
   if (!type) return 0;
@@ -240,7 +248,7 @@ export async function postStock(tx: DbOrTx, company: CompanyRow, row: DocRow, ac
         createdBy: actorId,
       };
     });
-  if (values.length && MOVEMENT_SIGN[type] < 0 && !company.allowNegativeStock) {
+  if (values.length && MOVEMENT_SIGN[type] < 0 && checksStock(company)) {
     const need = new Map<string, number>();
     for (const v of values) need.set(v.itemId, (need.get(v.itemId) ?? 0) + Math.abs(Number(v.quantity)));
     // Only stock there on the document date counts, and never more than the lowest it
@@ -281,7 +289,7 @@ export async function reverseStock(tx: DbOrTx, company: CompanyRow, row: DocRow,
   if (!open.length) return 0;
   // Taking back stock this document brought in: it may have been sold since.
   const incoming = open.filter((r) => Number(r.net) > 0);
-  if (incoming.length && !company.allowNegativeStock) {
+  if (incoming.length && checksStock(company)) {
     const ids = [...new Set(incoming.map((r) => r.itemId))].sort();
     const items = await tx.select().from(schema.items).where(and(eq(schema.items.companyId, row.companyId), inArray(schema.items.id, ids))).orderBy(schema.items.id).for('update');
     const ledger = await tx.select({ itemId: M.itemId, branchId: M.branchId, type: M.type, quantity: M.quantity, date: M.date }).from(M).where(and(eq(M.companyId, row.companyId), inArray(M.itemId, ids)));

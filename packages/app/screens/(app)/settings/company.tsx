@@ -13,7 +13,8 @@ import { CityField } from '@esmart/ui/components/pickers/CityField';
 import { useServerSave } from '../../../components/useServerSave';
 import { useSaveShortcut } from '../../../components/useSaveShortcut';
 import { useAppStore } from '../../../store/appStore';
-import { useActiveCompany, usePaymentAccounts } from '../../../store/selectors';
+import { useActiveCompany, usePaymentAccounts, usePlan } from '../../../store/selectors';
+import { hasModule } from '@esmart/core/domain/plan';
 import { bankDetailsOf } from '@esmart/core/domain/paymentAccounts';
 import { useCompanyUsage } from '../../../remote/queries';
 import { profileLocks } from '@esmart/core/domain/companyLock';
@@ -67,6 +68,7 @@ function CompanySettingsForm() {
   const anchor = (key: 'tax' | 'bank') => (section === key ? onSectionLayout : undefined);
 
   const company = useActiveCompany();
+  const plan = usePlan();
   const saveCompany = useAppStore((s) => s.saveCompany);
   // After the first posted entry, the fields those entries depend on are frozen.
   // Locked until the server says otherwise; it refuses the change either way.
@@ -420,14 +422,15 @@ function CompanySettingsForm() {
       ) : null}
     </>
   ) : null;
-  const negativeStockSwitch = (
+  // Only a plan that keeps stock (Pro and up) has a stock level to go below: Free and Basic never refuse a sale for it.
+  const negativeStockSwitch = hasModule(plan, 'inventory') ? (
     <SwitchField
       label={tr('settings:company.allowNegativeStock')}
       description={tr('settings:company.allowNegativeStockHint')}
       value={allowNegativeStock}
       onValueChange={setAllowNegativeStock}
     />
-  );
+  ) : null;
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -457,7 +460,7 @@ function CompanySettingsForm() {
                     {addressField}
                     <FieldGrid items={[stateField, cityField, pinField]} />
                   </FormSection>
-                  <FormSection title={tr('settings:company.inventory')}>{negativeStockSwitch}</FormSection>
+                  {negativeStockSwitch ? <FormSection title={tr('settings:company.inventory')}>{negativeStockSwitch}</FormSection> : null}
                 </View>
               }
             />
@@ -528,7 +531,7 @@ function CompanySettingsForm() {
             {registeredSwitch}
             {taxDetails}
 
-            {caption(tr('settings:company.inventory'))}
+            {negativeStockSwitch ? caption(tr('settings:company.inventory')) : null}
             {negativeStockSwitch}
 
           </>
