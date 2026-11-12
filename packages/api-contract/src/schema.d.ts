@@ -5962,6 +5962,8 @@ export interface components {
             reverseCharge?: boolean;
             attachmentIds?: string[];
             sourceDocumentId?: string;
+            /** @description Made from several documents at once (sales orders into one challan, and so on): the others, after sourceDocumentId */
+            readonly mergedSourceIds?: string[];
             /**
              * @description Why a credit or debit note was raised
              * @enum {string}
@@ -6129,6 +6131,8 @@ export interface components {
             allowedConversions?: components["schemas"]["DocumentKind"][];
             /** @description Direct notes applied to this document, or (on a note) the documents it is applied to */
             creditApplications?: components["schemas"]["CreditApplication"][];
+            /** @description The party's other documents that can go into the same conversion with this one (convert's alsoFrom), oldest first */
+            mergeableWith?: components["schemas"]["DocumentSummary"][];
         };
         /** @enum {string} */
         EInvoiceStatus: "notApplicable" | "pending" | "generated" | "cancelled" | "failed";
@@ -11043,6 +11047,8 @@ export interface operations {
                     targetKind: components["schemas"]["DocumentKind"];
                     /** @description Convert only these lines (partial fulfilment). All lines when omitted. */
                     lineIds?: string[];
+                    /** @description Other documents to merge into the same draft, where the conversion allows it (see mergeableWith): of the same kind, party, branch, currency and place of supply, each finalised and not yet carried forward. Their lines follow this one's, oldest first. */
+                    alsoFrom?: string[];
                 };
             };
         };

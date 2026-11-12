@@ -233,7 +233,8 @@ export const MUTATIONS: Partial<Record<keyof AppState, Builder>> = {
     () => '/convert',
     (call) => {
       const lineIds = call.args[2] as string[] | undefined;
-      return { targetKind: call.args[1] as DocumentKind, ...(lineIds?.length ? { lineIds } : {}) };
+      const alsoFrom = call.args[3] as string[] | undefined;
+      return { targetKind: call.args[1] as DocumentKind, ...(lineIds?.length ? { lineIds } : {}), ...(alsoFrom?.length ? { alsoFrom } : {}) };
     },
     (call) => call.result as string,
   ),

@@ -211,13 +211,31 @@ export const NOTE_SOURCE: Partial<Record<DocumentKind, DocumentKind>> = {
 export function conversionBlock(
   source: { id: string; status: DocStatus },
   target: DocumentKind,
-  made: { kind: DocumentKind; status: DocStatus; sourceDocumentId?: string | null }[],
+  made: { kind: DocumentKind; status: DocStatus; sourceDocumentId?: string | null; mergedSourceIds?: string[] | null }[],
 ): 'cancelled' | 'draft' | 'converted' | null {
   if (isCancelled(source.status)) return 'cancelled';
   if (!isFinalized(source.status)) return 'draft';
   if (AGAINST_SOURCE.includes(target)) return null;
-  const onward = made.some((d) => d.sourceDocumentId === source.id && !AGAINST_SOURCE.includes(d.kind) && !isCancelled(d.status));
+  const onward = made.some((d) => madeFrom(d, source.id) && !AGAINST_SOURCE.includes(d.kind) && !isCancelled(d.status));
   return onward ? 'converted' : null;
+}
+
+/** Was `d` made from `sourceId`: its source, or one of the others it was merged from. */
+export function madeFrom(d: { sourceDocumentId?: string | null; mergedSourceIds?: string[] | null }, sourceId: string): boolean {
+  return d.sourceDocumentId === sourceId || !!d.mergedSourceIds?.includes(sourceId);
+}
+
+/**
+ * Conversions that may take several documents of one party at once into one: sales orders into
+ * one delivery challan. The others merged in must be of the same kind, party, branch, currency
+ * and place of supply, each finalised and not yet carried forward.
+ */
+export const MERGE_CONVERSIONS: Partial<Record<DocumentKind, DocumentKind[]>> = {
+  salesOrder: ['delivery'],
+};
+
+export function canMerge(source: DocumentKind, target: DocumentKind): boolean {
+  return !!MERGE_CONVERSIONS[source]?.includes(target);
 }
 
 /** Documents that create a receivable / payable. */

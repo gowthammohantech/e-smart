@@ -1,0 +1,2 @@
+ALTER TABLE "documents" ADD COLUMN "merged_source_ids" varchar(40)[] DEFAULT '{}' NOT NULL;--> statement-breakpoint
+CREATE INDEX "documents_merged_source_ids_idx" ON "documents" USING gin ("merged_source_ids");

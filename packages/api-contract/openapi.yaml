@@ -2497,6 +2497,13 @@ paths:
               properties:
                 targetKind: { $ref: '#/components/schemas/DocumentKind' }
                 lineIds: { type: array, items: { type: string }, description: Convert only these lines (partial fulfilment). All lines when omitted. }
+                alsoFrom:
+                  type: array
+                  items: { type: string }
+                  description: >-
+                    Other documents to merge into the same draft, where the conversion allows it (see
+                    mergeableWith): of the same kind, party, branch, currency and place of supply, each
+                    finalised and not yet carried forward. Their lines follow this one's, oldest first.
       responses:
         '201':
           description: Draft created, with `sourceDocumentId` set
@@ -7896,6 +7903,7 @@ components:
         reverseCharge: { type: boolean, description: The whole document is under reverse charge; the buyer pays the GST }
         attachmentIds: { type: array, items: { type: string } }
         sourceDocumentId: { type: string }
+        mergedSourceIds: { type: array, items: { type: string }, readOnly: true, description: 'Made from several documents at once (sales orders into one challan, and so on): the others, after sourceDocumentId' }
         noteReason: { type: string, enum: [discount, priceChange, taxCorrection, deficiency, other], description: Why a credit or debit note was raised }
         noteGst:
           type: string
@@ -8031,6 +8039,7 @@ components:
             allowedTransitions: { type: array, items: { $ref: '#/components/schemas/DocStatus' } }
             allowedConversions: { type: array, items: { $ref: '#/components/schemas/DocumentKind' } }
             creditApplications: { type: array, items: { $ref: '#/components/schemas/CreditApplication' }, description: 'Direct notes applied to this document, or (on a note) the documents it is applied to' }
+            mergeableWith: { type: array, items: { $ref: '#/components/schemas/DocumentSummary' }, description: "The party's other documents that can go into the same conversion with this one (convert's alsoFrom), oldest first" }
 
     # ---------------------------------------------------------------- compliance
     EInvoiceStatus: { type: string, enum: [notApplicable, pending, generated, cancelled, failed] }

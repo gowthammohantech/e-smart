@@ -646,6 +646,8 @@ export const documents = pgTable("documents", {
 	notes: text(),
 	terms: text(),
 	sourceDocumentId: varchar("source_document_id", { length: 40 }),
+	// Made from several documents at once (orders into one challan, and so on): the others after source_document_id.
+	mergedSourceIds: varchar("merged_source_ids", { length: 40 }).array().default([]).notNull(),
 	noteReason: noteReason("note_reason"),
 	// A direct note (no source document): 'withGst' (s.34, the default) or 'noGst' (a financial or
 	// commercial note: no tax, posted to discount, out of the returns).
@@ -718,6 +720,7 @@ export const documents = pgTable("documents", {
 	index("documents_company_id_kind_status_date_idx").using("btree", table.companyId.asc().nullsLast(), table.kind.asc().nullsLast(), table.status.asc().nullsLast(), table.date.asc().nullsLast()),
 	index("documents_company_id_party_id_date_idx").using("btree", table.companyId.asc().nullsLast(), table.partyId.asc().nullsLast(), table.date.asc().nullsLast()),
 	index("documents_source_document_id_idx").using("btree", table.sourceDocumentId.asc().nullsLast()),
+	index("documents_merged_source_ids_idx").using("gin", table.mergedSourceIds),
 	index("documents_next_recurrence_date_idx").using("btree", table.nextRecurrenceDate.asc().nullsLast()),
 	index("documents_recurring_parent_id_date_idx").using("btree", table.recurringParentId.asc().nullsLast(), table.date.asc().nullsLast()),
 	foreignKey({

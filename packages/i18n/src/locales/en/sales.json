@@ -533,6 +533,18 @@
     "customerSeal": "Customer's seal and signature",
     "computerGenerated": "This is a computer-generated invoice"
   },
+  "merge": {
+    "title": {
+      "salesOrder": "Combine sales orders"
+    },
+    "hint": {
+      "salesOrder": "{{party}}’s other open orders can go on the same delivery note. Tick the ones to include: their lines follow this order’s."
+    },
+    "thisOne": "This one",
+    "picked_one": "{{count}} document into one",
+    "picked_other": "{{count}} documents into one",
+    "fetching": "Getting their lines…"
+  },
   "returnPicker": {
     "salesHint": "Pick the invoice being returned. Its lines are copied into the return, where you can reduce quantities or remove lines.",
     "purchaseHint": "Pick the bill being returned. Its lines are copied into the return, where you can reduce quantities or remove lines.",

@@ -51,7 +51,7 @@ import { nowISO, today } from '@esmart/core/lib/date';
 import { uid } from '@esmart/core/lib/id';
 import { calculateDocument } from '@esmart/core/domain/lineCalc';
 import { DEFAULT_PREFIXES, SERIES_KINDS, formatNumber } from '@esmart/core/domain/numbering';
-import { CREDIT_KINDS, PURCHASE_KINDS, conversionBlock, initialStatus, isFinalized, isPayableDocument } from '@esmart/core/domain/documentStates';
+import { CREDIT_KINDS, PURCHASE_KINDS, canMerge, conversionBlock, initialStatus, isFinalized, isPayableDocument } from '@esmart/core/domain/documentStates';
 import { documentAuditSnapshot } from '@esmart/core/domain/auditDiff';
 import { expenseCategories as defaultExpenseCategories } from '@esmart/core/data/masters';
 import { allocateAdvances, creditedTo, settledBy, statusForOutstanding } from '@esmart/core/domain/receivables';
@@ -213,8 +213,12 @@ type Actions = {
   finalizeDocument: (id: string) => void;
   removeDocument: (id: string) => void;
   duplicateDocument: (id: string) => string;
-  /** `lineIds` keeps only those of the source's lines (a note or return against part of an invoice). */
-  convertDocument: (id: string, target: DocumentKind, lineIds?: string[]) => string;
+  /**
+   * `lineIds` keeps only those of the source's lines (a note or return against part of an invoice).
+   * `alsoFrom` merges others of the party's into the same draft, where the conversion allows it
+   * (`canMerge`): their lines follow the source's, oldest first. They must be in the store.
+   */
+  convertDocument: (id: string, target: DocumentKind, lineIds?: string[], alsoFrom?: string[]) => string;
 
   /* payments */
   /** Returns the id, or '' when the account does not fit the payment method. */
@@ -286,6 +290,7 @@ export type NewDocumentInput = {
   branchId?: string;
   attachmentIds?: string[];
   sourceDocumentId?: string;
+  mergedSourceIds?: string[];
   status?: DocStatus;
 };
 
@@ -848,6 +853,7 @@ export const useAppStore = create<AppState>()(
             terms: draft.terms,
             attachmentIds: draft.attachmentIds ?? [],
             sourceDocumentId: draft.sourceDocumentId,
+            ...(draft.mergedSourceIds?.length && { mergedSourceIds: draft.mergedSourceIds }),
             totals: {
               subtotal: zero(draft.currency),
               lineDiscount: zero(draft.currency),
@@ -974,10 +980,20 @@ export const useAppStore = create<AppState>()(
           });
         },
 
-        convertDocument: (id, target, lineIds) => {
-          const src = get().documents.find((d) => d.id === id);
+        convertDocument: (id, target, lineIds, alsoFrom) => {
+          const docs = get().documents;
+          const src = docs.find((d) => d.id === id);
           // Nothing is made from a cancelled or draft document, nor twice from one order.
-          if (!src || conversionBlock(src, target, get().documents)) return '';
+          if (!src || conversionBlock(src, target, docs)) return '';
+          // Merged in, oldest first, as the server orders them: each the party's, open, not yet carried forward.
+          const others = (alsoFrom ?? [])
+            .filter((o) => o !== id)
+            .map((o) => docs.find((d) => d.id === o))
+            .filter((d): d is BusinessDocument => !!d)
+            .sort((a, b) => a.date.localeCompare(b.date) || a.number.localeCompare(b.number));
+          if (others.length && (!canMerge(src.kind, target) || others.length !== new Set(alsoFrom!.filter((o) => o !== id)).size)) return '';
+          if (others.some((d) => d.kind !== src.kind || d.partyId !== src.partyId || d.currency !== src.currency || conversionBlock(d, target, docs))) return '';
+          const sourceLines = [src, ...others].flatMap((d) => d.lines);
           const party = get().parties.find((p) => p.id === src.partyId);
           const newId = get().createDocument({
             kind: target,
@@ -989,7 +1005,7 @@ export const useAppStore = create<AppState>()(
                 : undefined,
             currency: src.currency,
             exchangeRate: src.exchangeRate,
-            lines: src.lines.filter((l) => !lineIds?.length || lineIds.includes(l.id)).map((l) => ({ ...l, id: uid('ln') })),
+            lines: sourceLines.filter((l) => !lineIds?.length || lineIds.includes(l.id)).map((l) => ({ ...l, id: uid('ln') })),
             documentDiscountMode: src.documentDiscountMode,
             documentDiscountValue: src.documentDiscountValue,
             charges: src.charges,
@@ -1004,10 +1020,11 @@ export const useAppStore = create<AppState>()(
             reverseCharge: src.reverseCharge,
             branchId: src.branchId,
             sourceDocumentId: src.id,
+            mergedSourceIds: others.map((d) => d.id),
             // A return starts as requested, not draft, or it has no way forward to post.
             status: initialStatus(target),
           });
-          audit(`converted to ${target}`, src.kind, src.id, src.number);
+          for (const d of [src, ...others]) audit(`converted to ${target}`, d.kind, d.id, d.number);
           return newId;
         },
 

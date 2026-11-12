@@ -154,6 +154,7 @@ export async function documentsToWire(db: DbOrTx, rows: DocRow[], now: Date, bas
       terms: row.terms,
       attachmentIds: attachments.filter((a) => a.entityId === row.id).map((a) => a.id),
       sourceDocumentId: row.sourceDocumentId,
+      mergedSourceIds: row.mergedSourceIds?.length ? row.mergedSourceIds : undefined,
       noteReason: row.noteReason,
       noteGst: row.noteGst as DocumentWire['noteGst'],
       originalNumber: row.originalNumber,
