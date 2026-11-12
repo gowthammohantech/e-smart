@@ -14,7 +14,7 @@ import { formatDate } from '@esmart/core/lib/date';
 type Row = { id: string; number: string; date: string; total?: Money; detail?: string };
 
 /** The kinds several of which can go into one (`MERGE_CONVERSIONS`), each with its own title and hint. */
-export type MergeSource = 'salesOrder';
+export type MergeSource = 'salesOrder' | 'delivery';
 
 /**
  * Several of a party's orders (challans, receipts) into one: this one, ticked and fixed, and the

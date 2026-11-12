@@ -227,11 +227,13 @@ export function madeFrom(d: { sourceDocumentId?: string | null; mergedSourceIds?
 
 /**
  * Conversions that may take several documents of one party at once into one: sales orders into
- * one delivery challan. The others merged in must be of the same kind, party, branch, currency
- * and place of supply, each finalised and not yet carried forward.
+ * one delivery challan, challans into one invoice. The others merged in must be of the same kind,
+ * party, branch, currency and place of supply, each finalised and not yet carried forward.
+ * An invoice from challans moves no stock: the challans did.
  */
 export const MERGE_CONVERSIONS: Partial<Record<DocumentKind, DocumentKind[]>> = {
   salesOrder: ['delivery'],
+  delivery: ['invoice'],
 };
 
 export function canMerge(source: DocumentKind, target: DocumentKind): boolean {

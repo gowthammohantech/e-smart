@@ -535,10 +535,12 @@
   },
   "merge": {
     "title": {
-      "salesOrder": "Combine sales orders"
+      "salesOrder": "Combine sales orders",
+      "delivery": "Combine delivery notes"
     },
     "hint": {
-      "salesOrder": "{{party}}’s other open orders can go on the same delivery note. Tick the ones to include: their lines follow this order’s."
+      "salesOrder": "{{party}}’s other open orders can go on the same delivery note. Tick the ones to include: their lines follow this order’s.",
+      "delivery": "{{party}}’s other delivery notes not yet invoiced can go on the same invoice. Tick the ones to include: their lines follow this note’s. The stock has already gone out on the notes, so the invoice doesn’t move it again."
     },
     "thisOne": "This one",
     "picked_one": "{{count}} document into one",

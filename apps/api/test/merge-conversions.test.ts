@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { setupApi } from './helpers';
-import { invoiceBody, line, moneySetup, type Money } from './money-fixtures';
+import { invoiceBody, line, moneySetup, onHand, type Money } from './money-fixtures';
 
 const t = setupApi();
 beforeEach(() => t.setNow('2026-09-29T10:00:00Z'));
@@ -87,5 +87,58 @@ describe('merge conversions: sales orders into one delivery challan', () => {
     expect(res.body.code).toBe('INVALID_MERGE');
     const detail = await t.get(`${m.c}/documents/${a.id}`, { token: m.token });
     expect(detail.body.mergeableWith).toEqual([]);
+  });
+});
+
+describe('merge conversions: delivery notes into one invoice', () => {
+  it('bills several delivery notes on one invoice, which moves no stock again', async () => {
+    const m = await moneySetup(t);
+    await m.allowNegativeStock();
+    const itemId = await m.item();
+    const note = (name: string, quantity: number, date: string) => made(m, 'delivery', name, { status: 'delivered', date, lines: [line(m.gst(18), { name, itemId, quantity })] });
+    const first = await note('Rods', 2, '2026-09-20');
+    const second = await note('More rods', 3, '2026-09-25');
+    expect(await onHand(t, itemId)).toBe(-5);
+
+    const detail = await t.get(`${m.c}/documents/${second.id}`, { token: m.token });
+    expect(ids(detail.body.mergeableWith)).toEqual([first.id]);
+
+    // Converted from the later one: its lines come first, the earlier note's after.
+    const invoice = await convert(m, second, 'invoice', [first]);
+    expect(invoice.status).toBe(201);
+    expect(invoice.body).toMatchObject({ kind: 'invoice', sourceDocumentId: second.id, mergedSourceIds: [first.id] });
+    expect(names(invoice.body)).toEqual(['More rods', 'Rods']);
+    const issued = await t.post(`${m.c}/documents/${invoice.body.id}/finalize`, {}, { token: m.token });
+    expect(issued.status).toBe(200);
+    expect(issued.body.document.totals.grandTotal.minor).toBe(5 * 100000 * 1.18);
+    // The notes took the stock out; the invoice leaves it.
+    expect(await onHand(t, itemId)).toBe(-5);
+    expect((await convert(m, first, 'invoice')).body.code).toBe('ALREADY_CONVERTED');
+  });
+
+  it('an invoice from a challan merged from orders moves no stock either', async () => {
+    const m = await moneySetup(t);
+    await m.allowNegativeStock();
+    const itemId = await m.item();
+    const order = (name: string) => made(m, 'salesOrder', name, { lines: [line(m.gst(18), { name, itemId, quantity: 1 })] });
+    const a = await order('Rods');
+    const b = await order('Bolts');
+    const challan = await convert(m, a, 'delivery', [b]);
+    expect((await t.post(`${m.c}/documents/${challan.body.id}/finalize`, {}, { token: m.token })).status).toBe(200);
+    expect(await onHand(t, itemId)).toBe(-2);
+    const invoice = await convert(m, challan.body, 'invoice');
+    expect((await t.post(`${m.c}/documents/${invoice.body.id}/finalize`, {}, { token: m.token })).status).toBe(200);
+    expect(await onHand(t, itemId)).toBe(-2);
+  });
+});
+
+describe('merge conversions: refusals', () => {
+  it('an order straight to an invoice goes one at a time', async () => {
+    const m = await moneySetup(t);
+    const a = await made(m, 'salesOrder', 'Rods');
+    const b = await made(m, 'salesOrder', 'Bolts');
+    const res = await convert(m, a, 'invoice', [b]);
+    expect(res.status).toBe(422);
+    expect(res.body.code).toBe('INVALID_MERGE');
   });
 });

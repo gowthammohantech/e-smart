@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, gte, inArray, lt, ne, notInArray, or, sql, type SQL } from 'drizzle-orm';
+import { and, arrayOverlaps, desc, eq, gt, gte, inArray, lt, ne, notInArray, or, sql, type SQL } from 'drizzle-orm';
 import { businessDate, creditNoteDeadline } from '@esmart/core/lib/date';
 import { INVOICE_LIMITS, nextInvoicePlan } from '@esmart/core/domain/plan';
 import { CREDIT_KINDS, NOTE_KINDS, NOTE_SOURCE, PAYABLE_KINDS, isFinalized, isPayableDocument } from '@esmart/core/domain/documentStates';
@@ -121,27 +121,32 @@ async function netPosted(tx: DbOrTx, referenceIds: string[]) {
 
 /**
  * Has the stock for this invoice (bill) already moved on a delivery note
- * (goods receipt) in its chain? Either one it was converted from, or one
- * raised from the same order. Then the invoice must not move it again.
+ * (goods receipt) in its chain? Either one it was converted from (or merged
+ * from, with others), or one raised from the same order. Then the invoice
+ * must not move it again.
  */
 async function movedUpstream(tx: DbOrTx, row: DocRow): Promise<boolean> {
   const pair = row.kind === 'invoice' ? { via: 'delivery', order: 'salesOrder' } : row.kind === 'purchaseBill' ? { via: 'goodsReceipt', order: 'purchaseOrder' } : null;
   if (!pair) return false;
   const via: string[] = [];
   const orders: string[] = [];
-  let sourceId = row.sourceDocumentId;
-  for (let depth = 0; sourceId && depth < 10; depth++) {
-    const [src] = await tx.select({ id: D.id, kind: D.kind, sourceDocumentId: D.sourceDocumentId }).from(D).where(eq(D.id, sourceId));
-    if (!src) break;
-    if (src.kind === pair.via) via.push(src.id);
-    if (src.kind === pair.order) orders.push(src.id);
-    sourceId = src.sourceDocumentId;
+  // Back through every source, level by level: a merged document has several.
+  const seen = new Set<string>();
+  let frontier = [row.sourceDocumentId, ...(row.mergedSourceIds ?? [])].filter((id): id is string => !!id);
+  for (let depth = 0; frontier.length && depth < 10; depth++) {
+    frontier.forEach((id) => seen.add(id));
+    const sources = await tx.select({ id: D.id, kind: D.kind, sourceDocumentId: D.sourceDocumentId, mergedSourceIds: D.mergedSourceIds }).from(D).where(inArray(D.id, frontier));
+    for (const src of sources) {
+      if (src.kind === pair.via) via.push(src.id);
+      if (src.kind === pair.order) orders.push(src.id);
+    }
+    frontier = [...new Set(sources.flatMap((s) => [s.sourceDocumentId, ...s.mergedSourceIds]))].filter((id): id is string => !!id && !seen.has(id));
   }
   if (orders.length) {
     const siblings = await tx
       .select({ id: D.id })
       .from(D)
-      .where(and(inArray(D.sourceDocumentId, orders), eq(D.kind, pair.via as DocumentKind)));
+      .where(and(or(inArray(D.sourceDocumentId, orders), arrayOverlaps(D.mergedSourceIds, orders)), eq(D.kind, pair.via as DocumentKind)));
     via.push(...siblings.map((s) => s.id));
   }
   return (await netPosted(tx, via)).some((r) => Number(r.net) !== 0);
