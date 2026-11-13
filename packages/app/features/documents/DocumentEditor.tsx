@@ -55,7 +55,7 @@ import {
   useTransporters,
   usePlan,
 } from '../../store/selectors';
-import { saleTdsOnPlan } from '@esmart/core/domain/plan';
+import { hasVehicles, saleTdsOnPlan } from '@esmart/core/domain/plan';
 import { PartyPickerBox } from '../contacts/PartyPickerBox';
 import { useCostCentres } from '../../store/books';
 import {
@@ -1403,7 +1403,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
         }}
       />
       {transportBy === 'own' ? (
-        <VehicleField value={draft.vehicleId} onChange={(vehicleId) => patch({ vehicleId })} />
+        // Free has no vehicles to pick: own transport is said, not which vehicle.
+        hasVehicles(plan) ? <VehicleField value={draft.vehicleId} onChange={(vehicleId) => patch({ vehicleId })} /> : null
       ) : (
         <PickerField
           label={tr('sales:editor.transport.transporter')}
