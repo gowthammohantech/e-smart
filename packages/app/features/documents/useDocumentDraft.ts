@@ -34,6 +34,8 @@ export type DraftState = {
   noteReason?: NoteReason;
   /** A direct note's GST treatment, and (with GST) the original invoice or bill it adjusts (RULES 6.24). */
   noteGst?: 'withGst' | 'noGst';
+  /** With an SEZ party: IGST charged or none (LUT or bond); unset takes the default (`defaultSezTax`). */
+  sezTax?: 'withTax' | 'withoutTax';
   originalNumber?: string;
   originalDate?: string;
   /** A TDS section, `none`, or unset for the supplier's own (on an invoice, the customer's). */
@@ -120,6 +122,7 @@ export function draftFromDocument(doc: BusinessDocument): DraftState {
     reverseCharge: doc.reverseCharge,
     noteReason: doc.noteReason,
     noteGst: doc.noteGst,
+    sezTax: doc.sezTax,
     originalNumber: doc.originalNumber,
     originalDate: doc.originalDate,
     // A stored bill keeps what it was worked out with.

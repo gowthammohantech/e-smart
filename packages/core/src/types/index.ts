@@ -483,6 +483,11 @@ export type BusinessDocument = {
    * or commercial note with no tax, posted to discount and left out of GSTR-1 and GSTR-3B.
    */
   noteGst?: 'withGst' | 'noGst';
+  /**
+   * A document with an SEZ unit or developer: `withTax` charges IGST, `withoutTax` goes under LUT or
+   * bond (zero-rated). Unset follows the LUT for a sale and charges IGST on a bill.
+   */
+  sezTax?: 'withTax' | 'withoutTax';
   /** A direct note with GST: the original invoice or bill it adjusts (GSTR-1 CDNR/CDNUR, the s.34 deadline). */
   originalNumber?: string;
   originalDate?: string;

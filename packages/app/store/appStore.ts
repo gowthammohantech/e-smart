@@ -282,6 +282,7 @@ export type NewDocumentInput = {
   isdInvoice?: boolean;
   placeOfSupplyStateCode?: string;
   reverseCharge?: boolean;
+  sezTax?: BusinessDocument['sezTax'];
   noteReason?: BusinessDocument['noteReason'];
   tdsSection?: string;
   tcsSection?: string;
@@ -404,6 +405,7 @@ export const useAppStore = create<AppState>()(
             purchase: PURCHASE_KINDS.includes(doc.kind),
             branch: s.branches.find((b) => b.id === doc.branchId),
             reverseCharge: doc.reverseCharge,
+            sezTax: doc.sezTax,
           }),
         });
       };
@@ -785,6 +787,7 @@ export const useAppStore = create<AppState>()(
             roundOffManual: draft.roundOffManual,
             placeOfSupplyStateCode: draft.placeOfSupplyStateCode ?? party?.billingAddress?.stateCode,
             reverseCharge: draft.reverseCharge,
+            sezTax: draft.sezTax,
             noteReason: draft.noteReason,
             tdsSection: draft.tdsSection,
             tcsSection: draft.tcsSection,
@@ -914,6 +917,7 @@ export const useAppStore = create<AppState>()(
             terms: src.terms,
             placeOfSupplyStateCode: src.placeOfSupplyStateCode,
             reverseCharge: src.reverseCharge,
+            sezTax: src.sezTax,
             branchId: src.branchId,
             status: initialStatus(src.kind),
           });
@@ -957,6 +961,7 @@ export const useAppStore = create<AppState>()(
             terms: src.terms,
             placeOfSupplyStateCode: src.placeOfSupplyStateCode,
             reverseCharge: src.reverseCharge,
+            sezTax: src.sezTax,
             branchId: src.branchId,
             sourceDocumentId: src.id,
             mergedSourceIds: others.map((d) => d.id),

@@ -12,6 +12,7 @@ import { formatDate } from '../lib/date';
 import { money } from '../lib/money';
 import { MIN_READABLE_QR_SIZE, qrMatrix, qrSvgString } from '../lib/qr';
 import { E_INVOICE_CANCEL_REASONS } from '../domain/eInvoice';
+import { PURCHASE_KINDS } from '../domain/documentStates';
 import type { LanguageCode } from '@esmart/i18n/config';
 import i18n from '@esmart/i18n';
 import { printableFields } from '../domain/customFields';
@@ -46,6 +47,17 @@ export function bilingual(t: Translate, language: LanguageCode): (key: string) =
 export const NOTE_REASON = { discount: 'Discount after sale', priceChange: 'Price change', taxCorrection: 'Tax correction', deficiency: 'Short or faulty supply', other: 'Other' } as const;
 
 export const SUPPLY_NOTE = { nil: 'Nil-rated supply', exempt: 'Exempt supply', nonGst: 'Non-GST supply' } as const;
+
+/**
+ * A supply to an SEZ unit or developer says on its face whether IGST was paid or it went under LUT or
+ * bond (statutory wording, so English). Only the seller's documents carry it; empty for anything else.
+ */
+export function sezNote(doc: Pick<BusinessDocument, 'kind' | 'sezTax'>): string {
+  if (!doc.sezTax || PURCHASE_KINDS.includes(doc.kind)) return '';
+  return doc.sezTax === 'withTax'
+    ? 'Supply meant for SEZ unit or SEZ developer for authorised operations on payment of integrated tax'
+    : 'Supply meant for SEZ unit or SEZ developer for authorised operations under bond or letter of undertaking without payment of integrated tax';
+}
 
 export function esc(s: string | undefined | null): string {
   return String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);

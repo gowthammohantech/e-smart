@@ -61,6 +61,13 @@ describe.each(INVOICE_LAYOUTS)('the %s layout prints what the law asks for', (la
     expect(text(render(layout, { document: d }))).toContain('reverse charge by the recipient');
   });
 
+  it('with the SEZ endorsement on a supply to an SEZ, as it was charged; never on a bill', () => {
+    expect(text(render(layout, { document: doc({ sezTax: 'withTax' }) }))).toContain('for authorised operations on payment of integrated tax');
+    expect(text(render(layout, { document: doc({ sezTax: 'withoutTax' }) }))).toContain('under bond or letter of undertaking without payment of integrated tax');
+    expect(text(render(layout, { document: doc({ kind: 'purchaseBill', sezTax: 'withTax' }) }))).not.toContain('Supply meant for SEZ');
+    expect(text(render(layout))).not.toContain('Supply meant for SEZ');
+  });
+
   it('with the proforma disclaimer', () => {
     expect(text(render(layout, { document: doc({ kind: 'proforma' }) }))).toContain('Not a tax invoice');
   });
