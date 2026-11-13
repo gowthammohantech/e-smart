@@ -3,6 +3,7 @@ import { userInfo } from 'node:os';
 import { parseArgs } from 'node:util';
 import { eq, sql } from 'drizzle-orm';
 import { createDb, createPool, schema } from './index';
+import { runDirectly } from './runDirectly';
 
 export type PlatformRoleArg = 'superadmin' | 'support' | 'none';
 const ROLES: PlatformRoleArg[] = ['superadmin', 'support', 'none'];
@@ -82,7 +83,7 @@ async function audit(tx: Tx, user: typeof schema.users.$inferSelect, action: str
   });
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (runDirectly(import.meta.url)) {
   const { values } = parseArgs({ options: { email: { type: 'string' }, role: { type: 'string', default: 'superadmin' }, 'reset-mfa': { type: 'boolean', default: false } } });
   if (!values.email) {
     console.error('Usage: npm run db:platform-admin -w @esmart/db -- --email you@example.com [--role superadmin|support|none] [--reset-mfa]');
