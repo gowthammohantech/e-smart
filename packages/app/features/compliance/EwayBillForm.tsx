@@ -57,7 +57,11 @@ export function useEwayBillForm(doc: BusinessDocument) {
 
   const buyer = parties.find((p) => p.id === doc.partyId);
   const branch = branches.find((b) => b.id === doc.branchId);
-  const shipTo = buyer?.shippingAddress ?? buyer?.billingAddress;
+  // Where the goods go: the invoice's own ship-to, else the buyer's shipping (or billing) address.
+  const shipTo = doc.shipTo?.address ?? buyer?.shippingAddress ?? buyer?.billingAddress;
+  // How they go, as the invoice says: one of the business's transporters, or its own vehicle.
+  const docTransporter = useAppStore((s) => (doc.transporterId ? s.transporters.find((x) => x.id === doc.transporterId) : undefined));
+  const docVehicle = useAppStore((s) => (doc.vehicleId ? s.vehicles.find((v) => v.id === doc.vehicleId) : undefined));
 
   const [subSupplyType, setSubSupplyType] = useState<EwaySubSupplyType>(subSupplyTypeFor(doc.kind));
   const [subSupplyDescription, setSubSupplyDescription] = useState('');
@@ -83,13 +87,13 @@ export function useEwayBillForm(doc: BusinessDocument) {
   });
   const [stateSheet, setStateSheet] = useState<'from' | 'to' | null>(null);
 
-  const [transporterId, setTransporterId] = useState(settings.defaultTransporterId ?? '');
-  const [transporterName, setTransporterName] = useState(settings.defaultTransporterName ?? '');
+  const [transporterId, setTransporterId] = useState(docTransporter?.transporterId ?? settings.defaultTransporterId ?? '');
+  const [transporterName, setTransporterName] = useState(docTransporter?.name ?? settings.defaultTransporterName ?? '');
   const transporters = useTransporters({ activeOnly: true });
   const [transporterOpen, setTransporterOpen] = useState(false);
   const [transportMode, setTransportMode] = useState<TransportMode>(settings.defaultTransportMode);
   const [vehicleType, setVehicleType] = useState<VehicleType>(settings.defaultVehicleType);
-  const [vehicleNumber, setVehicleNumber] = useState('');
+  const [vehicleNumber, setVehicleNumber] = useState(docVehicle?.registration ?? '');
   const [transportDocNumber, setTransportDocNumber] = useState('');
   const [transportDocDate, setTransportDocDate] = useState(doc.date);
   const [distanceKm, setDistanceKm] = useState(String(settings.defaultDistanceKm));

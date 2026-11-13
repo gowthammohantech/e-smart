@@ -10,7 +10,7 @@ import { describeGspError, hasErrorCode, parsePortalDateAny, parsePortalDateTime
 import { resolveGspGateway } from './provider-name';
 import { toGstinRecord } from './taxpayer';
 import { GspRequestError, type GspRequest, type GspTransport } from './transport';
-import { resplitTax, sandboxDocNo, WhitebooksGateway } from './whitebooks';
+import { resplitIrnTax, resplitTax, sandboxDocNo, WhitebooksGateway } from './whitebooks';
 
 const NOW = '2026-09-02T10:00:00.000Z';
 
@@ -510,6 +510,79 @@ describe('Whitebooks', () => {
       errors: [{ code: 'GSP_NOT_CONFIGURED', message: expect.stringContaining('TAXATION_WHITEBOOKS_EWAYBILL_APP_ID') }],
     });
     expect(t.calls).toHaveLength(0);
+  });
+
+  it('re-splits an invoice’s tax to match the seller and place of supply it is filed with', () => {
+    const line = { IgstAmt: 180, CgstAmt: 0, SgstAmt: 0 };
+    const inter = { SellerDtls: { Stcd: '33' }, BuyerDtls: { Pos: '29' }, ItemList: [line], ValDtls: { IgstVal: 180, CgstVal: 0, SgstVal: 0 } };
+    expect(resplitIrnTax(inter)).toBe(inter);
+    const intra = resplitIrnTax({ ...inter, SellerDtls: { Stcd: '29' } });
+    expect(intra.ItemList[0]).toMatchObject({ IgstAmt: 0, CgstAmt: 90, SgstAmt: 90 });
+    expect(intra.ValDtls).toMatchObject({ IgstVal: 0, CgstVal: 90, SgstVal: 90 });
+    const flipped = resplitIrnTax({ SellerDtls: { Stcd: '29' }, BuyerDtls: { Pos: '33' }, ItemList: [{ IgstAmt: 0, CgstAmt: 90, SgstAmt: 90 }], ValDtls: { IgstVal: 0, CgstVal: 90, SgstVal: 90 } });
+    expect(flipped.ItemList[0]).toMatchObject({ IgstAmt: 180, CgstAmt: 0, SgstAmt: 0 });
+  });
+
+  it('retries an e-invoice under an HSN the sandbox knows when it refuses the real one', async () => {
+    let calls = 0;
+    const t = fakeTransport({
+      '/einvoice/authenticate': () => auth as GspEnvelope,
+      '/einvoice/type/GENERATE/version/V1_03': () => {
+        calls += 1;
+        return calls === 1 ? refusedWith('2176', 'HSN code(s)-541241 is invalid') : ok({ Irn: 'WB-IRN' });
+      },
+    });
+    const result = await new WhitebooksGateway(whitebooksConfig(), t.transport, at('2026-09-02T10:00:00Z')).submitInvoice(creds, { payload, existingIrns: [], now: NOW });
+    expect(result).toMatchObject({ ok: true, irn: 'WB-IRN' });
+    const sent = t.calls.filter((c) => c.path.endsWith('GENERATE/version/V1_03')).map((c) => (c.body as { ItemList: { HsnCd: string }[] }).ItemList[0].HsnCd);
+    expect(sent).toEqual(['8501', '85362010']);
+  });
+
+  it('retries an e-invoice on a 4-digit HSN refusal (2311) and leaves a service line’s SAC alone', async () => {
+    let calls = 0;
+    const t = fakeTransport({
+      '/einvoice/authenticate': () => auth as GspEnvelope,
+      '/einvoice/type/GENERATE/version/V1_03': () => {
+        calls += 1;
+        return calls === 1 ? refusedWith('2311', '6 digits HSN code is mandatory') : ok({ Irn: 'WB-IRN' });
+      },
+    });
+    const mixed = { ...payload, ItemList: [{ ...(payload.ItemList[0] as object), HsnCd: '8544' }, { ...(payload.ItemList[0] as object), SlNo: '2', IsServc: 'Y', HsnCd: '995461' }] } as unknown as IrpInvoicePayload;
+    const result = await new WhitebooksGateway(whitebooksConfig(), t.transport, at('2026-09-02T10:00:00Z')).submitInvoice(creds, { payload: mixed, existingIrns: [], now: NOW });
+    expect(result).toMatchObject({ ok: true, irn: 'WB-IRN' });
+    const last = t.calls.filter((c) => c.path.endsWith('GENERATE/version/V1_03')).pop()!.body as { ItemList: { HsnCd: string }[] };
+    expect(last.ItemList.map((i) => i.HsnCd)).toEqual(['85362010', '995461']);
+  });
+
+  it('retries a direct e-way bill under an HSN the sandbox knows when it refuses the real one', async () => {
+    let genCalls = 0;
+    const t = fakeTransport({
+      '/ewaybillapi/v1.03/authenticate': () => ok({}),
+      '/ewaybillapi/v1.03/ewayapi/genewaybill': () => {
+        genCalls += 1;
+        return genCalls === 1 ? ({ status_cd: '0', error: [{ errorCode: '216', errorMessage: '216' }] } as unknown as GspEnvelope) : ok({ ewayBillNo: 171012272464, ewayBillDate: '02/09/2026 10:15:00 PM', validUpto: '04/09/2026 11:59:00 PM' });
+      },
+    });
+    const result = await new WhitebooksGateway(whitebooksConfig(), t.transport).submitEwayBill(creds, { payload: { ...ewb, mainHsnCode: '541241' }, vehicleType: 'regular', now: NOW });
+    expect(result).toMatchObject({ ok: true, ewayBillNumber: '171012272464' });
+    const sent = t.calls.filter((c) => c.path.endsWith('genewaybill')).map((c) => (c.body as { mainHsnCode?: number }).mainHsnCode);
+    expect(sent).toEqual([541241, 85362010]);
+  });
+
+  it('retries a direct e-way bill with distance 0 for an unregistered buyer once the seller is the sandbox taxpayer', async () => {
+    let genCalls = 0;
+    const t = fakeTransport({
+      '/ewaybillapi/v1.03/authenticate': () => ok({}),
+      '/ewaybillapi/v1.03/ewayapi/genewaybill': () => {
+        genCalls += 1;
+        return genCalls === 1 ? ({ status_cd: '0', error: [{ errorCode: '702', errorMessage: '702' }] } as unknown as GspEnvelope) : ok({ ewayBillNo: 171012272465, ewayBillDate: '02/09/2026 10:15:00 PM', validUpto: '04/09/2026 11:59:00 PM' });
+      },
+    });
+    const own = { ...creds, gstin: '33CGQPM1770F1ZB' };
+    const result = await new WhitebooksGateway(whitebooksConfig(), t.transport).submitEwayBill(own, { payload: { ...ewb, toGstin: 'URP', transDistance: 120 }, vehicleType: 'regular', now: NOW });
+    expect(result).toMatchObject({ ok: true, ewayBillNumber: '171012272465' });
+    const sent = t.calls.filter((c) => c.path.endsWith('genewaybill')).map((c) => (c.body as { transDistance?: number | string }).transDistance);
+    expect(sent.map(Number)).toEqual([120, 0]);
   });
 
   it('files every e-invoice against the sandbox buyer, whole block at a time', async () => {

@@ -25,6 +25,8 @@ export type OnboardingDraft = {
   /** The GSTIN the business details were last filled from, so going back to Tax doesn't fill them over again. */
   prefilledFromGstin: string;
   compositionScheme: boolean;
+  /** The tax rates the business starts with; unset is the regime's defaults. */
+  taxRates?: number[];
   invoicePrefix: string;
   invoiceNextNumber: string;
   includeFiscalYear: boolean;

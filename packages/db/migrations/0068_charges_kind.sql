@@ -1,0 +1,1 @@
+ALTER TABLE "documents" ADD COLUMN "charges_kind" varchar(12);

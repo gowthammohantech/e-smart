@@ -21,13 +21,13 @@ import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { Avatar } from '@esmart/ui/components/Avatar';
 
-import { DocStatus, DocumentKind, DocumentLine, NoteReason, Party } from '@esmart/core/types';
+import { CHARGES_KINDS, ChargesKind, ShipTo, DocStatus, DocumentKind, DocumentLine, NoteReason, Party } from '@esmart/core/types';
 import { NOTE_KINDS, PURCHASE_KINDS, isAwaitingApproval, isFinalized } from '@esmart/core/domain/documentStates';
 import { TDS_SECTIONS, tdsSection } from '@esmart/core/data/tdsSections';
 import { TCS_SECTIONS, partyTcsSection, tcsAskedOn, tcsRateFor, tcsSection } from '@esmart/core/data/tcsSections';
 import { documentKindLabel } from '@esmart/core/labels';
 import { resolveRate } from '@esmart/core/domain/fx';
-import { buildTaxContext, defaultSezTax, lutActive, taxAvailableOn, taxCategoriesOn, type SezTax } from '@esmart/core/domain/taxEngine';
+import { buildTaxContext, defaultCrossBorderTax, lutActive, taxAvailableOn, taxCategoriesOn, type CrossBorderTax } from '@esmart/core/domain/taxEngine';
 import { OTHER_COUNTRY_CODE } from '@esmart/core/domain/stateCodes';
 import { CURRENCIES } from '@esmart/core/lib/currencies';
 import { formatMoney, formatPercent, formatQty } from '@esmart/core/lib/format';
@@ -52,10 +52,10 @@ import {
   useDefaultBranchId,
   useDocument,
   useTaxCategories,
-  useVehicles,
+  useTransporters,
   usePlan,
 } from '../../store/selectors';
-import { saleTdsOnPlan } from '@esmart/core/domain/plan';
+import { hasVehicles, saleTdsOnPlan } from '@esmart/core/domain/plan';
 import { PartyPickerBox } from '../contacts/PartyPickerBox';
 import { useCostCentres } from '../../store/books';
 import {
@@ -118,6 +118,8 @@ const STEPS = ['party', 'items', 'extras', 'review'] as const;
 
 /** The documents GST is charged on, where reverse charge can apply. */
 const TAX_KINDS: DocumentKind[] = ['invoice', 'salesReturn', 'purchaseBill', 'purchaseReturn', ...NOTE_KINDS];
+/** Sales documents of goods that may go to a consignee other than the buyer. */
+const SHIP_TO_KINDS: DocumentKind[] = ['invoice', 'proforma', 'quote', 'salesOrder', 'delivery'];
 const NOTE_REASONS: NoteReason[] = ['discount', 'priceChange', 'taxCorrection', 'deficiency', 'other'];
 /** The documents goods travel with, where a vehicle is worth recording. */
 const VEHICLE_KINDS: DocumentKind[] = ['invoice', 'salesOrder', 'delivery', 'salesReturn', 'purchaseOrder', 'goodsReceipt', 'purchaseBill', 'purchaseReturn'];
@@ -202,7 +204,6 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   const desktop = useIsDesktop();
   // Whether these pickers show at all, so a desktop doesn't keep an empty row for them.
   const hasCostCentres = useCostCentres().length > 0;
-  const hasVehicles = useVehicles().length > 0;
 
   const company = useActiveCompany();
   const baseCurrency = useBaseCurrency();
@@ -257,7 +258,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
         // A party synced from an older API can arrive without an address.
         placeOfSupplyStateCode: p.billingAddress?.stateCode,
         // Another party starts from its own SEZ default.
-        sezTax: undefined,
+        crossBorderTax: undefined,
         dueDate: kind === 'invoice' || kind === 'purchaseBill' ? addDaysISO(d.date, p.paymentTermsDays) : d.dueDate,
         // A supplier under reverse charge puts their bills under it; the bill can still say otherwise.
         ...(isPurchase && { reverseCharge: !!p.reverseCharge }),
@@ -320,7 +321,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
         purchase: isPurchase,
         branch: branches.find((b) => b.id === (d.branchId ?? defaultBranchId)),
         reverseCharge: d.reverseCharge,
-        sezTax: d.sezTax,
+        crossBorderTax: d.crossBorderTax,
       });
       // A financial note without GST charges none, as the server works it out (RULES 6.24).
       return isNote && !d.sourceDocumentId && d.noteGst === 'noGst' ? { ...ctx, registered: false, reverseCharge: false } : ctx;
@@ -442,6 +443,15 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   // The warning came from saving an issued invoice's edit (RULES 6.23), not from finalising: accepting it saves again.
   const [creditOnEdit, setCreditOnEdit] = useState(false);
   const [chargesText, setChargesText] = useState(String(toMajor(draft.charges) || ''));
+  const [chargesKindOpen, setChargesKindOpen] = useState(false);
+  const [shipStateOpen, setShipStateOpen] = useState(false);
+  // Goods go by the business's own vehicle or with one of its transporters.
+  const [transportBy, setTransportBy] = useState<'own' | 'transporter'>(draft.transporterId ? 'transporter' : 'own');
+  const [transporterOpen, setTransporterOpen] = useState(false);
+  const transporters = useTransporters({ activeOnly: true });
+  // Goods that go out: where they go when not to the buyer's own address (the consignee).
+  const shipsTo = SHIP_TO_KINDS.includes(kind);
+  const chargesLabel = tr(`sales:editor.chargesKind.${draft.chargesKind ?? 'other'}` as 'sales:editor.chargesKind.other');
   const [discountText, setDiscountText] = useState(String(draft.documentDiscountValue || ''));
   const [roundOffText, setRoundOffText] = useState(
     draft.roundOffManual ? String(toMajor(draft.roundOffManual)) : '',
@@ -543,22 +553,34 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   };
 
   const docTaxContext = draftTaxContext(draft);
-  // With an SEZ unit or developer the document charges IGST or goes without, as chosen. A return or a
-  // note made from a document reverses it as it was charged, so it follows its source (the server too).
-  const sez = docTaxContext.crossBorder === 'sez';
-  const sezLocked = sez && !!draft.sourceDocumentId && (kind === 'salesReturn' || kind === 'purchaseReturn' || isNote);
-  const sezTax: SezTax = draft.sezTax ?? defaultSezTax(company, draft.date, isPurchase);
-  const sezHint = sezLocked
-    ? 'sales:editor.sez.fromSource'
-    : isPurchase
-      ? sezTax === 'withTax'
-        ? 'sales:editor.sez.billWithTaxHint'
-        : 'sales:editor.sez.billWithoutTaxHint'
-      : sezTax === 'withTax'
-        ? 'sales:editor.sez.withTaxHint'
-        : lutActive(company, draft.date)
-          ? 'sales:editor.sez.withoutTaxHint'
-          : 'sales:editor.sez.noLutHint';
+  // An export, a document with an SEZ unit or developer, or an import bill charges IGST or goes without,
+  // as chosen. A return or a note made from a document reverses it as it was charged, so it follows its
+  // source (the server too).
+  const crossBorder = docTaxContext.crossBorder;
+  const crossBorderLocked = !!crossBorder && !!draft.sourceDocumentId && (kind === 'salesReturn' || kind === 'purchaseReturn' || isNote);
+  const crossBorderTax: CrossBorderTax = draft.crossBorderTax ?? (crossBorder ? defaultCrossBorderTax(company, draft.date, isPurchase, crossBorder) : 'withTax');
+  const withTax = crossBorderTax === 'withTax';
+  const crossBorderHint = crossBorderLocked
+    ? 'sales:editor.crossBorder.fromSource'
+    : crossBorder === 'import'
+      ? withTax
+        ? 'sales:editor.crossBorder.importWithTaxHint'
+        : 'sales:editor.crossBorder.importWithoutTaxHint'
+      : isPurchase
+        ? withTax
+          ? 'sales:editor.crossBorder.billWithTaxHint'
+          : 'sales:editor.crossBorder.billWithoutTaxHint'
+        : withTax
+          ? crossBorder === 'export'
+            ? 'sales:editor.crossBorder.exportWithTaxHint'
+            : 'sales:editor.crossBorder.withTaxHint'
+          : !lutActive(company, draft.date)
+            ? 'sales:editor.crossBorder.noLutHint'
+            : crossBorder === 'export'
+              ? 'sales:editor.crossBorder.exportWithoutTaxHint'
+              : 'sales:editor.crossBorder.withoutTaxHint';
+  // IGST paid at customs goes on the bill of entry: only on an import bill that charges none itself.
+  const showBillOfEntry = kind === 'purchaseBill' && imported && !withTax;
   const inclusive = inclusiveState(draft.lines);
   const interState =
     taxContext.regime === 'GST' &&
@@ -707,13 +729,16 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       documentDiscountMode: draft.documentDiscountMode,
       documentDiscountValue: draft.documentDiscountValue,
       charges: draft.charges,
+      // Named only when something is charged.
+      chargesKind: draft.charges.minor ? (draft.chargesKind ?? 'other') : undefined,
+      shipTo: shipsTo ? (draft.shipTo ?? null) : undefined,
       applyRoundOff: draft.applyRoundOff,
       roundOffManual: draft.applyRoundOff ? draft.roundOffManual : undefined,
       notes: draft.notes || undefined,
       terms: draft.terms || undefined,
       reference: draft.reference || undefined,
       supplierDocNumber: draft.supplierDocNumber || undefined,
-      billOfEntry: imported ? draft.billOfEntry : undefined,
+      billOfEntry: showBillOfEntry ? draft.billOfEntry : undefined,
       isdInvoice: kind === 'purchaseBill' && !imported ? !!draft.isdInvoice : undefined,
       placeOfSupplyStateCode: draft.placeOfSupplyStateCode,
       // Sent as false too: left out, the server keeps the supplier's (or the stored) reverse charge.
@@ -722,7 +747,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       // A direct note says how it stands with GST; with GST it names the supply it adjusts (RULES 6.24).
       noteGst: directNote ? (draft.noteGst ?? 'withGst') : undefined,
       // Sent as chosen (or the default shown), so the server applies what the form showed.
-      sezTax: sez ? sezTax : undefined,
+      crossBorderTax: crossBorder ? crossBorderTax : undefined,
       originalNumber: directNote && draft.noteGst !== 'noGst' ? draft.originalNumber?.trim() || undefined : undefined,
       originalDate: directNote && draft.noteGst !== 'noGst' ? draft.originalDate : undefined,
       tdsSection: billTds || saleTds ? draft.tdsSection : undefined,
@@ -733,6 +758,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       costCentreId: draft.costCentreId,
       customFields: draft.customFields,
       vehicleId: draft.vehicleId,
+      // Null clears a transporter picked before, when it goes by the business's own vehicle again.
+      transporterId: VEHICLE_KINDS.includes(kind) ? (draft.transporterId ?? null) : undefined,
       branchId,
       attachmentIds: draft.attachmentIds,
       sourceDocumentId: draft.sourceDocumentId,
@@ -925,7 +952,16 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
         </Card>
       </Pressable>
     );
-    const dateField = (
+    // An issued invoice keeps its date when edited (the server holds it too): shown, not changed.
+    const dateField = editingIssued ? (
+      <TextField
+        label={tr('common:documentEditor.dateLabel', { kind: kindName })}
+        value={formatDate(draft.date)}
+        editable={false}
+        icon="calendar-outline"
+        hint={tr('sales:editor.dateKept')}
+      />
+    ) : (
       <DateField
         label={tr('common:documentEditor.dateLabel', { kind: kindName })}
         value={draft.date}
@@ -993,16 +1029,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           onPress={() => setPosOpen(true)}
           icon="map-marker-outline"
           hint={
-            sez
-              ? tr('sales:editor.sez.posHint')
-              : docTaxContext.crossBorder
-              ? tr(
-                  docTaxContext.zeroRated
-                    ? docTaxContext.crossBorder === 'import'
-                      ? 'sales:editor.importHint'
-                      : 'sales:editor.exportLutHint'
-                    : 'sales:editor.exportIgstHint',
-                )
+            crossBorder
+              ? tr(crossBorder === 'sez' ? 'sales:editor.crossBorder.posHint' : 'sales:editor.crossBorder.abroadPosHint')
               : interState
                 ? tr('sales:editor.interStateHint')
                 : tr('sales:editor.intraStateHint')
@@ -1042,23 +1070,57 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       kind === 'purchaseBill' && !imported && party?.taxId ? (
         <SwitchField label={tr('purchases:isd.label')} description={tr('purchases:isd.hint')} value={!!draft.isdInvoice} onValueChange={(isdInvoice) => patch({ isdInvoice })} />
       ) : null;
-    const sezBlock = sez ? (
+    const crossBorderBlock = crossBorder ? (
       <View style={{ gap: t.spacing.sm }}>
         <Text variant="small" tone="muted" weight="500">
-          {tr('sales:editor.sez.label')}
+          {tr(crossBorder === 'export' ? 'sales:editor.crossBorder.labelExport' : crossBorder === 'import' ? 'sales:editor.crossBorder.labelImport' : 'sales:editor.crossBorder.labelSez')}
         </Text>
         <Segmented
           options={[
-            { value: 'withTax', label: tr('sales:editor.sez.withTax') },
-            { value: 'withoutTax', label: tr('sales:editor.sez.withoutTax') },
+            { value: 'withTax', label: tr('sales:editor.crossBorder.withTax') },
+            { value: 'withoutTax', label: tr('sales:editor.crossBorder.withoutTax') },
           ]}
-          value={sezTax}
-          onChange={(v) => patch({ sezTax: v as SezTax })}
-          disabled={sezLocked}
+          value={crossBorderTax}
+          onChange={(v) => patch({ crossBorderTax: v as CrossBorderTax })}
+          disabled={crossBorderLocked}
         />
         <Text variant="caption" tone="muted">
-          {tr(sezHint)}
+          {tr(crossBorderHint)}
         </Text>
+      </View>
+    ) : null;
+    // Ship to: off ships to the buyer (their shipping address, else billing); on names a consignee.
+    const shipTo = draft.shipTo;
+    const patchShip = (over: Partial<ShipTo['address']> & { name?: string; gstin?: string }) => {
+      if (!shipTo) return;
+      const { name, gstin, ...address } = over;
+      patch({ shipTo: { ...shipTo, ...(name !== undefined && { name }), ...(gstin !== undefined && { gstin }), address: { ...shipTo.address, ...address } } });
+    };
+    const shipBlock = shipsTo && party ? (
+      <View style={{ gap: t.spacing.sm }}>
+        <SwitchField
+          label={tr('sales:editor.shipTo.label')}
+          description={tr(shipTo ? 'sales:editor.shipTo.onHint' : 'sales:editor.shipTo.offHint')}
+          value={!!shipTo}
+          onValueChange={(on) => {
+            const from = party.shippingAddress?.line1 ? party.shippingAddress : party.billingAddress;
+            patch({ shipTo: on ? { name: party.name, address: { line1: from?.line1 ?? '', line2: from?.line2, city: from?.city ?? '', state: from?.state ?? '', stateCode: from?.stateCode, postalCode: from?.postalCode ?? '', country: from?.country ?? 'IN' } } : undefined });
+          }}
+        />
+        {shipTo ? (
+          <>
+            <FieldRow>
+              <TextField label={tr('sales:editor.shipTo.name')} value={shipTo.name ?? ''} onChangeText={(name) => patchShip({ name })} icon="account-outline" maxLength={100} />
+              <TextField label={tr('sales:editor.shipTo.gstin')} value={shipTo.gstin ?? ''} onChangeText={(gstin) => patchShip({ gstin: gstin.toUpperCase() })} autoCapitalize="characters" maxLength={15} icon="card-account-details-outline" />
+            </FieldRow>
+            <TextField label={tr('sales:editor.shipTo.address')} value={shipTo.address.line1} onChangeText={(line1) => patchShip({ line1 })} icon="map-marker-outline" required />
+            <FieldRow>
+              <TextField label={tr('sales:editor.shipTo.city')} value={shipTo.address.city} onChangeText={(city) => patchShip({ city })} required />
+              <PickerField label={tr('sales:editor.shipTo.state')} value={shipTo.address.state} onPress={() => setShipStateOpen(true)} required />
+              <TextField label={tr('sales:editor.shipTo.pin')} value={shipTo.address.postalCode} onChangeText={(postalCode) => patchShip({ postalCode: postalCode.replace(/\D/g, '').slice(0, 6) })} keyboardType="number-pad" required />
+            </FieldRow>
+          </>
+        ) : null}
       </View>
     ) : null;
     const directNoteBlock = directNote ? (
@@ -1105,7 +1167,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           {dueField}
           {validField}
           {supplierDocField}
-          {kind === 'purchaseBill' && imported ? (
+          {showBillOfEntry ? (
             <View style={{ gap: t.spacing.sm }}>
               <Text variant="caption" tone="muted">{tr('purchases:boe.hint')}</Text>
               <TextField label={tr('purchases:boe.number')} value={boe.number} onChangeText={(number) => patchBoe({ number })} icon="file-certificate-outline" />
@@ -1120,7 +1182,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           {referenceField}
           {branchField}
           {posField}
-          {sezBlock}
+          {crossBorderBlock}
+          {shipBlock}
           {currencyField}
           {noteReasonField}
           {directNoteBlock}
@@ -1147,7 +1210,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
             ))}
           </View>
         ))}
-        {kind === 'purchaseBill' && imported ? (
+        {showBillOfEntry ? (
           <View style={{ gap: t.spacing.sm }}>
             <Text variant="caption" tone="muted">{tr('purchases:boe.hint')}</Text>
             <FieldRow>
@@ -1162,7 +1225,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
             </FieldRow>
           </View>
         ) : null}
-        {sezBlock}
+        {crossBorderBlock}
+        {shipBlock}
         {isdField}
         {directNoteBlock}
       </View>
@@ -1306,6 +1370,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
         <Card>
           <TotalsPanel
             totals={totals}
+            chargesLabel={chargesLabel}
             currency={draft.currency}
             baseCurrency={baseCurrency}
             exchangeRate={draft.exchangeRate}
@@ -1318,6 +1383,39 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       ) : null}
     </View>
   );
+
+  // Goods on the move go by the business's own vehicle or with one of its transporters (the e-way bill starts from it).
+  const pickedTransporter = transporters.find((x) => x.id === draft.transporterId);
+  const transportField = VEHICLE_KINDS.includes(kind) ? (
+    <View style={{ gap: t.spacing.sm }}>
+      <Text variant="small" tone="muted" weight="500">
+        {tr('sales:editor.transport.label')}
+      </Text>
+      <Segmented
+        options={[
+          { value: 'own', label: tr('sales:editor.transport.own') },
+          { value: 'transporter', label: tr('sales:editor.transport.transporter') },
+        ]}
+        value={transportBy}
+        onChange={(v) => {
+          setTransportBy(v as 'own' | 'transporter');
+          patch(v === 'own' ? { transporterId: null } : { vehicleId: undefined });
+        }}
+      />
+      {transportBy === 'own' ? (
+        // Free has no vehicles to pick: own transport is said, not which vehicle.
+        hasVehicles(plan) ? <VehicleField value={draft.vehicleId} onChange={(vehicleId) => patch({ vehicleId })} /> : null
+      ) : (
+        <PickerField
+          label={tr('sales:editor.transport.transporter')}
+          value={pickedTransporter ? `${pickedTransporter.name} · ${pickedTransporter.transporterId}` : undefined}
+          placeholder={tr(transporters.length ? 'sales:editor.transport.pick' : 'sales:editor.transport.none')}
+          onPress={() => setTransporterOpen(true)}
+          icon="truck-outline"
+        />
+      )}
+    </View>
+  ) : null;
 
   const renderExtras = () => (
     <View style={{ gap: t.spacing.lg }}>
@@ -1393,14 +1491,14 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
         <FieldGrid
           items={[
             hasCostCentres || draft.costCentreId ? <CostCentreField value={draft.costCentreId} onChange={(costCentreId) => patch({ costCentreId })} /> : null,
-            VEHICLE_KINDS.includes(kind) && (hasVehicles || draft.vehicleId) ? <VehicleField value={draft.vehicleId} onChange={(vehicleId) => patch({ vehicleId })} /> : null,
+            transportField,
           ]}
         />
       ) : (
         <>
           <CostCentreField value={draft.costCentreId} onChange={(costCentreId) => patch({ costCentreId })} />
           {/* A vehicle goes with goods on the move, not on a quote or a note. */}
-          {VEHICLE_KINDS.includes(kind) ? <VehicleField value={draft.vehicleId} onChange={(vehicleId) => patch({ vehicleId })} /> : null}
+          {transportField}
         </>
       )}
       <CustomFieldsSection entity="document" values={draft.customFields ?? {}} onChange={(customFields) => patch({ customFields })} errors={showFieldErrors ? fieldErrors : undefined} />
@@ -1473,8 +1571,10 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           </View>
         </View>
 
+        {/* What the charges are for, printed as their name. */}
+        <PickerField label={tr('sales:editor.chargesFor')} value={chargesLabel} onPress={() => setChargesKindOpen(true)} icon="truck-delivery-outline" />
         <AmountField
-          label={tr('sales:editor.otherCharges')}
+          label={chargesLabel}
           value={chargesText}
           onChangeValue={(v) => {
             setChargesText(v);
@@ -1557,6 +1657,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
         <Card>
           <TotalsPanel
             totals={totals}
+            chargesLabel={chargesLabel}
             currency={draft.currency}
             baseCurrency={baseCurrency}
             exchangeRate={draft.exchangeRate}
@@ -1610,6 +1711,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       <Card>
         <TotalsPanel
           totals={totals}
+          chargesLabel={chargesLabel}
           currency={draft.currency}
           baseCurrency={baseCurrency}
           exchangeRate={draft.exchangeRate}
@@ -1973,6 +2075,38 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           value={branchId}
           onSelect={(id) => patch({ branchId: id })}
           searchable={false}
+        />
+
+        <SelectSheet
+          visible={chargesKindOpen}
+          onClose={() => setChargesKindOpen(false)}
+          title={tr('sales:editor.chargesFor')}
+          options={CHARGES_KINDS.map((k) => ({ value: k, label: tr(`sales:editor.chargesKind.${k}` as 'sales:editor.chargesKind.other') }))}
+          value={draft.chargesKind ?? 'other'}
+          onSelect={(k) => patch({ chargesKind: k as ChargesKind })}
+          searchable={false}
+        />
+
+        <SelectSheet
+          visible={shipStateOpen}
+          onClose={() => setShipStateOpen(false)}
+          title={tr('sales:editor.shipTo.state')}
+          options={INDIAN_STATES.map((st) => ({ value: st.code, label: st.name }))}
+          value={draft.shipTo?.address.stateCode ?? null}
+          onSelect={(code) => {
+            const st = INDIAN_STATES.find((x) => x.code === code);
+            if (draft.shipTo && st) patch({ shipTo: { ...draft.shipTo, address: { ...draft.shipTo.address, state: st.name, stateCode: st.code } } });
+          }}
+        />
+
+        <SelectSheet
+          visible={transporterOpen}
+          onClose={() => setTransporterOpen(false)}
+          title={tr('sales:editor.transport.transporter')}
+          options={transporters.map((x) => ({ value: x.id, label: x.name, description: x.transporterId }))}
+          value={draft.transporterId ?? null}
+          onSelect={(transporterId) => patch({ transporterId })}
+          emptyMessage={tr('sales:editor.transport.none')}
         />
 
         <LineEditorSheet

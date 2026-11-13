@@ -6,7 +6,7 @@ exports[`the standard page is unchanged TCS and reverse charge and document disc
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>INVOICE SI/2026-27/0035</title>
+<title>TAX INVOICE SI/2026-27/0035</title>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -91,7 +91,7 @@ exports[`the standard page is unchanged TCS and reverse charge and document disc
       <div style="margin-top:5px"><strong>GSTIN:</strong> 33NDTPS4034R1ZD</div>
     </div>
     <div>
-      <div class="doc-title">INVOICE</div>
+      <div class="doc-title">TAX INVOICE</div>
       
       
       <div class="meta">
@@ -425,7 +425,7 @@ exports[`the standard page is unchanged cancelled IRN 1`] = `
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>INVOICE SI/2026-27/0035</title>
+<title>TAX INVOICE SI/2026-27/0035</title>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -510,7 +510,7 @@ exports[`the standard page is unchanged cancelled IRN 1`] = `
       <div style="margin-top:5px"><strong>GSTIN:</strong> 33NDTPS4034R1ZD</div>
     </div>
     <div>
-      <div class="doc-title">INVOICE</div>
+      <div class="doc-title">TAX INVOICE</div>
       
       
       <div class="meta">
@@ -653,7 +653,7 @@ exports[`the standard page is unchanged charges taxed with the lines (from 1 Dec
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>INVOICE SI/2026-27/0035</title>
+<title>TAX INVOICE SI/2026-27/0035</title>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -738,7 +738,7 @@ exports[`the standard page is unchanged charges taxed with the lines (from 1 Dec
       <div style="margin-top:5px"><strong>GSTIN:</strong> 33NDTPS4034R1ZD</div>
     </div>
     <div>
-      <div class="doc-title">INVOICE</div>
+      <div class="doc-title">TAX INVOICE</div>
       
       
       <div class="meta">
@@ -1288,7 +1288,7 @@ exports[`the standard page is unchanged draft 1`] = `
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>INVOICE Draft</title>
+<title>TAX INVOICE Draft</title>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -1373,7 +1373,7 @@ exports[`the standard page is unchanged draft 1`] = `
       <div style="margin-top:5px"><strong>GSTIN:</strong> 33NDTPS4034R1ZD</div>
     </div>
     <div>
-      <div class="doc-title">INVOICE</div>
+      <div class="doc-title">TAX INVOICE</div>
       
       
       <div class="meta">
@@ -1504,7 +1504,7 @@ exports[`the standard page is unchanged e-invoice with e-way bill 1`] = `
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>INVOICE SI/2026-27/0035</title>
+<title>TAX INVOICE SI/2026-27/0035</title>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -1589,7 +1589,7 @@ exports[`the standard page is unchanged e-invoice with e-way bill 1`] = `
       <div style="margin-top:5px"><strong>GSTIN:</strong> 33NDTPS4034R1ZD</div>
     </div>
     <div>
-      <div class="doc-title">INVOICE</div>
+      <div class="doc-title">TAX INVOICE</div>
       
       
       <div class="meta">
@@ -1735,7 +1735,7 @@ exports[`the standard page is unchanged foreign currency 1`] = `
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>INVOICE SI/2026-27/0035</title>
+<title>COMMERCIAL INVOICE SI/2026-27/0035</title>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -1820,7 +1820,7 @@ exports[`the standard page is unchanged foreign currency 1`] = `
       <div style="margin-top:5px"><strong>GSTIN:</strong> 33NDTPS4034R1ZD</div>
     </div>
     <div>
-      <div class="doc-title">INVOICE</div>
+      <div class="doc-title">COMMERCIAL INVOICE</div>
       
       
       <div class="meta">
@@ -1951,7 +1951,7 @@ exports[`the standard page is unchanged full invoice 1`] = `
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>INVOICE SI/2026-27/0035</title>
+<title>TAX INVOICE SI/2026-27/0035</title>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -2036,7 +2036,7 @@ exports[`the standard page is unchanged full invoice 1`] = `
       <div style="margin-top:5px"><strong>GSTIN:</strong> 33NDTPS4034R2ZC</div>
     </div>
     <div>
-      <div class="doc-title">INVOICE</div>
+      <div class="doc-title">TAX INVOICE</div>
       
       
       <div class="meta">
@@ -2167,7 +2167,7 @@ exports[`the standard page is unchanged inter-state 1`] = `
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>INVOICE SI/2026-27/0035</title>
+<title>TAX INVOICE SI/2026-27/0035</title>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -2252,7 +2252,7 @@ exports[`the standard page is unchanged inter-state 1`] = `
       <div style="margin-top:5px"><strong>GSTIN:</strong> 33NDTPS4034R1ZD</div>
     </div>
     <div>
-      <div class="doc-title">INVOICE</div>
+      <div class="doc-title">TAX INVOICE</div>
       
       
       <div class="meta">
@@ -2383,7 +2383,7 @@ exports[`the standard page is unchanged nil and exempt lines 1`] = `
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>INVOICE SI/2026-27/0035</title>
+<title>TAX INVOICE SI/2026-27/0035</title>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -2468,7 +2468,7 @@ exports[`the standard page is unchanged nil and exempt lines 1`] = `
       <div style="margin-top:5px"><strong>GSTIN:</strong> 33NDTPS4034R1ZD</div>
     </div>
     <div>
-      <div class="doc-title">INVOICE</div>
+      <div class="doc-title">TAX INVOICE</div>
       
       
       <div class="meta">
@@ -3006,7 +3006,7 @@ exports[`the standard page is unchanged reimbursement line 1`] = `
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>INVOICE SI/2026-27/0035</title>
+<title>TAX INVOICE SI/2026-27/0035</title>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -3091,7 +3091,7 @@ exports[`the standard page is unchanged reimbursement line 1`] = `
       <div style="margin-top:5px"><strong>GSTIN:</strong> 33NDTPS4034R1ZD</div>
     </div>
     <div>
-      <div class="doc-title">INVOICE</div>
+      <div class="doc-title">TAX INVOICE</div>
       
       
       <div class="meta">
@@ -3235,7 +3235,7 @@ exports[`the standard page is unchanged reverse charge 1`] = `
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>INVOICE SI/2026-27/0035</title>
+<title>TAX INVOICE SI/2026-27/0035</title>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -3320,7 +3320,7 @@ exports[`the standard page is unchanged reverse charge 1`] = `
       <div style="margin-top:5px"><strong>GSTIN:</strong> 33NDTPS4034R1ZD</div>
     </div>
     <div>
-      <div class="doc-title">INVOICE</div>
+      <div class="doc-title">TAX INVOICE</div>
       
       
       <div class="meta">
@@ -3451,7 +3451,7 @@ exports[`the standard page is unchanged tamil 1`] = `
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>விலைப்பட்டியல் SI/2026-27/0035</title>
+<title>TAX INVOICE SI/2026-27/0035</title>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -3536,7 +3536,7 @@ exports[`the standard page is unchanged tamil 1`] = `
       <div style="margin-top:5px"><strong>GSTIN:</strong> 33NDTPS4034R1ZD</div>
     </div>
     <div>
-      <div class="doc-title">விலைப்பட்டியல்</div>
+      <div class="doc-title">TAX INVOICE</div>
       
       
       <div class="meta">
@@ -3682,7 +3682,7 @@ exports[`the standard page is unchanged template: compact, no columns, footer, n
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>INVOICE SI/2026-27/0035</title>
+<title>TAX INVOICE SI/2026-27/0035</title>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -3767,7 +3767,7 @@ exports[`the standard page is unchanged template: compact, no columns, footer, n
       <div style="margin-top:5px"><strong>GSTIN:</strong> 33NDTPS4034R1ZD</div>
     </div>
     <div>
-      <div class="doc-title">INVOICE</div>
+      <div class="doc-title">TAX INVOICE</div>
       
       
       <div class="meta">

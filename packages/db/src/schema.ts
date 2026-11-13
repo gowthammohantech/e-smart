@@ -636,6 +636,8 @@ export const documents = pgTable("documents", {
 	documentDiscountMode: discountMode("document_discount_mode").default('amount').notNull(),
 	documentDiscountValue: numeric("document_discount_value", { precision: 18, scale:  4 }).default('0').notNull(),
 	chargesMinor: bigint("charges_minor", { mode: "number" }).default(0).notNull(),
+	// What the charges are for: freight, packing, insurance, handling, loading or other. Null reads as other.
+	chargesKind: varchar("charges_kind", { length: 12 }),
 	applyRoundOff: boolean("apply_round_off").default(true).notNull(),
 	// A round-off the user typed, overriding the automatic one.
 	roundOffManualMinor: bigint("round_off_manual_minor", { mode: "number" }),
@@ -654,14 +656,18 @@ export const documents = pgTable("documents", {
 	// A direct note (no source document): 'withGst' (s.34, the default) or 'noGst' (a financial or
 	// commercial note: no tax, posted to discount, out of the returns).
 	noteGst: varchar("note_gst", { length: 8 }),
-	// A document with an SEZ unit or developer: 'withTax' (IGST charged) or 'withoutTax' (LUT or bond,
-	// zero-rated). Null for any other party.
+	// Replaced by cross_border_tax (0067 copied it across); unread, to be dropped in a later release.
 	sezTax: varchar("sez_tax", { length: 10 }),
+	// An export, an SEZ supply (either way) or an import bill: 'withTax' (IGST charged) or 'withoutTax'
+	// (zero-rated under LUT or bond; on an import, IGST paid at customs). Null for anything else.
+	crossBorderTax: varchar("cross_border_tax", { length: 10 }),
 	// A direct note with GST: the original invoice or bill it adjusts, for GSTR-1 CDNR/CDNUR and the s.34 deadline.
 	originalNumber: varchar("original_number", { length: 40 }),
 	originalDate: date("original_date"),
 	// An import bill's bill of entry: { number, date, portCode, assessableMinor, igstMinor, cessMinor }. IGST paid at customs.
 	billOfEntry: jsonb("bill_of_entry"),
+	// Where the goods go when not to the buyer's own address: { name?, gstin?, address }. Null ships to the buyer.
+	shipTo: jsonb("ship_to"),
 	// A bill from the business's Input Service Distributor: its credit goes to 3B 4A(4).
 	isdInvoice: boolean("isd_invoice").default(false).notNull(),
 	// TDS deducted on a supplier's bill; what's owed them is the grand total less this.
@@ -715,6 +721,8 @@ export const documents = pgTable("documents", {
 	tcsRate: numeric("tcs_rate", { precision: 5, scale: 2 }),
 	// The vehicle it moved on or was for.
 	vehicleId: varchar("vehicle_id", { length: 40 }),
+	// Sent by a transporter rather than the business's own vehicle: one of its transporters.
+	transporterId: varchar("transporter_id", { length: 40 }),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
 }, (table): PgTableExtraConfigValue[] => [

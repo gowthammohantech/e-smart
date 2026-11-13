@@ -1584,11 +1584,10 @@ export interface paths {
          *     e-invoiced document is locked (`409 DOCUMENT_LOCKED`).
          *
          *     The exception (RULES 6.23, pending CA): an issued invoice whose `editable` is true is edited
-         *     in full. It is recomputed as a draft save is and keeps its number and branch; its stock is
-         *     taken back and posted again, and its expected TDS and TCS worked out afresh. Its date may not
-         *     move before the invoice issued before it (422 DATE_BEFORE_PREVIOUS), out of its numbering
-         *     period (422 DATE_OUTSIDE_SERIES), or into a closed (409 PERIOD_LOCKED) or filed (409
-         *     RETURN_FILED) period. The audit trail keeps the invoice before and after. When `editable` is
+         *     in full, except its date. It is recomputed as a draft save is and keeps its number, branch
+         *     and date (a different date is 422 DATE_LOCKED: cancel it and issue another); its stock is
+         *     taken back and posted again, and its expected TDS and TCS worked out afresh. The audit trail
+         *     keeps the invoice before and after. When `editable` is
          *     false, a change beyond those fields is 409 DOCUMENT_FINALIZED, naming the reason.
          */
         patch: operations["updateDocument"];
@@ -5998,6 +5997,11 @@ export interface components {
             documentDiscountMode?: "percent" | "amount";
             documentDiscountValue?: number;
             charges?: components["schemas"]["Money"];
+            /**
+             * @description What the charges are for; printed as their name on the document. Unset is other charges.
+             * @enum {string}
+             */
+            chargesKind?: "freight" | "packing" | "insurance" | "handling" | "loading" | "other";
             applyRoundOff?: boolean;
             /** @description A round-off the user typed; overrides the automatic one when applyRoundOff is true */
             roundOffManual?: components["schemas"]["Money"];
@@ -6034,11 +6038,17 @@ export interface components {
              * @enum {string}
              */
             noteGst?: "withGst" | "noGst";
+            /** @description Where the goods go when not to the buyer at their own address: the consignee, printed as Ship to. Left out ships to the buyer (their shipping address, else billing). Send null to clear it. */
+            shipTo?: {
+                name?: string;
+                gstin?: string;
+                address: components["schemas"]["Address"];
+            } | null;
             /**
-             * @description Only with an SEZ unit or developer (the party's GST registration is sez; 422 otherwise). withTax charges IGST (e-invoice SEZWP); withoutTax is zero-rated under LUT or bond (SEZWOP), no tax on any line. Unset takes withoutTax on a sale while the business's LUT is in force, else withTax. A return or note made from a document takes its source's. The server returns what it applied.
+             * @description On an export (a party abroad or place of supply 96), a document with an SEZ unit or developer, or an import bill; ignored for anything else. withTax charges IGST on every line (e-invoice EXPWP or SEZWP, GSTR-1 export WPAY); withoutTax charges none: zero-rated under LUT or bond (EXPWOP, SEZWOP, WOPAY), or on an import the IGST paid at customs, which only then may come with a billOfEntry (422 otherwise). Unset: an export or SEZ sale takes withoutTax while the business's LUT is in force, else withTax; an SEZ bill withTax; an import bill withoutTax. A return or note made from a document takes its source's. The server returns what it applied.
              * @enum {string}
              */
-            sezTax?: "withTax" | "withoutTax";
+            crossBorderTax?: "withTax" | "withoutTax";
             /** @description A direct note with GST: the number of the original invoice or bill it adjusts */
             originalNumber?: string;
             /**
@@ -6050,6 +6060,8 @@ export interface components {
             costCentreId?: string;
             /** @description The vehicle it moved on */
             vehicleId?: string;
+            /** @description Sent by a transporter rather than the business's own vehicle: one of its transporters (listTransporters). The e-way bill starts from it. null clears it. */
+            transporterId?: string | null;
             /**
              * @description On an invoice: the TCS section (s.206C) the sale falls under, or none. The rate follows the section, higher when the buyer has no PAN; a 206C(1F) sale collects only over ₹10 lakh.
              * @enum {string}
@@ -6137,13 +6149,13 @@ export interface components {
             };
             compliance?: components["schemas"]["ComplianceInfo"];
             readonly createdBy?: string;
-            /** @description On an invoice: whether it can be edited in full. A draft always can; an issued one only while it is the latest in its series, with nothing allocated, applied or raised against it, no IRN or e-way bill, and its GSTR-1 month and books period open (RULES 6.23). Unset on other kinds. */
+            /** @description On an invoice: whether it can be edited in full. A draft always can; an issued one (all but its date) while nothing is allocated, applied or raised against it, it has no IRN or e-way bill, and its GSTR-1 month and books period are open (RULES 6.23). Unset on other kinds. */
             readonly editable?: boolean;
             /**
              * @description Why an issued invoice can't be edited in full (editable false)
              * @enum {string}
              */
-            readonly editBlock?: "notInvoice" | "notFinal" | "periodLocked" | "notLatest" | "hasPayments" | "hasCredit" | "hasNotes" | "eInvoiced" | "ewayBill" | "returnFiled" | "laterStock";
+            readonly editBlock?: "notInvoice" | "notFinal" | "periodLocked" | "hasPayments" | "hasCredit" | "hasNotes" | "eInvoiced" | "ewayBill" | "returnFiled" | "laterStock";
         };
         /** @description A direct credit note applied to an invoice (or a supplier's to a bill), through adjustAdvances */
         CreditApplication: {
@@ -8233,6 +8245,8 @@ export interface operations {
                      * @default true
                      */
                     seedDefaults?: boolean;
+                    /** @description With seedDefaults, the tax rates the business starts with, a category each (GST 0% (Exempt), GST 5%…); left out, the regime's defaults (GST 0, 5, 12, 18, 28; VAT 0, 5). Ignored for a business not registered for tax. */
+                    taxRates?: number[];
                 };
             };
         };
@@ -14284,6 +14298,7 @@ export interface operations {
                 from: string;
                 to: string;
                 branchId?: components["parameters"]["BranchIdQuery"];
+                /** @description One contact, or several separated by commas: documents and payments of any of them */
                 partyId?: string;
             };
             header?: never;
@@ -14314,6 +14329,7 @@ export interface operations {
                 from: string;
                 to: string;
                 branchId?: components["parameters"]["BranchIdQuery"];
+                /** @description One contact, or several separated by commas: documents and payments of any of them */
                 partyId?: string;
                 currency?: string;
             };

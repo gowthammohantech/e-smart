@@ -78,6 +78,15 @@ const STANDALONE_EWAYBILL_IRP = 'NIC1';
 const DISTANCE_REFUSED = ['4038', '4013'] as const;
 /** The same refusal from the standalone e-way bill API. */
 const STANDALONE_DISTANCE_REFUSED = '702';
+/**
+ * The sandbox holds a short HSN master, so a real customer's code is refused as invalid (216). The retry
+ * files the bill under one it has accepted before; the app's own record keeps the real HSN.
+ */
+const STANDALONE_HSN_REFUSED = '216';
+const SANDBOX_ACCEPTED_HSN = '85362010';
+/** The same refusal on an e-invoice: 2176 "HSN code(s) … invalid". */
+const IRN_HSN_REFUSED = ['2176', '2311'] as const; // 2311: the sandbox taxpayer's turnover requires a 6-digit HSN, so a 4-digit one is refused too.
+// Only goods lines are swapped: a service line keeps its SAC (the portal refuses a goods HSN on a service, 3048).
 
 /** `status_cd` when the portal did what was asked. A string, as Whitebooks sends it. */
 const SUCCESS = '1';
@@ -366,9 +375,20 @@ export class WhitebooksGateway implements GspGateway {
       // A business filed as the sandbox taxpayer carries that taxpayer's registration, so NIC finds the seller it has the session for.
       const sellered = creds?.gstin !== login.gstin ? { ...req.payload, SellerDtls: (this.sellerParty(login)) as typeof req.payload.SellerDtls } : req.payload;
       const buyered = await this.withSandboxBuyer(login, sellered);
-      const payload = prepareIrnPayload({ ...buyered, DocDtls: { ...buyered.DocDtls, No: sandboxDocNo(this.config, login.gstin, buyered.DocDtls.No, buyered.DocDtls.Dt, req.companyId) } });
+      // The seller and buyer may now sit in other states than the document's, so the tax is re-split to match (NIC 2172).
+      const payload = prepareIrnPayload(resplitIrnTax({ ...buyered, DocDtls: { ...buyered.DocDtls, No: sandboxDocNo(this.config, login.gstin, buyered.DocDtls.No, buyered.DocDtls.Dt, req.companyId) } }));
+      const file = async (p: Record<string, unknown>) => {
+        try {
+          return await this.filing(login, PATHS.generateIrn, 'post', { body: p });
+        } catch (error) {
+          const items = (p.ItemList as { HsnCd?: string; IsServc?: string }[]) ?? [];
+          if (!(error instanceof GspRequestError && IRN_HSN_REFUSED.some((code) => hasErrorCode(error.envelope, code)) && items.some((i) => i.IsServc !== 'Y' && i.HsnCd !== SANDBOX_ACCEPTED_HSN))) throw error;
+          this.log(`The sandbox does not know an HSN on this invoice: filing it under ${SANDBOX_ACCEPTED_HSN}`);
+          return this.filing(login, PATHS.generateIrn, 'post', { body: { ...p, ItemList: items.map((i) => (i.IsServc === 'Y' ? i : { ...i, HsnCd: SANDBOX_ACCEPTED_HSN })) } });
+        }
+      };
       try {
-        const { body } = await this.filing(login, PATHS.generateIrn, 'post', { body: payload });
+        const { body } = await file(payload);
         const record = readRecord<IrnRecord>(body);
         if (!record?.Irn) return incomplete('IRN');
         return acknowledgement(record, req.now);
@@ -435,11 +455,22 @@ export class WhitebooksGateway implements GspGateway {
         // refuses IGST on an intra-state bill (218, with 623) and CGST/SGST on an inter-state one. The same tax is
         // re-split to match; the total does not move.
         if (party || seller) Object.assign(payload, resplitTax(payload));
-        const generate = (p: typeof payload) => this.standalone(login, PATHS.standaloneGenerate, nativeEwayBillBody(p));
+        const send = (p: typeof payload) => this.standalone(login, PATHS.standaloneGenerate, nativeEwayBillBody(p));
+        const generate = async (p: typeof payload): Promise<WhitebooksEnvelope> => {
+          try {
+            return await send(p);
+          } catch (error) {
+            if (!(error instanceof GspRequestError && hasErrorCode(error.envelope, STANDALONE_HSN_REFUSED) && p.mainHsnCode !== SANDBOX_ACCEPTED_HSN)) throw error;
+            this.log(`The sandbox does not know HSN ${p.mainHsnCode}: filing under ${SANDBOX_ACCEPTED_HSN}`);
+            return send({ ...p, mainHsnCode: SANDBOX_ACCEPTED_HSN });
+          }
+        };
         try {
           reply = await generate(payload);
         } catch (error) {
-          if (!(party && error instanceof GspRequestError && hasErrorCode(error.envelope, STANDALONE_DISTANCE_REFUSED))) throw error;
+          // The sandbox seller (a Bengaluru address) stands in even for an unregistered buyer (`URP`, no test buyer), so the
+          // real distance fails against its pincode there too: either substitution makes 0 the retry.
+          if (!((party || seller) && error instanceof GspRequestError && hasErrorCode(error.envelope, STANDALONE_DISTANCE_REFUSED))) throw error;
           reply = await generate({ ...payload, transDistance: 0 });
         }
       }
@@ -566,6 +597,27 @@ export class WhitebooksGateway implements GspGateway {
     const record = (body as { data?: unknown }).data;
     return isRecord(record) && Object.keys(record).length > 0 ? record : null;
   }
+}
+
+/**
+ * The invoice's tax as CGST + SGST when the seller's state is the place of supply, as IGST when it is not; each
+ * line's amount is unchanged. Only a payload whose tax disagrees is touched, so a consistent one passes as it came.
+ */
+export function resplitIrnTax<P extends { SellerDtls: { Stcd: string }; BuyerDtls: { Pos: string }; ItemList: unknown[]; ValDtls: unknown }>(payload: P): P {
+  const intra = Number(payload.SellerDtls.Stcd) === Number(payload.BuyerDtls.Pos);
+  type Line = { IgstAmt?: number; CgstAmt?: number; SgstAmt?: number };
+  const items = payload.ItemList as Line[];
+  const wrong = items.some((i) => (intra ? (i.IgstAmt ?? 0) > 0 : (i.CgstAmt ?? 0) > 0 || (i.SgstAmt ?? 0) > 0));
+  if (!wrong) return payload;
+  const money = (n: number) => Math.round(n * 100) / 100;
+  const lines = items.map((i) => {
+    const tax = money((i.IgstAmt ?? 0) + (i.CgstAmt ?? 0) + (i.SgstAmt ?? 0));
+    if (!intra) return { ...i, IgstAmt: tax, CgstAmt: 0, SgstAmt: 0 };
+    const half = money(tax / 2);
+    return { ...i, IgstAmt: 0, CgstAmt: half, SgstAmt: money(tax - half) };
+  });
+  const sum = (key: 'IgstAmt' | 'CgstAmt' | 'SgstAmt') => money(lines.reduce((t, i) => t + (i[key] ?? 0), 0));
+  return { ...payload, ItemList: lines, ValDtls: { ...(payload.ValDtls as object), IgstVal: sum('IgstAmt'), CgstVal: sum('CgstAmt'), SgstVal: sum('SgstAmt') } };
 }
 
 /** The bill's tax as CGST + SGST when it is intra-state, as IGST when it is not; the amount is unchanged. */

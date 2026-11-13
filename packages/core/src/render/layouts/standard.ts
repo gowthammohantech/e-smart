@@ -6,7 +6,8 @@ import { unitShortName } from '../../data/masters';
 import { shownCessRate } from '../../domain/lineCalc';
 import { tint } from '../invoiceTemplate';
 import type { DocView } from '../docView';
-import { addressBlock, bankBlock, cancelledStrip, eInvoiceBlock, esc, logoTag, NOTE_REASON, printedCustomFields, reimbursementTable, cessTable, signatureTag, sezNote, SUPPLY_NOTE } from '../blocks';
+import { addressBlock, bankBlock, cancelledStrip, eInvoiceBlock, esc, logoTag, NOTE_REASON, printedCustomFields, reimbursementTable, cessTable, signatureTag, crossBorderNote, SUPPLY_NOTE } from '../blocks';
+import { titleOf } from './common';
 
 /**
  * The standard page: the app's own design, and what every business printed before it could choose
@@ -49,7 +50,7 @@ export function standardLayout(view: DocView): string {
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>${label} ${esc(shownNumber)}</title>
+<title>${titleOf(view)} ${esc(shownNumber)}</title>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -134,9 +135,9 @@ export function standardLayout(view: DocView): string {
       ${sellerTaxId ? `<div style="margin-top:5px"><strong>${esc(company?.taxRegistration?.identifierLabel ?? 'GSTIN')}:</strong> ${esc(sellerTaxId)}</div>` : ''}
     </div>
     <div>
-      <div class="doc-title">${label}</div>
+      <div class="doc-title">${titleOf(view)}</div>
       ${doc.kind === 'proforma' ? '<div class="muted">Not a tax invoice. A tax invoice follows on supply or on receipt of payment.</div>' : ''}
-      ${billOfSupply ? '<div class="sub">Composition taxable person, not eligible to collect tax on supplies</div>' : ''}${sezNote(doc) ? `<div class="sub">${esc(sezNote(doc))}</div>` : ''}
+      ${billOfSupply ? '<div class="sub">Composition taxable person, not eligible to collect tax on supplies</div>' : ''}${crossBorderNote(doc) ? `<div class="sub">${esc(crossBorderNote(doc))}</div>` : ''}
       <div class="meta">
         <div><strong>${esc(shownNumber)}</strong></div>
         <div class="muted">Date: ${formatDate(doc.date)}</div>
@@ -158,7 +159,7 @@ export function standardLayout(view: DocView): string {
       <div class="muted">${addressBlock(party?.billingAddress)}</div>
       ${party?.taxId ? `<div style="margin-top:4px"><strong>${esc(t('sales:pdf.gstin'))}:</strong> ${esc(party.taxId)}</div>` : ''}
       ${party?.phone ? `<div class="muted">${esc(party.phone)}</div>` : ''}
-      ${party?.email ? `<div class="muted">${esc(party.email)}</div>` : ''}
+      ${party?.email ? `<div class="muted">${esc(party.email)}</div>` : ''}${doc.shipTo ? `<div class="cap" style="margin-top:10px">${bi('sales:pdf.consigneeShipTo')}</div><div class="name">${esc(doc.shipTo.name || party?.name)}</div><div class="muted">${addressBlock(doc.shipTo.address)}</div>${doc.shipTo.gstin ? `<div style="margin-top:4px"><strong>${esc(t('sales:pdf.gstin'))}:</strong> ${esc(doc.shipTo.gstin)}</div>` : ''}` : ''}
     </div>
     <div>
       ${pos ? `<div class="cap">${bi('sales:pdf.placeOfSupply')}</div><div>${esc(pos)}</div>` : ''}

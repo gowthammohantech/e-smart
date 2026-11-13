@@ -159,6 +159,28 @@ export function gstCategories(companyId: string): TaxCategory[] {
   }));
 }
 
+/** The rates a new business starts with, by tax regime; onboarding shows them to keep, drop or add to. */
+export function defaultTaxRates(regime: 'GST' | 'VAT' | 'NONE'): number[] {
+  return regime === 'GST' ? [0, 5, 12, 18, 28] : regime === 'VAT' ? [0, 5] : [0];
+}
+
+/**
+ * The tax categories a new business starts with: one per rate (the regime's defaults unless `rates`
+ * says otherwise), each named and described as the defaults are. Unregistered, a single "No tax".
+ */
+export function startingTaxCategories(
+  regime: 'GST' | 'VAT' | 'NONE',
+  rates?: readonly number[] | null,
+): { name: string; rate: number; type: 'GST' | 'VAT' | 'NONE'; effectiveFrom: string; description: string }[] {
+  if (regime === 'NONE') return [{ name: 'No tax', rate: 0, type: 'NONE', effectiveFrom: '2000-01-01', description: 'Not registered for tax' }];
+  const picked = [...new Set((rates?.length ? rates : defaultTaxRates(regime)).filter((r) => r >= 0 && r <= 100))].sort((a, b) => a - b);
+  return picked.map((r) =>
+    regime === 'GST'
+      ? { name: r === 0 ? 'GST 0% (Exempt)' : `GST ${r}%`, rate: r, type: 'GST' as const, effectiveFrom: '2017-07-01', description: r === 0 ? 'Exempt / nil-rated supplies' : `Standard ${r}% slab` }
+      : { name: `VAT ${r}%`, rate: r, type: 'VAT' as const, effectiveFrom: '2018-01-01', description: r === 0 ? 'Zero-rated and exempt supplies' : 'Standard rate' },
+  );
+}
+
 export function expenseCategories(companyId: string): ExpenseCategory[] {
   return [
     { id: 'exp_rent', companyId, name: 'Rent', icon: 'home-city-outline', color: '#4DA3FF' },

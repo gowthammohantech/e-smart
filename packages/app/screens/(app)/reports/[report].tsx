@@ -12,7 +12,7 @@ import { AgingBars } from '@esmart/ui/components/charts/AgingBars';
 import { seriesColor } from '@esmart/ui/theme/chartColors';
 import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
 
-import { ReportShell, reportTable, useReportScope, ReportLoading, ReportError, failedQuery } from '../../../features/reports/ReportShell';
+import { ReportShell, reportTable, reportPartyParam, useReportScope, ReportLoading, ReportError, failedQuery } from '../../../features/reports/ReportShell';
 import type { ReportTable } from '../../../features/reports/reportTable';
 import { DataTable, HeroFigure, KeyFigures, ReportSection } from '../../../features/reports/reportParts';
 import { ReportDesktop } from '../../../features/reports/ReportDesktop';
@@ -25,6 +25,7 @@ import {
   summarizePayments,
   summarizeStock,
   summarizeTax,
+  taxByHead,
 } from '@esmart/core/domain/reports';
 import { paymentMethodLabel } from '@esmart/core/labels';
 import { formatMoney, formatPercent, formatQty } from '@esmart/core/lib/format';
@@ -79,7 +80,7 @@ export default function Report() {
   // others stay empty, made by those functions over nothing so every shape is what it always was.
   const SERVER_KEYS = ['sales-summary', 'purchase-summary', 'expense-summary', 'receivables', 'payables', 'stock', 'tax-summary', 'payments', 'advances', 'profit', 'tds-register', 'tds-payable', 'tds-receivable', 'tds-26q', 'tds-challans', 'tcs-register', 'tcs-payable', 'msme-payables'];
   const serverKey = SERVER_KEYS.includes(key) ? (key as ReportDataKey) : null;
-  const remote = useReportData<unknown>(serverKey, { ...scope.filters.range, branchId: scope.filters.branchId, partyId: scope.filters.partyId });
+  const remote = useReportData<unknown>(serverKey, { ...scope.filters.range, branchId: scope.filters.branchId, partyId: reportPartyParam(scope.filters) });
   // A new period keeps the last figures on screen while it loads, as intended; but if this screen is
   // reused for another report, the placeholder is the old report's, in another shape: that waits.
   const [dataKey, setDataKey] = useState(key);
@@ -223,15 +224,33 @@ export default function Report() {
     );
     exportRows = () =>
       reportTable(
-        [tr('common:table.number'), tr('common:table.date'), tr('reports:shell.contact'), tr('reports:column.taxable'), tr('common:table.tax'), tr('common:table.total')],
-        data.documents.map((d) => [
-          d.number,
-          d.date,
-          partyNameOf(d.partyId),
-          toMajor(d.totals.taxableAmount),
-          toMajor(d.totals.totalTax),
-          toMajor(d.totals.grandTotal),
-        ]),
+        [
+          tr('common:table.number'),
+          tr('common:table.date'),
+          isSales ? tr('common:table.customer') : tr('common:table.supplier'),
+          tr('reports:column.taxable'),
+          'IGST',
+          'CGST',
+          'SGST',
+          tr('reports:column.cess'),
+          tr('common:table.tax'),
+          tr('common:table.total'),
+        ],
+        data.documents.map((d) => {
+          const heads = taxByHead(d);
+          return [
+            d.number,
+            d.date,
+            partyNameOf(d.partyId),
+            toMajor(d.totals.taxableAmount),
+            toMajor(heads.igst),
+            toMajor(heads.cgst),
+            toMajor(heads.sgst),
+            toMajor(heads.cess),
+            toMajor(d.totals.totalTax),
+            toMajor(d.totals.grandTotal),
+          ];
+        }),
       );
   }
 

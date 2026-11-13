@@ -553,6 +553,11 @@ paths:
                       type: boolean
                       default: true
                       description: Create default tax categories, expense categories, a cash account and compliance settings for the country.
+                    taxRates:
+                      type: array
+                      minItems: 1
+                      items: { type: number, minimum: 0, maximum: 100 }
+                      description: With seedDefaults, the tax rates the business starts with, a category each (GST 0% (Exempt), GST 5%…); left out, the regime's defaults (GST 0, 5, 12, 18, 28; VAT 0, 5). Ignored for a business not registered for tax.
       responses:
         '201':
           description: Created
@@ -2320,11 +2325,10 @@ paths:
         e-invoiced document is locked (`409 DOCUMENT_LOCKED`).
 
         The exception (RULES 6.23, pending CA): an issued invoice whose `editable` is true is edited
-        in full. It is recomputed as a draft save is and keeps its number and branch; its stock is
-        taken back and posted again, and its expected TDS and TCS worked out afresh. Its date may not
-        move before the invoice issued before it (422 DATE_BEFORE_PREVIOUS), out of its numbering
-        period (422 DATE_OUTSIDE_SERIES), or into a closed (409 PERIOD_LOCKED) or filed (409
-        RETURN_FILED) period. The audit trail keeps the invoice before and after. When `editable` is
+        in full, except its date. It is recomputed as a draft save is and keeps its number, branch
+        and date (a different date is 422 DATE_LOCKED: cancel it and issue another); its stock is
+        taken back and posted again, and its expected TDS and TCS worked out afresh. The audit trail
+        keeps the invoice before and after. When `editable` is
         false, a change beyond those fields is 409 DOCUMENT_FINALIZED, naming the reason.
       x-roles: [owner, admin, accountant, sales]
       parameters: [{ $ref: '#/components/parameters/IfMatch' }]
@@ -4788,7 +4792,7 @@ paths:
         - { name: from, in: query, required: true, schema: { type: string, format: date } }
         - { name: to, in: query, required: true, schema: { type: string, format: date } }
         - { $ref: '#/components/parameters/BranchIdQuery' }
-        - { name: partyId, in: query, schema: { type: string } }
+        - { name: partyId, in: query, schema: { type: string }, description: 'One contact, or several separated by commas: documents and payments of any of them' }
       responses:
         '200':
           description: OK
@@ -4821,7 +4825,7 @@ paths:
         - { name: from, in: query, required: true, schema: { type: string, format: date } }
         - { name: to, in: query, required: true, schema: { type: string, format: date } }
         - { $ref: '#/components/parameters/BranchIdQuery' }
-        - { name: partyId, in: query, schema: { type: string } }
+        - { name: partyId, in: query, schema: { type: string }, description: 'One contact, or several separated by commas: documents and payments of any of them' }
         - { name: currency, in: query, schema: { type: string } }
       responses:
         '200':
@@ -7954,6 +7958,7 @@ components:
         documentDiscountMode: { type: string, enum: [percent, amount] }
         documentDiscountValue: { type: number }
         charges: { $ref: '#/components/schemas/Money' }
+        chargesKind: { type: string, enum: [freight, packing, insurance, handling, loading, other], description: 'What the charges are for; printed as their name on the document. Unset is other charges.' }
         applyRoundOff: { type: boolean }
         roundOffManual: { allOf: [{ $ref: '#/components/schemas/Money' }], description: A round-off the user typed; overrides the automatic one when applyRoundOff is true }
         notes: { type: string }
@@ -7988,19 +7993,30 @@ components:
             the original invoice's financial year (422 NOTE_TIME_BARRED). noGst is a financial or
             commercial note: no tax on any line, posted to discount allowed (or received), and left
             out of GSTR-1 and GSTR-3B.
-        sezTax:
+        shipTo:
+          type: [object, 'null']
+          description: "Where the goods go when not to the buyer at their own address: the consignee, printed as Ship to. Left out ships to the buyer (their shipping address, else billing). Send null to clear it."
+          required: [address]
+          properties:
+            name: { type: string, maxLength: 100 }
+            gstin: { type: string, maxLength: 15 }
+            address: { $ref: '#/components/schemas/Address' }
+        crossBorderTax:
           type: string
           enum: [withTax, withoutTax]
           description: >-
-            Only with an SEZ unit or developer (the party's GST registration is sez; 422 otherwise).
-            withTax charges IGST (e-invoice SEZWP); withoutTax is zero-rated under LUT or bond (SEZWOP),
-            no tax on any line. Unset takes withoutTax on a sale while the business's LUT is in force,
-            else withTax. A return or note made from a document takes its source's. The server returns
-            what it applied.
+            On an export (a party abroad or place of supply 96), a document with an SEZ unit or developer,
+            or an import bill; ignored for anything else. withTax charges IGST on every line (e-invoice
+            EXPWP or SEZWP, GSTR-1 export WPAY); withoutTax charges none: zero-rated under LUT or bond
+            (EXPWOP, SEZWOP, WOPAY), or on an import the IGST paid at customs, which only then may come
+            with a billOfEntry (422 otherwise). Unset: an export or SEZ sale takes withoutTax while the
+            business's LUT is in force, else withTax; an SEZ bill withTax; an import bill withoutTax. A
+            return or note made from a document takes its source's. The server returns what it applied.
         originalNumber: { type: string, maxLength: 40, description: 'A direct note with GST: the number of the original invoice or bill it adjusts' }
         originalDate: { type: string, format: date, description: 'A direct note with GST: the date of the original invoice or bill' }
         costCentreId: { type: string, description: The project or department it belongs to }
         vehicleId: { type: string, description: The vehicle it moved on }
+        transporterId: { type: [string, 'null'], description: "Sent by a transporter rather than the business's own vehicle: one of its transporters (listTransporters). The e-way bill starts from it. null clears it." }
         tcsSection: { type: string, enum: [none, scrap, liquor, tenduLeaves, timberLease, timberOther, forestProduce, minerals, motorVehicle, luxuryGoods], description: 'On an invoice: the TCS section (s.206C) the sale falls under, or none. The rate follows the section, higher when the buyer has no PAN; a 206C(1F) sale collects only over ₹10 lakh.' }
         tdsSection: { type: string, enum: [none, 194C, 194JA, 194JB, 194H, 194IA, 194IB, 194A, 194Q], writeOnly: true, description: "On a supplier's bill or debit note: the TDS section, or none. Defaults to the supplier's; worked out only for a company with a TAN. On an invoice: the section the customer will deduct TDS under (expected TDS, not posted), or none; defaults to the party's." }
         tdsRate: { type: number, minimum: 0, maximum: 100, writeOnly: true, description: "On an invoice: the rate the customer will deduct at, percent. Defaults to the section's rate for the company's PAN." }
@@ -8063,14 +8079,14 @@ components:
               type: boolean
               readOnly: true
               description: >-
-                On an invoice: whether it can be edited in full. A draft always can; an issued one only
-                while it is the latest in its series, with nothing allocated, applied or raised against
-                it, no IRN or e-way bill, and its GSTR-1 month and books period open (RULES 6.23).
+                On an invoice: whether it can be edited in full. A draft always can; an issued one
+                (all but its date) while nothing is allocated, applied or raised against it, it has no
+                IRN or e-way bill, and its GSTR-1 month and books period are open (RULES 6.23).
                 Unset on other kinds.
             editBlock:
               type: string
               readOnly: true
-              enum: [notInvoice, notFinal, periodLocked, notLatest, hasPayments, hasCredit, hasNotes, eInvoiced, ewayBill, returnFiled, laterStock]
+              enum: [notInvoice, notFinal, periodLocked, hasPayments, hasCredit, hasNotes, eInvoiced, ewayBill, returnFiled, laterStock]
               description: Why an issued invoice can't be edited in full (editable false)
     CreditApplication:
       type: object

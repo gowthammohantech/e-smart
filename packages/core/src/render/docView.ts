@@ -4,7 +4,7 @@
  * resolved template. A layout only arranges these; none of them recomputes a figure, so every
  * layout prints the same amounts.
  */
-import { Branch, BusinessDocument, Company, DocumentLine, EwayBill, Party, TaxComponent, type Address } from '../types';
+import { Branch, BusinessDocument, CHARGES_KIND_PRINT, Company, DocumentLine, EwayBill, Party, TaxComponent, type Address } from '../types';
 import type { Money } from '../lib/money';
 import { documentKindLabel, type Translate } from '../labels';
 import { flattenTaxComponents, taxedCharges } from '../domain/lineCalc';
@@ -70,6 +70,8 @@ export type DocView = {
   tpl: ResolvedTemplate;
   /** A composition dealer's invoice is a bill of supply (Rule 49). */
   billOfSupply: boolean;
+  /** An invoice in a currency other than the business's own: titled a commercial invoice. */
+  commercial: boolean;
   /** The heading: upper-cased in English, as typed in Tamil. */
   label: string;
   sellerTaxId?: string;
@@ -116,7 +118,9 @@ export function buildDocView({
   // something.
   // A composition dealer may not issue a tax invoice, only a bill of supply (Rule 49). Statutory, so English.
   const billOfSupply = doc.kind === 'invoice' && !!company?.taxRegistration?.compositionScheme;
-  const kindName = billOfSupply ? 'Bill of Supply' : documentKindLabel(t, doc.kind, 1);
+  // An invoice in another currency (a USD export) is titled a commercial invoice; in the business's own, a tax invoice.
+  const commercial = !billOfSupply && isCommercialInvoice(doc, company?.baseCurrency);
+  const kindName = billOfSupply ? 'Bill of Supply' : commercial ? 'Commercial Invoice' : documentKindLabel(t, doc.kind, 1);
   const label = language === 'en' || billOfSupply ? kindName.toUpperCase() : kindName;
 
   const bi = bilingual(t, language);
@@ -128,12 +132,12 @@ export function buildDocView({
     row('subtotal', bi('sales:pdf.subtotal'), formatMoney(doc.totals.subtotal)),
     doc.totals.lineDiscount.minor > 0 ? row('lineDiscount', esc('Line discounts'), `− ${formatMoney(doc.totals.lineDiscount)}`) : null,
     // Charges taxed with the items (RULES 1.10): part of the taxable value, so shown above it.
-    chargesTaxed.minor ? row('chargesTaxed', esc('Freight and other charges'), formatMoney(chargesTaxed)) : null,
+    chargesTaxed.minor ? row('chargesTaxed', esc(doc.chargesKind ? CHARGES_KIND_PRINT[doc.chargesKind] : 'Freight and other charges'), formatMoney(chargesTaxed)) : null,
     row('taxable', bi('sales:pdf.taxableValue'), formatMoney(doc.totals.taxableAmount)),
     ...components.map((c) => row('tax', esc(c.label), formatMoney(c.amount))),
     doc.totals.documentDiscount.minor > 0 ? row('documentDiscount', esc('Discount on total'), `− ${formatMoney(doc.totals.documentDiscount)}`) : null,
     doc.totals.reimbursements?.minor ? row('reimbursements', esc('Reimbursement of expenses'), formatMoney(doc.totals.reimbursements)) : null,
-    doc.totals.charges.minor > 0 ? row('charges', esc('Other charges'), formatMoney(doc.totals.charges)) : null,
+    doc.totals.charges.minor > 0 ? row('charges', esc(CHARGES_KIND_PRINT[doc.chargesKind ?? 'other']), formatMoney(doc.totals.charges)) : null,
     // Income-tax TCS (s.206C), collected with the price: statutory, so English.
     doc.totals.tcs?.minor ? row('tcs', esc(`TCS collected u/s ${doc.tcs?.section ? (TCS_LABEL[doc.tcs.section] ?? '206C') : '206C'} @ ${doc.tcs?.rate ?? ''}%`), formatMoney(doc.totals.tcs)) : null,
     doc.totals.roundOff.minor !== 0 ? row('roundOff', bi('sales:pdf.roundOff'), formatMoney(doc.totals.roundOff, { signed: true })) : null,
@@ -158,6 +162,7 @@ export function buildDocView({
     bi,
     tpl: resolveTemplate(template ?? company?.invoiceTemplate, layout ?? doc.printLayout),
     billOfSupply,
+    commercial,
     label,
     sellerTaxId: branch?.gstin ?? company?.taxRegistration?.identifier,
     branchLabel: branchName ?? branch?.name,
@@ -180,6 +185,11 @@ export function buildDocView({
 const GSTIN = /^[0-9]{2}([A-Z]{5}[0-9]{4}[A-Z])[0-9A-Z]{3}$/;
 
 /** The PAN inside a GSTIN. */
+/** An invoice in a currency other than the business's own (a USD export): printed as a commercial invoice. */
+export function isCommercialInvoice(doc: Pick<BusinessDocument, 'kind' | 'currency'>, baseCurrency: string | undefined): boolean {
+  return doc.kind === 'invoice' && !!baseCurrency && doc.currency !== baseCurrency;
+}
+
 export function panOf(gstin: string | undefined): string | undefined {
   return gstin ? GSTIN.exec(gstin.trim().toUpperCase())?.[1] : undefined;
 }

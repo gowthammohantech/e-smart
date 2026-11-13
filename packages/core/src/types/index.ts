@@ -379,6 +379,22 @@ export type DocStatus =
 
 export type DiscountMode = 'percent' | 'amount';
 
+/** A consignee: who the goods go to and where, when not the buyer at their own address. */
+export type ShipTo = { name?: string; gstin?: string; address: Address };
+
+/** What a document's charges are for. */
+export type ChargesKind = 'freight' | 'packing' | 'insurance' | 'handling' | 'loading' | 'other';
+export const CHARGES_KINDS: ChargesKind[] = ['freight', 'packing', 'insurance', 'handling', 'loading', 'other'];
+/** As printed on the document (English, as the PDF's statutory lines are). */
+export const CHARGES_KIND_PRINT: Record<ChargesKind, string> = {
+  freight: 'Freight charges',
+  packing: 'Packing and forwarding',
+  insurance: 'Insurance',
+  handling: 'Handling charges',
+  loading: 'Loading and unloading',
+  other: 'Other charges',
+};
+
 export type DocumentLine = {
   id: string;
   itemId?: string;
@@ -457,6 +473,8 @@ export type BusinessDocument = {
   documentDiscountMode: DiscountMode;
   documentDiscountValue: number;
   charges: Money;
+  /** What the charges are for (freight, packing…); unset reads as other charges. */
+  chargesKind?: ChargesKind;
   applyRoundOff: boolean;
   /**
    * A round-off typed by the user (may be negative). Absent means the
@@ -486,10 +504,13 @@ export type BusinessDocument = {
    */
   noteGst?: 'withGst' | 'noGst';
   /**
-   * A document with an SEZ unit or developer: `withTax` charges IGST, `withoutTax` goes under LUT or
-   * bond (zero-rated). Unset follows the LUT for a sale and charges IGST on a bill.
+   * An export, a document with an SEZ unit or developer, or an import bill: `withTax` charges IGST,
+   * `withoutTax` charges none (zero-rated under LUT or bond; on an import, IGST paid at customs).
+   * Unset: an export or SEZ sale follows the LUT, an SEZ bill charges IGST, an import bill none.
    */
-  sezTax?: 'withTax' | 'withoutTax';
+  crossBorderTax?: 'withTax' | 'withoutTax';
+  /** Where the goods go when not to the buyer's own address (the consignee); unset or null ships to the buyer. */
+  shipTo?: ShipTo | null;
   /** A direct note with GST: the original invoice or bill it adjusts (GSTR-1 CDNR/CDNUR, the s.34 deadline). */
   originalNumber?: string;
   originalDate?: string;
@@ -521,6 +542,8 @@ export type BusinessDocument = {
   /** The project or department it belongs to. */
   /** The vehicle it moved on. */
   vehicleId?: string;
+  /** Sent by a transporter (one of the business's) rather than its own vehicle; unset or null is its own. */
+  transporterId?: string | null;
   costCentreId?: string;
   /** An invoice that repeats: the server issues a copy on each next date (setDocumentRecurrence). */
   recurrence?: RecurrenceFrequency;

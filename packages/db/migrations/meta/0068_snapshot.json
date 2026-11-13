@@ -1,6 +1,6 @@
 {
-  "id": "6f43c930-e9b9-487c-b3f2-98c1d73e8fb3",
-  "prevId": "13d02e66-7274-4996-85c6-9254e0d4311d",
+  "id": "8cf5b2b5-c722-44bc-9c11-3bcad77d3e97",
+  "prevId": "1ad50ea8-1d20-4c29-b41f-d3148ad4bde8",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -3937,6 +3937,12 @@
           "notNull": true,
           "default": 0
         },
+        "charges_kind": {
+          "name": "charges_kind",
+          "type": "varchar(12)",
+          "primaryKey": false,
+          "notNull": false
+        },
         "apply_round_off": {
           "name": "apply_round_off",
           "type": "boolean",
@@ -4015,6 +4021,12 @@
         },
         "sez_tax": {
           "name": "sez_tax",
+          "type": "varchar(10)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cross_border_tax": {
+          "name": "cross_border_tax",
           "type": "varchar(10)",
           "primaryKey": false,
           "notNull": false
@@ -9572,24 +9584,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
-        },
-        "lower_tds_section": {
-          "name": "lower_tds_section",
-          "type": "varchar(8)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "lower_tds_valid_from": {
-          "name": "lower_tds_valid_from",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "lower_tds_limit_minor": {
-          "name": "lower_tds_limit_minor",
-          "type": "bigint",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {

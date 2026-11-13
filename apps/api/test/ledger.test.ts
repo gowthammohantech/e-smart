@@ -11,9 +11,10 @@ describe('ledger', () => {
     const m = await moneySetup(t);
     t.setNow('2026-09-29T10:00:00Z');
     // Due 2026-10-29: current. Due 2026-09-14: 15 days late. Due 2026-07-01: 90 days late.
-    const current = await issueInvoice(t, m);
-    const late = await issueInvoice(t, m, { date: '2026-08-15', dueDate: '2026-09-14' });
+    // Issued in date order: an invoice can't be dated before one already issued.
     const old = await issueInvoice(t, m, { partyId: m.bengaluru.id, date: '2026-06-01', dueDate: '2026-07-01' });
+    const late = await issueInvoice(t, m, { date: '2026-08-15', dueDate: '2026-09-14' });
+    const current = await issueInvoice(t, m);
     await t.post(`${m.c}/payments`, { direction: 'received', partyId: m.mumbai.id, date: '2026-09-29', amount: { minor: 36000, currency: 'INR' }, currency: 'INR', method: 'cash', accountId: m.cash.id, allocations: [{ documentId: late.id, amount: { minor: 36000, currency: 'INR' } }] }, { token: m.token });
     const paid = await issueInvoice(t, m);
     await t.post(`${m.c}/payments`, { direction: 'received', partyId: m.mumbai.id, date: '2026-09-29', amount: { minor: 236000, currency: 'INR' }, currency: 'INR', method: 'cash', accountId: m.cash.id, allocations: [{ documentId: paid.id, amount: { minor: 236000, currency: 'INR' } }] }, { token: m.token });

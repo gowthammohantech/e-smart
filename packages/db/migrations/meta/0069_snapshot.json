@@ -1,6 +1,6 @@
 {
-  "id": "bc25b47c-b066-4723-8326-106dfa81098b",
-  "prevId": "6f43c930-e9b9-487c-b3f2-98c1d73e8fb3",
+  "id": "40ad9220-6ff8-427a-ab4f-b5f0c757532f",
+  "prevId": "8cf5b2b5-c722-44bc-9c11-3bcad77d3e97",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -3937,6 +3937,12 @@
           "notNull": true,
           "default": 0
         },
+        "charges_kind": {
+          "name": "charges_kind",
+          "type": "varchar(12)",
+          "primaryKey": false,
+          "notNull": false
+        },
         "apply_round_off": {
           "name": "apply_round_off",
           "type": "boolean",
@@ -4019,6 +4025,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "cross_border_tax": {
+          "name": "cross_border_tax",
+          "type": "varchar(10)",
+          "primaryKey": false,
+          "notNull": false
+        },
         "original_number": {
           "name": "original_number",
           "type": "varchar(40)",
@@ -4033,6 +4045,12 @@
         },
         "bill_of_entry": {
           "name": "bill_of_entry",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "ship_to": {
+          "name": "ship_to",
           "type": "jsonb",
           "primaryKey": false,
           "notNull": false
@@ -9572,24 +9590,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
-        },
-        "lower_tds_section": {
-          "name": "lower_tds_section",
-          "type": "varchar(8)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "lower_tds_valid_from": {
-          "name": "lower_tds_valid_from",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "lower_tds_limit_minor": {
-          "name": "lower_tds_limit_minor",
-          "type": "bigint",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {
@@ -11876,12 +11876,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
-        },
-        "pending_subscription_id": {
-          "name": "pending_subscription_id",
-          "type": "varchar(100)",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {},

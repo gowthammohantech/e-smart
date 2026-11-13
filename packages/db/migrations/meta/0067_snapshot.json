@@ -1,5 +1,5 @@
 {
-  "id": "13d02e66-7274-4996-85c6-9254e0d4311d",
+  "id": "1ad50ea8-1d20-4c29-b41f-d3148ad4bde8",
   "prevId": "9be47ac2-218b-4725-9aae-e58e296b6037",
   "version": "7",
   "dialect": "postgresql",
@@ -4015,6 +4015,12 @@
         },
         "sez_tax": {
           "name": "sez_tax",
+          "type": "varchar(10)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cross_border_tax": {
+          "name": "cross_border_tax",
           "type": "varchar(10)",
           "primaryKey": false,
           "notNull": false
