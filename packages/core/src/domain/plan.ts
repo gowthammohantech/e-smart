@@ -223,6 +223,23 @@ const GATED_PATHS: [prefix: string, module: Module | null][] = [
   ['/gst/journal', 'books'],
 ];
 
+/**
+ * Settings pages that only serve one module's fields: every plan opens them, and they go when the
+ * owner switches that module off. Categories and brands are retail item fields; currencies and
+ * their rates are multi-currency's (still open on a plan without it, which bills in a customer's
+ * currency all the same).
+ */
+const SWITCHED_PATHS: [prefix: string, module: Module][] = [
+  ['/settings/item-categories', 'pos'],
+  ['/settings/brands', 'pos'],
+  ['/settings/currencies', 'fx'],
+];
+
+/** The module whose switch hides a route even where the plan opens it, or null. */
+export function switchedModuleForPath(pathname: string): Module | null {
+  return SWITCHED_PATHS.find(([prefix]) => pathname === prefix || pathname.startsWith(`${prefix}/`))?.[1] ?? null;
+}
+
 /** The module a route belongs to, or null when every plan can open it. */
 export function moduleForPath(pathname: string): Module | null {
   for (const [prefix, module] of GATED_PATHS) {
@@ -238,6 +255,8 @@ export function moduleForPath(pathname: string): Module | null {
  */
 export function canOpen(tier: PlanTier, route: string, disabled?: readonly Module[] | null): boolean {
   const pathname = route.split('?')[0].replace(/\/\([^/)]+\)/g, '') || '/';
+  const switched = switchedModuleForPath(pathname);
+  if (switched && disabled?.includes(switched)) return false;
   const module = moduleForPath(pathname);
   return !module || moduleEnabled(tier, disabled, module);
 }
