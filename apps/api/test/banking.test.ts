@@ -344,13 +344,19 @@ describe('banking: matching', () => {
     expect((await t.del(`${m.c}/bank-statements/nope`, { token: m.token })).status).toBe(404);
   });
 
-  it('puts a line back to unmatched when its payment is deleted', async () => {
+  it('keeps a reconciled payment until its line is unmatched, and puts a line back when its payment goes', async () => {
     const m = await moneySetup(t);
     const acct = await bank(m);
     const p = await pay(m, acct, 99_900);
     await importLines(m, acct, [ln('2026-09-28', 'UPI IN', 99_900)]);
     expect((await lines(m, acct))[0].status).toBe('matched');
-    expect((await t.del(`${m.c}/payments/${p.id}`, { token: m.token })).status).toBe(204);
+    // Matched to the bank, it can't simply go: that would undo the reconciliation unseen.
+    const refused = await t.del(`${m.c}/payments/${p.id}`, { token: m.token });
+    expect(refused.status).toBe(409);
+    expect(refused.body.code).toBe('RECONCILED');
+    // A payment removed some other way (here, straight from the table) still lets its line go back.
+    await t.deps.db.delete(schema.paymentAllocations).where(eq(schema.paymentAllocations.paymentId, p.id));
+    await t.deps.db.delete(schema.payments).where(eq(schema.payments.id, p.id));
     const [line] = await lines(m, acct);
     expect(line.status).toBe('unmatched');
     expect(line.match).toBeUndefined();
@@ -377,13 +383,18 @@ describe('banking: matching', () => {
     expect(rec.body.unclearedPayments.deposits).toEqual([]);
   });
 
-  it('puts a line back to unmatched when its payment is edited to another amount', async () => {
+  it('keeps a reconciled payment’s amount until its line is unmatched', async () => {
     const m = await moneySetup(t);
     const acct = await bank(m);
     const p = await pay(m, acct, 99_900);
     await importLines(m, acct, [ln('2026-09-28', 'UPI IN', 99_900)]);
     expect((await lines(m, acct))[0].status).toBe('matched');
     const cur = await t.get(`${m.c}/payments/${p.id}`, { token: m.token });
+    const refused = await t.put(`${m.c}/payments/${p.id}`, { ...cur.body, amount: inr(90_000) }, { token: m.token });
+    expect(refused.body.code).toBe('RECONCILED');
+    // Unmatched first, on purpose, it can change.
+    const [matched] = await lines(m, acct);
+    expect((await t.del(`${m.c}/bank-lines/${matched.id}/match`, { token: m.token })).status).toBe(200);
     const edited = await t.put(`${m.c}/payments/${p.id}`, { ...cur.body, amount: inr(90_000) }, { token: m.token });
     expect(edited.status, edited.raw).toBe(200);
     const [line] = await lines(m, acct);

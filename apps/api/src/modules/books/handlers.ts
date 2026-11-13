@@ -12,8 +12,9 @@ import { recordChange, type DbOrTx } from '../../lib/audit';
 import { newId } from '../../lib/ids';
 import { assignNumber } from '../../lib/numbering';
 import { compact, iso, money, versioned } from '../../lib/wire';
-import { assertPeriodOpen } from '../documents/lifecycle';
+import { assertPeriodOpen, assertPeriodOpenNow } from '../documents/lifecycle';
 import { wouldOverdraw } from '../payments/engine';
+import { assertNotReconciled } from '../banking/engine';
 import { assertWithinPaymentLimit } from '../payments/requests';
 import { costCentreIssues } from './costCentres';
 import { loadBook, loadVouchers } from './book';
@@ -22,7 +23,7 @@ import { postVoucher } from '@esmart/core/domain/ledger/postings';
 import { comparisonPeriod, profitAndLossColumns, balanceSheetColumns, splitPeriods } from '@esmart/core/domain/ledger/comparative';
 import { integrityChecks, type IntegrityInput } from '@esmart/core/domain/ledger/integrity';
 import { partyStatement } from '../parties/statement';
-import { businessDate, financialYearOf } from '@esmart/core/lib/date';
+import { addDaysISO, businessDate, financialYearOf } from '@esmart/core/lib/date';
 import { assertOpeningOpen, ledgerKeyUse } from './usage';
 
 /**
@@ -66,6 +67,8 @@ export const VOUCHER_BLOCKED_KEYS = ['sys:openingStock', 'sys:accumulatedDepreci
 /** Earlier years' profit: open to vouchers, but only posted by these roles and with a narration. */
 export const RETAINED_EARNINGS = 'sys:retainedEarnings';
 export const RETAINED_EARNINGS_ROLES: string[] = ['owner', 'admin'];
+/** Accounts the books keep from their own sources: tax, sales and the opening difference. */
+const CONTROL_KEY = /^sys:(output|input|rcmPayable|gstCashLedger|gstOnAdvances|tdsPayable|tdsReceivable|tcsPayable|customsPayable|sales|openingDifference)/;
 
 const blocking = (issues: Issue[]) => (field: string, message: string) => issues.push({ field, message, severity: 'blocking' });
 
@@ -211,6 +214,24 @@ export async function voucherColumns(ctx: AnyCtx, db: DbOrTx, body: Schema<'Vouc
     }
     if (!draft && !body.narration?.trim()) block('narration', 'Say why earlier years’ profit changes: a voucher posting to it needs a narration');
   }
+  // Control accounts have their own sources: GST from documents and set-offs, TDS from bills and
+  // challans, a party's balance from documents and payments (so its invoices settle and age). A
+  // voucher may still adjust one, but that is the owner's call and says why (RULES 6.29); an
+  // accountant may prepare it as a draft. The GST cash ledger moves only by challan or set-off.
+  if (!draft) {
+    const own = (k: string) => (body.kind === 'gstJournal' && /^sys:(output|input|rcmPayable|gstCashLedger|gstInterest|gstLateFee|itcReversed|gstOnAdvances)/.test(k)) || ((body.kind === 'tdsChallan' || body.kind === 'gstChallan') && /^sys:(tdsPayable|tcsPayable|gstCashLedger)/.test(k));
+    if (lines.some((l) => l.account.startsWith('sys:gstCashLedger:')) && body.kind !== 'gstChallan' && body.kind !== 'gstJournal') {
+      block('lines', 'The GST cash ledger takes money only by a GST challan, and gives it only to a set-off');
+    }
+    const touchesCash = lines.some((l) => l.account.startsWith('pay:'));
+    const controlled = lines.filter((l) => !own(l.account) && (CONTROL_KEY.test(l.account) || (touchesCash && l.account.startsWith('party:'))));
+    if (controlled.length) {
+      if (!RETAINED_EARNINGS_ROLES.includes(ctx.user.role)) {
+        throw forbidden('CONTROL_ACCOUNT_ROLE', `${accountFor(controlled[0].account, book)?.name ?? controlled[0].account} is kept by the books themselves; only an owner or admin can post a voucher to it (save it as a draft for them)${touchesCash && controlled[0].account.startsWith('party:') ? ', or record the money as a payment so it settles invoices' : ''}`);
+      }
+      if (!body.narration?.trim()) block('narration', 'Say why: a voucher adjusting a control account needs a narration');
+    }
+  }
   // An inactive account takes no new entries; lines already on this voucher may stay.
   const kept = exceptId ? new Set(((await db.select({ lines: V.lines }).from(V).where(eq(V.id, exceptId)))[0]?.lines as StoredLine[] | undefined)?.map((l) => l.account) ?? []) : new Set<string>();
   const fresh = (prefix: string) => [...new Set(lines.map((l) => l.account).filter((k) => k.startsWith(`${prefix}:`) && !kept.has(k)).map((k) => k.slice(prefix.length + 1)))];
@@ -223,6 +244,14 @@ export async function voucherColumns(ctx: AnyCtx, db: DbOrTx, body: Schema<'Vouc
   lines.forEach((l, i) => {
     if (inactive.has(l.account)) block(`lines[${i}].account`, `${accountFor(l.account, book)?.name ?? l.account} is inactive; make it active to post to it`);
   });
+  // A voucher is in base currency; an account kept in another currency moves by payment, in its own currency.
+  const payIds = [...new Set(lines.filter((l) => l.account.startsWith('pay:')).map((l) => l.account.slice(4)))];
+  if (payIds.length) {
+    const PA = schema.paymentAccounts;
+    for (const a of await db.select({ id: PA.id, name: PA.name, currency: PA.currency }).from(PA).where(and(eq(PA.companyId, ctx.company.id), inArray(PA.id, payIds)))) {
+      if (a.currency.trim() !== base) block('lines', `${a.name} is kept in ${a.currency.trim()}; vouchers are in ${base}. Record money in or out of it as a payment`);
+    }
+  }
   if (!lines.length) block('lines', 'A voucher needs at least one line');
   if (!draft && lines.length < 2) block('lines', 'A voucher needs at least two lines');
   const debit = lines.reduce((a, l) => a + l.debitMinor, 0);
@@ -289,6 +318,7 @@ export async function voucherColumns(ctx: AnyCtx, db: DbOrTx, body: Schema<'Vouc
   const columns = { kind: body.kind, branchId: branchId!, date: body.date, narration: body.narration?.trim() || null, reference: body.reference?.trim() || null, challan: body.challan ?? null, gstChallan: body.gstChallan ?? null, partyId, lines };
   if (draft) return columns;
   assertPeriodOpen(ctx.company, body.date);
+  await assertPeriodOpenNow(db, ctx.company, body.date);
 
   // Money paid out by voucher answers to the same approval rule as a payment (RULES 6.14). Moving
   // money between the business's own accounts (a contra) and depositing tax are not payments to anyone.
@@ -298,7 +328,11 @@ export async function voucherColumns(ctx: AnyCtx, db: DbOrTx, body: Schema<'Vouc
   }
   // No account pays out more than it holds, as for payments: nor is money taken back out of one
   // (a receipt voucher cut) once it has been spent.
-  await assertVoucherCovered(ctx, db, lines, exceptId, pending);
+  // Cash moves on the day it moves, not ahead of today.
+  if (lines.some((l) => l.account.startsWith('pay:')) && body.date > addDaysISO(businessDate(ctx.now), 1)) {
+    throw unprocessable([{ field: 'date', message: `A voucher moving cash or bank can't be dated ${body.date}, in the future`, severity: 'blocking' }]);
+  }
+  await assertVoucherCovered(ctx, db, lines, body.date, exceptId, pending);
   if (pending) for (const l of lines) if (l.account.startsWith('pay:')) pending.set(l.account, (pending.get(l.account) ?? 0) + l.creditMinor - l.debitMinor);
   return columns;
 }
@@ -307,9 +341,9 @@ export async function voucherColumns(ctx: AnyCtx, db: DbOrTx, body: Schema<'Vouc
  * RULES 6.26 for a voucher: each cash or bank account it touches, now or before this change, must
  * not end below zero because of it. `lines` is what the voucher will post (none when it is deleted).
  */
-async function assertVoucherCovered(ctx: AnyCtx, db: DbOrTx, lines: StoredLine[], exceptId?: string, pending?: Map<string, number>) {
+async function assertVoucherCovered(ctx: AnyCtx, db: DbOrTx, lines: StoredLine[], date: string, exceptId?: string, pending?: Map<string, number>) {
   const base = ctx.company.baseCurrency.trim();
-  const [old] = exceptId ? await db.select({ lines: V.lines, status: V.status }).from(V).where(eq(V.id, exceptId)) : [];
+  const [old] = exceptId ? await db.select({ lines: V.lines, status: V.status, date: V.date }).from(V).where(eq(V.id, exceptId)) : [];
   const wasPosted = old?.status === 'posted' ? (old.lines as StoredLine[]) : [];
   const net = (ls: StoredLine[], key: string) => ls.filter((l) => l.account === key).reduce((a, l) => a + l.debitMinor - l.creditMinor, 0);
   const keys = [...new Set([...lines, ...wasPosted].map((l) => l.account).filter((k) => k.startsWith('pay:')))].sort();
@@ -319,7 +353,7 @@ async function assertVoucherCovered(ctx: AnyCtx, db: DbOrTx, lines: StoredLine[]
     if (!account) continue;
     const after = net(lines, key);
     // Taken by earlier vouchers in the same import, not yet in the books.
-    const held = await wouldOverdraw(db, account, { after, before: net(wasPosted, key) }, { voucherId: exceptId }, pending?.get(key) ?? 0);
+    const held = await wouldOverdraw(db, account, { after, before: net(wasPosted, key), date, wasDate: wasPosted.length ? old!.date : undefined }, { voucherId: exceptId }, pending?.get(key) ?? 0);
     if (held === null) continue;
     const i = lines.findIndex((l) => l.account === key);
     const message = after < 0
@@ -564,6 +598,9 @@ export const booksHandlers = defineHandlers({
     if (!dryRun && good.length) {
       await ctx.db.transaction(async (tx) => {
         for (const g of good) {
+          // Checked again inside the transaction that writes them, accounts locked: a payment made
+          // meanwhile can't have spent what the sheet's journals were counted against.
+          if (!asDrafts) await assertVoucherCovered(ctx, tx, g.cols.lines, g.cols.date);
           const row = await insertVoucher(ctx, tx, g.cols, !!asDrafts);
           results.push({ index: g.index, status: 'created', id: row.id, number: row.number });
         }
@@ -644,6 +681,9 @@ export const booksHandlers = defineHandlers({
     }
     const row = await ctx.db.transaction(async (tx) => {
       const cols = await voucherColumns(ctx, tx, ctx.body, current.id, draft);
+      // What it moved through cash or bank, and when, is what a matched bank line agreed with.
+      const cashOf = (ls: StoredLine[]) => JSON.stringify(ls.filter((l) => l.account.startsWith('pay:')).map((l) => [l.account, l.debitMinor, l.creditMinor]).sort());
+      if (!wasDraft && (cols.date !== current.date || cashOf(cols.lines) !== cashOf(current.lines as StoredLine[]))) await assertNotReconciled(tx, 'voucher', current.id, current.number);
       // Posting a draft: it takes its number now, on the date it is posted with.
       const posting = wasDraft && !draft;
       const number = posting ? await assignNumber(tx, { companyId: ctx.company.id, kind: cols.kind, branchId: cols.branchId, date: cols.date }) : current.number;
@@ -677,7 +717,8 @@ export const booksHandlers = defineHandlers({
     }
     await ctx.db.transaction(async (tx) => {
       // Money a receipt voucher brought in that has since been spent can't be taken back out (RULES 6.26).
-      if (current.status === 'posted') await assertVoucherCovered(ctx, tx, [], current.id);
+      if (current.status === 'posted') await assertVoucherCovered(ctx, tx, [], current.date, current.id);
+      if (current.status === 'posted') await assertNotReconciled(tx, 'voucher', current.id, current.number);
       await linkVoucherAttachments(tx, ctx.company.id, current.id, []);
       const deleted = await tx.delete(V).where(and(eq(V.id, current.id), eq(V.version, current.version))).returning({ id: V.id });
       if (!deleted.length) throw preconditionFailed();

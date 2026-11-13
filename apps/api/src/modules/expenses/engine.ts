@@ -9,7 +9,7 @@ import { recordChange, type DbOrTx } from '../../lib/audit';
 import { newId } from '../../lib/ids';
 import { notify, noteDate } from '../../lib/notify';
 import { assignNumber } from '../../lib/numbering';
-import { accountBalanceMinor } from '../payments/engine';
+import { accountBalanceMinor, lowestBalanceFrom } from '../payments/engine';
 import { assertWithinPaymentLimit } from '../payments/requests';
 import { expenseToWire, type ExpenseRow } from './wire';
 
@@ -48,19 +48,21 @@ export function expenseTax(amount: Money, rate: number, taxInclusive: boolean, r
 export async function shortfall(
   tx: DbOrTx,
   companyId: string,
-  e: { accountId: string; amountMinor: number; exchangeRate: string | number },
-  current?: { id: string; accountId: string; amountMinor: number; exchangeRate: string | number },
+  e: { accountId: string; amountMinor: number; exchangeRate: string | number; date?: string },
+  current?: { id: string; accountId: string; amountMinor: number; exchangeRate: string | number; date?: string },
 ): Promise<{ shortMinor: number; name: string; balanceMinor: number; amountBase: number }> {
   const amountBase = Math.round(e.amountMinor * Number(e.exchangeRate));
   const none = { shortMinor: 0, name: '', balanceMinor: 0, amountBase };
-  if (current && current.accountId === e.accountId && amountBase <= Math.round(current.amountMinor * Number(current.exchangeRate))) return none;
+  // No more from the same account, no earlier: nothing about the account gets worse.
+  if (current && current.accountId === e.accountId && amountBase <= Math.round(current.amountMinor * Number(current.exchangeRate)) && (!e.date || !current.date || e.date >= current.date)) return none;
   const [account] = await tx
     .select()
     .from(schema.paymentAccounts)
     .where(and(eq(schema.paymentAccounts.companyId, companyId), eq(schema.paymentAccounts.id, e.accountId)))
     .for('update');
   if (!account) return none;
-  const balanceMinor = await accountBalanceMinor(tx, account, undefined, undefined, current?.id);
+  // As of the expense's date and every day after: money that comes in later can't pay for it.
+  const balanceMinor = e.date ? await lowestBalanceFrom(tx, account, e.date, { expenseId: current?.id }) : await accountBalanceMinor(tx, account, undefined, undefined, current?.id);
   return { shortMinor: Math.max(amountBase - balanceMinor, 0), name: account.name, balanceMinor, amountBase };
 }
 

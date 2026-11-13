@@ -9,7 +9,7 @@ import type { DbOrTx } from '../../lib/audit';
 import { defineHandlers } from '../../context';
 import { checkIfMatch, setEtag } from '../../http/etag';
 import { conflict, forbidden, invalid, preconditionFailed, unprocessable, type Issue } from '../../http/errors';
-import { financialYearOf } from '@esmart/core/lib/date';
+import { businessDate, financialYearOf } from '@esmart/core/lib/date';
 import { identifyCompany, track } from '../../analytics/track';
 import { recordChange } from '../../lib/audit';
 import { newId } from '../../lib/ids';
@@ -62,7 +62,7 @@ export const companiesHandlers = defineHandlers({
       const [company] = await tx
         .insert(schema.companies)
         // A new business keeps stock perpetually from its first financial year (RULES 6.2).
-        .values({ id: companyId, accountId: ctx.user.accountId, ...cols, perpetualStockFrom: financialYearOf(ctx.now.toISOString().slice(0, 10), cols.fiscalYearStartMonth).start, plan: 'free' })
+        .values({ id: companyId, accountId: ctx.user.accountId, ...cols, perpetualStockFrom: financialYearOf(businessDate(ctx.now), cols.fiscalYearStartMonth).start, plan: 'free' })
         .returning();
       await tx.insert(schema.branches).values(
         branches.map((b, i) => ({

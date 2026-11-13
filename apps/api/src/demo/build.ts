@@ -173,25 +173,32 @@ export async function buildBusiness(api: DemoApi, p: Profile, ctx: BuildContext)
     // What each money account holds as the app sees it: nothing is ever paid from an account that can't
     // cover it. When the bank runs low the business draws on its working-capital line, as a real one would.
     const bankOpening = 1500000 + p.traits.expenses.reduce((a, [, x]) => a + x, 0) * 8;
-    const bal = new Map<string, number>([
-      [bank, bankOpening],
-      [wallet, 0],
-      [cash, 25000],
+    // Money in counts from the day it comes in (a receipt can be dated after the event that records it);
+    // money out counts from when it is spent. The app refuses a payment the account can't cover on its own date.
+    const ins = new Map<string, { date: string; rupees: number }[]>([
+      [bank, [{ date: '0000-00-00', rupees: bankOpening }]],
+      [wallet, []],
+      [cash, [{ date: '0000-00-00', rupees: 25000 }]],
     ]);
-    const credit = (account: string, rupees: number) => bal.set(account, (bal.get(account) ?? 0) + rupees);
+    const outs = new Map<string, number>();
+    const credit = (account: string, rupees: number, date = '0000-00-00') => {
+      if (rupees >= 0) ins.set(account, [...(ins.get(account) ?? []), { date, rupees }]);
+      else outs.set(account, (outs.get(account) ?? 0) - rupees);
+    };
+    const balOn = (account: string, date: string) => (ins.get(account) ?? []).filter((x) => x.date <= date).reduce((a, x) => a + x.rupees, 0) - (outs.get(account) ?? 0);
     const funder = p.type === 'freelancer' || p.type === 'other' ? directorLoan : loan;
     const ensure = async (date: string, rupees: number) => {
-      const short = rupees + 50000 - (bal.get(bank) ?? 0);
+      const short = rupees + 50000 - balOn(bank, date);
       if (short <= 0) return;
       const draw = Math.ceil(short / 100000) * 100000;
       await api.post(`${c}/vouchers`, { kind: 'journal', date, branchId: primary, narration: p.type === 'freelancer' || p.type === 'other' ? 'Funds brought in' : 'Working capital drawn from the loan line', lines: [{ account: `pay:${bank}`, debit: inr(draw), credit: inr(0) }, { account: `acc:${funder}`, debit: inr(0), credit: inr(draw) }] });
-      credit(bank, draw);
+      credit(bank, draw, date);
     };
     /** Pays from petty cash or UPI when they can cover it, otherwise the bank (topped up if need be). */
     const spendFrom = async (date: string, rupees: number, prefer?: string) => {
       const order = prefer ? [prefer] : rupees <= 4000 ? [r.pick([cash, wallet]), bank] : [bank];
       for (const a of order) {
-        if (a !== bank && (bal.get(a) ?? 0) >= rupees) {
+        if (a !== bank && balOn(a, date) >= rupees) {
           credit(a, -rupees);
           return a;
         }
@@ -397,7 +404,7 @@ export async function buildBusiness(api: DemoApi, p: Profile, ctx: BuildContext)
       let account = opts.account ?? (direction === 'paid' ? bank : r.chance(0.7) ? bank : r.chance(0.5) ? wallet : cash);
       // Foreign money is counted in rupees, roughly; it only matters that the bank isn't overdrawn.
       const inBase = currency === 'INR' ? total : total * (currency === 'USD' ? 83 : 105);
-      if (direction === 'received') credit(account, inBase);
+      if (direction === 'received') credit(account, inBase, date);
       else account = await spendFrom(date, inBase, account === bank ? undefined : account);
       return (opts.as ?? api).post(`${c}/payments`, {
         direction,
@@ -750,13 +757,13 @@ export async function buildBusiness(api: DemoApi, p: Profile, ctx: BuildContext)
     on(16, async () => api.post(`${c}/expenses`, { branchId: primary, categoryId: expCat('Office supplies'), date: day(16), amount: inr(3540), currency: 'INR', ...(p.registered && { taxCategoryId: tax(18), taxAmount: inr(540), taxInclusive: true, itcEligibility: 'blocked' }), ...(await (async () => { const a = await spendFrom(day(16), 3540); return { accountId: a, method: a === cash ? 'cash' : a === wallet ? 'upi' : 'bank' }; })()), notes: 'Team lunch (credit blocked, s.17(5))' }));
 
     // Books: loans, a contra, a provision, a draft left to finish, and a template.
-    on(190, () => (credit(bank, 500000), api.post(`${c}/vouchers`, { kind: 'journal', date: day(190), branchId: primary, narration: 'Capital brought in', lines: [{ account: `pay:${bank}`, debit: inr(500000), credit: inr(0) }, { account: `acc:${capitalIn}`, debit: inr(0), credit: inr(500000) }] })));
+    on(190, () => (credit(bank, 500000, day(190)), api.post(`${c}/vouchers`, { kind: 'journal', date: day(190), branchId: primary, narration: 'Capital brought in', lines: [{ account: `pay:${bank}`, debit: inr(500000), credit: inr(0) }, { account: `acc:${capitalIn}`, debit: inr(0), credit: inr(500000) }] })));
     on(120, async () => {
-      const amount = Math.min(20000, Math.floor((bal.get(cash) ?? 0) / 1000) * 1000);
+      const amount = Math.min(20000, Math.floor(balOn(cash, day(120)) / 1000) * 1000);
       if (amount < 1000) return;
       await api.post(`${c}/vouchers`, { kind: 'contra', date: day(120), branchId: primary, narration: 'Cash deposited in bank', lines: [{ account: `pay:${bank}`, debit: inr(amount), credit: inr(0) }, { account: `pay:${cash}`, debit: inr(0), credit: inr(amount) }] });
       credit(cash, -amount);
-      credit(bank, amount);
+      credit(bank, amount, day(120));
     });
     on(90, async () => (await spendFrom(day(90), 50000, bank), api.post(`${c}/vouchers`, { kind: 'journal', date: day(90), branchId: primary, narration: 'Loan instalment — principal', lines: [{ account: `acc:${p.type === 'freelancer' || p.type === 'other' ? directorLoan : loan}`, debit: inr(50000), credit: inr(0) }, { account: `pay:${bank}`, debit: inr(0), credit: inr(50000) }] })));
     on(35, () => api.post(`${c}/vouchers`, { kind: 'journal', date: day(35), branchId: primary, narration: 'Audit fee provided for the half year', reference: 'PROV-H1', lines: [{ account: `acc:${auditFees}`, debit: inr(45000), credit: inr(0), ...(centres.length && { costCentreId: centres[0] }) }, { account: `acc:${provision}`, debit: inr(0), credit: inr(45000) }] }));

@@ -361,7 +361,7 @@ export async function finalizeInTx(
   now: Date,
   opts: { overrideCreditLimit?: boolean } = {},
 ): Promise<DocRow> {
-  assertPeriodOpen(company, row.date);
+  await assertPeriodOpenNow(tx, company, row.date);
   if (TAX_DOCUMENTS.includes(row.kind) && row.date > addDays(today(now), 1)) {
     throw unprocessable([{ field: 'date', message: `A ${row.kind} cannot be dated ${row.date}, in the future`, severity: 'blocking' }], 'DOCUMENT_DATED_IN_FUTURE');
   }
@@ -429,6 +429,16 @@ export function assertPeriodOpen(company: CompanyRow, date: string) {
   if (company.lockedThroughDate && date <= company.lockedThroughDate) {
     throw conflict('PERIOD_LOCKED', `The books are closed through ${company.lockedThroughDate}; an owner must reopen them to change a document dated ${date}`);
   }
+}
+
+/**
+ * The same check against the books' lock date as it stands now, read under a share lock on the
+ * company: closing the books (an update of that row) waits for this write to finish, and a write
+ * that starts after the close sees it. The request's own copy of the company may be older.
+ */
+export async function assertPeriodOpenNow(tx: DbOrTx, company: CompanyRow, ...dates: (string | null | undefined)[]) {
+  const [row] = await tx.select({ lockedThroughDate: schema.companies.lockedThroughDate }).from(schema.companies).where(eq(schema.companies.id, company.id)).for('share');
+  for (const date of dates) if (date) assertPeriodOpen({ ...company, lockedThroughDate: row?.lockedThroughDate ?? null }, date);
 }
 
 /** How long a queued invoice may have waited for it to count as already issued on the device. */

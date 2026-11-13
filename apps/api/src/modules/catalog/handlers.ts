@@ -1,3 +1,4 @@
+import { assertOpeningOpen } from '../books/usage';
 import { businessDate } from '@esmart/core/lib/date';
 import { checkCustomValues, type CustomValues } from '@esmart/core/domain/customFields';
 import { cleanCustomValues, loadCustomFields } from '../settings/customFields';
@@ -194,6 +195,8 @@ export const catalogHandlers = defineHandlers({
         .insert(I)
         .values({ id: newId('itm'), companyId: ctx.company.id, ...cols, customFields, hsnCode, openingStock: String(openingStock), openingStockDate })
         .returning();
+      // Opening stock sits at the start of the books: not inside closed ones (an adjustment, dated today, instead).
+      if (created.trackInventory && openingStock > 0) assertOpeningOpen(ctx.company, undefined);
       if (created.trackInventory && openingStock > 0) {
         await tx.insert(schema.stockMovements).values({
           id: newId('stm'),
@@ -281,6 +284,7 @@ export const catalogHandlers = defineHandlers({
             .insert(I)
             .values({ id: newId('itm'), companyId: ctx.company.id, ...cols, customFields, hsnCode, openingStock: String(openingStock), openingStockDate })
             .returning();
+          if (created.trackInventory && openingStock > 0) assertOpeningOpen(ctx.company, undefined);
           if (created.trackInventory && openingStock > 0) {
             await tx.insert(schema.stockMovements).values({
               id: newId('stm'),

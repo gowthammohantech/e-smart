@@ -15,7 +15,9 @@ import { categoryOn } from '../../lib/taxRates';
 import { assignNumber } from '../../lib/numbering';
 import { notify, noteMoney } from '../../lib/notify';
 import { rateToBase } from '../documents/engine';
-import { assertPeriodOpen, syncPaymentState } from '../documents/lifecycle';
+import { assertPeriodOpen, assertPeriodOpenNow, syncPaymentState } from '../documents/lifecycle';
+import { assertNotReconciled } from '../banking/engine';
+import { addDaysISO, businessDate } from '@esmart/core/lib/date';
 import type { PaymentRow } from './wire';
 
 const PAY = schema.payments;
@@ -75,13 +77,67 @@ export const RATE_TOLERANCE = 0.1;
 export async function wouldOverdraw(
   tx: DbOrTx,
   account: typeof schema.paymentAccounts.$inferSelect,
-  change: { after: number; before: number },
+  change: { after: number; before: number; date?: string; wasDate?: string },
   except: { paymentId?: string; voucherId?: string; expenseId?: string } = {},
   pending = 0,
 ): Promise<number | null> {
+  if (!change.date) {
+    if (change.after >= change.before) return null;
+    const others = (await accountBalanceMinor(tx, account, except.paymentId, except.voucherId, except.expenseId)) - pending;
+    return others + change.after < 0 ? others : null;
+  }
+  // Moved to another day: on the days between the two dates the record counts on one side only.
+  const was = change.wasDate ?? change.date;
+  if (was !== change.date) {
+    const [from, until] = was < change.date ? [was, change.date] : [change.date, was];
+    // Moved later, those days lose what it did then; moved earlier, they gain what it does now.
+    const nowThen = was < change.date ? 0 : change.after;
+    const thenThen = was < change.date ? change.before : 0;
+    if (nowThen < thenThen) {
+      const between = (await lowestBalanceFrom(tx, account, from, except, until)) - pending;
+      if (between + nowThen < 0) return between;
+    }
+  }
   if (change.after >= change.before) return null;
-  const others = (await accountBalanceMinor(tx, account, except.paymentId, except.voucherId, except.expenseId)) - pending;
+  const others = (await lowestBalanceFrom(tx, account, was > change.date ? was : change.date, except)) - pending;
   return others + change.after < 0 ? others : null;
+}
+
+/**
+ * The lowest an account stands, in base currency, at the end of `date` or any day after it, leaving
+ * out the record being written. A payment dated 1 June can't be covered by money that only comes in
+ * on 30 June: the cash book would be negative for the days between (RULES 6.26).
+ */
+export async function lowestBalanceFrom(
+  tx: DbOrTx,
+  account: typeof schema.paymentAccounts.$inferSelect,
+  date: string,
+  except: { paymentId?: string; voucherId?: string; expenseId?: string } = {},
+  until?: string,
+): Promise<number> {
+  const E = schema.expenses;
+  const V = schema.vouchers;
+  const key = `pay:${account.id}`;
+  const rows = await tx.execute<{ before: string | null; later: string | null }>(sql`
+    with m as (
+      select d, sum(amt) as amt from (
+        select ${PAY.date} as d, case when ${PAY.direction} = 'received' then round(${PAY.amountMinor} * ${PAY.exchangeRate}) else -round(${PAY.amountMinor} * ${PAY.exchangeRate}) end as amt
+          from ${PAY} where ${PAY.accountId} = ${account.id} ${except.paymentId ? sql`and ${PAY.id} <> ${except.paymentId}` : sql``}
+        union all
+        select ${E.date}, -round(${E.amountMinor} * ${E.exchangeRate}) from ${E} where ${E.accountId} = ${account.id} ${except.expenseId ? sql`and ${E.id} <> ${except.expenseId}` : sql``}
+        union all
+        select v.date, (l->>'debitMinor')::bigint - (l->>'creditMinor')::bigint
+          from ${V} v, jsonb_array_elements(v.lines) l
+          where v.company_id = ${account.companyId} and v.status = 'posted' and l->>'account' = ${key} ${except.voucherId ? sql`and v.id <> ${except.voucherId}` : sql``}
+      ) x group by d
+    ), c as (select d, sum(amt) over (order by d) as cum from m)
+    select (select coalesce(sum(amt), 0) from m where d <= ${date}) as before,
+           (select min(cum) from c where d > ${date} ${until ? sql`and d < ${until}` : sql``}) as later`);
+  const r = rows.rows[0];
+  const opening = Math.round(account.openingBalanceMinor * Number(account.openingRate));
+  const onDay = Number(r?.before ?? 0);
+  const later = r?.later == null ? onDay : Math.min(onDay, Number(r.later));
+  return opening + later;
 }
 
 export type PaymentInput = {
@@ -175,7 +231,14 @@ export async function writePayment(
   const existing = opts.existing;
   // Books closed through a date stay as they were: nothing new, changed or removed in that period.
   assertPeriodOpen(company, input.date);
+  // Money moves on the day it moves: not a day ahead of today (a day's grace for time zones and devices).
+  if (input.date > addDaysISO(businessDate(opts.now), 1)) blocking('date', `A payment can't be dated ${input.date}, in the future`);
   if (existing) assertPeriodOpen(company, existing.date);
+  await assertPeriodOpenNow(tx, company, input.date, existing?.date);
+  // Reconciled with the bank: what the bank saw stays as it saw it.
+  if (existing && (existing.amountMinor !== input.amountMinor || existing.date !== input.date || existing.accountId !== input.accountId || existing.direction !== input.direction || existing.currency.trim() !== input.currency)) {
+    await assertNotReconciled(tx, 'payment', existing.id, existing.number);
+  }
 
   const [party] = await tx.select().from(schema.parties).where(and(eq(schema.parties.companyId, company.id), eq(schema.parties.id, input.partyId)));
   if (!party) blocking('partyId', 'No such party in this company');
@@ -301,7 +364,8 @@ export async function writePayment(
     const amountBase = Math.round(input.amountMinor * exchangeRate);
     const was = existing ? signed(existing.direction, Math.round(existing.amountMinor * Number(existing.exchangeRate))) : 0;
     const after = signed(input.direction, amountBase);
-    const held = await wouldOverdraw(tx, account, { after, before: existing?.accountId === account.id ? was : 0 }, { paymentId: existing?.id });
+    const same = existing?.accountId === account.id;
+    const held = await wouldOverdraw(tx, account, { after, before: same ? was : 0, date: input.date, wasDate: same ? existing!.date : undefined }, { paymentId: existing?.id });
     if (held !== null) {
       shortOfCash = true;
       blocking('amount.minor', input.direction === 'paid'
@@ -311,7 +375,7 @@ export async function writePayment(
     // Moved off another account: what it brought in there leaves with it.
     if (existing && existing.accountId !== account.id && was > 0) {
       const [old] = await tx.select().from(schema.paymentAccounts).where(eq(schema.paymentAccounts.id, existing.accountId)).for('update');
-      const oldHeld = old ? await wouldOverdraw(tx, old, { after: 0, before: was }, { paymentId: existing.id }) : null;
+      const oldHeld = old ? await wouldOverdraw(tx, old, { after: 0, before: was, date: existing.date }, { paymentId: existing.id }) : null;
       if (oldHeld !== null) {
         shortOfCash = true;
         blocking('accountId', `${old!.name} has already spent this money; moving it off would leave ${baseCurrency} ${(oldHeld / 100).toFixed(2)}`);
@@ -466,11 +530,13 @@ export async function writePayment(
 /** Deletes a payment and its allocations, and re-derives every document it settled. */
 export async function deletePayment(tx: DbOrTx, company: CompanyRow, actor: AuthUser, row: PaymentRow, now: Date) {
   assertPeriodOpen(company, row.date);
+  await assertPeriodOpenNow(tx, company, row.date);
+  await assertNotReconciled(tx, 'payment', row.id, row.number);
   if (row.direction === 'received' && (await refundedFrom(tx, row.id))) throw conflict('PAYMENT_REFUNDED', `${row.number} has refunds against it; remove those first`);
   // Money that came in and has since been spent can't be taken back out of the books (RULES 6.26).
   if (row.direction === 'received') {
     const [account] = await tx.select().from(schema.paymentAccounts).where(eq(schema.paymentAccounts.id, row.accountId)).for('update');
-    const held = account ? await wouldOverdraw(tx, account, { after: 0, before: Math.round(row.amountMinor * Number(row.exchangeRate)) }, { paymentId: row.id }) : null;
+    const held = account ? await wouldOverdraw(tx, account, { after: 0, before: Math.round(row.amountMinor * Number(row.exchangeRate)), date: row.date }, { paymentId: row.id }) : null;
     if (held !== null) throw conflict('INSUFFICIENT_BALANCE', `${account!.name} has already spent this money; deleting ${row.number} would leave it at ${company.baseCurrency.trim()} ${(held / 100).toFixed(2)}`);
   }
   // Removing a refund gives the advance back to the receipt it came out of.

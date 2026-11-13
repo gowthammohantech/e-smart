@@ -1,3 +1,4 @@
+import { conflict } from '../../http/errors';
 import { and, eq, gte, inArray, lte, notExists, sql, type SQL } from 'drizzle-orm';
 import type { Candidate, Suggestion } from '@esmart/core/domain/bankStatement';
 import type { Schema } from '@esmart/api-contract';
@@ -101,6 +102,20 @@ export async function bookRecords(db: DbOrTx, account: AccountRow, q: RecordQuer
 export async function bookRecord(db: DbOrTx, account: AccountRow, type: MatchType, id: string): Promise<Candidate | undefined> {
   const [c] = await bookRecords(db, account, { type, ids: [id] });
   return c;
+}
+
+/**
+ * A record matched to a bank statement line is reconciled: its amount, date, account and direction
+ * agree with the bank. Changing those, or deleting it, would quietly undo the reconciliation, so it
+ * is unmatched first, on purpose (409 RECONCILED). Other fields (allocations, notes) may change.
+ */
+export async function assertNotReconciled(db: DbOrTx, type: MatchType, id: string, what: string): Promise<void> {
+  const [line] = await db
+    .select({ date: L.date, description: L.description })
+    .from(L)
+    .where(and(eq(L.matchType, type), eq(L.matchId, id), eq(L.status, 'matched')))
+    .limit(1);
+  if (line) throw conflict('RECONCILED', `${what} is matched to the bank statement line of ${line.date} (${line.description.slice(0, 40)}); unmatch it in Banking first`);
 }
 
 /**

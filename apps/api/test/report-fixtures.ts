@@ -34,7 +34,7 @@ export async function books(t: TestContext, m: Money) {
   // The receipt goes in first: cash can't pay out more than it holds (RULES 6.26).
   const pay = await t.post(`${m.c}/payments`, { direction: 'received', partyId: m.mumbai.id, date: '2026-09-20', amount: INR(100000), currency: 'INR', method: 'cash', accountId: m.cash.id, allocations: [{ documentId: a.id, amount: INR(100000) }] }, { token: m.token });
   expect(pay.status).toBe(201);
-  const exp = await t.post(`${m.c}/expenses`, { categoryId: cat.id, date: '2026-09-12', amount: INR(11800), currency: 'INR', taxCategoryId: m.gst(18), supplierGstin: '27AABCS2222K1ZQ', accountId: m.cash.id, method: 'cash' }, { token: m.token });
+  const exp = await t.post(`${m.c}/expenses`, { categoryId: cat.id, date: '2026-09-20', amount: INR(11800), currency: 'INR', taxCategoryId: m.gst(18), supplierGstin: '27AABCS2222K1ZQ', accountId: m.cash.id, method: 'cash' }, { token: m.token });
   expect(exp.status).toBe(201);
   return { rod, a, b, draft: draft.body as { id: string }, bill: bill.body, category: cat, expense: exp.body, payment: pay.body };
 }

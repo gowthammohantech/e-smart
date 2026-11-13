@@ -82,16 +82,24 @@ describe('the approval rule, however money leaves', () => {
     await fund(m);
     await withRule(m, 100_000);
     const clerk = await joinTeam(t, m.token, { role: 'accountant', companyIds: [m.companyId] });
-    // Dr supplier / Cr cash ₹50,000 by journal: a payment by another name.
-    const jv = await t.post(`${m.c}/vouchers`, voucher('journal', [[`party:${m.supplier!.id}`, 5_000_000, 0], [`pay:${m.cash.id}`, 0, 5_000_000]]), { token: clerk.token });
+    // Dr rent / Cr cash ₹50,000 by journal: a payment by another name.
+    const rent = await t.post(`${m.c}/ledger-accounts`, { name: 'Rent', group: 'indirectExpenses', openingBalance: nil }, { token: m.token });
+    const jv = await t.post(`${m.c}/vouchers`, voucher('journal', [[`acc:${rent.body.id}`, 5_000_000, 0], [`pay:${m.cash.id}`, 0, 5_000_000]]), { token: clerk.token });
     expect(jv.status).toBe(409);
     expect(jv.body.code).toBe('PAYMENT_NEEDS_APPROVER');
+    // Dr supplier / Cr cash, by anyone but an owner or admin: record it as a payment, so its bills settle.
+    const toSupplier = await t.post(`${m.c}/vouchers`, voucher('journal', [[`party:${m.supplier!.id}`, 5_000, 0], [`pay:${m.cash.id}`, 0, 5_000]], { narration: 'Paid' }), { token: clerk.token });
+    expect(toSupplier.status).toBe(403);
+    expect(toSupplier.body.code).toBe('CONTROL_ACCOUNT_ROLE');
+    // Nor may a journal invent money in the GST cash ledger.
+    const invented = await t.post(`${m.c}/vouchers`, voucher('journal', [['sys:gstCashLedger:igst', 5_000, 0], ['sys:capital', 0, 5_000]], { narration: 'x' }), { token: m.token });
+    expect(invented.status).toBe(422);
     const [cat] = await t.deps.db.select().from(schema.expenseCategories).where(eq(schema.expenseCategories.companyId, m.companyId));
     const exp = await t.post(`${m.c}/expenses`, { categoryId: cat.id, date: '2026-09-29', amount: inr(5_000_000), currency: 'INR', accountId: m.cash.id, method: 'cash' }, { token: clerk.token });
     expect(exp.status).toBe(409);
     expect(exp.body.code).toBe('PAYMENT_NEEDS_APPROVER');
     // The owner records either.
-    expect((await t.post(`${m.c}/vouchers`, voucher('journal', [[`party:${m.supplier!.id}`, 5_000_000, 0], [`pay:${m.cash.id}`, 0, 5_000_000]]), { token: m.token })).status).toBe(201);
+    expect((await t.post(`${m.c}/vouchers`, voucher('journal', [[`party:${m.supplier!.id}`, 5_000_000, 0], [`pay:${m.cash.id}`, 0, 5_000_000]], { narration: 'Settled outside the app' }), { token: m.token })).status).toBe(201);
   });
 
   it('measures payments split into pieces together', async () => {
@@ -192,5 +200,55 @@ describe('who may undo a sale or redirect money', () => {
     const res = await t.put(`${m.c}/payment-accounts/${m.cash.id}`, { name: cash.name, type: cash.type, currency: 'INR', openingBalance: inr(50_000_000) }, { token: m.token, headers: { 'if-match': `"v${cash.version}"` } });
     expect(res.status).toBe(409);
     expect(res.body.code).toBe('PERIOD_LOCKED');
+  });
+});
+
+describe('cash on the day it moves (phase 4)', () => {
+  it('pays nothing out on a day before the money came in, and nothing ahead of today', async () => {
+    const m = await moneySetup(t);
+    expect((await t.post(`${m.c}/payments`, receipt(m, { amount: inr(100_000), date: '2026-09-25' }), { token: m.token })).status).toBe(201);
+    // ₹1,000 arrives on the 25th: a payment on the 20th can't spend it.
+    const early = await t.post(`${m.c}/payments`, payment(m, { amount: inr(100_000), date: '2026-09-20' }), { token: m.token });
+    expect(early.body.code).toBe('INSUFFICIENT_BALANCE');
+    expect((await t.post(`${m.c}/payments`, payment(m, { amount: inr(100_000), date: '2026-09-25' }), { token: m.token })).status).toBe(201);
+    const ahead = await t.post(`${m.c}/payments`, receipt(m, { date: '2026-10-15' }), { token: m.token });
+    expect(ahead.status).toBe(422);
+    expect(ahead.body.issues[0].field).toBe('date');
+  });
+
+  it('keeps an expense from spending money that arrives later', async () => {
+    const m = await moneySetup(t);
+    expect((await t.post(`${m.c}/payments`, receipt(m, { amount: inr(100_000), date: '2026-09-25' }), { token: m.token })).status).toBe(201);
+    const [cat] = await t.deps.db.select().from(schema.expenseCategories).where(eq(schema.expenseCategories.companyId, m.companyId));
+    const exp = await t.post(`${m.c}/expenses`, { categoryId: cat.id, date: '2026-09-10', amount: inr(50_000), currency: 'INR', accountId: m.cash.id, method: 'cash' }, { token: m.token });
+    expect(exp.body.code).toBe('INSUFFICIENT_BALANCE');
+  });
+
+  it('refuses a receipt moved later once the money has been spent in between', async () => {
+    const m = await moneySetup(t);
+    const rec = await t.post(`${m.c}/payments`, receipt(m, { amount: inr(100_000), date: '2026-09-10' }), { token: m.token });
+    expect((await t.post(`${m.c}/payments`, payment(m, { amount: inr(100_000), date: '2026-09-15' }), { token: m.token })).status).toBe(201);
+    const moved = await t.put(`${m.c}/payments/${rec.body.id}`, receipt(m, { amount: inr(100_000), date: '2026-09-20' }), { token: m.token, headers: { 'if-match': `"v${rec.body.version}"` } });
+    expect(moved.body.code).toBe('INSUFFICIENT_BALANCE');
+    // Moved earlier, nothing gets worse.
+    expect((await t.put(`${m.c}/payments/${rec.body.id}`, receipt(m, { amount: inr(100_000), date: '2026-09-05' }), { token: m.token, headers: { 'if-match': `"v${rec.body.version}"` } })).status).toBe(200);
+  });
+});
+
+describe('the books’ own figures (phase 4)', () => {
+  it('keeps opening stock out of closed books', async () => {
+    const m = await moneySetup(t);
+    await t.deps.db.update(schema.companies).set({ lockedThroughDate: '2026-06-30' }).where(eq(schema.companies.id, m.companyId));
+    const res = await t.post(`${m.c}/items`, { sku: 'LATE-1', name: 'Late rod', type: 'goods', unit: 'NOS', salePrice: inr(1_000), purchasePrice: inr(600), taxCategoryId: m.gst(18), trackInventory: true, openingStock: 1000 }, { token: m.token });
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe('PERIOD_LOCKED');
+  });
+
+  it('keeps vouchers off accounts kept in another currency', async () => {
+    const m = await moneySetup(t);
+    const usd = await t.post(`${m.c}/payment-accounts`, { name: 'USD account', type: 'bank', currency: 'USD', openingBalance: { minor: 0, currency: 'USD' } }, { token: m.token });
+    await fund(m);
+    const contra = await t.post(`${m.c}/vouchers`, voucher('contra', [[`pay:${usd.body.id}`, 8_300_000, 0], [`pay:${m.cash.id}`, 0, 8_300_000]]), { token: m.token });
+    expect(contra.status).toBe(422);
   });
 });

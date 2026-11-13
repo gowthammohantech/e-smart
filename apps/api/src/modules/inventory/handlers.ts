@@ -1,3 +1,4 @@
+import { assertOpeningOpen } from '../books/usage';
 import { and, asc, eq, exists, gte, ilike, inArray, lte, notInArray, or, sql, type SQL } from 'drizzle-orm';
 import { isLowStock, ledgerFor, stockMapOn, stockOnHand as coreStockOnHand, stockValue, valueStock } from '@esmart/core/domain/stockLedger';
 import { schema } from '@esmart/db';
@@ -176,6 +177,9 @@ export const inventoryHandlers = defineHandlers({
     const branch = await branchOrFail(ctx, ctx.db, body.branchId, 'branchId');
     // An adjustment posts to the books under perpetual stock, so a closed period stays closed.
     assertPeriodOpen(ctx.company, body.date);
+    // Opening stock counts from the start of the books, whatever its date: inside closed books it
+    // would change every closed balance sheet. A count found later is an adjustment, dated today.
+    if (type === 'opening') assertOpeningOpen(ctx.company, undefined);
 
     const rows = await ctx.db.transaction(async (tx) => {
       const items = await lockItems(tx, ctx.company.id, body.lines.map((l) => l.itemId));

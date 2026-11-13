@@ -1,3 +1,5 @@
+import { assertNotReconciled } from '../banking/engine';
+import { addDaysISO, businessDate as businessDateOf } from '@esmart/core/lib/date';
 import { and, eq, exists, gte, ilike, inArray, isNull, lte, ne, notExists, notInArray, or, sql, type SQL } from 'drizzle-orm';
 import { vehicleIssues } from '../settings/vehicles';
 import { buysFrom, sellsTo } from '@esmart/core/domain/partyKinds';
@@ -16,7 +18,7 @@ import { newId } from '../../lib/ids';
 import { categoryOn } from '../../lib/taxRates';
 import { assignNumber } from '../../lib/numbering';
 import { rateToBase } from '../documents/engine';
-import { assertPeriodOpen } from '../documents/lifecycle';
+import { assertPeriodOpen, assertPeriodOpenNow } from '../documents/lifecycle';
 import { assertAccountCovers, assertExpenseWithinLimit, expenseTax, linkExpenseAttachments, nextRecurrence } from './engine';
 import { expensesToWire, type ExpenseRow } from './wire';
 import { costCentreIssues } from '../books/costCentres';
@@ -183,6 +185,11 @@ export async function prepare(ctx: AnyCtx, db: DbOrTx, body: Schema<'Expense'>, 
   };
 }
 
+/** Money is spent on the day it is spent: not a day ahead of today (a day's grace for time zones). */
+function assertNotAhead(date: string, now: Date) {
+  if (date > addDaysISO(businessDateOf(now), 1)) throw unprocessable([{ field: 'date', message: `An expense can't be dated ${date}, in the future`, severity: 'blocking' }]);
+}
+
 /** Expenses: listExpenses, createExpense, getExpense, saveExpense, removeExpense. */
 type ExpenseQuery = Pick<Ctx<'listExpenses'>['query'], 'categoryId' | 'supplierId' | 'billable' | 'recurring' | 'branchId' | 'from' | 'to' | 'q'> &
   Partial<Pick<Ctx<'listExpenses'>['query'], 'unrecovered' | 'forCustomer' | 'exceptDocumentId'>>;
@@ -264,9 +271,11 @@ export const expensesHandlers = defineHandlers({
 
   async createExpense(ctx) {
     assertPeriodOpen(ctx.company, ctx.body.date);
+    assertNotAhead(ctx.body.date, ctx.now);
     const cols = await prepare(ctx, ctx.db, ctx.body);
     const row = await ctx.db.transaction(async (tx) => {
       // No account pays out more than it holds, as with payments.
+      await assertPeriodOpenNow(tx, ctx.company, cols.date);
       assertExpenseWithinLimit(ctx.company, ctx.user, cols);
       await assertAccountCovers(tx, ctx.company.id, ctx.company.baseCurrency.trim(), cols);
       const number = await assignNumber(tx, { companyId: ctx.company.id, kind: 'expense', branchId: cols.branchId, date: cols.date });
@@ -297,9 +306,14 @@ export const expensesHandlers = defineHandlers({
     checkIfMatch(ctx.req, current.version);
     assertPeriodOpen(ctx.company, current.date);
     assertPeriodOpen(ctx.company, ctx.body.date);
+    assertNotAhead(ctx.body.date, ctx.now);
     const cols = await prepare(ctx, ctx.db, ctx.body, current);
     const row = await ctx.db.transaction(async (tx) => {
+      await assertPeriodOpenNow(tx, ctx.company, cols.date, current.date);
       await assertNotRecovered(tx, current, cols);
+      if (current.amountMinor !== cols.amountMinor || current.date !== cols.date || current.accountId !== cols.accountId || current.currency.trim() !== cols.currency) {
+        await assertNotReconciled(tx, 'expense', current.id, current.number);
+      }
       assertExpenseWithinLimit(ctx.company, ctx.user, cols, current);
       await assertAccountCovers(tx, ctx.company.id, ctx.company.baseCurrency.trim(), cols, current);
       const before = await toWire(tx, current);
@@ -336,6 +350,7 @@ export const expensesHandlers = defineHandlers({
     assertPeriodOpen(ctx.company, current.date);
     await ctx.db.transaction(async (tx) => {
       await assertNotRecovered(tx, current);
+      await assertNotReconciled(tx, 'expense', current.id, current.number);
       const before = await toWire(tx, current);
       await linkExpenseAttachments(tx, ctx.company.id, current.id, []);
       await tx.update(E).set({ recurringParentId: null }).where(and(eq(E.companyId, ctx.company.id), eq(E.recurringParentId, current.id)));
