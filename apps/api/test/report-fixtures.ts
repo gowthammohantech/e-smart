@@ -21,8 +21,9 @@ export async function books(t: TestContext, m: Money) {
   // Invoice B sells a rod before the bill that brings any in.
   await m.allowNegativeStock();
   const rod = await m.item();
-  const a = await issueInvoice(t, m, { date: '2026-09-10', lines: [line(m.gst(18), { itemId: rod })] });
+  // Issued in date order: an invoice can't be dated before one already issued.
   const b = await issueInvoice(t, m, { partyId: m.bengaluru.id, date: '2026-08-15', lines: [line(m.gst(18), { itemId: rod, quantity: 1 })] });
+  const a = await issueInvoice(t, m, { date: '2026-09-10', lines: [line(m.gst(18), { itemId: rod })] });
   const draft = await t.post(`${m.c}/documents`, invoiceBody(m, { date: '2026-09-11', lines: [line(m.gst(18), { itemId: rod, quantity: 50 })] }), { token: m.token });
   const bill = await t.post(
     `${m.c}/documents`,

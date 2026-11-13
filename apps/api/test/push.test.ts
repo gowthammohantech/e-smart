@@ -43,8 +43,9 @@ describe('push notifications', () => {
 
   it('tells the team once when an invoice falls overdue, and not about old ones', async () => {
     const m = await moneySetup(t);
-    const recent = await issueInvoice(t, m, { date: '2026-09-29', dueDate: '2026-10-05' });
+    // Issued in date order: an invoice can't be dated before one already issued.
     const old = await issueInvoice(t, m, { date: '2026-06-01', dueDate: '2026-06-15' });
+    const recent = await issueInvoice(t, m, { date: '2026-09-29', dueDate: '2026-10-05' });
     // Two days after the recent one fell due.
     t.setNow('2026-10-07T04:30:00Z');
     expect(await notifyOverdueInvoices(t.deps)).toBe(1);
