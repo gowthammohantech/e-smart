@@ -57,7 +57,7 @@
     },
     "invoice": "விலைப்பட்டியல்",
     "thisMonth": "இந்த மாதம்",
-    "sales": "விற்பனை",
+    "sales": "விலைப்பட்டியல் (GST உட்பட)",
     "collected": "வசூலானது",
     "paymentsReceived": "பெற்ற கட்டணங்கள்",
     "expenses": "செலவுகள்",

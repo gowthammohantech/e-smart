@@ -471,3 +471,14 @@ describe('banking: reconciliation', () => {
     expect(today.body).toMatchObject({ asOf: '2026-09-29', bookBalance: inr(163_000), unrecordedLines: { creditsTotal: inr(1_200) }, difference: inr(0) });
   });
 });
+
+describe('one statement exported two ways (money audit A25)', () => {
+  it('finds the lines already imported though the balance column is missing this time', async () => {
+    const m = await moneySetup(t);
+    const acct = await bank(m);
+    const first = await importLines(m, acct, [ln('2026-09-10', 'NEFT RENT', -50_000, { balance: inr(950_000) }), ln('2026-09-11', 'UPI TEA', -2_000, { balance: inr(948_000) })]);
+    expect(first.status).toBe(201);
+    const again = await importLines(m, acct, [ln('2026-09-10', 'NEFT RENT', -50_000), ln('2026-09-11', 'UPI TEA', -2_000), ln('2026-09-12', 'UPI LUNCH', -1_000)]);
+    expect(again.body).toMatchObject({ imported: 1, duplicates: 2 });
+  });
+});

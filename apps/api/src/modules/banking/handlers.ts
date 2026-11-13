@@ -243,6 +243,19 @@ export const bankingHandlers = defineHandlers({
         const found = await tx.select({ key: L.lineKey }).from(L).where(and(eq(L.accountId, account.id), inArray(L.lineKey, chunk)));
         for (const f of found) existing.add(f.key);
       }
+      // The same statement exported with a balance column and without one keys differently: a line is
+      // also the same when the account already has as many lines of its date, amount and narration.
+      const plain = (l: { date: string; amountMinor: number; description: string }) => lineKey({ ...l, balanceMinor: undefined });
+      const already = new Map<string, number>();
+      for (const r of await tx.select({ date: L.date, amountMinor: L.amountMinor, description: L.description }).from(L).where(and(eq(L.accountId, account.id), gte(L.date, from), lte(L.date, to)))) {
+        already.set(plain(r), (already.get(plain(r)) ?? 0) + 1);
+      }
+      const nth = new Map<string, number>();
+      lines.forEach((l, i) => {
+        const k = plain(l);
+        nth.set(k, (nth.get(k) ?? 0) + 1);
+        if ((nth.get(k) ?? 0) <= (already.get(k) ?? 0)) existing.add(keys[i]);
+      });
       const fresh = lines.map((_, i) => i).filter((i) => !existing.has(keys[i]));
       if (!body.dryRun) await releaseOrphans(tx, account, ctx.now);
       const candidates = fresh.length ? await bookRecords(tx, account, { from: addDaysISO(from, -DAY_TOLERANCE), to: addDaysISO(to, DAY_TOLERANCE), unmatched: {} }) : [];

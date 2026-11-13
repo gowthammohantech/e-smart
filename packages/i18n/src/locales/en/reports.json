@@ -57,7 +57,7 @@
     },
     "invoice": "Invoice",
     "thisMonth": "This month",
-    "sales": "Sales",
+    "sales": "Invoiced (with GST)",
     "collected": "Collected",
     "paymentsReceived": "Payments received",
     "expenses": "Expenses",

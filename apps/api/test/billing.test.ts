@@ -73,3 +73,34 @@ describe('billing', () => {
     expect(res.body.code).toBe('ROLE_FORBIDDEN');
   });
 });
+
+describe('billing loopholes (money audit, phase 7)', () => {
+  it('upgrades a business that signs up again after cancelling', async () => {
+    const o = await ownerWithCompany(t);
+    const first = await t.post(`${o.c}/subscription/checkout`, { plan: 'pro', cycle: 'monthly' }, { token: o.token });
+    await razorpay(t, charged(first.body.subscriptionId, { companyId: o.company.id!, plan: 'pro', cycle: 'monthly' }), { eventId: 'evt_c1' });
+    await razorpay(t, { event: 'subscription.cancelled', payload: { subscription: { entity: { id: first.body.subscriptionId, status: 'cancelled' } } } }, { eventId: 'evt_x1' });
+    const again = await t.post(`${o.c}/subscription/checkout`, { plan: 'basic', cycle: 'monthly' }, { token: o.token });
+    expect(again.status).toBe(200);
+    await razorpay(t, charged(again.body.subscriptionId, { companyId: o.company.id!, plan: 'basic', cycle: 'monthly' }), { eventId: 'evt_c2' });
+    expect((await t.get(`${o.c}/subscription`, { token: o.token })).body).toMatchObject({ plan: 'basic', status: 'active' });
+  });
+
+  it('cancels the old subscription when a plan change activates, and ignores its later charges', async () => {
+    const o = await ownerWithCompany(t);
+    const cancelled: string[] = [];
+    const real = t.deps.providers.payments.cancelSubscription.bind(t.deps.providers.payments);
+    t.deps.providers.payments.cancelSubscription = async (id, opts) => {
+      cancelled.push(id);
+      return real(id, opts);
+    };
+    const basic = await t.post(`${o.c}/subscription/checkout`, { plan: 'basic', cycle: 'monthly' }, { token: o.token });
+    await razorpay(t, charged(basic.body.subscriptionId, { companyId: o.company.id!, plan: 'basic', cycle: 'monthly' }), { eventId: 'evt_b1' });
+    const pro = await t.post(`${o.c}/subscription/checkout`, { plan: 'pro', cycle: 'monthly' }, { token: o.token });
+    await razorpay(t, charged(pro.body.subscriptionId, { companyId: o.company.id!, plan: 'pro', cycle: 'monthly' }), { eventId: 'evt_p1' });
+    expect(cancelled).toContain(basic.body.subscriptionId);
+    // A late renewal of the old one changes nothing.
+    await razorpay(t, { ...charged(basic.body.subscriptionId, { companyId: o.company.id!, plan: 'basic', cycle: 'monthly' }), payload: { subscription: { entity: { id: basic.body.subscriptionId, status: 'active', current_start: 1792592000, current_end: 1795184000, notes: { companyId: o.company.id!, plan: 'basic', cycle: 'monthly' } } } } }, { eventId: 'evt_b2' });
+    expect((await t.get(`${o.c}/subscription`, { token: o.token })).body).toMatchObject({ plan: 'pro', status: 'active' });
+  });
+});

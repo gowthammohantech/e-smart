@@ -1,5 +1,5 @@
-import { and, eq, getTableColumns, gte, inArray, notInArray } from 'drizzle-orm';
-import { PAYABLE_KINDS, RECEIVABLE_KINDS } from '@esmart/core/domain/documentStates';
+import { and, eq, getTableColumns, gte, inArray, lte, notInArray, sql } from 'drizzle-orm';
+import { CREDIT_KINDS, PAYABLE_KINDS, RECEIVABLE_KINDS } from '@esmart/core/domain/documentStates';
 import { buildOutstanding, summarizeAging } from '@esmart/core/domain/receivables';
 import type { BusinessDocument, DocumentKind, Payment } from '@esmart/core/types';
 import { schema } from '@esmart/db';
@@ -24,10 +24,39 @@ type Aging = Schema<'AgingReport'>;
  * `amount_paid_minor`, which the Payments module keeps equal to the sum of
  * its allocations; it is handed to the engine as one allocation per document.
  */
+/** What settled each document by `asOf`: allocations of money dated by then, and returns, notes and credit applied by then. */
+async function paidAsOf(ctx: AgingCtx, rows: SummaryRow[], asOf: string): Promise<Map<string, number>> {
+  const ids = rows.map((r) => r.id);
+  const out = new Map<string, number>();
+  if (!ids.length) return out;
+  const A = schema.paymentAllocations;
+  const PAY = schema.payments;
+  const money_ = await ctx.db
+    .select({ documentId: A.documentId, total: sql<string>`coalesce(sum(${A.amountMinor} + ${A.tdsMinor} + ${A.discountMinor} + ${A.writeOffMinor}), 0)` })
+    .from(A)
+    .innerJoin(PAY, eq(PAY.id, A.paymentId))
+    .where(and(inArray(A.documentId, ids), lte(PAY.date, asOf)))
+    .groupBy(A.documentId);
+  const notes = await ctx.db
+    .select({ documentId: D.sourceDocumentId, total: sql<string>`coalesce(sum(${D.grandTotalMinor} - ${D.tdsAmountMinor}), 0)` })
+    .from(D)
+    .where(and(inArray(D.sourceDocumentId, ids), inArray(D.kind, CREDIT_KINDS), notInArray(D.status, ['draft', 'requested', 'cancelled', 'rejected']), lte(D.date, asOf)))
+    .groupBy(D.sourceDocumentId);
+  const CA = schema.creditApplications;
+  const applied = await ctx.db.select({ documentId: CA.documentId, total: sql<string>`coalesce(sum(${CA.amountMinor}), 0)` }).from(CA).where(and(inArray(CA.documentId, ids), lte(CA.date, asOf))).groupBy(CA.documentId);
+  for (const r of rows) {
+    const cash = Number(money_.find((x) => x.documentId === r.id)?.total ?? 0) + (r.kind === 'invoice' ? 0 : r.tdsAmountMinor);
+    const credit = Number(notes.find((x) => x.documentId === r.id)?.total ?? 0) + Number(applied.find((x) => x.documentId === r.id)?.total ?? 0);
+    out.set(r.id, Math.max(cash, Math.min(cash + credit, r.grandTotalMinor)));
+  }
+  return out;
+}
+
 async function agingReport(ctx: AgingCtx, kinds: DocumentKind[], q: { asOf?: string; partyId?: string; branchId?: string }): Promise<Aging> {
   const asOf = q.asOf ?? today(ctx.now);
   const baseCurrency = ctx.company.baseCurrency.trim();
-  const filters = [eq(D.companyId, ctx.company.id), inArray(D.kind, kinds), notInArray(D.status, ['draft', 'cancelled', 'rejected'])];
+  // Only what had been issued by the day asked for.
+  const filters = [eq(D.companyId, ctx.company.id), inArray(D.kind, kinds), notInArray(D.status, ['draft', 'cancelled', 'rejected']), lte(D.date, asOf)];
   if (q.partyId) filters.push(eq(D.partyId, q.partyId));
   if (q.branchId) filters.push(eq(D.branchId, q.branchId));
   if (ctx.user.branchIds.length) filters.push(inArray(D.branchId, ctx.user.branchIds));
@@ -53,7 +82,10 @@ async function agingReport(ctx: AgingCtx, kinds: DocumentKind[], q: { asOf?: str
         totals: { grandTotal: money(r.grandTotalMinor, r.currency.trim()) },
       }) as BusinessDocument,
   );
-  const settled = { allocations: rows.map((r) => ({ documentId: r.id, documentNumber: r.number, amount: money(r.amountPaidMinor, r.currency.trim()) })) } as Payment;
+  // As of today, what each has been paid is its amount_paid_minor. As of an earlier day, only what had
+  // settled it by then: money dated on or before it, and returns and notes dated by then (money audit C9).
+  const paidOf = asOf >= today(ctx.now) ? new Map(rows.map((r) => [r.id, r.amountPaidMinor])) : await paidAsOf(ctx, rows, asOf);
+  const settled = { allocations: rows.map((r) => ({ documentId: r.id, documentNumber: r.number, amount: money(paidOf.get(r.id) ?? 0, r.currency.trim()) })) } as Payment;
   const open = buildOutstanding(docs, [settled], asOf);
   const summary = summarizeAging(open, baseCurrency);
 

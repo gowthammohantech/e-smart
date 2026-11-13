@@ -443,6 +443,8 @@ export async function assertPeriodOpenNow(tx: DbOrTx, company: CompanyRow, ...da
 
 /** How long a queued invoice may have waited for it to count as already issued on the device. */
 const OFFLINE_GRACE_MS = 10 * 60_000;
+/** How many invoices queued offline may go over the month's limit. */
+const OFFLINE_GRACE_COUNT = 5;
 
 /**
  * The free plan's monthly invoices. An invoice issued offline was given to a
@@ -452,14 +454,16 @@ const OFFLINE_GRACE_MS = 10 * 60_000;
 async function checkInvoiceLimit(tx: DbOrTx, company: CompanyRow, now: Date) {
   const limit = INVOICE_LIMITS[company.plan];
   if (limit === null) return;
+  // The device sends when it queued the change, so that time is the client's word: a queued invoice
+  // gets some grace over the limit, never an unlimited pass (money audit C1).
   const queuedAt = replayQueuedAt.getStore();
-  if (queuedAt && now.getTime() - queuedAt.getTime() > OFFLINE_GRACE_MS) return;
+  const queued = !!queuedAt && now.getTime() - queuedAt.getTime() > OFFLINE_GRACE_MS;
   const monthStart = new Date(`${today(now).slice(0, 7)}-01T00:00:00+05:30`);
   const [{ used }] = await tx
     .select({ used: sql<number>`count(*)::int` })
     .from(D)
     .where(and(eq(D.companyId, company.id), eq(D.kind, 'invoice'), gte(D.finalizedAt, monthStart)));
-  if (used >= limit) throw invoiceLimitReached(company.plan, limit, nextInvoicePlan(company.plan));
+  if (used >= limit + (queued ? OFFLINE_GRACE_COUNT : 0)) throw invoiceLimitReached(company.plan, limit, nextInvoicePlan(company.plan));
 }
 
 /** What's returned against a document can't add up to more than it had, per item, across all its returns. */

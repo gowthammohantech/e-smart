@@ -66,46 +66,47 @@ describe('webhooks: razorpay ordering and refunds', () => {
   }
   const refund = (amount: number) => ({ entity: 'event', event: 'refund.processed', contains: ['refund'], payload: { refund: { entity: { id: 'rfnd_1', payment_id: 'pay_R1', amount } } } });
 
-  it('a full refund undoes the payment and reopens the invoice', async () => {
+  it('records a full refund as a refund of the receipt, on its own day, and reopens the invoice', async () => {
     const { inv } = await paidInvoice();
     expect((await documentRow(t, inv.id)).amountPaidMinor).toBe(inv.totals.grandTotal.minor);
     await razorpay(t, refund(inv.totals.grandTotal.minor), { eventId: 'evt_refund' });
     expect((await documentRow(t, inv.id)).amountPaidMinor).toBe(0);
-    expect(await t.deps.db.select().from(schema.payments)).toHaveLength(0);
+    // The receipt stays as it was taken; the refund is its own voucher against it (Rule 51).
+    const pays = await t.deps.db.select().from(schema.payments);
+    const receipt = pays.find((p) => p.direction === 'received')!;
+    const back = pays.find((p) => p.direction === 'paid')!;
+    expect(receipt.amountMinor).toBe(inv.totals.grandTotal.minor);
+    expect(back).toMatchObject({ refundOfPaymentId: receipt.id, amountMinor: inv.totals.grandTotal.minor, reference: 'rfnd_1' });
   });
 
-  it('a partial refund shrinks the payment, reopens that much of the invoice, and tells the owner', async () => {
+  it('records a partial refund against the receipt, reopens that much of the invoice, and tells the owner', async () => {
     const { inv } = await paidInvoice();
     const total = inv.totals.grandTotal.minor;
     const thirty = Math.round(total * 0.3);
     await razorpay(t, refund(thirty), { eventId: 'evt_refund' });
     expect((await documentRow(t, inv.id)).amountPaidMinor).toBe(total - thirty);
-    const [payment] = await t.deps.db.select().from(schema.payments);
-    expect(payment.amountMinor).toBe(total - thirty);
-    expect(payment.notes).toContain('refunded online');
+    const back = (await t.deps.db.select().from(schema.payments)).filter((p) => p.direction === 'paid');
+    expect(back.map((p) => p.amountMinor)).toEqual([thirty]);
     const notes = await t.deps.db.select().from(schema.notifications);
-    expect(notes.some((n) => n.title === 'Partial refund recorded')).toBe(true);
-    // The same event delivered again changes nothing.
+    expect(notes.some((n) => n.title === 'Refund recorded')).toBe(true);
+    // The same event delivered again, or the same signed body under another event id, changes nothing.
     await razorpay(t, refund(thirty), { eventId: 'evt_refund' });
-    expect((await t.deps.db.select().from(schema.payments))[0].amountMinor).toBe(total - thirty);
+    await razorpay(t, refund(thirty), { eventId: 'evt_refund_replayed' });
+    expect((await t.deps.db.select().from(schema.payments)).filter((p) => p.direction === 'paid')).toHaveLength(1);
   });
 
-  it('takes a partial refund off the newest invoice a payment covers, leaving the older one paid', async () => {
+  it('leaves alone a payment not taken through a payment link, whatever its reference says', async () => {
     const m = await moneySetup(t);
-    const older = await issueInvoice(t, m, { date: '2026-09-20' });
-    const newer = await issueInvoice(t, m, { date: '2026-09-28' });
-    const a = older.totals.grandTotal.minor;
-    const b = newer.totals.grandTotal.minor;
+    const inv = await issueInvoice(t, m);
+    const b = inv.totals.grandTotal.minor;
     const paid = await t.post(
       `${m.c}/payments`,
-      { direction: 'received', partyId: m.mumbai.id, date: '2026-09-29', amount: { minor: a + b, currency: 'INR' }, currency: 'INR', method: 'cash', reference: 'pay_R2', accountId: m.cash.id, allocations: [{ documentId: older.id, amount: { minor: a, currency: 'INR' } }, { documentId: newer.id, amount: { minor: b, currency: 'INR' } }] },
+      { direction: 'received', partyId: m.mumbai.id, date: '2026-09-29', amount: { minor: b, currency: 'INR' }, currency: 'INR', method: 'cash', reference: 'pay_R2', accountId: m.cash.id, allocations: [{ documentId: inv.id, amount: { minor: b, currency: 'INR' } }] },
       { token: m.token },
     );
     expect(paid.status).toBe(201);
-    const refunded = Math.round((a + b) * 0.3);
-    await razorpay(t, { entity: 'event', event: 'refund.processed', contains: ['refund'], payload: { refund: { entity: { id: 'rfnd_2', payment_id: 'pay_R2', amount: refunded } } } }, { eventId: 'evt_refund_2' });
-    expect((await documentRow(t, older.id)).amountPaidMinor).toBe(a);
-    expect((await documentRow(t, newer.id)).amountPaidMinor).toBe(b - refunded);
+    await razorpay(t, { entity: 'event', event: 'refund.processed', contains: ['refund'], payload: { refund: { entity: { id: 'rfnd_2', payment_id: 'pay_R2', amount: 1_000 } } } }, { eventId: 'evt_refund_2' });
+    expect((await documentRow(t, inv.id)).amountPaidMinor).toBe(b);
     await expectMoneyInvariants(t, m.companyId);
   });
 

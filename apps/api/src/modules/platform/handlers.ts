@@ -201,7 +201,8 @@ export const platformHandlers = defineHandlers({
       if (!current.suspendedAt) throw conflict('NOT_SUSPENDED', 'This account is not suspended');
       const [updated] = await tx
         .update(A)
-        .set({ suspendedAt: null, suspendedReason: null, suspendedBy: null, updatedAt: ctx.now })
+        // Back in use: an erase date set when it was deleted no longer applies.
+        .set({ suspendedAt: null, suspendedReason: null, suspendedBy: null, purgeAfter: null, updatedAt: ctx.now })
         .where(eq(A.id, current.id))
         .returning();
       await recordPlatformAction(tx, ctx.user, ctx.req, {

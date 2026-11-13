@@ -1,10 +1,10 @@
 import { createHmac } from 'node:crypto';
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, ne, or, sql } from 'drizzle-orm';
 import { accountTypesFor } from '@esmart/core/domain/paymentAccounts';
 import type { PaymentMethod, PlanTier } from '@esmart/core/types';
 import { schema } from '@esmart/db';
 import type { AuthUser, WebhookCtx, WebhookHandlers } from '../../context';
-import { unauthorized } from '../../http/errors';
+import { ApiError, unauthorized } from '../../http/errors';
 import { trackForCompany } from '../../analytics/track';
 import { recordChange, type DbOrTx } from '../../lib/audit';
 import { safeEqual, sha256 } from '../../lib/crypto';
@@ -56,7 +56,25 @@ async function once(ctx: WebhookCtx, source: 'razorpay' | 'whatsapp', externalId
       .onConflictDoNothing()
       .returning({ id: schema.webhookEvents.id });
     if (!inserted.length) return;
-    const problem = await process(tx, id);
+    // The same signed body delivered again under another event id (the id is a header the signature
+    // doesn't cover) is the same event: it does nothing twice.
+    const [twin] = await tx
+      .select({ id: schema.webhookEvents.id })
+      .from(schema.webhookEvents)
+      .where(and(eq(schema.webhookEvents.source, source), eq(schema.webhookEvents.eventType, eventType.slice(0, 60)), ne(schema.webhookEvents.id, id), eq(schema.webhookEvents.signatureValid, true), sql`${schema.webhookEvents.payload} = ${JSON.stringify(ctx.body)}::jsonb`))
+      .limit(1);
+    let problem: string | void;
+    if (twin) problem = `the same delivery as ${twin.id}`;
+    else {
+      // A refusal from the books (a closed period, an account short of cash) is recorded and told,
+      // not thrown: thrown, the provider would retry it for ever. Only what it wrote is undone.
+      try {
+        problem = await tx.transaction((t2) => process(t2, id));
+      } catch (error) {
+        if (!(error instanceof ApiError)) throw error;
+        problem = `refused: ${error.message}`;
+      }
+    }
     await tx.update(schema.webhookEvents).set({ processedAt: ctx.now, error: problem ?? null }).where(eq(schema.webhookEvents.id, id));
   });
 }
@@ -115,7 +133,10 @@ async function paymentLinkPaid(ctx: WebhookCtx, tx: DbOrTx, payload: Json): Prom
   const amountMinor = num(pay.amount) ?? num(link.amount_paid) ?? pl.amountMinor;
   const currency = (str(pay.currency) ?? str(link.currency) ?? pl.currency).trim();
   const createdAt = num(pay.created_at);
-  const date = createdAt ? today(new Date(createdAt * 1000)) : today(ctx.now);
+  const paidOn = createdAt ? today(new Date(createdAt * 1000)) : today(ctx.now);
+  // Paid on a day the books have since closed: the money is still in, so it is recorded on the first
+  // open day (today) rather than lost to a retry that can never succeed.
+  const date = company.lockedThroughDate && paidOn <= company.lockedThroughDate ? today(ctx.now) : paidOn;
 
   // The collection lands in a bank or wallet account that fits the method, else the default one.
   let method = methodOf(str(pay.method));
@@ -161,18 +182,30 @@ async function subscriptionCharged(ctx: WebhookCtx, tx: DbOrTx, eventId: string,
   if (!subId) return 'payload has no subscription.entity.id';
   const notes = obj(sub.notes);
   const S = schema.subscriptions;
-  const [known] = await tx.select().from(S).where(eq(S.providerSubscriptionId, subId));
-  const companyId = str(notes.companyId) ?? known?.companyId;
+  const [known] = await tx.select().from(S).where(or(eq(S.providerSubscriptionId, subId), eq(S.pendingSubscriptionId, subId)));
+  const companyId = known?.companyId ?? str(notes.companyId);
   if (!companyId) return `unknown subscription ${subId}`;
   const [company] = await tx.select().from(schema.companies).where(eq(schema.companies.id, companyId)).for('update');
   if (!company) return `unknown company ${companyId}`;
   const [current] = known?.companyId === companyId ? [known] : await tx.select().from(S).where(eq(S.companyId, companyId));
+  const at = (v: unknown) => (num(v) ? new Date(num(v)! * 1000) : null);
+  // A plan change's new subscription activating: the old one is cancelled now, so both never bill.
+  const switching = !!current && current.pendingSubscriptionId === subId;
+  if (switching && current!.providerSubscriptionId && current!.providerSubscriptionId !== subId && current!.status === 'active') {
+    await ctx.deps.providers.payments.cancelSubscription(current!.providerSubscriptionId, { atPeriodEnd: false });
+  }
+  if (!switching && current?.providerSubscriptionId && current.providerSubscriptionId !== subId && current.status === 'active') {
+    // A subscription the company has moved on from (replaced by a plan change): its charges change nothing.
+    return `subscription ${subId} is not the company's current one`;
+  }
   // Events can arrive out of order. Cancelling ends a subscription for good (signing up again is a new id).
-  if (known?.status === 'cancelled') return `subscription ${subId} is already cancelled`;
+  if (!switching && known?.status === 'cancelled') return `subscription ${subId} is already cancelled`;
+  // An older event than the period already recorded (a late charge after a halt) moves nothing back.
+  const end = at(sub.current_end);
+  if (!switching && current?.providerSubscriptionId === subId && current.currentPeriodEnd && end && end < current.currentPeriodEnd) return `an older event for ${subId}`;
   const plan = PLANS.find((p) => p === notes.plan) ?? current?.plan;
   if (!plan) return 'the subscription does not say which plan it is for';
   const cycle = notes.cycle === 'yearly' || notes.cycle === 'monthly' ? notes.cycle : (current?.cycle ?? 'monthly');
-  const at = (v: unknown) => (num(v) ? new Date(num(v)! * 1000) : null);
   const actor = await ownerOf(tx, companyId, 'Razorpay');
 
   const values = {
@@ -181,6 +214,7 @@ async function subscriptionCharged(ctx: WebhookCtx, tx: DbOrTx, eventId: string,
     status: 'active' as const,
     provider: 'razorpay' as const,
     providerSubscriptionId: subId,
+    pendingSubscriptionId: null,
     currentPeriodStart: at(sub.current_start),
     currentPeriodEnd: at(sub.current_end),
     cancelAtPeriodEnd: false,
@@ -201,67 +235,119 @@ async function subscriptionCharged(ctx: WebhookCtx, tx: DbOrTx, eventId: string,
 }
 
 /**
- * `refund.processed`: a full refund undoes the payment it refunds, reopening
- * what it settled. A partial one makes the payment smaller by that much.
+ * `refund.processed`: money a customer paid online went back to them. It is recorded as what it is,
+ * a refund paid out on the day it was made (a refund voucher against the receipt, Rule 51), never by
+ * rewriting the receipt on its own date: what was reported for that day stays as it was. When the
+ * receipt's money had settled invoices, as much as the refund is first released from the newest
+ * of them, so they read as owed again. Only payments taken through this company's payment links
+ * are matched (money audit C4, C22).
  */
 async function refundProcessed(ctx: WebhookCtx, tx: DbOrTx, payload: Json): Promise<string | void> {
   const refund = obj(obj(payload.refund).entity);
   const paymentId = str(refund.payment_id);
   if (!paymentId) return 'payload has no refund.entity.payment_id';
   const P = schema.payments;
-  const [payment] = await tx.select().from(P).where(and(eq(P.reference, paymentId), eq(P.direction, 'received'))).for('update');
-  if (!payment) return `no payment for ${paymentId}`;
+  const L = schema.paymentLinks;
+  const [hit] = await tx
+    .select({ payment: P })
+    .from(P)
+    .innerJoin(L, and(eq(L.paymentId, P.id), eq(L.companyId, P.companyId)))
+    .where(and(eq(P.reference, paymentId), eq(P.direction, 'received')))
+    .limit(1);
+  if (!hit) return `no payment-link payment for ${paymentId}`;
+  const [payment] = await tx.select().from(P).where(eq(P.id, hit.payment.id)).for('update');
   const [company] = await tx.select().from(schema.companies).where(eq(schema.companies.id, payment.companyId));
   const actor = await ownerOf(tx, payment.companyId, 'Razorpay');
   if (!company || !actor) return 'the payment no longer resolves to a company';
-  const amount = num(refund.amount) ?? 0;
-  if (!(amount > 0)) return 'refund has no amount';
-  if (amount >= payment.amountMinor) {
-    await deletePayment(tx, company, actor, payment, ctx.now);
-    return;
+  const refundId = str(refund.id);
+  if (refundId) {
+    const [already] = await tx.select({ id: P.id }).from(P).where(and(eq(P.companyId, company.id), eq(P.refundOfPaymentId, payment.id), eq(P.reference, refundId))).limit(1);
+    if (already) return `refund ${refundId} is already recorded`;
   }
-  // Part of it went back: the payment shrinks by that much. Its unallocated part (an advance) goes
-  // first, then what it paid on the newest invoices, so the oldest stay settled.
-  const A = schema.paymentAllocations;
-  const allocations = await tx
-    .select({ documentId: A.documentId, amountMinor: A.amountMinor, tdsMinor: A.tdsMinor, discountMinor: A.discountMinor, writeOffMinor: A.writeOffMinor, date: schema.documents.date })
-    .from(A)
-    .innerJoin(schema.documents, eq(schema.documents.id, A.documentId))
-    .where(eq(A.paymentId, payment.id))
-    .orderBy(desc(schema.documents.date), desc(schema.documents.id));
-  const remaining = payment.amountMinor - amount;
-  let release = Math.max(0, allocations.reduce((sum, a) => sum + a.amountMinor, 0) - remaining);
-  const kept = allocations
-    .map((a) => {
-      const cut = Math.min(a.amountMinor, release);
-      release -= cut;
-      // Only the cash is refunded; TDS, discount and write-off stay as they were.
-      return { documentId: a.documentId, amountMinor: a.amountMinor - cut, tdsMinor: a.tdsMinor, discountMinor: a.discountMinor, writeOffMinor: a.writeOffMinor };
-    })
-    .filter((a) => a.amountMinor + a.tdsMinor + a.discountMinor + a.writeOffMinor > 0);
+  const amount = Math.min(num(refund.amount) ?? 0, payment.amountMinor);
+  if (!(amount > 0)) return 'refund has no amount';
+  const createdAt = num(refund.created_at);
+  const madeOn = createdAt ? today(new Date(createdAt * 1000)) : today(ctx.now);
+  const date = company.lockedThroughDate && madeOn <= company.lockedThroughDate ? today(ctx.now) : madeOn;
   const refunded = noteMoney(amount, payment.currency);
-  await writePayment(
-    tx,
-    ctx.deps,
-    company,
-    actor,
-    {
-      direction: 'received',
-      partyId: payment.partyId,
-      branchId: payment.branchId,
-      date: payment.date,
-      amountMinor: remaining,
-      currency: payment.currency.trim(),
-      exchangeRate: Number(payment.exchangeRate),
-      method: payment.method,
-      reference: payment.reference,
-      accountId: payment.accountId,
-      notes: [payment.notes, `${refunded} refunded online`].filter(Boolean).join(' · ').slice(0, 500),
-      allocations: kept,
-    },
-    { now: ctx.now, existing: payment },
-  );
-  await notify(tx, ctx.deps, { companyId: payment.companyId, kind: 'paymentReceived', title: 'Partial refund recorded', body: `${payment.number}: ${refunded} was refunded online, so the payment is now ${noteMoney(remaining, payment.currency)}.`, entityType: 'payment', entityId: payment.id });
+  try {
+    await tx.transaction(async (t2) => {
+      // What the receipt still holds as an advance can go back as it is; beyond that, release it from
+      // the newest invoices it settled (their cash only; TDS, discount and write-off stay).
+      const advance = Math.max(payment.unallocatedMinor - payment.tdsMinor, 0);
+      if (amount > advance) {
+        const A = schema.paymentAllocations;
+        const allocations = await t2
+          .select({ documentId: A.documentId, amountMinor: A.amountMinor, tdsMinor: A.tdsMinor, discountMinor: A.discountMinor, writeOffMinor: A.writeOffMinor })
+          .from(A)
+          .innerJoin(schema.documents, eq(schema.documents.id, A.documentId))
+          .where(eq(A.paymentId, payment.id))
+          .orderBy(desc(schema.documents.date), desc(schema.documents.id));
+        let release = amount - advance;
+        const kept = allocations
+          .map((a) => {
+            const cut = Math.min(a.amountMinor, release);
+            release -= cut;
+            return { documentId: a.documentId, amountMinor: a.amountMinor - cut, tdsMinor: a.tdsMinor, discountMinor: a.discountMinor, writeOffMinor: a.writeOffMinor };
+          })
+          .filter((a) => a.amountMinor + a.tdsMinor + a.discountMinor + a.writeOffMinor > 0);
+        await writePayment(
+          t2,
+          ctx.deps,
+          company,
+          actor,
+          {
+            direction: 'received',
+            partyId: payment.partyId,
+            branchId: payment.branchId,
+            date: payment.date,
+            amountMinor: payment.amountMinor,
+            currency: payment.currency.trim(),
+            exchangeRate: Number(payment.exchangeRate),
+            method: payment.method,
+            reference: payment.reference,
+            accountId: payment.accountId,
+            notes: payment.notes,
+            tdsSection: payment.tdsSection,
+            advanceTdsMinor: payment.tdsMinor,
+            advanceTax: payment.advanceTaxCategoryId && payment.advancePlaceOfSupply ? { taxCategoryId: payment.advanceTaxCategoryId, placeOfSupplyStateCode: payment.advancePlaceOfSupply, hsn: payment.advanceHsn ?? undefined, cessRate: payment.advanceCessRate ? Number(payment.advanceCessRate) : undefined, reverseCharge: payment.advanceReverseCharge } : null,
+            allocations: kept,
+          },
+          { now: ctx.now, existing: payment },
+        );
+      }
+      const [receipt] = await t2.select().from(P).where(eq(P.id, payment.id));
+      await writePayment(
+        t2,
+        ctx.deps,
+        company,
+        actor,
+        {
+          direction: 'paid',
+          partyId: payment.partyId,
+          branchId: payment.branchId,
+          date,
+          amountMinor: amount,
+          currency: payment.currency.trim(),
+          exchangeRate: Number(receipt.exchangeRate),
+          method: payment.method,
+          reference: refundId ?? `refund ${paymentId}`,
+          accountId: payment.accountId,
+          notes: `Refunded online (${paymentId})`,
+          refundOf: payment.id,
+          allocations: [],
+        },
+        { now: ctx.now },
+      );
+    });
+  } catch (error) {
+    if (!(error instanceof ApiError)) throw error;
+    // The books refused it (the receipt's period is closed, the account can't cover it): the money
+    // has gone back all the same, so the business is told to record it by hand.
+    await notify(tx, ctx.deps, { companyId: payment.companyId, kind: 'paymentReceived', title: 'A refund needs recording', body: `${refunded} of ${payment.number} was refunded online on ${madeOn}, but it couldn't be recorded: ${error.message}`, entityType: 'payment', entityId: payment.id });
+    return `refused: ${error.message}`;
+  }
+  await notify(tx, ctx.deps, { companyId: payment.companyId, kind: 'paymentReceived', title: 'Refund recorded', body: `${refunded} of ${payment.number} was refunded online on ${madeOn}.`, entityType: 'payment', entityId: payment.id });
 }
 
 /** `subscription.cancelled` (and `.completed`, `.halted`): back to Free; no records are lost. */

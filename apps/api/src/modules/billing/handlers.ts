@@ -75,9 +75,14 @@ export const billingHandlers = defineHandlers({
       customer: { name: ctx.company.name, email: ctx.company.email ?? ctx.user.email },
     });
     await ctx.db.transaction(async (tx) => {
-      // A company with no live subscription remembers the checkout, so the webhook can find it.
-      if (!current || current.status !== 'active') {
-        const values = { plan: ctx.company.plan, cycle, status: current?.status ?? ('none' as const), provider: 'razorpay' as const, providerSubscriptionId: checkout.subscriptionId, providerCustomerId: checkout.customerId ?? null, updatedAt: ctx.now };
+      // A company with no live subscription remembers the checkout, so the webhook can find it. A
+      // checkout is a new subscription: whatever ended before (cancelled, halted) doesn't carry over.
+      if (current?.status === 'active') {
+        // A plan change while subscribed: the new subscription waits; when it activates the old one is
+        // cancelled, so the business is never billed twice.
+        await tx.update(S).set({ pendingSubscriptionId: checkout.subscriptionId, version: current.version + 1, updatedAt: ctx.now }).where(eq(S.companyId, ctx.company.id));
+      } else {
+        const values = { plan: ctx.company.plan, cycle, status: 'none' as const, provider: 'razorpay' as const, providerSubscriptionId: checkout.subscriptionId, pendingSubscriptionId: null, providerCustomerId: checkout.customerId ?? null, updatedAt: ctx.now };
         const [row] = await tx
           .insert(S)
           .values({ companyId: ctx.company.id, ...values })

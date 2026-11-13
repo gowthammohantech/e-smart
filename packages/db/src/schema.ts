@@ -232,6 +232,8 @@ export const subscriptions = pgTable("subscriptions", {
 	status: subscriptionStatus().default('none').notNull(),
 	provider: billingProvider(),
 	providerSubscriptionId: varchar("provider_subscription_id", { length: 100 }),
+	// A plan change's new subscription, until it activates and the old one is cancelled.
+	pendingSubscriptionId: varchar("pending_subscription_id", { length: 100 }),
 	providerCustomerId: varchar("provider_customer_id", { length: 100 }),
 	currentPeriodStart: timestamp("current_period_start", { withTimezone: true, mode: 'date' }),
 	currentPeriodEnd: timestamp("current_period_end", { withTimezone: true, mode: 'date' }),

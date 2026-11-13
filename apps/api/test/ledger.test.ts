@@ -106,3 +106,17 @@ describe('ledger', () => {
     expect(pdfText(pdf.raw)).toContain('STATEMENT OF ACCOUNT');
   });
 });
+
+describe('ageing as of an earlier day (money audit C9)', () => {
+  it('leaves out invoices raised after it and counts money only received by then', async () => {
+    const m = await moneySetup(t);
+    t.setNow('2026-09-29T10:00:00Z');
+    const early = await issueInvoice(t, m, { date: '2026-08-10' });
+    await issueInvoice(t, m, { date: '2026-09-20' });
+    const total = early.totals.grandTotal.minor;
+    expect((await t.post(`${m.c}/payments`, { direction: 'received', partyId: m.mumbai.id, date: '2026-09-25', amount: { minor: total, currency: 'INR' }, currency: 'INR', method: 'cash', accountId: m.cash.id, allocations: [{ documentId: early.id, amount: { minor: total, currency: 'INR' } }] }, { token: m.token })).status).toBe(201);
+    // On 31 August only the first invoice was out, and nothing had been paid on it.
+    const aug = await t.get(`${m.c}/receivables`, { token: m.token, query: { asOf: '2026-08-31' } });
+    expect(aug.body.total).toEqual({ minor: total, currency: 'INR' });
+  });
+});
