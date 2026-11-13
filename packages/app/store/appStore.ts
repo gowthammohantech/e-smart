@@ -293,6 +293,14 @@ export type NewDocumentInput = {
   sourceDocumentId?: string;
   mergedSourceIds?: string[];
   status?: DocStatus;
+  // What else the editor sets: kept on the document and sent with it.
+  costCentreId?: string;
+  vehicleId?: string;
+  customFields?: BusinessDocument['customFields'];
+  noteGst?: BusinessDocument['noteGst'];
+  originalNumber?: string;
+  originalDate?: string;
+  tdsRate?: number;
 };
 
 export type AppState = AppData & {
@@ -800,6 +808,13 @@ export const useAppStore = create<AppState>()(
             attachmentIds: draft.attachmentIds ?? [],
             sourceDocumentId: draft.sourceDocumentId,
             ...(draft.mergedSourceIds?.length && { mergedSourceIds: draft.mergedSourceIds }),
+            costCentreId: draft.costCentreId,
+            vehicleId: draft.vehicleId,
+            customFields: draft.customFields,
+            noteGst: draft.noteGst,
+            originalNumber: draft.originalNumber,
+            originalDate: draft.originalDate,
+            tdsRate: draft.tdsRate,
             totals: {
               subtotal: zero(draft.currency),
               lineDiscount: zero(draft.currency),
