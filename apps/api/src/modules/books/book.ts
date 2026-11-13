@@ -9,6 +9,7 @@ import { schema } from '@esmart/db';
 import { loadAssets } from '../assets/handlers';
 import { companyCore, partyCore } from '../documents/engine';
 import { coreMovements } from '../inventory/ledger';
+import { taxHistories } from '../../lib/taxRates';
 import { loadDocuments, loadExpenseCategories, loadExpenses, loadItems, loadPayments, type Scope } from '../reports/data';
 
 // Opening invoices and bills too: they post to the party and Opening balances (RULES 6.12), nothing else.
@@ -43,7 +44,10 @@ export async function loadBook(s: Scope): Promise<{ postings: Posting[]; book: B
   const vouchers = await loadVouchers(s);
   const branches = await s.db.select().from(schema.branches).where(eq(schema.branches.companyId, id));
   const T = schema.taxCategories;
-  const taxCategories = (await s.db.select().from(T).where(eq(T.companyId, id))).map((t) => ({ id: t.id, companyId: t.companyId, name: t.name, rate: Number(t.rate), type: t.type, effectiveFrom: t.effectiveFrom }));
+  const taxRows = await s.db.select().from(T).where(eq(T.companyId, id));
+  // With their earlier rates: an expense posts its tax at the rate in force on its date.
+  const histories = await taxHistories(s.db, taxRows.map((t) => t.id));
+  const taxCategories = taxRows.map((t) => ({ id: t.id, companyId: t.companyId, name: t.name, rate: Number(t.rate), type: t.type, effectiveFrom: t.effectiveFrom, history: histories.get(t.id) }));
   const items = await loadItems(s);
   const movements = await coreMovements(s.db, id, { to: s.to });
   const perpetualFrom = s.company.perpetualStockFrom;

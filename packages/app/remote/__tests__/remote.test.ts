@@ -2,6 +2,7 @@ import type { Party } from '@esmart/core/types';
 import { BOOK, buildTestBook } from '../../__fixtures__/book';
 import { useAppStore } from '../../store/appStore';
 import { onboardingSeries } from '../../store/onboardingStore';
+import { DEFAULT_PREFIXES, SERIES_KINDS, defaultSeries } from '@esmart/core/domain/numbering';
 import { api } from '../api';
 import { installRemote } from '../install';
 import { useRemoteMeta } from '../meta';
@@ -115,20 +116,9 @@ describe('queueing', () => {
     expect(queue().map((e) => e.body)).toEqual([{ status: 'issued', overrideCreditLimit: true }, { status: 'cancelled' }]);
   });
 
-  it('sends a new company with the numbering chosen during onboarding', () => {
-    const companyId = actions().createCompany({ ...actions().companies[0], name: 'New Co' } as never);
-    const series = actions().numberingSeries.find((s) => s.companyId === companyId && s.kind === 'invoice')!;
-    actions().saveNumberingSeries({ ...series, prefix: 'NC', nextNumber: 101 });
-    expect(queue()).toHaveLength(1);
-    expect(queue()[0].body).toMatchObject({ name: 'New Co', seedDefaults: true, numberingSeries: [{ kind: 'invoice', prefix: 'NC', nextNumber: 101 }] });
-  });
-
-  it('applies onboarding\'s financial-year choice to every series made at setup, each keeping its prefix', () => {
-    const companyId = actions().createCompany({ ...actions().companies[0], name: 'No FY Co' } as never);
-    const made = actions().numberingSeries.filter((s) => s.companyId === companyId);
-    for (const s of onboardingSeries(made, { invoicePrefix: 'NF', invoiceNextNumber: '7', includeFiscalYear: false })) actions().saveNumberingSeries(s);
-    expect(queue()).toHaveLength(1);
-    const sent = (queue()[0].body as { numberingSeries: { kind: string; prefix: string; nextNumber: number; includeFiscalYear: boolean }[] }).numberingSeries;
+  it('applies onboarding\'s financial-year choice to every series a new business starts with, each keeping its prefix', () => {
+    const made = SERIES_KINDS.map((kind) => defaultSeries('', kind, DEFAULT_PREFIXES[kind]));
+    const sent = onboardingSeries(made, { invoicePrefix: 'NF', invoiceNextNumber: '7', includeFiscalYear: false });
     expect(sent).toHaveLength(made.length);
     expect(sent.every((s) => s.includeFiscalYear === false)).toBe(true);
     expect(sent.find((s) => s.kind === 'invoice')).toMatchObject({ prefix: 'NF', nextNumber: 7 });

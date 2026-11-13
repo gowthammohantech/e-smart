@@ -134,13 +134,22 @@ describe('entries that depend on each other', () => {
     expect(convert.body).toMatchObject({ targetKind: 'creditNote', lineIds: keep });
   });
 
-  it('B2: keeps the chosen numbering when a pending company is edited', () => {
-    const companyId = actions().createCompany({ ...actions().companies[0], name: 'New Co' } as never);
-    const series = actions().numberingSeries.find((s) => s.companyId === companyId && s.kind === 'invoice')!;
-    actions().saveNumberingSeries({ ...series, prefix: 'NC', nextNumber: 101 });
-    const company = actions().companies.find((c) => c.id === companyId)!;
-    actions().saveCompany({ ...company, name: 'Newer Co' });
-    expect(queue()[0].body).toMatchObject({ name: 'Newer Co', numberingSeries: [{ kind: 'invoice', prefix: 'NC' }] });
+  it('sales orders merged into one delivery note carry all their lines, and go to the server as alsoFrom', () => {
+    const inv = actions().documents.find((d) => d.kind === 'invoice' && d.lines.length > 1)!;
+    const order = (line: (typeof inv.lines)[number], date: string) =>
+      actions().createDocument({ kind: 'salesOrder', partyId: inv.partyId, date, currency: inv.currency, exchangeRate: inv.exchangeRate, lines: [line], status: 'confirmed' });
+    const later = order(inv.lines[1], '2026-09-20');
+    const first = order(inv.lines[0], '2026-09-10');
+    const id = actions().convertDocument(first, 'delivery', undefined, [later]);
+    const copy = actions().documents.find((d) => d.id === id)!;
+    expect(copy).toMatchObject({ kind: 'delivery', sourceDocumentId: first, mergedSourceIds: [later] });
+    expect(copy.lines.map((l) => l.name)).toEqual([inv.lines[0].name, inv.lines[1].name]);
+    // Both are carried forward: neither converts again on its own.
+    expect(actions().convertDocument(later, 'delivery')).toBe('');
+    const convert = queue().find((e) => e.path.endsWith('/convert'))!;
+    expect(convert.body).toMatchObject({ targetKind: 'delivery', alsoFrom: [later] });
+    // Only where the conversion merges.
+    expect(actions().convertDocument(order(inv.lines[0], '2026-09-21'), 'invoice', undefined, [order(inv.lines[1], '2026-09-22')])).toBe('');
   });
 
 });

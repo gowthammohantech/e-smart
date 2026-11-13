@@ -646,10 +646,15 @@ export const documents = pgTable("documents", {
 	notes: text(),
 	terms: text(),
 	sourceDocumentId: varchar("source_document_id", { length: 40 }),
+	// Made from several documents at once (orders into one challan, and so on): the others after source_document_id.
+	mergedSourceIds: varchar("merged_source_ids", { length: 40 }).array().default([]).notNull(),
 	noteReason: noteReason("note_reason"),
 	// A direct note (no source document): 'withGst' (s.34, the default) or 'noGst' (a financial or
 	// commercial note: no tax, posted to discount, out of the returns).
 	noteGst: varchar("note_gst", { length: 8 }),
+	// A document with an SEZ unit or developer: 'withTax' (IGST charged) or 'withoutTax' (LUT or bond,
+	// zero-rated). Null for any other party.
+	sezTax: varchar("sez_tax", { length: 10 }),
 	// A direct note with GST: the original invoice or bill it adjusts, for GSTR-1 CDNR/CDNUR and the s.34 deadline.
 	originalNumber: varchar("original_number", { length: 40 }),
 	originalDate: date("original_date"),
@@ -718,6 +723,7 @@ export const documents = pgTable("documents", {
 	index("documents_company_id_kind_status_date_idx").using("btree", table.companyId.asc().nullsLast(), table.kind.asc().nullsLast(), table.status.asc().nullsLast(), table.date.asc().nullsLast()),
 	index("documents_company_id_party_id_date_idx").using("btree", table.companyId.asc().nullsLast(), table.partyId.asc().nullsLast(), table.date.asc().nullsLast()),
 	index("documents_source_document_id_idx").using("btree", table.sourceDocumentId.asc().nullsLast()),
+	index("documents_merged_source_ids_idx").using("gin", table.mergedSourceIds),
 	index("documents_next_recurrence_date_idx").using("btree", table.nextRecurrenceDate.asc().nullsLast()),
 	index("documents_recurring_parent_id_date_idx").using("btree", table.recurringParentId.asc().nullsLast(), table.date.asc().nullsLast()),
 	foreignKey({
@@ -1856,6 +1862,9 @@ export const companies = pgTable("companies", {
 	invoiceTemplate: jsonb("invoice_template"),
 	// Lixi messages and bill scans a month together; unset takes the plan's allowance.
 	aiMonthlyLimit: integer("ai_monthly_limit"),
+	// The GST gateway this company files through ('adaequare' | 'whitebooks'), set by a platform operator.
+	// Unset follows the deployment's default (TAXATION_GSP_PROVIDER_CODE).
+	gspProvider: varchar("gsp_provider", { length: 20 }),
 	lockedThroughDate: date("locked_through_date"),
 	// Perpetual stock from this day, the start of a financial year: receipts and issues post to stock
 	// at cost, and the goods sold to Cost of goods sold. Null keeps the books periodic (RULES 6.2).

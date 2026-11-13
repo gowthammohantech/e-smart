@@ -12,11 +12,17 @@ import {
   type IrpSimulation,
 } from '@esmart/core/domain/irpAdapter';
 import type { Config } from '../config';
-import { createGspGateway } from './gsp';
+import { createGspRouter } from './gsp';
+import type { GspGatewayName } from './gsp/provider-name';
 
 /** What `saveComplianceCredentials` stored, decrypted for the length of one call. */
 export type PortalCredentials = {
   gspProvider?: string;
+  /**
+   * The gateway a platform operator chose for this company. Unset follows the deployment's default,
+   * which is what every company did before the choice existed.
+   */
+  gspGateway?: GspGatewayName;
   /** The seller's GSTIN; the IRP and EWB APIs scope every call to it. */
   gstin: string;
   username: string;
@@ -36,6 +42,8 @@ export type FindEwayBillResult = { ok: true; found: Extract<SubmitEwayBillResult
 export type IrnStatusResult = { ok: true; status: 'active' | 'cancelled'; cancelDate?: string } | Failure;
 /** What a lost answer looks like: no answer at all. The call may or may not have reached the portal. */
 export const isUnanswered = (r: { ok: boolean; errors?: { code: string }[] }) => !r.ok && !!r.errors?.some((e) => e.code === 'GSP_UNAVAILABLE');
+/** A gateway that has no such call (Whitebooks cannot look a bill or an IRN up): the same as the method being absent. */
+export const isUnsupported = (r: { ok: boolean; errors?: { code: string }[] }) => !r.ok && !!r.errors?.some((e) => e.code === 'GSP_UNSUPPORTED');
 /**
  * The e-invoice (IRP) and e-way bill portals take separate logins, which need not match. Each call that
  * reaches a portal gets the login for that portal; a connection test gets both.
@@ -210,10 +218,10 @@ const billKey = (d: { docType: string; docNo: string; docDate: string; fromGstin
 
 /**
  * The real portals, through a GST Suvidha Provider: Adaequare (production-ready)
- * or Whitebooks (sandbox only). Which one is `TAXATION_GSP_PROVIDER_CODE`; see
- * `providers/gsp/` for the gateways and the README there for the environment.
+ * or Whitebooks (sandbox only). A company follows `TAXATION_GSP_PROVIDER_CODE` unless a platform
+ * operator chose a gateway for it; see `providers/gsp/` for the gateways and the README there for the environment.
  */
 export function createComplianceProvider(config: Config): ComplianceProvider {
-  if (config.COMPLIANCE_PROVIDER === 'gsp') return createGspGateway(config);
+  if (config.COMPLIANCE_PROVIDER === 'gsp') return createGspRouter(config);
   return new SimulatedComplianceProvider();
 }

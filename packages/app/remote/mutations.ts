@@ -124,14 +124,6 @@ export const MUTATIONS: Partial<Record<keyof AppState, Builder>> = {
     const d = byId(before.devices, args[0]);
     outbox.action({ method: 'DELETE', path: `/me/devices/${args[0]}`, entityType: 'device', entityId: args[0], label: d?.label ?? 'Device' });
   },
-  createCompany: ({ result, after }) => {
-    const company = byId(after.companies, result as string);
-    if (!company) return;
-    // The logo goes up on its own (remote/logo.ts); here logoUri is only a path on this device.
-    const { id, accountId, createdAt, plan, logoUri, signatureUri, ...body } = company as Company & Record<string, unknown>;
-    void accountId; void createdAt; void plan; void logoUri; void signatureUri;
-    outbox.push({ method: 'POST', path: '/companies', body: { ...body, seedDefaults: true, numberingSeries: [] }, entityType: 'company', entityId: id, label: company.name, clientEntityId: id });
-  },
   saveCompany: ({ args, after }) => {
     const company = byId(after.companies, (args[0] as Company).id);
     if (!company) return;
@@ -139,10 +131,8 @@ export const MUTATIONS: Partial<Record<keyof AppState, Builder>> = {
     const { logoUri, signatureUri, ...body } = company;
     void logoUri;
     void signatureUri;
-    // Still to be created: keep what the create carries besides the company itself.
-    const create = outbox.pendingCreate(company.id)?.body as { seedDefaults?: boolean; numberingSeries?: unknown[] } | undefined;
-    const saved = create ? { ...body, seedDefaults: create.seedDefaults, numberingSeries: create.numberingSeries } : body;
-    outbox.upsert({ entityType: 'company', id: company.id, collectionPath: '/companies', itemPath: c(company.id), body: saved, label: company.name });
+    // A business is made on the server first (remote/companies.ts), so this is always an update.
+    outbox.upsert({ entityType: 'company', id: company.id, collectionPath: '/companies', itemPath: c(company.id), body, label: company.name });
   },
   saveBranch: ({ args, after }) => {
     const b = byId(after.branches, (args[0] as Branch).id);
@@ -189,18 +179,8 @@ export const MUTATIONS: Partial<Record<keyof AppState, Builder>> = {
   saveNumberingSeries: ({ args, after }) => {
     const s = byId(after.numberingSeries, (args[0] as NumberingSeries).id);
     if (!s) return;
-    if (knownToServer(s.id)) {
-      outbox.upsert({ entityType: 'numbering_series', id: s.id, collectionPath: '', itemPath: `${c(s.companyId)}/numbering-series/${s.id}`, body: s, label: `${s.prefix} series` });
-      return;
-    }
-    // A series of a company the server hasn't created yet rides along with its create.
-    // Can't follow the create as an update: the server's series has its own id.
-    const create = outbox.openCreate(s.companyId);
-    if (create) {
-      const body = create.body as { numberingSeries?: NumberingSeries[] };
-      const series = [...(body.numberingSeries ?? []).filter((x) => x.kind !== s.kind), { kind: s.kind, prefix: s.prefix, nextNumber: s.nextNumber, padding: s.padding, includeFiscalYear: s.includeFiscalYear, includeBranchCode: s.includeBranchCode, resetPolicy: s.resetPolicy }];
-      outbox.update(create.id, { body: { ...body, numberingSeries: series } });
-    }
+    // Every series is the server's (a business is created there with its own): always an update.
+    outbox.upsert({ entityType: 'numbering_series', id: s.id, collectionPath: '', itemPath: `${c(s.companyId)}/numbering-series/${s.id}`, body: s, label: `${s.prefix} series` });
   },
   saveComplianceSettings: ({ args }) => {
     const s = args[0] as ComplianceSettings;
@@ -233,7 +213,8 @@ export const MUTATIONS: Partial<Record<keyof AppState, Builder>> = {
     () => '/convert',
     (call) => {
       const lineIds = call.args[2] as string[] | undefined;
-      return { targetKind: call.args[1] as DocumentKind, ...(lineIds?.length ? { lineIds } : {}) };
+      const alsoFrom = call.args[3] as string[] | undefined;
+      return { targetKind: call.args[1] as DocumentKind, ...(lineIds?.length ? { lineIds } : {}), ...(alsoFrom?.length ? { alsoFrom } : {}) };
     },
     (call) => call.result as string,
   ),

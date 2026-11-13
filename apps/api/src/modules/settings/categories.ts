@@ -6,6 +6,7 @@ import { checkIfMatch, setEtag } from '../../http/etag';
 import { conflict, invalid, notFound, preconditionFailed, unprocessable, type Issue } from '../../http/errors';
 import type { DbOrTx } from '../../lib/audit';
 import { newId } from '../../lib/ids';
+import { taxHistories } from '../../lib/taxRates';
 import { ensureHsn } from '../catalog/hsn';
 import { audit, firstUse } from './shared';
 import { ledgerKeyUse } from '../books/usage';
@@ -68,7 +69,9 @@ async function assertNameFree(db: DbOrTx, companyId: string, name: string, excep
 export const categoryHandlers = defineHandlers({
   async listTaxCategories(ctx) {
     const rows = await ctx.db.select().from(T).where(eq(T.companyId, ctx.company.id)).orderBy(asc(T.rate), asc(T.name));
-    return { data: rows.map(taxCategoryToWire) };
+    // Each with its earlier rates, so the app charges a back-dated document or expense as the server does.
+    const histories = await taxHistories(ctx.db, rows.map((r) => r.id));
+    return { data: rows.map((r) => taxCategoryToWire(r, histories.get(r.id))) };
   },
 
   async createTaxCategory(ctx) {
@@ -104,7 +107,7 @@ export const categoryHandlers = defineHandlers({
       return updated;
     });
     setEtag(ctx.reply, row.version);
-    return taxCategoryToWire(row);
+    return taxCategoryToWire(row, (await taxHistories(ctx.db, [row.id])).get(row.id));
   },
 
   async removeTaxCategory(ctx) {

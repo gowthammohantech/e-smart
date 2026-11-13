@@ -10,7 +10,7 @@ import { describeGspError, hasErrorCode, parsePortalDateAny, parsePortalDateTime
 import { resolveGspGateway } from './provider-name';
 import { toGstinRecord } from './taxpayer';
 import { GspRequestError, type GspRequest, type GspTransport } from './transport';
-import { sandboxDocNo, WhitebooksGateway } from './whitebooks';
+import { resplitTax, sandboxDocNo, WhitebooksGateway } from './whitebooks';
 
 const NOW = '2026-09-02T10:00:00.000Z';
 
@@ -360,6 +360,7 @@ describe('Whitebooks', () => {
   const refusedWith = (code: string, message: string, extra: object = {}) =>
     ({ status_cd: '0', status_desc: JSON.stringify([{ errorCode: code, errorMessage: message }]), ...extra }) as GspEnvelope;
   const at = (iso: string) => () => new Date(iso).getTime();
+  const sandboxSeller = { Gstin: '29AAGCB1286Q000', LegalName: 'Sandbox Seller', AddrBno: '1', AddrSt: 'MG Road', AddrLoc: 'Bengaluru', StateCode: 29, AddrPncd: 560001 };
 
   it('authenticates the taxpayer, then files under the token', async () => {
     const t = fakeTransport({
@@ -383,6 +384,7 @@ describe('Whitebooks', () => {
     const t = fakeTransport({
       '/einvoice/authenticate': () => auth as GspEnvelope,
       '/einvoice/type/GENERATE/version/V1_03': () => ok({ Irn: 'WB-IRN' }),
+      '/einvoice/type/GSTNDETAILS/version/V1_03': () => ok(sandboxSeller),
     });
     const gateway = new WhitebooksGateway(whitebooksConfig(), t.transport, at('2026-09-02T10:00:00Z'));
     await gateway.submitInvoice(creds, { payload, existingIrns: [], now: NOW });
@@ -390,6 +392,20 @@ describe('Whitebooks', () => {
     expect(t.calls.filter((c) => c.path === '/einvoice/authenticate')).toHaveLength(1);
     await gateway.submitInvoice({ ...creds, gstin: '29AAGCB1286Q001', username: 'other' }, { payload, existingIrns: [], now: NOW });
     expect(t.calls.filter((c) => c.path === '/einvoice/authenticate')).toHaveLength(2);
+  });
+
+  it('files a business with its own GSTIN as the sandbox taxpayer, seller block and all', async () => {
+    const t = fakeTransport({
+      '/einvoice/authenticate': () => auth as GspEnvelope,
+      '/einvoice/type/GSTNDETAILS/version/V1_03': () => ok(sandboxSeller),
+      '/einvoice/type/GENERATE/version/V1_03': () => ok({ Irn: 'WB-IRN' }),
+    });
+    const own = { ...creds, gstin: '33CGQPM1770F1ZB' };
+    const own2 = { ...payload, SellerDtls: { ...payload.SellerDtls, Gstin: '33CGQPM1770F1ZB', Stcd: '33' } };
+    await new WhitebooksGateway(whitebooksConfig(), t.transport, at('2026-09-02T10:00:00Z')).submitInvoice(own, { payload: own2, existingIrns: [], now: NOW });
+    expect(t.calls.every((c) => c.headers?.gstin === undefined || c.headers.gstin === '29AAGCB1286Q000')).toBe(true);
+    const sent = t.calls.find((c) => c.path.endsWith('GENERATE/version/V1_03'))!.body as { SellerDtls: { Gstin: string; Stcd: string } };
+    expect(sent.SellerDtls).toMatchObject({ Gstin: '29AAGCB1286Q000', Stcd: '29' });
   });
 
   it('turns a refusal into the portal’s own codes', async () => {
@@ -526,6 +542,19 @@ describe('Whitebooks', () => {
 
     const missing = fakeTransport({ '/public/search': () => ({ error: { errorCode: 'FO8000' } }) as unknown as GspEnvelope });
     expect(await new WhitebooksGateway(whitebooksConfig(), missing.transport).lookupTaxpayer('27AAGCB1286Q2Z3')).toBeNull();
+  });
+});
+
+describe('sandbox buyer tax split', () => {
+  it('turns IGST into CGST + SGST when the test buyer is in the seller’s state', () => {
+    expect(resplitTax({ fromStateCode: '29', toStateCode: '29', cgstValue: 0, sgstValue: 0, igstValue: 90000 })).toEqual({ cgstValue: 45000, sgstValue: 45000, igstValue: 0 });
+  });
+  it('keeps the total when the halves do not divide evenly', () => {
+    const t = resplitTax({ fromStateCode: '29', toStateCode: '29', cgstValue: 0, sgstValue: 0, igstValue: 0.05 });
+    expect(t.cgstValue + t.sgstValue).toBeCloseTo(0.05, 2);
+  });
+  it('turns CGST + SGST into IGST when the test buyer is in another state', () => {
+    expect(resplitTax({ fromStateCode: '29', toStateCode: '33', cgstValue: 450, sgstValue: 450, igstValue: 0 })).toEqual({ cgstValue: 0, sgstValue: 0, igstValue: 900 });
   });
 });
 

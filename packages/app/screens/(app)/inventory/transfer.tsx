@@ -14,7 +14,7 @@ import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { useServerSave } from '../../../components/useServerSave';
 import { useAppStore } from '../../../store/appStore';
-import { useBranches, useDefaultBranchId } from '../../../store/selectors';
+import { useBranches, useCanOpen, useDefaultBranchId } from '../../../store/selectors';
 import { useServerStockLevels, useTrackedItems } from '../../../remote/queries';
 import { unitShortName } from '@esmart/core/data/masters';
 import { formatQty } from '@esmart/core/lib/format';
@@ -40,6 +40,8 @@ function StockTransferForm() {
   // Every tracked item, from the server.
   const { items } = useTrackedItems();
   const branches = useBranches();
+  // Adding a branch is offered only while the branches page is open (the owner may switch it off).
+  const canAddBranch = useCanOpen()('/settings/branches');
   // From the branch picked in the switcher, to the first other one.
   const defaultBranchId = useDefaultBranchId();
   const transferStock = useAppStore((s) => s.transferStock);
@@ -77,8 +79,8 @@ function StockTransferForm() {
               icon="warehouse"
           title={tr('inventory:transfer.oneLocation')}
           message={tr('inventory:transfer.oneLocationBody')}
-          actionLabel={tr('inventory:transfer.addBranch')}
-          onAction={() => router.push('/(app)/settings/branches')}
+          actionLabel={canAddBranch ? tr('inventory:transfer.addBranch') : undefined}
+          onAction={canAddBranch ? () => router.push('/(app)/settings/branches') : undefined}
         />
       </View>
     );

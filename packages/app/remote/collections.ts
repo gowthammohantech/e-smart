@@ -64,7 +64,4 @@ export const SETUP_ENTITY_TYPES = [
 ];
 export const RECENT_DAYS = 30;
 
-/** Collections every new company starts with; the server creates its own copies. */
-export const COMPANY_DEFAULTS: CollectionKey[] = ['branches', 'numberingSeries', 'taxCategories', 'expenseCategories', 'paymentAccounts', 'complianceSettings'];
-
 export const companyPath = (companyId: string) => `/companies/${encodeURIComponent(companyId)}`;

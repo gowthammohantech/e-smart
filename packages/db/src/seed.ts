@@ -28,6 +28,7 @@ import { ACCOUNT_ID, CURRENT_USER_ID, buildDemoData, type DemoData } from './dem
 import { createDb, createPool, type Db } from './index';
 import { HSN_STARTER } from './reference';
 import * as s from './schema';
+import { runDirectly } from './runDirectly';
 
 export { buildDemoData, type DemoData } from './demo';
 
@@ -935,7 +936,7 @@ export async function seedDemoFromEnv(db: Db, { reset = false, env = process.env
   return `Demo account loaded: ${data.companies.length} companies, ${data.parties.length} parties, ${data.items.length} items, ${data.documents.length} documents, ${data.payments.length} payments, ${data.expenses.length} expenses. Sign in as ${account.email}.`;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (runDirectly(import.meta.url)) {
   const url = process.env.MIGRATION_DATABASE_URL || process.env.DATABASE_URL || 'postgres://esmart:esmart@localhost:5432/esmart';
   const pool = createPool(url, 1);
   try {

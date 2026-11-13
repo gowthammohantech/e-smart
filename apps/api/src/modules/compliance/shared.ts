@@ -12,6 +12,7 @@ import { decrypt } from '../../lib/crypto';
 import { newId } from '../../lib/ids';
 import { compact, iso, money } from '../../lib/wire';
 import type { PortalCredentials } from '../../providers/compliance';
+import { parseGspGateway } from '../../providers/gsp/router';
 import { assertKindAllowed, type DocRow } from '../documents/engine';
 import { documentsToWire, toCoreDocument } from '../documents/wire';
 
@@ -151,6 +152,8 @@ export async function portalCredentials(db: DbOrTx, config: Config, company: Com
   if (!row) return null;
   return {
     gspProvider: row.gspProvider ?? undefined,
+    // The company's own gateway, when an operator chose one; otherwise the deployment's default answers.
+    gspGateway: parseGspGateway(company.gspProvider),
     gstin: company.taxIdentifier ?? '',
     username: (portal === 'einvoice' ? settings?.irp : settings?.ewb) ?? '',
     password: decrypt(row.passwordEncrypted, config.CREDENTIALS_KEY),

@@ -1,4 +1,5 @@
 import { fileURLToPath } from 'node:url';
+import { runDirectly } from './runDirectly';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { createDb, createPool } from './index';
 import { seedReference } from './reference';
@@ -24,7 +25,7 @@ export async function runMigrations(url: string, env: Record<string, string | un
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (runDirectly(import.meta.url)) {
   // The owner role: in a deployment DATABASE_URL is the restricted app role, which can't change the schema.
   const url = process.env.MIGRATION_DATABASE_URL || process.env.DATABASE_URL || 'postgres://esmart:esmart@localhost:5432/esmart';
   const demo = await runMigrations(url);

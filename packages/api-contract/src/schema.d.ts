@@ -4518,6 +4518,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/companies/{companyId}/gsp-provider": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Choose the GST gateway (GSP) this company files e-invoices and e-way bills through, or clear the choice so it follows the deployment's default. Only a gateway the deployment is set up for may be chosen. The company's cached portal session is dropped, so its next filing signs in afresh through the new gateway. */
+        put: operations["setCompanyGspProvider"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/users": {
         parameters: {
             query?: never;
@@ -4983,9 +5002,18 @@ export interface components {
             /** @enum {string} */
             type: "GST" | "CGST" | "SGST" | "IGST" | "VAT" | "CESS" | "NONE";
             hsnCode?: string;
-            /** Format: date */
+            /**
+             * Format: date
+             * @description The day `rate` applies from. A document or expense dated before it is charged the rate in force then (history).
+             */
             effectiveFrom: string;
             description?: string;
+            /** @description The rates it had before effectiveFrom, oldest first, each from its own day */
+            readonly history?: {
+                /** Format: date */
+                effectiveFrom: string;
+                rate: number;
+            }[];
         };
         ExpenseCategory: components["schemas"]["Versioned"] & {
             readonly id?: string;
@@ -5962,6 +5990,8 @@ export interface components {
             reverseCharge?: boolean;
             attachmentIds?: string[];
             sourceDocumentId?: string;
+            /** @description Made from several documents at once (sales orders into one challan, and so on): the others, after sourceDocumentId */
+            readonly mergedSourceIds?: string[];
             /**
              * @description Why a credit or debit note was raised
              * @enum {string}
@@ -5972,6 +6002,11 @@ export interface components {
              * @enum {string}
              */
             noteGst?: "withGst" | "noGst";
+            /**
+             * @description Only with an SEZ unit or developer (the party's GST registration is sez; 422 otherwise). withTax charges IGST (e-invoice SEZWP); withoutTax is zero-rated under LUT or bond (SEZWOP), no tax on any line. Unset takes withoutTax on a sale while the business's LUT is in force, else withTax. A return or note made from a document takes its source's. The server returns what it applied.
+             * @enum {string}
+             */
+            sezTax?: "withTax" | "withoutTax";
             /** @description A direct note with GST: the number of the original invoice or bill it adjusts */
             originalNumber?: string;
             /**
@@ -6129,6 +6164,8 @@ export interface components {
             allowedConversions?: components["schemas"]["DocumentKind"][];
             /** @description Direct notes applied to this document, or (on a note) the documents it is applied to */
             creditApplications?: components["schemas"]["CreditApplication"][];
+            /** @description The party's other documents that can go into the same conversion with this one (convert's alsoFrom), oldest first */
+            mergeableWith?: components["schemas"]["DocumentSummary"][];
         };
         /** @enum {string} */
         EInvoiceStatus: "notApplicable" | "pending" | "generated" | "cancelled" | "failed";
@@ -6772,8 +6809,34 @@ export interface components {
             subscriptionStatus: "active" | "trialing" | "pastDue" | "cancelled" | "none";
             /** Format: date-time */
             onboardingCompletedAt?: string | null;
+            /** @description The gateway an operator chose for this company; null follows the deployment default */
+            gspProvider?: components["schemas"]["GspGateway"] | null;
             /** Format: date-time */
             createdAt: string;
+        };
+        /** @enum {string} */
+        GspGateway: "adaequare" | "whitebooks";
+        /** @description Which GST gateway (GSP) a company files through, and which ones this deployment can offer. */
+        PlatformGsp: {
+            /** @description The choice an operator made for this company; null means none */
+            override: components["schemas"]["GspGateway"] | null;
+            default: components["schemas"]["GspGateway"];
+            effective: components["schemas"]["GspGateway"];
+            /** @description True when the deployment files through the built-in simulator, so no gateway is called whatever is chosen */
+            simulated: boolean;
+            options: {
+                gateway: components["schemas"]["GspGateway"];
+                /** @description Whether the deployment can file through it */
+                available: boolean;
+                sandboxOnly: boolean;
+                /** @description Why it cannot be chosen */
+                reason?: string | null;
+            }[];
+        };
+        PlatformGspChange: {
+            /** @description The gateway to use; null clears the choice so the company follows the deployment default */
+            provider: components["schemas"]["GspGateway"] | null;
+            reason: string;
         };
         PlatformUser: {
             id: string;
@@ -6799,6 +6862,7 @@ export interface components {
         };
         PlatformCompanyDetail: {
             company: components["schemas"]["PlatformCompany"];
+            gsp: components["schemas"]["PlatformGsp"];
             accountName: string;
             accountSuspended?: boolean;
             subscription: components["schemas"]["Subscription"] | null;
@@ -11043,6 +11107,8 @@ export interface operations {
                     targetKind: components["schemas"]["DocumentKind"];
                     /** @description Convert only these lines (partial fulfilment). All lines when omitted. */
                     lineIds?: string[];
+                    /** @description Other documents to merge into the same draft, where the conversion allows it (see mergeableWith): of the same kind, party, branch, currency and place of supply, each finalised and not yet carried forward. Their lines follow this one's, oldest first. */
+                    alsoFrom?: string[];
                 };
             };
         };
@@ -16333,6 +16399,39 @@ export interface operations {
             };
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    setCompanyGspProvider: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlatformGspChange"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        company: components["schemas"]["PlatformCompany"];
+                        gsp: components["schemas"]["PlatformGsp"];
+                    };
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             422: components["responses"]["Unprocessable"];
         };
     };

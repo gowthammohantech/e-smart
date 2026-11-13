@@ -8,6 +8,8 @@ import { useRemoteMeta } from '../meta';
 import * as outbox from '../outbox';
 import { saveOnline } from '../save';
 import { drainLeftovers } from '../send';
+import { createBusiness } from '../companies';
+import { refreshNow } from '../refresh';
 
 jest.mock('@react-native-async-storage/async-storage', () =>
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -82,35 +84,46 @@ describe('sending a save straight to the server', () => {
     expect(queue()).toHaveLength(0);
   });
 
-  it("points what follows a new company at the server's defaults", async () => {
+  it('creates a business on the server first, then opens it here with its setup and plan', async () => {
     const lists: Record<string, unknown[]> = {
-      '/companies/{companyId}/tax-categories': [{ id: 'tax_SERVER', companyId: 'cmp_SERVER', rate: 18, version: 1 }],
+      '/companies/{companyId}/branches': [{ id: 'brn_SERVER', companyId: 'cmp_FREE', name: 'Mumbai', code: 'HO', isPrimary: true, version: 1 }],
+      '/companies/{companyId}/tax-categories': [{ id: 'tax_SERVER', companyId: 'cmp_FREE', rate: 18, version: 1 }],
     };
-    GET.mockImplementation(async (path: string) => ({ data: { data: lists[path] ?? [], nextCursor: null } }));
-    accept((path) => (path === '/companies' ? { id: 'cmp_SERVER' } : {}));
-    let localTax = '';
-    const res = await saveOnline(() => {
-      const companyId = actions().createCompany({ ...actions().companies[0], name: 'New Co' } as never);
-      localTax = actions().taxCategories.find((x) => x.companyId === companyId && x.rate === 18)!.id;
-      actions().saveItem({ ...actions().items[0], id: 'itm_new', companyId, taxCategoryId: localTax } as never);
-      return companyId;
+    GET.mockImplementation(async (path: string) => {
+      // A Free plan keeps some lists closed: the business still opens.
+      if (path === '/companies/{companyId}/expense-categories') throw new ApiError(403, { status: 403, title: 'Forbidden', detail: 'Needs pro' });
+      return { data: { data: lists[path] ?? [], nextCursor: null } };
     });
-    expect(res.outcome).toBe('saved');
-    const item = POST.mock.calls.find((c) => String(c[0]).endsWith('/items'))!;
-    expect(item[0]).toContain('cmp_SERVER');
-    expect((item[1] as Init).body).toMatchObject({ taxCategoryId: 'tax_SERVER' });
-    expect(actions().taxCategories.some((x) => x.id === localTax)).toBe(false);
+    accept((path) => (path === '/companies' ? { id: 'cmp_FREE', plan: 'free' } : {}));
+    const { name, address, country, baseCurrency, fiscalYearStartMonth, taxRegistration } = actions().companies[0];
+    const id = await createBusiness({ name: 'Free Co', address, country, baseCurrency, fiscalYearStartMonth, taxRegistration } as never, [{ kind: 'invoice', prefix: 'FC', nextNumber: 7 } as never], 'key-1');
+    void name;
+    expect(id).toBe('cmp_FREE');
+    const [path, init] = POST.mock.calls[0] as [string, Init];
+    expect(path).toBe('/companies');
+    expect(init.body).toMatchObject({ name: 'Free Co', seedDefaults: true, numberingSeries: [{ kind: 'invoice', prefix: 'FC', nextNumber: 7 }] });
+    expect(init.headers).toMatchObject({ 'Idempotency-Key': 'key-1' });
+    // Opened as the server made it: on the Free plan, with the server's branch. Nothing waits to be sent.
+    expect(actions().activeCompanyId).toBe('cmp_FREE');
+    expect(actions().activeBranchId).toBe('brn_SERVER');
+    expect(actions().companies.find((c) => c.id === 'cmp_FREE')?.plan).toBe('free');
+    expect(queue()).toHaveLength(0);
   });
 
-  it('creates a company whose plan keeps a defaults list closed', async () => {
-    GET.mockImplementation(async (path: string) => {
-      if (path === '/companies/{companyId}/expense-categories') throw new ApiError(403, { status: 403, title: 'Forbidden', detail: 'Needs pro' });
-      return { data: { data: [], nextCursor: null } };
-    });
-    accept(() => ({ id: 'cmp_FREE' }));
-    const res = await saveOnline(() => actions().createCompany({ ...actions().companies[0], name: 'Free Co' } as never));
-    expect(res).toMatchObject({ outcome: 'saved', id: 'cmp_FREE' });
-    expect(queue()).toHaveLength(0);
+  it('a refresh answered with an older list keeps a business created while it was on its way', async () => {
+    let answer: (v: unknown) => void = () => {};
+    GET.mockImplementation((path: string) =>
+      path === '/me' ? new Promise((resolve) => (answer = resolve)) : Promise.resolve({ data: { data: [], nextCursor: null } }),
+    );
+    const others = actions().companies.map((c) => ({ id: c.id, name: c.name }));
+    const run = refreshNow();
+    await Promise.resolve();
+    // Made while /me was out: the answer doesn't list it yet.
+    useAppStore.setState({ companies: [...actions().companies, { ...actions().companies[0], id: 'cmp_NEW', name: 'New Co' }], activeCompanyId: 'cmp_NEW' });
+    answer({ data: { companies: others } });
+    await run.catch(() => {});
+    expect(actions().companies.some((c) => c.id === 'cmp_NEW')).toBe(true);
+    expect(actions().activeCompanyId).toBe('cmp_NEW');
   });
 
   it('stops at the first refusal: what was built on it is not sent', async () => {

@@ -1,7 +1,7 @@
 import type { SyncQueueEntry } from '@esmart/core/types';
 import { useAppStore } from '../store/appStore';
-import { COLLECTIONS, COMPANY_DEFAULTS, type CollectionKey } from './collections';
-import { knownToServer, useRemoteMeta } from './meta';
+import { COLLECTIONS, type CollectionKey } from './collections';
+import { useRemoteMeta } from './meta';
 
 type Row = Record<string, unknown>;
 
@@ -119,20 +119,6 @@ export function applyChanges(changes: Change[]) {
 export function replaceForCompany(collection: CollectionKey, companyId: string, rows: Row[]) {
   const list = useAppStore.getState()[collection] as Row[];
   useAppStore.setState({ [collection]: [...list.filter((r) => r.companyId !== companyId), ...rows] } as never);
-}
-
-/**
- * A company created offline got local copies of its defaults (branch,
- * series, tax categories…). The server made its own when the create synced,
- * and the next pull brings them, so drop the local ones it never saw.
- */
-export function purgeLocalDefaults(companyId: string) {
-  const s = useAppStore.getState();
-  const next: Row = {};
-  for (const collection of COMPANY_DEFAULTS) {
-    next[collection] = (s[collection] as Row[]).filter((r) => r.companyId !== companyId || knownToServer(String(r.id ?? r.companyId)));
-  }
-  useAppStore.setState(next as never);
 }
 
 /**

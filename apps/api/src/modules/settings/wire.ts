@@ -9,7 +9,8 @@ type RateRow = typeof schema.exchangeRates.$inferSelect;
 type TransporterRow = typeof schema.transporters.$inferSelect;
 type SeriesRow = typeof schema.numberingSeries.$inferSelect;
 
-export function taxCategoryToWire(row: TaxRow): Schema<'TaxCategory'> {
+/** `history` is the rates it had before its current one (`taxHistories`), so a form can charge as of any date. */
+export function taxCategoryToWire(row: TaxRow, history?: { effectiveFrom: string; rate: number }[]): Schema<'TaxCategory'> {
   return compact({
     id: row.id,
     companyId: row.companyId,
@@ -19,6 +20,7 @@ export function taxCategoryToWire(row: TaxRow): Schema<'TaxCategory'> {
     hsnCode: row.hsnCode,
     effectiveFrom: row.effectiveFrom,
     description: row.description,
+    history: history?.length ? history : undefined,
     ...versioned(row),
   });
 }

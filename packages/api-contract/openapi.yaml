@@ -2497,6 +2497,13 @@ paths:
               properties:
                 targetKind: { $ref: '#/components/schemas/DocumentKind' }
                 lineIds: { type: array, items: { type: string }, description: Convert only these lines (partial fulfilment). All lines when omitted. }
+                alsoFrom:
+                  type: array
+                  items: { type: string }
+                  description: >-
+                    Other documents to merge into the same draft, where the conversion allows it (see
+                    mergeableWith): of the same kind, party, branch, currency and place of supply, each
+                    finalised and not yet carried forward. Their lines follow this one's, oldest first.
       responses:
         '201':
           description: Draft created, with `sourceDocumentId` set
@@ -6476,6 +6483,33 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '422': { $ref: '#/components/responses/Unprocessable' }
+  /admin/companies/{companyId}/gsp-provider:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    put:
+      tags: [Platform]
+      operationId: setCompanyGspProvider
+      summary: Choose the GST gateway (GSP) this company files e-invoices and e-way bills through, or clear the choice so it follows the deployment's default. Only a gateway the deployment is set up for may be chosen. The company's cached portal session is dropped, so its next filing signs in afresh through the new gateway.
+      x-platform-roles: [superadmin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PlatformGspChange' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [company, gsp]
+                properties:
+                  company: { $ref: '#/components/schemas/PlatformCompany' }
+                  gsp: { $ref: '#/components/schemas/PlatformGsp' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
   /admin/users:
     get:
       tags: [Platform]
@@ -6975,8 +7009,18 @@ components:
             rate: { type: number, minimum: 0, maximum: 999.999, description: 'Combined percentage, split at calculation time. Up to 100, or 999.999 for CESS' }
             type: { type: string, enum: [GST, CGST, SGST, IGST, VAT, CESS, NONE] }
             hsnCode: { type: string }
-            effectiveFrom: { type: string, format: date }
+            effectiveFrom: { type: string, format: date, description: 'The day `rate` applies from. A document or expense dated before it is charged the rate in force then (history).' }
             description: { type: string }
+            history:
+              type: array
+              readOnly: true
+              description: The rates it had before effectiveFrom, oldest first, each from its own day
+              items:
+                type: object
+                required: [effectiveFrom, rate]
+                properties:
+                  effectiveFrom: { type: string, format: date }
+                  rate: { type: number }
     ExpenseCategory:
       allOf:
         - $ref: '#/components/schemas/Versioned'
@@ -7896,6 +7940,7 @@ components:
         reverseCharge: { type: boolean, description: The whole document is under reverse charge; the buyer pays the GST }
         attachmentIds: { type: array, items: { type: string } }
         sourceDocumentId: { type: string }
+        mergedSourceIds: { type: array, items: { type: string }, readOnly: true, description: 'Made from several documents at once (sales orders into one challan, and so on): the others, after sourceDocumentId' }
         noteReason: { type: string, enum: [discount, priceChange, taxCorrection, deficiency, other], description: Why a credit or debit note was raised }
         noteGst:
           type: string
@@ -7907,6 +7952,15 @@ components:
             the original invoice's financial year (422 NOTE_TIME_BARRED). noGst is a financial or
             commercial note: no tax on any line, posted to discount allowed (or received), and left
             out of GSTR-1 and GSTR-3B.
+        sezTax:
+          type: string
+          enum: [withTax, withoutTax]
+          description: >-
+            Only with an SEZ unit or developer (the party's GST registration is sez; 422 otherwise).
+            withTax charges IGST (e-invoice SEZWP); withoutTax is zero-rated under LUT or bond (SEZWOP),
+            no tax on any line. Unset takes withoutTax on a sale while the business's LUT is in force,
+            else withTax. A return or note made from a document takes its source's. The server returns
+            what it applied.
         originalNumber: { type: string, maxLength: 40, description: 'A direct note with GST: the number of the original invoice or bill it adjusts' }
         originalDate: { type: string, format: date, description: 'A direct note with GST: the date of the original invoice or bill' }
         costCentreId: { type: string, description: The project or department it belongs to }
@@ -8031,6 +8085,7 @@ components:
             allowedTransitions: { type: array, items: { $ref: '#/components/schemas/DocStatus' } }
             allowedConversions: { type: array, items: { $ref: '#/components/schemas/DocumentKind' } }
             creditApplications: { type: array, items: { $ref: '#/components/schemas/CreditApplication' }, description: 'Direct notes applied to this document, or (on a note) the documents it is applied to' }
+            mergeableWith: { type: array, items: { $ref: '#/components/schemas/DocumentSummary' }, description: "The party's other documents that can go into the same conversion with this one (convert's alsoFrom), oldest first" }
 
     # ---------------------------------------------------------------- compliance
     EInvoiceStatus: { type: string, enum: [notApplicable, pending, generated, cancelled, failed] }
@@ -8629,7 +8684,36 @@ components:
         plan: { $ref: '#/components/schemas/PlanTier' }
         subscriptionStatus: { type: string, enum: [active, trialing, pastDue, cancelled, none] }
         onboardingCompletedAt: { type: [string, 'null'], format: date-time }
+        gspProvider: { oneOf: [{ $ref: '#/components/schemas/GspGateway' }, { type: 'null' }], description: 'The gateway an operator chose for this company; null follows the deployment default' }
         createdAt: { type: string, format: date-time }
+    GspGateway:
+      type: string
+      enum: [adaequare, whitebooks]
+    PlatformGsp:
+      type: object
+      description: Which GST gateway (GSP) a company files through, and which ones this deployment can offer.
+      required: [override, default, effective, simulated, options]
+      properties:
+        override: { oneOf: [{ $ref: '#/components/schemas/GspGateway' }, { type: 'null' }], description: 'The choice an operator made for this company; null means none' }
+        default: { $ref: '#/components/schemas/GspGateway' }
+        effective: { $ref: '#/components/schemas/GspGateway' }
+        simulated: { type: boolean, description: 'True when the deployment files through the built-in simulator, so no gateway is called whatever is chosen' }
+        options:
+          type: array
+          items:
+            type: object
+            required: [gateway, available, sandboxOnly]
+            properties:
+              gateway: { $ref: '#/components/schemas/GspGateway' }
+              available: { type: boolean, description: Whether the deployment can file through it }
+              sandboxOnly: { type: boolean }
+              reason: { type: [string, 'null'], description: Why it cannot be chosen }
+    PlatformGspChange:
+      type: object
+      required: [provider, reason]
+      properties:
+        provider: { oneOf: [{ $ref: '#/components/schemas/GspGateway' }, { type: 'null' }], description: 'The gateway to use; null clears the choice so the company follows the deployment default' }
+        reason: { type: string, minLength: 3, maxLength: 500 }
     PlatformUser:
       type: object
       required: [id, accountId, name, email, role, status, accountSuspended, createdAt]
@@ -8655,9 +8739,10 @@ components:
         users: { type: array, items: { $ref: '#/components/schemas/PlatformUser' } }
     PlatformCompanyDetail:
       type: object
-      required: [company, accountName, subscription, planHistory, documentCounts, userCount]
+      required: [company, accountName, subscription, planHistory, documentCounts, userCount, gsp]
       properties:
         company: { $ref: '#/components/schemas/PlatformCompany' }
+        gsp: { $ref: '#/components/schemas/PlatformGsp' }
         accountName: { type: string }
         accountSuspended: { type: boolean }
         subscription: { oneOf: [{ $ref: '#/components/schemas/Subscription' }, { type: 'null' }] }

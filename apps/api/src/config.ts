@@ -165,6 +165,8 @@ const Env = z.object({
   TAXATION_GSTIN_ALLOW_SANDBOX: bool.default(false),
   /** Sandbox only: file every e-invoice against this buyer, looked up from NIC's register. Whitebooks only; needs TAXATION_GSTIN_ALLOW_SANDBOX=true. */
   TAXATION_SANDBOX_BUYER_GSTIN: z.string().trim().toUpperCase().default(''),
+  /** Sandbox only: file every business as this taxpayer. Whitebooks only; blank means 29AAGCB1286Q000, the one GSTIN its sandbox accepts. */
+  TAXATION_SANDBOX_GSTIN: z.string().trim().toUpperCase().default(''),
   /** Adaequare's only pair, and Whitebooks' GST taxpayer lookup pair. */
   TAXATION_GSP_APP_ID: z.string().trim().default(''),
   TAXATION_GSP_APP_SECRET: z.string().trim().default(''),

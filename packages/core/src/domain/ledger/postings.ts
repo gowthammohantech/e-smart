@@ -6,7 +6,7 @@ import { CREDIT_KINDS } from '../documentStates';
 import { expenseCost, claimableTax, expenseTaxComponents } from '../expenseTax';
 import { ItcBuckets, TaxSplit, itcOfDocument } from '../itc';
 import { calculateLine, linesWithCharges, taxedCharges } from '../lineCalc';
-import { homeStateCode } from '../taxEngine';
+import { homeStateCode, rateOf } from '../taxEngine';
 import { addDaysISO } from '../../lib/date';
 import type { PerpetualStock } from '../stockLedger';
 import { TAX_KINDS, TaxKind } from './accounts';
@@ -285,7 +285,8 @@ export function postPayment(p: Payment, ctx: { homeState?: string; documentDate?
 export function postExpense(e: Expense, ctx: { company?: Company; branches: Branch[]; taxCategories: TaxCategory[] }): Posting[] {
   const rate = e.exchangeRate || 1;
   const b = (minor: number) => minor * rate;
-  const taxRate = ctx.taxCategories.find((c) => c.id === e.taxCategoryId)?.rate ?? 0;
+  // The rate in force on the expense's date, not one the category took on later.
+  const taxRate = rateOf(ctx.taxCategories, e.taxCategoryId, e.date);
   const components = expenseTaxComponents(e, taxRate, ctx.company, ctx.branches.find((x) => x.id === e.branchId));
   const claim = claimableTax(e).minor > 0;
   const byKind = (k: TaxKind) => components.filter((c) => TYPE_TO_KIND[c.type] === k).reduce((a, c) => a + c.amount.minor, 0);

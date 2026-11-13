@@ -111,6 +111,67 @@ export type Gstr1Summary = Record<Gstr1Table, Gstr1Row[]> & {
 
 export const GSTR1_TABLES: Gstr1Table[] = ['b2b', 'b2cl', 'b2cs', 'exp', 'cdnr', 'cdnur'];
 
+/** GSTR-1 figures in minor units of the base currency: a table's, several tables', or the liability. */
+export type Gstr1Amounts = { taxable: number; igst: number; cgst: number; sgst: number; cess: number };
+
+/** The outward supply tables the liability is made of, and the note tables taken from it. */
+export const GSTR1_SUPPLY_TABLES: Gstr1Table[] = ['b2b', 'b2cl', 'b2cs', 'exp'];
+export const GSTR1_NOTE_TABLES: Gstr1Table[] = ['cdnr', 'cdnur'];
+
+const NO_AMOUNTS: Gstr1Amounts = { taxable: 0, igst: 0, cgst: 0, sgst: 0, cess: 0 };
+
+/** a + sign × b, head by head. */
+export function addGstr1Amounts(a: Gstr1Amounts, b: Gstr1Amounts, sign: 1 | -1 = 1): Gstr1Amounts {
+  return { taxable: a.taxable + sign * b.taxable, igst: a.igst + sign * b.igst, cgst: a.cgst + sign * b.cgst, sgst: a.sgst + sign * b.sgst, cess: a.cess + sign * b.cess };
+}
+
+/**
+ * What GSTR-1 rows come to, net: a credit note takes away, a debit note (or an invoice) adds. A
+ * reverse-charge row counts in the value but not the tax, which the buyer pays.
+ */
+export function gstr1RowAmounts(rows: readonly Gstr1Row[]): Gstr1Amounts {
+  return rows.reduce((a, r) => {
+    const sign = r.noteType === 'C' ? -1 : 1;
+    const tax = r.reverseCharge ? 0 : 1;
+    return addGstr1Amounts(a, { taxable: r.taxableValue.minor, igst: tax * r.igst.minor, cgst: tax * r.cgst.minor, sgst: tax * r.sgst.minor, cess: tax * r.cess.minor }, sign);
+  }, NO_AMOUNTS);
+}
+
+/** What table 11 rows (advances received, or adjusted) come to. */
+export function gstr1AdvanceAmounts(rows: readonly AdvanceRow[]): Gstr1Amounts {
+  return rows.reduce((a, r) => addGstr1Amounts(a, r), NO_AMOUNTS);
+}
+
+/** The liability and each part of it: the four lines its formula reads. */
+export type Gstr1Liability = Gstr1Amounts & {
+  /** B2B + B2CL + B2CS + EXP, net of any notes reported inside them (B2CS carries its own). */
+  supplies: Gstr1Amounts;
+  /** 11A: tax on advances received in the period. */
+  advancesReceived: Gstr1Amounts;
+  /** 11B: advances of earlier periods adjusted against invoices (or refunded) in it. */
+  advancesAdjusted: Gstr1Amounts;
+  /** CDNR + CDNUR as credit: credit notes, less debit notes. */
+  creditNotes: Gstr1Amounts;
+};
+
+/**
+ * The tax a GSTR-1 period leaves the business liable for, as the books lay it out:
+ *
+ *   total liabilities = supplies (B2B + B2CL + B2CS + EXP) + advances received (11A)
+ *                       − advances adjusted (11B) − credit notes (CDNR + CDNUR, a debit note adding)
+ *
+ * Head by head, in the base currency's minor units. Nil-rated, exempt and non-GST supplies carry no
+ * tax, and HSN and documents issued restate what is already counted, so neither is in it.
+ */
+export function gstr1Liability(summary: Pick<Gstr1Summary, Gstr1Table | 'advances'>): Gstr1Liability {
+  const supplies = gstr1RowAmounts(GSTR1_SUPPLY_TABLES.flatMap((t) => summary[t] ?? []));
+  const creditNotes = addGstr1Amounts(NO_AMOUNTS, gstr1RowAmounts(GSTR1_NOTE_TABLES.flatMap((t) => summary[t] ?? [])), -1);
+  const advancesReceived = gstr1AdvanceAmounts(summary.advances?.received ?? []);
+  const advancesAdjusted = gstr1AdvanceAmounts(summary.advances?.adjusted ?? []);
+  const total = addGstr1Amounts(addGstr1Amounts(addGstr1Amounts(supplies, advancesReceived), advancesAdjusted, -1), creditNotes, -1);
+  return { ...total, supplies, advancesReceived, advancesAdjusted, creditNotes };
+}
+
 export const GSTR1_TABLE_LABELS: Record<Gstr1Table, string> = {
   b2b: 'B2B — registered buyers',
   b2cl: 'B2CL — large inter-state B2C',

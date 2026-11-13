@@ -344,6 +344,14 @@ describe('documents: stock and plans', () => {
     expect(overridden.body.document.status).toBe('issued');
   });
 
+  it('never refuses a sale for stock on a plan that keeps none (Free), which has no negative-stock setting', async () => {
+    const m = await moneySetup(t, 'free');
+    const rod = await m.item();
+    const sale = await t.post(`${m.c}/documents`, invoiceBody(m, { status: 'issued', lines: [line(m.gst(18), { itemId: rod, quantity: 3 })] }), { token: m.token });
+    expect(sale.status).toBe(201);
+    expect(sale.body.status).toBe('issued');
+  });
+
   it('refuses a sale that would take stock below zero, unless the company allows it', async () => {
     const m = await moneySetup(t);
     const rod = await m.item();

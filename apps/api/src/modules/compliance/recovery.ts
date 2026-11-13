@@ -5,7 +5,7 @@ import { E_INVOICE_CANCEL_REASONS } from '@esmart/core/domain/eInvoice';
 import type { Deps } from '../../context';
 import { ApiError } from '../../http/errors';
 import { notify } from '../../lib/notify';
-import { isUnanswered } from '../../providers/compliance';
+import { isUnanswered, isUnsupported } from '../../providers/compliance';
 import { actorFor } from '../webhooks/handlers';
 import { recordIrnCancelled } from './einvoice';
 import { generateEway } from './eway';
@@ -77,14 +77,15 @@ async function fail(deps: Deps, attempt: Attempt, now: Date, message: string): P
 async function recoverEwayBill(deps: Deps, attempt: Attempt, now: Date): Promise<Outcome> {
   const provider = deps.providers.compliance;
   const age = now.getTime() - attempt.startedAt.getTime();
-  if (!provider.findEwayBillByDocument) {
-    return age > GIVE_UP_MS ? fail(deps, attempt, now, 'The portal gave no answer. Check on the e-way bill portal whether the bill was raised.') : 'waiting';
-  }
+  // No lookup to ask (the gateway has none): wait, then leave it to a person to check on the portal.
+  const noLookup = () => (age > GIVE_UP_MS ? fail(deps, attempt, now, 'The portal gave no answer. Check on the e-way bill portal whether the bill was raised.') : ('waiting' as const));
+  if (!provider.findEwayBillByDocument) return noLookup();
   const { company, actor } = await context(deps, attempt);
   const request = attempt.request as { input: Parameters<typeof generateEway>[1]; docType: string; docNo: string; docDate: string; fromGstin: string };
   const creds = await portalCredentials(deps.db, deps.config, company, 'ewaybill');
   const answer = await provider.findEwayBillByDocument(creds, { docType: request.docType, docNo: request.docNo, docDate: request.docDate, fromGstin: request.fromGstin, now: now.toISOString() });
   if (!answer.ok) {
+    if (isUnsupported(answer)) return noLookup();
     if (isUnanswered(answer)) return 'waiting';
     throw new Error(answer.errors[0]?.message ?? 'The portal refused the lookup');
   }
@@ -109,14 +110,14 @@ async function recoverEwayBill(deps: Deps, attempt: Attempt, now: Date): Promise
 async function recoverIrnCancel(deps: Deps, attempt: Attempt, now: Date): Promise<Outcome> {
   const provider = deps.providers.compliance;
   const age = now.getTime() - attempt.startedAt.getTime();
-  if (!provider.getIrnStatus) {
-    return age > GIVE_UP_MS ? fail(deps, attempt, now, 'The portal gave no answer. Check on the e-invoice portal whether the IRN was cancelled.') : 'waiting';
-  }
+  const noLookup = () => (age > GIVE_UP_MS ? fail(deps, attempt, now, 'The portal gave no answer. Check on the e-invoice portal whether the IRN was cancelled.') : ('waiting' as const));
+  if (!provider.getIrnStatus) return noLookup();
   const { company, actor } = await context(deps, attempt);
   const request = attempt.request as { irn: string; reasonCode: CancelReasonCode; remark: string | null };
   const creds = await portalCredentials(deps.db, deps.config, company, 'einvoice');
   const answer = await provider.getIrnStatus(creds, { irn: request.irn, now: now.toISOString() });
   if (!answer.ok) {
+    if (isUnsupported(answer)) return noLookup();
     if (isUnanswered(answer)) return 'waiting';
     throw new Error(answer.errors[0]?.message ?? 'The portal refused the lookup');
   }

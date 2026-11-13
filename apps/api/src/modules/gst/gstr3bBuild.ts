@@ -6,6 +6,8 @@ import { businessDate } from '@esmart/core/lib/date';
 import { schema } from '@esmart/db';
 import type { CompanyRow } from '../../context';
 import type { DbOrTx } from '../../lib/audit';
+import { taxHistories } from '../../lib/taxRates';
+import { taxRateOn } from '@esmart/core/domain/taxEngine';
 import { companyCore, partyCore } from '../documents/engine';
 import { documentsToWire, toCoreDocument } from '../documents/wire';
 import { toCoreExpense } from '../expenses/wire';
@@ -66,13 +68,19 @@ export async function build3b(db: DbOrTx, company: CompanyRow, gstin: string, pe
   const E = schema.expenses;
   const expenseRows = branchIds.length ? await db.select().from(E).where(and(eq(E.companyId, company.id), inArray(E.branchId, branchIds), sqlBetween(E.date, from, to))) : [];
   const T = schema.taxCategories;
-  const rates = new Map((await db.select({ id: T.id, rate: T.rate }).from(T).where(eq(T.companyId, company.id))).map((t) => [t.id, Number(t.rate)]));
+  const categories = await db.select({ id: T.id, rate: T.rate, effectiveFrom: T.effectiveFrom }).from(T).where(eq(T.companyId, company.id));
+  const histories = await taxHistories(db, categories.map((c) => c.id));
+  // Each expense split at the rate in force on its own date.
+  const rateOn = (id: string, date: string) => {
+    const c = categories.find((x) => x.id === id);
+    return c ? taxRateOn({ rate: Number(c.rate), effectiveFrom: c.effectiveFrom, history: histories.get(c.id) }, date) : 0;
+  };
   const core = companyCore(company);
   const expenses = expenseRows.map(toCoreExpense);
   const expenseSplit = new Map<string, TaxSplit>();
   for (const e of expenses) {
     if (!e.taxCategoryId || !e.taxAmount.minor) continue;
-    const parts = expenseTaxComponents(e, rates.get(e.taxCategoryId) ?? 0, core);
+    const parts = expenseTaxComponents(e, rateOn(e.taxCategoryId, e.date), core);
     const rate = e.exchangeRate || 1;
     const split = { igst: 0, cgst: 0, sgst: 0, cess: 0 };
     for (const c of parts) {

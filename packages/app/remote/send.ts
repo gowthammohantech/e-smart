@@ -1,7 +1,6 @@
 import { ApiError } from '@esmart/api-client';
-import { useAppStore } from '../store/appStore';
 import { api, isNetworkError } from './api';
-import { applyEntity, purgeLocalDefaults, remapIds, unwrap } from './apply';
+import { applyEntity, remapIds, unwrap } from './apply';
 import { useRemoteMeta } from './meta';
 import { reportError } from '../lib/reporter';
 import * as outbox from './outbox';
@@ -30,42 +29,6 @@ export async function allowed<T>(p: Promise<T>, fallback: T): Promise<T> {
     if (err instanceof ApiError && err.status === 403) return fallback;
     throw err;
   }
-}
-
-/**
- * A company created here got local copies of its defaults, and the changes after it in the same save
- * may refer to them. The server made its own: match them up, so those changes point at the server's.
- */
-export async function adoptCompanyDefaults(companyId: string) {
-  const path = { companyId };
-  const list = (p: Promise<{ data?: unknown }>) => allowed<{ data?: unknown }>(p, {});
-  const [branches, series, taxes, categories, accounts] = await Promise.all([
-    list(api.GET('/companies/{companyId}/branches', { params: { path } })),
-    list(api.GET('/companies/{companyId}/numbering-series', { params: { path } })),
-    list(api.GET('/companies/{companyId}/tax-categories', { params: { path } })),
-    list(api.GET('/companies/{companyId}/expense-categories', { params: { path } })),
-    list(api.GET('/companies/{companyId}/payment-accounts', { params: { path } })),
-  ]);
-  type R = { id?: string; companyId?: string; [k: string]: unknown };
-  const s = useAppStore.getState();
-  const rowsOf = (r: { data?: unknown }) => ((r.data as { data?: R[] } | undefined)?.data ?? []) as R[];
-  const sets: { type: string; server: R[]; local: R[]; key: (r: R) => string }[] = [
-    { type: 'branch', server: rowsOf(branches), local: s.branches as never, key: (r) => (r.isPrimary ? 'primary' : String(r.code)) },
-    { type: 'numbering_series', server: rowsOf(series), local: s.numberingSeries as never, key: (r) => String(r.kind) },
-    { type: 'tax_category', server: rowsOf(taxes), local: s.taxCategories as never, key: (r) => String(Number(r.rate)) },
-    { type: 'expense_category', server: rowsOf(categories), local: s.expenseCategories as never, key: (r) => String(r.name).toLowerCase() },
-    { type: 'payment_account', server: rowsOf(accounts), local: s.paymentAccounts as never, key: (r) => (r.isDefault ? 'default' : String(r.name)) },
-  ];
-  const map: Record<string, string> = {};
-  for (const { server, local, key } of sets) {
-    const byKey = new Map(server.map((r) => [key(r), r.id]));
-    for (const row of local) {
-      const to = row.companyId === companyId && row.id ? byKey.get(key(row)) : undefined;
-      if (to && row.id) map[row.id] = to;
-    }
-  }
-  remapIds(map);
-  for (const { type, server } of sets) for (const row of server) applyEntity(type, row);
 }
 
 /** The documents a payment's body (or the server's copy of it) allocates to. */
@@ -124,16 +87,6 @@ async function sendOne(entry: outbox.Entry): Promise<Outcome> {
   const serverId = typeof entity?.id === 'string' ? entity.id : undefined;
   if (entry.clientEntityId && serverId && serverId !== entry.clientEntityId) {
     remapIds({ [entry.clientEntityId]: serverId });
-    if (entry.path === '/companies') {
-      // The server took the company; failing to fetch its defaults now must not turn that into a failure.
-      // The local defaults stay until the next pull replaces them.
-      try {
-        await adoptCompanyDefaults(serverId);
-        purgeLocalDefaults(serverId);
-      } catch (err) {
-        reportError(err, { source: 'adoptCompanyDefaults' });
-      }
-    }
   }
   outbox.drop(entry.id);
   const entityId = entry.clientEntityId && serverId ? serverId : entry.entityId;

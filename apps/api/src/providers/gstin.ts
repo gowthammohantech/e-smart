@@ -6,7 +6,7 @@ import { sql } from 'drizzle-orm';
 import type { Db } from '@esmart/db';
 import type { Config } from '../config';
 import { featureUnavailable, upstream } from '../http/errors';
-import { createGspGateway, GspConfigError, type GspGateway } from './gsp';
+import { createGspRouter, GspConfigError, type GspGateway } from './gsp';
 import { toGstinRecord } from './gsp/taxpayer';
 import { GspAuthError, GspRequestError } from './gsp/transport';
 
@@ -359,7 +359,7 @@ class GspGstinProvider implements GstinProvider {
 export function createGstinProvider(config: Config, db: Db): GstinProvider {
   switch (config.GSTIN_PROVIDER) {
     case 'gsp':
-      return new GspGstinProvider(createGspGateway(config));
+      return new GspGstinProvider(createGspRouter(config));
     case 'disabled':
       return new DisabledGstinProvider();
     case 'simulator':

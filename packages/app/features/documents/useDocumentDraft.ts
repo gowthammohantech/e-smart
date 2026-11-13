@@ -4,7 +4,8 @@ import { Money, factorOf, fromMajor, money, zero } from '@esmart/core/lib/money'
 import { addDaysISO, today } from '@esmart/core/lib/date';
 import { uid } from '@esmart/core/lib/id';
 import { calculateDocument } from '@esmart/core/domain/lineCalc';
-import { TaxContext } from '@esmart/core/domain/taxEngine';
+import { TaxContext, taxRateOn } from '@esmart/core/domain/taxEngine';
+import { NOTE_KINDS } from '@esmart/core/domain/documentStates';
 import type { CustomValues } from '@esmart/core/domain/customFields';
 
 export type DraftState = {
@@ -33,6 +34,8 @@ export type DraftState = {
   noteReason?: NoteReason;
   /** A direct note's GST treatment, and (with GST) the original invoice or bill it adjusts (RULES 6.24). */
   noteGst?: 'withGst' | 'noGst';
+  /** With an SEZ party: IGST charged or none (LUT or bond); unset takes the default (`defaultSezTax`). */
+  sezTax?: 'withTax' | 'withoutTax';
   originalNumber?: string;
   originalDate?: string;
   /** A TDS section, `none`, or unset for the supplier's own (on an invoice, the customer's). */
@@ -119,6 +122,7 @@ export function draftFromDocument(doc: BusinessDocument): DraftState {
     reverseCharge: doc.reverseCharge,
     noteReason: doc.noteReason,
     noteGst: doc.noteGst,
+    sezTax: doc.sezTax,
     originalNumber: doc.originalNumber,
     originalDate: doc.originalDate,
     // A stored bill keeps what it was worked out with.
@@ -215,6 +219,20 @@ export function alignCurrency(d: DraftState, baseCurrency: string): DraftState {
   return { ...d, charges: to(d.charges), lines: d.lines.map((l) => ({ ...l, unitPrice: to(l.unitPrice) })) };
 }
 
+/**
+ * Lines moved from one date to another: each still charging its category's rate on `from` takes
+ * the category's rate on `to`. A line at a rate of its own (0% on a non-taxable supply, a rate the
+ * list doesn't have) keeps it.
+ */
+export function reRated(lines: DocumentLine[], taxCategories: TaxCategory[], from: string, to: string): DocumentLine[] {
+  return lines.map((l) => {
+    const c = taxCategories.find((x) => x.id === l.taxCategoryId);
+    if (!c || l.taxRate !== taxRateOn(c, from)) return l;
+    const rate = taxRateOn(c, to);
+    return rate === l.taxRate ? l : { ...l, taxRate: rate };
+  });
+}
+
 export function blankLine(currency: string, taxCategories: TaxCategory[]): DocumentLine {
   const fallback = taxCategories.find((c) => c.rate === 18) ?? taxCategories[0];
   return {
@@ -248,10 +266,18 @@ export function useDocumentDraft(options: {
     return start.pricesIncludeTax === undefined && start.lines.length ? { ...start, pricesIncludeTax: inclusiveState(start.lines) === 'inclusive' } : start;
   });
 
-  // A party in another currency moves the whole draft into it.
+  // A party in another currency moves the whole draft into it. A new date charges each line the
+  // rate its category has on that day, as the server will (a return or note against an invoice
+  // keeps the invoice's rates).
   const patch = useCallback(
-    (p: Partial<DraftState>) => setDraft((d) => alignCurrency({ ...d, ...p }, baseCurrency)),
-    [baseCurrency],
+    (p: Partial<DraftState>) =>
+      setDraft((d) => {
+        const next = { ...d, ...p };
+        const keepsSourceRates = !!next.sourceDocumentId && (NOTE_KINDS.includes(kind) || kind === 'salesReturn' || kind === 'purchaseReturn');
+        if (p.date && p.date !== d.date && !keepsSourceRates) next.lines = reRated(next.lines, taxCategories, d.date, p.date);
+        return alignCurrency(next, baseCurrency);
+      }),
+    [baseCurrency, kind, taxCategories],
   );
 
   const addLine = useCallback((line: DocumentLine) => {

@@ -29,13 +29,25 @@ export function lutActive(company: Company | undefined, date: string): boolean {
   return !reg.lutValidTill || date <= reg.lutValidTill;
 }
 
+/** Whether a supply to or from an SEZ unit or developer charges IGST, or goes without (LUT or bond). */
+export type SezTax = 'withTax' | 'withoutTax';
+
+/**
+ * What an SEZ document does when nobody has chosen: a sale goes without tax while the business's LUT
+ * is in force and with IGST otherwise; a bill from an SEZ supplier charges IGST.
+ */
+export function defaultSezTax(company: Company | undefined, date: string, purchase: boolean): SezTax {
+  return !purchase && lutActive(company, date) ? 'withoutTax' : 'withTax';
+}
+
 /**
  * The tax context for one document: the company's registration, the place of
- * supply, and whether the party makes it an export, SEZ supply or import.
+ * supply, and whether the party makes it an export, SEZ supply or import. An
+ * SEZ document charges IGST or not as `sezTax` says, else as `defaultSezTax`.
  */
 export function buildTaxContext(
   company: Company | undefined,
-  opts: { placeOfSupply?: string; party?: Party; date: string; purchase: boolean; branch?: Branch; reverseCharge?: boolean },
+  opts: { placeOfSupply?: string; party?: Party; date: string; purchase: boolean; branch?: Branch; reverseCharge?: boolean; sezTax?: SezTax | null },
 ): TaxContext {
   const reg = company?.taxRegistration;
   // A branch with its own GSTIN supplies from that state; its first two digits are the state code.
@@ -58,7 +70,9 @@ export function buildTaxContext(
     // A foreign supplier's bill carries no Indian GST (IGST on imports is paid at customs).
     zeroRated:
       crossBorder === 'import' ||
-      (!!crossBorder && !opts.purchase && lutActive(company, opts.date)),
+      (crossBorder === 'sez'
+        ? (opts.sezTax ?? defaultSezTax(company, opts.date, opts.purchase)) === 'withoutTax'
+        : crossBorder === 'export' && !opts.purchase && lutActive(company, opts.date)),
     composition: !opts.purchase && !!reg?.compositionScheme,
     reverseCharge: !!opts.reverseCharge,
   };
@@ -148,6 +162,38 @@ export function findTaxCategory(
   return categories.find((c) => c.id === id);
 }
 
-export function rateOf(categories: TaxCategory[], id: string | undefined): number {
-  return findTaxCategory(categories, id)?.rate ?? 0;
+export function rateOf(categories: TaxCategory[], id: string | undefined, date?: string): number {
+  const c = findTaxCategory(categories, id);
+  return c ? taxRateOn(c, date) : 0;
+}
+
+/**
+ * A category's rate on `date`: its rate from `effectiveFrom` on, and before that the last of its
+ * earlier rates (`history`) to have started by then. No date, or nothing earlier on record, is
+ * today's rate. The server charges a document the same way.
+ */
+export function taxRateOn(category: Pick<TaxCategory, 'rate' | 'effectiveFrom' | 'history'>, date: string | undefined): number {
+  if (!date || !category.effectiveFrom || category.effectiveFrom <= date) return category.rate;
+  let best: { effectiveFrom: string; rate: number } | undefined;
+  for (const h of category.history ?? []) if (h.effectiveFrom <= date && (!best || h.effectiveFrom > best.effectiveFrom)) best = h;
+  return best?.rate ?? category.rate;
+}
+
+/**
+ * Whether a category may be charged on `date`: it is in force from its first rate's day (its
+ * effective date, or the earliest of its earlier rates). A tax that starts later can't be picked
+ * on a document or expense dated before it.
+ */
+export function taxAvailableOn(category: Pick<TaxCategory, 'effectiveFrom' | 'history'>, date: string | undefined): boolean {
+  if (!date || !category.effectiveFrom) return true;
+  const start = (category.history ?? []).reduce((a, h) => (h.effectiveFrom < a ? h.effectiveFrom : a), category.effectiveFrom);
+  return start <= date;
+}
+
+/** Every category at its rate on `date`, for a form that charges as of that day. */
+export function taxCategoriesOn<T extends TaxCategory>(categories: T[], date: string | undefined): T[] {
+  return categories.map((c) => {
+    const rate = taxRateOn(c, date);
+    return rate === c.rate ? c : { ...c, rate };
+  });
 }

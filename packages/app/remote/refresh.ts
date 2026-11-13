@@ -142,14 +142,19 @@ const COLLECTION_OF: Record<string, string> = {
   integration: 'integrations',
 };
 
-/** The businesses this person can open, as the server lists them now. One no longer listed goes. */
+/**
+ * The businesses this person can open, as the server lists them now. One no longer listed goes, but
+ * only one this device had when it asked: a business created while the answer was on its way isn't
+ * in it yet, and must not be dropped (that left a new sign-up with no open business).
+ */
 async function loadCompanies(started: number) {
+  const known = new Set(useAppStore.getState().companies.map((c) => c.id));
   const { data: me } = await api.GET('/me');
   assertSession(started);
   if (!Array.isArray(me?.companies)) return;
   const listed = me.companies as Row[];
   const ids = new Set(listed.map((c) => c.id));
-  for (const c of useAppStore.getState().companies) if (!ids.has(c.id)) useAppStore.getState().forgetCompany(c.id);
+  for (const c of useAppStore.getState().companies) if (known.has(c.id) && !ids.has(c.id)) useAppStore.getState().forgetCompany(c.id);
   applyChanges(listed.filter((c) => c.id).map((c) => ({ entityType: 'company', entityId: c.id!, op: 'upsert', data: c })));
 }
 

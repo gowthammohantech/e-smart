@@ -1,6 +1,6 @@
-import { and, asc, desc, eq, exists, getTableColumns, gte, ilike, inArray, lte, ne, notInArray, or, sql, type SQL } from 'drizzle-orm';
+import { and, arrayContains, arrayOverlaps, asc, desc, eq, exists, getTableColumns, gte, ilike, inArray, lte, ne, notInArray, or, sql, type SQL } from 'drizzle-orm';
 import { decide, needsApproval, notifyDecision, pendingApprovals, sendForApproval, type Approval } from './approvals';
-import { NOTE_SOURCE, PAYABLE_KINDS, SALES_KINDS, canCancel, canTransition, conversionBlock, isFinalized, isPayableDocument, nextStatuses } from '@esmart/core/domain/documentStates';
+import { MERGE_CONVERSIONS, NOTE_SOURCE, PAYABLE_KINDS, SALES_KINDS, canCancel, canMerge, canTransition, conversionBlock, isFinalized, isPayableDocument, nextStatuses } from '@esmart/core/domain/documentStates';
 import { hasModule } from '@esmart/core/domain/plan';
 import type { DocStatus, DocumentKind } from '@esmart/core/types';
 import { schema } from '@esmart/db';
@@ -111,6 +111,74 @@ async function findDocument(ctx: AnyCtx, db: DbOrTx, id: string, opts: { lock?: 
 
 const branchVisible = (user: AuthUser, branchId: string) => !user.branchIds.length || user.branchIds.includes(branchId);
 
+type MadeRow = { kind: DocumentKind; status: DocStatus; sourceDocumentId: string | null; mergedSourceIds: string[]; number: string | null };
+
+/** Everything made from any of `ids`, from it alone or merged with others. */
+async function madeFromAny(db: DbOrTx, companyId: string, ids: string[]): Promise<MadeRow[]> {
+  if (!ids.length) return [];
+  return db
+    .select({ kind: D.kind, status: D.status, sourceDocumentId: D.sourceDocumentId, mergedSourceIds: D.mergedSourceIds, number: D.number })
+    .from(D)
+    .where(and(eq(D.companyId, companyId), or(inArray(D.sourceDocumentId, ids), arrayOverlaps(D.mergedSourceIds, ids))));
+}
+
+/** What a merged document takes from its sources must agree across them: one party, branch, currency, place of supply and SEZ tax. */
+function sameHeader(a: DocRow, b: DocRow): boolean {
+  return (
+    a.partyId === b.partyId &&
+    a.branchId === b.branchId &&
+    a.currency.trim() === b.currency.trim() &&
+    (a.placeOfSupplyStateCode ?? null) === (b.placeOfSupplyStateCode ?? null) &&
+    a.reverseCharge === b.reverseCharge &&
+    (a.sezTax ?? null) === (b.sezTax ?? null)
+  );
+}
+
+/**
+ * The party's other documents of this kind that could go into the same conversion now:
+ * finalised, not carried forward, with the same party, branch, currency and place of supply. Oldest first.
+ */
+async function mergeCandidates(ctx: AnyCtx, row: DocRow): Promise<SummaryRow[]> {
+  const target = MERGE_CONVERSIONS[row.kind]?.[0];
+  if (!target) return [];
+  const rows = await ctx.db
+    .select({ ...getTableColumns(D), partyName: P.name })
+    .from(D)
+    .innerJoin(P, eq(P.id, D.partyId))
+    .where(and(eq(D.companyId, ctx.company.id), eq(D.kind, row.kind), eq(D.partyId, row.partyId), eq(D.branchId, row.branchId), ne(D.id, row.id), notInArray(D.status, ['draft', 'cancelled', 'rejected'])))
+    .orderBy(asc(D.date), asc(D.number))
+    .limit(100);
+  const like = rows.filter((d) => sameHeader(row, d));
+  const made = await madeFromAny(ctx.db, ctx.company.id, like.map((d) => d.id));
+  const asOf = today(ctx.now);
+  return like.filter((d) => !conversionBlock({ id: d.id, status: effectiveStatus(d, asOf) }, target, made));
+}
+
+/**
+ * The documents `alsoFrom` names, checked to go into one `target` with `src`: a conversion that
+ * merges, each of the same kind and header as `src`, finalised and not yet carried forward.
+ * Oldest first, as their lines follow `src`'s.
+ */
+async function mergedInto(ctx: AnyCtx, src: DocRow, target: DocumentKind, alsoFrom: string[]): Promise<DocRow[]> {
+  const ids = [...new Set(alsoFrom)].filter((id) => id !== src.id);
+  if (!ids.length) return [];
+  const issue = (message: string) => unprocessable([{ field: 'alsoFrom', message, severity: 'blocking' }], 'INVALID_MERGE');
+  if (!canMerge(src.kind, target)) throw issue(`A ${target} is made from one ${src.kind} at a time`);
+  const rows = await ctx.db.select().from(D).where(and(eq(D.companyId, ctx.company.id), inArray(D.id, ids)));
+  const missing = ids.filter((id) => !rows.some((r) => r.id === id && branchVisible(ctx.user, r.branchId)));
+  if (missing.length) throw issue(`No such document: ${missing.join(', ')}`);
+  const made = await madeFromAny(ctx.db, ctx.company.id, ids);
+  const asOf = today(ctx.now);
+  for (const r of rows) {
+    if (r.kind !== src.kind) throw issue(`${r.number} is not a ${src.kind}`);
+    if (!sameHeader(src, r)) throw issue(`${r.number} is for another party, branch, currency or place of supply than ${src.number}`);
+    const block = conversionBlock({ id: r.id, status: effectiveStatus(r, asOf) }, target, made);
+    if (block === 'draft' || block === 'cancelled') throw issue(`${r.number} is ${effectiveStatus(r, asOf)}`);
+    if (block === 'converted') throw conflict('ALREADY_CONVERTED', `${r.number} has already been carried forward; cancel that first to convert it again`);
+  }
+  return rows.sort((a, b) => a.date.localeCompare(b.date) || a.number.localeCompare(b.number));
+}
+
 async function toWire(ctx: AnyCtx, row: DocRow): Promise<DocumentWire> {
   const [doc] = await documentsToWire(ctx.db, [row], ctx.now, ctx.company.baseCurrency.trim());
   // An invoice says whether it can still be edited in full (a draft always can; RULES 6.23 after issue).
@@ -198,14 +266,30 @@ function checkRequestedStatus(kind: DocumentKind, status: string): DocStatus {
  * Inserts a new document from prepared fields, finalising it in the same
  * transaction when asked. Shared by create, convert and duplicate.
  */
-export async function insertDocument(ctx: AnyCtx, f: DocFields, lines: LineInput[], status: DocStatus, extra: { attachmentIds?: string[]; snapshotRates?: boolean; action?: string; overrideCreditLimit?: boolean } = {}) {
+export async function insertDocument(
+  ctx: AnyCtx,
+  f: DocFields,
+  lines: LineInput[],
+  status: DocStatus,
+  extra: { attachmentIds?: string[]; snapshotRates?: boolean; action?: string; overrideCreditLimit?: boolean; mergedSourceIds?: string[] } = {},
+) {
   const prepared = await prepareDocument(ctx.db, ctx.company, f, lines, { snapshotRates: extra.snapshotRates ?? true });
   if (!branchVisible(ctx.user, prepared.columns.branchId)) throw invalid('branchId', 'You cannot create documents in this branch');
   const draftStatus = requestedStatus(f.kind, 'draft') as DocStatus;
   const row = await ctx.db.transaction(async (tx) => {
     const [created] = await tx
       .insert(D)
-      .values({ id: newId('doc'), companyId: ctx.company.id, number: draftNumber(f.kind), status: draftStatus, createdBy: ctx.user.id, ...prepared.columns, createdAt: ctx.now, updatedAt: ctx.now })
+      .values({
+        id: newId('doc'),
+        companyId: ctx.company.id,
+        number: draftNumber(f.kind),
+        status: draftStatus,
+        createdBy: ctx.user.id,
+        ...prepared.columns,
+        mergedSourceIds: extra.mergedSourceIds ?? [],
+        createdAt: ctx.now,
+        updatedAt: ctx.now,
+      })
       .returning();
     await writeLines(tx, created.id, prepared);
     await linkAttachments(tx, ctx.company.id, created.id, extra.attachmentIds);
@@ -328,6 +412,7 @@ function frozenChanges(row: DocRow, body: Schema<'NewDocumentInput'>, stored: Li
   cmp('supplierDocNumber', body.supplierDocNumber, row.supplierDocNumber);
   cmp('sourceDocumentId', body.sourceDocumentId, row.sourceDocumentId);
   cmp('noteGst', body.noteGst, row.noteGst ?? undefined);
+  cmp('sezTax', body.sezTax, row.sezTax ?? undefined);
   cmp('originalNumber', body.originalNumber, row.originalNumber ?? undefined);
   cmp('originalDate', body.originalDate, row.originalDate ?? undefined);
   // What an invoice's full edit can change too (RULES 6.23): compared so the edit isn't dropped as a notes-only save.
@@ -411,7 +496,7 @@ function listFilters(ctx: Pick<Ctx<'listDocuments'>, 'company' | 'user' | 'db' |
   if (q.branchId) filters.push(eq(D.branchId, q.branchId));
   if (q.from) filters.push(gte(D.date, q.from));
   if (q.to) filters.push(lte(D.date, q.to));
-  if (q.sourceDocumentId) filters.push(eq(D.sourceDocumentId, q.sourceDocumentId));
+  if (q.sourceDocumentId) filters.push(or(eq(D.sourceDocumentId, q.sourceDocumentId), arrayContains(D.mergedSourceIds, [q.sourceDocumentId]))!);
   if (q.outstanding !== undefined) {
     const open = and(inArray(D.kind, PAYABLE_KINDS), notInArray(D.status, ['draft', 'cancelled']), sql`${D.grandTotalMinor} > ${D.amountPaidMinor}`);
     filters.push(q.outstanding ? open : sql`not (${open})`);
@@ -617,15 +702,27 @@ export const documentsHandlers = defineHandlers({
         .select({ ...getTableColumns(D), partyName: P.name })
         .from(D)
         .innerJoin(P, eq(P.id, D.partyId))
-        .where(and(eq(D.companyId, ctx.company.id), or(eq(D.sourceDocumentId, row.id), row.sourceDocumentId ? eq(D.id, row.sourceDocumentId) : undefined)))
+        .where(
+          and(
+            eq(D.companyId, ctx.company.id),
+            or(
+              eq(D.sourceDocumentId, row.id),
+              arrayContains(D.mergedSourceIds, [row.id]),
+              row.sourceDocumentId ? eq(D.id, row.sourceDocumentId) : undefined,
+              row.mergedSourceIds.length ? inArray(D.id, row.mergedSourceIds) : undefined,
+            ),
+          ),
+        )
         .orderBy(desc(D.date)),
     ]);
     const currency = row.currency.trim();
     const open = isFinalized(status) && status !== 'cancelled';
     const conversions = CONVERSIONS[row.kind].filter((target) => {
       if (isPurchaseKind(target) && !hasModule(ctx.company.plan, 'purchases')) return false;
-      return !conversionBlock({ id: row.id, status }, target, related as { kind: DocumentKind; status: DocStatus; sourceDocumentId: string | null }[]);
+      return !conversionBlock({ id: row.id, status }, target, related);
     });
+    // Others of the party's that could go into the same challan, invoice, receipt or bill with it.
+    const mergeable = conversions.some((target) => canMerge(row.kind, target)) ? await mergeCandidates(ctx, row) : [];
     setEtag(ctx.reply, row.version);
     return {
       ...doc,
@@ -637,6 +734,7 @@ export const documentsHandlers = defineHandlers({
       allowedTransitions: nextStatuses(row.kind, status).filter((s) => !DERIVED.includes(s)),
       allowedConversions: conversions,
       creditApplications: await creditApplicationsOf(ctx.db, ctx.company.id, row.id, currency),
+      mergeableWith: await summariesToWire(ctx.db, mergeable, ctx.now),
     };
   },
 
@@ -765,8 +863,8 @@ export const documentsHandlers = defineHandlers({
     const status = effectiveStatus(src, today(ctx.now));
     if (!CONVERSIONS[src.kind].includes(target)) throw conflict('INVALID_CONVERSION', `A ${src.kind} cannot be converted to a ${target}`);
     // Nothing from a draft or a cancelled document, and an order or quote is carried forward once.
-    const made = await ctx.db.select({ kind: D.kind, status: D.status, sourceDocumentId: D.sourceDocumentId, number: D.number }).from(D).where(and(eq(D.companyId, ctx.company.id), eq(D.sourceDocumentId, src.id)));
-    const block = conversionBlock({ id: src.id, status }, target, made as { kind: DocumentKind; status: DocStatus; sourceDocumentId: string | null; number: string | null }[]);
+    const made = await madeFromAny(ctx.db, ctx.company.id, [src.id]);
+    const block = conversionBlock({ id: src.id, status }, target, made);
     if (block === 'cancelled') throw conflict('INVALID_CONVERSION', `${src.number} is ${status}`);
     if (block === 'draft') {
       throw conflict('INVALID_CONVERSION', NOTE_SOURCE[target] ? 'A return or note is raised against a finalised document' : 'A draft is finalised before anything is made from it');
@@ -775,11 +873,16 @@ export const documentsHandlers = defineHandlers({
       const onward = made.find((d) => !NOTE_SOURCE[d.kind] && d.status !== 'cancelled' && d.status !== 'rejected');
       throw conflict('ALREADY_CONVERTED', `${src.number} has already been carried forward${onward?.number ? ` to ${onward.number}` : ''}; cancel that first to convert it again`);
     }
-    const stored = linesFromRows(await ctx.db.select().from(schema.documentLines).where(eq(schema.documentLines.documentId, src.id)));
+    const others = await mergedInto(ctx, src, target, ctx.body.alsoFrom ?? []);
+    // The lines of each, this one's first and the others' after in the order they were raised.
+    const sources = [src, ...others];
+    const lineRows = await ctx.db.select().from(schema.documentLines).where(inArray(schema.documentLines.documentId, sources.map((d) => d.id)));
+    const stored = sources.flatMap((d) => linesFromRows(lineRows.filter((l) => l.documentId === d.id)));
+    const numbers = sources.map((d) => d.number).join(', ');
     let lines = stored;
     if (ctx.body.lineIds?.length) {
       const unknown = ctx.body.lineIds.filter((id) => !stored.some((l) => l.id === id));
-      if (unknown.length) throw unprocessable(unknown.map((id) => ({ field: 'lineIds', message: `${id} is not a line of ${src.number}`, severity: 'blocking' as const })));
+      if (unknown.length) throw unprocessable(unknown.map((id) => ({ field: 'lineIds', message: `${id} is not a line of ${numbers}`, severity: 'blocking' as const })));
       lines = stored.filter((l) => ctx.body.lineIds!.includes(l.id!));
     }
     // A new document takes the supplier's TDS section, not the one its source was finalised with.
@@ -787,9 +890,10 @@ export const documentsHandlers = defineHandlers({
     // The new draft keeps the source's tax rates: a return must reverse exactly what was charged.
     const row = await insertDocument(ctx, f, lines.map((l) => ({ ...l, id: undefined })), requestedStatus(target, 'draft') as DocStatus, {
       snapshotRates: false,
-      action: `converted from ${src.number}`,
+      action: `converted from ${numbers}`,
+      mergedSourceIds: others.map((d) => d.id),
     });
-    track(ctx, 'document_converted', { fromKind: src.kind, toKind: target });
+    track(ctx, 'document_converted', { fromKind: src.kind, toKind: target, ...(others.length && { merged: sources.length }) });
     setEtag(ctx.reply, row.version);
     return toWire(ctx, row);
   },

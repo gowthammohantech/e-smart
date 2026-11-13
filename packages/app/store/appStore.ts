@@ -50,10 +50,9 @@ import { Money, zero } from '@esmart/core/lib/money';
 import { nowISO, today } from '@esmart/core/lib/date';
 import { uid } from '@esmart/core/lib/id';
 import { calculateDocument } from '@esmart/core/domain/lineCalc';
-import { DEFAULT_PREFIXES, SERIES_KINDS, formatNumber } from '@esmart/core/domain/numbering';
-import { CREDIT_KINDS, PURCHASE_KINDS, conversionBlock, initialStatus, isFinalized, isPayableDocument } from '@esmart/core/domain/documentStates';
+import { formatNumber } from '@esmart/core/domain/numbering';
+import { CREDIT_KINDS, PURCHASE_KINDS, canMerge, conversionBlock, initialStatus, isFinalized, isPayableDocument } from '@esmart/core/domain/documentStates';
 import { documentAuditSnapshot } from '@esmart/core/domain/auditDiff';
-import { expenseCategories as defaultExpenseCategories } from '@esmart/core/data/masters';
 import { allocateAdvances, creditedTo, settledBy, statusForOutstanding } from '@esmart/core/domain/receivables';
 import { expectedTdsForDocument, tdsForDocument } from './tds';
 import { accountFitsMethod, bankDetailsOf } from '@esmart/core/domain/paymentAccounts';
@@ -171,7 +170,6 @@ type Actions = {
   forgetCompany: (companyId: string) => void;
   saveCompany: (company: Company) => void;
   setPlan: (companyId: string, plan: PlanTier) => void;
-  createCompany: (partial: Omit<Company, 'id' | 'accountId' | 'createdAt'>) => string;
   saveBranch: (branch: Branch) => void;
   removeBranch: (id: string) => void;
   saveUser: (user: User) => void;
@@ -213,8 +211,12 @@ type Actions = {
   finalizeDocument: (id: string) => void;
   removeDocument: (id: string) => void;
   duplicateDocument: (id: string) => string;
-  /** `lineIds` keeps only those of the source's lines (a note or return against part of an invoice). */
-  convertDocument: (id: string, target: DocumentKind, lineIds?: string[]) => string;
+  /**
+   * `lineIds` keeps only those of the source's lines (a note or return against part of an invoice).
+   * `alsoFrom` merges others of the party's into the same draft, where the conversion allows it
+   * (`canMerge`): their lines follow the source's, oldest first. They must be in the store.
+   */
+  convertDocument: (id: string, target: DocumentKind, lineIds?: string[], alsoFrom?: string[]) => string;
 
   /* payments */
   /** Returns the id, or '' when the account does not fit the payment method. */
@@ -280,12 +282,14 @@ export type NewDocumentInput = {
   isdInvoice?: boolean;
   placeOfSupplyStateCode?: string;
   reverseCharge?: boolean;
+  sezTax?: BusinessDocument['sezTax'];
   noteReason?: BusinessDocument['noteReason'];
   tdsSection?: string;
   tcsSection?: string;
   branchId?: string;
   attachmentIds?: string[];
   sourceDocumentId?: string;
+  mergedSourceIds?: string[];
   status?: DocStatus;
 };
 
@@ -325,11 +329,6 @@ export type ExtendEwayBillInput = {
 };
 
 const emptySession: Session = { userId: null, authenticated: false, onboardingComplete: false };
-
-/** Default expense categories for a new company, with ids unique to it. */
-function starterExpenseCategories(companyId: string): ExpenseCategory[] {
-  return defaultExpenseCategories(companyId).map((c) => ({ ...c, id: uid('exc') }));
-}
 
 /**
  * The books as the server last sent them, in memory only: nothing is kept on the device. Signing in
@@ -406,6 +405,7 @@ export const useAppStore = create<AppState>()(
             purchase: PURCHASE_KINDS.includes(doc.kind),
             branch: s.branches.find((b) => b.id === doc.branchId),
             reverseCharge: doc.reverseCharge,
+            sezTax: doc.sezTax,
           }),
         });
       };
@@ -590,60 +590,6 @@ export const useAppStore = create<AppState>()(
           if (!company || company.plan === plan) return;
           set({ companies: get().companies.map((c) => (c.id === companyId ? { ...c, plan } : c)) });
           audit('updated', 'company', companyId, `Plan changed to ${plan}`);
-        },
-        createCompany: (partial) => {
-          const id = uid('cmp');
-          const company: Company = { ...partial, id, accountId: get().accountId, createdAt: nowISO() };
-          const branch: Branch = {
-            id: uid('brn'),
-            companyId: id,
-            name: 'Head office',
-            code: 'HO',
-            address: partial.address,
-            gstin: partial.taxRegistration?.registered ? partial.taxRegistration.identifier : undefined,
-            isPrimary: true,
-          };
-          const kinds = SERIES_KINDS;
-          const prefixes = DEFAULT_PREFIXES;
-          const series: NumberingSeries[] = kinds.map((kind) => ({
-            id: uid('series'),
-            companyId: id,
-            kind,
-            prefix: prefixes[kind],
-            nextNumber: 1,
-            padding: 4,
-            includeFiscalYear: true,
-            includeBranchCode: false,
-            resetPolicy: 'yearly',
-          }));
-          const taxes: TaxCategory[] = [0, 5, 12, 18, 28].map((rate) => ({
-            id: uid('tax'),
-            companyId: id,
-            name: rate === 0 ? 'GST 0% (Exempt)' : `GST ${rate}%`,
-            rate,
-            type: 'GST',
-            effectiveFrom: today(),
-          }));
-          const account: PaymentAccount = {
-            id: uid('acc'),
-            companyId: id,
-            name: 'Cash in hand',
-            type: 'cash',
-            currency: partial.baseCurrency,
-            openingBalance: zero(partial.baseCurrency),
-            isDefault: true,
-          };
-          set({
-            companies: [...get().companies, company],
-            branches: [...get().branches, branch],
-            numberingSeries: [...get().numberingSeries, ...series],
-            taxCategories: [...get().taxCategories, ...taxes],
-            paymentAccounts: [...get().paymentAccounts, account],
-            expenseCategories: [...get().expenseCategories, ...starterExpenseCategories(id)],
-            activeCompanyId: id,
-            activeBranchId: branch.id,
-          });
-          return id;
         },
         saveBranch: (branch) => {
           const exists = get().branches.some((b) => b.id === branch.id);
@@ -841,6 +787,7 @@ export const useAppStore = create<AppState>()(
             roundOffManual: draft.roundOffManual,
             placeOfSupplyStateCode: draft.placeOfSupplyStateCode ?? party?.billingAddress?.stateCode,
             reverseCharge: draft.reverseCharge,
+            sezTax: draft.sezTax,
             noteReason: draft.noteReason,
             tdsSection: draft.tdsSection,
             tcsSection: draft.tcsSection,
@@ -848,6 +795,7 @@ export const useAppStore = create<AppState>()(
             terms: draft.terms,
             attachmentIds: draft.attachmentIds ?? [],
             sourceDocumentId: draft.sourceDocumentId,
+            ...(draft.mergedSourceIds?.length && { mergedSourceIds: draft.mergedSourceIds }),
             totals: {
               subtotal: zero(draft.currency),
               lineDiscount: zero(draft.currency),
@@ -969,15 +917,26 @@ export const useAppStore = create<AppState>()(
             terms: src.terms,
             placeOfSupplyStateCode: src.placeOfSupplyStateCode,
             reverseCharge: src.reverseCharge,
+            sezTax: src.sezTax,
             branchId: src.branchId,
             status: initialStatus(src.kind),
           });
         },
 
-        convertDocument: (id, target, lineIds) => {
-          const src = get().documents.find((d) => d.id === id);
+        convertDocument: (id, target, lineIds, alsoFrom) => {
+          const docs = get().documents;
+          const src = docs.find((d) => d.id === id);
           // Nothing is made from a cancelled or draft document, nor twice from one order.
-          if (!src || conversionBlock(src, target, get().documents)) return '';
+          if (!src || conversionBlock(src, target, docs)) return '';
+          // Merged in, oldest first, as the server orders them: each the party's, open, not yet carried forward.
+          const others = (alsoFrom ?? [])
+            .filter((o) => o !== id)
+            .map((o) => docs.find((d) => d.id === o))
+            .filter((d): d is BusinessDocument => !!d)
+            .sort((a, b) => a.date.localeCompare(b.date) || a.number.localeCompare(b.number));
+          if (others.length && (!canMerge(src.kind, target) || others.length !== new Set(alsoFrom!.filter((o) => o !== id)).size)) return '';
+          if (others.some((d) => d.kind !== src.kind || d.partyId !== src.partyId || d.currency !== src.currency || conversionBlock(d, target, docs))) return '';
+          const sourceLines = [src, ...others].flatMap((d) => d.lines);
           const party = get().parties.find((p) => p.id === src.partyId);
           const newId = get().createDocument({
             kind: target,
@@ -989,7 +948,7 @@ export const useAppStore = create<AppState>()(
                 : undefined,
             currency: src.currency,
             exchangeRate: src.exchangeRate,
-            lines: src.lines.filter((l) => !lineIds?.length || lineIds.includes(l.id)).map((l) => ({ ...l, id: uid('ln') })),
+            lines: sourceLines.filter((l) => !lineIds?.length || lineIds.includes(l.id)).map((l) => ({ ...l, id: uid('ln') })),
             documentDiscountMode: src.documentDiscountMode,
             documentDiscountValue: src.documentDiscountValue,
             charges: src.charges,
@@ -1002,12 +961,14 @@ export const useAppStore = create<AppState>()(
             terms: src.terms,
             placeOfSupplyStateCode: src.placeOfSupplyStateCode,
             reverseCharge: src.reverseCharge,
+            sezTax: src.sezTax,
             branchId: src.branchId,
             sourceDocumentId: src.id,
+            mergedSourceIds: others.map((d) => d.id),
             // A return starts as requested, not draft, or it has no way forward to post.
             status: initialStatus(target),
           });
-          audit(`converted to ${target}`, src.kind, src.id, src.number);
+          for (const d of [src, ...others]) audit(`converted to ${target}`, d.kind, d.id, d.number);
           return newId;
         },
 

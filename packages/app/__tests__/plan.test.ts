@@ -71,6 +71,25 @@ describe('plan tiers', () => {
     expect(canOpen('basic', '/(app)/expenses/new')).toBe(false);
     expect(canOpen('pro', '/(app)/purchases/bills/new')).toBe(true);
   });
+
+  it('hides a module\'s own settings pages when the owner switches it off, on any plan', () => {
+    for (const plan of ['free', 'pro'] as const) {
+      // Retail item fields off: no item categories or brands to keep.
+      expect(canOpen(plan, '/settings/item-categories', ['pos'])).toBe(false);
+      expect(canOpen(plan, '/(app)/settings/brands', ['pos'])).toBe(false);
+      expect(canOpen(plan, '/settings/currencies', ['pos'])).toBe(true);
+      // Multi-currency off: no currencies and rates.
+      expect(canOpen(plan, '/settings/currencies', ['fx'])).toBe(false);
+      expect(canOpen(plan, '/settings/item-categories', ['fx'])).toBe(true);
+      // Branches off: no branches page.
+      expect(canOpen(plan, '/settings/branches', ['branches'])).toBe(false);
+      expect(canOpen(plan, '/settings/branches', ['fx'])).toBe(true);
+    }
+    expect(canOpen('free', '/settings/branches', [])).toBe(true);
+    // Left on, they open on every plan: a Free customer can still be billed in their currency.
+    expect(canOpen('free', '/settings/currencies', [])).toBe(true);
+    expect(canOpen('basic', '/settings/brands')).toBe(true);
+  });
 });
 
 describe('onboarding by plan', () => {
