@@ -134,6 +134,28 @@ describe('entries that depend on each other', () => {
     expect(convert.body).toMatchObject({ targetKind: 'creditNote', lineIds: keep });
   });
 
+  it('a new document keeps everything the editor sends, and sends it on', () => {
+    const inv = actions().documents.find((d) => d.kind === 'invoice')!;
+    const id = actions().createDocument({
+      kind: 'invoice',
+      partyId: inv.partyId,
+      date: '2026-09-20',
+      currency: inv.currency,
+      exchangeRate: inv.exchangeRate,
+      lines: inv.lines,
+      vehicleId: 'veh_1',
+      transporterId: 'trn_1',
+      costCentreId: 'cc_1',
+      customFields: { cf1: 'LR-9' },
+      tdsRate: 2,
+    } as never);
+    expect(actions().documents.find((d) => d.id === id)).toMatchObject({ vehicleId: 'veh_1', transporterId: 'trn_1', costCentreId: 'cc_1', customFields: { cf1: 'LR-9' }, tdsRate: 2 });
+    expect(queue().find((e) => e.clientEntityId === id)?.body).toMatchObject({ vehicleId: 'veh_1', transporterId: 'trn_1', costCentreId: 'cc_1', customFields: { cf1: 'LR-9' } });
+
+    const note = actions().createDocument({ kind: 'creditNote', partyId: inv.partyId, date: '2026-09-21', currency: inv.currency, exchangeRate: inv.exchangeRate, lines: inv.lines, noteReason: 'discount', noteGst: 'withGst', originalNumber: 'SI/1', originalDate: '2026-09-01' } as never);
+    expect(actions().documents.find((d) => d.id === note)).toMatchObject({ noteGst: 'withGst', originalNumber: 'SI/1', originalDate: '2026-09-01' });
+  });
+
   it('sales orders merged into one delivery note carry all their lines, and go to the server as alsoFrom', () => {
     const inv = actions().documents.find((d) => d.kind === 'invoice' && d.lines.length > 1)!;
     const order = (line: (typeof inv.lines)[number], date: string) =>

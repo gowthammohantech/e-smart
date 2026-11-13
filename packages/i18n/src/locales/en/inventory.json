@@ -75,7 +75,13 @@
     },
     "category": "Category",
     "brand": "Brand",
-    "none": "None"
+    "none": "None",
+    "hsnSearch": "Find HSN / SAC code",
+    "hsnSearchTitle": "HSN / SAC codes",
+    "hsnSearchPlaceholder": "Code or description, e.g. 8482 or bearings",
+    "hsnRate": "{{kind}} · GST {{rate}}",
+    "hsnNoMatch": "No code matches — type the code in the field yourself.",
+    "hsnTypeToSearch": "Type a code or a few words of the description."
   },
   "gst": {
     "supplyType": "GST treatment",

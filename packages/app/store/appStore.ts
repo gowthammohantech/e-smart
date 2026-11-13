@@ -272,6 +272,8 @@ export type NewDocumentInput = {
   documentDiscountMode?: 'percent' | 'amount';
   documentDiscountValue?: number;
   charges?: Money;
+  chargesKind?: BusinessDocument['chargesKind'];
+  shipTo?: BusinessDocument['shipTo'];
   applyRoundOff?: boolean;
   roundOffManual?: Money;
   notes?: string;
@@ -282,7 +284,7 @@ export type NewDocumentInput = {
   isdInvoice?: boolean;
   placeOfSupplyStateCode?: string;
   reverseCharge?: boolean;
-  sezTax?: BusinessDocument['sezTax'];
+  crossBorderTax?: BusinessDocument['crossBorderTax'];
   noteReason?: BusinessDocument['noteReason'];
   tdsSection?: string;
   tcsSection?: string;
@@ -291,6 +293,15 @@ export type NewDocumentInput = {
   sourceDocumentId?: string;
   mergedSourceIds?: string[];
   status?: DocStatus;
+  // What else the editor sets: kept on the document and sent with it.
+  costCentreId?: string;
+  vehicleId?: string;
+  transporterId?: string | null;
+  customFields?: BusinessDocument['customFields'];
+  noteGst?: BusinessDocument['noteGst'];
+  originalNumber?: string;
+  originalDate?: string;
+  tdsRate?: number;
 };
 
 export type AppState = AppData & {
@@ -405,7 +416,7 @@ export const useAppStore = create<AppState>()(
             purchase: PURCHASE_KINDS.includes(doc.kind),
             branch: s.branches.find((b) => b.id === doc.branchId),
             reverseCharge: doc.reverseCharge,
-            sezTax: doc.sezTax,
+            crossBorderTax: doc.crossBorderTax,
           }),
         });
       };
@@ -783,11 +794,13 @@ export const useAppStore = create<AppState>()(
             documentDiscountMode: draft.documentDiscountMode ?? 'percent',
             documentDiscountValue: draft.documentDiscountValue ?? 0,
             charges: draft.charges ?? zero(draft.currency),
+            chargesKind: draft.chargesKind,
+            shipTo: draft.shipTo,
             applyRoundOff: draft.applyRoundOff ?? draft.currency === 'INR',
             roundOffManual: draft.roundOffManual,
             placeOfSupplyStateCode: draft.placeOfSupplyStateCode ?? party?.billingAddress?.stateCode,
             reverseCharge: draft.reverseCharge,
-            sezTax: draft.sezTax,
+            crossBorderTax: draft.crossBorderTax,
             noteReason: draft.noteReason,
             tdsSection: draft.tdsSection,
             tcsSection: draft.tcsSection,
@@ -796,6 +809,14 @@ export const useAppStore = create<AppState>()(
             attachmentIds: draft.attachmentIds ?? [],
             sourceDocumentId: draft.sourceDocumentId,
             ...(draft.mergedSourceIds?.length && { mergedSourceIds: draft.mergedSourceIds }),
+            costCentreId: draft.costCentreId,
+            vehicleId: draft.vehicleId,
+            transporterId: draft.transporterId,
+            customFields: draft.customFields,
+            noteGst: draft.noteGst,
+            originalNumber: draft.originalNumber,
+            originalDate: draft.originalDate,
+            tdsRate: draft.tdsRate,
             totals: {
               subtotal: zero(draft.currency),
               lineDiscount: zero(draft.currency),
@@ -911,13 +932,15 @@ export const useAppStore = create<AppState>()(
             documentDiscountMode: src.documentDiscountMode,
             documentDiscountValue: src.documentDiscountValue,
             charges: src.charges,
+            chargesKind: src.chargesKind,
+            shipTo: src.shipTo,
             applyRoundOff: src.applyRoundOff,
             roundOffManual: src.roundOffManual,
             notes: src.notes,
             terms: src.terms,
             placeOfSupplyStateCode: src.placeOfSupplyStateCode,
             reverseCharge: src.reverseCharge,
-            sezTax: src.sezTax,
+            crossBorderTax: src.crossBorderTax,
             branchId: src.branchId,
             status: initialStatus(src.kind),
           });
@@ -952,6 +975,8 @@ export const useAppStore = create<AppState>()(
             documentDiscountMode: src.documentDiscountMode,
             documentDiscountValue: src.documentDiscountValue,
             charges: src.charges,
+            chargesKind: src.chargesKind,
+            shipTo: src.shipTo,
             applyRoundOff: src.applyRoundOff,
             roundOffManual: src.roundOffManual,
             // The PO number and supplier's bill number travel with the conversion, as on the server.
@@ -961,7 +986,7 @@ export const useAppStore = create<AppState>()(
             terms: src.terms,
             placeOfSupplyStateCode: src.placeOfSupplyStateCode,
             reverseCharge: src.reverseCharge,
-            sezTax: src.sezTax,
+            crossBorderTax: src.crossBorderTax,
             branchId: src.branchId,
             sourceDocumentId: src.id,
             mergedSourceIds: others.map((d) => d.id),

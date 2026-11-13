@@ -121,7 +121,12 @@
     "to": "முடிவு",
     "toBeforeFrom": "தொடக்கத்துக்கு முன்பே முடிகிறது",
     "applyRange": "இந்தக் காலத்தைக் காட்டு",
-    "branchLimitedTitle": "சில கிளைகளுக்கு மட்டும்"
+    "branchLimitedTitle": "சில கிளைகளுக்கு மட்டும்",
+    "contactsPicked_one": "{{count}} தொடர்பு",
+    "contactsPicked_other": "{{count}} தொடர்புகள்",
+    "pickContacts": "ஒன்று அல்லது பலவற்றைத் தேர்ந்தெடுக்கவும்.",
+    "showContacts_one": "{{count}} தொடர்பைக் காட்டு",
+    "showContacts_other": "{{count}} தொடர்புகளைக் காட்டு"
   },
   "detail": {
     "openAdvances": "திறந்த முன்பணங்கள்",
@@ -357,7 +362,8 @@
     "section": "பிரிவு",
     "tds": "TDS",
     "tdsBase": "வரிக்குட்பட்ட தொகை",
-    "documents": "பில்கள்"
+    "documents": "பில்கள்",
+    "cess": "செஸ்"
   },
   "cell": {
     "days_one": "{{count}} நாள்",

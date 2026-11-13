@@ -131,9 +131,23 @@ export function moduleSetFor(tier: PlanTier): ModuleSet {
 
 /** Modules every plan has: they only show or hide fields, so there is nothing to sell. */
 const EVERY_PLAN: readonly Module[] = ['pos'];
+/** Of those, the ones the Free plan leaves out: retail item fields (category, brand) are for the Smart plans. */
+const NOT_ON_FREE: readonly Module[] = ['pos'];
 
 export function hasModule(tier: PlanTier, module: Module): boolean {
+  if (tier === 'free' && NOT_ON_FREE.includes(module)) return false;
   return EVERY_PLAN.includes(module) || moduleSetFor(tier) === 'full';
+}
+
+/** Vehicles (picked on an invoice, kept in settings) come with the Smart plans, not Free. */
+export function hasVehicles(tier: PlanTier): boolean {
+  return tier !== 'free';
+}
+
+/** Pages a plan can't open that aren't a module's: vehicles on Free. */
+function planOpensPath(tier: PlanTier, pathname: string): boolean {
+  if (pathname === '/settings/vehicles' || pathname.startsWith('/settings/vehicles/')) return hasVehicles(tier);
+  return true;
 }
 
 /** What a module can't work without: payables are the buying side's bills, scanning fills in expenses. */
@@ -203,6 +217,9 @@ const GATED_PATHS: [prefix: string, module: Module | null][] = [
   ['/inventory', 'inventory'],
   ['/expenses', 'expenses'],
   ['/settings/expense-categories', 'expenses'],
+  // Retail item fields: none on Free, and switched off by the owner on the others.
+  ['/settings/item-categories', 'pos'],
+  ['/settings/brands', 'pos'],
   ['/ocr', 'ocr'],
   // Currencies & rates is open on every plan: a customer on any plan can be billed in their currency.
   // Branches opens on every plan: Free has its one branch to name, and adding more is what is locked.
@@ -225,14 +242,12 @@ const GATED_PATHS: [prefix: string, module: Module | null][] = [
 
 /**
  * Settings pages that only serve one module's fields: every plan opens them, and they go when the
- * owner switches that module off. Categories and brands are retail item fields; currencies and
- * their rates are multi-currency's (still open on a plan without it, which bills in a customer's
- * currency all the same); branches are the branches module's (open on a plan without it to name
- * its one branch).
+ * owner switches that module off. Currencies and their rates are multi-currency's (still open on a
+ * plan without it, which bills in a customer's currency all the same); branches are the branches
+ * module's (open on a plan without it to name its one branch). Item categories and brands follow
+ * the plan too (GATED_PATHS): Free has no retail item fields.
  */
 const SWITCHED_PATHS: [prefix: string, module: Module][] = [
-  ['/settings/item-categories', 'pos'],
-  ['/settings/brands', 'pos'],
   ['/settings/currencies', 'fx'],
   ['/settings/branches', 'branches'],
 ];
@@ -259,6 +274,7 @@ export function canOpen(tier: PlanTier, route: string, disabled?: readonly Modul
   const pathname = route.split('?')[0].replace(/\/\([^/)]+\)/g, '') || '/';
   const switched = switchedModuleForPath(pathname);
   if (switched && disabled?.includes(switched)) return false;
+  if (!planOpensPath(tier, pathname)) return false;
   const module = moduleForPath(pathname);
   return !module || moduleEnabled(tier, disabled, module);
 }

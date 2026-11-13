@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import type { Schema } from '@esmart/api-contract';
-import { expenseCategories, gstCategories } from '@esmart/core/data/masters';
+import { expenseCategories, startingTaxCategories } from '@esmart/core/data/masters';
 import { defaultComplianceSettings } from '@esmart/core/domain/complianceDefaults';
 import { DEFAULT_PREFIXES, SERIES_KINDS, defaultSeries } from '@esmart/core/domain/numbering';
 import { schema } from '@esmart/db';
@@ -42,17 +42,11 @@ export async function createNumberingSeries(tx: DbOrTx, companyId: string, given
 export async function seedCompanyDefaults(
   tx: DbOrTx,
   company: { id: string; baseCurrency: string; taxRegime: 'GST' | 'VAT' | 'NONE'; country: string },
+  /** The rates onboarding kept (and added); unset is the regime's defaults. */
+  taxRates?: readonly number[] | null,
 ) {
   const currency = company.baseCurrency.trim();
-  const taxes =
-    company.taxRegime === 'GST'
-      ? gstCategories(company.id).map((t) => ({ name: t.name, rate: t.rate, type: 'GST' as const, effectiveFrom: t.effectiveFrom, description: t.description }))
-      : company.taxRegime === 'VAT'
-        ? [
-            { name: 'VAT 0%', rate: 0, type: 'VAT' as const, effectiveFrom: '2018-01-01', description: 'Zero-rated and exempt supplies' },
-            { name: 'VAT 5%', rate: 5, type: 'VAT' as const, effectiveFrom: '2018-01-01', description: 'Standard rate' },
-          ]
-        : [{ name: 'No tax', rate: 0, type: 'NONE' as const, effectiveFrom: '2000-01-01', description: 'Not registered for tax' }];
+  const taxes = startingTaxCategories(company.taxRegime, taxRates);
   await tx.insert(schema.taxCategories).values(
     taxes.map((t) => ({
       id: newId('tax'),

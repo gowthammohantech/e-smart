@@ -633,7 +633,7 @@ export function buildIrpPayload(ctx: EInvoiceContext): IrpInvoicePayload {
       Loc: sellerAddr.city,
       Pin: Number(sellerAddr.postalCode) || 0,
       Stcd: sellerAddr.stateCode ?? '',
-      Ph: company.phone,
+      Ph: portalPhone(company.phone),
       Em: company.email,
     },
     BuyerDtls: {
@@ -645,7 +645,7 @@ export function buildIrpPayload(ctx: EInvoiceContext): IrpInvoicePayload {
       Loc: buyerAddr?.city ?? '',
       Pin: Number(buyerAddr?.postalCode) || 0,
       Stcd: buyerAddr?.stateCode ?? '',
-      Ph: buyer?.phone,
+      Ph: portalPhone(buyer?.phone),
       Em: buyer?.email,
     },
     ItemList: itemList,
@@ -667,6 +667,16 @@ export function buildIrpPayload(ctx: EInvoiceContext): IrpInvoicePayload {
       TotInvVal: round2(toMajor(doc.totals.grandTotal) + (reverseCharge ? toMajor(doc.totals.reverseChargeTax ?? { minor: 0, currency }) : 0)),
     },
   };
+}
+
+/**
+ * A phone as the IRP takes it: 6 to 12 digits, nothing else (`^([0-9]{6,12})$`, error 5002 otherwise).
+ * `+91 98765 43210` goes as 9876543210; one that still doesn't fit is left out, as the field is optional.
+ */
+export function portalPhone(phone: string | null | undefined): string | undefined {
+  let digits = (phone ?? '').replace(/\D/g, '');
+  if (digits.length === 12 && digits.startsWith('91')) digits = digits.slice(2);
+  return digits.length >= 6 && digits.length <= 12 ? digits : undefined;
 }
 
 function round2(n: number): number {

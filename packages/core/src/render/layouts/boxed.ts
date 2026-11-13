@@ -34,7 +34,8 @@ export function boxedLayout(view: DocView, variant: 'classic' | 'detailed', copy
   // the consignee beside them when shipped to; with dispatch-from as well, from over to in two rows.
   const seller = sellerBlock(view);
   const buyer = `<div class="cap">${bi('sales:pdf.buyerBillTo')}</div>${buyerBlock(view)}`;
-  const consignee = tpl.showShipTo ? `<div class="cap">${bi('sales:pdf.consigneeShipTo')}</div>${consigneeBlock(view)}` : '';
+  // A document that names its own consignee prints it, whatever the template says.
+  const consignee = tpl.showShipTo || view.doc.shipTo ? `<div class="cap">${bi('sales:pdf.consigneeShipTo')}</div>${consigneeBlock(view)}` : '';
   const dispatchFrom =
     tpl.showShipTo && detailed
       ? `<div class="cap">${bi('sales:pdf.dispatchFrom')}</div><div class="pname">${esc(company?.name)}${view.branch?.name ? ` – ${esc(view.branch.name)}` : ''}</div>${addressLines(view.sellerAddress)}${view.sellerTaxId ? `<div><span class="b">GSTIN:</span> ${esc(view.sellerTaxId)}</div>` : ''}`

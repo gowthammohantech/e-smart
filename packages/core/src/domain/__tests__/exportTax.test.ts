@@ -1,4 +1,4 @@
-import { buildTaxContext, defaultSezTax, splitTax } from '../taxEngine';
+import { buildTaxContext, defaultCrossBorderTax, splitTax } from '../taxEngine';
 import { fromMajor } from '../../lib/money';
 import { Company, Party } from '../../types';
 
@@ -50,7 +50,7 @@ describe('export, SEZ and import tax', () => {
     const lut = company({ lutNumber: 'AD270426012345X', lutValidTill: '2027-03-31' });
     for (const c of [company(), lut]) {
       for (const purchase of [false, true]) {
-        const at = (sezTax?: 'withTax' | 'withoutTax') => buildTaxContext(c, { party: party('sez', '29'), placeOfSupply: '29', date: '2026-06-01', purchase, sezTax });
+        const at = (crossBorderTax?: 'withTax' | 'withoutTax') => buildTaxContext(c, { party: party('sez', '29'), placeOfSupply: '29', date: '2026-06-01', purchase, crossBorderTax });
         expect(types(at('withTax'))).toEqual(['IGST']);
         expect(splitTax(taxable, 18, at('withoutTax'))).toEqual([]);
       }
@@ -60,13 +60,25 @@ describe('export, SEZ and import tax', () => {
     expect(splitTax(taxable, 18, unchosen(lut, false))).toEqual([]);
     expect(types(unchosen(company(), false))).toEqual(['IGST']);
     expect(types(unchosen(lut, true))).toEqual(['IGST']);
-    expect(defaultSezTax(lut, '2026-06-01', false)).toBe('withoutTax');
-    expect(defaultSezTax(lut, '2026-06-01', true)).toBe('withTax');
+    expect(defaultCrossBorderTax(lut, '2026-06-01', false)).toBe('withoutTax');
+    expect(defaultCrossBorderTax(lut, '2026-06-01', true)).toBe('withTax');
   });
 
-  it('leaves exports to the LUT whatever an SEZ choice says', () => {
-    const ctx = buildTaxContext(company(), { party: party('overseas', '96'), placeOfSupply: '96', date: '2026-06-01', purchase: false, sezTax: 'withoutTax' });
-    expect(types(ctx)).toEqual(['IGST']);
+  it('charges an export or an import bill IGST or none as chosen, LUT or not', () => {
+    const lut = company({ lutNumber: 'AD270426012345X', lutValidTill: '2027-03-31' });
+    for (const c of [company(), lut]) {
+      for (const purchase of [false, true]) {
+        const at = (crossBorderTax?: 'withTax' | 'withoutTax') => buildTaxContext(c, { party: party('overseas', '96'), placeOfSupply: '96', date: '2026-06-01', purchase, crossBorderTax });
+        expect(at().crossBorder).toBe(purchase ? 'import' : 'export');
+        expect(types(at('withTax'))).toEqual(['IGST']);
+        expect(splitTax(taxable, 18, at('withoutTax'))).toEqual([]);
+      }
+    }
+    // Unchosen: an export follows the LUT; an import bill charges none (IGST is paid at customs).
+    expect(defaultCrossBorderTax(lut, '2026-06-01', false, 'export')).toBe('withoutTax');
+    expect(defaultCrossBorderTax(company(), '2026-06-01', false, 'export')).toBe('withTax');
+    expect(defaultCrossBorderTax(lut, '2026-06-01', true, 'import')).toBe('withoutTax');
+    expect(defaultCrossBorderTax(company(), '2026-06-01', true, 'import')).toBe('withoutTax');
   });
 
   it('puts no GST on a bill from an overseas supplier', () => {

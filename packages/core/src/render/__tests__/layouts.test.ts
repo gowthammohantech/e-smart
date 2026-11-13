@@ -41,6 +41,13 @@ describe.each(INVOICE_LAYOUTS)('the %s layout prints what the law asks for', (la
     expect(text(render(layout))).toMatch(layout === 'standard' ? /INVOICE/ : /TAX INVOICE/);
   });
 
+  it('titled a commercial invoice in another currency, a tax invoice in the business’s own', () => {
+    const usd = text(render(layout, { document: doc({ currency: 'USD', exchangeRate: 83 }) }));
+    expect(usd).toContain('COMMERCIAL INVOICE');
+    expect(usd).not.toContain('TAX INVOICE');
+    expect(text(render(layout))).toContain('TAX INVOICE');
+  });
+
   it('as a bill of supply for a composition dealer', () => {
     expect(text(render(layout, { company: company({ taxRegistration: { regime: 'GST', identifier: '33NDTPS4034R1ZD', compositionScheme: true } } as never) }))).toContain('BILL OF SUPPLY');
   });
@@ -62,10 +69,31 @@ describe.each(INVOICE_LAYOUTS)('the %s layout prints what the law asks for', (la
   });
 
   it('with the SEZ endorsement on a supply to an SEZ, as it was charged; never on a bill', () => {
-    expect(text(render(layout, { document: doc({ sezTax: 'withTax' }) }))).toContain('for authorised operations on payment of integrated tax');
-    expect(text(render(layout, { document: doc({ sezTax: 'withoutTax' }) }))).toContain('under bond or letter of undertaking without payment of integrated tax');
-    expect(text(render(layout, { document: doc({ kind: 'purchaseBill', sezTax: 'withTax' }) }))).not.toContain('Supply meant for SEZ');
+    expect(text(render(layout, { document: doc({ crossBorderTax: 'withTax' }) }))).toContain('for authorised operations on payment of integrated tax');
+    expect(text(render(layout, { document: doc({ crossBorderTax: 'withoutTax' }) }))).toContain('under bond or letter of undertaking without payment of integrated tax');
+    expect(text(render(layout, { document: doc({ kind: 'purchaseBill', crossBorderTax: 'withTax' }) }))).not.toContain('Supply meant for SEZ');
     expect(text(render(layout))).not.toContain('Supply meant for SEZ');
+    // An export (supplied to another country) carries the export wording.
+    expect(text(render(layout, { document: doc({ crossBorderTax: 'withTax', placeOfSupplyStateCode: '96' }) }))).toContain('Supply meant for export on payment of integrated tax');
+    expect(text(render(layout, { document: doc({ crossBorderTax: 'withoutTax', placeOfSupplyStateCode: '96' }) }))).toContain('Supply meant for export under bond or letter of undertaking without payment of integrated tax');
+  });
+
+  it('prints the document’s own ship-to, whatever the template says', () => {
+    const shipTo = { name: 'Site office', gstin: '29AABCS1234K1Z5', address: { line1: '9 Dock Road', city: 'Mangaluru', state: 'Karnataka', stateCode: '29', postalCode: '575001', country: 'IN' } };
+    const page = text(render(layout, { document: doc({ shipTo } as never) }));
+    expect(page).toContain('Site office');
+    expect(page).toContain('9 Dock Road');
+    expect(page).toContain('29AABCS1234K1Z5');
+    expect(text(render(layout))).not.toContain('9 Dock Road');
+  });
+
+  it('names the charges by what they are for', () => {
+    const charged = (over: object) => doc({ date: '2026-11-20', charges: money(5000, 'INR'), ...over } as never);
+    const freight = charged({ chargesKind: 'freight' });
+    expect(freight.totals.charges.minor).toBeGreaterThan(0);
+    expect(text(render(layout, { document: freight }))).toContain('Freight charges');
+    expect(text(render(layout, { document: charged({ chargesKind: 'packing' }) }))).toContain('Packing and forwarding');
+    expect(text(render(layout, { document: charged({}) }))).toContain('Other charges');
   });
 
   it('with the proforma disclaimer', () => {

@@ -7,7 +7,7 @@ import { FULL_PLAN, hasModule, moduleEnabled, moduleForReport, type Module } fro
 import { tdsRegister } from '@esmart/core/domain/tds';
 import type { BusinessDocument } from '@esmart/core/types';
 import { schema } from '@esmart/db';
-import { summarizeAdvances, summarizeDocuments, summarizeExpenses, summarizePayments, summarizeStock, summarizeTax, type ReportFilters } from '@esmart/core/domain/reports';
+import { summarizeAdvances, summarizeDocuments, summarizeExpenses, summarizePayments, summarizeStock, summarizeTax, partyInFilter, type ReportFilters } from '@esmart/core/domain/reports';
 import { RawBody, defineHandlers, type CompanyRow, type Ctx } from '../../context';
 import { forbidden, invalid, planUpgradeRequired } from '../../http/errors';
 import { loadBook, loadVouchers } from '../books/book';
@@ -29,6 +29,12 @@ import { accountNames, branchNames, loadDocuments, loadExpenseCategories, loadEx
 import { tableCsv, tableHtml, tableOf, type ReportBody, type ReportKey } from './table';
 
 type Query = { branchId?: string; partyId?: string; currency?: string };
+
+/** `partyId` is one contact or several, comma-separated: the filters' single contact, or its list. */
+function partyFilter(partyId: string | undefined): Pick<ReportFilters, 'partyId' | 'partyIds'> {
+  const ids = [...new Set((partyId ?? '').split(',').map((x) => x.trim()).filter(Boolean))];
+  return ids.length > 1 ? { partyId: null, partyIds: ids } : { partyId: ids[0] ?? null, partyIds: null };
+}
 type AgingCtx = Pick<Ctx<'getReceivables'>, 'company' | 'user' | 'db' | 'now'>;
 
 /** English names for the payment methods (the app translates its own). */
@@ -59,7 +65,7 @@ export async function aging(ctx: AgingCtx, kind: 'receivables' | 'payables', q: 
  */
 export async function buildReport(s: Scope, key: ReportKey, q: Query): Promise<ReportBody> {
   const base = s.company.baseCurrency.trim();
-  const filters: ReportFilters = { range: { from: s.from, to: s.to }, branchId: q.branchId ?? null, partyId: q.partyId ?? null, currency: q.currency ?? null };
+  const filters: ReportFilters = { range: { from: s.from, to: s.to }, branchId: q.branchId ?? null, ...partyFilter(q.partyId), currency: q.currency ?? null };
 
   switch (key) {
     case 'sales-summary':
@@ -122,7 +128,7 @@ export async function buildReport(s: Scope, key: ReportKey, q: Query): Promise<R
     case 'tds-register': {
       // A purchase return gives back TDS at its bill's rate, as a credit note does.
       const { docs } = await loadDocuments(s, ['purchaseBill', 'supplierDebitNote', 'supplierCreditNote', 'purchaseReturn']);
-      const live = docs.filter((d) => tdsLive(d) && (!q.partyId || d.partyId === q.partyId));
+      const live = docs.filter((d) => tdsLive(d) && partyInFilter(filters, d.partyId));
       const partyIds = [...new Set(live.map((d) => d.partyId))];
       const parties = partyIds.length ? await s.db.select({ id: schema.parties.id, name: schema.parties.name, pan: schema.parties.pan }).from(schema.parties).where(inArray(schema.parties.id, partyIds)) : [];
       const toBase = (minor: number, d: BusinessDocument) => Math.round(minor * (d.currency === base ? 1 : d.exchangeRate));
@@ -168,12 +174,15 @@ export const reportsHandlers = defineHandlers({
     // The whole book up to `to`, as the app held it: the core functions apply the range themselves.
     const all: Scope = { db: ctx.db, company: ctx.company, user: ctx.user, now: ctx.now, from: '1900-01-01', to };
     const base = ctx.company.baseCurrency.trim();
-    const filters: ReportFilters = { range: { from, to }, branchId: branchId ?? null, partyId: partyId ?? null, currency: null };
+    const filters: ReportFilters = { range: { from, to }, branchId: branchId ?? null, ...partyFilter(partyId), currency: null };
     const range = { from, to };
     const SALES_SIDE = ['invoice', 'debitNote', 'salesReturn', 'creditNote'] as const;
     const BUY_SIDE = ['purchaseBill', 'supplierDebitNote', 'purchaseReturn', 'supplierCreditNote'] as const;
     const partiesOf = async (docs: { partyId: string }[], extra: { partyId: string }[] = []) => loadParties(all, [...docs, ...extra].map((d) => d.partyId));
-    const inScope = <T extends { branchId?: string; partyId?: string }>(rows: T[]) => rows.filter((r) => (!branchId || r.branchId === branchId) && (!partyId || r.partyId === partyId));
+    // With a contact (or several) picked, a row of no contact is out.
+    const byParty = !!filters.partyId || !!filters.partyIds?.length;
+    const inScope = <T extends { branchId?: string; partyId?: string }>(rows: T[]) =>
+      rows.filter((r) => (!branchId || r.branchId === branchId) && (!byParty || (!!r.partyId && partyInFilter(filters, r.partyId))));
 
     switch (key) {
       case 'sales-summary':

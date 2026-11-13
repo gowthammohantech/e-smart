@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -19,6 +19,7 @@ import { formatDate, nowISO, today } from '@esmart/core/lib/date';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { Errors, hasErrors, hsnMandatory, required, validHsn } from '@esmart/core/lib/validators';
 import { useAppStore } from '../../store/appStore';
+import { searchHsn, type HsnMatch } from '../../remote/reference';
 import { useActiveCompany, useBaseCurrency, useBrands, useHasModule, useItemCategories, useItems, useTaxCategories } from '../../store/selectors';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { useGoBack } from '../../navigation/useGoBack';
@@ -85,6 +86,37 @@ function ItemFormFields({ item }: { item?: Item }) {
 
   const [unitOpen, setUnitOpen] = useState(false);
   const [taxOpen, setTaxOpen] = useState(false);
+  // The HSN/SAC master, searched as it is typed: a pick fills the code, the description and the rate.
+  const [hsnOpen, setHsnOpen] = useState(false);
+  const [hsnQuery, setHsnQuery] = useState('');
+  const [hsnMatches, setHsnMatches] = useState<HsnMatch[]>([]);
+  const [hsnLoading, setHsnLoading] = useState(false);
+  useEffect(() => {
+    if (!hsnOpen || !hsnQuery.trim()) {
+      setHsnMatches([]);
+      return;
+    }
+    let live = true;
+    setHsnLoading(true);
+    const timer = setTimeout(() => {
+      searchHsn(hsnQuery)
+        .then((rows) => live && setHsnMatches(rows))
+        .catch(() => live && setHsnMatches([]))
+        .finally(() => live && setHsnLoading(false));
+    }, 250);
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+  }, [hsnOpen, hsnQuery]);
+  const pickHsn = (code: string) => {
+    const match = hsnMatches.find((h) => h.code === code);
+    setHsnCode(code);
+    if (match?.description && !description.trim()) setDescription(match.description);
+    const rated = match?.gstRate == null ? undefined : taxCategories.find((c) => c.rate === match.gstRate);
+    if (rated) setTaxCategoryId(rated.id);
+    setHsnOpen(false);
+  };
   const [categoryOpen, setCategoryOpen] = useState(false);
   const [brandOpen, setBrandOpen] = useState(false);
   const [errors, setErrors] = useState<Errors<'name' | 'sku' | 'hsn' | 'openingStockDate'>>({});
@@ -242,6 +274,7 @@ function ItemFormFields({ item }: { item?: Item }) {
             error={errors.hsn}
             required={hsnRequired}
           />
+          <Button title={tr('inventory:form.hsnSearch')} variant="ghost" size="sm" icon="magnify" onPress={() => setHsnOpen(true)} style={{ alignSelf: 'flex-start', marginTop: -t.spacing.sm }} />
           {gstRegistered || gst ? <GstTreatmentFields value={gst} onChange={setGst} type={type} /> : null}
 
           {type === 'goods' ? (
@@ -319,6 +352,22 @@ function ItemFormFields({ item }: { item?: Item }) {
           value={taxCategoryId}
           onSelect={setTaxCategoryId}
           searchable={false}
+        />
+        <SelectSheet
+          visible={hsnOpen}
+          onClose={() => setHsnOpen(false)}
+          title={tr('inventory:form.hsnSearchTitle')}
+          searchPlaceholder={tr('inventory:form.hsnSearchPlaceholder')}
+          options={hsnMatches.map((h) => ({
+            value: h.code ?? '',
+            label: `${h.code} · ${h.description ?? ''}`,
+            description: h.gstRate == null ? h.kind : tr('inventory:form.hsnRate', { kind: h.kind, rate: formatPercent(h.gstRate) }),
+          }))}
+          value={hsnCode || null}
+          onSelect={pickHsn}
+          onQueryChange={setHsnQuery}
+          loading={hsnLoading}
+          emptyMessage={tr(hsnQuery.trim() ? 'inventory:form.hsnNoMatch' : 'inventory:form.hsnTypeToSearch')}
         />
         <SelectSheet
           visible={categoryOpen}

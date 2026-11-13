@@ -53,7 +53,7 @@ const TA_LATIN_ALLOWLIST = new RegExp(
     // GSTR-1 table codes, as the portal names them.
     'EXP|CDNR|CDNUR|AT|ATADJ|B2BA|B2CLA|B2CSA|EXPA|CDNRA|CDNURA|B2CL|B2CS|NIL|DOCS|AMEND|A|UIN',
     // E-invoice supply types, as the IRP schema names them.
-    'SEZWP|SEZWOP',
+    'SEZWP|SEZWOP|EXPWP|EXPWOP',
     // The postal code, which Indian forms call a PIN in every language.
     'PIN',
     // A GST challan's identifiers, as printed on PMT-06.

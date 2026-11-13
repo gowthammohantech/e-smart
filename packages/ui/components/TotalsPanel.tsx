@@ -54,8 +54,11 @@ export function TotalsPanel({
   tds,
   itc,
   cess,
+  chargesLabel,
 }: {
   totals: DocumentTotals;
+  /** The charges row's name (freight, packing…); other charges when unset. */
+  chargesLabel?: string;
   /**
    * TDS kept back on a supplier's bill, with how it reads ("TDS 194C @ 2%"); or, on an invoice, what
    * the customer is expected to deduct, with `netLabel` for what they then pay (the total is unchanged).
@@ -103,7 +106,7 @@ export function TotalsPanel({
         <Row label={tr('common:totals.reimbursements')} value={formatMoney(totals.reimbursements)} />
       ) : null}
 
-      {!isZero(totals.charges) ? <Row label={tr('common:totals.otherCharges')} value={formatMoney(totals.charges)} /> : null}
+      {!isZero(totals.charges) ? <Row label={chargesLabel ?? tr('common:totals.otherCharges')} value={formatMoney(totals.charges)} /> : null}
 
       {/* TCS is inside the grand total (lineCalc): without its row the rows wouldn't add up to Total. */}
       {totals.tcs && !isZero(totals.tcs) ? <Row label={tr('common:totals.tcs')} value={formatMoney(totals.tcs)} /> : null}

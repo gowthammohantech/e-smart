@@ -626,7 +626,7 @@ ${url}`;
           {doc.placeOfSupplyStateCode ? (
             <Badge label={tr('sales:detail.placeOfSupplyBadge', { state: INDIAN_STATES.find((s) => s.code === doc.placeOfSupplyStateCode)?.name ?? doc.placeOfSupplyStateCode })} tone="neutral" />
           ) : null}
-          {doc.sezTax ? <Badge label={tr(doc.sezTax === 'withTax' ? 'sales:detail.sezWithTax' : 'sales:detail.sezWithoutTax')} tone="info" /> : null}
+          {doc.crossBorderTax ? <Badge label={tr(doc.crossBorderTax === 'withTax' ? 'sales:detail.crossBorderWithTax' : 'sales:detail.crossBorderWithoutTax')} tone="info" /> : null}
           {doc.reference ? <Badge label={tr('sales:detail.referenceBadge', { reference: doc.reference })} tone="neutral" /> : null}
           {doc.supplierDocNumber ? <Badge label={tr('sales:detail.theirNumber', { number: doc.supplierDocNumber })} tone="neutral" /> : null}
           {costCentre ? <Badge label={costCentre.name} tone="neutral" icon="sitemap-outline" /> : null}
@@ -749,6 +749,7 @@ ${url}`;
       <Card style={{ marginTop: desktop ? 0 : t.spacing.md }}>
         <TotalsPanel
           totals={doc.totals}
+          chargesLabel={doc.chargesKind ? tr(`sales:editor.chargesKind.${doc.chargesKind}` as 'sales:editor.chargesKind.other') : undefined}
           currency={doc.currency}
           baseCurrency={baseCurrency}
           exchangeRate={doc.exchangeRate}
@@ -802,13 +803,12 @@ ${url}`;
       </Card>
     </>
   );
-  // An issued invoice may be edited in full while it is the latest of its series and nothing stands on
-  // it (RULES 6.23): the server says so. When it can't for a reason other than a later invoice, the
-  // reason is the hint.
+  // An issued invoice may be edited in full, its date kept, while nothing stands on it (RULES 6.23):
+  // the server says so. When it can't, the reason is the hint.
   const editable = !isFinalized(doc.status) || (record?.editable ?? doc.editable) === true;
   type HintedBlock = 'periodLocked' | 'hasPayments' | 'hasCredit' | 'hasNotes' | 'eInvoiced' | 'ewayBill' | 'returnFiled' | 'laterStock';
   const editBlock = (record?.editBlock ?? doc.editBlock) as string | undefined;
-  const hinted = (b: string | undefined): b is HintedBlock => !!b && !['notLatest', 'notFinal', 'notInvoice'].includes(b);
+  const hinted = (b: string | undefined): b is HintedBlock => !!b && !['notFinal', 'notInvoice'].includes(b);
   const editHint: string | undefined =
     editable || doc.status === 'cancelled'
       ? undefined

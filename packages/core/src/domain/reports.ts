@@ -19,8 +19,27 @@ export type ReportFilters = {
   range: DateRange;
   branchId?: string | null;
   partyId?: string | null;
+  /** Several contacts: a document or payment of any of them. With one, partyId says the same. */
+  partyIds?: readonly string[] | null;
   currency?: string | null;
 };
+
+/** A document's tax by head (IGST, CGST, SGST, cess), in its own currency; reverse-charge tax, which the other side pays, is left out. */
+export function taxByHead(doc: Pick<BusinessDocument, 'currency' | 'totals'>): { igst: Money; cgst: Money; sgst: Money; cess: Money } {
+  const of = (type: string) =>
+    money(
+      doc.totals.taxLines.filter((l) => !l.reverseCharge).reduce((a, l) => a + l.components.filter((c) => c.type === type).reduce((b, c) => b + c.amount.minor, 0), 0),
+      doc.currency,
+    );
+  return { igst: of('IGST'), cgst: of('CGST'), sgst: of('SGST'), cess: of('CESS') };
+}
+
+/** Whether a document or payment of this contact is within the filters' contact (or contacts). */
+export function partyInFilter(f: Pick<ReportFilters, 'partyId' | 'partyIds'>, partyId: string): boolean {
+  if (f.partyId && partyId !== f.partyId) return false;
+  if (f.partyIds?.length && !f.partyIds.includes(partyId)) return false;
+  return true;
+}
 
 const LIVE_STATUSES = ['issued', 'partiallyPaid', 'paid', 'overdue', 'sent', 'confirmed', 'delivered', 'fulfilled', 'received', 'billed', 'accepted', 'approved', 'processed'];
 
@@ -35,7 +54,7 @@ function inBase(amount: Money, rate: number, baseCurrency: string): Money {
 function matches(d: BusinessDocument, f: ReportFilters): boolean {
   if (!inRange(d.date, f.range)) return false;
   if (f.branchId && d.branchId !== f.branchId) return false;
-  if (f.partyId && d.partyId !== f.partyId) return false;
+  if (!partyInFilter(f, d.partyId)) return false;
   if (f.currency && d.currency !== f.currency) return false;
   return true;
 }
@@ -324,7 +343,7 @@ export function summarizePayments(
     (p) =>
       inRange(p.date, filters.range) &&
       (!filters.branchId || p.branchId === filters.branchId) &&
-      (!filters.partyId || p.partyId === filters.partyId),
+      partyInFilter(filters, p.partyId),
   );
 
   const received = sum(
@@ -402,7 +421,7 @@ export function summarizeAdvances(payments: Payment[], baseCurrency: string, fil
         p.unallocated.minor > 0 &&
         inRange(p.date, filters.range) &&
         (!filters.branchId || p.branchId === filters.branchId) &&
-        (!filters.partyId || p.partyId === filters.partyId),
+        partyInFilter(filters, p.partyId),
     )
     .map((p) => ({
       id: p.id,

@@ -1,4 +1,4 @@
-import { approvalKindAvailable, canOpen, hasModule, moduleForPath, moduleSetFor } from '@esmart/core/domain/plan';
+import { approvalKindAvailable, canOpen, hasModule, hasVehicles, moduleForPath, moduleSetFor } from '@esmart/core/domain/plan';
 import { nextStepRoute, onboardingSteps } from '../store/onboardingStore';
 
 // Hoisted above the imports by Jest, so the store gets the mock.
@@ -80,7 +80,7 @@ describe('plan tiers', () => {
       expect(canOpen(plan, '/settings/currencies', ['pos'])).toBe(true);
       // Multi-currency off: no currencies and rates.
       expect(canOpen(plan, '/settings/currencies', ['fx'])).toBe(false);
-      expect(canOpen(plan, '/settings/item-categories', ['fx'])).toBe(true);
+      expect(canOpen(plan, '/settings/item-categories', ['fx'])).toBe(plan !== 'free');
       // Branches off: no branches page.
       expect(canOpen(plan, '/settings/branches', ['branches'])).toBe(false);
       expect(canOpen(plan, '/settings/branches', ['fx'])).toBe(true);
@@ -89,6 +89,17 @@ describe('plan tiers', () => {
     // Left on, they open on every plan: a Free customer can still be billed in their currency.
     expect(canOpen('free', '/settings/currencies', [])).toBe(true);
     expect(canOpen('basic', '/settings/brands')).toBe(true);
+  });
+
+  it('leaves item categories, brands and vehicles out of the Free plan only', () => {
+    for (const route of ['/settings/item-categories', '/settings/brands', '/settings/vehicles']) {
+      expect(canOpen('free', route, [])).toBe(false);
+      for (const plan of ['basic', 'pro', 'business'] as const) expect(canOpen(plan, route, [])).toBe(true);
+    }
+    expect(hasModule('free', 'pos')).toBe(false);
+    expect(hasModule('basic', 'pos')).toBe(true);
+    expect(hasVehicles('free')).toBe(false);
+    expect(hasVehicles('basic')).toBe(true);
   });
 });
 

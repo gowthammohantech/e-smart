@@ -71,10 +71,12 @@
     "stateHint": "The first two digits set your home state for CGST/SGST vs IGST.",
     "composition": "Composition scheme",
     "compositionHint": "Turn on if you file under the composition scheme — invoices will not show a tax breakdown.",
-    "defaultSlabs": "Default tax slabs",
+    "defaultSlabs": "Tax rates to start with",
     "unregisteredNote": "Your invoices will be raised without a tax breakdown. You can register later without losing any history.",
     "registeredFor": "I'm registered for {{regime}}",
-    "slabsNote": "These are created for you. Add or edit slabs any time in Settings → Taxes."
+    "slabsNote": "Tap a rate to leave it out, or add another. You can change them any time in Settings → Taxes.",
+    "addRate": "Add a rate (%)",
+    "add": "Add"
   },
   "numbering": {
     "title": "Invoice numbering",

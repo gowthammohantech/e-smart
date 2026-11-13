@@ -15,9 +15,9 @@ export type SeriesChoice = Pick<NumberingSeries, 'kind' | 'prefix' | 'nextNumber
  * the server is still making it. `idempotencyKey` makes a retry return the same business.
  * Throws when the server refuses it or can't be reached.
  */
-export async function createBusiness(business: NewBusiness, numberingSeries: SeriesChoice[], idempotencyKey: string): Promise<string> {
+export async function createBusiness(business: NewBusiness, numberingSeries: SeriesChoice[], idempotencyKey: string, taxRates?: number[]): Promise<string> {
   const { data } = await api.POST('/companies', {
-    body: { ...business, seedDefaults: true, numberingSeries } as never,
+    body: { ...business, seedDefaults: true, numberingSeries, ...(taxRates?.length && { taxRates }) } as never,
     headers: { 'Idempotency-Key': idempotencyKey },
   });
   const company = data as Company | undefined;
