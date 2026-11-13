@@ -85,7 +85,8 @@ const STANDALONE_DISTANCE_REFUSED = '702';
 const STANDALONE_HSN_REFUSED = '216';
 const SANDBOX_ACCEPTED_HSN = '85362010';
 /** The same refusal on an e-invoice: 2176 "HSN code(s) … invalid". */
-const IRN_HSN_REFUSED = '2176';
+const IRN_HSN_REFUSED = ['2176', '2311'] as const; // 2311: the sandbox taxpayer's turnover requires a 6-digit HSN, so a 4-digit one is refused too.
+// Only goods lines are swapped: a service line keeps its SAC (the portal refuses a goods HSN on a service, 3048).
 
 /** `status_cd` when the portal did what was asked. A string, as Whitebooks sends it. */
 const SUCCESS = '1';
@@ -380,10 +381,10 @@ export class WhitebooksGateway implements GspGateway {
         try {
           return await this.filing(login, PATHS.generateIrn, 'post', { body: p });
         } catch (error) {
-          const items = (p.ItemList as { HsnCd?: string }[]) ?? [];
-          if (!(error instanceof GspRequestError && hasErrorCode(error.envelope, IRN_HSN_REFUSED) && items.some((i) => i.HsnCd !== SANDBOX_ACCEPTED_HSN))) throw error;
+          const items = (p.ItemList as { HsnCd?: string; IsServc?: string }[]) ?? [];
+          if (!(error instanceof GspRequestError && IRN_HSN_REFUSED.some((code) => hasErrorCode(error.envelope, code)) && items.some((i) => i.IsServc !== 'Y' && i.HsnCd !== SANDBOX_ACCEPTED_HSN))) throw error;
           this.log(`The sandbox does not know an HSN on this invoice: filing it under ${SANDBOX_ACCEPTED_HSN}`);
-          return this.filing(login, PATHS.generateIrn, 'post', { body: { ...p, ItemList: items.map((i) => ({ ...i, HsnCd: SANDBOX_ACCEPTED_HSN })) } });
+          return this.filing(login, PATHS.generateIrn, 'post', { body: { ...p, ItemList: items.map((i) => (i.IsServc === 'Y' ? i : { ...i, HsnCd: SANDBOX_ACCEPTED_HSN })) } });
         }
       };
       try {
