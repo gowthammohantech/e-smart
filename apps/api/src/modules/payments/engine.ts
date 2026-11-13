@@ -307,6 +307,9 @@ export async function writePayment(
 
   const merged = new Map<string, number>();
   let overOutstanding = false;
+  // Each branch's GSTIN (its own, else the company's), for an advance's tax.
+  const branchRows = input.advanceTax || existing?.advanceTaxCategoryId ? await tx.select({ id: schema.branches.id, gstin: schema.branches.gstin }).from(schema.branches).where(eq(schema.branches.companyId, company.id)) : [];
+  const gstinOf = branchRows.length ? (id: string) => branchRows.find((b) => b.id === id)?.gstin ?? company.taxIdentifier ?? null : null;
   input.allocations.forEach((a, i) => {
     const field = `allocations[${i}]`;
     const doc = docs.find((d) => d.id === a.documentId);
@@ -314,6 +317,12 @@ export async function writePayment(
     if (merged.has(a.documentId)) return blocking(`${field}.documentId`, `${doc.number} is allocated twice`);
     merged.set(a.documentId, a.amountMinor);
     if (doc.partyId !== input.partyId) blocking(`${field}.documentId`, `${doc.number} belongs to another party`);
+    // A user kept to some branches settles only their documents.
+    if (actor.branchIds.length && !actor.branchIds.includes(doc.branchId)) blocking(`${field}.documentId`, `${doc.number} is in a branch you don't work in`);
+    // Tax on an advance was paid under the receiving branch's GSTIN: it is taken back only under that GSTIN.
+    if (gstinOf && branchId && gstinOf(doc.branchId) !== gstinOf(branchId) && (input.advanceTax || existing?.advanceTaxCategoryId)) {
+      blocking(`${field}.documentId`, `${doc.number} is under GSTIN ${gstinOf(doc.branchId) ?? 'none'}; the advance's tax was paid under ${gstinOf(branchId) ?? 'none'}`);
+    }
     if (!wanted.includes(doc.kind)) blocking(`${field}.documentId`, `A ${input.direction} payment settles ${input.direction === 'received' ? 'invoices and debit notes' : 'purchase bills and supplier debit notes'}, not a ${doc.kind}`);
     if (!isFinalized(doc.status) || doc.status === 'cancelled') blocking(`${field}.documentId`, `${doc.number} is ${doc.status}`);
     if (doc.currency.trim() !== input.currency) blocking(`${field}.documentId`, `${doc.number} is in ${doc.currency.trim()}, the payment in ${input.currency}`);
@@ -436,10 +445,13 @@ export async function writePayment(
   if (input.currency !== baseCurrency) {
     fxGainLossMinor = input.allocations.reduce((s, a) => {
       const doc = docs.find((d) => d.id === a.documentId)!;
-      const diff = settlementGainLoss({ minor: a.amountMinor, currency: input.currency }, Number(doc.exchangeRate), exchangeRate!, baseCurrency).minor;
+      // On all it settles: TDS, discount and write-off clear the invoice at its own rate too.
+      const diff = settlementGainLoss({ minor: settles(a), currency: input.currency }, Number(doc.exchangeRate), exchangeRate!, baseCurrency).minor;
       // Receiving more base currency than booked is a gain; paying more is a loss.
       return s + (input.direction === 'received' ? diff : -diff);
     }, 0);
+    // A refund pays back an advance taken at the receipt's rate: paying more in base is a loss.
+    if (receipt) fxGainLossMinor += -settlementGainLoss({ minor: input.amountMinor, currency: input.currency }, Number(receipt.exchangeRate), exchangeRate!, baseCurrency).minor;
   }
 
   const columns = {

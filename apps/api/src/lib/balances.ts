@@ -1,4 +1,5 @@
-import { and, eq, inArray, isNull, notInArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, isNull, notInArray, sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import { PAYABLE_KINDS, RECEIVABLE_KINDS } from '@esmart/core/domain/documentStates';
 import { applyOpening } from '@esmart/core/domain/receivables';
 import { openingOnSide } from '@esmart/core/domain/partyKinds';
@@ -87,6 +88,16 @@ export async function partyBalances(
   for (const r of notes) {
     if ((r.kind === 'supplierCreditNote') === (kindOf.get(r.partyId) === 'supplier')) out.get(r.partyId)!.advance += Number(r.total);
   }
+  // Credit notes that, with what was paid, came to more than their invoice: the excess is credit too.
+  const withLinked = await db
+    .selectDistinct({ partyId: d.partyId, currency: d.currency })
+    .from(d)
+    .where(and(eq(d.companyId, companyId), inArray(d.partyId, ids), inArray(d.kind, ['creditNote', 'supplierCreditNote']), isNotNull(d.sourceDocumentId), notInArray(d.status, [...CLOSED, 'requested'])));
+  for (const r of withLinked) {
+    const partySide = kindOf.get(r.partyId) === 'supplier' ? 'supplier' : 'customer';
+    const extra = await excessOfLinkedNotes(db, companyId, r.partyId, partySide, r.currency.trim());
+    out.get(r.partyId)!.advance += extra.reduce((a, x) => a + x.left, 0);
+  }
   // Last: the opening balance is settled first from the advances counted above.
   for (const r of openings) {
     const b = out.get(r.id)!;
@@ -98,3 +109,46 @@ export async function partyBalances(
   }
   return out;
 }
+
+/**
+ * Credit notes (or returns) against an invoice or bill that, with what was paid on it, came to more
+ * than it was for: the excess is the party's credit, to set against another document like a direct
+ * note's (money audit A15). Shared among the source's notes, latest first, less what each has been
+ * applied elsewhere already.
+ */
+export async function excessOfLinkedNotes(db: DbOrTx, companyId: string, partyId: string, side: 'customer' | 'supplier', base: string, branches: string[] = []) {
+  const D = schema.documents;
+  const CA = schema.creditApplications;
+  const S = alias(D, 'source');
+  const noteKind = side === 'customer' ? 'creditNote' : 'supplierCreditNote';
+  const rows = await db
+    .select({ id: D.id, number: D.number, date: D.date, total: D.grandTotalMinor, tds: D.tdsAmountMinor, sourceId: D.sourceDocumentId, sourceTotal: S.grandTotalMinor, applied: sql<number>`coalesce((select sum(ca.amount_minor) from credit_applications ca where ca.note_id = "documents"."id"), 0)::bigint` })
+    .from(D)
+    .innerJoin(S, eq(S.id, D.sourceDocumentId))
+    .where(and(eq(D.companyId, companyId), eq(D.partyId, partyId), eq(D.kind, noteKind), notInArray(D.status, [...CLOSED, 'requested']), eq(D.currency, base), notInArray(S.status, [...CLOSED, 'requested']), branches.length ? inArray(D.branchId, branches) : undefined))
+    .orderBy(D.date, D.id);
+  if (!rows.length) return [];
+  const sourceIds = [...new Set(rows.map((r) => r.sourceId!))];
+  const A = schema.paymentAllocations;
+  const settled = await db
+    .select({ documentId: A.documentId, total: sql<number>`coalesce(sum(${A.amountMinor} + ${A.tdsMinor} + ${A.discountMinor} + ${A.writeOffMinor}), 0)::bigint` })
+    .from(A)
+    .where(inArray(A.documentId, sourceIds))
+    .groupBy(A.documentId);
+  const appliedTo = await db.select({ documentId: CA.documentId, total: sql<number>`coalesce(sum(${CA.amountMinor}), 0)::bigint` }).from(CA).where(inArray(CA.documentId, sourceIds)).groupBy(CA.documentId);
+  const out: { n: { id: string; number: string; date: string; total: number; tds: number }; left: number }[] = [];
+  for (const sid of sourceIds) {
+    const mine = rows.filter((r) => r.sourceId === sid);
+    const credited = mine.reduce((a, r) => a + r.total - r.tds, 0);
+    const paid = Number(settled.find((x) => x.documentId === sid)?.total ?? 0) + Number(appliedTo.find((x) => x.documentId === sid)?.total ?? 0);
+    let excess = Math.max(paid + credited - mine[0].sourceTotal, 0) - mine.reduce((a, r) => a + Number(r.applied), 0);
+    for (const r of [...mine].reverse()) {
+      if (excess <= 0) break;
+      const left = Math.min(r.total - r.tds - Number(r.applied), excess);
+      if (left > 0) out.push({ n: { id: r.id, number: r.number, date: r.date, total: r.total, tds: r.tds }, left });
+      excess -= Math.max(left, 0);
+    }
+  }
+  return out;
+}
+

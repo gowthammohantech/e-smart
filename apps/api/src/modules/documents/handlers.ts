@@ -902,7 +902,10 @@ export const documentsHandlers = defineHandlers({
       lines = stored.filter((l) => ctx.body.lineIds!.includes(l.id!));
     }
     // A new document takes the supplier's TDS section, not the one its source was finalised with.
-    const f: DocFields = { ...fieldsFromRow(src), kind: target, date: today(ctx.now), dueDate: null, validUntil: null, sourceDocumentId: src.id, tdsSection: undefined };
+    // Dated today, at today's rate: the source's rate was for its own day. A return or note reverses
+    // its source, so it keeps the source's rate.
+    const reverses = ['salesReturn', 'purchaseReturn', 'creditNote', 'debitNote', 'supplierCreditNote', 'supplierDebitNote'].includes(target);
+    const f: DocFields = { ...fieldsFromRow(src), kind: target, date: today(ctx.now), dueDate: null, validUntil: null, sourceDocumentId: src.id, tdsSection: undefined, ...(!reverses && { exchangeRate: null }) };
     // The new draft keeps the source's tax rates: a return must reverse exactly what was charged.
     const row = await insertDocument(ctx, f, lines.map((l) => ({ ...l, id: undefined })), requestedStatus(target, 'draft') as DocStatus, {
       snapshotRates: false,
@@ -917,7 +920,7 @@ export const documentsHandlers = defineHandlers({
   async duplicateDocument(ctx) {
     const src = await findDocument(ctx, ctx.db, ctx.params.id);
     const stored = linesFromRows(await ctx.db.select().from(schema.documentLines).where(eq(schema.documentLines.documentId, src.id)));
-    const f: DocFields = { ...fieldsFromRow(src), date: today(ctx.now), dueDate: null, validUntil: null, sourceDocumentId: null, tdsSection: src.tdsSection ?? undefined };
+    const f: DocFields = { ...fieldsFromRow(src), date: today(ctx.now), dueDate: null, validUntil: null, sourceDocumentId: null, tdsSection: src.tdsSection ?? undefined, exchangeRate: null };
     const row = await insertDocument(ctx, f, stored.map((l) => ({ ...l, id: undefined, taxRate: undefined })), requestedStatus(src.kind, 'draft') as DocStatus, {
       action: `duplicated from ${src.number}`,
     });

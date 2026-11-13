@@ -10,6 +10,7 @@ import { recordChange, type DbOrTx } from '../../lib/audit';
 import { newId } from '../../lib/ids';
 import { money } from '../../lib/wire';
 import { assertPeriodOpen, syncPaymentState } from '../documents/lifecycle';
+import { excessOfLinkedNotes } from '../../lib/balances';
 import { writePayment } from './engine';
 import { requestInput } from './requests';
 import { paymentsToWire } from './wire';
@@ -75,6 +76,7 @@ export async function adjustable(ctx: AnyCtx, db: DbOrTx, partyId: string, side:
       ),
     )
     .orderBy(D.date, D.id);
+  const linkedCredit = await excessOfLinkedNotes(db, ctx.company.id, partyId, side, base, branches);
   const kinds = PAYABLE_KINDS.filter((k) => RECEIVABLE_KINDS.includes(k) === (side === 'customer'));
   const docs = await db
     .select()
@@ -101,8 +103,7 @@ export async function adjustable(ctx: AnyCtx, db: DbOrTx, partyId: string, side:
     : [];
   const withService = new Set(service.map((s) => s.documentId));
   const credits: (Credit & { left: { minor: number; currency: string } })[] = [
-    ...notes
-      .map((n) => ({ n, left: n.total - n.tds - Number(n.applied) }))
+    ...[...notes.map((n) => ({ n, left: n.total - n.tds - Number(n.applied) })), ...linkedCredit]
       .filter((x) => x.left > 0)
       .map(({ n, left }) => ({ sourceType: 'note' as const, id: n.id, number: n.number, date: n.date, total: money(n.total - n.tds, base), left: money(left, base) })),
     ...pays.map((p) => ({ sourceType: 'payment' as const, id: p.id, number: p.number, date: p.date, total: money(p.amountMinor + p.tdsMinor, base), left: money(p.unallocatedMinor, base), advanceTax: !!p.advanceTaxCategoryId })),
