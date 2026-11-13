@@ -19,6 +19,7 @@ import {
   requiresCancelRemark,
   uqcFor,
   validateEInvoice,
+  portalPhone,
 } from '../eInvoice';
 import {
   EWAY_CANCEL_REASONS,
@@ -1300,5 +1301,20 @@ describe('e-invoice and notes without GST (RULES 6.24)', () => {
 
   it('still reports a note with GST', () => {
     expect(isEInvoiceApplicable(ctx({ document: invoice({ kind: 'creditNote', noteGst: 'withGst' }) })).docType).toBe('CRN');
+  });
+});
+
+describe('portalPhone', () => {
+  it('sends digits only, as the IRP schema asks (5002 otherwise)', () => {
+    expect(portalPhone('+91 98765 43210')).toBe('9876543210');
+    expect(portalPhone('+919876543210')).toBe('9876543210');
+    expect(portalPhone('080-2345 6789')).toBe('08023456789');
+    expect(portalPhone('9876543210')).toBe('9876543210');
+  });
+  it('leaves out a phone the portal would refuse', () => {
+    expect(portalPhone('12345')).toBeUndefined();
+    expect(portalPhone('+44 20 7946 0958 123')).toBeUndefined();
+    expect(portalPhone('')).toBeUndefined();
+    expect(portalPhone(undefined)).toBeUndefined();
   });
 });
