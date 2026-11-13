@@ -27,7 +27,7 @@ import { TDS_SECTIONS, tdsSection } from '@esmart/core/data/tdsSections';
 import { TCS_SECTIONS, partyTcsSection, tcsAskedOn, tcsRateFor, tcsSection } from '@esmart/core/data/tcsSections';
 import { documentKindLabel } from '@esmart/core/labels';
 import { resolveRate } from '@esmart/core/domain/fx';
-import { buildTaxContext, taxAvailableOn, taxCategoriesOn } from '@esmart/core/domain/taxEngine';
+import { buildTaxContext, defaultSezTax, lutActive, taxAvailableOn, taxCategoriesOn, type SezTax } from '@esmart/core/domain/taxEngine';
 import { OTHER_COUNTRY_CODE } from '@esmart/core/domain/stateCodes';
 import { CURRENCIES } from '@esmart/core/lib/currencies';
 import { formatMoney, formatPercent, formatQty } from '@esmart/core/lib/format';
@@ -256,6 +256,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
         partyId: p.id,
         // A party synced from an older API can arrive without an address.
         placeOfSupplyStateCode: p.billingAddress?.stateCode,
+        // Another party starts from its own SEZ default.
+        sezTax: undefined,
         dueDate: kind === 'invoice' || kind === 'purchaseBill' ? addDaysISO(d.date, p.paymentTermsDays) : d.dueDate,
         // A supplier under reverse charge puts their bills under it; the bill can still say otherwise.
         ...(isPurchase && { reverseCharge: !!p.reverseCharge }),
@@ -318,6 +320,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
         purchase: isPurchase,
         branch: branches.find((b) => b.id === (d.branchId ?? defaultBranchId)),
         reverseCharge: d.reverseCharge,
+        sezTax: d.sezTax,
       });
       // A financial note without GST charges none, as the server works it out (RULES 6.24).
       return isNote && !d.sourceDocumentId && d.noteGst === 'noGst' ? { ...ctx, registered: false, reverseCharge: false } : ctx;
@@ -540,6 +543,22 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   };
 
   const docTaxContext = draftTaxContext(draft);
+  // With an SEZ unit or developer the document charges IGST or goes without, as chosen. A return or a
+  // note made from a document reverses it as it was charged, so it follows its source (the server too).
+  const sez = docTaxContext.crossBorder === 'sez';
+  const sezLocked = sez && !!draft.sourceDocumentId && (kind === 'salesReturn' || kind === 'purchaseReturn' || isNote);
+  const sezTax: SezTax = draft.sezTax ?? defaultSezTax(company, draft.date, isPurchase);
+  const sezHint = sezLocked
+    ? 'sales:editor.sez.fromSource'
+    : isPurchase
+      ? sezTax === 'withTax'
+        ? 'sales:editor.sez.billWithTaxHint'
+        : 'sales:editor.sez.billWithoutTaxHint'
+      : sezTax === 'withTax'
+        ? 'sales:editor.sez.withTaxHint'
+        : lutActive(company, draft.date)
+          ? 'sales:editor.sez.withoutTaxHint'
+          : 'sales:editor.sez.noLutHint';
   const inclusive = inclusiveState(draft.lines);
   const interState =
     taxContext.regime === 'GST' &&
@@ -702,6 +721,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       noteReason: isNote ? draft.noteReason : undefined,
       // A direct note says how it stands with GST; with GST it names the supply it adjusts (RULES 6.24).
       noteGst: directNote ? (draft.noteGst ?? 'withGst') : undefined,
+      // Sent as chosen (or the default shown), so the server applies what the form showed.
+      sezTax: sez ? sezTax : undefined,
       originalNumber: directNote && draft.noteGst !== 'noGst' ? draft.originalNumber?.trim() || undefined : undefined,
       originalDate: directNote && draft.noteGst !== 'noGst' ? draft.originalDate : undefined,
       tdsSection: billTds || saleTds ? draft.tdsSection : undefined,
@@ -972,7 +993,9 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           onPress={() => setPosOpen(true)}
           icon="map-marker-outline"
           hint={
-            docTaxContext.crossBorder
+            sez
+              ? tr('sales:editor.sez.posHint')
+              : docTaxContext.crossBorder
               ? tr(
                   docTaxContext.zeroRated
                     ? docTaxContext.crossBorder === 'import'
@@ -1019,6 +1042,25 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       kind === 'purchaseBill' && !imported && party?.taxId ? (
         <SwitchField label={tr('purchases:isd.label')} description={tr('purchases:isd.hint')} value={!!draft.isdInvoice} onValueChange={(isdInvoice) => patch({ isdInvoice })} />
       ) : null;
+    const sezBlock = sez ? (
+      <View style={{ gap: t.spacing.sm }}>
+        <Text variant="small" tone="muted" weight="500">
+          {tr('sales:editor.sez.label')}
+        </Text>
+        <Segmented
+          options={[
+            { value: 'withTax', label: tr('sales:editor.sez.withTax') },
+            { value: 'withoutTax', label: tr('sales:editor.sez.withoutTax') },
+          ]}
+          value={sezTax}
+          onChange={(v) => patch({ sezTax: v as SezTax })}
+          disabled={sezLocked}
+        />
+        <Text variant="caption" tone="muted">
+          {tr(sezHint)}
+        </Text>
+      </View>
+    ) : null;
     const directNoteBlock = directNote ? (
       <View style={{ gap: t.spacing.sm }}>
         <Text variant="small" tone="muted" weight="500">
@@ -1078,6 +1120,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           {referenceField}
           {branchField}
           {posField}
+          {sezBlock}
           {currencyField}
           {noteReasonField}
           {directNoteBlock}
@@ -1119,6 +1162,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
             </FieldRow>
           </View>
         ) : null}
+        {sezBlock}
         {isdField}
         {directNoteBlock}
       </View>

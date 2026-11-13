@@ -11,14 +11,17 @@ import { useQueryParams } from '../../../navigation/queryParams';
 import { deliverFile } from '../../../features/reports/exportFiles';
 import { gstr1Json } from '../../../remote/exports';
 import { DataTable, KeyFigures, ReportSection } from '../../../features/reports/reportParts';
-import { Gstr1Summary, gstr1RateSummary, gstr1Summary } from '@esmart/core/domain/gstr1';
+import { Gstr1Summary, gstr1Liability, gstr1RateSummary, gstr1Summary } from '@esmart/core/domain/gstr1';
 import { periodLabel } from '../../../features/compliance/periods';
-import { GSTR1_SECTIONS, useGstr1Sections, type Gstr1Section } from '../../../features/compliance/gstr1Sections';
+import { GSTR1_SECTIONS, LIABILITY_AFTER, useGstr1Sections, type Gstr1Section, type SectionTotals } from '../../../features/compliance/gstr1Sections';
 import { useActiveCompany, useBaseCurrency, useBranches } from '../../../store/selectors';
 import { useReportData } from '../../../remote/queries';
 import { formatMoney, formatPercent } from '@esmart/core/lib/format';
 import { money } from '@esmart/core/lib/money';
 import { ReportSkeleton } from '../../../components/ScreenSkeleton';
+
+/** A line of the summary: a section, or (section null) the total liabilities. */
+type SummaryLine = Omit<SectionTotals, 'section' | 'records'> & { section: Gstr1Section | null; records: number | null };
 
 /**
  * GSTR-1, the outward-supplies return. Every sale lands in exactly one table,
@@ -57,6 +60,17 @@ export default function Gstr1Report() {
 
   const { totals } = useGstr1Sections(summary);
   const rates = useMemo(() => gstr1RateSummary(summary, baseCurrency), [summary, baseCurrency]);
+  // Supplies + advances received − advances adjusted − credit notes (the formula lives in core).
+  const liability = useMemo(() => gstr1Liability(summary), [summary]);
+  // The summary's lines in the books' order: the sections, with total liabilities after the ones it adds up.
+  const lines = useMemo<SummaryLine[]>(() => {
+    const at = totals.findIndex((r) => r.section === LIABILITY_AFTER) + 1;
+    const { taxable, igst, cgst, sgst, cess } = liability;
+    return [...totals.slice(0, at), { section: null, records: null, taxable, igst, cgst, sgst, cess }, ...totals.slice(at)];
+  }, [totals, liability]);
+  const liabilityRow = lines.findIndex((l) => l.section === null);
+  const lineName = (l: SummaryLine) => (l.section ? tr(`compliance:gstr1.section.${l.section}`) : tr('compliance:gstr1.totalLiabilities'));
+  const taxOf = (l: SummaryLine) => (l.igst === null ? null : (l.igst ?? 0) + (l.cgst ?? 0) + (l.sgst ?? 0) + (l.cess ?? 0));
   // A section opens on its own page, for the same month and branch: the query string carries them.
   const router = useRouter();
   const [query] = useQueryParams();
@@ -65,11 +79,10 @@ export default function Gstr1Report() {
   const exportRows = () =>
     reportTable(
       ['Particulars', 'Section', 'Table', 'Records', 'Taxable value', 'IGST', 'CGST', 'SGST', 'Cess', 'Total tax'],
-      totals.map((r) => {
+      lines.map((r) => {
         const meta = GSTR1_SECTIONS.find((x) => x.value === r.section);
         const major = (minor: number | null) => (minor === null ? '' : minor / 100);
-        const tax = r.igst === null ? null : (r.igst ?? 0) + (r.cgst ?? 0) + (r.sgst ?? 0) + (r.cess ?? 0);
-        return [tr(`compliance:gstr1.section.${r.section}`), meta?.label ?? r.section, meta?.tables ?? '', r.records, major(r.taxable), major(r.igst), major(r.cgst), major(r.sgst), major(r.cess), major(tax)];
+        return [lineName(r), meta?.label ?? '', meta?.tables ?? '', r.records ?? '', major(r.taxable), major(r.igst), major(r.cgst), major(r.sgst), major(r.cess), major(taxOf(r))];
       }),
     );
 
@@ -82,16 +95,7 @@ export default function Gstr1Report() {
     return x ? `${x.label} · ${tr('compliance:gstr1.col.tables')} ${x.tables}` : s;
   };
   // Named as the books name them, the return's short name and table numbers under each.
-  const summaryRows = totals.map((r) => [
-    tr(`compliance:gstr1.section.${r.section}`),
-    String(r.records),
-    m(r.taxable),
-    m(r.igst),
-    m(r.cgst),
-    m(r.sgst),
-    m(r.cess),
-    r.igst === null ? '—' : m((r.igst ?? 0) + (r.cgst ?? 0) + (r.sgst ?? 0) + (r.cess ?? 0)),
-  ]);
+  const summaryRows = lines.map((r) => [lineName(r), r.section ? String(r.records) : '', m(r.taxable), m(r.igst), m(r.cgst), m(r.sgst), m(r.cess), taxOf(r) === null ? '—' : m(taxOf(r))]);
 
   // The portal's file is one registration's return for one month. It is offered only when it holds what
   // the screen shows: the range is a whole month, and the branch picked (or, with none, every branch)
@@ -154,16 +158,24 @@ export default function Gstr1Report() {
           <DataTable
             headers={[tr('compliance:gstr1.col.section'), tr('compliance:gstr1.col.records'), tr('compliance:gstr1.col.taxable'), ...taxHeads, tr('compliance:gstr1.col.totalTax')]}
             rows={summaryRows}
-            subtitles={totals.map((r) => sectionTables(r.section))}
+            subtitles={lines.map((r) => (r.section ? sectionTables(r.section) : undefined))}
+            strong={[liabilityRow]}
             firstWidth={260}
             widths={[2.4, 0.6, 1.1, 1, 1, 1, 0.7, 1]}
             kinds={['text', 'num', 'num', 'num', 'num', 'num', 'num', 'num']}
             minWidth={980}
-            onRowPress={(i) => openSection(totals[i].section)}
-            rowLabel={(i) => sectionName(totals[i].section)}
+            onRowPress={(i) => {
+              const section = lines[i].section;
+              if (section) openSection(section);
+            }}
+            canPress={(i) => lines[i].section !== null}
+            rowLabel={(i) => {
+              const section = lines[i].section;
+              return section ? sectionName(section) : lineName(lines[i]);
+            }}
           />
           <Text variant="caption" tone="muted" style={{ marginTop: t.spacing.sm, lineHeight: 18 }}>
-            {tr('compliance:gstr1.summaryHint')}
+            {tr('compliance:gstr1.totalLiabilitiesHint')} {tr('compliance:gstr1.summaryHint')}
           </Text>
         </ReportSection>
 

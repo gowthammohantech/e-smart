@@ -1,0 +1,1 @@
+ALTER TABLE "documents" ADD COLUMN "sez_tax" varchar(10);

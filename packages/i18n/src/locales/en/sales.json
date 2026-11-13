@@ -132,6 +132,18 @@
       "originalBill": "Original bill number",
       "originalDate": "Original date"
     },
+    "sez": {
+      "label": "SEZ supply",
+      "withTax": "With tax",
+      "withoutTax": "Without tax",
+      "posHint": "Supply with an SEZ unit or developer — IGST, never CGST + SGST, wherever the SEZ is.",
+      "withTaxHint": "IGST is charged on every line (SEZ with payment of tax). The e-invoice goes as SEZWP.",
+      "withoutTaxHint": "No tax on any line: supplied under your LUT or bond (SEZ without payment of tax). The e-invoice goes as SEZWOP.",
+      "noLutHint": "No tax on any line (SEZ without payment of tax). Your business has no LUT in force on this date: keep a bond for this supply, or add the LUT in the business profile.",
+      "billWithTaxHint": "The SEZ supplier charged IGST on this bill.",
+      "billWithoutTaxHint": "The SEZ supplier charged no tax on this bill.",
+      "fromSource": "Follows the document it was made from, so it reverses exactly what was charged."
+    },
     "saveChanges": "Save changes",
     "finaliseAction": {
       "invoice": "Issue invoice",
@@ -217,6 +229,8 @@
     "dueOn": "Due {{date}}",
     "validTo": "Valid to {{date}}",
     "placeOfSupplyBadge": "PoS {{state}}",
+    "sezWithTax": "SEZ · with tax",
+    "sezWithoutTax": "SEZ · without tax",
     "referenceBadge": "Ref {{reference}}",
     "theirNumber": "Their no. {{number}}",
     "paid": "Paid",

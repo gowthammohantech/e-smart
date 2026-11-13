@@ -6002,6 +6002,11 @@ export interface components {
              * @enum {string}
              */
             noteGst?: "withGst" | "noGst";
+            /**
+             * @description Only with an SEZ unit or developer (the party's GST registration is sez; 422 otherwise). withTax charges IGST (e-invoice SEZWP); withoutTax is zero-rated under LUT or bond (SEZWOP), no tax on any line. Unset takes withoutTax on a sale while the business's LUT is in force, else withTax. A return or note made from a document takes its source's. The server returns what it applied.
+             * @enum {string}
+             */
+            sezTax?: "withTax" | "withoutTax";
             /** @description A direct note with GST: the number of the original invoice or bill it adjusts */
             originalNumber?: string;
             /**

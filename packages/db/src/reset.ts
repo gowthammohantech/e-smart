@@ -1,4 +1,5 @@
 import { createPool } from './index';
+import { runDirectly } from './runDirectly';
 
 /** Drops and recreates the public schema. Development only. */
 export async function resetDatabase(url: string): Promise<void> {
@@ -11,7 +12,7 @@ export async function resetDatabase(url: string): Promise<void> {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (runDirectly(import.meta.url)) {
   await resetDatabase(process.env.MIGRATION_DATABASE_URL || process.env.DATABASE_URL || 'postgres://esmart:esmart@localhost:5432/esmart');
   console.log('Database reset.');
 }

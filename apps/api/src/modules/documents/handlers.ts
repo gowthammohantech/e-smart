@@ -122,14 +122,15 @@ async function madeFromAny(db: DbOrTx, companyId: string, ids: string[]): Promis
     .where(and(eq(D.companyId, companyId), or(inArray(D.sourceDocumentId, ids), arrayOverlaps(D.mergedSourceIds, ids))));
 }
 
-/** What a merged document takes from its sources must agree across them: one party, branch, currency and place of supply. */
+/** What a merged document takes from its sources must agree across them: one party, branch, currency, place of supply and SEZ tax. */
 function sameHeader(a: DocRow, b: DocRow): boolean {
   return (
     a.partyId === b.partyId &&
     a.branchId === b.branchId &&
     a.currency.trim() === b.currency.trim() &&
     (a.placeOfSupplyStateCode ?? null) === (b.placeOfSupplyStateCode ?? null) &&
-    a.reverseCharge === b.reverseCharge
+    a.reverseCharge === b.reverseCharge &&
+    (a.sezTax ?? null) === (b.sezTax ?? null)
   );
 }
 
@@ -411,6 +412,7 @@ function frozenChanges(row: DocRow, body: Schema<'NewDocumentInput'>, stored: Li
   cmp('supplierDocNumber', body.supplierDocNumber, row.supplierDocNumber);
   cmp('sourceDocumentId', body.sourceDocumentId, row.sourceDocumentId);
   cmp('noteGst', body.noteGst, row.noteGst ?? undefined);
+  cmp('sezTax', body.sezTax, row.sezTax ?? undefined);
   cmp('originalNumber', body.originalNumber, row.originalNumber ?? undefined);
   cmp('originalDate', body.originalDate, row.originalDate ?? undefined);
   // What an invoice's full edit can change too (RULES 6.23): compared so the edit isn't dropped as a notes-only save.

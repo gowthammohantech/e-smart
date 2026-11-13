@@ -1,4 +1,5 @@
 import pg from 'pg';
+import { runDirectly } from './runDirectly';
 
 /**
  * The two login roles the API uses, next to the owner that runs migrations
@@ -72,7 +73,7 @@ export async function applyRoles(url: string, env: Record<string, string | undef
   return done;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (runDirectly(import.meta.url)) {
   const url = process.env.MIGRATION_DATABASE_URL || process.env.DATABASE_URL || 'postgres://esmart:esmart@localhost:5432/esmart';
   for (const line of await applyRoles(url)) console.log(line);
 }

@@ -29,13 +29,25 @@ export function lutActive(company: Company | undefined, date: string): boolean {
   return !reg.lutValidTill || date <= reg.lutValidTill;
 }
 
+/** Whether a supply to or from an SEZ unit or developer charges IGST, or goes without (LUT or bond). */
+export type SezTax = 'withTax' | 'withoutTax';
+
+/**
+ * What an SEZ document does when nobody has chosen: a sale goes without tax while the business's LUT
+ * is in force and with IGST otherwise; a bill from an SEZ supplier charges IGST.
+ */
+export function defaultSezTax(company: Company | undefined, date: string, purchase: boolean): SezTax {
+  return !purchase && lutActive(company, date) ? 'withoutTax' : 'withTax';
+}
+
 /**
  * The tax context for one document: the company's registration, the place of
- * supply, and whether the party makes it an export, SEZ supply or import.
+ * supply, and whether the party makes it an export, SEZ supply or import. An
+ * SEZ document charges IGST or not as `sezTax` says, else as `defaultSezTax`.
  */
 export function buildTaxContext(
   company: Company | undefined,
-  opts: { placeOfSupply?: string; party?: Party; date: string; purchase: boolean; branch?: Branch; reverseCharge?: boolean },
+  opts: { placeOfSupply?: string; party?: Party; date: string; purchase: boolean; branch?: Branch; reverseCharge?: boolean; sezTax?: SezTax | null },
 ): TaxContext {
   const reg = company?.taxRegistration;
   // A branch with its own GSTIN supplies from that state; its first two digits are the state code.
@@ -58,7 +70,9 @@ export function buildTaxContext(
     // A foreign supplier's bill carries no Indian GST (IGST on imports is paid at customs).
     zeroRated:
       crossBorder === 'import' ||
-      (!!crossBorder && !opts.purchase && lutActive(company, opts.date)),
+      (crossBorder === 'sez'
+        ? (opts.sezTax ?? defaultSezTax(company, opts.date, opts.purchase)) === 'withoutTax'
+        : crossBorder === 'export' && !opts.purchase && lutActive(company, opts.date)),
     composition: !opts.purchase && !!reg?.compositionScheme,
     reverseCharge: !!opts.reverseCharge,
   };
