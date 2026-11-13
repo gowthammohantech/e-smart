@@ -719,6 +719,8 @@ export const documents = pgTable("documents", {
 	tcsRate: numeric("tcs_rate", { precision: 5, scale: 2 }),
 	// The vehicle it moved on or was for.
 	vehicleId: varchar("vehicle_id", { length: 40 }),
+	// Sent by a transporter rather than the business's own vehicle: one of its transporters.
+	transporterId: varchar("transporter_id", { length: 40 }),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
 }, (table): PgTableExtraConfigValue[] => [

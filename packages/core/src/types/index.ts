@@ -540,6 +540,8 @@ export type BusinessDocument = {
   /** The project or department it belongs to. */
   /** The vehicle it moved on. */
   vehicleId?: string;
+  /** Sent by a transporter (one of the business's) rather than its own vehicle; unset or null is its own. */
+  transporterId?: string | null;
   costCentreId?: string;
   /** An invoice that repeats: the server issues a copy on each next date (setDocumentRecurrence). */
   recurrence?: RecurrenceFrequency;

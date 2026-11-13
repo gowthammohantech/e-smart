@@ -6028,6 +6028,8 @@ export interface components {
             costCentreId?: string;
             /** @description The vehicle it moved on */
             vehicleId?: string;
+            /** @description Sent by a transporter rather than the business's own vehicle: one of its transporters (listTransporters). The e-way bill starts from it. null clears it. */
+            transporterId?: string | null;
             /**
              * @description On an invoice: the TCS section (s.206C) the sale falls under, or none. The rate follows the section, higher when the buyer has no PAN; a 206C(1F) sale collects only over ₹10 lakh.
              * @enum {string}

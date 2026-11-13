@@ -7975,6 +7975,7 @@ components:
         originalDate: { type: string, format: date, description: 'A direct note with GST: the date of the original invoice or bill' }
         costCentreId: { type: string, description: The project or department it belongs to }
         vehicleId: { type: string, description: The vehicle it moved on }
+        transporterId: { type: [string, 'null'], description: "Sent by a transporter rather than the business's own vehicle: one of its transporters (listTransporters). The e-way bill starts from it. null clears it." }
         tcsSection: { type: string, enum: [none, scrap, liquor, tenduLeaves, timberLease, timberOther, forestProduce, minerals, motorVehicle, luxuryGoods], description: 'On an invoice: the TCS section (s.206C) the sale falls under, or none. The rate follows the section, higher when the buyer has no PAN; a 206C(1F) sale collects only over ₹10 lakh.' }
         tdsSection: { type: string, enum: [none, 194C, 194JA, 194JB, 194H, 194IA, 194IB, 194A, 194Q], writeOnly: true, description: "On a supplier's bill or debit note: the TDS section, or none. Defaults to the supplier's; worked out only for a company with a TAN. On an invoice: the section the customer will deduct TDS under (expected TDS, not posted), or none; defaults to the party's." }
         tdsRate: { type: number, minimum: 0, maximum: 100, writeOnly: true, description: "On an invoice: the rate the customer will deduct at, percent. Defaults to the section's rate for the company's PAN." }

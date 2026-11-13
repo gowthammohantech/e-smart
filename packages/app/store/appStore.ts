@@ -296,6 +296,7 @@ export type NewDocumentInput = {
   // What else the editor sets: kept on the document and sent with it.
   costCentreId?: string;
   vehicleId?: string;
+  transporterId?: string | null;
   customFields?: BusinessDocument['customFields'];
   noteGst?: BusinessDocument['noteGst'];
   originalNumber?: string;
@@ -810,6 +811,7 @@ export const useAppStore = create<AppState>()(
             ...(draft.mergedSourceIds?.length && { mergedSourceIds: draft.mergedSourceIds }),
             costCentreId: draft.costCentreId,
             vehicleId: draft.vehicleId,
+            transporterId: draft.transporterId,
             customFields: draft.customFields,
             noteGst: draft.noteGst,
             originalNumber: draft.originalNumber,

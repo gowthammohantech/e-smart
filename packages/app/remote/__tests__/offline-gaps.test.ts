@@ -144,12 +144,13 @@ describe('entries that depend on each other', () => {
       exchangeRate: inv.exchangeRate,
       lines: inv.lines,
       vehicleId: 'veh_1',
+      transporterId: 'trn_1',
       costCentreId: 'cc_1',
       customFields: { cf1: 'LR-9' },
       tdsRate: 2,
     } as never);
-    expect(actions().documents.find((d) => d.id === id)).toMatchObject({ vehicleId: 'veh_1', costCentreId: 'cc_1', customFields: { cf1: 'LR-9' }, tdsRate: 2 });
-    expect(queue().find((e) => e.clientEntityId === id)?.body).toMatchObject({ vehicleId: 'veh_1', costCentreId: 'cc_1', customFields: { cf1: 'LR-9' } });
+    expect(actions().documents.find((d) => d.id === id)).toMatchObject({ vehicleId: 'veh_1', transporterId: 'trn_1', costCentreId: 'cc_1', customFields: { cf1: 'LR-9' }, tdsRate: 2 });
+    expect(queue().find((e) => e.clientEntityId === id)?.body).toMatchObject({ vehicleId: 'veh_1', transporterId: 'trn_1', costCentreId: 'cc_1', customFields: { cf1: 'LR-9' } });
 
     const note = actions().createDocument({ kind: 'creditNote', partyId: inv.partyId, date: '2026-09-21', currency: inv.currency, exchangeRate: inv.exchangeRate, lines: inv.lines, noteReason: 'discount', noteGst: 'withGst', originalNumber: 'SI/1', originalDate: '2026-09-01' } as never);
     expect(actions().documents.find((d) => d.id === note)).toMatchObject({ noteGst: 'withGst', originalNumber: 'SI/1', originalDate: '2026-09-01' });

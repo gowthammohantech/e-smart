@@ -187,6 +187,13 @@
       "city": "City",
       "state": "State",
       "pin": "PIN"
+    },
+    "transport": {
+      "label": "Transport by",
+      "own": "Own vehicle",
+      "transporter": "Transporter",
+      "pick": "Pick a transporter",
+      "none": "No transporters yet: add them in Settings → Transporters."
     }
   },
   "reimburse": {

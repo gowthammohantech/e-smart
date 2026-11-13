@@ -1,0 +1,1 @@
+ALTER TABLE "documents" ADD COLUMN "transporter_id" varchar(40);

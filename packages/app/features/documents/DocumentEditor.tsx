@@ -52,7 +52,7 @@ import {
   useDefaultBranchId,
   useDocument,
   useTaxCategories,
-  useVehicles,
+  useTransporters,
   usePlan,
 } from '../../store/selectors';
 import { saleTdsOnPlan } from '@esmart/core/domain/plan';
@@ -204,7 +204,6 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   const desktop = useIsDesktop();
   // Whether these pickers show at all, so a desktop doesn't keep an empty row for them.
   const hasCostCentres = useCostCentres().length > 0;
-  const hasVehicles = useVehicles().length > 0;
 
   const company = useActiveCompany();
   const baseCurrency = useBaseCurrency();
@@ -446,6 +445,10 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   const [chargesText, setChargesText] = useState(String(toMajor(draft.charges) || ''));
   const [chargesKindOpen, setChargesKindOpen] = useState(false);
   const [shipStateOpen, setShipStateOpen] = useState(false);
+  // Goods go by the business's own vehicle or with one of its transporters.
+  const [transportBy, setTransportBy] = useState<'own' | 'transporter'>(draft.transporterId ? 'transporter' : 'own');
+  const [transporterOpen, setTransporterOpen] = useState(false);
+  const transporters = useTransporters({ activeOnly: true });
   // Goods that go out: where they go when not to the buyer's own address (the consignee).
   const shipsTo = SHIP_TO_KINDS.includes(kind);
   const chargesLabel = tr(`sales:editor.chargesKind.${draft.chargesKind ?? 'other'}` as 'sales:editor.chargesKind.other');
@@ -755,6 +758,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       costCentreId: draft.costCentreId,
       customFields: draft.customFields,
       vehicleId: draft.vehicleId,
+      // Null clears a transporter picked before, when it goes by the business's own vehicle again.
+      transporterId: VEHICLE_KINDS.includes(kind) ? (draft.transporterId ?? null) : undefined,
       branchId,
       attachmentIds: draft.attachmentIds,
       sourceDocumentId: draft.sourceDocumentId,
@@ -1379,6 +1384,38 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
     </View>
   );
 
+  // Goods on the move go by the business's own vehicle or with one of its transporters (the e-way bill starts from it).
+  const pickedTransporter = transporters.find((x) => x.id === draft.transporterId);
+  const transportField = VEHICLE_KINDS.includes(kind) ? (
+    <View style={{ gap: t.spacing.sm }}>
+      <Text variant="small" tone="muted" weight="500">
+        {tr('sales:editor.transport.label')}
+      </Text>
+      <Segmented
+        options={[
+          { value: 'own', label: tr('sales:editor.transport.own') },
+          { value: 'transporter', label: tr('sales:editor.transport.transporter') },
+        ]}
+        value={transportBy}
+        onChange={(v) => {
+          setTransportBy(v as 'own' | 'transporter');
+          patch(v === 'own' ? { transporterId: null } : { vehicleId: undefined });
+        }}
+      />
+      {transportBy === 'own' ? (
+        <VehicleField value={draft.vehicleId} onChange={(vehicleId) => patch({ vehicleId })} />
+      ) : (
+        <PickerField
+          label={tr('sales:editor.transport.transporter')}
+          value={pickedTransporter ? `${pickedTransporter.name} · ${pickedTransporter.transporterId}` : undefined}
+          placeholder={tr(transporters.length ? 'sales:editor.transport.pick' : 'sales:editor.transport.none')}
+          onPress={() => setTransporterOpen(true)}
+          icon="truck-outline"
+        />
+      )}
+    </View>
+  ) : null;
+
   const renderExtras = () => (
     <View style={{ gap: t.spacing.lg }}>
       {/* Tax and bookkeeping details: kept off the first step so a phone's Who step is just who and when. */}
@@ -1453,14 +1490,14 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
         <FieldGrid
           items={[
             hasCostCentres || draft.costCentreId ? <CostCentreField value={draft.costCentreId} onChange={(costCentreId) => patch({ costCentreId })} /> : null,
-            VEHICLE_KINDS.includes(kind) && (hasVehicles || draft.vehicleId) ? <VehicleField value={draft.vehicleId} onChange={(vehicleId) => patch({ vehicleId })} /> : null,
+            transportField,
           ]}
         />
       ) : (
         <>
           <CostCentreField value={draft.costCentreId} onChange={(costCentreId) => patch({ costCentreId })} />
           {/* A vehicle goes with goods on the move, not on a quote or a note. */}
-          {VEHICLE_KINDS.includes(kind) ? <VehicleField value={draft.vehicleId} onChange={(vehicleId) => patch({ vehicleId })} /> : null}
+          {transportField}
         </>
       )}
       <CustomFieldsSection entity="document" values={draft.customFields ?? {}} onChange={(customFields) => patch({ customFields })} errors={showFieldErrors ? fieldErrors : undefined} />
@@ -2059,6 +2096,16 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
             const st = INDIAN_STATES.find((x) => x.code === code);
             if (draft.shipTo && st) patch({ shipTo: { ...draft.shipTo, address: { ...draft.shipTo.address, state: st.name, stateCode: st.code } } });
           }}
+        />
+
+        <SelectSheet
+          visible={transporterOpen}
+          onClose={() => setTransporterOpen(false)}
+          title={tr('sales:editor.transport.transporter')}
+          options={transporters.map((x) => ({ value: x.id, label: x.name, description: x.transporterId }))}
+          value={draft.transporterId ?? null}
+          onSelect={(transporterId) => patch({ transporterId })}
+          emptyMessage={tr('sales:editor.transport.none')}
         />
 
         <LineEditorSheet

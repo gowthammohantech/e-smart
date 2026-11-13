@@ -184,6 +184,7 @@ export type DocFields = {
   /** A TCS section (s.206C), `none`, or unset: an invoice keeps what it had, a new one takes the customer's. */
   tcsSection?: string | null;
   vehicleId?: string | null;
+  transporterId?: string | null;
   /** Undefined keeps what the document had. */
   customFields?: Record<string, unknown>;
   notes: string | null;
@@ -280,6 +281,7 @@ export function fieldsFromWire(body: Schema<'NewDocumentInput'>, base?: DocRow):
     // Like TDS: a stored invoice keeps what it had; a new one takes the customer's section unless told otherwise.
     tcsSection: body.tcsSection ?? (base ? base.tcsSection : undefined),
     vehicleId: keep(body.vehicleId, base?.vehicleId),
+    transporterId: keep(body.transporterId, base?.transporterId),
     notes: keep(body.notes, base?.notes),
     terms: keep(body.terms, base?.terms),
     sourceDocumentId: keep(body.sourceDocumentId, base?.sourceDocumentId),
@@ -328,6 +330,7 @@ export function fieldsFromRow(row: DocRow): DocFields {
     customFields: row.customFields as Record<string, unknown>,
     tcsSection: row.tcsSection,
     vehicleId: row.vehicleId,
+    transporterId: row.transporterId,
     notes: row.notes,
     terms: row.terms,
     sourceDocumentId: row.sourceDocumentId,
@@ -548,6 +551,10 @@ export async function prepareDocument(
 
   issues.push(...(await costCentreIssues(db, company.id, [{ field: 'costCentreId', id: f.costCentreId }, ...lines.map((l, i) => ({ field: `lines[${i}].costCentreId`, id: l.costCentreId }))])));
   issues.push(...(await vehicleIssues(db, company.id, f.vehicleId)));
+  if (f.transporterId) {
+    const [tr] = await db.select({ id: schema.transporters.id }).from(schema.transporters).where(and(eq(schema.transporters.companyId, company.id), eq(schema.transporters.id, f.transporterId)));
+    if (!tr) issues.push({ field: 'transporterId', message: 'No such transporter in this company', severity: 'blocking' });
+  }
   await checkRecoveredExpenses(db, company.id, f, coreLines, opts.documentId, blocking);
   if (issues.length) throw unprocessable(issues);
 
@@ -666,6 +673,7 @@ export async function prepareDocument(
       originalDate: NOTE_KINDS.includes(f.kind) && !f.sourceDocumentId && !noGst ? f.originalDate : null,
       tcsSection: tcsRate > 0 ? tcsCode : null,
       vehicleId: f.vehicleId ?? null,
+      transporterId: f.transporterId ?? null,
       tcsRate: tcsRate > 0 ? String(tcsRate) : null,
       tdsSection: tds.amountMinor > 0 || tds.section ? tds.section : null,
       tdsRate: tds.section ? String(tds.rate) : null,

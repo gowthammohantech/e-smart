@@ -418,6 +418,7 @@ function frozenChanges(row: DocRow, body: Schema<'NewDocumentInput'>, stored: Li
     if (section(body.tdsSection) ?? row.tdsSection) cmp('tdsRate', body.tdsRate ?? undefined, row.tdsRate != null ? Number(row.tdsRate) : null);
     cmp('costCentreId', body.costCentreId === undefined ? undefined : (body.costCentreId ?? null), row.costCentreId ?? null);
     cmp('vehicleId', body.vehicleId === undefined ? undefined : (body.vehicleId ?? null), row.vehicleId ?? null);
+    cmp('transporterId', body.transporterId === undefined ? undefined : (body.transporterId ?? null), row.transporterId ?? null);
     cmp('reverseCharge', body.reverseCharge, row.reverseCharge);
     if (body.customFields !== undefined) cmp('customFields', stableJson(body.customFields ?? {}), stableJson(row.customFields ?? {}));
   }
