@@ -9,6 +9,7 @@ import {
   subtract,
   sum,
   zero,
+  factorOf,
 } from '../lib/money';
 import {
   DiscountMode,
@@ -141,7 +142,8 @@ function discountOf(base: Money, mode: DiscountMode, value: number): Money {
     const capped = Math.min(value, 100);
     return percent(base, capped);
   }
-  const asMoney = money(Math.round(value * Math.pow(10, base.currency === 'JPY' ? 0 : 2)), base.currency);
+  // In the currency's own minor units: paise, cents, fils (three places), yen (none).
+  const asMoney = money(Math.round(value * factorOf(base.currency)), base.currency);
   return asMoney.minor > base.minor ? base : asMoney;
 }
 

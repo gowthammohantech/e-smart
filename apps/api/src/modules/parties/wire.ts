@@ -21,7 +21,16 @@ export function partyToWire(row: PartyRow): Schema<'Party'> {
     udyamNumber: row.udyamNumber,
     reverseCharge: row.reverseCharge || undefined,
     tdsSection: (row.tdsSection ?? undefined) as Schema<'Party'>['tdsSection'],
-    lowerTdsCertificate: row.lowerTdsRate !== null && row.lowerTdsValidTill ? { rate: Number(row.lowerTdsRate), validTill: row.lowerTdsValidTill } : undefined,
+    lowerTdsCertificate:
+      row.lowerTdsRate !== null && row.lowerTdsValidTill
+        ? {
+            rate: Number(row.lowerTdsRate),
+            validTill: row.lowerTdsValidTill,
+            ...(row.lowerTdsValidFrom && { validFrom: row.lowerTdsValidFrom }),
+            ...(row.lowerTdsSection && { section: row.lowerTdsSection as Schema<'TdsSectionCode'> }),
+            ...(row.lowerTdsLimitMinor !== null && { limit: { minor: row.lowerTdsLimitMinor, currency: 'INR' } }),
+          }
+        : undefined,
     tcsApplicable: row.tcsApplicable || undefined,
     tcsSection: (row.tcsSection ?? undefined) as Schema<'Party'>['tcsSection'],
     email: row.email,
@@ -68,6 +77,9 @@ export function partyColumns(body: Schema<'Party'>) {
     tdsSection: body.tdsSection ?? null,
     lowerTdsRate: body.lowerTdsCertificate ? String(body.lowerTdsCertificate.rate) : null,
     lowerTdsValidTill: body.lowerTdsCertificate?.validTill ?? null,
+    lowerTdsValidFrom: body.lowerTdsCertificate?.validFrom ?? null,
+    lowerTdsSection: body.lowerTdsCertificate?.section ?? null,
+    lowerTdsLimitMinor: body.lowerTdsCertificate?.limit?.minor ?? null,
     // A section means something only while TCS applies; switching it off forgets the section.
     tcsApplicable: body.tcsApplicable ?? false,
     tcsSection: body.tcsApplicable ? (body.tcsSection ?? null) : null,

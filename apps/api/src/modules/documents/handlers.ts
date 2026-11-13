@@ -222,6 +222,11 @@ async function editLatestInvoice(ctx: AnyCtx, tx: DbOrTx, current: DocRow, body:
     .where(and(eq(D.id, current.id), eq(D.version, current.version)))
     .returning();
   if (!updated) throw preconditionFailed();
+  // Raised past the company's approval rule by someone who isn't an approver: the approval it was
+  // issued under (if any) was for the smaller amount, so the edit waits for an owner or admin.
+  if (updated.grandTotalBaseMinor > current.grandTotalBaseMinor && needsApproval(ctx.company, ctx.user, { ...updated, approval: null })) {
+    throw conflict('DOCUMENT_NEEDS_APPROVER', `${current.number} would be over the approval rule; ask an owner or admin to make this change`);
+  }
   await writeLines(tx, current.id, prepared);
   // An edit that raises what the customer owes is held to their credit limit, as issuing it was.
   if (!body.overrideCreditLimit && (updated.grandTotalMinor > current.grandTotalMinor || updated.partyId !== current.partyId)) {

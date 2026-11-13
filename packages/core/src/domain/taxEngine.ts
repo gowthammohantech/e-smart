@@ -40,6 +40,14 @@ export function defaultSezTax(company: Company | undefined, date: string, purcha
   return !purchase && lutActive(company, date) ? 'withoutTax' : 'withTax';
 }
 
+/** Whether a supplier charges GST on its bill: registered (or SEZ) yes; unregistered or composition no. */
+export function supplierCharges(party: Party, fallback: boolean): boolean {
+  const type = party.gstRegistrationType;
+  if (type === 'unregistered' || type === 'composition') return false;
+  if (type === 'regular' || type === 'sez' || party.taxId) return true;
+  return fallback;
+}
+
 /**
  * The tax context for one document: the company's registration, the place of
  * supply, and whether the party makes it an export, SEZ supply or import. An
@@ -65,7 +73,11 @@ export function buildTaxContext(
     regime: reg?.regime ?? 'NONE',
     homeStateCode: home,
     placeOfSupplyStateCode: pos,
-    registered: !!reg?.registered,
+    // A sale is taxed when the business is registered. A purchase carries the GST its supplier
+    // charges: a registered supplier charges it whether or not the business is registered, and an
+    // unregistered or composition supplier charges none (reverse charge aside, which the business
+    // itself pays, so needs its own registration). A supplier of unknown standing reads as before.
+    registered: opts.purchase && !opts.reverseCharge && opts.party ? supplierCharges(opts.party, !!reg?.registered) : !!reg?.registered,
     crossBorder,
     // A foreign supplier's bill carries no Indian GST (IGST on imports is paid at customs).
     zeroRated:

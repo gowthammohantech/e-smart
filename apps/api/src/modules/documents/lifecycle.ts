@@ -1,5 +1,5 @@
 import { and, arrayOverlaps, desc, eq, gt, gte, inArray, lt, ne, notInArray, or, sql, type SQL } from 'drizzle-orm';
-import { businessDate, creditNoteDeadline } from '@esmart/core/lib/date';
+import { businessDate, creditNoteDeadline, financialYearOf } from '@esmart/core/lib/date';
 import { INVOICE_LIMITS, hasModule, nextInvoicePlan } from '@esmart/core/domain/plan';
 import { CREDIT_KINDS, NOTE_KINDS, NOTE_SOURCE, PAYABLE_KINDS, isFinalized, isPayableDocument } from '@esmart/core/domain/documentStates';
 import { statusForOutstanding } from '@esmart/core/domain/receivables';
@@ -370,6 +370,7 @@ export async function finalizeInTx(
     throw conflict('RETURN_FILED', `GSTR-1 for ${row.date.slice(0, 7)} is filed; a ${row.kind} dated ${row.date} would never be reported. Date it in a month whose GSTR-1 is still open`);
   }
   if (row.kind === 'invoice') await checkInvoiceLimit(tx, company, now);
+  await checkSupplierNumberUnique(tx, row);
   if (isReturn(row) && row.sourceDocumentId) await checkReturnWithinSource(tx, row);
   if (againstSource(row)) await checkAgainstSource(tx, row);
   if (!opts.overrideCreditLimit) await checkCreditLimit(tx, row, now);
@@ -611,6 +612,34 @@ export const EDIT_BLOCK_MESSAGES: Record<EditBlock, string> = {
   returnFiled: 'Its GSTR-1 period is filed',
   laterStock: 'Its items have later stock movements, and stock is costed FIFO',
 };
+
+/**
+ * A supplier's bill (or note) is entered once: the same supplier number from the same supplier in
+ * the same financial year (April to March, the GST year) would book the payable and its input
+ * credit twice. Spaces and case don't make a number different.
+ */
+async function checkSupplierNumberUnique(tx: DbOrTx, row: DocRow) {
+  if (!['purchaseBill', 'supplierDebitNote', 'supplierCreditNote'].includes(row.kind) || !row.supplierDocNumber?.trim()) return;
+  const fy = financialYearOf(row.date, 4);
+  const norm = (c: SQL | string) => sql`upper(regexp_replace(${c}, '\\s', '', 'g'))`;
+  const [dupe] = await tx
+    .select({ number: D.number })
+    .from(D)
+    .where(
+      and(
+        eq(D.companyId, row.companyId),
+        eq(D.partyId, row.partyId),
+        eq(D.kind, row.kind),
+        ne(D.id, row.id),
+        notInArray(D.status, ['draft', 'requested', 'cancelled', 'rejected']),
+        gte(D.date, fy.start),
+        sql`${D.date} <= ${fy.end}`,
+        sql`${norm(sql`${D.supplierDocNumber}`)} = ${norm(row.supplierDocNumber.trim())}`,
+      ),
+    )
+    .limit(1);
+  if (dupe) throw conflict('DUPLICATE_SUPPLIER_BILL', `The supplier's ${row.supplierDocNumber.trim()} is already in the books as ${dupe.number.trim()} for ${fy.label}`);
+}
 
 /** GSTR-3B for a period (MMYYYY) is filed. */
 export async function gstr3bFiled(tx: DbOrTx, companyId: string, period: string): Promise<boolean> {

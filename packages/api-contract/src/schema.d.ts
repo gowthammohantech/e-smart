@@ -5237,6 +5237,15 @@ export interface components {
                 rate: number;
                 /** Format: date */
                 validTill: string;
+                /**
+                 * Format: date
+                 * @description The day the certificate starts; before it the normal rate applies
+                 */
+                validFrom?: string;
+                /** @description The section it is for; unset, the supplier's default section */
+                section?: components["schemas"]["TdsSectionCode"];
+                /** @description The amount it covers in the financial year; bills past it are deducted at the normal rate */
+                limit?: components["schemas"]["Money"];
             };
             /** @description Sales to this customer collect TCS (s.206C) by default, under tcsSection */
             tcsApplicable?: boolean;

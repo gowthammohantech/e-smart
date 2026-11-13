@@ -145,6 +145,14 @@ export async function prepare(ctx: AnyCtx, db: DbOrTx, body: Schema<'Expense'>, 
   const taxInclusive = body.taxInclusive ?? current?.taxInclusive ?? true;
   const reverseCharge = body.reverseCharge ?? current?.reverseCharge ?? false;
   const recurrence = body.recurrence ?? current?.recurrence ?? 'none';
+  // Input credit needs a tax invoice from a registered supplier (s.16(2)(a)) and a business on regular
+  // GST: without the supplier's GSTIN (on the expense or its saved supplier), or for an unregistered or
+  // composition business, the GST is part of the cost. Reverse charge is the business's own tax.
+  const supplierGstin = body.supplierGstin?.trim().toUpperCase() || null;
+  const [supplier] = body.supplierId ? await db.select({ taxId: schema.parties.taxId }).from(schema.parties).where(and(eq(schema.parties.companyId, companyId), eq(schema.parties.id, body.supplierId))) : [];
+  const onRegularGst = !!ctx.company.taxRegistered && !ctx.company.compositionScheme;
+  const creditable = onRegularGst && (reverseCharge || !!supplierGstin || !!supplier?.taxId);
+  const itcEligibility = creditable ? (body.itcEligibility ?? 'eligible') : 'ineligible';
   // A template keeps its place in the series unless its date or frequency changed.
   const keepSchedule = current && current.recurrence === recurrence && current.date === body.date && current.nextRecurrenceDate;
   return {
@@ -159,8 +167,8 @@ export async function prepare(ctx: AnyCtx, db: DbOrTx, body: Schema<'Expense'>, 
     taxAmountMinor: expenseTax(money(body.amount.minor, body.currency), rate, taxInclusive, reverseCharge).minor,
     taxInclusive,
     placeOfSupplyStateCode: body.placeOfSupplyStateCode ?? null,
-    supplierGstin: body.supplierGstin?.trim().toUpperCase() || null,
-    itcEligibility: body.itcEligibility ?? 'eligible',
+    supplierGstin,
+    itcEligibility,
     reverseCharge,
     accountId: body.accountId,
     method: body.method,

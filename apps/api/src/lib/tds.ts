@@ -1,4 +1,4 @@
-import { and, eq, gte, inArray, lte, ne, notInArray, or, sql } from 'drizzle-orm';
+import { and, eq, gte, inArray, lte, ne, notInArray, sql } from 'drizzle-orm';
 import { financialYearOf } from '@esmart/core/lib/date';
 import { tdsFor, type TdsResult } from '@esmart/core/domain/tds';
 import { schema } from '@esmart/db';
@@ -50,7 +50,8 @@ export async function tdsYearSoFar(db: DbOrTx, companyId: string, party: PartyRo
         inArray(D.partyId, ids),
         inArray(D.kind, ['purchaseBill', 'supplierDebitNote', 'supplierCreditNote', 'purchaseReturn']),
         notInArray(D.status, ['draft', 'cancelled', 'rejected']),
-        or(eq(D.tdsSection, section), sql`${D.tdsSection} is null`),
+        // Only bills under this section count towards its thresholds: a bill of goods with no TDS isn't a contract.
+        eq(D.tdsSection, section),
         gte(D.date, fy.start),
         lte(D.date, fy.end),
         except.documentId ? ne(D.id, except.documentId) : undefined,
@@ -81,7 +82,17 @@ export async function tdsOn(
 ): Promise<TdsResult & { section: string | null }> {
   if (!section) return { section: null, rate: 0, amountMinor: 0, reason: 'none' };
   const prior = await tdsYearSoFar(db, company.id, party, section, date, except);
-  const certificate = party.lowerTdsRate !== null && party.lowerTdsValidTill ? { rate: Number(party.lowerTdsRate), validTill: party.lowerTdsValidTill } : undefined;
+  const certificate =
+    party.lowerTdsRate !== null && party.lowerTdsValidTill
+      ? {
+          rate: Number(party.lowerTdsRate),
+          validTill: party.lowerTdsValidTill,
+          validFrom: party.lowerTdsValidFrom ?? undefined,
+          // Issued for one section: the one it names, else the supplier's own.
+          section: party.lowerTdsSection ?? party.tdsSection ?? undefined,
+          limitMinor: party.lowerTdsLimitMinor ?? undefined,
+        }
+      : undefined;
   const deductedOnPaymentsMinor = await tdsOnPaymentsTo(db, except.documentId, section);
   return { section, ...tdsFor({ section, pan: party.pan ?? undefined, certificate, date, baseMinor, prior, deductedOnPaymentsMinor }) };
 }

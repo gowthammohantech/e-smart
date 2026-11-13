@@ -14,6 +14,7 @@ import { OTHER_COUNTRY_CODE } from '@esmart/core/domain/stateCodes';
 import { buildTaxContext, taxAvailableOn, taxRateOn, type SezTax } from '@esmart/core/domain/taxEngine';
 import { addDaysISO } from '@esmart/core/lib/date';
 import type { Branch, Company, DocumentKind, DocumentLine, DocumentTotals, GstFlags, Party, TaxCategory } from '@esmart/core/types';
+import { factorOf } from '@esmart/core/lib/money';
 import { schema } from '@esmart/db';
 import type { Schema } from '@esmart/api-contract';
 import type { CompanyRow } from '../../context';
@@ -436,9 +437,23 @@ export async function prepareDocument(
 
   // A return or note against an SEZ document reverses it as it was charged: with IGST or without.
   let sezTax = f.sezTax;
+  let fromSource: { placeOfSupply: string | null; reverseCharge: boolean } | null = null;
+  /** The invoice or bill a direct note with GST names, when it is in these books. */
+  let namedOriginal: { number: string; grandTotalMinor: number; currency: string } | null = null;
+  if (f.chargesMinor < 0) blocking('charges', 'Charges cannot be negative; a reduction is a discount or a credit note');
+  // Round off takes the total to a round figure: at most ten units of the currency either way (to the nearest ten).
+  if (f.roundOffManualMinor !== null && Math.abs(f.roundOffManualMinor) > 10 * factorOf(f.currency)) blocking('roundOffManual', `Round off is at most ${f.currency} 10 either way`);
   if (f.sourceDocumentId) {
-    const [src] = await db.select({ id: D.id, date: D.date, number: D.number, sezTax: D.sezTax }).from(D).where(and(eq(D.companyId, company.id), eq(D.id, f.sourceDocumentId)));
+    const [src] = await db
+      .select({ id: D.id, date: D.date, number: D.number, sezTax: D.sezTax, placeOfSupplyStateCode: D.placeOfSupplyStateCode, reverseCharge: D.reverseCharge })
+      .from(D)
+      .where(and(eq(D.companyId, company.id), eq(D.id, f.sourceDocumentId)));
     if (src?.sezTax && (f.kind === 'salesReturn' || f.kind === 'purchaseReturn' || NOTE_KINDS.includes(f.kind))) sezTax = src.sezTax as SezTax;
+    // A return or note reverses tax under the heads it was charged under: the source's place of supply
+    // (IGST or CGST and SGST) and reverse charge, not the party's state today.
+    if (src && (f.kind === 'salesReturn' || f.kind === 'purchaseReturn' || NOTE_KINDS.includes(f.kind))) {
+      fromSource = { placeOfSupply: src.placeOfSupplyStateCode, reverseCharge: src.reverseCharge };
+    }
     if (!src) blocking('sourceDocumentId', 'No such document in this company');
     // What a document is made from (the quote behind an order, the invoice behind a return) came first.
     else if (f.date < src.date) blocking('date', `Can't be before ${src.date}, the date of ${src.number.trim()} it was made from`);
@@ -452,6 +467,17 @@ export async function prepareDocument(
       if (!f.originalNumber) blocking('originalNumber', `A ${f.kind} with GST and no linked ${what} needs the original ${what} number`);
       if (!f.originalDate) blocking('originalDate', `A ${f.kind} with GST and no linked ${what} needs the original ${what} date`);
       else if (f.originalDate > f.date) blocking('originalDate', `The original ${what} cannot be dated after the note (${f.date})`);
+      // An invoice or bill that is in these books is linked, so the note is held to what it charged.
+      if (f.originalNumber) {
+        const kinds = isPurchaseKind(f.kind) ? ['purchaseBill'] : ['invoice'];
+        const numberCol = isPurchaseKind(f.kind) ? D.supplierDocNumber : D.number;
+        const [inBooks] = await db
+          .select({ id: D.id, number: D.number, grandTotalMinor: D.grandTotalMinor, currency: D.currency })
+          .from(D)
+          .where(and(eq(D.companyId, company.id), eq(D.partyId, f.partyId), inArray(D.kind, kinds as DocumentKind[]), eq(numberCol, f.originalNumber.trim()), notInArray(D.status, ['draft', 'cancelled'])))
+          .limit(1);
+        if (inBooks) namedOriginal = inBooks;
+      }
     }
   }
   if (f.noteGst && !NOTE_KINDS.includes(f.kind)) blocking('noteGst', 'Only a credit or debit note has a GST treatment');
@@ -467,14 +493,17 @@ export async function prepareDocument(
   // A return, or a note against an invoice or bill, reverses exactly what was charged, whatever the
   // category says now: the note's line takes its source line's rate when it names the same item.
   const returned = new Map<string, number>();
+  let sourceRates: Set<number> | null = null;
   if (f.sourceDocumentId && (f.kind === 'salesReturn' || f.kind === 'purchaseReturn' || NOTE_KINDS.includes(f.kind))) {
     const stored = await db.select().from(schema.documentLines).where(eq(schema.documentLines.documentId, f.sourceDocumentId));
     for (const s of stored) returned.set(s.itemId ?? s.name, Number(s.taxRate));
+    sourceRates = new Set(stored.map((s) => Number(s.taxRate)));
   }
   // A category changed since the document's date charged its earlier rate then.
   const histories = await taxHistories(db, categories.filter((c) => c.effectiveFrom > f.date).map((c) => c.id));
   const rateOn = (c: (typeof categories)[number]) => taxRateOn({ ...c, history: histories.get(c.id) }, f.date);
 
+  const noCredit = isPurchaseKind(f.kind) && (!company.taxRegistered || !!company.compositionScheme);
   const coreLines: DocumentLine[] = lines.map((l, i) => {
     const category = categories.find((c) => c.id === l.taxCategoryId);
     if (!category) blocking(`lines[${i}].taxCategoryId`, 'No such tax category in this company');
@@ -494,7 +523,10 @@ export async function prepareDocument(
     // The line's own treatment, else the item's. A non-taxable supply is charged at 0%.
     // A financial note without GST charges none on any line (RULES 6.24).
     const own = l.gst ?? (item ? gstFlagsFrom(item) : undefined) ?? {};
-    const gst = noGst ? { ...own, supplyType: 'nonGst' as const, reverseCharge: false, cessRate: 0 } : own;
+    const plain = noGst ? { ...own, supplyType: 'nonGst' as const, reverseCharge: false, cessRate: 0 } : own;
+    // A business that isn't on regular GST (unregistered, or composition, s.10(4)) claims no input
+    // credit: GST it pays a supplier is part of the cost.
+    const gst = noCredit ? { ...plain, itcEligibility: 'ineligible' as const } : plain;
     const taxable = !gst.reimbursement && (gst.supplyType ?? 'taxable') === 'taxable';
     // A line's own cost centre is for what is spent, not stock (RULES 6.20): stock takes the document's,
     // since its cost reaches profit only when it is sold.
@@ -520,6 +552,15 @@ export async function prepareDocument(
     };
   });
 
+  // A note line that isn't one of the source's items still adjusts tax only at a rate the source charged.
+  if (sourceRates?.size) {
+    coreLines.forEach((l, i) => {
+      if (l.taxRate > 0 && !returned.has(l.itemId ?? l.name) && !sourceRates!.has(l.taxRate)) {
+        blocking(`lines[${i}].taxCategoryId`, `The ${f.kind} adjusts tax at the rates its source charged (${[...sourceRates!].sort((a, b) => a - b).join('%, ')}%), not ${l.taxRate}%`);
+      }
+    });
+  }
+
   // The rate to base: what the client sent, else the effective rate on the date.
   let exchangeRate = f.exchangeRate;
   if (f.currency === baseCurrency) exchangeRate = 1;
@@ -539,13 +580,14 @@ export async function prepareDocument(
   const partyCountry = party!.billingCountry.trim();
   const placeOfSupply =
     f.placeOfSupplyStateCode ??
+    fromSource?.placeOfSupply ??
     (party!.billingStateCode ||
       (partyCountry !== company.country.trim() ? OTHER_COUNTRY_CODE : company.placeOfSupplyStateCode) ||
       null);
 
   const coreCompany = companyCore(company);
   // A supplier marked reverse charge puts the whole bill under it unless the document says otherwise.
-  const reverseCharge = noGst ? false : (f.reverseCharge ?? (isPurchaseKind(f.kind) && party!.reverseCharge));
+  const reverseCharge = noGst ? false : (f.reverseCharge ?? fromSource?.reverseCharge ?? (isPurchaseKind(f.kind) && party!.reverseCharge));
   const taxContext = buildTaxContext(coreCompany, {
     placeOfSupply: placeOfSupply ?? undefined,
     party: partyCore(party!),
@@ -588,6 +630,11 @@ export async function prepareDocument(
     }
   }
   if (tcsRate > 0) totals = calculateDocument({ ...calcInput, tcsRate });
+  if (totals.grandTotal.minor < 0) throw unprocessable([{ field: 'lines', message: 'The total cannot be below zero; a reduction is a credit note', severity: 'blocking' }]);
+  // A direct note naming an invoice or bill in these books adjusts no more than it charged (s.34).
+  if (namedOriginal && namedOriginal.currency.trim() === f.currency && totals.grandTotal.minor > namedOriginal.grandTotalMinor) {
+    throw unprocessable([{ field: 'lines', message: `${namedOriginal.number.trim()} was for ${f.currency} ${(namedOriginal.grandTotalMinor / 100).toFixed(2)}; a note against it can't be for more`, severity: 'blocking' }]);
+  }
 
   // TDS the business keeps back from a supplier, worked on the taxable value in base currency.
   let tds: { section: string | null; rate: number; amountMinor: number } = { section: null, rate: 0, amountMinor: 0 };
@@ -602,8 +649,16 @@ export async function prepareDocument(
     if (expected) tds = expected;
   } else if ((f.kind === 'supplierCreditNote' || f.kind === 'purchaseReturn') && f.sourceDocumentId) {
     // A credit note or return gives back TDS at the rate its bill was taxed at.
-    const [src] = await db.select({ section: D.tdsSection, rate: D.tdsRate }).from(D).where(eq(D.id, f.sourceDocumentId));
-    if (src?.section && src.rate) tds = { section: src.section, rate: Number(src.rate), amountMinor: Math.round((baseMinor * Number(src.rate)) / 100) };
+    // Only what the bill actually kept back comes back, in proportion: a bill under the threshold kept none.
+    const [src] = await db
+      .select({ section: D.tdsSection, rate: D.tdsRate, kept: D.tdsAmountMinor, taxable: D.taxableAmountMinor, rate2: D.exchangeRate })
+      .from(D)
+      .where(and(eq(D.companyId, company.id), eq(D.id, f.sourceDocumentId)));
+    if (src?.section && src.rate && src.kept > 0) {
+      const keptBase = Math.round(src.kept * Number(src.rate2));
+      const srcBase = Math.round(src.taxable * Number(src.rate2));
+      tds = { section: src.section, rate: Number(src.rate), amountMinor: Math.min(srcBase > 0 ? Math.round((keptBase * baseMinor) / srcBase) : 0, keptBase) };
+    }
   }
   // Held in the document's currency, like what is paid against it.
   const tdsAmountMinor = exchangeRate === 1 ? tds.amountMinor : Math.round(tds.amountMinor / exchangeRate!);

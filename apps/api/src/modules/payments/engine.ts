@@ -259,8 +259,9 @@ export async function writePayment(
       if ((a[k] ?? 0) < 0) return blocking(`${field}.${k}`, 'Cannot be negative');
     }
     if (!(settles(a) > 0)) return blocking(`${field}.amount.minor`, 'Must be more than zero');
-    // TDS is kept back once (RULES 4.16, pending CA): a bill that kept it back under this section takes no more on what pays it.
-    if (input.direction === 'paid' && (a.tdsMinor ?? 0) > 0 && doc.tdsAmountMinor > 0 && (!input.tdsSection || input.tdsSection === 'none' || doc.tdsSection === input.tdsSection)) {
+    // TDS is kept back once (RULES 4.16, pending CA): a bill that kept it back takes no more on what
+    // pays it, under its own section or any other (one payment is one nature of payment).
+    if (input.direction === 'paid' && (a.tdsMinor ?? 0) > 0 && doc.tdsAmountMinor > 0) {
       blocking(`${field}.tdsDeducted`, `${doc.number} already kept back TDS under ${doc.tdsSection ?? 'its section'}; it is not deducted again on the payment`);
     }
     // TDS is a share of the taxable value at the section's rate, never more (the no-PAN rate at most).
@@ -334,6 +335,8 @@ export async function writePayment(
     // Advances for goods carry no GST (notification 66/2017): only a service's SAC (99…) is taxed on receipt.
     else if (hsn && !hsn.startsWith('99')) blocking('advanceTax.hsn', `${hsn} is goods: an advance for goods carries no GST (notification 66/2017); leave the tax off`);
     if (advance.cessRate != null && !(advance.cessRate >= 0 && advance.cessRate <= 300)) blocking('advanceTax.cessRate', 'A cess rate from 0 to 300 percent');
+    // Reverse charge puts the tax on the customer, which only a registered customer can pay (s.9(3)).
+    if (advance.reverseCharge && party && !party.taxId) blocking('advanceTax.reverseCharge', `${party.name} has no GSTIN; reverse charge applies only to a registered customer`);
   }
   // A refund pays a customer back out of an advance they paid (Rule 51): it settles nothing else,
   // and takes no more than is left of that advance.

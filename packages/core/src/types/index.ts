@@ -180,7 +180,7 @@ export type Party = {
   /** The TDS section their bills fall under by default (194C, 194J(b)…). */
   tdsSection?: string;
   /** A lower or nil deduction certificate they hold (s.197). */
-  lowerTdsCertificate?: { rate: number; validTill: string };
+  lowerTdsCertificate?: { rate: number; validTill: string; validFrom?: string; section?: string; limit?: { minor: number; currency: string } };
   /** Sales to this customer collect TCS (s.206C) by default, under `tcsSection`. */
   tcsApplicable?: boolean;
   /** The TCS section their invoices fall under by default (a TCS_SECTIONS code). */

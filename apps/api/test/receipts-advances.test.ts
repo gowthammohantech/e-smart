@@ -71,7 +71,8 @@ describe('an advance for a service on reverse charge', () => {
     await registered(m);
     const adv = await t.post(
       `${m.c}/payments`,
-      { direction: 'received', partyId: m.mumbai.id, date: '2026-09-15', amount: inr(1_180_000), currency: 'INR', method: 'cash', accountId: m.cash.id, advanceTax: { taxCategoryId: m.gst(18), placeOfSupplyStateCode: '27', hsn: '998311', reverseCharge: true } },
+      // Reverse charge falls on a registered customer.
+      { direction: 'received', partyId: m.bengaluru.id, date: '2026-09-15', amount: inr(1_180_000), currency: 'INR', method: 'cash', accountId: m.cash.id, advanceTax: { taxCategoryId: m.gst(18), placeOfSupplyStateCode: '27', hsn: '998311', reverseCharge: true } },
       { token: m.token },
     );
     expect(adv.status).toBe(201);
@@ -82,6 +83,13 @@ describe('an advance for a service on reverse charge', () => {
     const voucher = pdfText((await t.get(`${m.c}/payments/${adv.body.id}/receipt`, { token: m.token })).raw);
     expect(voucher).toContain('RECEIPT VOUCHER');
     expect(voucher).toContain('Tax payable on reverse charge: Yes');
+    // Not for a customer without a GSTIN: they can't pay it.
+    const unregistered = await t.post(
+      `${m.c}/payments`,
+      { direction: 'received', partyId: m.mumbai.id, date: '2026-09-15', amount: inr(1_180_000), currency: 'INR', method: 'cash', accountId: m.cash.id, advanceTax: { taxCategoryId: m.gst(18), placeOfSupplyStateCode: '27', hsn: '998311', reverseCharge: true } },
+      { token: m.token },
+    );
+    expect(unregistered.body.issues?.map((i: { field: string }) => i.field)).toContain('advanceTax.reverseCharge');
 
     // The same advance without the flag owes the tax, as before.
     const taxed = await t.post(

@@ -31,7 +31,10 @@ export function tdsForDocument(
   const deductedOnPaymentsMinor = (ctx.payments ?? [])
     .filter((p) => p.direction === 'paid' && p.tdsSection === section)
     .reduce((a, p) => a + p.allocations.filter((x) => x.documentId === doc.id).reduce((b, x) => b + (x.tdsDeducted?.minor ?? 0), 0), 0);
-  const r = tdsFor({ section, pan: party.pan, certificate: party.lowerTdsCertificate, date: doc.date, baseMinor, prior, deductedOnPaymentsMinor });
+  // A certificate is for its own section, else the supplier's default one (as the server reads it).
+  const cert = party.lowerTdsCertificate;
+  const certificate = cert ? { ...cert, section: cert.section ?? party.tdsSection } : undefined;
+  const r = tdsFor({ section, pan: party.pan, certificate, date: doc.date, baseMinor, prior, deductedOnPaymentsMinor });
   return r.amountMinor > 0 ? { section, rate: r.rate, amount: money(Math.round(r.amountMinor / rate), doc.currency) } : undefined;
 }
 

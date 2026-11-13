@@ -117,6 +117,9 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
   const [tcsOpen, setTcsOpen] = useState(false);
   const [certRate, setCertRate] = useState(party?.lowerTdsCertificate ? String(party.lowerTdsCertificate.rate) : '');
   const [certValidTill, setCertValidTill] = useState(party?.lowerTdsCertificate?.validTill ?? '');
+  const [certValidFrom, setCertValidFrom] = useState(party?.lowerTdsCertificate?.validFrom ?? '');
+  // The amount the certificate covers, in rupees as typed; blank for no limit.
+  const [certLimit, setCertLimit] = useState(party?.lowerTdsCertificate?.limit ? String(party.lowerTdsCertificate.limit.minor / 100) : '');
   const [active, setActive] = useState((party?.status ?? 'active') === 'active');
 
   const [stateOpen, setStateOpen] = useState(false);
@@ -233,7 +236,17 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
       udyamNumber: buysFrom(kind) && msmeType ? udyam.trim().toUpperCase() || undefined : undefined,
       reverseCharge: buysFrom(kind) && reverseCharge ? true : undefined,
       tdsSection: buysFrom(kind) ? tdsSectionCode : undefined,
-      lowerTdsCertificate: buysFrom(kind) && tdsSectionCode && certRate && certValidTill ? { rate: Number(certRate), validTill: certValidTill } : undefined,
+      // A certificate is issued for one section (the supplier's), from a date, up to an amount.
+      lowerTdsCertificate:
+        buysFrom(kind) && tdsSectionCode && certRate && certValidTill
+          ? {
+              rate: Number(certRate),
+              validTill: certValidTill,
+              section: tdsSectionCode,
+              ...(certValidFrom && { validFrom: certValidFrom }),
+              ...(certLimit && Number(certLimit) > 0 && { limit: { minor: Math.round(Number(certLimit) * 100), currency: 'INR' } }),
+            }
+          : undefined,
       tcsApplicable: sellsTo(kind) && tcsApplicable ? true : undefined,
       tcsSection: sellsTo(kind) && tcsApplicable ? tcsSectionCode : undefined,
       email: email.trim().toLowerCase() || undefined,
@@ -369,6 +382,22 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
             <View style={desktop ? undefined : { flex: 1 }}>
               <DateField label={tr('contacts:form.lowerTdsValidTill')} value={certValidTill} onChange={setCertValidTill} />
             </View>
+          </View>
+        ) : null}
+        {tdsSectionCode && certRate ? (
+          <View style={desktop ? { gap: t.spacing.lg } : { flexDirection: 'row', gap: t.spacing.md }}>
+            <View style={desktop ? undefined : { flex: 1 }}>
+              <DateField label={tr('contacts:form.lowerTdsValidFrom')} value={certValidFrom} onChange={setCertValidFrom} />
+            </View>
+            <TextField
+              label={tr('contacts:form.lowerTdsLimit')}
+              value={certLimit}
+              onChangeText={(v) => setCertLimit(v.replace(/[^0-9.]/g, ''))}
+              placeholder="—"
+              keyboardType="decimal-pad"
+              hint={tr('contacts:form.lowerTdsLimitHint')}
+              containerStyle={desktop ? undefined : { flex: 1 }}
+            />
           </View>
         ) : null}
       </>

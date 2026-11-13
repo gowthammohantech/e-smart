@@ -7258,6 +7258,9 @@ components:
               properties:
                 rate: { type: number, minimum: 0, maximum: 100 }
                 validTill: { type: string, format: date }
+                validFrom: { type: string, format: date, description: 'The day the certificate starts; before it the normal rate applies' }
+                section: { allOf: [{ $ref: '#/components/schemas/TdsSectionCode' }], description: "The section it is for; unset, the supplier's default section" }
+                limit: { allOf: [{ $ref: '#/components/schemas/Money' }], description: 'The amount it covers in the financial year; bills past it are deducted at the normal rate' }
             tcsApplicable: { type: boolean, description: "Sales to this customer collect TCS (s.206C) by default, under tcsSection" }
             tcsSection: { allOf: [{ $ref: '#/components/schemas/TcsSectionCode' }], description: "The TCS section this customer's invoices fall under by default; needs tcsApplicable" }
             email: { type: string, format: email }

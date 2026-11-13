@@ -1,7 +1,17 @@
 import { TdsSection, tdsSection } from '../data/tdsSections';
 
 /** A lower or nil deduction certificate (s.197), for one deductee. */
-export type LowerTdsCertificate = { rate: number; validTill: string; limitMinor?: number };
+export type LowerTdsCertificate = {
+  rate: number;
+  validTill: string;
+  /** The day it starts; the normal rate before. */
+  validFrom?: string;
+  /** The section it is issued for; under any other the normal rate applies. */
+  section?: string;
+  /** What it covers in the financial year (base currency paise); past it, the normal rate. */
+  limitMinor?: number;
+  limit?: { minor: number };
+};
 
 export type TdsInput = {
   section: string | undefined;
@@ -33,11 +43,25 @@ export function isIndividualPan(pan: string | undefined): boolean {
   return c === 'P' || c === 'H';
 }
 
-export function tdsRate(section: TdsSection, pan: string | undefined, certificate: LowerTdsCertificate | undefined, date: string): { rate: number; reason: TdsResult['reason'] } {
+/**
+ * Whether a certificate covers this bill: its section, from its start to its end, and within its
+ * limit once this bill is counted (`usedMinor`, the year's base with this bill). A bill that would
+ * take the year past the limit is deducted at the normal rate in full (the safer side).
+ */
+export function certificateCovers(certificate: LowerTdsCertificate, section: string, date: string, usedMinor?: number): boolean {
+  if (certificate.section && certificate.section !== section) return false;
+  if (certificate.validFrom && date < certificate.validFrom) return false;
+  if (date > certificate.validTill) return false;
+  const limit = certificate.limitMinor ?? certificate.limit?.minor;
+  if (limit !== undefined && usedMinor !== undefined && usedMinor > limit) return false;
+  return true;
+}
+
+export function tdsRate(section: TdsSection, pan: string | undefined, certificate: LowerTdsCertificate | undefined, date: string, usedMinor?: number): { rate: number; reason: TdsResult['reason'] } {
   if (!pan || !/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan.trim().toUpperCase())) {
     return { rate: Math.max(section.noPanRate, section.rateOther), reason: 'noPan' };
   }
-  if (certificate && date <= certificate.validTill) return { rate: certificate.rate, reason: 'lowerCertificate' };
+  if (certificate && certificateCovers(certificate, section.code, date, usedMinor)) return { rate: certificate.rate, reason: 'lowerCertificate' };
   return { rate: isIndividualPan(pan) ? section.rateIndividual : section.rateOther, reason: 'deducted' };
 }
 
@@ -58,8 +82,8 @@ export function tdsFor(input: TdsInput): TdsResult {
 function tdsBeforePayments(input: TdsInput): TdsResult {
   const section = tdsSection(input.section);
   if (!section || input.baseMinor <= 0) return { rate: 0, amountMinor: 0, reason: 'none' };
-  const { rate, reason } = tdsRate(section, input.pan, input.certificate, input.date);
   const total = input.prior.baseMinor + input.baseMinor;
+  const { rate, reason } = tdsRate(section, input.pan, input.certificate, input.date, total);
   const annual = section.annualThresholdMinor;
 
   if (section.onExcessOnly && annual !== undefined) {
@@ -176,7 +200,8 @@ export function tdsPriorOnDevice(
   for (const d of documents) {
     if (d.id === exceptId || !TDS_KINDS.includes(d.kind) || !same.has(d.partyId) || d.date < start || d.date > end) continue;
     if (['draft', 'cancelled', 'rejected'].includes(d.status)) continue;
-    if (d.tds && d.tds.section !== section) continue;
+    // Only bills under this section count towards its thresholds, as the server counts them.
+    if (d.tds?.section !== section) continue;
     const sign = TDS_BACK.includes(d.kind) ? -1 : 1;
     const rate = d.currency === baseCurrency ? 1 : d.exchangeRate;
     baseMinor += sign * Math.round(d.totals.taxableAmount.minor * rate);

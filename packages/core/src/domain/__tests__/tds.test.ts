@@ -31,6 +31,14 @@ describe('TDS', () => {
     expect(run({ baseMinor: 40_000_00, pan: undefined })).toMatchObject({ rate: 20, reason: 'noPan', amountMinor: 8_00_000 });
   });
 
+  it('holds a certificate to its section, its start and its limit', () => {
+    const base = { rate: 0.5, validTill: '2026-12-31' };
+    expect(run({ baseMinor: 40_000_00, certificate: { ...base, section: '194JB' } })).toMatchObject({ reason: 'deducted' });
+    expect(run({ baseMinor: 40_000_00, certificate: { ...base, validFrom: '2026-12-01' } })).toMatchObject({ reason: 'deducted' });
+    expect(run({ baseMinor: 40_000_00, certificate: { ...base, limitMinor: 30_000_00 } })).toMatchObject({ reason: 'deducted' });
+    expect(run({ baseMinor: 40_000_00, certificate: { ...base, limitMinor: 50_000_00 } })).toMatchObject({ rate: 0.5, reason: 'lowerCertificate' });
+  });
+
   it('applies a lower deduction certificate while it is valid', () => {
     const certificate = { rate: 0.5, validTill: '2026-12-31' };
     expect(run({ baseMinor: 40_000_00, certificate })).toMatchObject({ rate: 0.5, reason: 'lowerCertificate' });

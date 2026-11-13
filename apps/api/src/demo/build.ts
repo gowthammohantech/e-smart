@@ -530,10 +530,14 @@ export async function buildBusiness(api: DemoApi, p: Profile, ctx: BuildContext)
       const base = invoices.find((d) => d.status !== 'cancelled') ?? invoices[0];
       const party = customers.find((x) => x.id === base.partyId)!;
       // One against a specific invoice (it reduces that invoice)…
-      await issue('creditNote', party, day(50), [{ ...line(sellable[0], 1, { price: Math.max(1, Math.round(due(base) * 0.05)) }), itemId: undefined, name: 'Rate difference allowed' }], { sourceDocumentId: base.id, noteReason: 'discount', noteGst: 'withGst', originalNumber: base.number, originalDate: base.date });
+      // At a rate the invoice charged: a note adjusts tax only at its source's rates.
+      const charged = sellable.find((it) => (base as { lines?: { itemId?: string }[] }).lines?.some((l) => l.itemId === it.id)) ?? sellable[0];
+      await issue('creditNote', party, day(50), [{ ...line(charged, 1, { price: Math.max(1, Math.round(due(base) * 0.05)) }), itemId: undefined, name: 'Rate difference allowed' }], { sourceDocumentId: base.id, noteReason: 'discount', noteGst: 'withGst', originalNumber: base.number, originalDate: base.date });
       // …and a quarterly discount left as credit, then set against whatever they owe next.
       const regular = regulars[0];
-      const note = await issue('creditNote', regular, day(49), [{ ...line(sellable[0], 1, { price: 4000 }), itemId: undefined, name: 'Quarterly volume discount' }], { noteReason: 'discount', noteGst: 'withGst', originalNumber: base.number, originalDate: base.date });
+      // A note with GST names one of the customer's own invoices, and is for no more than it was (s.34).
+      const theirs = invoices.find((d) => d.partyId === regular.id && d.status !== 'cancelled') ?? base;
+      const note = await issue('creditNote', regular, day(49), [{ ...line(sellable[0], 1, { price: Math.max(1, Math.min(4000, Math.round(due(theirs) * 0.5))) }), itemId: undefined, name: 'Quarterly volume discount' }], { noteReason: 'discount', noteGst: 'withGst', originalNumber: theirs.number, originalDate: theirs.date });
       on(47, () => adjust(regular, note.id));
     });
     on(38, async () => {

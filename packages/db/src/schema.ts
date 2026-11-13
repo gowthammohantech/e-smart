@@ -901,6 +901,10 @@ export const parties = pgTable("parties", {
 	tdsSection: varchar("tds_section", { length: 8 }),
 	lowerTdsRate: numeric("lower_tds_rate", { precision: 6, scale:  3 }),
 	lowerTdsValidTill: date("lower_tds_valid_till"),
+	// The section the certificate is for (else the supplier's), the day it starts, and the amount it covers.
+	lowerTdsSection: varchar("lower_tds_section", { length: 8 }),
+	lowerTdsValidFrom: date("lower_tds_valid_from"),
+	lowerTdsLimitMinor: bigint("lower_tds_limit_minor", { mode: "number" }),
 	// Sales to this customer collect TCS by default, under this section (s.206C).
 	tcsApplicable: boolean("tcs_applicable").default(false).notNull(),
 	tcsSection: varchar("tcs_section", { length: 20 }),
