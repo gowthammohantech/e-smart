@@ -21,7 +21,7 @@ import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { Avatar } from '@esmart/ui/components/Avatar';
 
-import { CHARGES_KINDS, ChargesKind, DocStatus, DocumentKind, DocumentLine, NoteReason, Party } from '@esmart/core/types';
+import { CHARGES_KINDS, ChargesKind, ShipTo, DocStatus, DocumentKind, DocumentLine, NoteReason, Party } from '@esmart/core/types';
 import { NOTE_KINDS, PURCHASE_KINDS, isAwaitingApproval, isFinalized } from '@esmart/core/domain/documentStates';
 import { TDS_SECTIONS, tdsSection } from '@esmart/core/data/tdsSections';
 import { TCS_SECTIONS, partyTcsSection, tcsAskedOn, tcsRateFor, tcsSection } from '@esmart/core/data/tcsSections';
@@ -118,6 +118,8 @@ const STEPS = ['party', 'items', 'extras', 'review'] as const;
 
 /** The documents GST is charged on, where reverse charge can apply. */
 const TAX_KINDS: DocumentKind[] = ['invoice', 'salesReturn', 'purchaseBill', 'purchaseReturn', ...NOTE_KINDS];
+/** Sales documents of goods that may go to a consignee other than the buyer. */
+const SHIP_TO_KINDS: DocumentKind[] = ['invoice', 'proforma', 'quote', 'salesOrder', 'delivery'];
 const NOTE_REASONS: NoteReason[] = ['discount', 'priceChange', 'taxCorrection', 'deficiency', 'other'];
 /** The documents goods travel with, where a vehicle is worth recording. */
 const VEHICLE_KINDS: DocumentKind[] = ['invoice', 'salesOrder', 'delivery', 'salesReturn', 'purchaseOrder', 'goodsReceipt', 'purchaseBill', 'purchaseReturn'];
@@ -443,6 +445,9 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   const [creditOnEdit, setCreditOnEdit] = useState(false);
   const [chargesText, setChargesText] = useState(String(toMajor(draft.charges) || ''));
   const [chargesKindOpen, setChargesKindOpen] = useState(false);
+  const [shipStateOpen, setShipStateOpen] = useState(false);
+  // Goods that go out: where they go when not to the buyer's own address (the consignee).
+  const shipsTo = SHIP_TO_KINDS.includes(kind);
   const chargesLabel = tr(`sales:editor.chargesKind.${draft.chargesKind ?? 'other'}` as 'sales:editor.chargesKind.other');
   const [discountText, setDiscountText] = useState(String(draft.documentDiscountValue || ''));
   const [roundOffText, setRoundOffText] = useState(
@@ -723,6 +728,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       charges: draft.charges,
       // Named only when something is charged.
       chargesKind: draft.charges.minor ? (draft.chargesKind ?? 'other') : undefined,
+      shipTo: shipsTo ? (draft.shipTo ?? null) : undefined,
       applyRoundOff: draft.applyRoundOff,
       roundOffManual: draft.applyRoundOff ? draft.roundOffManual : undefined,
       notes: draft.notes || undefined,
@@ -1078,6 +1084,40 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
         </Text>
       </View>
     ) : null;
+    // Ship to: off ships to the buyer (their shipping address, else billing); on names a consignee.
+    const shipTo = draft.shipTo;
+    const patchShip = (over: Partial<ShipTo['address']> & { name?: string; gstin?: string }) => {
+      if (!shipTo) return;
+      const { name, gstin, ...address } = over;
+      patch({ shipTo: { ...shipTo, ...(name !== undefined && { name }), ...(gstin !== undefined && { gstin }), address: { ...shipTo.address, ...address } } });
+    };
+    const shipBlock = shipsTo && party ? (
+      <View style={{ gap: t.spacing.sm }}>
+        <SwitchField
+          label={tr('sales:editor.shipTo.label')}
+          description={tr(shipTo ? 'sales:editor.shipTo.onHint' : 'sales:editor.shipTo.offHint')}
+          value={!!shipTo}
+          onValueChange={(on) => {
+            const from = party.shippingAddress?.line1 ? party.shippingAddress : party.billingAddress;
+            patch({ shipTo: on ? { name: party.name, address: { line1: from?.line1 ?? '', line2: from?.line2, city: from?.city ?? '', state: from?.state ?? '', stateCode: from?.stateCode, postalCode: from?.postalCode ?? '', country: from?.country ?? 'IN' } } : undefined });
+          }}
+        />
+        {shipTo ? (
+          <>
+            <FieldRow>
+              <TextField label={tr('sales:editor.shipTo.name')} value={shipTo.name ?? ''} onChangeText={(name) => patchShip({ name })} icon="account-outline" maxLength={100} />
+              <TextField label={tr('sales:editor.shipTo.gstin')} value={shipTo.gstin ?? ''} onChangeText={(gstin) => patchShip({ gstin: gstin.toUpperCase() })} autoCapitalize="characters" maxLength={15} icon="card-account-details-outline" />
+            </FieldRow>
+            <TextField label={tr('sales:editor.shipTo.address')} value={shipTo.address.line1} onChangeText={(line1) => patchShip({ line1 })} icon="map-marker-outline" required />
+            <FieldRow>
+              <TextField label={tr('sales:editor.shipTo.city')} value={shipTo.address.city} onChangeText={(city) => patchShip({ city })} required />
+              <PickerField label={tr('sales:editor.shipTo.state')} value={shipTo.address.state} onPress={() => setShipStateOpen(true)} required />
+              <TextField label={tr('sales:editor.shipTo.pin')} value={shipTo.address.postalCode} onChangeText={(postalCode) => patchShip({ postalCode: postalCode.replace(/\D/g, '').slice(0, 6) })} keyboardType="number-pad" required />
+            </FieldRow>
+          </>
+        ) : null}
+      </View>
+    ) : null;
     const directNoteBlock = directNote ? (
       <View style={{ gap: t.spacing.sm }}>
         <Text variant="small" tone="muted" weight="500">
@@ -1138,6 +1178,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           {branchField}
           {posField}
           {crossBorderBlock}
+          {shipBlock}
           {currencyField}
           {noteReasonField}
           {directNoteBlock}
@@ -1180,6 +1221,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           </View>
         ) : null}
         {crossBorderBlock}
+        {shipBlock}
         {isdField}
         {directNoteBlock}
       </View>
@@ -2005,6 +2047,18 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           value={draft.chargesKind ?? 'other'}
           onSelect={(k) => patch({ chargesKind: k as ChargesKind })}
           searchable={false}
+        />
+
+        <SelectSheet
+          visible={shipStateOpen}
+          onClose={() => setShipStateOpen(false)}
+          title={tr('sales:editor.shipTo.state')}
+          options={INDIAN_STATES.map((st) => ({ value: st.code, label: st.name }))}
+          value={draft.shipTo?.address.stateCode ?? null}
+          onSelect={(code) => {
+            const st = INDIAN_STATES.find((x) => x.code === code);
+            if (draft.shipTo && st) patch({ shipTo: { ...draft.shipTo, address: { ...draft.shipTo.address, state: st.name, stateCode: st.code } } });
+          }}
         />
 
         <LineEditorSheet

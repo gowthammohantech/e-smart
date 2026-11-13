@@ -176,6 +176,17 @@
       "handling": "Handling charges",
       "loading": "Loading and unloading",
       "other": "Other charges"
+    },
+    "shipTo": {
+      "label": "Ship to a different address",
+      "offHint": "Goods go to the customer at their shipping address (or billing, without one).",
+      "onHint": "Printed as Ship to (consignee) on the document.",
+      "name": "Consignee name",
+      "gstin": "Consignee GSTIN (optional)",
+      "address": "Address",
+      "city": "City",
+      "state": "State",
+      "pin": "PIN"
     }
   },
   "reimburse": {

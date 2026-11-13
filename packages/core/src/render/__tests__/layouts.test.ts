@@ -78,6 +78,15 @@ describe.each(INVOICE_LAYOUTS)('the %s layout prints what the law asks for', (la
     expect(text(render(layout, { document: doc({ crossBorderTax: 'withoutTax', placeOfSupplyStateCode: '96' }) }))).toContain('Supply meant for export under bond or letter of undertaking without payment of integrated tax');
   });
 
+  it('prints the document’s own ship-to, whatever the template says', () => {
+    const shipTo = { name: 'Site office', gstin: '29AABCS1234K1Z5', address: { line1: '9 Dock Road', city: 'Mangaluru', state: 'Karnataka', stateCode: '29', postalCode: '575001', country: 'IN' } };
+    const page = text(render(layout, { document: doc({ shipTo } as never) }));
+    expect(page).toContain('Site office');
+    expect(page).toContain('9 Dock Road');
+    expect(page).toContain('29AABCS1234K1Z5');
+    expect(text(render(layout))).not.toContain('9 Dock Road');
+  });
+
   it('names the charges by what they are for', () => {
     const charged = (over: object) => doc({ date: '2026-11-20', charges: money(5000, 'INR'), ...over } as never);
     const freight = charged({ chargesKind: 'freight' });

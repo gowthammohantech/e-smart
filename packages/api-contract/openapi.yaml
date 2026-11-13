@@ -7952,6 +7952,14 @@ components:
             the original invoice's financial year (422 NOTE_TIME_BARRED). noGst is a financial or
             commercial note: no tax on any line, posted to discount allowed (or received), and left
             out of GSTR-1 and GSTR-3B.
+        shipTo:
+          type: [object, 'null']
+          description: "Where the goods go when not to the buyer at their own address: the consignee, printed as Ship to. Left out ships to the buyer (their shipping address, else billing). Send null to clear it."
+          required: [address]
+          properties:
+            name: { type: string, maxLength: 100 }
+            gstin: { type: string, maxLength: 15 }
+            address: { $ref: '#/components/schemas/Address' }
         crossBorderTax:
           type: string
           enum: [withTax, withoutTax]

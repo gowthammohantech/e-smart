@@ -13,7 +13,7 @@ import { FULL_PLAN, hasModule, saleTdsOnPlan } from '@esmart/core/domain/plan';
 import { OTHER_COUNTRY_CODE } from '@esmart/core/domain/stateCodes';
 import { buildTaxContext, taxAvailableOn, taxRateOn, type CrossBorderTax } from '@esmart/core/domain/taxEngine';
 import { addDaysISO } from '@esmart/core/lib/date';
-import type { Branch, ChargesKind, Company, DocumentKind, DocumentLine, DocumentTotals, GstFlags, Party, TaxCategory } from '@esmart/core/types';
+import type { Branch, ChargesKind, Company, ShipTo, DocumentKind, DocumentLine, DocumentTotals, GstFlags, Party, TaxCategory } from '@esmart/core/types';
 import { schema } from '@esmart/db';
 import type { Schema } from '@esmart/api-contract';
 import type { CompanyRow } from '../../context';
@@ -160,6 +160,8 @@ export type DocFields = {
   chargesMinor: number;
   /** What the charges are for; null is other charges. */
   chargesKind: ChargesKind | null;
+  /** The consignee, when the goods go somewhere other than the buyer's own address. */
+  shipTo: ShipTo | null;
   chargesCurrency?: string;
   applyRoundOff: boolean | null;
   /** A round-off the user typed, in minor units of the document currency. */
@@ -256,6 +258,8 @@ export function fieldsFromWire(body: Schema<'NewDocumentInput'>, base?: DocRow):
     documentDiscountValue: body.documentDiscountValue ?? (base ? Number(base.documentDiscountValue) : 0),
     chargesMinor: body.charges?.minor ?? base?.chargesMinor ?? 0,
     chargesKind: keep(body.chargesKind, base?.chargesKind as ChargesKind | null | undefined),
+    // Another party ships to its own address unless told otherwise.
+    shipTo: keep(body.shipTo === undefined ? undefined : cleanShipTo(body.shipTo), base && base.partyId !== body.partyId ? null : (base?.shipTo as ShipTo | null | undefined)),
     chargesCurrency: body.charges?.currency,
     applyRoundOff: body.applyRoundOff ?? base?.applyRoundOff ?? null,
     roundOffManualMinor: body.roundOffManual !== undefined ? body.roundOffManual.minor : (base?.roundOffManualMinor ?? null),
@@ -282,6 +286,14 @@ export function fieldsFromWire(body: Schema<'NewDocumentInput'>, base?: DocRow):
   };
 }
 
+/** A consignee as stored: trimmed, the GSTIN upper-cased, empty parts dropped; null when there is none. */
+function cleanShipTo(v: { name?: string; gstin?: string; address: Schema<'Address'> } | null): ShipTo | null {
+  if (!v) return null;
+  const name = v.name?.trim();
+  const gstin = v.gstin?.trim().toUpperCase();
+  return { ...(name && { name }), ...(gstin && { gstin }), address: v.address as ShipTo['address'] };
+}
+
 export function fieldsFromRow(row: DocRow): DocFields {
   return {
     kind: row.kind,
@@ -300,6 +312,7 @@ export function fieldsFromRow(row: DocRow): DocFields {
     documentDiscountValue: Number(row.documentDiscountValue),
     chargesMinor: row.chargesMinor,
     chargesKind: row.chargesKind as ChargesKind | null,
+    shipTo: (row.shipTo as ShipTo | null) ?? null,
     applyRoundOff: row.applyRoundOff,
     roundOffManualMinor: row.roundOffManualMinor,
     placeOfSupplyStateCode: row.placeOfSupplyStateCode,
@@ -641,6 +654,7 @@ export async function prepareDocument(
       chargesMinor: f.chargesMinor,
       // Named only when there is something charged.
       chargesKind: f.chargesMinor ? f.chargesKind : null,
+      shipTo: f.shipTo,
       applyRoundOff,
       roundOffManualMinor: f.roundOffManualMinor,
       placeOfSupplyStateCode: placeOfSupply,

@@ -273,6 +273,7 @@ export type NewDocumentInput = {
   documentDiscountValue?: number;
   charges?: Money;
   chargesKind?: BusinessDocument['chargesKind'];
+  shipTo?: BusinessDocument['shipTo'];
   applyRoundOff?: boolean;
   roundOffManual?: Money;
   notes?: string;
@@ -785,6 +786,7 @@ export const useAppStore = create<AppState>()(
             documentDiscountValue: draft.documentDiscountValue ?? 0,
             charges: draft.charges ?? zero(draft.currency),
             chargesKind: draft.chargesKind,
+            shipTo: draft.shipTo,
             applyRoundOff: draft.applyRoundOff ?? draft.currency === 'INR',
             roundOffManual: draft.roundOffManual,
             placeOfSupplyStateCode: draft.placeOfSupplyStateCode ?? party?.billingAddress?.stateCode,
@@ -914,6 +916,7 @@ export const useAppStore = create<AppState>()(
             documentDiscountValue: src.documentDiscountValue,
             charges: src.charges,
             chargesKind: src.chargesKind,
+            shipTo: src.shipTo,
             applyRoundOff: src.applyRoundOff,
             roundOffManual: src.roundOffManual,
             notes: src.notes,
@@ -956,6 +959,7 @@ export const useAppStore = create<AppState>()(
             documentDiscountValue: src.documentDiscountValue,
             charges: src.charges,
             chargesKind: src.chargesKind,
+            shipTo: src.shipTo,
             applyRoundOff: src.applyRoundOff,
             roundOffManual: src.roundOffManual,
             // The PO number and supplier's bill number travel with the conversion, as on the server.

@@ -159,7 +159,7 @@ export function standardLayout(view: DocView): string {
       <div class="muted">${addressBlock(party?.billingAddress)}</div>
       ${party?.taxId ? `<div style="margin-top:4px"><strong>${esc(t('sales:pdf.gstin'))}:</strong> ${esc(party.taxId)}</div>` : ''}
       ${party?.phone ? `<div class="muted">${esc(party.phone)}</div>` : ''}
-      ${party?.email ? `<div class="muted">${esc(party.email)}</div>` : ''}
+      ${party?.email ? `<div class="muted">${esc(party.email)}</div>` : ''}${doc.shipTo ? `<div class="cap" style="margin-top:10px">${bi('sales:pdf.consigneeShipTo')}</div><div class="name">${esc(doc.shipTo.name || party?.name)}</div><div class="muted">${addressBlock(doc.shipTo.address)}</div>${doc.shipTo.gstin ? `<div style="margin-top:4px"><strong>${esc(t('sales:pdf.gstin'))}:</strong> ${esc(doc.shipTo.gstin)}</div>` : ''}` : ''}
     </div>
     <div>
       ${pos ? `<div class="cap">${bi('sales:pdf.placeOfSupply')}</div><div>${esc(pos)}</div>` : ''}

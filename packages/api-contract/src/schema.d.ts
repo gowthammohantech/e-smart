@@ -6006,6 +6006,12 @@ export interface components {
              * @enum {string}
              */
             noteGst?: "withGst" | "noGst";
+            /** @description Where the goods go when not to the buyer at their own address: the consignee, printed as Ship to. Left out ships to the buyer (their shipping address, else billing). Send null to clear it. */
+            shipTo?: {
+                name?: string;
+                gstin?: string;
+                address: components["schemas"]["Address"];
+            } | null;
             /**
              * @description On an export (a party abroad or place of supply 96), a document with an SEZ unit or developer, or an import bill; ignored for anything else. withTax charges IGST on every line (e-invoice EXPWP or SEZWP, GSTR-1 export WPAY); withoutTax charges none: zero-rated under LUT or bond (EXPWOP, SEZWOP, WOPAY), or on an import the IGST paid at customs, which only then may come with a billOfEntry (422 otherwise). Unset: an export or SEZ sale takes withoutTax while the business's LUT is in force, else withTax; an SEZ bill withTax; an import bill withoutTax. A return or note made from a document takes its source's. The server returns what it applied.
              * @enum {string}

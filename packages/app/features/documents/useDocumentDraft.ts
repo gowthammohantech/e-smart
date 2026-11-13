@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { BusinessDocument, ChargesKind, DiscountMode, DocumentKind, DocumentLine, Item, NoteReason, Party, TaxCategory } from '@esmart/core/types';
+import { BusinessDocument, ChargesKind, ShipTo, DiscountMode, DocumentKind, DocumentLine, Item, NoteReason, Party, TaxCategory } from '@esmart/core/types';
 import { Money, factorOf, fromMajor, money, zero } from '@esmart/core/lib/money';
 import { addDaysISO, today } from '@esmart/core/lib/date';
 import { uid } from '@esmart/core/lib/id';
@@ -27,6 +27,8 @@ export type DraftState = {
   charges: Money;
   /** What the charges are for; unset is other charges. */
   chargesKind?: ChargesKind;
+  /** The consignee, when the goods go somewhere other than the buyer's own address. */
+  shipTo?: ShipTo;
   applyRoundOff: boolean;
   roundOffManual?: Money;
   placeOfSupplyStateCode?: string;
@@ -119,6 +121,7 @@ export function draftFromDocument(doc: BusinessDocument): DraftState {
     documentDiscountValue: doc.documentDiscountValue,
     charges: doc.charges,
     chargesKind: doc.chargesKind,
+    shipTo: doc.shipTo ?? undefined,
     applyRoundOff: doc.applyRoundOff,
     roundOffManual: doc.roundOffManual,
     placeOfSupplyStateCode: doc.placeOfSupplyStateCode,

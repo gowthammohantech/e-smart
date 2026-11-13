@@ -664,6 +664,8 @@ export const documents = pgTable("documents", {
 	originalDate: date("original_date"),
 	// An import bill's bill of entry: { number, date, portCode, assessableMinor, igstMinor, cessMinor }. IGST paid at customs.
 	billOfEntry: jsonb("bill_of_entry"),
+	// Where the goods go when not to the buyer's own address: { name?, gstin?, address }. Null ships to the buyer.
+	shipTo: jsonb("ship_to"),
 	// A bill from the business's Input Service Distributor: its credit goes to 3B 4A(4).
 	isdInvoice: boolean("isd_invoice").default(false).notNull(),
 	// TDS deducted on a supplier's bill; what's owed them is the grand total less this.

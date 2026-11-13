@@ -379,6 +379,9 @@ export type DocStatus =
 
 export type DiscountMode = 'percent' | 'amount';
 
+/** A consignee: who the goods go to and where, when not the buyer at their own address. */
+export type ShipTo = { name?: string; gstin?: string; address: Address };
+
 /** What a document's charges are for. */
 export type ChargesKind = 'freight' | 'packing' | 'insurance' | 'handling' | 'loading' | 'other';
 export const CHARGES_KINDS: ChargesKind[] = ['freight', 'packing', 'insurance', 'handling', 'loading', 'other'];
@@ -504,6 +507,8 @@ export type BusinessDocument = {
    * Unset: an export or SEZ sale follows the LUT, an SEZ bill charges IGST, an import bill none.
    */
   crossBorderTax?: 'withTax' | 'withoutTax';
+  /** Where the goods go when not to the buyer's own address (the consignee); unset or null ships to the buyer. */
+  shipTo?: ShipTo | null;
   /** A direct note with GST: the original invoice or bill it adjusts (GSTR-1 CDNR/CDNUR, the s.34 deadline). */
   originalNumber?: string;
   originalDate?: string;

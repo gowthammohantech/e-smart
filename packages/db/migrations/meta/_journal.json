@@ -484,6 +484,13 @@
       "when": 1794566996097,
       "tag": "0068_charges_kind",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1794567294458,
+      "tag": "0069_ship_to",
+      "breakpoints": true
     }
   ]
 }

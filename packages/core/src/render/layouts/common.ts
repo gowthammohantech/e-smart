@@ -105,6 +105,9 @@ export function buyerBlock(view: DocView): string {
 /** The consignee: the party's shipping address, or its billing one when it has none. */
 export function consigneeBlock(view: DocView): string {
   const p = view.party;
+  // The document's own consignee when it names one, else the buyer at their shipping (or billing) address.
+  const ship = view.doc.shipTo;
+  if (ship) return partyBlock({ name: ship.name || p?.name, address: ship.address, gstin: ship.gstin });
   return partyBlock({ name: p?.name, address: p?.shippingAddress?.line1 ? p.shippingAddress : p?.billingAddress, gstin: view.doc.partyGstin ?? p?.taxId });
 }
 
@@ -124,7 +127,7 @@ export type Fact = { label: string; value: string; strong?: boolean };
 export function headerFacts(view: DocView): Fact[] {
   const { doc, bi, source, origin, ewayBill, pos, party } = view;
   const note = ['creditNote', 'debitNote', 'salesReturn', 'purchaseReturn', 'supplierCreditNote', 'supplierDebitNote'].includes(doc.kind);
-  const destination = party?.shippingAddress?.city || party?.billingAddress?.city;
+  const destination = doc.shipTo?.address.city || party?.shippingAddress?.city || party?.billingAddress?.city;
   const transport = ewayBill ? [ewayBill.transportMode ? capital(String(ewayBill.transportMode)) : '', ewayBill.vehicleNumber, ewayBill.transporterName].filter(Boolean).join(' · ') : '';
   const facts: (Fact | null)[] = [
     { label: bi('sales:pdf.number'), value: esc(view.shownNumber), strong: true },
