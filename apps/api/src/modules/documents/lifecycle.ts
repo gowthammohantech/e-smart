@@ -1,4 +1,4 @@
-import { and, arrayOverlaps, desc, eq, gt, gte, inArray, lt, ne, notInArray, or, sql, type SQL } from 'drizzle-orm';
+import { and, arrayOverlaps, desc, eq, gt, gte, inArray, ne, notInArray, or, sql, type SQL } from 'drizzle-orm';
 import { businessDate, creditNoteDeadline } from '@esmart/core/lib/date';
 import { INVOICE_LIMITS, hasModule, nextInvoicePlan } from '@esmart/core/domain/plan';
 import { CREDIT_KINDS, NOTE_KINDS, NOTE_SOURCE, PAYABLE_KINDS, isFinalized, isPayableDocument } from '@esmart/core/domain/documentStates';
@@ -12,7 +12,7 @@ import { conflict, invoiceLimitReached, preconditionFailed, unprocessable } from
 import { recordChange, type DbOrTx } from '../../lib/audit';
 import { partyBalances } from '../../lib/balances';
 import { newId } from '../../lib/ids';
-import { assignNumber } from '../../lib/numbering';
+import { assignNumber, sameNumberingPeriod } from '../../lib/numbering';
 import { replayQueuedAt } from '../../lib/replay';
 import { gstFlagsFrom } from '../../lib/wire';
 import type { DocRow } from './engine';
@@ -365,7 +365,10 @@ export async function finalizeInTx(
   if (TAX_DOCUMENTS.includes(row.kind) && row.date > addDays(today(now), 1)) {
     throw unprocessable([{ field: 'date', message: `A ${row.kind} cannot be dated ${row.date}, in the future`, severity: 'blocking' }], 'DOCUMENT_DATED_IN_FUTURE');
   }
-  if (row.kind === 'invoice') await checkInvoiceLimit(tx, company, now);
+  if (row.kind === 'invoice') {
+    await checkInvoiceLimit(tx, company, now);
+    await checkNotBeforeIssued(tx, row);
+  }
   if (isReturn(row) && row.sourceDocumentId) await checkReturnWithinSource(tx, row);
   if (againstSource(row)) await checkAgainstSource(tx, row);
   if (!opts.overrideCreditLimit) await checkCreditLimit(tx, row, now);
@@ -615,16 +618,38 @@ export async function gstr1Closed(tx: DbOrTx, companyId: string, date: string): 
   return !!r;
 }
 
-/** The finalised invoice issued just before this one in its series (by when it was issued), if any. */
-export async function previousInSeries(tx: DbOrTx, row: DocRow): Promise<DocRow | undefined> {
-  if (!row.finalizedAt) return undefined;
-  const [prev] = await tx
-    .select()
+/**
+ * An invoice is not issued dated before one already issued in its series and numbering period, so
+ * its numbers run in date order: a back-dated entry after a later one is refused. A series that
+ * carries the branch code is each branch's own; an earlier numbering period (last financial year)
+ * keeps its own numbers, so a late entry there is still taken.
+ */
+async function checkNotBeforeIssued(tx: DbOrTx, row: DocRow): Promise<void> {
+  const [series] = await tx
+    .select({ includeBranchCode: schema.numberingSeries.includeBranchCode })
+    .from(schema.numberingSeries)
+    .where(and(eq(schema.numberingSeries.companyId, row.companyId), eq(schema.numberingSeries.kind, 'invoice')));
+  const [later] = await tx
+    .select({ number: D.number, date: D.date })
     .from(D)
-    .where(and(eq(D.companyId, row.companyId), eq(D.kind, row.kind), ne(D.id, row.id), sql`${D.number} not like '%-DRAFT'`, or(lt(D.finalizedAt, row.finalizedAt), and(eq(D.finalizedAt, row.finalizedAt), lt(D.id, row.id)))))
-    .orderBy(desc(D.finalizedAt), desc(D.id))
+    .where(
+      and(
+        eq(D.companyId, row.companyId),
+        eq(D.kind, row.kind),
+        ne(D.id, row.id),
+        sql`${D.number} not like '%-DRAFT'`,
+        gt(D.date, row.date),
+        ...(series?.includeBranchCode && row.branchId ? [eq(D.branchId, row.branchId)] : []),
+      ),
+    )
+    .orderBy(desc(D.date))
     .limit(1);
-  return prev;
+  if (later && (await sameNumberingPeriod(tx, row.companyId, 'invoice', row.date, later.date))) {
+    throw unprocessable(
+      [{ field: 'date', message: `${later.number.trim()} is already issued on ${later.date}: an invoice can't be dated before it (${row.date}). Date it ${later.date} or later`, severity: 'blocking' }],
+      'DATE_BEFORE_PREVIOUS',
+    );
+  }
 }
 
 /**
