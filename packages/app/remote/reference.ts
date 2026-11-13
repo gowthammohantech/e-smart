@@ -17,3 +17,12 @@ export async function lookupGstin(gstin: string) {
 }
 
 export type GstinDetails = NonNullable<Awaited<ReturnType<typeof lookupGstin>>>;
+
+/** HSN/SAC codes from the master list whose code starts with, or description holds, `q`, each with its usual GST rate. */
+export async function searchHsn(q: string) {
+  if (!q.trim()) return [];
+  const { data } = await api.GET('/reference/hsn', { params: { query: { q: q.trim() } } });
+  return data?.data ?? [];
+}
+
+export type HsnMatch = Awaited<ReturnType<typeof searchHsn>>[number];

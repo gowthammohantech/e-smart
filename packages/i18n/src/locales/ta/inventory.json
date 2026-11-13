@@ -75,7 +75,13 @@
     },
     "category": "வகை",
     "brand": "பிராண்ட்",
-    "none": "இல்லை"
+    "none": "இல்லை",
+    "hsnSearch": "HSN / SAC குறியீட்டைத் தேடு",
+    "hsnSearchTitle": "HSN / SAC குறியீடுகள்",
+    "hsnSearchPlaceholder": "குறியீடு அல்லது விளக்கம், எ.கா. 8482",
+    "hsnRate": "{{kind}} · GST {{rate}}",
+    "hsnNoMatch": "பொருந்தும் குறியீடு இல்லை — புலத்தில் நீங்களே குறியீட்டை உள்ளிடவும்.",
+    "hsnTypeToSearch": "குறியீடு அல்லது விளக்கத்தின் சில சொற்களை உள்ளிடவும்."
   },
   "gst": {
     "supplyType": "GST வகை",
