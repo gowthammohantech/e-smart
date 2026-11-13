@@ -553,6 +553,11 @@ paths:
                       type: boolean
                       default: true
                       description: Create default tax categories, expense categories, a cash account and compliance settings for the country.
+                    taxRates:
+                      type: array
+                      minItems: 1
+                      items: { type: number, minimum: 0, maximum: 100 }
+                      description: With seedDefaults, the tax rates the business starts with, a category each (GST 0% (Exempt), GST 5%…); left out, the regime's defaults (GST 0, 5, 12, 18, 28; VAT 0, 5). Ignored for a business not registered for tax.
       responses:
         '201':
           description: Created

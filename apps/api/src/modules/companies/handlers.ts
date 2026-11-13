@@ -76,7 +76,7 @@ export const companiesHandlers = defineHandlers({
         })),
       );
       await createNumberingSeries(tx, companyId, body.numberingSeries);
-      if (body.seedDefaults ?? true) await seedCompanyDefaults(tx, company);
+      if (body.seedDefaults ?? true) await seedCompanyDefaults(tx, company, body.taxRates);
 
       // The creator, and every other owner on the account, can open it.
       const owners = await tx

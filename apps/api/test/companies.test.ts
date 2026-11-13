@@ -80,4 +80,25 @@ describe('companies', () => {
     const got = await t.get(`/companies/${first.body.id}`, { token: owner.token });
     expect(got.headers.etag).toBe('"v1"');
   });
+
+  it('starts with the tax rates onboarding kept and added, or the defaults', async () => {
+    const owner = await signUpOwner(t);
+    const base = { businessType: 'retail', country: 'IN', baseCurrency: 'INR', address: MUMBAI, fiscalYearStartMonth: 4, taxRegistration: { regime: 'GST', identifierLabel: 'GSTIN', registered: false } };
+    const rates = async (companyId: string) =>
+      (await t.deps.db.select({ rate: schema.taxCategories.rate, name: schema.taxCategories.name }).from(schema.taxCategories).where(eq(schema.taxCategories.companyId, companyId)))
+        .map((r) => ({ rate: Number(r.rate), name: r.name }))
+        .sort((a, b) => a.rate - b.rate);
+
+    const chosen = await t.post('/companies', { ...base, name: 'Chosen Rates', taxRates: [18, 0, 3, 5] }, { token: owner.token, headers: idem() });
+    expect(chosen.status, chosen.raw).toBe(201);
+    expect(await rates(chosen.body.id)).toEqual([
+      { rate: 0, name: 'GST 0% (Exempt)' },
+      { rate: 3, name: 'GST 3%' },
+      { rate: 5, name: 'GST 5%' },
+      { rate: 18, name: 'GST 18%' },
+    ]);
+
+    const defaults = await t.post('/companies', { ...base, name: 'Default Rates' }, { token: owner.token, headers: idem() });
+    expect((await rates(defaults.body.id)).map((r) => r.rate)).toEqual([0, 5, 12, 18, 28]);
+  });
 });

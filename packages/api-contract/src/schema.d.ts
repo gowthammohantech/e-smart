@@ -8213,6 +8213,8 @@ export interface operations {
                      * @default true
                      */
                     seedDefaults?: boolean;
+                    /** @description With seedDefaults, the tax rates the business starts with, a category each (GST 0% (Exempt), GST 5%…); left out, the regime's defaults (GST 0, 5, 12, 18, 28; VAT 0, 5). Ignored for a business not registered for tax. */
+                    taxRates?: number[];
                 };
             };
         };

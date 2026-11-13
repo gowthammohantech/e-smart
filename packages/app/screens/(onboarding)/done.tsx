@@ -111,6 +111,7 @@ export default function Done() {
         },
         series,
         idempotencyKey,
+        draft.taxRegistered ? draft.taxRates : undefined,
       );
     } catch (err) {
       finished.current = false;
