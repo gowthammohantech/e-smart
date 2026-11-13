@@ -130,7 +130,7 @@ function sameHeader(a: DocRow, b: DocRow): boolean {
     a.currency.trim() === b.currency.trim() &&
     (a.placeOfSupplyStateCode ?? null) === (b.placeOfSupplyStateCode ?? null) &&
     a.reverseCharge === b.reverseCharge &&
-    (a.sezTax ?? null) === (b.sezTax ?? null)
+    (a.crossBorderTax ?? null) === (b.crossBorderTax ?? null)
   );
 }
 
@@ -412,7 +412,7 @@ function frozenChanges(row: DocRow, body: Schema<'NewDocumentInput'>, stored: Li
   cmp('supplierDocNumber', body.supplierDocNumber, row.supplierDocNumber);
   cmp('sourceDocumentId', body.sourceDocumentId, row.sourceDocumentId);
   cmp('noteGst', body.noteGst, row.noteGst ?? undefined);
-  cmp('sezTax', body.sezTax, row.sezTax ?? undefined);
+  cmp('crossBorderTax', body.crossBorderTax, row.crossBorderTax ?? undefined);
   cmp('originalNumber', body.originalNumber, row.originalNumber ?? undefined);
   cmp('originalDate', body.originalDate, row.originalDate ?? undefined);
   // What an invoice's full edit can change too (RULES 6.23): compared so the edit isn't dropped as a notes-only save.

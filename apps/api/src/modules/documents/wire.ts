@@ -157,7 +157,7 @@ export async function documentsToWire(db: DbOrTx, rows: DocRow[], now: Date, bas
       mergedSourceIds: row.mergedSourceIds?.length ? row.mergedSourceIds : undefined,
       noteReason: row.noteReason,
       noteGst: row.noteGst as DocumentWire['noteGst'],
-      sezTax: (row.sezTax ?? undefined) as DocumentWire['sezTax'],
+      crossBorderTax: (row.crossBorderTax ?? undefined) as DocumentWire['crossBorderTax'],
       originalNumber: row.originalNumber,
       originalDate: row.originalDate,
       billOfEntry: boeToWire(row.billOfEntry, baseCurrency),

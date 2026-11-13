@@ -626,7 +626,7 @@ ${url}`;
           {doc.placeOfSupplyStateCode ? (
             <Badge label={tr('sales:detail.placeOfSupplyBadge', { state: INDIAN_STATES.find((s) => s.code === doc.placeOfSupplyStateCode)?.name ?? doc.placeOfSupplyStateCode })} tone="neutral" />
           ) : null}
-          {doc.sezTax ? <Badge label={tr(doc.sezTax === 'withTax' ? 'sales:detail.sezWithTax' : 'sales:detail.sezWithoutTax')} tone="info" /> : null}
+          {doc.crossBorderTax ? <Badge label={tr(doc.crossBorderTax === 'withTax' ? 'sales:detail.crossBorderWithTax' : 'sales:detail.crossBorderWithoutTax')} tone="info" /> : null}
           {doc.reference ? <Badge label={tr('sales:detail.referenceBadge', { reference: doc.reference })} tone="neutral" /> : null}
           {doc.supplierDocNumber ? <Badge label={tr('sales:detail.theirNumber', { number: doc.supplierDocNumber })} tone="neutral" /> : null}
           {costCentre ? <Badge label={costCentre.name} tone="neutral" icon="sitemap-outline" /> : null}

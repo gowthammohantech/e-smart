@@ -6,7 +6,7 @@ import { unitShortName } from '../../data/masters';
 import { shownCessRate } from '../../domain/lineCalc';
 import { tint } from '../invoiceTemplate';
 import type { DocView } from '../docView';
-import { addressBlock, bankBlock, cancelledStrip, eInvoiceBlock, esc, logoTag, NOTE_REASON, printedCustomFields, reimbursementTable, cessTable, signatureTag, sezNote, SUPPLY_NOTE } from '../blocks';
+import { addressBlock, bankBlock, cancelledStrip, eInvoiceBlock, esc, logoTag, NOTE_REASON, printedCustomFields, reimbursementTable, cessTable, signatureTag, crossBorderNote, SUPPLY_NOTE } from '../blocks';
 
 /**
  * The standard page: the app's own design, and what every business printed before it could choose
@@ -136,7 +136,7 @@ export function standardLayout(view: DocView): string {
     <div>
       <div class="doc-title">${label}</div>
       ${doc.kind === 'proforma' ? '<div class="muted">Not a tax invoice. A tax invoice follows on supply or on receipt of payment.</div>' : ''}
-      ${billOfSupply ? '<div class="sub">Composition taxable person, not eligible to collect tax on supplies</div>' : ''}${sezNote(doc) ? `<div class="sub">${esc(sezNote(doc))}</div>` : ''}
+      ${billOfSupply ? '<div class="sub">Composition taxable person, not eligible to collect tax on supplies</div>' : ''}${crossBorderNote(doc) ? `<div class="sub">${esc(crossBorderNote(doc))}</div>` : ''}
       <div class="meta">
         <div><strong>${esc(shownNumber)}</strong></div>
         <div class="muted">Date: ${formatDate(doc.date)}</div>

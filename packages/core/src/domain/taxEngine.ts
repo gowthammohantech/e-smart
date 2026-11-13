@@ -14,7 +14,7 @@ export type TaxContext = {
    * the SEZ sits in the business's own state.
    */
   crossBorder?: 'export' | 'sez' | 'import';
-  /** No GST on the document: an export / SEZ supply under LUT, or an import bill. */
+  /** No GST on the document: an export or SEZ supply without tax (LUT or bond), or an import bill without. */
   zeroRated?: boolean;
   /** A sale by a composition dealer: a bill of supply, which may not charge GST (s.10(4)). */
   composition?: boolean;
@@ -29,25 +29,30 @@ export function lutActive(company: Company | undefined, date: string): boolean {
   return !reg.lutValidTill || date <= reg.lutValidTill;
 }
 
-/** Whether a supply to or from an SEZ unit or developer charges IGST, or goes without (LUT or bond). */
-export type SezTax = 'withTax' | 'withoutTax';
+/**
+ * Whether an export, a supply with an SEZ unit or developer, or an import bill charges IGST, or goes
+ * without: zero-rated under LUT or bond, or (an import) with the IGST paid at customs instead.
+ */
+export type CrossBorderTax = 'withTax' | 'withoutTax';
 
 /**
- * What an SEZ document does when nobody has chosen: a sale goes without tax while the business's LUT
- * is in force and with IGST otherwise; a bill from an SEZ supplier charges IGST.
+ * What a cross-border document does when nobody has chosen: an export or SEZ sale goes without tax
+ * while the business's LUT is in force and with IGST otherwise; a bill from an SEZ supplier charges
+ * IGST; an import bill charges none (IGST on goods is paid at customs, on the bill of entry).
  */
-export function defaultSezTax(company: Company | undefined, date: string, purchase: boolean): SezTax {
+export function defaultCrossBorderTax(company: Company | undefined, date: string, purchase: boolean, crossBorder: NonNullable<TaxContext['crossBorder']> = 'sez'): CrossBorderTax {
+  if (crossBorder === 'import') return 'withoutTax';
   return !purchase && lutActive(company, date) ? 'withoutTax' : 'withTax';
 }
 
 /**
  * The tax context for one document: the company's registration, the place of
- * supply, and whether the party makes it an export, SEZ supply or import. An
- * SEZ document charges IGST or not as `sezTax` says, else as `defaultSezTax`.
+ * supply, and whether the party makes it an export, SEZ supply or import. Any
+ * of those charges IGST or not as `crossBorderTax` says, else as `defaultCrossBorderTax`.
  */
 export function buildTaxContext(
   company: Company | undefined,
-  opts: { placeOfSupply?: string; party?: Party; date: string; purchase: boolean; branch?: Branch; reverseCharge?: boolean; sezTax?: SezTax | null },
+  opts: { placeOfSupply?: string; party?: Party; date: string; purchase: boolean; branch?: Branch; reverseCharge?: boolean; crossBorderTax?: CrossBorderTax | null },
 ): TaxContext {
   const reg = company?.taxRegistration;
   // A branch with its own GSTIN supplies from that state; its first two digits are the state code.
@@ -67,12 +72,7 @@ export function buildTaxContext(
     placeOfSupplyStateCode: pos,
     registered: !!reg?.registered,
     crossBorder,
-    // A foreign supplier's bill carries no Indian GST (IGST on imports is paid at customs).
-    zeroRated:
-      crossBorder === 'import' ||
-      (crossBorder === 'sez'
-        ? (opts.sezTax ?? defaultSezTax(company, opts.date, opts.purchase)) === 'withoutTax'
-        : crossBorder === 'export' && !opts.purchase && lutActive(company, opts.date)),
+    zeroRated: !!crossBorder && (opts.crossBorderTax ?? defaultCrossBorderTax(company, opts.date, opts.purchase, crossBorder)) === 'withoutTax',
     composition: !opts.purchase && !!reg?.compositionScheme,
     reverseCharge: !!opts.reverseCharge,
   };

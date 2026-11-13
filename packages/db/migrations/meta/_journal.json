@@ -470,6 +470,13 @@
       "when": 1794555598145,
       "tag": "0066_sez_tax",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1794557863090,
+      "tag": "0067_cross_border_tax",
+      "breakpoints": true
     }
   ]
 }

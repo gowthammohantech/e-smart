@@ -652,9 +652,11 @@ export const documents = pgTable("documents", {
 	// A direct note (no source document): 'withGst' (s.34, the default) or 'noGst' (a financial or
 	// commercial note: no tax, posted to discount, out of the returns).
 	noteGst: varchar("note_gst", { length: 8 }),
-	// A document with an SEZ unit or developer: 'withTax' (IGST charged) or 'withoutTax' (LUT or bond,
-	// zero-rated). Null for any other party.
+	// Replaced by cross_border_tax (0067 copied it across); unread, to be dropped in a later release.
 	sezTax: varchar("sez_tax", { length: 10 }),
+	// An export, an SEZ supply (either way) or an import bill: 'withTax' (IGST charged) or 'withoutTax'
+	// (zero-rated under LUT or bond; on an import, IGST paid at customs). Null for anything else.
+	crossBorderTax: varchar("cross_border_tax", { length: 10 }),
 	// A direct note with GST: the original invoice or bill it adjusts, for GSTR-1 CDNR/CDNUR and the s.34 deadline.
 	originalNumber: varchar("original_number", { length: 40 }),
 	originalDate: date("original_date"),

@@ -282,7 +282,7 @@ export type NewDocumentInput = {
   isdInvoice?: boolean;
   placeOfSupplyStateCode?: string;
   reverseCharge?: boolean;
-  sezTax?: BusinessDocument['sezTax'];
+  crossBorderTax?: BusinessDocument['crossBorderTax'];
   noteReason?: BusinessDocument['noteReason'];
   tdsSection?: string;
   tcsSection?: string;
@@ -405,7 +405,7 @@ export const useAppStore = create<AppState>()(
             purchase: PURCHASE_KINDS.includes(doc.kind),
             branch: s.branches.find((b) => b.id === doc.branchId),
             reverseCharge: doc.reverseCharge,
-            sezTax: doc.sezTax,
+            crossBorderTax: doc.crossBorderTax,
           }),
         });
       };
@@ -787,7 +787,7 @@ export const useAppStore = create<AppState>()(
             roundOffManual: draft.roundOffManual,
             placeOfSupplyStateCode: draft.placeOfSupplyStateCode ?? party?.billingAddress?.stateCode,
             reverseCharge: draft.reverseCharge,
-            sezTax: draft.sezTax,
+            crossBorderTax: draft.crossBorderTax,
             noteReason: draft.noteReason,
             tdsSection: draft.tdsSection,
             tcsSection: draft.tcsSection,
@@ -917,7 +917,7 @@ export const useAppStore = create<AppState>()(
             terms: src.terms,
             placeOfSupplyStateCode: src.placeOfSupplyStateCode,
             reverseCharge: src.reverseCharge,
-            sezTax: src.sezTax,
+            crossBorderTax: src.crossBorderTax,
             branchId: src.branchId,
             status: initialStatus(src.kind),
           });
@@ -961,7 +961,7 @@ export const useAppStore = create<AppState>()(
             terms: src.terms,
             placeOfSupplyStateCode: src.placeOfSupplyStateCode,
             reverseCharge: src.reverseCharge,
-            sezTax: src.sezTax,
+            crossBorderTax: src.crossBorderTax,
             branchId: src.branchId,
             sourceDocumentId: src.id,
             mergedSourceIds: others.map((d) => d.id),

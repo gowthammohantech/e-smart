@@ -484,10 +484,11 @@ export type BusinessDocument = {
    */
   noteGst?: 'withGst' | 'noGst';
   /**
-   * A document with an SEZ unit or developer: `withTax` charges IGST, `withoutTax` goes under LUT or
-   * bond (zero-rated). Unset follows the LUT for a sale and charges IGST on a bill.
+   * An export, a document with an SEZ unit or developer, or an import bill: `withTax` charges IGST,
+   * `withoutTax` charges none (zero-rated under LUT or bond; on an import, IGST paid at customs).
+   * Unset: an export or SEZ sale follows the LUT, an SEZ bill charges IGST, an import bill none.
    */
-  sezTax?: 'withTax' | 'withoutTax';
+  crossBorderTax?: 'withTax' | 'withoutTax';
   /** A direct note with GST: the original invoice or bill it adjusts (GSTR-1 CDNR/CDNUR, the s.34 deadline). */
   originalNumber?: string;
   originalDate?: string;

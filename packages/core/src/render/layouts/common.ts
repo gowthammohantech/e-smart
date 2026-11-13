@@ -9,7 +9,7 @@ import { formatDate } from '../../lib/date';
 import { amountInWords } from '../../lib/amountInWords';
 import { INDIAN_STATES } from '../../data/masters';
 import type { DocView } from '../docView';
-import { esc, NOTE_REASON, printedCustomFields, sezNote } from '../blocks';
+import { esc, NOTE_REASON, printedCustomFields, crossBorderNote } from '../blocks';
 
 /** Text that reads on the accent: white on a dark one, near-black on a light one (WCAG contrast). */
 export function onAccent(hex: string): string {
@@ -168,7 +168,7 @@ export function titleNotes(view: DocView): string {
     doc.kind === 'proforma' ? '<div class="sub ctr">Not a tax invoice. A tax invoice follows on supply or on receipt of payment.</div>' : '',
     billOfSupply ? '<div class="sub ctr">Composition taxable person, not eligible to collect tax on supplies</div>' : '',
     doc.reverseCharge ? '<div class="sub ctr">Tax is payable on reverse charge by the recipient</div>' : '',
-    sezNote(doc) ? `<div class="sub ctr">${esc(sezNote(doc))}</div>` : '',
+    crossBorderNote(doc) ? `<div class="sub ctr">${esc(crossBorderNote(doc))}</div>` : '',
   ].join('');
 }
 
