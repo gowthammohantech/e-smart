@@ -161,6 +161,7 @@ export function DataTable({
   paged = false,
   tone,
   onRowPress,
+  canPress,
   rowLabel,
   subtitles,
   firstWidth,
@@ -182,6 +183,8 @@ export function DataTable({
   tone?: (row: number, column: number) => 'good' | 'bad' | 'warn' | undefined;
   /** A row that opens something (its detail, its document): pressed by its index in `rows`. */
   onRowPress?: (row: number) => void;
+  /** With `onRowPress`: whether this row opens something (a total inside the body doesn't). */
+  canPress?: (row: number) => boolean;
   /** What a pressable row is called to a screen reader. */
   rowLabel?: (row: number) => string;
   /** A muted second line under a row's first cell, e.g. the return's table numbers under a section. */
@@ -231,6 +234,7 @@ export function DataTable({
         rows={rows.map((cells, index) => ({ cells, index }))}
         rowKey={(row) => String(row.index)}
         onRowPress={onRowPress ? (row) => onRowPress(row.index) : undefined}
+        canPress={canPress ? (row) => canPress(row.index) : undefined}
         rowLabel={rowLabel ? (row) => rowLabel(row.index) : undefined}
         footer={
           total
@@ -280,7 +284,7 @@ export function DataTable({
       {bodyRows.map((row, ri) => {
         const isTotal = !!total && ri === bodyRows.length - 1;
         const bold = isTotal || strongSet.has(ri);
-        const press = onRowPress && !isTotal ? () => onRowPress(ri) : undefined;
+        const press = onRowPress && !isTotal && (canPress?.(ri) ?? true) ? () => onRowPress(ri) : undefined;
         return (
           <Pressable
             key={ri}

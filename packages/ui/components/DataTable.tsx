@@ -88,6 +88,7 @@ export function DataTable<T>({
   rows,
   rowKey,
   onRowPress,
+  canPress,
   footer,
   empty,
   initialSort,
@@ -115,6 +116,8 @@ export function DataTable<T>({
   rows: T[];
   rowKey: (row: T) => string;
   onRowPress?: (row: T) => void;
+  /** With `onRowPress`: whether this row opens something. Left out, every row does. */
+  canPress?: (row: T) => boolean;
   /** Cells for a totals row, keyed by column key. */
   footer?: Partial<Record<string, React.ReactNode>>;
   /** Shown in place of rows when there are none. */
@@ -397,7 +400,7 @@ export function DataTable<T>({
     );
     const style = rowStyle(i === visible.length - 1 && !short && !error);
     const tint = checked ? t.c.chip : undefined;
-    return onRowPress ? (
+    return onRowPress && (canPress?.(row) ?? true) ? (
       <Pressable
         key={key}
         onPress={() => onRowPress(row)}

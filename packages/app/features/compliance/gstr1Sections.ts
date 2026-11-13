@@ -11,22 +11,30 @@ import { periodLabel } from './periods';
 import { useActiveCompany, useBaseCurrency } from '../../store/selectors';
 
 /** The parts of GSTR-1, each its own table (or tables) of the return. */
-export type Gstr1Section = Gstr1Table | 'nil' | 'at' | 'hsn' | 'docs' | 'amend';
+/** `at` is advances received (11A), `atadj` advances adjusted (11B). */
+export type Gstr1Section = Gstr1Table | 'nil' | 'at' | 'atadj' | 'hsn' | 'docs' | 'amend';
 
-/** In the order the return lists them, each with the return's own short name and table numbers. */
+/**
+ * In the order the books' consolidated GSTR-1 report lists them, each with the return's own short
+ * name and table numbers. The total liabilities line goes after `LIABILITY_AFTER`.
+ */
 export const GSTR1_SECTIONS: { value: Gstr1Section; label: string; tables: string }[] = [
   { value: 'b2b', label: 'B2B', tables: '4A, 4B, 6B, 6C' },
   { value: 'b2cl', label: 'B2CL', tables: '5' },
   { value: 'b2cs', label: 'B2CS', tables: '7' },
-  { value: 'exp', label: 'EXP', tables: '6A' },
+  { value: 'at', label: '11A', tables: '11A' },
+  { value: 'atadj', label: '11B', tables: '11B' },
   { value: 'cdnr', label: 'CDNR', tables: '9B' },
   { value: 'cdnur', label: 'CDNUR', tables: '9B' },
   { value: 'nil', label: 'NIL', tables: '8' },
-  { value: 'at', label: '11A/B', tables: '11A, 11B' },
+  { value: 'exp', label: 'EXP', tables: '6A' },
   { value: 'hsn', label: 'HSN', tables: '12' },
   { value: 'docs', label: 'DOCS', tables: '13' },
   { value: 'amend', label: 'AMEND', tables: '9A, 9C, 10' },
 ];
+
+/** The section the summary's total liabilities line follows: what comes after restates, not adds. */
+export const LIABILITY_AFTER: Gstr1Section = 'exp';
 
 export const isGstr1Section = (v: unknown): v is Gstr1Section => GSTR1_SECTIONS.some((s) => s.value === v);
 
@@ -75,8 +83,9 @@ export function useGstr1Sections(summary: Gstr1Summary) {
 
   // Table 7 is filed per place of supply and rate, net of the credit notes against it.
   const b2cs = useMemo(() => consolidateB2cs(summary.b2cs, homeState, baseCurrency), [summary.b2cs, homeState, baseCurrency]);
-  const advanceRows = useMemo(
-    () => [...summary.advances.received.map((r) => ({ table: '11A', ...r })), ...summary.advances.adjusted.map((r) => ({ table: '11B', ...r }))],
+  // 11A and 11B, each its own line and page.
+  const advances = useMemo(
+    () => ({ at: summary.advances.received.map((r) => ({ table: '11A', ...r })), atadj: summary.advances.adjusted.map((r) => ({ table: '11B', ...r })) }),
     [summary.advances],
   );
   const amend = summary.amendments;
@@ -101,7 +110,19 @@ export function useGstr1Sections(summary: Gstr1Summary) {
       };
     };
     const amendLines = [...amendRows.map((a) => a.r), ...b2csa.map((b) => b.l)];
-    return [
+    const advanceLine = (section: 'at' | 'atadj'): SectionTotals => {
+      const rows = advances[section];
+      return {
+        section,
+        records: rows.length,
+        taxable: sum(rows, (r) => r.taxable),
+        igst: sum(rows, (r) => r.igst),
+        cgst: sum(rows, (r) => r.cgst),
+        sgst: sum(rows, (r) => r.sgst),
+        cess: sum(rows, (r) => r.cess),
+      };
+    };
+    const lines: SectionTotals[] = [
       docRows('b2b'),
       docRows('b2cl'),
       {
@@ -118,15 +139,8 @@ export function useGstr1Sections(summary: Gstr1Summary) {
       docRows('cdnur'),
       // Nil rated, exempt and non-GST carry no tax.
       { section: 'nil', records: summary.nil.length, taxable: sum(summary.nil, (n) => n.nilRated.minor + n.exempt.minor + n.nonGst.minor), igst: null, cgst: null, sgst: null, cess: null },
-      {
-        section: 'at',
-        records: advanceRows.length,
-        taxable: sum(advanceRows, (r) => r.taxable),
-        igst: sum(advanceRows, (r) => r.igst),
-        cgst: sum(advanceRows, (r) => r.cgst),
-        sgst: sum(advanceRows, (r) => r.sgst),
-        cess: sum(advanceRows, (r) => r.cess),
-      },
+      advanceLine('at'),
+      advanceLine('atadj'),
       {
         section: 'hsn',
         records: summary.hsn.length,
@@ -148,7 +162,9 @@ export function useGstr1Sections(summary: Gstr1Summary) {
         cess: sum(amendLines, (l) => l.cess.minor),
       },
     ];
-  }, [summary, b2cs, advanceRows, amendRows, b2csa]);
+    // In the order the summary lists them.
+    return GSTR1_SECTIONS.map((s) => lines.find((l) => l.section === s.value)!);
+  }, [summary, b2cs, advances, amendRows, b2csa]);
 
   const detail = (view: Gstr1Section): SectionDetail => {
     const m = (minor: number) => formatMoney(money(minor, baseCurrency));
@@ -164,6 +180,8 @@ export function useGstr1Sections(summary: Gstr1Summary) {
 
     switch (view) {
       case 'at':
+      case 'atadj': {
+        const advanceRows = advances[view];
         return {
           headers: [tr('compliance:gstr1.col.table'), tr('compliance:gstr1.col.pos'), tr('compliance:gstr1.col.rate'), tr('compliance:gstr1.col.taxable'), ...taxHeads],
           rows: advanceRows.map((r) => [r.table, r.placeOfSupply, formatPercent(r.rate), m(r.taxable), ...taxCells(r.igst, r.cgst, r.sgst, r.cess)]),
@@ -180,6 +198,7 @@ export function useGstr1Sections(summary: Gstr1Summary) {
               advanceRows.map((r) => [r.table, r.placeOfSupply, r.rate, r.taxable / 100, r.igst / 100, r.cgst / 100, r.sgst / 100, r.cess / 100]),
             ),
         };
+      }
       case 'b2cs':
         return {
           headers: [tr('compliance:gstr1.col.pos'), tr('compliance:gstr1.col.supply'), tr('compliance:gstr1.col.rate'), tr('compliance:gstr1.col.taxable'), ...taxHeads],
