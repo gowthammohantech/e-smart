@@ -14251,6 +14251,7 @@ export interface operations {
                 from: string;
                 to: string;
                 branchId?: components["parameters"]["BranchIdQuery"];
+                /** @description One contact, or several separated by commas: documents and payments of any of them */
                 partyId?: string;
             };
             header?: never;
@@ -14281,6 +14282,7 @@ export interface operations {
                 from: string;
                 to: string;
                 branchId?: components["parameters"]["BranchIdQuery"];
+                /** @description One contact, or several separated by commas: documents and payments of any of them */
                 partyId?: string;
                 currency?: string;
             };
