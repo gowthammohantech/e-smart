@@ -91,6 +91,19 @@ const NOT_FOUND_CODE = 'FO8000';
 /** Whitebooks' sandbox register knows only these; any other GSTIN is searched as the first. */
 /** The one GSTIN the Whitebooks sandbox accepts for filing; every business is filed as it. */
 export const SANDBOX_TAXPAYER_GSTIN = '29AAGCB1286Q000';
+/**
+ * That taxpayer's registration as the sandbox accepted it on earlier e-way bills. It is fixed, not looked up:
+ * the sandbox register answers for this GSTIN with a record too sparse to build a seller from.
+ */
+const SANDBOX_TAXPAYER_PARTY: PartyBlock = {
+  Gstin: SANDBOX_TAXPAYER_GSTIN,
+  LglNm: 'Cotton Business',
+  Addr1: '21, Residency Road',
+  Addr2: 'Ashok Nagar',
+  Loc: 'Bengaluru',
+  Pin: 560025,
+  Stcd: '29',
+};
 const SANDBOX_REGISTER_GSTINS = ['27AAGCB1286Q2Z3', '33AAGCB1286Q2ZA', '27AAGCB1286Q1Z4', '33AAGCB1286Q1ZB'] as const;
 
 /**
@@ -150,7 +163,6 @@ export class WhitebooksGateway implements GspGateway {
   /** When each taxpayer's standalone e-way bill login lapses. */
   private readonly ewaybillSessions = new Map<string, number>();
   private sandboxBuyer: Promise<PartyBlock> | null = null;
-  private sandboxSellerParty: Promise<PartyBlock> | null = null;
 
   constructor(
     private readonly config: Config,
@@ -352,7 +364,7 @@ export class WhitebooksGateway implements GspGateway {
     return this.guard(async () => {
       const login = this.login(creds);
       // A business filed as the sandbox taxpayer carries that taxpayer's registration, so NIC finds the seller it has the session for.
-      const sellered = creds?.gstin !== login.gstin ? { ...req.payload, SellerDtls: (await this.sellerParty(login)) as typeof req.payload.SellerDtls } : req.payload;
+      const sellered = creds?.gstin !== login.gstin ? { ...req.payload, SellerDtls: (this.sellerParty(login)) as typeof req.payload.SellerDtls } : req.payload;
       const buyered = await this.withSandboxBuyer(login, sellered);
       const payload = prepareIrnPayload({ ...buyered, DocDtls: { ...buyered.DocDtls, No: sandboxDocNo(this.config, login.gstin, buyered.DocDtls.No, buyered.DocDtls.Dt, req.companyId) } });
       try {
@@ -412,7 +424,7 @@ export class WhitebooksGateway implements GspGateway {
         // the real pincodes as not matching the sandbox buyer's (702). Same remedy as the IRN path: the registered
         // test buyer stands in, and 0 (the portal works the distance out) is the retry.
         const party = await this.sandboxParty(login, req.payload.toGstin);
-        const seller = creds?.gstin !== login.gstin ? await this.sellerParty(login) : null;
+        const seller = creds?.gstin !== login.gstin ? this.sellerParty(login) : null;
         const payload = {
           ...req.payload,
           ...(seller ? { fromGstin: String(seller.Gstin), fromTrdName: String(seller.LglNm), fromAddr1: String(seller.Addr1), fromAddr2: seller.Addr2 ? String(seller.Addr2) : undefined, fromPlace: String(seller.Loc), fromPincode: Number(seller.Pin), fromStateCode: String(seller.Stcd) } : {}),
@@ -485,13 +497,9 @@ export class WhitebooksGateway implements GspGateway {
     return requireLogin(creds && this.sandboxTaxpayer(creds));
   }
 
-  /** The sandbox taxpayer's own registration, as the seller block NIC checks against the session's GSTIN. */
-  private async sellerParty(creds: PortalCredentials): Promise<PartyBlock> {
-    this.sandboxSellerParty ??= this.fetchParty(creds, creds.gstin).catch((error) => {
-      this.sandboxSellerParty = null;
-      throw error;
-    });
-    return this.sandboxSellerParty;
+  /** The sandbox taxpayer's registration, as the seller block NIC checks against the session's GSTIN. */
+  private sellerParty(creds: PortalCredentials): PartyBlock {
+    return creds.gstin === SANDBOX_TAXPAYER_GSTIN ? SANDBOX_TAXPAYER_PARTY : { ...SANDBOX_TAXPAYER_PARTY, Gstin: creds.gstin };
   }
 
   /**
