@@ -9,11 +9,15 @@ export const fmtDay = (iso: string) => formatDate(iso, 'dd MMM');
 export const PLAN_LABELS: Record<string, string> = { free: 'Free', basic: 'Basic', pro: 'Pro', business: 'Business' };
 export const PLANS = ['free', 'basic', 'pro', 'business'] as const;
 
+/** The GST gateways (GSPs) a company can file through. */
+export const GSP_LABELS = { adaequare: 'Adaequare', whitebooks: 'Whitebooks (sandbox)' } as const;
+
 /** `account.suspend` → `Suspended account`; an action with no label here shows as it is. */
 const ACTIONS: Record<string, string> = {
   'account.suspend': 'Suspended account',
   'account.reactivate': 'Reactivated account',
   'company.plan.override': 'Changed plan',
+  'company.gsp.set': 'Changed GST gateway',
   'user.disable': 'Disabled user',
   'user.enable': 'Enabled user',
   'operator.role_granted': 'Changed platform role',

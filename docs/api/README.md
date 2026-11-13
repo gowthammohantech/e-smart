@@ -470,6 +470,7 @@ only `superadmin` can act. Each action takes a `reason` and writes a
 | POST | `/admin/accounts/{accountId}/reactivate` | reactivateAccount | superadmin |
 | GET | `/admin/companies/{companyId}` | getPlatformCompany | support, superadmin |
 | PUT | `/admin/companies/{companyId}/plan` | overrideCompanyPlan | superadmin |
+| PUT | `/admin/companies/{companyId}/gsp-provider` | setCompanyGspProvider | superadmin |
 | GET | `/admin/users` | listPlatformUsers | support, superadmin |
 | POST | `/admin/users/{userId}/disable` | disablePlatformUser | superadmin |
 | POST | `/admin/users/{userId}/enable` | enablePlatformUser | superadmin |

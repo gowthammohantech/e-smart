@@ -1,7 +1,11 @@
 import { count, eq, inArray, max, sql } from 'drizzle-orm';
 import type { Schema } from '@esmart/api-contract';
 import { schema } from '@esmart/db';
+import type { Config } from '../../config';
 import type { DbOrTx } from '../../lib/audit';
+import { gspAvailability } from '../../providers/gsp/availability';
+import { resolveGspGateway } from '../../providers/gsp/provider-name';
+import { parseGspGateway } from '../../providers/gsp/router';
 
 type AccountRow = typeof schema.accounts.$inferSelect;
 type CompanyRow = typeof schema.companies.$inferSelect;
@@ -22,7 +26,24 @@ export function companyToPlatform(c: CompanyRow, subscriptionStatus: Schema<'Pla
     plan: c.plan,
     subscriptionStatus,
     onboardingCompletedAt: iso(c.onboardingCompletedAt),
+    gspProvider: parseGspGateway(c.gspProvider) ?? null,
     createdAt: c.createdAt.toISOString(),
+  };
+}
+
+/** The deployment's default gateway: what a company with no choice of its own files through. */
+export const defaultGspGateway = (config: Config) => resolveGspGateway(config.TAXATION_TAXPAYER_PROVIDER, config.TAXATION_GSP_PROVIDER_CODE);
+
+/** Which gateway a company files through, why, and which the deployment could offer instead. */
+export function gspToPlatform(config: Config, c: CompanyRow): Schema<'PlatformGsp'> {
+  const override = parseGspGateway(c.gspProvider) ?? null;
+  const fallback = defaultGspGateway(config);
+  return {
+    override,
+    default: fallback,
+    effective: override ?? fallback,
+    simulated: config.COMPLIANCE_PROVIDER !== 'gsp',
+    options: gspAvailability(config).map((o) => ({ gateway: o.gateway, available: o.available, sandboxOnly: o.sandboxOnly, reason: o.reason ?? null })),
   };
 }
 

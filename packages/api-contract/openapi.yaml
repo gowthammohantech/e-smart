@@ -6483,6 +6483,33 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '422': { $ref: '#/components/responses/Unprocessable' }
+  /admin/companies/{companyId}/gsp-provider:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    put:
+      tags: [Platform]
+      operationId: setCompanyGspProvider
+      summary: Choose the GST gateway (GSP) this company files e-invoices and e-way bills through, or clear the choice so it follows the deployment's default. Only a gateway the deployment is set up for may be chosen. The company's cached portal session is dropped, so its next filing signs in afresh through the new gateway.
+      x-platform-roles: [superadmin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PlatformGspChange' }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [company, gsp]
+                properties:
+                  company: { $ref: '#/components/schemas/PlatformCompany' }
+                  gsp: { $ref: '#/components/schemas/PlatformGsp' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
   /admin/users:
     get:
       tags: [Platform]
@@ -8648,7 +8675,36 @@ components:
         plan: { $ref: '#/components/schemas/PlanTier' }
         subscriptionStatus: { type: string, enum: [active, trialing, pastDue, cancelled, none] }
         onboardingCompletedAt: { type: [string, 'null'], format: date-time }
+        gspProvider: { oneOf: [{ $ref: '#/components/schemas/GspGateway' }, { type: 'null' }], description: 'The gateway an operator chose for this company; null follows the deployment default' }
         createdAt: { type: string, format: date-time }
+    GspGateway:
+      type: string
+      enum: [adaequare, whitebooks]
+    PlatformGsp:
+      type: object
+      description: Which GST gateway (GSP) a company files through, and which ones this deployment can offer.
+      required: [override, default, effective, simulated, options]
+      properties:
+        override: { oneOf: [{ $ref: '#/components/schemas/GspGateway' }, { type: 'null' }], description: 'The choice an operator made for this company; null means none' }
+        default: { $ref: '#/components/schemas/GspGateway' }
+        effective: { $ref: '#/components/schemas/GspGateway' }
+        simulated: { type: boolean, description: 'True when the deployment files through the built-in simulator, so no gateway is called whatever is chosen' }
+        options:
+          type: array
+          items:
+            type: object
+            required: [gateway, available, sandboxOnly]
+            properties:
+              gateway: { $ref: '#/components/schemas/GspGateway' }
+              available: { type: boolean, description: Whether the deployment can file through it }
+              sandboxOnly: { type: boolean }
+              reason: { type: [string, 'null'], description: Why it cannot be chosen }
+    PlatformGspChange:
+      type: object
+      required: [provider, reason]
+      properties:
+        provider: { oneOf: [{ $ref: '#/components/schemas/GspGateway' }, { type: 'null' }], description: 'The gateway to use; null clears the choice so the company follows the deployment default' }
+        reason: { type: string, minLength: 3, maxLength: 500 }
     PlatformUser:
       type: object
       required: [id, accountId, name, email, role, status, accountSuspended, createdAt]
@@ -8674,9 +8730,10 @@ components:
         users: { type: array, items: { $ref: '#/components/schemas/PlatformUser' } }
     PlatformCompanyDetail:
       type: object
-      required: [company, accountName, subscription, planHistory, documentCounts, userCount]
+      required: [company, accountName, subscription, planHistory, documentCounts, userCount, gsp]
       properties:
         company: { $ref: '#/components/schemas/PlatformCompany' }
+        gsp: { $ref: '#/components/schemas/PlatformGsp' }
         accountName: { type: string }
         accountSuspended: { type: boolean }
         subscription: { oneOf: [{ $ref: '#/components/schemas/Subscription' }, { type: 'null' }] }

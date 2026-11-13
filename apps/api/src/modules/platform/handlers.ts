@@ -12,7 +12,10 @@ import { newestFirst } from '../audit/keyset';
 import { subscriptionToWire } from '../billing/handlers';
 import { recordUserChange, revokeAllSessions } from '../users/shared';
 import { recordPlatformAction } from './audit';
-import { accountRow, accountsToPlatform, companyToPlatform, subscriptionStatuses, userToPlatform } from './wire';
+import { GSP_GATEWAY_CODES } from '../../providers/gsp/provider-name';
+import { gspAvailability } from '../../providers/gsp/availability';
+import { parseGspGateway } from '../../providers/gsp/router';
+import { accountRow, accountsToPlatform, companyToPlatform, defaultGspGateway, gspToPlatform, subscriptionStatuses, userToPlatform } from './wire';
 
 const A = schema.accounts;
 const C = schema.companies;
@@ -243,6 +246,7 @@ export const platformHandlers = defineHandlers({
     await recordPlatformAction(ctx.db, ctx.user, ctx.req, { action: 'company.viewed', target: { type: 'company', id: company.id, label: company.name }, reason: 'Viewed' });
     return {
       company: companyToPlatform(company, subscription?.status),
+      gsp: gspToPlatform(ctx.deps.config, company),
       accountName: account.name,
       accountSuspended: account.suspendedAt !== null,
       subscription: subscription ? subscriptionToWire(company.id, company.plan, subscription) : null,
@@ -327,6 +331,54 @@ export const platformHandlers = defineHandlers({
       subscription: subscriptionToWire(result.company.id, result.company.plan, result.subscription),
       warning: provider ? `This subscription is billed through ${provider}; its next billing event may change the plan back.` : null,
     };
+  },
+
+  /**
+   * Chooses the GST gateway one company files through, or clears the choice so it follows the deployment's
+   * default. Only a gateway this deployment can run is accepted. The cached portal session belongs to the old
+   * gateway, so it is dropped with the switch; the portal login itself is the business's own and stays.
+   */
+  async setCompanyGspProvider(ctx) {
+    const reason = reasonOf(ctx.body);
+    const next = ctx.body.provider ?? null;
+    const config = ctx.deps.config;
+    if (next) {
+      const option = gspAvailability(config).find((o) => o.gateway === next);
+      if (!option?.available) throw invalid('provider', option?.reason ?? `The ${next} gateway is not available here`);
+    }
+    const CRD = schema.complianceCredentials;
+    const result = await ctx.db.transaction(async (tx) => {
+      const [company] = await tx.select().from(C).where(eq(C.id, ctx.params.companyId)).for('update');
+      if (!company) throw notFound('Company');
+      const current = parseGspGateway(company.gspProvider) ?? null;
+      if (current === next) throw conflict('NO_CHANGE', next ? `This company already files through ${next}` : 'This company already follows the deployment default');
+      const [updated] = await tx.update(C).set({ gspProvider: next, version: company.version + 1, updatedAt: ctx.now }).where(eq(C.id, company.id)).returning();
+      const effective = next ?? defaultGspGateway(config);
+      await tx
+        .update(CRD)
+        .set({ gspProvider: GSP_GATEWAY_CODES[effective], authTokenEncrypted: null, authTokenExpiresAt: null, lastTestedAt: null, lastTestOk: null })
+        .where(eq(CRD.companyId, company.id));
+      await recordChange(tx, asSupport(ctx.user), {
+        companyId: company.id,
+        action: next ? `GST gateway set to ${next}` : 'GST gateway set to the platform default',
+        entityType: 'company',
+        entityId: company.id,
+        entityLabel: company.name,
+        version: updated.version,
+        before: { gspProvider: current },
+        after: { gspProvider: next },
+      });
+      await recordPlatformAction(tx, ctx.user, ctx.req, {
+        action: 'company.gsp.set',
+        target: { type: 'company', id: company.id, label: company.name },
+        reason,
+        before: { gspProvider: current },
+        after: { gspProvider: next },
+      });
+      return updated;
+    });
+    const [subscription] = await ctx.db.select({ status: schema.subscriptions.status }).from(schema.subscriptions).where(eq(schema.subscriptions.companyId, result.id));
+    return { company: companyToPlatform(result, subscription?.status), gsp: gspToPlatform(config, result) };
   },
 
   /** Newest first, across every account. */

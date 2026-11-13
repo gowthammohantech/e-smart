@@ -1859,6 +1859,9 @@ export const companies = pgTable("companies", {
 	invoiceTemplate: jsonb("invoice_template"),
 	// Lixi messages and bill scans a month together; unset takes the plan's allowance.
 	aiMonthlyLimit: integer("ai_monthly_limit"),
+	// The GST gateway this company files through ('adaequare' | 'whitebooks'), set by a platform operator.
+	// Unset follows the deployment's default (TAXATION_GSP_PROVIDER_CODE).
+	gspProvider: varchar("gsp_provider", { length: 20 }),
 	lockedThroughDate: date("locked_through_date"),
 	// Perpetual stock from this day, the start of a financial year: receipts and issues post to stock
 	// at cost, and the goods sold to Cost of goods sold. Null keeps the books periodic (RULES 6.2).
