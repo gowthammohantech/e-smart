@@ -7,7 +7,7 @@ import { Can } from '../components/Can';
 import { ReasonDialog } from '../components/ReasonDialog';
 import { PageHeader, QueryState, EmptyState, DetailSkeleton } from '../components/ui';
 import { api, need, type Schema } from '../lib/api';
-import { fmtDate, fmtDateTime, fmtInt, PLAN_LABELS, PLANS } from '../lib/format';
+import { fmtDate, fmtDateTime, fmtInt, GSP_LABELS, PLAN_LABELS, PLANS } from '../lib/format';
 
 /** Provider cost in US dollars; small sums keep four places so a few calls don't read as $0.00. */
 const fmtUsd = (usd: number) => `$${usd.toFixed(usd > 0 && usd < 1 ? 4 : 2)}`;
@@ -103,6 +103,76 @@ function PlanOverride({ company, billedBy, onWarning }: { company: Schema<'Platf
   );
 }
 
+/** Which GST gateway the company files e-invoices and e-way bills through, and the control to change it. */
+export function GspProvider({ company, gsp }: { company: Schema<'PlatformCompany'>; gsp: Schema<'PlatformGsp'> }) {
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  // Always one of the two gateways: a company with no choice of its own shows the one it files through today.
+  const [choice, setChoice] = useState<Schema<'GspGateway'>>(gsp.effective);
+  const picked = gsp.options.find((o) => o.gateway === choice);
+
+  return (
+    <section className="card" aria-label="GST gateway">
+      <div className="card-head">
+        <h2>GST gateway</h2>
+        <Can role="superadmin">
+          <button
+            className="btn small"
+            type="button"
+            onClick={() => {
+              setChoice(gsp.effective);
+              setOpen(true);
+            }}
+          >
+            Change gateway
+          </button>
+        </Can>
+      </div>
+      <div className="card-body">
+        <dl className="facts">
+          <div>
+            <dt>Files through</dt>
+            <dd>{GSP_LABELS[gsp.effective]}</dd>
+          </div>
+        </dl>
+        {gsp.simulated ? <p className="hint">This deployment uses the built-in simulator, so no gateway is called whichever one is chosen.</p> : null}
+      </div>
+      <ReasonDialog
+        open={open}
+        title={`Change the GST gateway for ${company.name}`}
+        description="Applies to this company's e-invoices and e-way bills from its next filing, and is recorded in its own audit trail as a change by platform support. Its portal login is kept; the saved portal session is dropped."
+        confirmLabel="Change gateway"
+        onClose={() => setOpen(false)}
+        onConfirm={async (reason) => {
+          if (choice === gsp.effective) throw new Error(`This company already files through ${GSP_LABELS[choice]}. Pick the other gateway to change it.`);
+          need(
+            await api.PUT('/admin/companies/{companyId}/gsp-provider', {
+              params: { path: { companyId: company.id } },
+              body: { provider: choice, reason },
+            }),
+          );
+          await queryClient.invalidateQueries();
+        }}
+      >
+        <label className="field">
+          <span>Gateway</span>
+          <select className="select" value={choice} onChange={(e) => setChoice(e.target.value as Schema<'GspGateway'>)}>
+            {gsp.options.map((o) => (
+              <option key={o.gateway} value={o.gateway} disabled={!o.available}>
+                {GSP_LABELS[o.gateway]}
+                {o.gateway === gsp.effective ? ' (current)' : ''}
+                {o.available ? '' : ' (not available)'}
+              </option>
+            ))}
+          </select>
+          {picked && !picked.available ? <span className="hint">{picked.reason}</span> : null}
+          <span className="hint">A company must have its portal login registered with the gateway you choose.</span>
+        </label>
+      </ReasonDialog>
+    </section>
+  );
+}
+
 export function CompanyDetail() {
   const { companyId = '' } = useParams();
   const query = useQuery({
@@ -121,7 +191,7 @@ export function CompanyDetail() {
       header={<PageHeader crumbs={[{ to: '/accounts', label: 'Accounts' }]} title="Company" />}
     >
       {() => {
-        const { company, accountName, accountSuspended, subscription, planHistory, documentCounts, userCount, aiCost = [] } = query.data!;
+        const { company, gsp, accountName, accountSuspended, subscription, planHistory, documentCounts, userCount, aiCost = [] } = query.data!;
         const aiTotal = aiCost.reduce((s, r) => s + r.costUsd, 0);
         const totalDocs = documentCounts.reduce((s, d) => s + d.count, 0);
         return (
@@ -175,6 +245,8 @@ export function CompanyDetail() {
                 </div>
               </dl>
             </section>
+
+            <GspProvider key={`${company.id}:${gsp.effective}`} company={company} gsp={gsp} />
 
             <div className="grid-2">
               <section className="card">

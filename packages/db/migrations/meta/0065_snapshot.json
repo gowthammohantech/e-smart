@@ -1,5 +1,5 @@
 {
-  "id": "b01b14f3-15a1-4490-bd93-12e1b707a247",
+  "id": "bfe36221-55f8-4524-99ce-e8d3c849c8ec",
   "prevId": "6bdaecd8-d13d-48dd-a2cf-197a60f6f658",
   "version": "7",
   "dialect": "postgresql",
@@ -1905,6 +1905,12 @@
         "ai_monthly_limit": {
           "name": "ai_monthly_limit",
           "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "gsp_provider": {
+          "name": "gsp_provider",
+          "type": "varchar(20)",
           "primaryKey": false,
           "notNull": false
         },
@@ -4004,12 +4010,6 @@
         "note_gst": {
           "name": "note_gst",
           "type": "varchar(8)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "sez_tax": {
-          "name": "sez_tax",
-          "type": "varchar(10)",
           "primaryKey": false,
           "notNull": false
         },

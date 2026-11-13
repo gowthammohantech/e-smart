@@ -4518,6 +4518,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/companies/{companyId}/gsp-provider": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Choose the GST gateway (GSP) this company files e-invoices and e-way bills through, or clear the choice so it follows the deployment's default. Only a gateway the deployment is set up for may be chosen. The company's cached portal session is dropped, so its next filing signs in afresh through the new gateway. */
+        put: operations["setCompanyGspProvider"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/users": {
         parameters: {
             query?: never;
@@ -6790,8 +6809,34 @@ export interface components {
             subscriptionStatus: "active" | "trialing" | "pastDue" | "cancelled" | "none";
             /** Format: date-time */
             onboardingCompletedAt?: string | null;
+            /** @description The gateway an operator chose for this company; null follows the deployment default */
+            gspProvider?: components["schemas"]["GspGateway"] | null;
             /** Format: date-time */
             createdAt: string;
+        };
+        /** @enum {string} */
+        GspGateway: "adaequare" | "whitebooks";
+        /** @description Which GST gateway (GSP) a company files through, and which ones this deployment can offer. */
+        PlatformGsp: {
+            /** @description The choice an operator made for this company; null means none */
+            override: components["schemas"]["GspGateway"] | null;
+            default: components["schemas"]["GspGateway"];
+            effective: components["schemas"]["GspGateway"];
+            /** @description True when the deployment files through the built-in simulator, so no gateway is called whatever is chosen */
+            simulated: boolean;
+            options: {
+                gateway: components["schemas"]["GspGateway"];
+                /** @description Whether the deployment can file through it */
+                available: boolean;
+                sandboxOnly: boolean;
+                /** @description Why it cannot be chosen */
+                reason?: string | null;
+            }[];
+        };
+        PlatformGspChange: {
+            /** @description The gateway to use; null clears the choice so the company follows the deployment default */
+            provider: components["schemas"]["GspGateway"] | null;
+            reason: string;
         };
         PlatformUser: {
             id: string;
@@ -6817,6 +6862,7 @@ export interface components {
         };
         PlatformCompanyDetail: {
             company: components["schemas"]["PlatformCompany"];
+            gsp: components["schemas"]["PlatformGsp"];
             accountName: string;
             accountSuspended?: boolean;
             subscription: components["schemas"]["Subscription"] | null;
@@ -16353,6 +16399,39 @@ export interface operations {
             };
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    setCompanyGspProvider: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlatformGspChange"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        company: components["schemas"]["PlatformCompany"];
+                        gsp: components["schemas"]["PlatformGsp"];
+                    };
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
             422: components["responses"]["Unprocessable"];
         };
     };

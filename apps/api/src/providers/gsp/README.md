@@ -19,7 +19,10 @@ providers/gsp/
   adaequare.ts      AdaequareGateway
   whitebooks.ts     WhitebooksGateway
   taxpayer.ts       the register's record -> GstinRecord
-  index.ts          createGspGateway(config): one shared instance per config
+  build.ts          buildGateway(config, name): one named gateway, with the sandbox and URL checks
+  router.ts         GspRouter: every gateway behind one interface, routed per company
+  availability.ts   which gateways an operator may choose for a company
+  index.ts          createGspRouter(config): one shared router per config
 ```
 
 ## Switching it on, and switching provider
@@ -38,8 +41,31 @@ names still work as a fallback for a value its provider-specific variable leaves
 blank.
 
 `COMPLIANCE_PROVIDER` and `GSTIN_PROVIDER` stay independent switches, but the
-gateway behind both is the one `TAXATION_GSP_PROVIDER_CODE` names, so an e-way
-bill by IRN is always raised under the session that registered the IRN.
+gateway behind both is the one `TAXATION_GSP_PROVIDER_CODE` names, unless an
+operator has chosen another for the company (below). One company is always on one
+gateway, so an e-way bill by IRN is raised under the session that registered the IRN.
+
+## Choosing a gateway per company
+
+`TAXATION_GSP_PROVIDER_CODE` is the **default**. A platform operator (superadmin) can
+override it for one business from the admin portal (Company → GST gateway), which sets
+`companies.gsp_provider` (`adaequare` | `whitebooks`; null follows the default). Nothing
+changes for a company until that is set.
+
+- Both gateways run in one process. `GspRouter` builds each on first use and keeps its
+  own tokens and sessions, so a company on Whitebooks and one on Adaequare file side by side.
+- A call is routed by the login it carries (`PortalCredentials.gspGateway`, read from the
+  company in `portalCredentials()`). Calls with no company, such as the GSTIN register
+  lookup, use the default.
+- A gateway is offered only if the deployment can run it (`gspAvailability`): Whitebooks
+  needs `TAXATION_GSTIN_ALLOW_SANDBOX=true`, and each needs its base URL and application
+  pair. A choice that later becomes impossible (the sandbox switch turned off) is
+  refused with `GSP_NOT_CONFIGURED`; the company is never filed through the other gateway.
+- Switching drops the company's cached portal session and re-stamps its stored login with
+  the new gateway; the login itself is kept. The business's portal login must be
+  registered with the gateway chosen, or its connection test fails.
+- The sandbox buyer swap (`TAXATION_SANDBOX_BUYER_GSTIN`) applies to Whitebooks only, so
+  with Adaequare as the default it affects just the companies chosen onto Whitebooks.
 
 ## Two credentials per filing
 

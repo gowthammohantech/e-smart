@@ -1,0 +1,1 @@
+ALTER TABLE "companies" ADD COLUMN "gsp_provider" varchar(20);
