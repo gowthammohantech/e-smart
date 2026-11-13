@@ -553,6 +553,22 @@ describe('Whitebooks', () => {
     expect(sent).toEqual([541241, 85362010]);
   });
 
+  it('retries a direct e-way bill with distance 0 for an unregistered buyer once the seller is the sandbox taxpayer', async () => {
+    let genCalls = 0;
+    const t = fakeTransport({
+      '/ewaybillapi/v1.03/authenticate': () => ok({}),
+      '/ewaybillapi/v1.03/ewayapi/genewaybill': () => {
+        genCalls += 1;
+        return genCalls === 1 ? ({ status_cd: '0', error: [{ errorCode: '702', errorMessage: '702' }] } as unknown as GspEnvelope) : ok({ ewayBillNo: 171012272465, ewayBillDate: '02/09/2026 10:15:00 PM', validUpto: '04/09/2026 11:59:00 PM' });
+      },
+    });
+    const own = { ...creds, gstin: '33CGQPM1770F1ZB' };
+    const result = await new WhitebooksGateway(whitebooksConfig(), t.transport).submitEwayBill(own, { payload: { ...ewb, toGstin: 'URP', transDistance: 120 }, vehicleType: 'regular', now: NOW });
+    expect(result).toMatchObject({ ok: true, ewayBillNumber: '171012272465' });
+    const sent = t.calls.filter((c) => c.path.endsWith('genewaybill')).map((c) => (c.body as { transDistance?: number | string }).transDistance);
+    expect(sent.map(Number)).toEqual([120, 0]);
+  });
+
   it('files every e-invoice against the sandbox buyer, whole block at a time', async () => {
     const t = fakeTransport({
       '/einvoice/authenticate': () => auth as GspEnvelope,

@@ -467,7 +467,9 @@ export class WhitebooksGateway implements GspGateway {
         try {
           reply = await generate(payload);
         } catch (error) {
-          if (!(party && error instanceof GspRequestError && hasErrorCode(error.envelope, STANDALONE_DISTANCE_REFUSED))) throw error;
+          // The sandbox seller (a Bengaluru address) stands in even for an unregistered buyer (`URP`, no test buyer), so the
+          // real distance fails against its pincode there too: either substitution makes 0 the retry.
+          if (!((party || seller) && error instanceof GspRequestError && hasErrorCode(error.envelope, STANDALONE_DISTANCE_REFUSED))) throw error;
           reply = await generate({ ...payload, transDistance: 0 });
         }
       }
