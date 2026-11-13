@@ -194,6 +194,13 @@ export function gstr3b(input: Input): Gstr3b {
         put(doc.isdInvoice ? '4A4' : '4A5', doc.isdInvoice ? out.itc.isd : out.itc.allOther, src, fromSplit(sumSplits(itc.eligible, itc.capitalGoods, itc.blocked, itc.ineligible)));
         put('4B1', out.itc.reversedRules, src, fromSplit(sumSplits(itc.blocked, itc.ineligible)));
       }
+      // Goods sent back to the supplier: the credit taken on them comes out in the return's own month,
+      // whether or not the supplier's credit note has reached 2B yet (s.16, s.34).
+      if (doc.kind === 'purchaseReturn' && !doc.itcClaimPeriod && inPeriod(doc.date, period)) {
+        // (itcOfDocument already carries a return's credit as negative.)
+        put('4A5', out.itc.allOther, src, fromSplit(sumSplits(itc.eligible, itc.capitalGoods, itc.blocked, itc.ineligible)));
+        put('4B1', out.itc.reversedRules, src, fromSplit(sumSplits(itc.blocked, itc.ineligible)));
+      }
       // 4B(2) and 4D(1): 180 days unpaid, reversed; paid since, claimed again.
       const claimable = sumSplits(itc.eligible, itc.capitalGoods);
       if (doc.itcReversedOn && inPeriod(doc.itcReversedOn, period)) put('4B2', out.itc.reversedOther, src, fromSplit(claimable));
@@ -268,7 +275,8 @@ const kinds = (): Record<TaxKind, number> => ({ igst: 0, cgst: 0, sgst: 0, cess:
  * Pays the month's tax from credit in the order the law sets (CGST s.49, rule 88A), then cash.
  * IGST credit goes first: to IGST, then to CGST and SGST, split so their own credit can cover the
  * rest. CGST credit then pays CGST and IGST; SGST credit SGST and IGST; never CGST for SGST or the
- * other way. Cess credit pays only cess. Reverse-charge tax is paid in cash whatever credit there is.
+ * other way. Cess credit pays only cess. Reverse-charge tax is paid in cash whatever credit there is,
+ * and so is net credit below zero (more reversed in 4B than claimed in 4A).
  */
 export function utilizeItc(liability: Record<TaxKind, number>, reverseCharge: Record<TaxKind, number>, available: Record<TaxKind, number>): Utilization {
   const owed = { igst: Math.max(liability.igst, 0), cgst: Math.max(liability.cgst, 0), sgst: Math.max(liability.sgst, 0), cess: Math.max(liability.cess, 0) };
@@ -297,7 +305,9 @@ export function utilizeItc(liability: Record<TaxKind, number>, reverseCharge: Re
   pay('sgst', 'sgst');
   pay('sgst', 'igst');
   pay('cess', 'cess');
-  const cash = { igst: owed.igst + reverseCharge.igst, cgst: owed.cgst + reverseCharge.cgst, sgst: owed.sgst + reverseCharge.sgst, cess: owed.cess + reverseCharge.cess };
+  // Credit can't go below zero: a head whose reversals (4B) exceed its credit owes the difference in cash.
+  const short = (k: TaxKind) => Math.max(-available[k], 0);
+  const cash = { igst: owed.igst + reverseCharge.igst + short('igst'), cgst: owed.cgst + reverseCharge.cgst + short('cgst'), sgst: owed.sgst + reverseCharge.sgst + short('sgst'), cess: owed.cess + reverseCharge.cess + short('cess') };
   return { liability: { igst: liability.igst + reverseCharge.igst, cgst: liability.cgst + reverseCharge.cgst, sgst: liability.sgst + reverseCharge.sgst, cess: liability.cess + reverseCharge.cess }, credit: used, cash, carriedForward: left };
 }
 

@@ -112,6 +112,13 @@ describe('paying the tax from credit (rule 88A)', () => {
     expect(u.carriedForward).toEqual(k(0, 50, 50));
   });
 
+  it('pays in cash what reversals take credit below zero', () => {
+    // CGST: ₹50 claimed, ₹80 reversed under 4B(2): net −₹30 is owed, on top of the ₹100 of tax.
+    const u = utilizeItc(k(0, 100, 100), k(0, 0, 0), k(0, -30, 200));
+    expect(u.cash).toEqual(k(0, 130, 0));
+    expect(u.carriedForward).toEqual(k(0, 0, 100));
+  });
+
   it('pays no cash that a smarter split could have avoided', () => {
     // A naive IGST-to-CGST-first split would leave SGST short.
     const u = utilizeItc(k(0, 100, 100), k(0, 0, 0), k(100, 100, 0));

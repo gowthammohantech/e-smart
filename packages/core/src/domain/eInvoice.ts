@@ -190,6 +190,8 @@ export function isEInvoiceApplicable(ctx: EInvoiceContext): EInvoiceApplicabilit
   if (doc.status === 'draft' || doc.status === 'requested') {
     return no('The document has not been finalised yet');
   }
+  // A cancelled document is no supply: the IRP must not be told of it.
+  if (doc.status === 'cancelled' || doc.status === 'rejected') return no('The document is cancelled');
 
   const supplyType = eInvoiceSupplyTypeFor(doc, buyer);
   if (!supplyType) return no('A sale to an unregistered buyer is outside e-invoicing');

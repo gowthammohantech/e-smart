@@ -15,7 +15,8 @@ import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { Text } from '@esmart/ui/components/Text';
 import { useToast } from '@esmart/ui/components/Toast';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
-import { formatDate } from '@esmart/core/lib/date';
+import { formatDate, today } from '@esmart/core/lib/date';
+import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { formatMoney } from '@esmart/core/lib/format';
 import { api } from '../../../remote/api';
 import { describeError } from '../../../remote/errors';
@@ -93,6 +94,26 @@ export default function GstReturnsScreen() {
   }
   // Filing with the EVC can't be undone: it is asked first.
   const [askFile, setAskFile] = useState<ReturnType | null>(null);
+  // A return filed on the portal itself, recorded here so the books close and the month is held.
+  const [portalFiled, setPortalFiled] = useState<{ r: ReturnType; filedOn: string; arn: string } | null>(null);
+  const markFiled = async () => {
+    if (!gstin || !portalFiled) return;
+    const { r, filedOn, arn } = portalFiled;
+    setBusy(`${r}:markFiled`);
+    try {
+      const { error } = await api.POST('/companies/{companyId}/gst/returns/{returnType}/mark-filed', { params: { path: { ...path, returnType: r } }, body: { gstin, period, filedOn, ...(arn.trim() && { arn: arn.trim() }) } });
+      if (error) toast.show(describeError(error, tr), 'error');
+      else {
+        toast.show(tr('compliance:returns.markedFiled', { name: r === 'gstr1' ? 'GSTR-1' : 'GSTR-3B' }), 'success', { icon: 'check-all' });
+        setPortalFiled(null);
+        await load();
+      }
+    } catch (err) {
+      toast.show(describeError(err, tr), 'error');
+    } finally {
+      setBusy(null);
+    }
+  };
   const branches = useBranches();
 
   useEffect(() => {
@@ -326,6 +347,9 @@ export default function GstReturnsScreen() {
             ) : null}
           </>
         )}
+        {status !== 'filed' && !blocked ? (
+          <Button title={tr('compliance:returns.filedOnPortal')} size="sm" variant="ghost" icon="check-decagram-outline" disabled={!!busy} onPress={() => setPortalFiled({ r, filedOn: today(), arn: '' })} />
+        ) : null}
       </Card>
     );
   };
@@ -572,6 +596,18 @@ export default function GstReturnsScreen() {
           return step(r, 'file', tr('compliance:returns.filed', { name: r === 'gstr1' ? 'GSTR-1' : 'GSTR-3B' }));
         }}
       />
+      <Sheet visible={!!portalFiled} onClose={() => setPortalFiled(null)} title={portalFiled ? tr('compliance:returns.markFiledTitle', { name: portalFiled.r === 'gstr1' ? 'GSTR-1' : 'GSTR-3B', period: periodLabel(period) }) : undefined}>
+        {portalFiled ? (
+          <View style={{ gap: t.spacing.md, paddingBottom: t.spacing.lg }}>
+            <Text variant="small" tone="muted">
+              {tr('compliance:returns.markFiledBody')}
+            </Text>
+            <DateField label={tr('compliance:returns.filedOn')} value={portalFiled.filedOn} onChange={(filedOn) => setPortalFiled((p) => (p ? { ...p, filedOn } : p))} maximumDate={new Date()} required />
+            <TextField label={tr('compliance:returns.arnLabel')} value={portalFiled.arn} onChangeText={(arn) => setPortalFiled((p) => (p ? { ...p, arn: arn.toUpperCase().slice(0, 20) } : p))} autoCapitalize="characters" />
+            <Button title={tr('compliance:returns.markFiled')} icon="check-decagram-outline" loading={busy === `${portalFiled.r}:markFiled`} disabled={!!busy} onPress={() => void markFiled()} />
+          </View>
+        ) : null}
+      </Sheet>
       <SelectSheet visible={open === 'gstin'} onClose={() => setOpen(null)} title="GSTIN" options={gstins.map((g) => ({ value: g, label: g }))} value={gstin} onSelect={setGstin} searchable={false} />
       <SelectSheet visible={open === 'period'} onClose={() => setOpen(null)} title={tr('compliance:gstr2b.period')} options={periods.map((p) => ({ value: p, label: periodLabel(p) }))} value={period} onSelect={setPeriod} searchable={false} />
     </View>

@@ -48,6 +48,7 @@ import {
   assertNoLiveReturns,
   assertPeriodOpen,
   finalizeInTx,
+  assertCancellable,
   gstr1Closed,
   isCredit,
   postStock,
@@ -361,6 +362,7 @@ async function changeStatus(ctx: AnyCtx, id: string, target: DocStatus, reason?:
         throw forbidden('CANCEL_ROLE', `Only an owner, admin or accountant can cancel an issued ${locked.kind}`);
       }
       assertPeriodOpen(ctx.company, locked.date);
+      await assertCancellable(tx, locked);
       // Money allocated to it, not what it reads as paid: a bill's own TDS counts as paid from the start.
       const [allocation] = await tx.select({ id: schema.paymentAllocations.id }).from(schema.paymentAllocations).where(eq(schema.paymentAllocations.documentId, locked.id)).limit(1);
       if (allocation) throw conflict('DOCUMENT_HAS_PAYMENTS', 'Remove the payments allocated to this document before cancelling it');

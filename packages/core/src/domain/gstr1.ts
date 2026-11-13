@@ -254,8 +254,14 @@ export function noteTypeOf(kind: BusinessDocument['kind']): 'C' | 'D' | undefine
  * `originalValue` is the invoice a note was raised against: whether that sale was B2CL decides
  * where an unregistered buyer's note goes, not the note's own size.
  */
+/** Registered as the document was issued, when that is known; else the party as it is now. */
+function registeredFor(doc: BusinessDocument, party: Party): boolean {
+  if (doc.registeredAtIssue === undefined) return isRegistered(party);
+  return doc.registeredAtIssue && party.gstRegistrationType !== 'overseas';
+}
+
 function tableFor(doc: BusinessDocument, party: Party, placeOfSupply: string, interState: boolean, originalValue: Money): Gstr1Table {
-  const registered = isRegistered(party);
+  const registered = registeredFor(doc, party);
   const exported = isExport(party, placeOfSupply);
   const large = interState && originalValue.minor > B2CL_THRESHOLD_MINOR;
   if (noteTypeOf(doc.kind)) {
@@ -369,7 +375,7 @@ export function gstr1Summary(args: {
     const sez = party.gstRegistrationType === 'sez';
     const original = source ? { number: source.number, date: source.date } : { number: doc.originalNumber, date: doc.originalDate };
     // The buyer as registered when the document was issued.
-    const gstin = isRegistered(party) ? (doc.partyGstin ?? party.taxId) : undefined;
+    const gstin = registeredFor(doc, party) ? (doc.partyGstin ?? party.taxId) : undefined;
 
     // Exempt and non-GST lines are reported apart from nil-rated ones. Reimbursements are no supply at all.
     // Charges taxed with the lines (RULES 1.10) follow each line's treatment here and in the HSN summary.
@@ -395,7 +401,7 @@ export function gstr1Summary(args: {
     slabs.forEach((slab) => {
       // An SEZ supply without tax went under LUT or bond: it is zero-rated (SEZWOP), not nil-rated.
       if (slab.rate === 0 && !slab.components.length && doc.kind === 'invoice' && table !== 'exp' && !sez) {
-        const supplyType = `${interState ? 'INTR' : 'INTRA'}${isRegistered(party) ? 'B2B' : 'B2C'}` as NilSupplyType;
+        const supplyType = `${interState ? 'INTR' : 'INTRA'}${registeredFor(doc, party) ? 'B2B' : 'B2C'}` as NilSupplyType;
         const nil = nilMap.get(supplyType) ?? { supplyType, nilRated: zero(baseCurrency), exempt: zero(baseCurrency), nonGst: zero(baseCurrency) };
         const add = (m: Money, minor: number) => money(m.minor + toBase(money(minor, doc.currency), rate).minor, baseCurrency);
         nil.nilRated = add(nil.nilRated, nilRated);

@@ -205,7 +205,9 @@ export async function recordIrnCancelled(
     const row = await findDocument(tx, company, actor, documentId, { lock: true });
     await writeEInvoice(tx, row, { status: 'cancelled', cancelledAt: c.now, cancelReasonCode: c.reasonCode, cancelRemark: c.remark?.slice(0, 100) ?? null }, false, c.now);
     await touchDocument(tx, actor, row, c.now, { complianceLastMessage: `IRN cancelled on the portal: ${c.reason.toLowerCase()}` }, { action: 'cancelled e-invoice', before: c.irn, after: c.reason });
-    await notify(tx, deps, { companyId: row.companyId, kind: 'compliance', title: 'IRN cancelled', body: `${row.number} · ${c.reason}`, entityType: 'document', entityId: row.id });
+    // The IRN going doesn't take the invoice out of the books or GSTR-1: say so, so it is cancelled there too
+    // (an IRN once cancelled can't be generated again for the same number).
+    await notify(tx, deps, { companyId: row.companyId, kind: 'compliance', title: 'IRN cancelled', body: `${row.number} · ${c.reason}. Cancel ${row.number} in your books too, or it stays in your sales and GSTR-1.`, entityType: 'document', entityId: row.id });
     if (c.attemptId) await tx.update(CA).set({ status: 'settled', settledAt: c.now }).where(eq(CA.id, c.attemptId));
   });
 }

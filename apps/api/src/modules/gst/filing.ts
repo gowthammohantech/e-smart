@@ -268,6 +268,32 @@ const filingHandlers = defineHandlers({
     return returnWire(row);
   },
 
+  /**
+   * A return filed on the portal, recorded here (RULES 7.x, money audit B5): the same record and the
+   * same consequences as filing through the app, so a business that files on the portal still gets
+   * its books closed, its set-off posted, amendments tracked and the period's GSTR-1 held.
+   */
+  async markGstReturnFiled(ctx) {
+    const returnType = ctx.params.returnType as ReturnType;
+    const { gstin, period, filedOn } = ctx.body;
+    await assertCompanyGstin(ctx.db, ctx.company, gstin);
+    if (filedOn > businessDate(ctx.now)) throw invalid('filedOn', 'The day it was filed cannot be in the future');
+    const { to } = periodBounds(period);
+    if (filedOn <= to && returnType === 'gstr3b') throw invalid('filedOn', `A GSTR-3B for ${period.slice(0, 2)}/${period.slice(2)} is filed after the month ends`);
+    const existing = await findReturn(ctx.db, ctx.company.id, gstin, returnType, period);
+    assertNotFiled(existing);
+    if (returnType === 'gstr3b') {
+      const r1 = await findReturn(ctx.db, ctx.company.id, gstin, 'gstr1', period);
+      if (r1?.status !== 'filed') throw conflict('GSTR1_FIRST', 'Mark the period’s GSTR-1 filed before its GSTR-3B');
+    }
+    // What the books report now is what was filed: later changes show against it as amendments.
+    const { json, utilization, reported } = await payloadFor(ctx.db, ctx.company, gstin, returnType, period, ctx.now);
+    const row = await upsertReturn(ctx.db, ctx.company.id, gstin, returnType, period, { status: 'submitted', payload: { ...json, utilization, reported }, lastError: null }, ctx.now);
+    const filed = await recordFiled(ctx.db, ctx.company, ctx.user, row, { arn: ctx.body.arn?.trim() || null, filedAt: new Date(`${filedOn}T00:00:00Z`) }, ctx.now);
+    track(ctx, 'gst_return_action', { returnType, action: 'markFiled' });
+    return returnWire(filed);
+  },
+
   async fileGstReturn(ctx) {
     if (!ctx.deps.config.GST_FILING_ENABLED) throw new ApiError(503, 'FILING_DISABLED', 'Filing through the app is not switched on yet; file on the GST portal, using the saved return');
     const returnType = ctx.params.returnType as ReturnType;
@@ -311,7 +337,7 @@ async function ownerOf(db: DbOrTx, company: CompanyRow): Promise<AuthUser> {
 }
 
 /** The `gst.returns.recover` job: returns whose filing answer was lost, settled from the portal's tracker. */
-type GstAction = 'save' | 'offset' | 'proceed' | 'evc' | 'file';
+type GstAction = 'save' | 'offset' | 'proceed' | 'evc' | 'file' | 'markFiled';
 
 /** Each step of filing, counted once it succeeds: which return and which step, nothing from it. */
 function tracked<K extends OperationId>(handler: Handler<K>, action: GstAction): Handler<K> {

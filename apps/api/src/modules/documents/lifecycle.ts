@@ -365,6 +365,10 @@ export async function finalizeInTx(
   if (TAX_DOCUMENTS.includes(row.kind) && row.date > addDays(today(now), 1)) {
     throw unprocessable([{ field: 'date', message: `A ${row.kind} cannot be dated ${row.date}, in the future`, severity: 'blocking' }], 'DOCUMENT_DATED_IN_FUTURE');
   }
+  // A sale dated into a month whose GSTR-1 is filed would never be reported: it goes in an open month.
+  if (GSTR1_KINDS.includes(row.kind) && (await gstr1Closed(tx, company.id, row.date))) {
+    throw conflict('RETURN_FILED', `GSTR-1 for ${row.date.slice(0, 7)} is filed; a ${row.kind} dated ${row.date} would never be reported. Date it in a month whose GSTR-1 is still open`);
+  }
   if (row.kind === 'invoice') await checkInvoiceLimit(tx, company, now);
   if (isReturn(row) && row.sourceDocumentId) await checkReturnWithinSource(tx, row);
   if (againstSource(row)) await checkAgainstSource(tx, row);
@@ -404,7 +408,11 @@ export async function finalizeInTx(
 const addDays = (iso: string, days: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
 
 /** Dated by the business itself, and what the tax return is built from. */
-const TAX_DOCUMENTS: DocumentKind[] = ['invoice', 'salesReturn', 'purchaseBill', 'purchaseReturn'];
+const TAX_DOCUMENTS: DocumentKind[] = ['invoice', 'salesReturn', 'purchaseBill', 'purchaseReturn', ...NOTE_KINDS];
+/** What GSTR-1 reports: sales, and the notes and returns against them. */
+export const GSTR1_KINDS: DocumentKind[] = ['invoice', 'salesReturn', 'creditNote', 'debitNote'];
+/** Purchases whose credit GSTR-3B claims. */
+const ITC_KINDS: DocumentKind[] = ['purchaseBill', 'supplierDebitNote', 'supplierCreditNote', 'purchaseReturn'];
 const RETURN_KINDS: DocumentKind[] = ['salesReturn', 'purchaseReturn'];
 export const isReturn = (row: Pick<DocRow, 'kind'>) => RETURN_KINDS.includes(row.kind);
 /** Returns and credit notes: they lower what their source still owes. */
@@ -603,6 +611,37 @@ export const EDIT_BLOCK_MESSAGES: Record<EditBlock, string> = {
   returnFiled: 'Its GSTR-1 period is filed',
   laterStock: 'Its items have later stock movements, and stock is costed FIFO',
 };
+
+/** GSTR-3B for a period (MMYYYY) is filed. */
+export async function gstr3bFiled(tx: DbOrTx, companyId: string, period: string): Promise<boolean> {
+  const R = schema.gstReturns;
+  const [r] = await tx
+    .select({ id: R.id })
+    .from(R)
+    .where(and(eq(R.companyId, companyId), eq(R.returnType, 'gstr3b'), eq(R.period, period), inArray(R.status, ['submitted', 'filed'])))
+    .limit(1);
+  return !!r;
+}
+
+/**
+ * Cancelling takes a document out of the returns. One already reported can't simply vanish: a sale
+ * in a filed GSTR-1 would drop out of a 3B rebuilt later and then again through the amendment, and
+ * a bill whose credit a filed 3B claimed would keep that credit. Those are undone with a credit note
+ * (or a return to the supplier) dated today instead.
+ */
+export async function assertCancellable(tx: DbOrTx, row: DocRow): Promise<void> {
+  if (GSTR1_KINDS.includes(row.kind) && (await gstr1Closed(tx, row.companyId, row.date))) {
+    throw conflict('RETURN_FILED', `${row.number} is in the filed GSTR-1 for ${row.date.slice(0, 7)}; issue a credit note dated today instead of cancelling it`);
+  }
+  if (ITC_KINDS.includes(row.kind)) {
+    const own = `${row.date.slice(5, 7)}${row.date.slice(0, 4)}`;
+    for (const period of new Set([row.itcClaimPeriod, own].filter((p): p is string => !!p))) {
+      if (await gstr3bFiled(tx, row.companyId, period)) {
+        throw conflict('RETURN_FILED', `${row.number}'s input tax is in the filed GSTR-3B for ${period.slice(0, 2)}/${period.slice(2)}; record a purchase return or supplier credit note dated today instead of cancelling it`);
+      }
+    }
+  }
+}
 
 /** GSTR-1 for the month `date` falls in is filed, or frozen for filing. */
 export async function gstr1Closed(tx: DbOrTx, companyId: string, date: string): Promise<boolean> {

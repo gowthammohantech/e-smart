@@ -5255,6 +5255,39 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/GstReturn' }
 
+  /companies/{companyId}/gst/returns/{returnType}/mark-filed:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { name: returnType, in: path, required: true, schema: { type: string, enum: [gstr1, gstr3b] } }
+    post:
+      tags: [GST]
+      operationId: markGstReturnFiled
+      summary: Records a return filed on the GST portal
+      description: >-
+        For a business that files on the portal itself: records the return as filed, as the app
+        would have, with what the books report for the period kept as the filed snapshot (so later
+        changes show as amendments). GSTR-3B needs the period’s GSTR-1 filed first; marking it filed
+        closes the books through the period and posts the set-off as a GST journal. Cannot be undone.
+        409 RETURN_FILED when it is already filed.
+      x-roles: [owner, admin, accountant]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [gstin, period, filedOn]
+              properties:
+                gstin: { type: string }
+                period: { type: string, pattern: '^(0[1-9]|1[0-2])[0-9]{4}$' }
+                filedOn: { type: string, format: date, description: 'The day it was filed on the portal; not in the future' }
+                arn: { type: string, maxLength: 20, description: 'The ARN the portal gave' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GstReturn' }
   /companies/{companyId}/gst/gstr1:
     parameters: [{ $ref: '#/components/parameters/CompanyId' }]
     get:
@@ -7609,7 +7642,7 @@ components:
                 type: string
                 enum: [matched, matchedWithinTolerance, manuallyLinked, claimed, partial, probable, missingInBooks, notOurs, claimLater]
                 description: "matchedWithinTolerance: amounts agree, dated a few days apart. partial: number agrees, amount or date doesn't (see reasons). claimed: its bill's credit is claimed for this period."
-              reasons: { type: array, items: { type: string, enum: [taxable, tax, date, number] }, description: What differs between the line and its bill }
+              reasons: { type: array, items: { type: string, enum: [taxable, tax, date, number, supplier, kind] }, description: What differs between the line and its bill }
               decision: { type: string, enum: [accepted, notOurs, claimLater] }
               bill: { $ref: '#/components/schemas/Gstr2bBill' }
               difference:

@@ -3697,6 +3697,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/{companyId}/gst/returns/{returnType}/mark-filed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                returnType: "gstr1" | "gstr3b";
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Records a return filed on the GST portal
+         * @description For a business that files on the portal itself: records the return as filed, as the app would have, with what the books report for the period kept as the filed snapshot (so later changes show as amendments). GSTR-3B needs the period’s GSTR-1 filed first; marking it filed closes the books through the period and posts the set-off as a GST journal. Cannot be undone. 409 RETURN_FILED when it is already filed.
+         */
+        post: operations["markGstReturnFiled"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/{companyId}/gst/gstr1": {
         parameters: {
             query?: never;
@@ -5628,7 +5651,7 @@ export interface components {
                  */
                 status?: "matched" | "matchedWithinTolerance" | "manuallyLinked" | "claimed" | "partial" | "probable" | "missingInBooks" | "notOurs" | "claimLater";
                 /** @description What differs between the line and its bill */
-                reasons?: ("taxable" | "tax" | "date" | "number")[];
+                reasons?: ("taxable" | "tax" | "date" | "number" | "supplier" | "kind")[];
                 /** @enum {string} */
                 decision?: "accepted" | "notOurs" | "claimLater";
                 bill?: components["schemas"]["Gstr2bBill"];
@@ -14815,6 +14838,43 @@ export interface operations {
                     period: string;
                     pan?: string;
                     otp: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GstReturn"];
+                };
+            };
+        };
+    };
+    markGstReturnFiled: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                returnType: "gstr1" | "gstr3b";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    gstin: string;
+                    period: string;
+                    /**
+                     * Format: date
+                     * @description The day it was filed on the portal; not in the future
+                     */
+                    filedOn: string;
+                    /** @description The ARN the portal gave */
+                    arn?: string;
                 };
             };
         };

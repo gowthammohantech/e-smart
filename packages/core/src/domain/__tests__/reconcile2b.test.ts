@@ -29,6 +29,21 @@ describe('GSTR-2B reconciliation', () => {
     expect(r.matches[0].status).toBe('probable');
   });
 
+  it('claims nothing on a link to another supplier’s bill, the wrong kind, or more tax than 2B shows', () => {
+    const other = bill({ supplierGstin: '27AABCU9603R1ZX', number: 'BIG', taxMinor: 18_000_000 });
+    const wrong = reconcile2b([line({ linkedDocumentId: other.id, decision: 'accepted' })], [other]);
+    expect(wrong.matches[0]).toMatchObject({ status: 'partial' });
+    expect(wrong.matches[0].reasons).toEqual(expect.arrayContaining(['supplier', 'tax']));
+    expect(wrong.claimableTaxMinor).toBe(0);
+    const bill2 = bill({ number: 'ANY' });
+    const credit = reconcile2b([line({ documentType: 'C', linkedDocumentId: bill2.id, decision: 'accepted' })], [bill2]);
+    expect(credit.matches[0].reasons).toContain('kind');
+    expect(credit.claimableTaxMinor).toBe(0);
+    // The right bill under another number is still the person's to link.
+    const right = bill({ number: 'AS-101-A' });
+    expect(reconcile2b([line({ linkedDocumentId: right.id, decision: 'accepted' })], [right]).matches[0].status).toBe('manuallyLinked');
+  });
+
   it('lists 2B lines not in the books and bills not in 2B', () => {
     const r = reconcile2b([line({ number: 'X1' })], [bill({ number: 'Y9', taxMinor: 5000 })]);
     expect(r.matches[0].status).toBe('missingInBooks');

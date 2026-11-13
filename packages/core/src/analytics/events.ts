@@ -46,7 +46,7 @@ export const ANALYTICS_EVENTS = {
   expense_created: { hasTax: bool },
   payment_recorded: { direction: oneOf('received', 'paid'), mode: token, fromBankLine: bool, allocations: count },
 
-  gst_return_action: { returnType: token, action: oneOf('save', 'offset', 'proceed', 'evc', 'file') },
+  gst_return_action: { returnType: token, action: oneOf('save', 'offset', 'proceed', 'evc', 'file', 'markFiled') },
   gstr2b_imported: {},
   report_viewed: { report: token, format: token },
   bank_statement_imported: { lines: SIZE },

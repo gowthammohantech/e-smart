@@ -60,7 +60,7 @@ export type MatchStatus =
 export const CLAIMABLE: MatchStatus[] = ['matched', 'matchedWithinTolerance', 'manuallyLinked', 'claimed'];
 
 /** Why a line and its bill don't agree. */
-export type MismatchReason = 'taxable' | 'tax' | 'date' | 'number';
+export type MismatchReason = 'taxable' | 'tax' | 'date' | 'number' | 'supplier' | 'kind';
 
 export type Match = {
   line: TwoBLine;
@@ -136,8 +136,19 @@ export function reconcile2b(lines: TwoBLine[], bills: BookBill[], opts: { tolera
     used.add(exact.id);
     const { same, close, ...diff } = compare(line, exact);
     if (linked || line.decision === 'accepted') {
-      const reasons = normalizeNumber(exact.number) === normalizeNumber(line.number) ? diff.reasons : [...(diff.reasons ?? []), 'number' as const];
-      return { line, bill: exact, status: exact.claimedIn ? 'claimed' : 'manuallyLinked', ...diff, ...(reasons?.length ? { reasons } : {}) };
+      const reasons: MismatchReason[] = [...(diff.reasons ?? [])];
+      if (normalizeNumber(exact.number) !== normalizeNumber(line.number)) reasons.push('number');
+      // A person's link claims the bill's credit, so it must be the bill this line is: the same
+      // supplier, the same kind of document, and no more tax than the supplier reported. Otherwise
+      // it stays a partial match, to fix, and claims nothing.
+      const wrongSupplier = !boe && exact.supplierGstin !== line.supplierGstin;
+      const wrongKind = exact.kind !== kind;
+      const moreTax = exact.taxMinor - line.taxMinor > tolerance;
+      if (wrongSupplier) reasons.push('supplier');
+      if (wrongKind) reasons.push('kind');
+      if (moreTax && !reasons.includes('tax')) reasons.push('tax');
+      const status: MatchStatus = exact.claimedIn ? 'claimed' : wrongSupplier || wrongKind || moreTax ? 'partial' : 'manuallyLinked';
+      return { line, bill: exact, status, ...(reasons.length ? { difference: diff.difference ?? { taxableMinor: line.taxableMinor - exact.taxableMinor, taxMinor: line.taxMinor - exact.taxMinor, days: Math.round(daysApart(line.date, exact.date)) }, reasons } : {}) };
     }
     const status: MatchStatus = !close ? 'partial' : exact.claimedIn ? 'claimed' : same ? 'matched' : 'matchedWithinTolerance';
     return { line, bill: exact, status, ...diff };

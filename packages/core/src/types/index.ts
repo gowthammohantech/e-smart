@@ -468,6 +468,8 @@ export type BusinessDocument = {
   reverseCharge?: boolean;
   /** The party's GSTIN and state when the document was finalised, as the returns need them. */
   partyGstin?: string;
+  /** Whether the buyer was GST-registered when this was issued (its GSTIN recorded then). Unset: read from the party as it is now. */
+  registeredAtIssue?: boolean;
   partyStateCode?: string;
   notes?: string;
   terms?: string;

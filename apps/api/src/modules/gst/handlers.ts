@@ -122,7 +122,10 @@ export async function gstr1ForRange(
   const sourceIds = [...new Set(rows.map((r) => r.sourceDocumentId).filter((id): id is string => !!id && !rows.some((x) => x.id === id)))];
   const sources = sourceIds.length ? await db.select().from(D).where(and(eq(D.companyId, company.id), inArray(D.id, sourceIds))) : [];
   const baseCurrency = company.baseCurrency.trim();
-  const documents = (await documentsToWire(db, [...rows, ...sources], now, baseCurrency)).map(toCoreDocument);
+  // Whether the buyer was registered when each document was issued: the GSTIN recorded then, never
+  // the one the party has today (a customer who registers later stays B2C for what came before).
+  const atIssue = new Map([...rows, ...sources].map((r) => [r.id, !!r.partyGstin]));
+  const documents = (await documentsToWire(db, [...rows, ...sources], now, baseCurrency)).map((d) => ({ ...toCoreDocument(d), registeredAtIssue: atIssue.get(d.id!) }));
   const partyIds = [...new Set(rows.map((r) => r.partyId))];
   const parties = partyIds.length ? await db.select().from(schema.parties).where(inArray(schema.parties.id, partyIds)) : [];
   const items = await db.select().from(schema.items).where(eq(schema.items.companyId, company.id));
