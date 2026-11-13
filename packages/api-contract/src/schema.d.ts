@@ -1584,11 +1584,10 @@ export interface paths {
          *     e-invoiced document is locked (`409 DOCUMENT_LOCKED`).
          *
          *     The exception (RULES 6.23, pending CA): an issued invoice whose `editable` is true is edited
-         *     in full. It is recomputed as a draft save is and keeps its number and branch; its stock is
-         *     taken back and posted again, and its expected TDS and TCS worked out afresh. Its date may not
-         *     move before the invoice issued before it (422 DATE_BEFORE_PREVIOUS), out of its numbering
-         *     period (422 DATE_OUTSIDE_SERIES), or into a closed (409 PERIOD_LOCKED) or filed (409
-         *     RETURN_FILED) period. The audit trail keeps the invoice before and after. When `editable` is
+         *     in full, except its date. It is recomputed as a draft save is and keeps its number, branch
+         *     and date (a different date is 422 DATE_LOCKED: cancel it and issue another); its stock is
+         *     taken back and posted again, and its expected TDS and TCS worked out afresh. The audit trail
+         *     keeps the invoice before and after. When `editable` is
          *     false, a change beyond those fields is 409 DOCUMENT_FINALIZED, naming the reason.
          */
         patch: operations["updateDocument"];
@@ -6105,13 +6104,13 @@ export interface components {
             };
             compliance?: components["schemas"]["ComplianceInfo"];
             readonly createdBy?: string;
-            /** @description On an invoice: whether it can be edited in full. A draft always can; an issued one only while it is the latest in its series, with nothing allocated, applied or raised against it, no IRN or e-way bill, and its GSTR-1 month and books period open (RULES 6.23). Unset on other kinds. */
+            /** @description On an invoice: whether it can be edited in full. A draft always can; an issued one (all but its date) while nothing is allocated, applied or raised against it, it has no IRN or e-way bill, and its GSTR-1 month and books period are open (RULES 6.23). Unset on other kinds. */
             readonly editable?: boolean;
             /**
              * @description Why an issued invoice can't be edited in full (editable false)
              * @enum {string}
              */
-            readonly editBlock?: "notInvoice" | "notFinal" | "periodLocked" | "notLatest" | "hasPayments" | "hasCredit" | "hasNotes" | "eInvoiced" | "ewayBill" | "returnFiled" | "laterStock";
+            readonly editBlock?: "notInvoice" | "notFinal" | "periodLocked" | "hasPayments" | "hasCredit" | "hasNotes" | "eInvoiced" | "ewayBill" | "returnFiled" | "laterStock";
         };
         /** @description A direct credit note applied to an invoice (or a supplier's to a bill), through adjustAdvances */
         CreditApplication: {

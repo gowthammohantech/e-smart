@@ -802,13 +802,12 @@ ${url}`;
       </Card>
     </>
   );
-  // An issued invoice may be edited in full while it is the latest of its series and nothing stands on
-  // it (RULES 6.23): the server says so. When it can't for a reason other than a later invoice, the
-  // reason is the hint.
+  // An issued invoice may be edited in full, its date kept, while nothing stands on it (RULES 6.23):
+  // the server says so. When it can't, the reason is the hint.
   const editable = !isFinalized(doc.status) || (record?.editable ?? doc.editable) === true;
   type HintedBlock = 'periodLocked' | 'hasPayments' | 'hasCredit' | 'hasNotes' | 'eInvoiced' | 'ewayBill' | 'returnFiled' | 'laterStock';
   const editBlock = (record?.editBlock ?? doc.editBlock) as string | undefined;
-  const hinted = (b: string | undefined): b is HintedBlock => !!b && !['notLatest', 'notFinal', 'notInvoice'].includes(b);
+  const hinted = (b: string | undefined): b is HintedBlock => !!b && !['notFinal', 'notInvoice'].includes(b);
   const editHint: string | undefined =
     editable || doc.status === 'cancelled'
       ? undefined

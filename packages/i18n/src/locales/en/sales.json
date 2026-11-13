@@ -166,7 +166,8 @@
       "supplierDebitNote": "Record debit note",
       "openingInvoice": "Finalise",
       "openingBill": "Finalise"
-    }
+    },
+    "dateKept": "An issued invoice keeps its date. To date it otherwise, cancel it and issue a new one."
   },
   "reimburse": {
     "title": "{{count}} billable expenses to recover",

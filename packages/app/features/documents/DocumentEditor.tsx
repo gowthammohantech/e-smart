@@ -937,7 +937,16 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
         </Card>
       </Pressable>
     );
-    const dateField = (
+    // An issued invoice keeps its date when edited (the server holds it too): shown, not changed.
+    const dateField = editingIssued ? (
+      <TextField
+        label={tr('common:documentEditor.dateLabel', { kind: kindName })}
+        value={formatDate(draft.date)}
+        editable={false}
+        icon="calendar-outline"
+        hint={tr('sales:editor.dateKept')}
+      />
+    ) : (
       <DateField
         label={tr('common:documentEditor.dateLabel', { kind: kindName })}
         value={draft.date}

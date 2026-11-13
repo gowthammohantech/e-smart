@@ -588,13 +588,12 @@ export async function syncPaymentState(tx: DbOrTx, actor: AuthUser, companyId: s
 // ------------------------------------------------------------ editing the latest invoice
 
 /** Why a finalised invoice can't be edited in full (RULES 6.23); the app shows it as a hint. */
-export type EditBlock = 'notInvoice' | 'notFinal' | 'periodLocked' | 'notLatest' | 'hasPayments' | 'hasCredit' | 'hasNotes' | 'eInvoiced' | 'ewayBill' | 'returnFiled' | 'laterStock';
+export type EditBlock = 'notInvoice' | 'notFinal' | 'periodLocked' | 'hasPayments' | 'hasCredit' | 'hasNotes' | 'eInvoiced' | 'ewayBill' | 'returnFiled' | 'laterStock';
 
 export const EDIT_BLOCK_MESSAGES: Record<EditBlock, string> = {
   notInvoice: 'Only an invoice can be edited after it is issued',
   notFinal: 'Only an issued invoice can be edited this way',
   periodLocked: 'The books are closed for its date',
-  notLatest: 'A later invoice has been issued in its series',
   hasPayments: 'A payment is allocated to it',
   hasCredit: 'A credit note is adjusted against it',
   hasNotes: 'A return, credit note or debit note stands against it',
@@ -630,7 +629,7 @@ export async function previousInSeries(tx: DbOrTx, row: DocRow): Promise<DocRow 
 
 /**
  * Whether a finalised invoice may still be edited in full (RULES 6.23, pending CA), and if not, why:
- * it is the latest issued in its numbering series, nothing has settled or adjusted it, it is not
+ * nothing has settled or adjusted it (its date stays as issued, so later invoices don't hold it), it is not
  * e-invoiced or e-way billed, its GSTR-1 month is open and its books period too. With FIFO costing,
  * a later movement of any of its items holds it too: re-costing this sale would re-cost those.
  */
@@ -638,20 +637,6 @@ export async function canEditLatest(tx: DbOrTx, company: Pick<CompanyRow, 'id' |
   if (row.kind !== 'invoice') return 'notInvoice';
   if (!isFinalized(row.status) || row.status === 'cancelled' || !row.finalizedAt) return 'notFinal';
   if (company.lockedThroughDate && row.date <= company.lockedThroughDate) return 'periodLocked';
-  const [later] = await tx
-    .select({ id: D.id })
-    .from(D)
-    .where(
-      and(
-        eq(D.companyId, row.companyId),
-        eq(D.kind, row.kind),
-        ne(D.id, row.id),
-        sql`${D.number} not like '%-DRAFT'`,
-        or(gt(D.finalizedAt, row.finalizedAt), and(eq(D.finalizedAt, row.finalizedAt), gt(D.id, row.id))),
-      ),
-    )
-    .limit(1);
-  if (later) return 'notLatest';
   const A = schema.paymentAllocations;
   const [paid] = await tx.select({ id: A.paymentId }).from(A).where(eq(A.documentId, row.id)).limit(1);
   if (paid) return 'hasPayments';

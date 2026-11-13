@@ -63,16 +63,16 @@ describe('editing the latest invoice (RULES 6.23)', () => {
     expect(audit.after).toMatchObject({ number: inv.number, total: inr(424800), taxable: inr(360000), lines: ['Steel rod × 3 NOS @ 1200.00, 18%'], notes: 'Corrected quantity' });
   });
 
-  it('refuses once a later invoice is issued in the series', async () => {
+  it('edits an earlier invoice too, once a later one is issued, keeping its number and date', async () => {
     const m = await moneySetup(t);
     const first = await issueInvoice(t, m);
     const second = await issueInvoice(t, m);
-    expect(await read(m, first.id)).toMatchObject({ editable: false, editBlock: 'notLatest' });
+    expect(await read(m, first.id)).toMatchObject({ editable: true });
     expect(await read(m, second.id)).toMatchObject({ editable: true });
     const res = await edit(m, first.id, { lines: [line(m.gst(18), { quantity: 5 })] });
-    expect(res.status).toBe(409);
-    expect(res.body.code).toBe('DOCUMENT_FINALIZED');
-    expect(res.body.detail).toContain('later invoice');
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ number: first.number, date: '2026-09-29' });
+    expect(res.body.totals.grandTotal.minor).toBe(590000);
     // Notes alone still change on any finalised invoice.
     expect((await edit(m, first.id, { notes: 'Thanks' })).status).toBe(200);
   });
@@ -142,32 +142,15 @@ describe('editing the latest invoice (RULES 6.23)', () => {
     expect(res.body.detail).toContain('GSTR-1');
   });
 
-  it('keeps the date after the invoice before it, inside the numbering period, and out of filed months', async () => {
+  it('keeps the date it was issued on: an edit that moves it is refused', async () => {
     const m = await moneySetup(t);
-    const first = await issueInvoice(t, m, { date: '2026-09-20' });
-    const latest = await issueInvoice(t, m, { date: '2026-09-25' });
-    expect(first.number < latest.number).toBe(true);
-    const early = await edit(m, latest.id, { date: '2026-09-19' });
-    expect(early.status).toBe(422);
-    expect(early.body.code).toBe('DATE_BEFORE_PREVIOUS');
-    const later = await edit(m, latest.id, { date: '2026-09-22' });
-    expect(later.status).toBe(200);
-    expect(later.body).toMatchObject({ date: '2026-09-22', number: latest.number });
-
-    await t.deps.db.insert(schema.gstReturns).values({ id: 'gret_test_2', companyId: m.companyId, gstin: '27AAPFU0939F1ZV', returnType: 'gstr1', period: '102026', status: 'filed' });
-    t.setNow('2026-10-05T10:00:00Z');
-    const intoFiled = await edit(m, latest.id, { date: '2026-10-02' });
-    expect(intoFiled.status).toBe(409);
-    expect(intoFiled.body.code).toBe('RETURN_FILED');
-  });
-
-  it('keeps the date in the financial year its number belongs to', async () => {
-    const m = await moneySetup(t);
-    t.setNow('2026-04-02T10:00:00Z');
-    const inv = await issueInvoice(t, m, { date: '2026-04-02' });
-    const res = await edit(m, inv.id, { date: '2026-03-30' });
-    expect(res.status).toBe(422);
-    expect(res.body.code).toBe('DATE_OUTSIDE_SERIES');
+    const inv = await issueInvoice(t, m, { date: '2026-09-25' });
+    for (const date of ['2026-09-24', '2026-09-26']) {
+      const res = await edit(m, inv.id, { date });
+      expect(res.status).toBe(422);
+      expect(res.body.code).toBe('DATE_LOCKED');
+    }
+    expect((await edit(m, inv.id, { date: '2026-09-25', lines: [line(m.gst(18), { quantity: 4 })] })).status).toBe(200);
   });
 
   it('with FIFO costing, refuses once its items have moved since; average costing allows it', async () => {

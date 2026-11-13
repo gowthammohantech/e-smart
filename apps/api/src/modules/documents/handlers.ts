@@ -48,16 +48,13 @@ import {
   assertNoLiveReturns,
   assertPeriodOpen,
   finalizeInTx,
-  gstr1Closed,
   isCredit,
   postStock,
-  previousInSeries,
   reverseStock,
   syncPaymentState,
   today,
   withdrawStock,
 } from './lifecycle';
-import { sameNumberingPeriod } from '../../lib/numbering';
 import { SHARE_LINK_DAYS, createShareLinkFor, paymentLinkFor, pdfFilename, renderDocumentPdf, storePdfLinkFor } from './outbound';
 import { companyLogoFile } from '../companies/logo';
 import { renderDocumentEmailHtml } from '../../lib/emailLayout';
@@ -189,10 +186,10 @@ async function toWire(ctx: AnyCtx, row: DocRow): Promise<DocumentWire> {
 }
 
 /**
- * A full edit of an issued invoice that is still the latest of its series (RULES 6.23, pending CA):
- * recomputed as a draft save is, same number, its stock taken back and posted again, its expected
- * TDS and TCS worked out afresh. The date may not move before the invoice issued just before it,
- * out of its numbering period, or into a closed or filed period. The ledger reposts from it.
+ * A full edit of an issued invoice nothing depends on (RULES 6.23, pending CA): recomputed as a draft
+ * save is, same number and date, its stock taken back and posted again, its expected TDS and TCS
+ * worked out afresh. Its date stays as issued: cancel it and issue another to change that. The
+ * ledger reposts from it.
  */
 async function editLatestInvoice(ctx: AnyCtx, tx: DbOrTx, current: DocRow, body: Schema<'NewDocumentInput'>, changed: string[]): Promise<DocRow> {
   const block = await canEditLatest(tx, ctx.company, current);
@@ -204,12 +201,7 @@ async function editLatestInvoice(ctx: AnyCtx, tx: DbOrTx, current: DocRow, body:
   if (f.branchId !== current.branchId) throw invalid('branchId', `${current.number} keeps its branch: its number was drawn there`);
   const dateIssue = (message: string, code: string) => unprocessable([{ field: 'date', message, severity: 'blocking' }], code);
   if (f.date !== current.date) {
-    assertPeriodOpen(ctx.company, f.date);
-    if (f.date > addDaysISO(today(ctx.now), 1)) throw dateIssue(`An invoice cannot be dated ${f.date}, in the future`, 'DOCUMENT_DATED_IN_FUTURE');
-    const prev = await previousInSeries(tx, current);
-    if (prev && f.date < prev.date) throw dateIssue(`${current.number} cannot be dated before ${prev.number} (${prev.date}), issued before it`, 'DATE_BEFORE_PREVIOUS');
-    if (!(await sameNumberingPeriod(tx, ctx.company.id, 'invoice', current.date, f.date))) throw dateIssue(`${current.number} cannot move out of the numbering period it was issued in`, 'DATE_OUTSIDE_SERIES');
-    if (await gstr1Closed(tx, ctx.company.id, f.date)) throw conflict('RETURN_FILED', `GSTR-1 for ${f.date.slice(0, 7)} is filed; the invoice cannot move into it`);
+    throw dateIssue(`${current.number} keeps its date (${current.date}): cancel it and issue a new invoice to date it otherwise`, 'DATE_LOCKED');
   }
   const prepared = await prepareDocument(tx, ctx.company, f, linesFromWire(body.lines), { snapshotRates: true, documentId: current.id });
   // The party as registered now: the edit issues the invoice again.
