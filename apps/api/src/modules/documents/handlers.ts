@@ -398,6 +398,7 @@ function frozenChanges(row: DocRow, body: Schema<'NewDocumentInput'>, stored: Li
   cmp('documentDiscountMode', body.documentDiscountMode, row.documentDiscountMode);
   cmp('documentDiscountValue', body.documentDiscountValue, Number(row.documentDiscountValue));
   cmp('charges', body.charges?.minor, row.chargesMinor);
+  cmp('chargesKind', body.chargesKind, row.chargesKind ?? undefined);
   cmp('applyRoundOff', body.applyRoundOff, row.applyRoundOff);
   cmp('roundOffManual', body.roundOffManual?.minor, row.roundOffManualMinor);
   cmp('placeOfSupplyStateCode', body.placeOfSupplyStateCode, row.placeOfSupplyStateCode);

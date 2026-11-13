@@ -144,6 +144,7 @@ export async function documentsToWire(db: DbOrTx, rows: DocRow[], now: Date, bas
       documentDiscountMode: row.documentDiscountMode,
       documentDiscountValue: Number(row.documentDiscountValue),
       charges: m(row.chargesMinor),
+      chargesKind: (row.chargesKind ?? undefined) as DocumentWire['chargesKind'],
       applyRoundOff: row.applyRoundOff,
       roundOffManual: row.roundOffManualMinor !== null ? m(row.roundOffManualMinor) : undefined,
       placeOfSupplyStateCode: row.placeOfSupplyStateCode,

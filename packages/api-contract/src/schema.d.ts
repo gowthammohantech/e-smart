@@ -5965,6 +5965,11 @@ export interface components {
             documentDiscountMode?: "percent" | "amount";
             documentDiscountValue?: number;
             charges?: components["schemas"]["Money"];
+            /**
+             * @description What the charges are for; printed as their name on the document. Unset is other charges.
+             * @enum {string}
+             */
+            chargesKind?: "freight" | "packing" | "insurance" | "handling" | "loading" | "other";
             applyRoundOff?: boolean;
             /** @description A round-off the user typed; overrides the automatic one when applyRoundOff is true */
             roundOffManual?: components["schemas"]["Money"];

@@ -167,7 +167,16 @@
       "openingInvoice": "Finalise",
       "openingBill": "Finalise"
     },
-    "dateKept": "An issued invoice keeps its date. To date it otherwise, cancel it and issue a new one."
+    "dateKept": "An issued invoice keeps its date. To date it otherwise, cancel it and issue a new one.",
+    "chargesFor": "Charges for",
+    "chargesKind": {
+      "freight": "Freight charges",
+      "packing": "Packing and forwarding",
+      "insurance": "Insurance",
+      "handling": "Handling charges",
+      "loading": "Loading and unloading",
+      "other": "Other charges"
+    }
   },
   "reimburse": {
     "title": "{{count}} billable expenses to recover",

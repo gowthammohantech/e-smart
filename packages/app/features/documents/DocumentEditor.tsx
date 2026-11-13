@@ -21,7 +21,7 @@ import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { Avatar } from '@esmart/ui/components/Avatar';
 
-import { DocStatus, DocumentKind, DocumentLine, NoteReason, Party } from '@esmart/core/types';
+import { CHARGES_KINDS, ChargesKind, DocStatus, DocumentKind, DocumentLine, NoteReason, Party } from '@esmart/core/types';
 import { NOTE_KINDS, PURCHASE_KINDS, isAwaitingApproval, isFinalized } from '@esmart/core/domain/documentStates';
 import { TDS_SECTIONS, tdsSection } from '@esmart/core/data/tdsSections';
 import { TCS_SECTIONS, partyTcsSection, tcsAskedOn, tcsRateFor, tcsSection } from '@esmart/core/data/tcsSections';
@@ -442,6 +442,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   // The warning came from saving an issued invoice's edit (RULES 6.23), not from finalising: accepting it saves again.
   const [creditOnEdit, setCreditOnEdit] = useState(false);
   const [chargesText, setChargesText] = useState(String(toMajor(draft.charges) || ''));
+  const [chargesKindOpen, setChargesKindOpen] = useState(false);
+  const chargesLabel = tr(`sales:editor.chargesKind.${draft.chargesKind ?? 'other'}` as 'sales:editor.chargesKind.other');
   const [discountText, setDiscountText] = useState(String(draft.documentDiscountValue || ''));
   const [roundOffText, setRoundOffText] = useState(
     draft.roundOffManual ? String(toMajor(draft.roundOffManual)) : '',
@@ -719,6 +721,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       documentDiscountMode: draft.documentDiscountMode,
       documentDiscountValue: draft.documentDiscountValue,
       charges: draft.charges,
+      // Named only when something is charged.
+      chargesKind: draft.charges.minor ? (draft.chargesKind ?? 'other') : undefined,
       applyRoundOff: draft.applyRoundOff,
       roundOffManual: draft.applyRoundOff ? draft.roundOffManual : undefined,
       notes: draft.notes || undefined,
@@ -1319,6 +1323,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
         <Card>
           <TotalsPanel
             totals={totals}
+            chargesLabel={chargesLabel}
             currency={draft.currency}
             baseCurrency={baseCurrency}
             exchangeRate={draft.exchangeRate}
@@ -1486,8 +1491,10 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           </View>
         </View>
 
+        {/* What the charges are for, printed as their name. */}
+        <PickerField label={tr('sales:editor.chargesFor')} value={chargesLabel} onPress={() => setChargesKindOpen(true)} icon="truck-delivery-outline" />
         <AmountField
-          label={tr('sales:editor.otherCharges')}
+          label={chargesLabel}
           value={chargesText}
           onChangeValue={(v) => {
             setChargesText(v);
@@ -1570,6 +1577,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
         <Card>
           <TotalsPanel
             totals={totals}
+            chargesLabel={chargesLabel}
             currency={draft.currency}
             baseCurrency={baseCurrency}
             exchangeRate={draft.exchangeRate}
@@ -1623,6 +1631,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       <Card>
         <TotalsPanel
           totals={totals}
+          chargesLabel={chargesLabel}
           currency={draft.currency}
           baseCurrency={baseCurrency}
           exchangeRate={draft.exchangeRate}
@@ -1985,6 +1994,16 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           options={branches.map((b) => ({ value: b.id, label: b.name, description: b.code }))}
           value={branchId}
           onSelect={(id) => patch({ branchId: id })}
+          searchable={false}
+        />
+
+        <SelectSheet
+          visible={chargesKindOpen}
+          onClose={() => setChargesKindOpen(false)}
+          title={tr('sales:editor.chargesFor')}
+          options={CHARGES_KINDS.map((k) => ({ value: k, label: tr(`sales:editor.chargesKind.${k}` as 'sales:editor.chargesKind.other') }))}
+          value={draft.chargesKind ?? 'other'}
+          onSelect={(k) => patch({ chargesKind: k as ChargesKind })}
           searchable={false}
         />
 

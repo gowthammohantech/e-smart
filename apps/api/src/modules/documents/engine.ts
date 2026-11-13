@@ -13,7 +13,7 @@ import { FULL_PLAN, hasModule, saleTdsOnPlan } from '@esmart/core/domain/plan';
 import { OTHER_COUNTRY_CODE } from '@esmart/core/domain/stateCodes';
 import { buildTaxContext, taxAvailableOn, taxRateOn, type CrossBorderTax } from '@esmart/core/domain/taxEngine';
 import { addDaysISO } from '@esmart/core/lib/date';
-import type { Branch, Company, DocumentKind, DocumentLine, DocumentTotals, GstFlags, Party, TaxCategory } from '@esmart/core/types';
+import type { Branch, ChargesKind, Company, DocumentKind, DocumentLine, DocumentTotals, GstFlags, Party, TaxCategory } from '@esmart/core/types';
 import { schema } from '@esmart/db';
 import type { Schema } from '@esmart/api-contract';
 import type { CompanyRow } from '../../context';
@@ -158,6 +158,8 @@ export type DocFields = {
   documentDiscountMode: 'percent' | 'amount';
   documentDiscountValue: number;
   chargesMinor: number;
+  /** What the charges are for; null is other charges. */
+  chargesKind: ChargesKind | null;
   chargesCurrency?: string;
   applyRoundOff: boolean | null;
   /** A round-off the user typed, in minor units of the document currency. */
@@ -253,6 +255,7 @@ export function fieldsFromWire(body: Schema<'NewDocumentInput'>, base?: DocRow):
     documentDiscountMode: body.documentDiscountMode ?? base?.documentDiscountMode ?? 'percent',
     documentDiscountValue: body.documentDiscountValue ?? (base ? Number(base.documentDiscountValue) : 0),
     chargesMinor: body.charges?.minor ?? base?.chargesMinor ?? 0,
+    chargesKind: keep(body.chargesKind, base?.chargesKind as ChargesKind | null | undefined),
     chargesCurrency: body.charges?.currency,
     applyRoundOff: body.applyRoundOff ?? base?.applyRoundOff ?? null,
     roundOffManualMinor: body.roundOffManual !== undefined ? body.roundOffManual.minor : (base?.roundOffManualMinor ?? null),
@@ -296,6 +299,7 @@ export function fieldsFromRow(row: DocRow): DocFields {
     documentDiscountMode: row.documentDiscountMode,
     documentDiscountValue: Number(row.documentDiscountValue),
     chargesMinor: row.chargesMinor,
+    chargesKind: row.chargesKind as ChargesKind | null,
     applyRoundOff: row.applyRoundOff,
     roundOffManualMinor: row.roundOffManualMinor,
     placeOfSupplyStateCode: row.placeOfSupplyStateCode,
@@ -635,6 +639,8 @@ export async function prepareDocument(
       documentDiscountMode: f.documentDiscountMode,
       documentDiscountValue: String(f.documentDiscountValue),
       chargesMinor: f.chargesMinor,
+      // Named only when there is something charged.
+      chargesKind: f.chargesMinor ? f.chargesKind : null,
       applyRoundOff,
       roundOffManualMinor: f.roundOffManualMinor,
       placeOfSupplyStateCode: placeOfSupply,

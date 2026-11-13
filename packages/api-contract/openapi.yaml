@@ -7917,6 +7917,7 @@ components:
         documentDiscountMode: { type: string, enum: [percent, amount] }
         documentDiscountValue: { type: number }
         charges: { $ref: '#/components/schemas/Money' }
+        chargesKind: { type: string, enum: [freight, packing, insurance, handling, loading, other], description: 'What the charges are for; printed as their name on the document. Unset is other charges.' }
         applyRoundOff: { type: boolean }
         roundOffManual: { allOf: [{ $ref: '#/components/schemas/Money' }], description: A round-off the user typed; overrides the automatic one when applyRoundOff is true }
         notes: { type: string }

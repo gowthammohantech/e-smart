@@ -634,6 +634,8 @@ export const documents = pgTable("documents", {
 	documentDiscountMode: discountMode("document_discount_mode").default('amount').notNull(),
 	documentDiscountValue: numeric("document_discount_value", { precision: 18, scale:  4 }).default('0').notNull(),
 	chargesMinor: bigint("charges_minor", { mode: "number" }).default(0).notNull(),
+	// What the charges are for: freight, packing, insurance, handling, loading or other. Null reads as other.
+	chargesKind: varchar("charges_kind", { length: 12 }),
 	applyRoundOff: boolean("apply_round_off").default(true).notNull(),
 	// A round-off the user typed, overriding the automatic one.
 	roundOffManualMinor: bigint("round_off_manual_minor", { mode: "number" }),

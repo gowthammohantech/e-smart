@@ -379,6 +379,19 @@ export type DocStatus =
 
 export type DiscountMode = 'percent' | 'amount';
 
+/** What a document's charges are for. */
+export type ChargesKind = 'freight' | 'packing' | 'insurance' | 'handling' | 'loading' | 'other';
+export const CHARGES_KINDS: ChargesKind[] = ['freight', 'packing', 'insurance', 'handling', 'loading', 'other'];
+/** As printed on the document (English, as the PDF's statutory lines are). */
+export const CHARGES_KIND_PRINT: Record<ChargesKind, string> = {
+  freight: 'Freight charges',
+  packing: 'Packing and forwarding',
+  insurance: 'Insurance',
+  handling: 'Handling charges',
+  loading: 'Loading and unloading',
+  other: 'Other charges',
+};
+
 export type DocumentLine = {
   id: string;
   itemId?: string;
@@ -457,6 +470,8 @@ export type BusinessDocument = {
   documentDiscountMode: DiscountMode;
   documentDiscountValue: number;
   charges: Money;
+  /** What the charges are for (freight, packing…); unset reads as other charges. */
+  chargesKind?: ChargesKind;
   applyRoundOff: boolean;
   /**
    * A round-off typed by the user (may be negative). Absent means the

@@ -78,6 +78,15 @@ describe.each(INVOICE_LAYOUTS)('the %s layout prints what the law asks for', (la
     expect(text(render(layout, { document: doc({ crossBorderTax: 'withoutTax', placeOfSupplyStateCode: '96' }) }))).toContain('Supply meant for export under bond or letter of undertaking without payment of integrated tax');
   });
 
+  it('names the charges by what they are for', () => {
+    const charged = (over: object) => doc({ date: '2026-11-20', charges: money(5000, 'INR'), ...over } as never);
+    const freight = charged({ chargesKind: 'freight' });
+    expect(freight.totals.charges.minor).toBeGreaterThan(0);
+    expect(text(render(layout, { document: freight }))).toContain('Freight charges');
+    expect(text(render(layout, { document: charged({ chargesKind: 'packing' }) }))).toContain('Packing and forwarding');
+    expect(text(render(layout, { document: charged({}) }))).toContain('Other charges');
+  });
+
   it('with the proforma disclaimer', () => {
     expect(text(render(layout, { document: doc({ kind: 'proforma' }) }))).toContain('Not a tax invoice');
   });
