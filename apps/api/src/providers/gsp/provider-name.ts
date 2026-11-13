@@ -12,6 +12,9 @@
 export const GSP_GATEWAYS = ['adaequare', 'whitebooks'] as const;
 export type GspGatewayName = (typeof GSP_GATEWAYS)[number];
 
+/** The GSP account code for each gateway, as `TAXATION_GSP_PROVIDER_CODE` spells it. */
+export const GSP_GATEWAY_CODES: Readonly<Record<GspGatewayName, string>> = { adaequare: 'ADAEQUARE_GSP', whitebooks: 'WHITE_BOOKS_GSP' };
+
 /** Adaequare, and deliberately so: the one gateway with a production entitlement. */
 export const DEFAULT_GSP_GATEWAY: GspGatewayName = 'adaequare';
 

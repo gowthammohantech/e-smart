@@ -7,6 +7,8 @@ import { checkIfMatch, setEtag } from '../../http/etag';
 import { preconditionFailed, unprocessable } from '../../http/errors';
 import { recordChange } from '../../lib/audit';
 import { encrypt } from '../../lib/crypto';
+import { GSP_GATEWAY_CODES } from '../../providers/gsp/provider-name';
+import { parseGspGateway } from '../../providers/gsp/router';
 import { loadSettings, portalCredentials, resolveTransporter, settingsToWire, transporterById, type Portal } from './shared';
 
 const S = schema.complianceSettings;
@@ -107,7 +109,9 @@ export const settingsHandlers = defineHandlers({
   async saveComplianceCredentials(ctx) {
     const b = ctx.body;
     const key = ctx.deps.config.CREDENTIALS_KEY;
-    const gspProvider = ctx.deps.config.TAXATION_GSP_PROVIDER_CODE.slice(0, 40);
+    // The gateway the company files through: its own choice when a platform operator made one, else the deployment's.
+    const chosen = parseGspGateway(ctx.company.gspProvider);
+    const gspProvider = (chosen ? GSP_GATEWAY_CODES[chosen] : ctx.deps.config.TAXATION_GSP_PROVIDER_CODE).slice(0, 40);
     const portals: Portal[] = b.portal === 'einvoice' ? ['einvoice'] : b.portal === 'ewaybill' ? ['ewaybill'] : ['einvoice', 'ewaybill'];
     const username = b.username.trim().slice(0, 100);
     await ctx.db.transaction(async (tx) => {
