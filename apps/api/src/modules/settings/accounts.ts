@@ -6,11 +6,13 @@ import { schema } from '@esmart/db';
 import { defineHandlers, type AuthUser, type CompanyRow } from '../../context';
 import { rateToBase } from '../documents/engine';
 import { checkIfMatch, setEtag } from '../../http/etag';
-import { conflict, notFound, preconditionFailed, unprocessable, type Issue } from '../../http/errors';
+import { conflict, forbidden, notFound, preconditionFailed, unprocessable, type Issue } from '../../http/errors';
+import { notify } from '../../lib/notify';
+import { businessDate } from '@esmart/core/lib/date';
 import type { DbOrTx } from '../../lib/audit';
 import { newId } from '../../lib/ids';
 import { audit, firstUse } from './shared';
-import { ledgerKeyUse } from '../books/usage';
+import { assertOpeningOpen, ledgerKeyUse } from '../books/usage';
 import { paymentAccountToWire } from './wire';
 import { invoiceBankColumns } from '../companies/wire';
 
@@ -158,14 +160,16 @@ export const accountHandlers = defineHandlers({
   },
 
   async createPaymentAccount(ctx) {
-    await validate(ctx.db, ctx.body, ctx.now.toISOString().slice(0, 10));
+    await validate(ctx.db, ctx.body, businessDate(ctx.now));
+    // An opening balance sits at the start of the books (or the day before its date): not inside closed ones.
+    if (ctx.body.openingBalance.minor) assertOpeningOpen(ctx.company, ctx.body.openingBalanceDate);
     const row = await ctx.db.transaction(async (tx) => {
       // The company's first account is its default whatever the body says.
       const [existingDefault] = await tx.select({ id: A.id }).from(A).where(and(eq(A.companyId, ctx.company.id), eq(A.isDefault, true)));
       const isDefault = !!ctx.body.isDefault || !existingDefault;
       const id = newId('pac');
       if (isDefault) await clearOtherDefaults(tx, ctx.user, ctx.company.id, id, ctx.now);
-      const [created] = await tx.insert(A).values({ id, companyId: ctx.company.id, ...columns(ctx.body), openingRate: await openingRateFor(tx, ctx.company, ctx.body, ctx.now.toISOString().slice(0, 10)), isDefault }).returning();
+      const [created] = await tx.insert(A).values({ id, companyId: ctx.company.id, ...columns(ctx.body), openingRate: await openingRateFor(tx, ctx.company, ctx.body, businessDate(ctx.now)), isDefault }).returning();
       await audit(tx, ctx.user, ctx.company.id, 'payment_account', 'created', created, created.name, { after: paymentAccountToWire(created, created.openingBalanceMinor) });
       return created;
     });
@@ -176,7 +180,20 @@ export const accountHandlers = defineHandlers({
   async savePaymentAccount(ctx) {
     const current = await findAccount(ctx.db, ctx.company.id, ctx.params.id);
     checkIfMatch(ctx.req, current.version);
-    await validate(ctx.db, ctx.body, ctx.now.toISOString().slice(0, 10));
+    await validate(ctx.db, ctx.body, businessDate(ctx.now));
+    // The opening balance is the books' starting point: inside closed books, neither the old one nor the new one moves.
+    const openingChanged = ctx.body.openingBalance.minor !== current.openingBalanceMinor || (ctx.body.openingBalanceDate ?? null) !== (current.openingBalanceDate ?? null) || ctx.body.currency !== current.currency.trim();
+    if (openingChanged) {
+      if (current.openingBalanceMinor) assertOpeningOpen(ctx.company, current.openingBalanceDate);
+      if (ctx.body.openingBalance.minor) assertOpeningOpen(ctx.company, ctx.body.openingBalanceDate);
+    }
+    // The account printed on invoices is where customers send money: changing where it points is the
+    // owner's call, and the owners hear of it.
+    const printed = ctx.company.bankPaymentAccountId === current.id;
+    const bankChanged = printed && JSON.stringify(invoiceBankColumns(current)) !== JSON.stringify(invoiceBankColumns({ ...current, ...columns(ctx.body) }));
+    if (bankChanged && !['owner', 'admin'].includes(ctx.user.role)) {
+      throw forbidden('BANK_DETAILS_ROLE', 'Your invoices print this account’s bank details; only an owner or admin can change them');
+    }
     // Accounts with money through them keep their currency and type: past
     // balances are in that currency, and past payments used methods the type allows.
     const currencyChanged = ctx.body.currency !== current.currency.trim();
@@ -202,7 +219,8 @@ export const accountHandlers = defineHandlers({
       if (isDefault && !current.isDefault) await clearOtherDefaults(tx, ctx.user, ctx.company.id, current.id, ctx.now);
       const [updated] = await tx
         .update(A)
-        .set({ ...columns(ctx.body), openingRate: await openingRateFor(tx, ctx.company, ctx.body, ctx.now.toISOString().slice(0, 10)), isDefault, version: current.version + 1, updatedAt: ctx.now })
+        // The opening's rate is taken once: re-reading it on a rename would move the opening balance.
+        .set({ ...columns(ctx.body), openingRate: openingChanged ? await openingRateFor(tx, ctx.company, ctx.body, businessDate(ctx.now)) : current.openingRate, isDefault, version: current.version + 1, updatedAt: ctx.now })
         .where(and(eq(A.id, current.id), eq(A.version, current.version)))
         .returning();
       if (!updated) throw preconditionFailed();
@@ -211,6 +229,16 @@ export const accountHandlers = defineHandlers({
         after: paymentAccountToWire(updated, updated.openingBalanceMinor),
       });
       await syncInvoiceBank(tx, ctx.company.id, updated, ctx.now);
+      if (bankChanged) {
+        await notify(tx, ctx.deps, {
+          companyId: ctx.company.id,
+          kind: 'system',
+          title: 'The bank details on your invoices changed',
+          body: `${ctx.user.name} changed ${updated.name}: invoices now ask customers to pay ${updated.bankName ?? ''} ${updated.accountNumber ? `account ending ${updated.accountNumber.slice(-4)}` : ''}${updated.upiId ? ` / UPI ${updated.upiId}` : ''}.`.replace(/\s+/g, ' '),
+          entityType: 'payment_account',
+          entityId: updated.id,
+        });
+      }
       return updated;
     });
     setEtag(ctx.reply, row.version);

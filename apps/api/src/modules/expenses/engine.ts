@@ -3,13 +3,14 @@ import { and, eq, inArray, isNull, lte, ne } from 'drizzle-orm';
 import { inclusiveTax, money, percent, zero, type Money } from '@esmart/core/lib/money';
 import { schema } from '@esmart/db';
 import { nextRecurrence } from '@esmart/core/domain/recurrence';
-import type { AuthUser, Deps } from '../../context';
+import type { AuthUser, CompanyRow, Deps } from '../../context';
 import { unprocessable } from '../../http/errors';
 import { recordChange, type DbOrTx } from '../../lib/audit';
 import { newId } from '../../lib/ids';
 import { notify, noteDate } from '../../lib/notify';
 import { assignNumber } from '../../lib/numbering';
 import { accountBalanceMinor } from '../payments/engine';
+import { assertWithinPaymentLimit } from '../payments/requests';
 import { expenseToWire, type ExpenseRow } from './wire';
 
 const E = schema.expenses;
@@ -61,6 +62,22 @@ export async function shortfall(
   if (!account) return none;
   const balanceMinor = await accountBalanceMinor(tx, account, undefined, undefined, current?.id);
   return { shortMinor: Math.max(amountBase - balanceMinor, 0), name: account.name, balanceMinor, amountBase };
+}
+
+/**
+ * An expense is money paid out, so it answers to the payment approval rule (RULES 6.14): someone who
+ * isn't an owner or admin can't record one over it, nor raise one past it (an edit that takes no
+ * more from the same account than before is never refused).
+ */
+export function assertExpenseWithinLimit(
+  company: CompanyRow,
+  user: AuthUser,
+  e: { accountId: string; amountMinor: number; exchangeRate: string | number },
+  current?: { accountId: string; amountMinor: number; exchangeRate: string | number },
+): void {
+  const after = Math.round(e.amountMinor * Number(e.exchangeRate));
+  const before = current && current.accountId === e.accountId ? Math.round(current.amountMinor * Number(current.exchangeRate)) : 0;
+  if (after > before) assertWithinPaymentLimit(company, user, after, 'expense');
 }
 
 /** 422 INSUFFICIENT_BALANCE when the account can't cover the expense (see `shortfall`). */

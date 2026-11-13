@@ -7,7 +7,7 @@ import { schema } from '@esmart/db';
 import type { Schema } from '@esmart/api-contract';
 import { RawBody, defineHandlers, type AuthUser, type Ctx } from '../../context';
 import { checkIfMatch, setEtag } from '../../http/etag';
-import { conflict, invalid, notFound, preconditionFailed, unprocessable, upstream } from '../../http/errors';
+import { conflict, forbidden, invalid, notFound, preconditionFailed, unprocessable, upstream } from '../../http/errors';
 import { keyset } from '../../http/pagination';
 import { track } from '../../analytics/track';
 import { recordChange, type DbOrTx } from '../../lib/audit';
@@ -335,6 +335,10 @@ function statusBefore(row: DocRow, target: DocStatus, now: Date): DocStatus {
   return effectiveStatus({ ...row, amountPaidMinor: Math.max(row.amountPaidMinor - ownTds, 0) }, today(now));
 }
 
+/** Documents that post to the books once issued, and the roles that may cancel one. */
+const BOOKED_KINDS: string[] = ['invoice', 'purchaseBill', 'salesReturn', 'purchaseReturn', 'creditNote', 'debitNote', 'supplierCreditNote', 'supplierDebitNote', 'openingInvoice', 'openingBill', 'delivery', 'goodsReceipt'];
+const CANCEL_ROLES = ['owner', 'admin', 'accountant'];
+
 /**
  * Moves a document between statuses (not out of draft; see finalizeDraft)
  * under a row lock, re-checking the transition against the locked row.
@@ -351,6 +355,11 @@ async function changeStatus(ctx: AnyCtx, id: string, target: DocStatus, reason?:
     if (target === 'cancelled') await assertNoLiveReturns(tx, locked);
     if (!(target === 'cancelled' ? canCancel(locked.kind, from) : canTransition(locked.kind, from, target))) throw conflict('INVALID_TRANSITION', `A ${locked.kind} cannot go from ${from} to ${target}`);
     if (target === 'cancelled') {
+      // Cancelling an issued invoice, bill, note or return takes revenue, a receivable or stock out of
+      // the books: that is for the books' keepers, not everyone who may raise one.
+      if (BOOKED_KINDS.includes(locked.kind) && isFinalized(from) && !CANCEL_ROLES.includes(ctx.user.companyRoles?.[ctx.company.id] ?? ctx.user.role)) {
+        throw forbidden('CANCEL_ROLE', `Only an owner, admin or accountant can cancel an issued ${locked.kind}`);
+      }
       assertPeriodOpen(ctx.company, locked.date);
       // Money allocated to it, not what it reads as paid: a bill's own TDS counts as paid from the start.
       const [allocation] = await tx.select({ id: schema.paymentAllocations.id }).from(schema.paymentAllocations).where(eq(schema.paymentAllocations.documentId, locked.id)).limit(1);

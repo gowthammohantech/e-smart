@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import type { Schema } from "@esmart/api-contract";
 import { schema } from "@esmart/db";
 import {
@@ -26,31 +26,27 @@ type RequestRow = typeof R.$inferSelect;
 type PaymentBody = Schema<"Payment">;
 
 /**
- * Payment approvals (RULES 6.14). A payment made to a supplier over the company's `payment` rule, by
- * someone who isn't an owner or admin, isn't recorded: it is kept as a request and the owners and
- * admins are told. Approving it records the payment then, as the approver; rejecting it says why.
- * Money received never waits, and nor does a refund.
+ * Payment approvals (RULES 6.14). Money paid out over the company's `payment` rule, by someone who
+ * isn't an owner or admin, isn't recorded: it is kept as a request and the owners and admins are
+ * told. Approving it records the payment then, as the approver; rejecting it says why. Money
+ * received never waits. A refund is money paid out, so it waits like any other payment.
  */
-export function paymentLimit(
-  company: CompanyRow,
-  user: AuthUser,
-  body: Pick<PaymentBody, "direction" | "refundOf" | "currency" | "exchangeRate">,
-): number | null {
-  if (
-    APPROVERS.includes(user.role) ||
-    body.direction !== "paid" ||
-    body.refundOf
-  )
-    return null;
+export function ruleLimit(company: CompanyRow, user: AuthUser): number | null {
+  if (APPROVERS.includes(user.role)) return null;
   const rule = (
     (company.approvalRules as
       (ApprovalRule | { kind: "payment"; overMinor: number })[] | null) ?? []
   ).find((r) => r.kind === "payment");
-  if (!rule) return null;
-  // A foreign-currency payment sent without its rate can't be measured against a limit in base
-  // currency (its minor units would be read as rupees), so it always waits for an approver.
-  if (body.currency !== company.baseCurrency.trim() && !body.exchangeRate) return 0;
-  return rule.overMinor;
+  return rule ? rule.overMinor : null;
+}
+
+export function paymentLimit(
+  company: CompanyRow,
+  user: AuthUser,
+  body: Pick<PaymentBody, "direction" | "currency" | "exchangeRate">,
+): number | null {
+  if (body.direction !== "paid") return null;
+  return ruleLimit(company, user);
 }
 
 /** In base currency: the amount at the rate given, or as it is when no rate is given. */
@@ -58,12 +54,41 @@ export const amountInBase = (
   body: Pick<PaymentBody, "amount" | "exchangeRate">,
 ) => Math.round(body.amount.minor * (body.exchangeRate ?? 1));
 
-/** What a held request is worth in base currency: at the rate sent, else the day's rate on file. */
-async function requestAmountInBase(tx: DbOrTx, company: CompanyRow, body: PaymentBody): Promise<number> {
+/**
+ * What a payment is worth in base currency, measured for the approval rule: at the company's own
+ * rate for the day when it has one, never at a rate the request names, so a payment can't be made
+ * to look small by the rate sent with it. Without a rate on file, the rate sent; without either it
+ * can't be measured (null), and always waits for an approver.
+ */
+export async function measuredInBase(db: DbOrTx, company: CompanyRow, body: Pick<PaymentBody, "amount" | "currency" | "exchangeRate" | "date">): Promise<number | null> {
   const base = company.baseCurrency.trim();
-  if (body.currency === base || body.exchangeRate) return amountInBase(body);
-  const rate = await rateToBase(tx, company.id, body.currency, base, body.date);
-  return Math.round(body.amount.minor * (rate ?? 1));
+  if (body.currency === base) return body.amount.minor;
+  const table = await rateToBase(db, company.id, body.currency, base, body.date);
+  const rate = table ?? body.exchangeRate ?? null;
+  return rate ? Math.round(body.amount.minor * rate) : null;
+}
+
+/** 409 PAYMENT_NEEDS_APPROVER: money going out another way (an expense, a voucher) over the rule, from someone who isn't an approver. */
+export function assertWithinPaymentLimit(company: CompanyRow, user: AuthUser, amountBaseMinor: number, what: string): void {
+  const limit = ruleLimit(company, user);
+  if (limit === null || amountBaseMinor <= limit) return;
+  throw conflict(
+    "PAYMENT_NEEDS_APPROVER",
+    `Payments over ${(limit / 100).toFixed(2)} need an owner or admin, however they are recorded. Ask one of them to record this ${what}.`,
+  );
+}
+
+/**
+ * What this user has paid this party in the last day, in base currency: payments split into pieces
+ * each under the rule add up against it (RULES 6.14).
+ */
+async function paidRecently(db: DbOrTx, company: CompanyRow, user: AuthUser, partyId: string, now: Date): Promise<number> {
+  const PAY = schema.payments;
+  const [row] = await db
+    .select({ total: sql<string>`coalesce(sum(round(${PAY.amountMinor} * ${PAY.exchangeRate})), 0)` })
+    .from(PAY)
+    .where(and(eq(PAY.companyId, company.id), eq(PAY.createdBy, user.id), eq(PAY.partyId, partyId), eq(PAY.direction, "paid"), gte(PAY.createdAt, new Date(now.getTime() - 24 * 3600_000))));
+  return Number(row?.total ?? 0);
 }
 
 /** Keeps the payment as a request and tells the approvers; the caller answers 409 PAYMENT_HELD. */
@@ -75,6 +100,12 @@ export async function holdPayment(
   body: PaymentBody,
   now: Date,
 ): Promise<RequestRow> {
+  // The same payment sent again (a retry, a double tap) is the request already waiting, not a second one.
+  const [waiting] = await tx
+    .select()
+    .from(R)
+    .where(and(eq(R.companyId, company.id), eq(R.requestedBy, user.id), eq(R.status, "pending"), sql`${R.body} = ${JSON.stringify(body)}::jsonb`));
+  if (waiting) return waiting;
   const [row] = await tx
     .insert(R)
     .values({
@@ -83,7 +114,7 @@ export async function holdPayment(
       body,
       partyId: body.partyId,
       direction: body.direction,
-      amountBaseMinor: await requestAmountInBase(tx, company, body),
+      amountBaseMinor: (await measuredInBase(tx, company, body)) ?? body.amount.minor,
       requestedBy: user.id,
       createdAt: now,
       updatedAt: now,
@@ -110,9 +141,11 @@ export async function holdPayment(
 
 /**
  * The one gate every new payment made passes (RULES 6.14): the payments screen, a bank-statement
- * line recorded as a payment, and Lixi (which calls createPayment). Over the rule, from someone who
- * isn't an approver, the payment is kept as a request (committed on its own) and 409 PAYMENT_HELD
- * is thrown, so nothing is recorded. Call it before the transaction that would write the payment.
+ * line recorded as a payment, a refund, and Lixi (which calls createPayment). Over the rule, from
+ * someone who isn't an approver, the payment is kept as a request (committed on its own) and 409
+ * PAYMENT_HELD is thrown, so nothing is recorded. The amount is measured at the company's rate, and
+ * with what the same person paid the same party in the last day, so splitting doesn't get under it.
+ * Call it before the transaction that would write the payment.
  */
 export async function holdIfOverLimit(
   db: DbOrTx,
@@ -124,7 +157,9 @@ export async function holdIfOverLimit(
   detail = "",
 ): Promise<void> {
   const limit = paymentLimit(company, user, body);
-  if (limit === null || amountInBase(body) <= limit) return;
+  if (limit === null) return;
+  const amount = await measuredInBase(db, company, body);
+  if (amount !== null && amount + (await paidRecently(db, company, user, body.partyId, now)) <= limit) return;
   const held = await db.transaction((tx) => holdPayment(tx, deps, company, user, body, now));
   throw new ApiError(
     409,
@@ -135,20 +170,24 @@ export async function holdIfOverLimit(
 }
 
 /**
- * Editing a payment made can't take it over the rule either: someone who isn't an approver may
- * not raise one past the limit (or above where it already was, when it is already past it).
+ * Editing a payment can't take it over the rule either. Someone who isn't an approver may not raise
+ * one past the limit (or above where it already was, when it is already past it). An edit that makes
+ * it a payment out, or sends it to another party or out of another account, is a new payment as far
+ * as the rule goes: nothing of it was paid out that way before.
  */
-export function assertEditWithinLimit(
+export async function assertEditWithinLimit(
+  db: DbOrTx,
   company: CompanyRow,
   user: AuthUser,
   body: PaymentBody,
-  existing: { amountMinor: number; exchangeRate: string | number },
-): void {
+  existing: { amountMinor: number; exchangeRate: string | number; direction: string; partyId: string; accountId: string },
+): Promise<void> {
   const limit = paymentLimit(company, user, body);
   if (limit === null) return;
-  const after = amountInBase(body);
-  const before = Math.round(existing.amountMinor * Number(existing.exchangeRate ?? 1));
-  if (after > limit && after > before)
+  const after = await measuredInBase(db, company, body);
+  const same = existing.direction === body.direction && existing.partyId === body.partyId && existing.accountId === body.accountId;
+  const before = same ? Math.round(existing.amountMinor * Number(existing.exchangeRate ?? 1)) : 0;
+  if (after === null || (after > limit && after > before))
     throw conflict(
       "PAYMENT_NEEDS_APPROVER",
       `Payments over ${(limit / 100).toFixed(2)} need an owner or admin. Ask one of them to change this payment.`,

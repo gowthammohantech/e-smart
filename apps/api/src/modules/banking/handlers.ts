@@ -18,7 +18,7 @@ import { money } from '../../lib/wire';
 import { voucherColumns, voucherToWire } from '../books/handlers';
 import { assertPeriodOpen } from '../documents/lifecycle';
 import { prepare as prepareExpense } from '../expenses/handlers';
-import { assertAccountCovers } from '../expenses/engine';
+import { assertAccountCovers, assertExpenseWithinLimit } from '../expenses/engine';
 import { expensesToWire } from '../expenses/wire';
 import { assertDirectionAllowed, writePayment } from '../payments/engine';
 import { holdIfOverLimit, requestInput } from '../payments/requests';
@@ -448,10 +448,11 @@ export const bankingHandlers = defineHandlers({
       }) as Schema<'Payment'>;
     // The same approval rule as any payment made (RULES 6.14): over it, from someone who isn't an
     // owner or admin, it is kept as a request and the line stays unmatched until it is approved.
-    if (peek.status !== 'matched') {
-      const peekAccount = await bankAccount(ctx.db, ctx.company, peek.accountId);
-      await holdIfOverLimit(ctx.db, ctx.deps, ctx.company, ctx.user, asPayment(peek, peekAccount), ctx.now, ' Match the line to the payment once it is approved.');
-    }
+    // A matched line is refused here, before the rule, so the rule is never skipped for one that is
+    // unmatched by the time the payment is written.
+    if (peek.status === 'matched') throw conflict('ALREADY_MATCHED', 'This bank line is already matched; unmatch it first');
+    const peekAccount = await bankAccount(ctx.db, ctx.company, peek.accountId);
+    await holdIfOverLimit(ctx.db, ctx.deps, ctx.company, ctx.user, asPayment(peek, peekAccount), ctx.now, ' Match the line to the payment once it is approved.');
     const out = await ctx.db.transaction(async (tx) => {
       const line = await findLine(ctx, tx, ctx.params.id, true);
       checkIfMatch(ctx.req, line.version);
@@ -497,6 +498,7 @@ export const bankingHandlers = defineHandlers({
       if (line.version !== peek.version) throw preconditionFailed();
       if (line.status === 'matched') throw conflict('ALREADY_MATCHED', 'This bank line is already matched; unmatch it first');
       // The same rule as any expense: no account pays out more than the books say it holds (RULES 6.26).
+      assertExpenseWithinLimit(ctx.company, ctx.user, cols);
       await assertAccountCovers(tx, ctx.company.id, ctx.company.baseCurrency.trim(), cols);
       const E = schema.expenses;
       const number = await assignNumber(tx, { companyId: ctx.company.id, kind: 'expense', branchId: cols.branchId, date: cols.date });

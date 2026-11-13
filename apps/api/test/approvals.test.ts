@@ -120,8 +120,9 @@ describe('payment approvals (RULES 6.14)', () => {
     const noRate = await usd(1_000);
     expect(noRate.status).toBe(409);
     expect(noRate.body.code).toBe('PAYMENT_HELD');
-    // With its rate it is judged at that rate ($10 at 85 = ₹850, under the rule).
-    expect((await usd(1_000, { exchangeRate: 85 })).body.code).not.toBe('PAYMENT_HELD');
+    // With its rate it is judged at that rate ($5 at 85 = ₹425), together with what the clerk paid
+    // this supplier today (₹500): ₹925, under the rule.
+    expect((await usd(500, { exchangeRate: 85 })).body.code).not.toBe('PAYMENT_HELD');
   });
 
   it('holds a payment made recorded from a bank line, and an edit past the rule, the same way', async () => {

@@ -13,7 +13,8 @@ import { newId } from '../../lib/ids';
 import { assignNumber } from '../../lib/numbering';
 import { compact, iso, money, versioned } from '../../lib/wire';
 import { assertPeriodOpen } from '../documents/lifecycle';
-import { accountBalanceMinor } from '../payments/engine';
+import { wouldOverdraw } from '../payments/engine';
+import { assertWithinPaymentLimit } from '../payments/requests';
 import { costCentreIssues } from './costCentres';
 import { loadBook, loadVouchers } from './book';
 import { cashLedgerBalance } from '@esmart/core/domain/gstUtilization';
@@ -289,20 +290,43 @@ export async function voucherColumns(ctx: AnyCtx, db: DbOrTx, body: Schema<'Vouc
   if (draft) return columns;
   assertPeriodOpen(ctx.company, body.date);
 
-  // No account pays out more than it holds, as for payments.
-  const A = schema.paymentAccounts;
-  for (const [i, l] of lines.entries()) {
-    const out = l.creditMinor - l.debitMinor;
-    if (out <= 0 || !l.account.startsWith('pay:')) continue;
-    const [account] = await db.select().from(A).where(and(eq(A.companyId, ctx.company.id), eq(A.id, l.account.slice(4)))).for('update');
-    // Taken by earlier vouchers in the same import, not yet in the books.
-    const balance = (await accountBalanceMinor(db, account, undefined, exceptId)) - (pending?.get(l.account) ?? 0);
-    if (out > balance) {
-      throw unprocessable([{ field: `lines[${i}]`, message: `${account.name} holds ${base} ${(Math.max(balance, 0) / 100).toFixed(2)}; this voucher takes ${base} ${(out / 100).toFixed(2)}`, severity: 'blocking' }], 'INSUFFICIENT_BALANCE');
-    }
+  // Money paid out by voucher answers to the same approval rule as a payment (RULES 6.14). Moving
+  // money between the business's own accounts (a contra) and depositing tax are not payments to anyone.
+  if (!['contra', 'tdsChallan', 'gstChallan'].includes(body.kind)) {
+    const out = lines.filter((l) => l.account.startsWith('pay:')).reduce((a, l) => a + l.creditMinor - l.debitMinor, 0);
+    if (out > 0) assertWithinPaymentLimit(ctx.company, ctx.user, out, 'voucher');
   }
+  // No account pays out more than it holds, as for payments: nor is money taken back out of one
+  // (a receipt voucher cut) once it has been spent.
+  await assertVoucherCovered(ctx, db, lines, exceptId, pending);
   if (pending) for (const l of lines) if (l.account.startsWith('pay:')) pending.set(l.account, (pending.get(l.account) ?? 0) + l.creditMinor - l.debitMinor);
   return columns;
+}
+
+/**
+ * RULES 6.26 for a voucher: each cash or bank account it touches, now or before this change, must
+ * not end below zero because of it. `lines` is what the voucher will post (none when it is deleted).
+ */
+async function assertVoucherCovered(ctx: AnyCtx, db: DbOrTx, lines: StoredLine[], exceptId?: string, pending?: Map<string, number>) {
+  const base = ctx.company.baseCurrency.trim();
+  const [old] = exceptId ? await db.select({ lines: V.lines, status: V.status }).from(V).where(eq(V.id, exceptId)) : [];
+  const wasPosted = old?.status === 'posted' ? (old.lines as StoredLine[]) : [];
+  const net = (ls: StoredLine[], key: string) => ls.filter((l) => l.account === key).reduce((a, l) => a + l.debitMinor - l.creditMinor, 0);
+  const keys = [...new Set([...lines, ...wasPosted].map((l) => l.account).filter((k) => k.startsWith('pay:')))].sort();
+  const A = schema.paymentAccounts;
+  for (const key of keys) {
+    const [account] = await db.select().from(A).where(and(eq(A.companyId, ctx.company.id), eq(A.id, key.slice(4)))).for('update');
+    if (!account) continue;
+    const after = net(lines, key);
+    // Taken by earlier vouchers in the same import, not yet in the books.
+    const held = await wouldOverdraw(db, account, { after, before: net(wasPosted, key) }, { voucherId: exceptId }, pending?.get(key) ?? 0);
+    if (held === null) continue;
+    const i = lines.findIndex((l) => l.account === key);
+    const message = after < 0
+      ? `${account.name} holds ${base} ${(Math.max(held, 0) / 100).toFixed(2)}; this voucher takes ${base} ${(-after / 100).toFixed(2)}`
+      : `${account.name} has already spent this money; it would be left at ${base} ${((held + after) / 100).toFixed(2)}`;
+    throw unprocessable([{ field: i >= 0 ? `lines[${i}]` : 'lines', message, severity: 'blocking' }], 'INSUFFICIENT_BALANCE');
+  }
 }
 
 /** What makes two journals the same entry, for spotting one imported twice. */
@@ -640,6 +664,10 @@ export const booksHandlers = defineHandlers({
     checkIfMatch(ctx.req, current.version);
     // A draft was never in the books, so a closed period doesn't hold it.
     if (current.status !== 'draft') assertPeriodOpen(ctx.company, current.date);
+    // Taking an appropriation out of earlier years' profit is as much the owner's call as putting it in (RULES 6.25).
+    if (current.status !== 'draft' && (current.lines as StoredLine[]).some((l) => l.account === RETAINED_EARNINGS) && !RETAINED_EARNINGS_ROLES.includes(ctx.user.role)) {
+      throw forbidden('RETAINED_EARNINGS_ROLE', 'Only an owner or admin can remove a voucher posted to earlier years’ profit');
+    }
     // A GST challan whose money a set-off has already used can't go: the cash ledger would run negative.
     if (current.kind === 'gstChallan' && current.status !== 'draft') {
       const others = (await loadVouchers({ db: ctx.db, company: ctx.company, to: '9999-12-31' })).filter((v) => v.id !== current.id);
@@ -648,6 +676,8 @@ export const booksHandlers = defineHandlers({
       if (head) throw conflict('CHALLAN_USED', `A GST set-off has used this challan's ${head.toUpperCase()}; reverse the set-off first`);
     }
     await ctx.db.transaction(async (tx) => {
+      // Money a receipt voucher brought in that has since been spent can't be taken back out (RULES 6.26).
+      if (current.status === 'posted') await assertVoucherCovered(ctx, tx, [], current.id);
       await linkVoucherAttachments(tx, ctx.company.id, current.id, []);
       const deleted = await tx.delete(V).where(and(eq(V.id, current.id), eq(V.version, current.version))).returning({ id: V.id });
       if (!deleted.length) throw preconditionFailed();

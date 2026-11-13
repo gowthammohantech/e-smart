@@ -55,6 +55,35 @@ export async function accountBalanceMinor(
   return Math.round(account.openingBalanceMinor * Number(account.openingRate)) + net - Number(spent?.total ?? 0) + Number(moved?.total ?? 0);
 }
 
+/** The most any section deducts (its no-PAN rate, s.206AA, or its normal rate if higher); 20% when no section is named. */
+export function tdsCeilingPercent(code: string | null | undefined): number {
+  const s = tdsSectionOf(code ?? undefined);
+  return s ? Math.max(s.rateIndividual, s.rateOther, s.noPanRate) : 20;
+}
+
+/** How far a rate sent with a payment may stray from the company's rate for the day. */
+export const RATE_TOLERANCE = 0.1;
+
+/**
+ * No account pays out more than it holds (RULES 6.26), whichever way it would be emptied: money paid
+ * out, or money that came in taken back (deleted, cut, moved to another account). `after` and
+ * `before` are what this record does to the account (received positive, paid negative), in base
+ * currency. A change that leaves the account no worse off is never refused, so a record made before
+ * the rule can still be corrected. Returns what the account holds without this record when it
+ * would end below zero, else null.
+ */
+export async function wouldOverdraw(
+  tx: DbOrTx,
+  account: typeof schema.paymentAccounts.$inferSelect,
+  change: { after: number; before: number },
+  except: { paymentId?: string; voucherId?: string; expenseId?: string } = {},
+  pending = 0,
+): Promise<number | null> {
+  if (change.after >= change.before) return null;
+  const others = (await accountBalanceMinor(tx, account, except.paymentId, except.voucherId, except.expenseId)) - pending;
+  return others + change.after < 0 ? others : null;
+}
+
 export type PaymentInput = {
   direction: 'received' | 'paid';
   partyId: string;
@@ -165,8 +194,14 @@ export async function writePayment(
   // A receipt may move no money when it only records TDS deducted, a discount or a write-off.
   const adjusting = input.allocations.some((a) => adjusts(a) > 0);
   if (!(input.amountMinor > 0) && !(adjusting && input.amountMinor === 0)) blocking('amount.minor', 'Must be more than zero');
-  if (input.allocations.some((a) => (a.writeOffMinor ?? 0) > 0) && !['owner', 'admin', 'accountant'].includes(actor.companyRoles?.[company.id] ?? actor.role)) {
+  // Settling without money moving is for the books' keepers: a discount or a write-off clears what a
+  // party owes as surely as cash does.
+  const keeper = ['owner', 'admin', 'accountant'].includes(actor.companyRoles?.[company.id] ?? actor.role);
+  if (input.allocations.some((a) => (a.writeOffMinor ?? 0) > 0) && !keeper) {
     blocking('allocations', 'Only an owner, admin or accountant can write off what a party owes');
+  }
+  if (input.allocations.some((a) => (a.discountMinor ?? 0) > 0) && !keeper) {
+    blocking('allocations', 'Only an owner, admin or accountant can settle an invoice with a discount');
   }
   const [cur] = await tx.select().from(schema.currencies).where(eq(schema.currencies.code, input.currency));
   if (!cur) blocking('currency', `Unknown currency ${input.currency}`);
@@ -189,6 +224,14 @@ export async function writePayment(
         (existing && existing.currency.trim() === input.currency && existing.date === input.date ? Number(existing.exchangeRate) : null) ??
         (await rateToBase(tx, company.id, input.currency, baseCurrency, input.date)));
   if (!exchangeRate || exchangeRate <= 0) blocking('exchangeRate', `A ${input.currency} payment needs its rate to ${baseCurrency}`);
+  // A rate sent with the payment is the bank's, near the company's own for the day; far from it, it
+  // would make a payment look small for the approval rule and book a gain or loss that isn't there.
+  else if (input.currency !== baseCurrency && input.exchangeRate != null && !(existing && Number(existing.exchangeRate) === input.exchangeRate)) {
+    const table = await rateToBase(tx, company.id, input.currency, baseCurrency, input.date);
+    if (table && Math.abs(input.exchangeRate / table - 1) > RATE_TOLERANCE) {
+      blocking('exchangeRate', `${input.exchangeRate} is more than ${RATE_TOLERANCE * 100}% from the rate on file for ${input.date} (${table}); check it, or update the rate on file`);
+    }
+  }
 
   // Lock every document this write touches, in a stable order.
   const before = existing ? await tx.select().from(A).where(eq(A.paymentId, existing.id)) : [];
@@ -220,6 +263,11 @@ export async function writePayment(
     if (input.direction === 'paid' && (a.tdsMinor ?? 0) > 0 && doc.tdsAmountMinor > 0 && (!input.tdsSection || input.tdsSection === 'none' || doc.tdsSection === input.tdsSection)) {
       blocking(`${field}.tdsDeducted`, `${doc.number} already kept back TDS under ${doc.tdsSection ?? 'its section'}; it is not deducted again on the payment`);
     }
+    // TDS is a share of the taxable value at the section's rate, never more (the no-PAN rate at most).
+    if ((a.tdsMinor ?? 0) > 0) {
+      const ceiling = Math.ceil((doc.taxableAmountMinor * tdsCeilingPercent(input.tdsSection)) / 100);
+      if ((a.tdsMinor ?? 0) > ceiling) blocking(`${field}.tdsDeducted`, `TDS on ${doc.number} can't be more than ${tdsCeilingPercent(input.tdsSection)}% of its taxable value (${input.currency} ${(ceiling / 100).toFixed(2)})`);
+    }
     const earlier = before.find((b) => b.documentId === doc.id);
     const mine = earlier ? earlier.amountMinor + earlier.tdsMinor + earlier.discountMinor + earlier.writeOffMinor : 0;
     const owed = doc.grandTotalMinor - doc.amountPaidMinor + mine;
@@ -235,17 +283,38 @@ export async function writePayment(
   if (advanceTds < 0) blocking('advanceTds', 'Cannot be negative');
   if (advanceTds > 0 && input.direction !== 'received') blocking('advanceTds', 'Only money received carries TDS the customer deducted; TDS kept back from a supplier goes on the bill it settles');
   if (advanceTds > 0 && !(input.tdsSection && input.tdsSection !== 'none')) blocking('tdsSection', 'Which section the customer deducted TDS under');
+  // The customer kept back a share of the gross (cash + TDS) at the section's rate: TDS ≤ cash × r / (100 − r).
+  if (advanceTds > 0) {
+    const r = tdsCeilingPercent(input.tdsSection);
+    const ceiling = Math.ceil((input.amountMinor * r) / (100 - r));
+    if (advanceTds > ceiling) blocking('advanceTds', `TDS under ${input.tdsSection ?? 'a section'} is at most ${r}% of what was due; on ${input.currency} ${(input.amountMinor / 100).toFixed(2)} received that is ${input.currency} ${(ceiling / 100).toFixed(2)}`);
+  }
   const credit = input.amountMinor + Math.max(advanceTds, 0);
   if (allocated > credit) blocking('allocations', `Allocations (${input.currency} ${(allocated / 100).toFixed(2)}) exceed the payment (${input.currency} ${(credit / 100).toFixed(2)})`);
 
-  // No account pays out more than it holds: cash, bank or wallet.
+  // No account pays out more than it holds: cash, bank or wallet. Money taken back out of an
+  // account (a receipt cut, turned round or moved elsewhere) is held to the same rule.
   let shortOfCash = false;
-  if (input.direction === 'paid' && account && exchangeRate && !issues.length) {
-    const balance = await accountBalanceMinor(tx, account, existing?.id);
+  if (account && exchangeRate && !issues.length) {
+    const signed = (direction: string, base: number) => (direction === 'received' ? base : -base);
     const amountBase = Math.round(input.amountMinor * exchangeRate);
-    if (amountBase > balance) {
+    const was = existing ? signed(existing.direction, Math.round(existing.amountMinor * Number(existing.exchangeRate))) : 0;
+    const after = signed(input.direction, amountBase);
+    const held = await wouldOverdraw(tx, account, { after, before: existing?.accountId === account.id ? was : 0 }, { paymentId: existing?.id });
+    if (held !== null) {
       shortOfCash = true;
-      blocking('amount.minor', `${account.name} holds ${baseCurrency} ${(Math.max(balance, 0) / 100).toFixed(2)}; this payment needs ${baseCurrency} ${(amountBase / 100).toFixed(2)}`);
+      blocking('amount.minor', input.direction === 'paid'
+        ? `${account.name} holds ${baseCurrency} ${(Math.max(held, 0) / 100).toFixed(2)}; this payment needs ${baseCurrency} ${(amountBase / 100).toFixed(2)}`
+        : `${account.name} has already spent this money; it would be left at ${baseCurrency} ${((held + after) / 100).toFixed(2)}`);
+    }
+    // Moved off another account: what it brought in there leaves with it.
+    if (existing && existing.accountId !== account.id && was > 0) {
+      const [old] = await tx.select().from(schema.paymentAccounts).where(eq(schema.paymentAccounts.id, existing.accountId)).for('update');
+      const oldHeld = old ? await wouldOverdraw(tx, old, { after: 0, before: was }, { paymentId: existing.id }) : null;
+      if (oldHeld !== null) {
+        shortOfCash = true;
+        blocking('accountId', `${old!.name} has already spent this money; moving it off would leave ${baseCurrency} ${(oldHeld / 100).toFixed(2)}`);
+      }
     }
   }
   // An advance for services: the rate is the category's on the day, kept once taken.
@@ -280,12 +349,14 @@ export async function writePayment(
       if (receipt.partyId !== input.partyId) blocking('refundOf', `${receipt.number} was received from another party`);
       if (receipt.currency.trim() !== input.currency) blocking('refundOf', `${receipt.number} is in ${receipt.currency.trim()}`);
       if (input.date < receipt.date) blocking('date', `Not before the advance was received (${receipt.date})`);
-      const left = receipt.unallocatedMinor + (existing ? existing.amountMinor : 0);
+      // Only cash comes back: TDS the customer kept back from the advance was never paid to us.
+      const left = Math.max(receipt.unallocatedMinor - receipt.tdsMinor, 0) + (existing ? existing.amountMinor : 0);
       if (input.amountMinor > left) blocking('amount.minor', `${receipt.number} has ${input.currency} ${(Math.max(left, 0) / 100).toFixed(2)} of its advance left`);
     }
   }
   // A receipt keeps room for what was already paid back out of it.
-  const refunded = existing && input.direction === 'received' ? await refundedFrom(tx, existing.id) : 0;
+  const refunded = existing && existing.direction === 'received' ? await refundedFrom(tx, existing.id) : 0;
+  if (refunded && input.direction !== 'received') blocking('direction', `${existing!.number} has refunds against it; it stays money received`);
   if (refunded) {
     if (input.partyId !== existing!.partyId || input.currency !== existing!.currency.trim()) blocking('partyId', `${existing!.number} has refunds against it; its party and currency stay`);
     if (allocated + refunded > credit) blocking('allocations', `${input.currency} ${(refunded / 100).toFixed(2)} of it has been refunded; allocations can use only the rest`);
@@ -393,6 +464,12 @@ export async function writePayment(
 export async function deletePayment(tx: DbOrTx, company: CompanyRow, actor: AuthUser, row: PaymentRow, now: Date) {
   assertPeriodOpen(company, row.date);
   if (row.direction === 'received' && (await refundedFrom(tx, row.id))) throw conflict('PAYMENT_REFUNDED', `${row.number} has refunds against it; remove those first`);
+  // Money that came in and has since been spent can't be taken back out of the books (RULES 6.26).
+  if (row.direction === 'received') {
+    const [account] = await tx.select().from(schema.paymentAccounts).where(eq(schema.paymentAccounts.id, row.accountId)).for('update');
+    const held = account ? await wouldOverdraw(tx, account, { after: 0, before: Math.round(row.amountMinor * Number(row.exchangeRate)) }, { paymentId: row.id }) : null;
+    if (held !== null) throw conflict('INSUFFICIENT_BALANCE', `${account!.name} has already spent this money; deleting ${row.number} would leave it at ${company.baseCurrency.trim()} ${(held / 100).toFixed(2)}`);
+  }
   // Removing a refund gives the advance back to the receipt it came out of.
   const [receipt] = row.refundOfPaymentId ? await tx.select().from(PAY).where(eq(PAY.id, row.refundOfPaymentId)).for('update') : [];
   const allocations = await tx.select().from(A).where(eq(A.paymentId, row.id));

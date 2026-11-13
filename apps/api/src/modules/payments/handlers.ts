@@ -109,7 +109,7 @@ export const paymentsHandlers = defineHandlers({
     const row = await ctx.db.transaction(async (tx) => {
       const current = await findPayment(ctx, tx, ctx.params.id, { lock: true });
       checkIfMatch(ctx.req, current.version);
-      assertEditWithinLimit(ctx.company, ctx.user, ctx.body, current);
+      await assertEditWithinLimit(tx, ctx.company, ctx.user, ctx.body, current);
       const saved = await writePayment(tx, ctx.deps, ctx.company, ctx.user, inputOf(ctx.body), { now: ctx.now, existing: current });
       await linkPaymentAttachments(tx, ctx.company.id, saved.id, ctx.body.attachmentIds);
       return saved;
