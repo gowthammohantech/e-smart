@@ -227,12 +227,14 @@ const GATED_PATHS: [prefix: string, module: Module | null][] = [
  * Settings pages that only serve one module's fields: every plan opens them, and they go when the
  * owner switches that module off. Categories and brands are retail item fields; currencies and
  * their rates are multi-currency's (still open on a plan without it, which bills in a customer's
- * currency all the same).
+ * currency all the same); branches are the branches module's (open on a plan without it to name
+ * its one branch).
  */
 const SWITCHED_PATHS: [prefix: string, module: Module][] = [
   ['/settings/item-categories', 'pos'],
   ['/settings/brands', 'pos'],
   ['/settings/currencies', 'fx'],
+  ['/settings/branches', 'branches'],
 ];
 
 /** The module whose switch hides a route even where the plan opens it, or null. */

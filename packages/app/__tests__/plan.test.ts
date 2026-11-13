@@ -81,7 +81,11 @@ describe('plan tiers', () => {
       // Multi-currency off: no currencies and rates.
       expect(canOpen(plan, '/settings/currencies', ['fx'])).toBe(false);
       expect(canOpen(plan, '/settings/item-categories', ['fx'])).toBe(true);
+      // Branches off: no branches page.
+      expect(canOpen(plan, '/settings/branches', ['branches'])).toBe(false);
+      expect(canOpen(plan, '/settings/branches', ['fx'])).toBe(true);
     }
+    expect(canOpen('free', '/settings/branches', [])).toBe(true);
     // Left on, they open on every plan: a Free customer can still be billed in their currency.
     expect(canOpen('free', '/settings/currencies', [])).toBe(true);
     expect(canOpen('basic', '/settings/brands')).toBe(true);
