@@ -27,6 +27,22 @@ describe('costMovements', () => {
     expect(Math.round(costedStockValue(costMovements(items, ms), '2026-04-02'))).toBe(5000);
   });
 
+  it('leaves no value in stock once a shortfall is made good (money audit C14)', () => {
+    // Sold 10 before any came in (at the ₹9 price then), then 10 bought at ₹15: nothing on hand, nothing in stock.
+    const ms = [mv('salesIssue', 10, 900, '2026-04-01', 'inv1'), mv('purchaseReceipt', 10, 1500, '2026-04-02', 'bill1')];
+    const costed = costMovements(items, ms);
+    expect(Math.round(costedStockValue(costed))).toBe(0);
+    // More than the shortfall: what is left is worth the lot's price.
+    const more = costMovements(items, [mv('salesIssue', 10, 900, '2026-04-01', 'inv1'), mv('purchaseReceipt', 15, 1500, '2026-04-02', 'bill1')]);
+    expect(Math.round(costedStockValue(more))).toBe(7500);
+  });
+
+  it('costs stock never priced at the price recorded then, not the item’s price today (money audit C8)', () => {
+    const ms = [mv('salesIssue', 2, 700, '2026-04-01', 'inv1')];
+    const now = [{ id: 'itm_a', purchasePrice: { minor: 5000, currency: 'INR' } }];
+    expect(costMovements(now, ms).map((m) => Math.round(m.cost))).toEqual([-1400]);
+  });
+
   it('takes movements in date order, not the order given', () => {
     const ms = [mv('salesIssue', 2, 0, '2026-04-05', 'inv1'), mv('purchaseReceipt', 2, 1000, '2026-04-01', 'bill1'), mv('purchaseReceipt', 2, 2000, '2026-04-03', 'bill2')];
     expect(costs(ms)).toEqual([-3000, 2000, 4000]);

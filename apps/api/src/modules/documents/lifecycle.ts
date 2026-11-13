@@ -672,6 +672,11 @@ export async function assertCancellable(tx: DbOrTx, row: DocRow): Promise<void> 
   if (GSTR1_KINDS.includes(row.kind) && (await gstr1Closed(tx, row.companyId, row.date))) {
     throw conflict('RETURN_FILED', `${row.number} is in the filed GSTR-1 for ${row.date.slice(0, 7)}; issue a credit note dated today instead of cancelling it`);
   }
+  // A bill whose assets are in the register: the register would keep depreciating what the books no longer hold.
+  if (row.kind === 'purchaseBill') {
+    const [asset] = await tx.select({ name: schema.fixedAssets.name }).from(schema.fixedAssets).where(and(eq(schema.fixedAssets.companyId, row.companyId), eq(schema.fixedAssets.sourceDocumentId, row.id))).limit(1);
+    if (asset) throw conflict('DOCUMENT_HAS_ASSETS', `${row.number} bought ${asset.name}, which is in the fixed asset register; remove it from the register first`);
+  }
   if (ITC_KINDS.includes(row.kind)) {
     const own = `${row.date.slice(5, 7)}${row.date.slice(0, 4)}`;
     for (const period of new Set([row.itcClaimPeriod, own].filter((p): p is string => !!p))) {

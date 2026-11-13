@@ -121,10 +121,14 @@ export function postDocument(doc: BusinessDocument, baseCurrency: string): Posti
 
   if (sales) {
     const tax = chargedTax(doc, false);
+    // A fixed asset sold (a line marked capital goods) is no sale of stock: what it fetched goes to
+    // Profit or loss on assets sold, against the book value its disposal takes there (RULES 6.15).
+    const assetSold = discountNote ? 0 : linesWithCharges(doc).filter((l) => l.gst?.capitalGoods && !l.gst?.reimbursement).reduce((a, l) => a + calculateLine(l, doc.currency, { regime: 'GST', registered: false }).taxable.minor, 0);
     entries.push(
       [party, b(t.grandTotal.minor)],
       // Charges taxed with the lines (RULES 1.10) are inside the taxable value but still recovered as charges.
-      [discountNote ? 'sys:discountAllowed' : 'sys:sales', -b(t.taxableAmount.minor - taxed)],
+      [discountNote ? 'sys:discountAllowed' : 'sys:sales', -b(t.taxableAmount.minor - taxed - assetSold)],
+      ['sys:assetDisposal', -b(assetSold)],
       ...TAX_KINDS.map((k): Entry => [`sys:output${k}`, -b(tax[k])]),
       ['sys:discountAllowed', b(t.documentDiscount.minor)],
       // Recovering a billable expense clears what it put in Reimbursements recoverable: none of it is income.
@@ -400,7 +404,8 @@ const GRNI = 'sys:goodsReceivedNotBilled';
 
 /**
  * Each bill takes over the goods receipts it was made from: the receipt itself, or those raised from
- * the same purchase order. The earliest bill takes a receipt whole; a receipt is taken over once.
+ * the same purchase order by the bill's date. The earliest bill takes a receipt whole; a receipt is
+ * taken over once.
  */
 function billReceipts(received: Map<string, number>, documents: Map<string, BusinessDocument>): Posting[] {
   if (!received.size) return [];
@@ -414,11 +419,13 @@ function billReceipts(received: Map<string, number>, documents: Map<string, Busi
   const out: Posting[] = [];
   for (const bill of bills) {
     const ids: string[] = [];
-    // Up the bill's chain: a receipt it was made from, or the order whose receipts it bills.
+    // Up the bill's chain: a receipt it was made from, or the order whose receipts it bills. Of an
+    // order's receipts, only those that had come in by the bill's date: goods received after it are
+    // still unbilled until a later bill takes them.
     let at = bill.sourceDocumentId;
     for (let depth = 0; at && depth < 10; depth++) {
       if (received.has(at)) ids.push(at);
-      ids.push(...(receiptsOf.get(at) ?? []));
+      ids.push(...(receiptsOf.get(at) ?? []).filter((id) => id === bill.sourceDocumentId || (documents.get(id)?.date ?? '') <= bill.date));
       at = documents.get(at)?.sourceDocumentId;
     }
     const value = [...new Set(ids)].filter((id) => !taken.has(id)).reduce((a, id) => (taken.add(id), a + received.get(id)!), 0);

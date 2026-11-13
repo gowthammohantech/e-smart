@@ -1,4 +1,4 @@
-import { and, asc, eq, isNotNull, isNull } from 'drizzle-orm';
+import { and, asc, eq, isNotNull, isNull, ne, sql } from 'drizzle-orm';
 import { accumulatedDepreciation, assetEntries, assetSchedule, bookValue, depreciationEntries, type FixedAsset, type ScheduleRow } from '@esmart/core/domain/fixedAssets';
 import { addDaysISO, businessDate, financialYearOf } from '@esmart/core/lib/date';
 import type { Schema } from '@esmart/api-contract';
@@ -164,8 +164,20 @@ async function columns(db: DbOrTx, company: CompanyRow, body: Schema<'FixedAsset
   issues.push(...(await costCentreIssues(db, company.id, [{ field: 'costCentreId', id: body.costCentreId }])));
   if (body.sourceDocumentId) {
     const D = schema.documents;
-    const [d] = await db.select({ kind: D.kind }).from(D).where(and(eq(D.companyId, company.id), eq(D.id, body.sourceDocumentId)));
+    const [d] = await db.select({ kind: D.kind, status: D.status, number: D.number, rate: D.exchangeRate }).from(D).where(and(eq(D.companyId, company.id), eq(D.id, body.sourceDocumentId)));
     if (!d || d.kind !== 'purchaseBill') block('sourceDocumentId', 'No such purchase bill in this company');
+    else if (['draft', 'requested', 'cancelled', 'rejected'].includes(d.status)) block('sourceDocumentId', `${d.number} is ${d.status}; only an issued bill's asset is in the books`);
+    else {
+      // The register is the books' own detail of what the bill put in fixed assets: all the assets
+      // from one bill cost no more, together, than its capital-goods lines did.
+      const DL = schema.documentLines;
+      const [capital] = await db.select({ total: sql<string>`coalesce(sum(${DL.lineTotalMinor}), 0)` }).from(DL).where(and(eq(DL.documentId, body.sourceDocumentId), eq(DL.capitalGoods, true)));
+      const [others] = await db.select({ total: sql<string>`coalesce(sum(${FA.costMinor}), 0)` }).from(FA).where(and(eq(FA.companyId, company.id), eq(FA.sourceDocumentId, body.sourceDocumentId), selfId ? ne(FA.id, selfId) : undefined));
+      // The lines with their tax: GST that can't be claimed is part of the asset's cost (a rupee's room for rounding).
+      const onBill = Math.round(Number(capital?.total ?? 0) * Number(d.rate));
+      const room = onBill - Number(others?.total ?? 0);
+      if (onBill > 0 && cost > room + 100) block('cost', `${d.number} put ${base} ${(onBill / 100).toFixed(2)} of capital goods in the books${Number(others?.total ?? 0) ? `, ${base} ${(Number(others!.total) / 100).toFixed(2)} of it registered already` : ''}; this asset can't cost more than what is left`);
+    }
   }
   const code = body.assetCode?.trim() || null;
   if (code) {

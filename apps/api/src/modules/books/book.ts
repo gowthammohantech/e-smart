@@ -53,8 +53,16 @@ export async function loadBook(s: Scope): Promise<{ postings: Posting[]; book: B
   const perpetualFrom = s.company.perpetualStockFrom;
   // A return comes back at what the goods it returns went out (or came in) at.
   const sourceOf = new Map(docs.filter((d) => d.sourceDocumentId).map((d) => [d.id, d.sourceDocumentId!]));
+  // Up the chain to the document that actually moved the goods: an invoice made from a delivery
+  // challan moved none itself, nor a bill made from a goods receipt (RULES 6.2, 6.10).
+  const moved = new Set(movements.map((m) => m.referenceId).filter((x): x is string => !!x));
+  const movedSource = (id: string) => {
+    let at = sourceOf.get(id);
+    for (let depth = 0; at && depth < 10 && !moved.has(at); depth++) at = sourceOf.get(at);
+    return at && moved.has(at) ? at : sourceOf.get(id);
+  };
   const costing = s.company.stockCosting as Stock['costing'];
-  const stock: Stock = { items, movements, baseCurrency: base, perpetualFrom, sourceOf: (id) => sourceOf.get(id), costing };
+  const stock: Stock = { items, movements, baseCurrency: base, perpetualFrom, sourceOf: movedSource, costing };
   const openingStockMinor = openingStockValue(items, movements, base, costing);
 
   const postings = allPostings({

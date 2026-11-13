@@ -198,6 +198,13 @@ export const inventoryHandlers = defineHandlers({
       if (issues.length) throw unprocessable(issues);
 
       const touched = [...new Set(body.lines.map((l) => l.itemId))].map((id) => items.get(id)!);
+      const companyWide = await coreMovements(tx, ctx.company.id, { itemIds: touched.map((i) => i.id) });
+      const averageOf = new Map(
+        touched.map((i) => {
+          const held = coreStockOnHand(i.id, companyWide);
+          return [i.id, held > 0 ? Math.round(stockValue(toCoreItem(i), companyWide, base).minor / held) : undefined] as const;
+        }).filter((x): x is readonly [string, number] => x[1] !== undefined),
+      );
       const before = await stockOnHand(tx, ctx.company.id, touched.map((i) => i.id), branch.id);
       const delta = new Map<string, number>();
       for (const l of body.lines) delta.set(l.itemId, (delta.get(l.itemId) ?? 0) + l.quantity);
@@ -230,7 +237,9 @@ export const inventoryHandlers = defineHandlers({
               type,
               quantity: String(l.quantity),
               currency: base,
-              unitCostMinor: l.unitCost?.minor ?? item.purchasePriceMinor,
+              // A count found more, with no cost given, comes in at what the stock is already worth
+              // (its average), not the catalogue price, which could lift profit by a count alone.
+              unitCostMinor: l.unitCost?.minor ?? (l.quantity > 0 && type === 'adjustment' ? (averageOf.get(item.id) ?? item.purchasePriceMinor) : item.purchasePriceMinor),
               date: body.date,
               referenceType: 'adjustment',
               adjustReason: type === 'adjustment' ? (body.reason ?? 'other') : null,

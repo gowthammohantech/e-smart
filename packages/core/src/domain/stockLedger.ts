@@ -167,7 +167,12 @@ export function stockValue(item: Item, movements: StockMovement[], baseCurrency:
   const voided = voidedBy(movements);
   // A transfer in carries the sending branch's average, so a branch's stock keeps its value.
   const inbound = movements.filter((m) => m.itemId === item.id && (isPricedLot(m) || (m.type === 'transferIn' && m.unitCost.minor > 0)) && !voided(m));
-  if (inbound.length === 0) return multiply(money(item.purchasePrice.minor, baseCurrency), qty);
+  // Never priced in: at the price recorded on its latest movement, not today's catalogue price, so a
+  // price edited later doesn't revalue stock as it stood before.
+  if (inbound.length === 0) {
+    const frozen = [...movements].reverse().find((m) => m.itemId === item.id && m.unitCost.minor > 0)?.unitCost.minor;
+    return multiply(money(frozen ?? item.purchasePrice.minor, baseCurrency), qty);
+  }
   const totalQty = inbound.reduce((a, m) => a + signedQuantity(m), 0);
   const totalCost = sum(
     inbound.map((m) => multiply(money(m.unitCost.minor, baseCurrency), signedQuantity(m))),
@@ -233,7 +238,9 @@ export function costMovements(
       costOf.set(m, 0);
       continue;
     }
-    const average = s.qty > 0 ? s.value / s.qty : (price.get(m.itemId) ?? 0);
+    // With no stock to average, the price recorded on the movement when it was written (the item's
+    // price then), not today's: editing an item's price later must not re-cost what is past.
+    const average = s.qty > 0 ? s.value / s.qty : m.unitCost.minor > 0 ? m.unitCost.minor : (price.get(m.itemId) ?? 0);
     const source = m.referenceId && opts.sourceOf?.(m.referenceId);
     const sourceUnit = source ? unitCostOf.get(`${source}|${m.itemId}`) : undefined;
     let unit: number;
@@ -247,6 +254,13 @@ export function costMovements(
     // Issued at the average, the last of the stock takes whatever value is left, so stock
     // run down to nothing is worth nothing; anything beyond (negative stock) goes at the average.
     if (q < 0 && unit === average && s.qty > 0 && s.qty + q <= 1e-9) cost = -s.value + average * (s.qty + q);
+    // Stock in that makes good a shortfall (stock sold before it came in): what is left on hand is
+    // worth this lot's price and no more. The difference from what the sale was costed at stays in
+    // Purchases, a direct expense like cost of goods sold, rather than in Stock in hand with no stock.
+    if (q > 0 && s.qty < -1e-9) {
+      const after = s.qty + q;
+      cost = (after >= 0 ? unit * after : (s.value / s.qty) * after) - s.value;
+    }
     s.qty += q;
     s.value += cost;
     if (m.referenceId) unitCostOf.set(`${m.referenceId}|${m.itemId}`, unit);
@@ -300,7 +314,7 @@ function costFifo(
     const before = worth(q);
     const source = m.referenceId && opts.sourceOf?.(m.referenceId);
     const sourceUnit = source ? unitCostOf.get(`${source}|${m.itemId}`) : undefined;
-    const fallback = lastUnit.get(m.itemId) ?? price.get(m.itemId) ?? 0;
+    const fallback = lastUnit.get(m.itemId) ?? (m.unitCost.minor > 0 ? m.unitCost.minor : undefined) ?? price.get(m.itemId) ?? 0;
     if (qty > 0) {
       const priced = m.type === 'opening' || m.type === 'purchaseReceipt' || (m.type === 'adjustment' && m.unitCost.minor > 0);
       const unit = m.type === 'salesReturn' && sourceUnit !== undefined ? sourceUnit : priced && m.unitCost.minor > 0 ? m.unitCost.minor : (q.find((l) => l.qty > EPS)?.unit ?? fallback);

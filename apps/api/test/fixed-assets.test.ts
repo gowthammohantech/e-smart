@@ -108,3 +108,37 @@ describe('fixed assets', () => {
     expect(removed.status).toBe(204);
   });
 });
+
+describe('the register tied to the books (money audit, phase 6)', () => {
+  it('registers no more than a bill bought, and keeps the bill while its asset is registered', async () => {
+    const m = await moneySetup(t);
+    const bill = await t.post(
+      `${m.c}/documents`,
+      { kind: 'purchaseBill', partyId: m.supplier!.id, date: '2026-04-01', currency: 'INR', supplierDocNumber: 'LATHE-1', status: 'issued', lines: [{ name: 'CNC lathe', quantity: 1, unit: 'NOS', unitPrice: inr(1_000_000), taxCategoryId: m.gst(18), gst: { capitalGoods: true } }] },
+      { token: m.token },
+    );
+    expect(bill.status, bill.raw).toBe(201);
+    const twice = await t.post(`${m.c}/fixed-assets`, { ...lathe, cost: inr(5_000_000), sourceDocumentId: bill.body.id }, { token: m.token });
+    expect(twice.status).toBe(422);
+    expect(twice.body.issues[0].field).toBe('cost');
+    const ok = await t.post(`${m.c}/fixed-assets`, { ...lathe, cost: inr(1_000_000), sourceDocumentId: bill.body.id }, { token: m.token });
+    expect(ok.status, ok.raw).toBe(201);
+    const cancel = await t.post(`${m.c}/documents/${bill.body.id}/status`, { status: 'cancelled', reason: 'Wrong' }, { token: m.token, headers: { 'if-match': `"v${bill.body.version}"` } });
+    expect(cancel.body.code).toBe('DOCUMENT_HAS_ASSETS');
+  });
+
+  it('takes what an asset fetched to profit or loss on assets sold, not to sales', async () => {
+    const m = await moneySetup(t);
+    t.setNow('2026-09-29T10:00:00Z');
+    const inv = await t.post(
+      `${m.c}/documents`,
+      { kind: 'invoice', partyId: m.mumbai.id, date: '2026-09-20', currency: 'INR', status: 'issued', lines: [{ name: 'Old lathe', quantity: 1, unit: 'NOS', unitPrice: inr(800_000), taxCategoryId: m.gst(18), gst: { capitalGoods: true } }] },
+      { token: m.token },
+    );
+    expect(inv.status, inv.raw).toBe(201);
+    const tb = await t.get(`${m.c}/reports/trial-balance`, { token: m.token, query: { from: '2026-04-01', to: '2027-03-31' } });
+    const closing = (key: string) => tb.body.rows.find((r: { account: string }) => r.account === key)?.closing?.minor ?? 0;
+    expect(closing('sys:sales')).toBe(0);
+    expect(Math.abs(closing('sys:assetDisposal'))).toBe(800_000);
+  });
+});
