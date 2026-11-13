@@ -41,6 +41,13 @@ describe.each(INVOICE_LAYOUTS)('the %s layout prints what the law asks for', (la
     expect(text(render(layout))).toMatch(layout === 'standard' ? /INVOICE/ : /TAX INVOICE/);
   });
 
+  it('titled a commercial invoice in another currency, a tax invoice in the business’s own', () => {
+    const usd = text(render(layout, { document: doc({ currency: 'USD', exchangeRate: 83 }) }));
+    expect(usd).toContain('COMMERCIAL INVOICE');
+    expect(usd).not.toContain('TAX INVOICE');
+    expect(text(render(layout))).toContain('TAX INVOICE');
+  });
+
   it('as a bill of supply for a composition dealer', () => {
     expect(text(render(layout, { company: company({ taxRegistration: { regime: 'GST', identifier: '33NDTPS4034R1ZD', compositionScheme: true } } as never) }))).toContain('BILL OF SUPPLY');
   });

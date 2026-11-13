@@ -7,6 +7,7 @@ import { shownCessRate } from '../../domain/lineCalc';
 import { tint } from '../invoiceTemplate';
 import type { DocView } from '../docView';
 import { addressBlock, bankBlock, cancelledStrip, eInvoiceBlock, esc, logoTag, NOTE_REASON, printedCustomFields, reimbursementTable, cessTable, signatureTag, crossBorderNote, SUPPLY_NOTE } from '../blocks';
+import { titleOf } from './common';
 
 /**
  * The standard page: the app's own design, and what every business printed before it could choose
@@ -49,7 +50,7 @@ export function standardLayout(view: DocView): string {
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>${label} ${esc(shownNumber)}</title>
+<title>${titleOf(view)} ${esc(shownNumber)}</title>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -134,7 +135,7 @@ export function standardLayout(view: DocView): string {
       ${sellerTaxId ? `<div style="margin-top:5px"><strong>${esc(company?.taxRegistration?.identifierLabel ?? 'GSTIN')}:</strong> ${esc(sellerTaxId)}</div>` : ''}
     </div>
     <div>
-      <div class="doc-title">${label}</div>
+      <div class="doc-title">${titleOf(view)}</div>
       ${doc.kind === 'proforma' ? '<div class="muted">Not a tax invoice. A tax invoice follows on supply or on receipt of payment.</div>' : ''}
       ${billOfSupply ? '<div class="sub">Composition taxable person, not eligible to collect tax on supplies</div>' : ''}${crossBorderNote(doc) ? `<div class="sub">${esc(crossBorderNote(doc))}</div>` : ''}
       <div class="meta">

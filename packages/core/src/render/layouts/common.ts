@@ -153,7 +153,8 @@ function capital(s: string): string {
 
 /** The heading: a registered seller's invoice is a tax invoice (Rule 46), the rest by their kind. */
 export function titleOf(view: DocView): string {
-  return view.doc.kind === 'invoice' && !view.billOfSupply && view.sellerTaxId ? 'TAX INVOICE' : view.label;
+  // In the business's own currency a registered seller's invoice is a tax invoice; in another, a commercial invoice.
+  return view.doc.kind === 'invoice' && !view.billOfSupply && !view.commercial && view.sellerTaxId ? 'TAX INVOICE' : view.label;
 }
 
 /** The steps from the lines' sum to the total, a row each, under the items. */
