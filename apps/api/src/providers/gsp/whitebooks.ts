@@ -89,6 +89,8 @@ const DUPLICATE_INFO_CODE = 'DUPIRN';
 const NOT_FOUND_CODE = 'FO8000';
 
 /** Whitebooks' sandbox register knows only these; any other GSTIN is searched as the first. */
+/** The one GSTIN the Whitebooks sandbox accepts for filing; every business is filed as it. */
+export const SANDBOX_TAXPAYER_GSTIN = '29AAGCB1286Q000';
 const SANDBOX_REGISTER_GSTINS = ['27AAGCB1286Q2Z3', '33AAGCB1286Q2ZA', '27AAGCB1286Q1Z4', '33AAGCB1286Q1ZB'] as const;
 
 /**
@@ -148,6 +150,7 @@ export class WhitebooksGateway implements GspGateway {
   /** When each taxpayer's standalone e-way bill login lapses. */
   private readonly ewaybillSessions = new Map<string, number>();
   private sandboxBuyer: Promise<PartyBlock> | null = null;
+  private sandboxSellerParty: Promise<PartyBlock> | null = null;
 
   constructor(
     private readonly config: Config,
@@ -328,8 +331,9 @@ export class WhitebooksGateway implements GspGateway {
   // ------------------------------------------------------------ ComplianceProvider
 
   async testConnection(logins: PortalLogins): Promise<ConnectionResult> {
-    const check = async (creds: PortalCredentials | null, portal: string) => {
-      if (!creds) return { ok: false, message: `No ${portal} credentials are stored yet` };
+    const check = async (stored: PortalCredentials | null, portal: string) => {
+      if (!stored) return { ok: false, message: `No ${portal} credentials are stored yet` };
+      const creds = this.sandboxTaxpayer(stored);
       try {
         const account = whitebooksAccount(this.config);
         // The e-way bill login is checked through the e-invoice API too: bills by IRN are raised under that session.
@@ -346,8 +350,10 @@ export class WhitebooksGateway implements GspGateway {
 
   submitInvoice(creds: PortalCredentials | null, req: Parameters<ComplianceProvider['submitInvoice']>[1]): Promise<SubmitInvoiceResult> {
     return this.guard(async () => {
-      const login = requireLogin(creds);
-      const buyered = await this.withSandboxBuyer(login, req.payload);
+      const login = this.login(creds);
+      // A business filed as the sandbox taxpayer carries that taxpayer's registration, so NIC finds the seller it has the session for.
+      const sellered = creds?.gstin !== login.gstin ? { ...req.payload, SellerDtls: (await this.sellerParty(login)) as typeof req.payload.SellerDtls } : req.payload;
+      const buyered = await this.withSandboxBuyer(login, sellered);
       const payload = prepareIrnPayload({ ...buyered, DocDtls: { ...buyered.DocDtls, No: sandboxDocNo(this.config, login.gstin, buyered.DocDtls.No, buyered.DocDtls.Dt, req.companyId) } });
       try {
         const { body } = await this.filing(login, PATHS.generateIrn, 'post', { body: payload });
@@ -367,7 +373,7 @@ export class WhitebooksGateway implements GspGateway {
 
   cancelIrn(creds: PortalCredentials | null, req: Parameters<ComplianceProvider['cancelIrn']>[1]): Promise<CancelIrnResult> {
     return this.guard(async () => {
-      const login = requireLogin(creds);
+      const login = this.login(creds);
       const { body } = await this.filing(login, PATHS.cancelIrn, 'post', {
         withIrp: true,
         body: { Irn: req.irn, CnlRsn: req.reasonCode, ...(req.remark?.trim() ? { CnlRem: req.remark.trim() } : {}) },
@@ -381,7 +387,7 @@ export class WhitebooksGateway implements GspGateway {
 
   submitEwayBill(creds: PortalCredentials | null, req: Parameters<ComplianceProvider['submitEwayBill']>[1]): Promise<SubmitEwayBillResult> {
     return this.guard(async () => {
-      const login = requireLogin(creds);
+      const login = this.login(creds);
       // By IRN under the taxpayer session that registered it — `TransDocNo`/`TransDocDt`, not NIC's `TrnDocNO`/`TrnDocDt`.
       //
       // **Sandbox buyer:** NIC checks the distance against the pincodes it holds for the IRN, and with the buyer
@@ -406,15 +412,17 @@ export class WhitebooksGateway implements GspGateway {
         // the real pincodes as not matching the sandbox buyer's (702). Same remedy as the IRN path: the registered
         // test buyer stands in, and 0 (the portal works the distance out) is the retry.
         const party = await this.sandboxParty(login, req.payload.toGstin);
+        const seller = creds?.gstin !== login.gstin ? await this.sellerParty(login) : null;
         const payload = {
           ...req.payload,
+          ...(seller ? { fromGstin: String(seller.Gstin), fromTrdName: String(seller.LglNm), fromAddr1: String(seller.Addr1), fromAddr2: seller.Addr2 ? String(seller.Addr2) : undefined, fromPlace: String(seller.Loc), fromPincode: Number(seller.Pin), fromStateCode: String(seller.Stcd) } : {}),
           docNo: sandboxDocNo(this.config, login.gstin, req.payload.docNo, req.payload.docDate, req.companyId),
           ...(party ? { toGstin: String(party.Gstin), toTrdName: String(party.LglNm), toAddr1: String(party.Addr1), toAddr2: party.Addr2 ? String(party.Addr2) : undefined, toPlace: String(party.Loc), toPincode: Number(party.Pin), toStateCode: String(party.Stcd) } : {}),
         };
         // The test buyer sits in a state of its own, so the bill can flip between intra- and inter-state, and NIC
         // refuses IGST on an intra-state bill (218, with 623) and CGST/SGST on an inter-state one. The same tax is
         // re-split to match; the total does not move.
-        if (party) Object.assign(payload, resplitTax(payload));
+        if (party || seller) Object.assign(payload, resplitTax(payload));
         const generate = (p: typeof payload) => this.standalone(login, PATHS.standaloneGenerate, nativeEwayBillBody(p));
         try {
           reply = await generate(payload);
@@ -429,7 +437,7 @@ export class WhitebooksGateway implements GspGateway {
 
   updatePartB(creds: PortalCredentials | null, req: Parameters<ComplianceProvider['updatePartB']>[1]): Promise<UpdatePartBResult> {
     return this.guard(async () => {
-      const login = requireLogin(creds);
+      const login = this.login(creds);
       const reply = await this.standalone(login, PATHS.standalonePartB, partBBody(req));
       const record = readRecord<{ vehUpdDate?: string }>(reply);
       return { ok: true as const, updatedAt: (parsePortalDateAny(record?.vehUpdDate) ?? new Date(req.now)).toISOString() };
@@ -438,7 +446,7 @@ export class WhitebooksGateway implements GspGateway {
 
   extend(creds: PortalCredentials | null, req: Parameters<ComplianceProvider['extend']>[1]): Promise<ExtendResult> {
     return this.guard(async () => {
-      const login = requireLogin(creds);
+      const login = this.login(creds);
       const reply = await this.standalone(login, PATHS.standaloneExtend, extendBody(req));
       const validUpto = parsePortalDateAny(readRecord<{ validUpto?: string }>(reply)?.validUpto);
       return validUpto ? { ok: true as const, newValidUpto: validUpto.toISOString() } : incomplete('new validity');
@@ -447,7 +455,7 @@ export class WhitebooksGateway implements GspGateway {
 
   cancelEwayBill(creds: PortalCredentials | null, req: Parameters<ComplianceProvider['cancelEwayBill']>[1]): Promise<CancelEwayBillResult> {
     return this.guard(async () => {
-      const login = requireLogin(creds);
+      const login = this.login(creds);
       if (!Number.isSafeInteger(Number(req.ewayBillNumber))) return incomplete(`usable e-way bill number (got "${req.ewayBillNumber}")`);
       const reply = await this.standalone(login, PATHS.standaloneCancel, cancelEwayBillBody(req.ewayBillNumber, req.reasonCode, req.remark?.trim()));
       const record = readRecord<{ cancelDate?: string }>(reply);
@@ -459,6 +467,32 @@ export class WhitebooksGateway implements GspGateway {
   }
 
   // -------------------------------------------------------------- sandbox buyer
+
+  /**
+   * **Sandbox only.** The Whitebooks sandbox registers one taxpayer, so a business with its own GSTIN is refused
+   * with "Invalid authentication token" however good its login is. Every call is made as the sandbox taxpayer
+   * instead (`TAXATION_SANDBOX_GSTIN`, `29AAGCB1286Q000` unless set); the business's username and password are kept.
+   * The business's own documents, PDFs and audit trail are untouched.
+   */
+  private sandboxTaxpayer(creds: PortalCredentials): PortalCredentials {
+    const gstin = this.config.TAXATION_SANDBOX_GSTIN || SANDBOX_TAXPAYER_GSTIN;
+    if (creds.gstin !== gstin) this.log(`Filing as sandbox taxpayer ${gstin} in place of ${creds.gstin || 'no GSTIN'}`);
+    return { ...creds, gstin };
+  }
+
+  /** The stored login, filed as the sandbox taxpayer. */
+  private login(creds: PortalCredentials | null): PortalCredentials {
+    return requireLogin(creds && this.sandboxTaxpayer(creds));
+  }
+
+  /** The sandbox taxpayer's own registration, as the seller block NIC checks against the session's GSTIN. */
+  private async sellerParty(creds: PortalCredentials): Promise<PartyBlock> {
+    this.sandboxSellerParty ??= this.fetchParty(creds, creds.gstin).catch((error) => {
+      this.sandboxSellerParty = null;
+      throw error;
+    });
+    return this.sandboxSellerParty;
+  }
 
   /**
    * **Sandbox only.** The sandbox refuses any buyer GSTIN it has not registered

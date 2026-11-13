@@ -360,6 +360,7 @@ describe('Whitebooks', () => {
   const refusedWith = (code: string, message: string, extra: object = {}) =>
     ({ status_cd: '0', status_desc: JSON.stringify([{ errorCode: code, errorMessage: message }]), ...extra }) as GspEnvelope;
   const at = (iso: string) => () => new Date(iso).getTime();
+  const sandboxSeller = { Gstin: '29AAGCB1286Q000', LegalName: 'Sandbox Seller', AddrBno: '1', AddrSt: 'MG Road', AddrLoc: 'Bengaluru', StateCode: 29, AddrPncd: 560001 };
 
   it('authenticates the taxpayer, then files under the token', async () => {
     const t = fakeTransport({
@@ -383,6 +384,7 @@ describe('Whitebooks', () => {
     const t = fakeTransport({
       '/einvoice/authenticate': () => auth as GspEnvelope,
       '/einvoice/type/GENERATE/version/V1_03': () => ok({ Irn: 'WB-IRN' }),
+      '/einvoice/type/GSTNDETAILS/version/V1_03': () => ok(sandboxSeller),
     });
     const gateway = new WhitebooksGateway(whitebooksConfig(), t.transport, at('2026-09-02T10:00:00Z'));
     await gateway.submitInvoice(creds, { payload, existingIrns: [], now: NOW });
@@ -390,6 +392,20 @@ describe('Whitebooks', () => {
     expect(t.calls.filter((c) => c.path === '/einvoice/authenticate')).toHaveLength(1);
     await gateway.submitInvoice({ ...creds, gstin: '29AAGCB1286Q001', username: 'other' }, { payload, existingIrns: [], now: NOW });
     expect(t.calls.filter((c) => c.path === '/einvoice/authenticate')).toHaveLength(2);
+  });
+
+  it('files a business with its own GSTIN as the sandbox taxpayer, seller block and all', async () => {
+    const t = fakeTransport({
+      '/einvoice/authenticate': () => auth as GspEnvelope,
+      '/einvoice/type/GSTNDETAILS/version/V1_03': () => ok(sandboxSeller),
+      '/einvoice/type/GENERATE/version/V1_03': () => ok({ Irn: 'WB-IRN' }),
+    });
+    const own = { ...creds, gstin: '33CGQPM1770F1ZB' };
+    const own2 = { ...payload, SellerDtls: { ...payload.SellerDtls, Gstin: '33CGQPM1770F1ZB', Stcd: '33' } };
+    await new WhitebooksGateway(whitebooksConfig(), t.transport, at('2026-09-02T10:00:00Z')).submitInvoice(own, { payload: own2, existingIrns: [], now: NOW });
+    expect(t.calls.every((c) => c.headers?.gstin === undefined || c.headers.gstin === '29AAGCB1286Q000')).toBe(true);
+    const sent = t.calls.find((c) => c.path.endsWith('GENERATE/version/V1_03'))!.body as { SellerDtls: { Gstin: string; Stcd: string } };
+    expect(sent.SellerDtls).toMatchObject({ Gstin: '29AAGCB1286Q000', Stcd: '29' });
   });
 
   it('turns a refusal into the portal’s own codes', async () => {
