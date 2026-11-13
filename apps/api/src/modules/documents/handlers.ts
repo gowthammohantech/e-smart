@@ -520,7 +520,9 @@ export const documentsHandlers = defineHandlers({
     const filters = listFilters(ctx, q);
     const sort = q.sort ?? '-date';
     const column = sort.endsWith('number') ? D.number : sort.endsWith('total') ? D.grandTotalMinor : D.date;
-    const k = keyset({ cursor: q.cursor, limit: q.limit, sort: column, id: D.id, order: sort.startsWith('-') ? 'desc' : 'asc' });
+    // Documents of one day (or one amount) read in their number's order, not the order they were keyed in.
+    const then = column === D.number ? undefined : D.number;
+    const k = keyset({ cursor: q.cursor, limit: q.limit, sort: column, then, id: D.id, order: sort.startsWith('-') ? 'desc' : 'asc' });
     const rows = await ctx.db
       .select({ ...getTableColumns(D), partyName: P.name })
       .from(D)
