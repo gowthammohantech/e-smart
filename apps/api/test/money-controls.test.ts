@@ -252,3 +252,20 @@ describe('the books’ own figures (phase 4)', () => {
     expect(contra.status).toBe(422);
   });
 });
+
+describe('cash limits in the Income-tax Act (phase 8)', () => {
+  it('refuses ₹2 lakh or more in cash from one person in a day, and tells the owners of large cash payments', async () => {
+    const m = await moneySetup(t);
+    expect((await t.post(`${m.c}/payments`, receipt(m, { amount: inr(15_000_000) }), { token: m.token })).status).toBe(201);
+    const second = await t.post(`${m.c}/payments`, receipt(m, { amount: inr(5_000_000) }), { token: m.token });
+    expect(second.status).toBe(422);
+    expect(second.body.issues[0].field).toBe('method');
+    // By bank it is fine.
+    const hdfc = await t.post(`${m.c}/payment-accounts`, { name: 'HDFC', type: 'bank', currency: 'INR', openingBalance: nil }, { token: m.token });
+    expect((await t.post(`${m.c}/payments`, receipt(m, { amount: inr(5_000_000), method: 'bank', accountId: hdfc.body.id }), { token: m.token })).status).toBe(201);
+    // ₹15,000 in cash to a supplier: recorded, and the owners told.
+    expect((await t.post(`${m.c}/payments`, payment(m, { amount: inr(1_500_000) }), { token: m.token })).status).toBe(201);
+    const notes = await t.deps.db.select().from(schema.notifications).where(eq(schema.notifications.companyId, m.companyId));
+    expect(notes.some((n) => n.title === 'Cash payment over ₹10,000')).toBe(true);
+  });
+});

@@ -1,3 +1,5 @@
+import { notify, noteMoney } from '../../lib/notify';
+import { CASH_PAYMENT_LIMIT } from '../payments/engine';
 import { assertNotReconciled } from '../banking/engine';
 import { addDaysISO, businessDate as businessDateOf } from '@esmart/core/lib/date';
 import { and, eq, exists, gte, ilike, inArray, isNull, lte, ne, notExists, notInArray, or, sql, type SQL } from 'drizzle-orm';
@@ -284,6 +286,11 @@ export const expensesHandlers = defineHandlers({
         .values({ id: newId('exp'), companyId: ctx.company.id, number, createdBy: ctx.user.id, ...cols, createdAt: ctx.now, updatedAt: ctx.now })
         .returning();
       await linkExpenseAttachments(tx, ctx.company.id, created.id, ctx.body.attachmentIds);
+      // s.40A(3): over ₹10,000 in cash to one person in a day isn't allowed as an expense; the owners are told.
+      const base = Math.round(created.amountMinor * Number(created.exchangeRate));
+      if (created.method === 'cash' && base > CASH_PAYMENT_LIMIT) {
+        await notify(tx, ctx.deps, { companyId: ctx.company.id, kind: 'system', title: 'Cash payment over ₹10,000', body: `${created.number}: ${noteMoney(base, ctx.company.baseCurrency)} paid in cash. Cash over ₹10,000 to one person in a day isn't allowed as an expense for income tax (s.40A(3)); pay by bank where you can.`, entityType: 'expense', entityId: created.id });
+      }
       const wire = await toWire(tx, created);
       await recordChange(tx, ctx.user, { companyId: ctx.company.id, action: 'created', entityType: 'expense', entityId: created.id, entityLabel: created.number, version: created.version, after: wire });
       return created;

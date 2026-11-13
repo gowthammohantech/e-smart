@@ -1,4 +1,4 @@
-import { and, eq, inArray, ne, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
 import { hasLedger } from '@esmart/core/domain/partyKinds';
 import { PAYABLE_KINDS, RECEIVABLE_KINDS, isFinalized } from '@esmart/core/domain/documentStates';
 import { settlementGainLoss } from '@esmart/core/domain/fx';
@@ -62,6 +62,11 @@ export function tdsCeilingPercent(code: string | null | undefined): number {
   const s = tdsSectionOf(code ?? undefined);
   return s ? Math.max(s.rateIndividual, s.rateOther, s.noPanRate) : 20;
 }
+
+/** s.269ST: cash received from one person in a day must stay under ₹2 lakh. */
+export const CASH_RECEIPT_LIMIT = 2_00_000_00;
+/** s.40A(3): cash paid to one person in a day over ₹10,000 is disallowed as an expense. */
+export const CASH_PAYMENT_LIMIT = 10_000_00;
 
 /** How far a rate sent with a payment may stray from the company's rate for the day. */
 export const RATE_TOLERANCE = 0.1;
@@ -438,6 +443,19 @@ export async function writePayment(
     if (allocated + refunded > credit) blocking('allocations', `${input.currency} ${(refunded / 100).toFixed(2)} of it has been refunded; allocations can use only the rest`);
   }
   if (input.tdsSection && input.tdsSection !== 'none' && !tdsSectionOf(input.tdsSection)) blocking('tdsSection', `Unknown TDS section ${input.tdsSection}`);
+  // s.269ST: no one may receive ₹2 lakh or more in cash from one person in a day (the penalty is the
+  // whole amount). Counted with the party's other cash receipts that day.
+  let cashToday = 0;
+  if (input.method === 'cash' && exchangeRate && party) {
+    const [r] = await tx
+      .select({ total: sql<string>`coalesce(sum(round(${PAY.amountMinor} * ${PAY.exchangeRate})), 0)` })
+      .from(PAY)
+      .where(and(eq(PAY.companyId, company.id), eq(PAY.partyId, input.partyId), eq(PAY.direction, input.direction), eq(PAY.method, 'cash'), eq(PAY.date, input.date), isNull(PAY.refundOfPaymentId), existing ? ne(PAY.id, existing.id) : undefined));
+    cashToday = Number(r?.total ?? 0) + Math.round(input.amountMinor * exchangeRate);
+    if (input.direction === 'received' && !refundOf && cashToday >= CASH_RECEIPT_LIMIT) {
+      blocking('method', `${party.name} would have paid ${baseCurrency} ${(cashToday / 100).toFixed(2)} in cash on ${input.date}; ₹2,00,000 or more in cash from one person in a day is not allowed (s.269ST). Take it by bank`);
+    }
+  }
   if (issues.length) throw unprocessable(issues, overOutstanding ? 'ALLOCATION_EXCEEDS_OUTSTANDING' : shortOfCash ? 'INSUFFICIENT_BALANCE' : 'VALIDATION_FAILED');
 
   // FX gain or loss (base currency) when a foreign-currency document settles at another rate.
@@ -525,6 +543,18 @@ export async function writePayment(
     before: existing ? { amountMinor: existing.amountMinor, allocations: before.map((b) => ({ documentId: b.documentId, amountMinor: b.amountMinor })) } : undefined,
     after: { amountMinor: row.amountMinor, allocations: input.allocations },
   });
+  // s.40A(3): cash paid to one person over ₹10,000 in a day is not allowed as an expense. Allowed to
+  // record, but the owners are told, so it is a choice made knowingly.
+  if (input.direction === 'paid' && !refundOf && cashToday > CASH_PAYMENT_LIMIT && cashToday - Math.round(input.amountMinor * (exchangeRate ?? 1)) <= CASH_PAYMENT_LIMIT) {
+    await notify(tx, deps, {
+      companyId: company.id,
+      kind: 'system',
+      title: 'Cash payment over ₹10,000',
+      body: `${row.number}: ${party!.name} has been paid ${noteMoney(cashToday, baseCurrency)} in cash on ${input.date}. Cash over ₹10,000 to one person in a day isn't allowed as an expense for income tax (s.40A(3)); pay by bank where you can.`,
+      entityType: 'payment',
+      entityId: row.id,
+    });
+  }
   if (!existing && input.direction === 'received' && (opts.notifyReceived ?? true)) {
     const amount = noteMoney(row.amountMinor, row.currency);
     await notify(tx, deps, {

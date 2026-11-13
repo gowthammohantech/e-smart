@@ -404,6 +404,8 @@ export async function buildBusiness(api: DemoApi, p: Profile, ctx: BuildContext)
       let account = opts.account ?? (direction === 'paid' ? bank : r.chance(0.7) ? bank : r.chance(0.5) ? wallet : cash);
       // Foreign money is counted in rupees, roughly; it only matters that the bank isn't overdrawn.
       const inBase = currency === 'INR' ? total : total * (currency === 'USD' ? 83 : 105);
+      // Large sums come in by bank: ₹2 lakh or more in cash from one person in a day isn't allowed (s.269ST).
+      if (direction === 'received' && account === cash && inBase >= 100000) account = bank;
       if (direction === 'received') credit(account, inBase, date);
       else account = await spendFrom(date, inBase, account === bank ? undefined : account);
       return (opts.as ?? api).post(`${c}/payments`, {
