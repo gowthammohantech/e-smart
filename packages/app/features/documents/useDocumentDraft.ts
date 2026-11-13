@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { BusinessDocument, DiscountMode, DocumentKind, DocumentLine, Item, NoteReason, Party, TaxCategory } from '@esmart/core/types';
+import { BusinessDocument, ChargesKind, ShipTo, DiscountMode, DocumentKind, DocumentLine, Item, NoteReason, Party, TaxCategory } from '@esmart/core/types';
 import { Money, factorOf, fromMajor, money, zero } from '@esmart/core/lib/money';
 import { addDaysISO, today } from '@esmart/core/lib/date';
 import { uid } from '@esmart/core/lib/id';
@@ -25,6 +25,10 @@ export type DraftState = {
   documentDiscountMode: DiscountMode;
   documentDiscountValue: number;
   charges: Money;
+  /** What the charges are for; unset is other charges. */
+  chargesKind?: ChargesKind;
+  /** The consignee, when the goods go somewhere other than the buyer's own address. */
+  shipTo?: ShipTo;
   applyRoundOff: boolean;
   roundOffManual?: Money;
   placeOfSupplyStateCode?: string;
@@ -34,8 +38,8 @@ export type DraftState = {
   noteReason?: NoteReason;
   /** A direct note's GST treatment, and (with GST) the original invoice or bill it adjusts (RULES 6.24). */
   noteGst?: 'withGst' | 'noGst';
-  /** With an SEZ party: IGST charged or none (LUT or bond); unset takes the default (`defaultSezTax`). */
-  sezTax?: 'withTax' | 'withoutTax';
+  /** With an SEZ party: IGST charged or none (LUT or bond); unset takes the default (`defaultCrossBorderTax`). */
+  crossBorderTax?: 'withTax' | 'withoutTax';
   originalNumber?: string;
   originalDate?: string;
   /** A TDS section, `none`, or unset for the supplier's own (on an invoice, the customer's). */
@@ -48,6 +52,8 @@ export type DraftState = {
   /** On an invoice: the TCS section (s.206C), or none. */
   tcsSection?: string;
   vehicleId?: string;
+  /** Sent by one of the business's transporters rather than its own vehicle. */
+  transporterId?: string | null;
   notes: string;
   terms: string;
   attachmentIds: string[];
@@ -116,13 +122,15 @@ export function draftFromDocument(doc: BusinessDocument): DraftState {
     documentDiscountMode: doc.documentDiscountMode,
     documentDiscountValue: doc.documentDiscountValue,
     charges: doc.charges,
+    chargesKind: doc.chargesKind,
+    shipTo: doc.shipTo ?? undefined,
     applyRoundOff: doc.applyRoundOff,
     roundOffManual: doc.roundOffManual,
     placeOfSupplyStateCode: doc.placeOfSupplyStateCode,
     reverseCharge: doc.reverseCharge,
     noteReason: doc.noteReason,
     noteGst: doc.noteGst,
-    sezTax: doc.sezTax,
+    crossBorderTax: doc.crossBorderTax,
     originalNumber: doc.originalNumber,
     originalDate: doc.originalDate,
     // A stored bill keeps what it was worked out with.
@@ -132,6 +140,7 @@ export function draftFromDocument(doc: BusinessDocument): DraftState {
     customFields: doc.customFields,
     tcsSection: doc.tcs?.section,
     vehicleId: doc.vehicleId,
+    transporterId: doc.transporterId,
     notes: doc.notes ?? '',
     terms: doc.terms ?? '',
     attachmentIds: [...doc.attachmentIds],

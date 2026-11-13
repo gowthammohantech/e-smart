@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { WizardShell } from '@esmart/ui/components/WizardShell';
@@ -8,8 +8,9 @@ import { SwitchField, TextField } from '@esmart/ui/components/Field';
 import { Card } from '@esmart/ui/components/Card';
 import { Text } from '@esmart/ui/components/Text';
 import { Badge } from '@esmart/ui/components/Badge';
+import { Button } from '@esmart/ui/components/Button';
 import { nextStepRoute, onboardingSteps, stepIndex, useOnboardingStore } from '../../store/onboardingStore';
-import { COUNTRIES, INDIAN_STATES } from '@esmart/core/data/masters';
+import { COUNTRIES, INDIAN_STATES, defaultTaxRates } from '@esmart/core/data/masters';
 import { useSignOut } from '../../features/session/useSignOut';
 import { useGstinLookup, type GstinDetails } from '../../features/gstin/useGstinLookup';
 import { validGstin } from '@esmart/core/lib/validators';
@@ -23,6 +24,20 @@ export default function TaxStep() {
   const [error, setError] = useState<string | undefined>();
   const country = COUNTRIES.find((c) => c.code === draft.country);
   const isGst = country?.regime === 'GST';
+  // The rates the business starts with: the regime's defaults, as kept, dropped or added to here.
+  const regime = country?.regime === 'VAT' ? 'VAT' : 'GST';
+  const taxName = regime === 'VAT' ? 'VAT' : 'GST';
+  const defaults = defaultTaxRates(regime);
+  const rates = draft.taxRates ?? defaults;
+  const shownRates = [...new Set([...defaults, ...rates])].sort((a, b) => a - b);
+  const [rateText, setRateText] = useState('');
+  // At least one rate stays: a business registered for tax needs one to charge.
+  const toggleRate = (r: number) => set({ taxRates: rates.includes(r) ? (rates.length > 1 ? rates.filter((x) => x !== r) : rates) : [...rates, r].sort((a, b) => a - b) });
+  const addRate = () => {
+    const r = Number(rateText);
+    if (rateText && Number.isFinite(r) && r >= 0 && r <= 100 && !rates.includes(r)) set({ taxRates: [...rates, r].sort((a, b) => a - b) });
+    setRateText('');
+  };
 
   /** The GSTIN's registered details become the business step's starting point; it can still edit them. */
   const fillFromPortal = (d: GstinDetails) => {
@@ -118,12 +133,37 @@ export default function TaxStep() {
             />
           ) : null}
 
+          {/* The rates the business starts with: tap one to leave it out or bring it back, or add another. */}
           <Card variant="flat" style={{ gap: t.spacing.md }}>
             <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('onboarding:tax.defaultSlabs')}</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm }}>
-              {(isGst ? [0, 5, 12, 18, 28] : [0, 5, 20]).map((r) => (
-                <Badge key={r} label={`${country?.regime === 'VAT' ? 'VAT' : 'GST'} ${r}%`} tone={r === 18 ? 'info' : 'neutral'} />
-              ))}
+              {shownRates.map((r) => {
+                const on = rates.includes(r);
+                return (
+                  <Pressable
+                    key={r}
+                    onPress={() => toggleRate(r)}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: on }}
+                    accessibilityLabel={`${taxName} ${r}%`}
+                    style={{ opacity: on ? 1 : 0.5 }}
+                  >
+                    <Badge label={`${taxName} ${r}%`} tone={on ? 'info' : 'neutral'} icon={on ? 'check' : 'plus'} />
+                  </Pressable>
+                );
+              })}
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: t.spacing.sm }}>
+              <TextField
+                label={tr('onboarding:tax.addRate')}
+                value={rateText}
+                onChangeText={(v) => setRateText(v.replace(/[^0-9.]/g, ''))}
+                keyboardType="decimal-pad"
+                placeholder="3"
+                containerStyle={{ flex: 1 }}
+                onSubmitEditing={addRate}
+              />
+              <Button title={tr('onboarding:tax.add')} variant="ghost" icon="plus" onPress={addRate} disabled={!rateText} />
             </View>
             <Text variant="caption" tone="muted">
               {tr('onboarding:tax.slabsNote')}

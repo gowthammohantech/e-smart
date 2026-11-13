@@ -28,7 +28,7 @@ export function modernLayout(view: DocView, copyLabel: string): string {
   const cards = [
     `<div class="card"><div class="ctitle">${bi('sales:pdf.billedBy')}</div>${sellerBlock(view)}</div>`,
     `<div class="card"><div class="ctitle">${bi('sales:pdf.billedTo')}</div>${buyerBlock(view)}</div>`,
-    tpl.showShipTo ? `<div class="card"><div class="ctitle">${bi('sales:pdf.consigneeShipTo')}</div>${consigneeBlock(view)}</div>` : '',
+    tpl.showShipTo || view.doc.shipTo ? `<div class="card"><div class="ctitle">${bi('sales:pdf.consigneeShipTo')}</div>${consigneeBlock(view)}</div>` : '',
   ].join('');
 
   const rows = view.items

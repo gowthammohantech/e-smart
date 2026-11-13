@@ -48,16 +48,13 @@ import {
   assertNoLiveReturns,
   assertPeriodOpen,
   finalizeInTx,
-  gstr1Closed,
   isCredit,
   postStock,
-  previousInSeries,
   reverseStock,
   syncPaymentState,
   today,
   withdrawStock,
 } from './lifecycle';
-import { sameNumberingPeriod } from '../../lib/numbering';
 import { SHARE_LINK_DAYS, createShareLinkFor, paymentLinkFor, pdfFilename, renderDocumentPdf, storePdfLinkFor } from './outbound';
 import { companyLogoFile } from '../companies/logo';
 import { renderDocumentEmailHtml } from '../../lib/emailLayout';
@@ -130,7 +127,7 @@ function sameHeader(a: DocRow, b: DocRow): boolean {
     a.currency.trim() === b.currency.trim() &&
     (a.placeOfSupplyStateCode ?? null) === (b.placeOfSupplyStateCode ?? null) &&
     a.reverseCharge === b.reverseCharge &&
-    (a.sezTax ?? null) === (b.sezTax ?? null)
+    (a.crossBorderTax ?? null) === (b.crossBorderTax ?? null)
   );
 }
 
@@ -189,10 +186,10 @@ async function toWire(ctx: AnyCtx, row: DocRow): Promise<DocumentWire> {
 }
 
 /**
- * A full edit of an issued invoice that is still the latest of its series (RULES 6.23, pending CA):
- * recomputed as a draft save is, same number, its stock taken back and posted again, its expected
- * TDS and TCS worked out afresh. The date may not move before the invoice issued just before it,
- * out of its numbering period, or into a closed or filed period. The ledger reposts from it.
+ * A full edit of an issued invoice nothing depends on (RULES 6.23, pending CA): recomputed as a draft
+ * save is, same number and date, its stock taken back and posted again, its expected TDS and TCS
+ * worked out afresh. Its date stays as issued: cancel it and issue another to change that. The
+ * ledger reposts from it.
  */
 async function editLatestInvoice(ctx: AnyCtx, tx: DbOrTx, current: DocRow, body: Schema<'NewDocumentInput'>, changed: string[]): Promise<DocRow> {
   const block = await canEditLatest(tx, ctx.company, current);
@@ -204,12 +201,7 @@ async function editLatestInvoice(ctx: AnyCtx, tx: DbOrTx, current: DocRow, body:
   if (f.branchId !== current.branchId) throw invalid('branchId', `${current.number} keeps its branch: its number was drawn there`);
   const dateIssue = (message: string, code: string) => unprocessable([{ field: 'date', message, severity: 'blocking' }], code);
   if (f.date !== current.date) {
-    assertPeriodOpen(ctx.company, f.date);
-    if (f.date > addDaysISO(today(ctx.now), 1)) throw dateIssue(`An invoice cannot be dated ${f.date}, in the future`, 'DOCUMENT_DATED_IN_FUTURE');
-    const prev = await previousInSeries(tx, current);
-    if (prev && f.date < prev.date) throw dateIssue(`${current.number} cannot be dated before ${prev.number} (${prev.date}), issued before it`, 'DATE_BEFORE_PREVIOUS');
-    if (!(await sameNumberingPeriod(tx, ctx.company.id, 'invoice', current.date, f.date))) throw dateIssue(`${current.number} cannot move out of the numbering period it was issued in`, 'DATE_OUTSIDE_SERIES');
-    if (await gstr1Closed(tx, ctx.company.id, f.date)) throw conflict('RETURN_FILED', `GSTR-1 for ${f.date.slice(0, 7)} is filed; the invoice cannot move into it`);
+    throw dateIssue(`${current.number} keeps its date (${current.date}): cancel it and issue a new invoice to date it otherwise`, 'DATE_LOCKED');
   }
   const prepared = await prepareDocument(tx, ctx.company, f, linesFromWire(body.lines), { snapshotRates: true, documentId: current.id });
   // The party as registered now: the edit issues the invoice again.
@@ -406,13 +398,15 @@ function frozenChanges(row: DocRow, body: Schema<'NewDocumentInput'>, stored: Li
   cmp('documentDiscountMode', body.documentDiscountMode, row.documentDiscountMode);
   cmp('documentDiscountValue', body.documentDiscountValue, Number(row.documentDiscountValue));
   cmp('charges', body.charges?.minor, row.chargesMinor);
+  cmp('chargesKind', body.chargesKind, row.chargesKind ?? undefined);
+  cmp('shipTo', body.shipTo === undefined ? undefined : stableJson(body.shipTo ?? null), stableJson(row.shipTo ?? null));
   cmp('applyRoundOff', body.applyRoundOff, row.applyRoundOff);
   cmp('roundOffManual', body.roundOffManual?.minor, row.roundOffManualMinor);
   cmp('placeOfSupplyStateCode', body.placeOfSupplyStateCode, row.placeOfSupplyStateCode);
   cmp('supplierDocNumber', body.supplierDocNumber, row.supplierDocNumber);
   cmp('sourceDocumentId', body.sourceDocumentId, row.sourceDocumentId);
   cmp('noteGst', body.noteGst, row.noteGst ?? undefined);
-  cmp('sezTax', body.sezTax, row.sezTax ?? undefined);
+  cmp('crossBorderTax', body.crossBorderTax, row.crossBorderTax ?? undefined);
   cmp('originalNumber', body.originalNumber, row.originalNumber ?? undefined);
   cmp('originalDate', body.originalDate, row.originalDate ?? undefined);
   // What an invoice's full edit can change too (RULES 6.23): compared so the edit isn't dropped as a notes-only save.
@@ -424,6 +418,7 @@ function frozenChanges(row: DocRow, body: Schema<'NewDocumentInput'>, stored: Li
     if (section(body.tdsSection) ?? row.tdsSection) cmp('tdsRate', body.tdsRate ?? undefined, row.tdsRate != null ? Number(row.tdsRate) : null);
     cmp('costCentreId', body.costCentreId === undefined ? undefined : (body.costCentreId ?? null), row.costCentreId ?? null);
     cmp('vehicleId', body.vehicleId === undefined ? undefined : (body.vehicleId ?? null), row.vehicleId ?? null);
+    cmp('transporterId', body.transporterId === undefined ? undefined : (body.transporterId ?? null), row.transporterId ?? null);
     cmp('reverseCharge', body.reverseCharge, row.reverseCharge);
     if (body.customFields !== undefined) cmp('customFields', stableJson(body.customFields ?? {}), stableJson(row.customFields ?? {}));
   }
@@ -520,7 +515,9 @@ export const documentsHandlers = defineHandlers({
     const filters = listFilters(ctx, q);
     const sort = q.sort ?? '-date';
     const column = sort.endsWith('number') ? D.number : sort.endsWith('total') ? D.grandTotalMinor : D.date;
-    const k = keyset({ cursor: q.cursor, limit: q.limit, sort: column, id: D.id, order: sort.startsWith('-') ? 'desc' : 'asc' });
+    // Documents of one day (or one amount) read in their number's order, not the order they were keyed in.
+    const then = column === D.number ? undefined : D.number;
+    const k = keyset({ cursor: q.cursor, limit: q.limit, sort: column, then, id: D.id, order: sort.startsWith('-') ? 'desc' : 'asc' });
     const rows = await ctx.db
       .select({ ...getTableColumns(D), partyName: P.name })
       .from(D)

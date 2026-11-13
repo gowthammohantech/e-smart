@@ -11,9 +11,9 @@ import { resolveRate } from '@esmart/core/domain/fx';
 import { calculateDocument, calculateLine } from '@esmart/core/domain/lineCalc';
 import { FULL_PLAN, hasModule, saleTdsOnPlan } from '@esmart/core/domain/plan';
 import { OTHER_COUNTRY_CODE } from '@esmart/core/domain/stateCodes';
-import { buildTaxContext, taxAvailableOn, taxRateOn, type SezTax } from '@esmart/core/domain/taxEngine';
+import { buildTaxContext, taxAvailableOn, taxRateOn, type CrossBorderTax } from '@esmart/core/domain/taxEngine';
 import { addDaysISO } from '@esmart/core/lib/date';
-import type { Branch, Company, DocumentKind, DocumentLine, DocumentTotals, GstFlags, Party, TaxCategory } from '@esmart/core/types';
+import type { Branch, ChargesKind, Company, ShipTo, DocumentKind, DocumentLine, DocumentTotals, GstFlags, Party, TaxCategory } from '@esmart/core/types';
 import { schema } from '@esmart/db';
 import type { Schema } from '@esmart/api-contract';
 import type { CompanyRow } from '../../context';
@@ -158,6 +158,10 @@ export type DocFields = {
   documentDiscountMode: 'percent' | 'amount';
   documentDiscountValue: number;
   chargesMinor: number;
+  /** What the charges are for; null is other charges. */
+  chargesKind: ChargesKind | null;
+  /** The consignee, when the goods go somewhere other than the buyer's own address. */
+  shipTo: ShipTo | null;
   chargesCurrency?: string;
   applyRoundOff: boolean | null;
   /** A round-off the user typed, in minor units of the document currency. */
@@ -167,8 +171,8 @@ export type DocFields = {
   noteReason: NonNullable<DocRow['noteReason']> | null;
   /** A direct note's GST treatment (RULES 6.24): with GST under s.34 (null too), or a financial note without. */
   noteGst: 'withGst' | 'noGst' | null;
-  /** With an SEZ party: IGST charged, or none under LUT or bond. Null takes the default (`defaultSezTax`). */
-  sezTax: SezTax | null;
+  /** An export, SEZ or import document: IGST charged, or none. Null takes the default (`defaultCrossBorderTax`). */
+  crossBorderTax: CrossBorderTax | null;
   /** A direct note with GST: the original invoice or bill it adjusts. */
   originalNumber: string | null;
   originalDate: string | null;
@@ -180,6 +184,7 @@ export type DocFields = {
   /** A TCS section (s.206C), `none`, or unset: an invoice keeps what it had, a new one takes the customer's. */
   tcsSection?: string | null;
   vehicleId?: string | null;
+  transporterId?: string | null;
   /** Undefined keeps what the document had. */
   customFields?: Record<string, unknown>;
   notes: string | null;
@@ -253,6 +258,9 @@ export function fieldsFromWire(body: Schema<'NewDocumentInput'>, base?: DocRow):
     documentDiscountMode: body.documentDiscountMode ?? base?.documentDiscountMode ?? 'percent',
     documentDiscountValue: body.documentDiscountValue ?? (base ? Number(base.documentDiscountValue) : 0),
     chargesMinor: body.charges?.minor ?? base?.chargesMinor ?? 0,
+    chargesKind: keep(body.chargesKind, base?.chargesKind as ChargesKind | null | undefined),
+    // Another party ships to its own address unless told otherwise.
+    shipTo: keep(body.shipTo === undefined ? undefined : cleanShipTo(body.shipTo), base && base.partyId !== body.partyId ? null : (base?.shipTo as ShipTo | null | undefined)),
     chargesCurrency: body.charges?.currency,
     applyRoundOff: body.applyRoundOff ?? base?.applyRoundOff ?? null,
     roundOffManualMinor: body.roundOffManual !== undefined ? body.roundOffManual.minor : (base?.roundOffManualMinor ?? null),
@@ -262,7 +270,7 @@ export function fieldsFromWire(body: Schema<'NewDocumentInput'>, base?: DocRow):
     noteReason: keep(body.noteReason, base?.noteReason),
     noteGst: keep(body.noteGst, base?.noteGst as DocFields['noteGst'] | undefined),
     // Another party starts from its own default unless one is sent.
-    sezTax: keep(body.sezTax, base && base.partyId !== body.partyId ? null : (base?.sezTax as DocFields['sezTax'] | undefined)),
+    crossBorderTax: keep(body.crossBorderTax, base && base.partyId !== body.partyId ? null : (base?.crossBorderTax as DocFields['crossBorderTax'] | undefined)),
     originalNumber: keep(body.originalNumber === undefined ? undefined : body.originalNumber.trim() || null, base?.originalNumber),
     originalDate: keep(body.originalDate, base?.originalDate),
     // A stored document keeps what it had; a new one takes the supplier's section unless told otherwise.
@@ -273,10 +281,19 @@ export function fieldsFromWire(body: Schema<'NewDocumentInput'>, base?: DocRow):
     // Like TDS: a stored invoice keeps what it had; a new one takes the customer's section unless told otherwise.
     tcsSection: body.tcsSection ?? (base ? base.tcsSection : undefined),
     vehicleId: keep(body.vehicleId, base?.vehicleId),
+    transporterId: keep(body.transporterId, base?.transporterId),
     notes: keep(body.notes, base?.notes),
     terms: keep(body.terms, base?.terms),
     sourceDocumentId: keep(body.sourceDocumentId, base?.sourceDocumentId),
   };
+}
+
+/** A consignee as stored: trimmed, the GSTIN upper-cased, empty parts dropped; null when there is none. */
+function cleanShipTo(v: { name?: string; gstin?: string; address: Schema<'Address'> } | null): ShipTo | null {
+  if (!v) return null;
+  const name = v.name?.trim();
+  const gstin = v.gstin?.trim().toUpperCase();
+  return { ...(name && { name }), ...(gstin && { gstin }), address: v.address as ShipTo['address'] };
 }
 
 export function fieldsFromRow(row: DocRow): DocFields {
@@ -296,13 +313,15 @@ export function fieldsFromRow(row: DocRow): DocFields {
     documentDiscountMode: row.documentDiscountMode,
     documentDiscountValue: Number(row.documentDiscountValue),
     chargesMinor: row.chargesMinor,
+    chargesKind: row.chargesKind as ChargesKind | null,
+    shipTo: (row.shipTo as ShipTo | null) ?? null,
     applyRoundOff: row.applyRoundOff,
     roundOffManualMinor: row.roundOffManualMinor,
     placeOfSupplyStateCode: row.placeOfSupplyStateCode,
     reverseCharge: row.reverseCharge,
     noteReason: row.noteReason,
     noteGst: row.noteGst as DocFields['noteGst'],
-    sezTax: row.sezTax as DocFields['sezTax'],
+    crossBorderTax: row.crossBorderTax as DocFields['crossBorderTax'],
     originalNumber: row.originalNumber,
     originalDate: row.originalDate,
     tdsSection: row.tdsSection ?? (row.finalizedAt ? 'none' : undefined),
@@ -311,6 +330,7 @@ export function fieldsFromRow(row: DocRow): DocFields {
     customFields: row.customFields as Record<string, unknown>,
     tcsSection: row.tcsSection,
     vehicleId: row.vehicleId,
+    transporterId: row.transporterId,
     notes: row.notes,
     terms: row.terms,
     sourceDocumentId: row.sourceDocumentId,
@@ -434,11 +454,11 @@ export async function prepareDocument(
     if (!party?.taxId) blocking('isdInvoice', "An ISD invoice comes from the distributor's GSTIN; the supplier has none");
   }
 
-  // A return or note against an SEZ document reverses it as it was charged: with IGST or without.
-  let sezTax = f.sezTax;
+  // A return or note against an export, SEZ or import document reverses it as it was charged: with IGST or without.
+  let crossBorderTax = f.crossBorderTax;
   if (f.sourceDocumentId) {
-    const [src] = await db.select({ id: D.id, date: D.date, number: D.number, sezTax: D.sezTax }).from(D).where(and(eq(D.companyId, company.id), eq(D.id, f.sourceDocumentId)));
-    if (src?.sezTax && (f.kind === 'salesReturn' || f.kind === 'purchaseReturn' || NOTE_KINDS.includes(f.kind))) sezTax = src.sezTax as SezTax;
+    const [src] = await db.select({ id: D.id, date: D.date, number: D.number, crossBorderTax: D.crossBorderTax }).from(D).where(and(eq(D.companyId, company.id), eq(D.id, f.sourceDocumentId)));
+    if (src?.crossBorderTax && (f.kind === 'salesReturn' || f.kind === 'purchaseReturn' || NOTE_KINDS.includes(f.kind))) crossBorderTax = src.crossBorderTax as CrossBorderTax;
     if (!src) blocking('sourceDocumentId', 'No such document in this company');
     // What a document is made from (the quote behind an order, the invoice behind a return) came first.
     else if (f.date < src.date) blocking('date', `Can't be before ${src.date}, the date of ${src.number.trim()} it was made from`);
@@ -531,6 +551,10 @@ export async function prepareDocument(
 
   issues.push(...(await costCentreIssues(db, company.id, [{ field: 'costCentreId', id: f.costCentreId }, ...lines.map((l, i) => ({ field: `lines[${i}].costCentreId`, id: l.costCentreId }))])));
   issues.push(...(await vehicleIssues(db, company.id, f.vehicleId)));
+  if (f.transporterId) {
+    const [tr] = await db.select({ id: schema.transporters.id }).from(schema.transporters).where(and(eq(schema.transporters.companyId, company.id), eq(schema.transporters.id, f.transporterId)));
+    if (!tr) issues.push({ field: 'transporterId', message: 'No such transporter in this company', severity: 'blocking' });
+  }
   await checkRecoveredExpenses(db, company.id, f, coreLines, opts.documentId, blocking);
   if (issues.length) throw unprocessable(issues);
 
@@ -553,10 +577,15 @@ export async function prepareDocument(
     purchase: isPurchaseKind(f.kind),
     branch: branch ? branchCore(branch) : undefined,
     reverseCharge,
-    sezTax,
+    crossBorderTax,
   });
-  // What an SEZ document applied, so it reads the same however the LUT changes later; none for anyone else.
-  const appliedSezTax: SezTax | null = taxContext.crossBorder === 'sez' ? (taxContext.zeroRated ? 'withoutTax' : 'withTax') : null;
+  // What an export, SEZ or import document applied, so it reads the same however the LUT changes later;
+  // none for anything else.
+  const appliedCrossBorderTax: CrossBorderTax | null = taxContext.crossBorder ? (taxContext.zeroRated ? 'withoutTax' : 'withTax') : null;
+  // An import bill charging IGST on its lines has none paid at customs: a bill of entry too would claim it twice.
+  if (taxContext.crossBorder === 'import' && appliedCrossBorderTax === 'withTax' && f.kind === 'purchaseBill' && f.billOfEntry) {
+    throw unprocessable([{ field: 'billOfEntry', message: 'An import bill charging IGST has no bill of entry: choose without tax to record the IGST paid at customs', severity: 'blocking' }]);
+  }
   const applyRoundOff = f.applyRoundOff ?? f.currency === 'INR';
   const calcInput = {
     lines: coreLines,
@@ -630,17 +659,21 @@ export async function prepareDocument(
       documentDiscountMode: f.documentDiscountMode,
       documentDiscountValue: String(f.documentDiscountValue),
       chargesMinor: f.chargesMinor,
+      // Named only when there is something charged.
+      chargesKind: f.chargesMinor ? f.chargesKind : null,
+      shipTo: f.shipTo,
       applyRoundOff,
       roundOffManualMinor: f.roundOffManualMinor,
       placeOfSupplyStateCode: placeOfSupply,
       reverseCharge,
       noteReason: NOTE_KINDS.includes(f.kind) ? f.noteReason : null,
       noteGst: NOTE_KINDS.includes(f.kind) && !f.sourceDocumentId ? directNoteGst(f) : null,
-      sezTax: appliedSezTax,
+      crossBorderTax: appliedCrossBorderTax,
       originalNumber: NOTE_KINDS.includes(f.kind) && !f.sourceDocumentId && !noGst ? f.originalNumber : null,
       originalDate: NOTE_KINDS.includes(f.kind) && !f.sourceDocumentId && !noGst ? f.originalDate : null,
       tcsSection: tcsRate > 0 ? tcsCode : null,
       vehicleId: f.vehicleId ?? null,
+      transporterId: f.transporterId ?? null,
       tcsRate: tcsRate > 0 ? String(tcsRate) : null,
       tdsSection: tds.amountMinor > 0 || tds.section ? tds.section : null,
       tdsRate: tds.section ? String(tds.rate) : null,

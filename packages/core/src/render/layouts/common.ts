@@ -9,7 +9,7 @@ import { formatDate } from '../../lib/date';
 import { amountInWords } from '../../lib/amountInWords';
 import { INDIAN_STATES } from '../../data/masters';
 import type { DocView } from '../docView';
-import { esc, NOTE_REASON, printedCustomFields, sezNote } from '../blocks';
+import { esc, NOTE_REASON, printedCustomFields, crossBorderNote } from '../blocks';
 
 /** Text that reads on the accent: white on a dark one, near-black on a light one (WCAG contrast). */
 export function onAccent(hex: string): string {
@@ -105,6 +105,9 @@ export function buyerBlock(view: DocView): string {
 /** The consignee: the party's shipping address, or its billing one when it has none. */
 export function consigneeBlock(view: DocView): string {
   const p = view.party;
+  // The document's own consignee when it names one, else the buyer at their shipping (or billing) address.
+  const ship = view.doc.shipTo;
+  if (ship) return partyBlock({ name: ship.name || p?.name, address: ship.address, gstin: ship.gstin });
   return partyBlock({ name: p?.name, address: p?.shippingAddress?.line1 ? p.shippingAddress : p?.billingAddress, gstin: view.doc.partyGstin ?? p?.taxId });
 }
 
@@ -124,7 +127,7 @@ export type Fact = { label: string; value: string; strong?: boolean };
 export function headerFacts(view: DocView): Fact[] {
   const { doc, bi, source, origin, ewayBill, pos, party } = view;
   const note = ['creditNote', 'debitNote', 'salesReturn', 'purchaseReturn', 'supplierCreditNote', 'supplierDebitNote'].includes(doc.kind);
-  const destination = party?.shippingAddress?.city || party?.billingAddress?.city;
+  const destination = doc.shipTo?.address.city || party?.shippingAddress?.city || party?.billingAddress?.city;
   const transport = ewayBill ? [ewayBill.transportMode ? capital(String(ewayBill.transportMode)) : '', ewayBill.vehicleNumber, ewayBill.transporterName].filter(Boolean).join(' · ') : '';
   const facts: (Fact | null)[] = [
     { label: bi('sales:pdf.number'), value: esc(view.shownNumber), strong: true },
@@ -153,7 +156,8 @@ function capital(s: string): string {
 
 /** The heading: a registered seller's invoice is a tax invoice (Rule 46), the rest by their kind. */
 export function titleOf(view: DocView): string {
-  return view.doc.kind === 'invoice' && !view.billOfSupply && view.sellerTaxId ? 'TAX INVOICE' : view.label;
+  // In the business's own currency a registered seller's invoice is a tax invoice; in another, a commercial invoice.
+  return view.doc.kind === 'invoice' && !view.billOfSupply && !view.commercial && view.sellerTaxId ? 'TAX INVOICE' : view.label;
 }
 
 /** The steps from the lines' sum to the total, a row each, under the items. */
@@ -168,7 +172,7 @@ export function titleNotes(view: DocView): string {
     doc.kind === 'proforma' ? '<div class="sub ctr">Not a tax invoice. A tax invoice follows on supply or on receipt of payment.</div>' : '',
     billOfSupply ? '<div class="sub ctr">Composition taxable person, not eligible to collect tax on supplies</div>' : '',
     doc.reverseCharge ? '<div class="sub ctr">Tax is payable on reverse charge by the recipient</div>' : '',
-    sezNote(doc) ? `<div class="sub ctr">${esc(sezNote(doc))}</div>` : '',
+    crossBorderNote(doc) ? `<div class="sub ctr">${esc(crossBorderNote(doc))}</div>` : '',
   ].join('');
 }
 

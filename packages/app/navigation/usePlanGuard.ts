@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { usePathname, useRouter } from 'expo-router';
-import { hasModule, moduleEnabled, moduleForPath, switchedModuleForPath } from '@esmart/core/domain/plan';
+import { canOpen, hasModule, moduleEnabled, moduleForPath, switchedModuleForPath } from '@esmart/core/domain/plan';
 import { useDisabledModules, usePlan } from '../store/selectors';
 
 /**
@@ -21,6 +21,9 @@ export function usePlanGuard() {
     } else if ((module && !moduleEnabled(plan, disabled, module)) || (switched && disabled.includes(switched))) {
       // In the plan, but switched off (or a settings page of a module switched off): where it can be switched on.
       router.replace('/(app)/settings/modules');
+    } else if (!canOpen(plan, pathname, disabled)) {
+      // Not a module's, but not on this plan either (vehicles on Free): the plans.
+      router.replace('/(app)/upgrade');
     }
   }, [pathname, plan, disabled, router]);
 }

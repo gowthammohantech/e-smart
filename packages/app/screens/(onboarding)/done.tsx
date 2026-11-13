@@ -22,11 +22,14 @@ import { COUNTRIES } from '@esmart/core/data/masters';
 import { DEFAULT_PREFIXES, SERIES_KINDS, defaultSeries } from '@esmart/core/domain/numbering';
 import { joinPhone } from '@esmart/core/lib/phone';
 
-const NEXT_STEPS: { icon: IconName; labelKey: string; bodyKey: string }[] = [
-  { icon: 'account-plus-outline', labelKey: 'customersLabel', bodyKey: 'customersBody' },
-  { icon: 'tag-outline', labelKey: 'itemsLabel', bodyKey: 'itemsBody' },
-  { icon: 'file-document-outline', labelKey: 'invoiceLabel', bodyKey: 'invoiceBody' },
+/** Each finishes setup and opens where that first step is done. */
+const NEXT_STEPS: { icon: IconName; labelKey: string; bodyKey: string; route: string }[] = [
+  { icon: 'account-plus-outline', labelKey: 'customersLabel', bodyKey: 'customersBody', route: '/(app)/contacts/customers/new' },
+  { icon: 'tag-outline', labelKey: 'itemsLabel', bodyKey: 'itemsBody', route: '/(app)/catalog/items/new' },
+  { icon: 'file-document-outline', labelKey: 'invoiceLabel', bodyKey: 'invoiceBody', route: '/(app)/sales/invoices/new' },
 ];
+const INVOICE_ROUTE = NEXT_STEPS[2].route;
+const DASHBOARD_ROUTE = '/(app)/(tabs)';
 
 export default function Done() {
   const t = useTheme();
@@ -45,7 +48,7 @@ export default function Done() {
   const finished = useRef(false);
   // The business the server already made: a retry after the last step failed doesn't make a second.
   const created = useRef<string | null>(null);
-  const finish = async (goToInvoice: boolean) => {
+  const finish = async (goTo: string) => {
     if (finished.current) return;
     finished.current = true;
     setBusy(true);
@@ -62,7 +65,12 @@ export default function Done() {
     useAppStore.setState((s) => ({ session: { ...s.session, onboardingComplete: true } }));
     reset();
     toast.show(tr('onboarding:done.created'), 'success', { icon: 'store-check-outline', detail: draft.name || tr('onboarding:done.defaultName') });
-    router.replace(goToInvoice ? '/(app)/sales/invoices/new' : '/(app)/(tabs)');
+    // The dashboard sits under a first step, so Back from it lands there.
+    if (goTo === DASHBOARD_ROUTE) router.replace(goTo as never);
+    else {
+      router.replace(DASHBOARD_ROUTE as never);
+      router.push(goTo as never);
+    }
   };
 
   const createBusiness = async (): Promise<boolean> => {
@@ -103,6 +111,7 @@ export default function Done() {
         },
         series,
         idempotencyKey,
+        draft.taxRegistered ? draft.taxRates : undefined,
       );
     } catch (err) {
       finished.current = false;
@@ -171,7 +180,13 @@ export default function Done() {
 
         <View style={{ gap: t.spacing.md }}>
           {NEXT_STEPS.map((s) => (
-            <Card key={s.labelKey} variant="flat" style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
+            <Card
+              key={s.labelKey}
+              variant="flat"
+              onPress={busy ? undefined : () => finish(s.route)}
+              accessibilityLabel={tr(`onboarding:done.next.${s.labelKey}` as 'onboarding:done.next.customersLabel')}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md, opacity: busy ? 0.6 : 1 }}
+            >
               <View
                 style={{
                   width: 36,
@@ -192,6 +207,7 @@ export default function Done() {
                   {tr(`onboarding:done.next.${s.bodyKey}` as 'onboarding:done.next.customersBody')}
                 </Text>
               </View>
+              <Icon name="chevron-right" size={18} color={t.c.muted} />
             </Card>
           ))}
         </View>
@@ -206,13 +222,13 @@ export default function Done() {
       >
         {desktop ? (
           <>
-            <Button title={tr('onboarding:done.goToDashboard')} variant="ghost" onPress={() => finish(false)} disabled={busy} />
-            <Button title={tr('onboarding:done.createInvoice')} onPress={() => finish(true)} loading={busy} iconRight="arrow-right" />
+            <Button title={tr('onboarding:done.goToDashboard')} variant="ghost" onPress={() => finish(DASHBOARD_ROUTE)} disabled={busy} />
+            <Button title={tr('onboarding:done.createInvoice')} onPress={() => finish(INVOICE_ROUTE)} loading={busy} iconRight="arrow-right" />
           </>
         ) : (
           <>
-            <Button title={tr('onboarding:done.createInvoice')} onPress={() => finish(true)} loading={busy} fullWidth />
-            <Button title={tr('onboarding:done.goToDashboard')} variant="ghost" onPress={() => finish(false)} disabled={busy} fullWidth />
+            <Button title={tr('onboarding:done.createInvoice')} onPress={() => finish(INVOICE_ROUTE)} loading={busy} fullWidth />
+            <Button title={tr('onboarding:done.goToDashboard')} variant="ghost" onPress={() => finish(DASHBOARD_ROUTE)} disabled={busy} fullWidth />
           </>
         )}
       </View>

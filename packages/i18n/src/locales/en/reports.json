@@ -121,7 +121,12 @@
     "to": "To",
     "toBeforeFrom": "Ends before it starts",
     "applyRange": "Show this range",
-    "branchLimitedTitle": "Limited to some branches"
+    "branchLimitedTitle": "Limited to some branches",
+    "contactsPicked_one": "{{count}} contact",
+    "contactsPicked_other": "{{count}} contacts",
+    "pickContacts": "Tick one or several.",
+    "showContacts_one": "Show {{count}} contact",
+    "showContacts_other": "Show {{count}} contacts"
   },
   "detail": {
     "openAdvances": "Open advances",
@@ -357,7 +362,8 @@
     "section": "Section",
     "tds": "TDS",
     "tdsBase": "Amount taxed",
-    "documents": "Bills"
+    "documents": "Bills",
+    "cess": "Cess"
   },
   "cell": {
     "days_one": "{{count}} day",

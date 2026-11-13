@@ -94,6 +94,8 @@ export function ReportShell({
 
   const branch = branches.find((b) => b.id === scope.filters.branchId);
   const party = parties.find((p) => p.id === scope.filters.partyId);
+  // Several contacts picked: the chip counts them.
+  const partyCount = scope.filters.partyIds?.length ?? 0;
   // Opened with ?partyId= for a contact not yet in the store: shimmer the chip, not "All contacts".
   const partyPending = !!scope.filters.partyId && !party && partyRecord.isLoading;
   const rangeLabel = asAt
@@ -268,8 +270,11 @@ export function ReportShell({
               <Skeleton height={40} width={120} radius={t.radius.pill} />
             </SkeletonGroup>
           ) : showPartyFilter
-            ? chip(party?.name ?? tr('reports:shell.allContacts'), !!party, () => setPartyOpen(true), () =>
-                changeScope({ ...scope, filters: { ...scope.filters, partyId: null } }),
+            ? chip(
+                partyCount > 1 ? tr('reports:shell.contactsPicked', { count: partyCount }) : (party?.name ?? tr('reports:shell.allContacts')),
+                !!party || partyCount > 1,
+                () => setPartyOpen(true),
+                () => changeScope({ ...scope, filters: { ...scope.filters, partyId: null, partyIds: null } }),
               )
             : null}
         </ScrollView>
@@ -447,17 +452,31 @@ export function ReportShell({
         visible={partyOpen}
         onClose={() => setPartyOpen(false)}
         title={tr('reports:shell.contact')}
-        options={[
-          { value: '', label: tr('reports:shell.allContacts') },
-          ...(partySearch.data ?? []).map((p) => ({ value: p.id!, label: p.name!, description: tr(p.kind === 'supplier' ? 'common:table.supplier' : 'common:table.customer') })),
-        ]}
+        subtitle={tr('reports:shell.pickContacts')}
+        options={(partySearch.data ?? []).map((p) => ({ value: p.id!, label: p.name!, description: tr(p.kind === 'supplier' ? 'common:table.supplier' : 'common:table.customer') }))}
         onQueryChange={setPartyQuery}
         loading={partySearch.isFetching}
-        value={scope.filters.partyId ?? ''}
-        onSelect={(v) => changeScope({ ...scope, filters: { ...scope.filters, partyId: v || null } })}
+        // Tick one or several; none confirmed is every contact again.
+        multiple
+        confirmLabel={(count) => (count ? tr('reports:shell.showContacts', { count }) : tr('reports:shell.allContacts'))}
+        onConfirm={(ids) => {
+          setPartyOpen(false);
+          changeScope({ ...scope, filters: { ...scope.filters, ...partyFilters(ids) } });
+        }}
       />
     </View>
   );
+}
+
+/** The contacts picked, as filters: one is `partyId` (statements and links read it), several `partyIds`. */
+function partyFilters(ids: string[]): Pick<ReportFilters, 'partyId' | 'partyIds'> {
+  const unique = [...new Set(ids.filter(Boolean))];
+  return unique.length > 1 ? { partyId: null, partyIds: unique } : { partyId: unique[0] ?? null, partyIds: null };
+}
+
+/** The contact or contacts as the URL and the server take them: one id, or several comma-separated. */
+export function reportPartyParam(f: Pick<ReportFilters, 'partyId' | 'partyIds'>): string | undefined {
+  return f.partyIds?.length ? f.partyIds.join(',') : (f.partyId ?? undefined);
 }
 
 /** The report's filters, kept in the URL (`?range=lastMonth&branch=…&party=…&currency=…`). */
@@ -475,7 +494,7 @@ export function useReportScope(initial: DateRangePreset = 'thisFY') {
     const preset: DateRangePreset = custom ? 'custom' : presetParam(params.range, initial);
     return {
       preset,
-      filters: { range: resolveRange(preset, custom, fyStartMonth), branchId: params.branch ?? null, partyId: params.party ?? null, currency: params.currency ?? null },
+      filters: { range: resolveRange(preset, custom, fyStartMonth), branchId: params.branch ?? null, ...partyFilters((params.party ?? '').split(',')), currency: params.currency ?? null },
     };
   }, [params, initial, fyStartMonth]);
   const setScope = useCallback(
@@ -485,7 +504,7 @@ export function useReportScope(initial: DateRangePreset = 'thisFY') {
         from: s.preset === 'custom' ? s.filters.range.from : undefined,
         to: s.preset === 'custom' ? s.filters.range.to : undefined,
         branch: s.filters.branchId ?? undefined,
-        party: s.filters.partyId ?? undefined,
+        party: reportPartyParam(s.filters),
         currency: s.filters.currency ?? undefined,
       }),
     [setParams, initial],

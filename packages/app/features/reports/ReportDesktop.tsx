@@ -21,6 +21,7 @@ import type {
   TaxSummaryRow,
   TransactionSummary,
 } from '@esmart/core/domain/reports';
+import { taxByHead } from '@esmart/core/domain/reports';
 import type { OutstandingDoc } from '@esmart/core/domain/receivables';
 import type { Branch, ExpenseCategory, Party } from '@esmart/core/types';
 import { paymentMethodLabel } from '@esmart/core/labels';
@@ -75,6 +76,16 @@ export function ReportDesktop({ report, data }: { report: string; data: ReportDa
       { key: 'date', header: tr('common:table.date'), flex: 1, render: (r) => <Cell tone="muted">{formatDate(r.date)}</Cell>, sortValue: (r) => r.date },
       { key: 'party', header: isSales ? tr('common:table.customer') : tr('common:table.supplier'), flex: 2, render: (r) => <Cell>{partyName(r.partyId)}</Cell>, sortValue: (r) => partyName(r.partyId) },
       { key: 'taxable', header: tr('reports:column.taxable'), flex: 1.2, align: 'right', secondary: true, render: (r) => <Cell mono>{money(r.totals.taxableAmount)}</Cell>, sortValue: (r) => sortMoney(r.totals.taxableAmount) },
+      // The tax by head, then in all.
+      ...(['igst', 'cgst', 'sgst', 'cess'] as const).map((head) => ({
+        key: head,
+        header: head === 'cess' ? tr('reports:column.cess') : head.toUpperCase(),
+        flex: 0.9,
+        align: 'right' as const,
+        secondary: true,
+        render: (r: TransactionSummary['documents'][number]) => <Cell mono tone="muted">{money(taxByHead(r)[head])}</Cell>,
+        sortValue: (r: TransactionSummary['documents'][number]) => taxByHead(r)[head].minor,
+      })),
       { key: 'tax', header: tr('common:table.tax'), flex: 1, align: 'right', secondary: true, render: (r) => <Cell mono tone="muted">{money(r.totals.totalTax)}</Cell>, sortValue: (r) => sortMoney(r.totals.totalTax) },
       { key: 'total', header: tr('common:table.total'), flex: 1.2, align: 'right', render: (r) => <Cell mono weight="600">{money(r.totals.grandTotal)}</Cell>, sortValue: (r) => sortMoney(r.totals.grandTotal) },
     ];
