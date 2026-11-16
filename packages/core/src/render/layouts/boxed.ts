@@ -11,7 +11,7 @@ import { amountInWords } from '../../lib/amountInWords';
 import { unitShortName } from '../../data/masters';
 import { tint } from '../invoiceTemplate';
 import type { DocView, TotalEntry } from '../docView';
-import { bankBlock, cancelledStrip, eInvoiceBlock, esc, logoTag, reimbursementTable, cessTable, signatureTag, SUPPLY_NOTE } from '../blocks';
+import { bankBlock, cancelledStrip, eInvoiceBlock, eInvoiceQr, esc, logoTag, reimbursementTable, cessTable, signatureTag, SUPPLY_NOTE } from '../blocks';
 import { addressLines, baseCss, pageHtml, stepRows, titleOf, buyerBlock, consigneeBlock, footLine, headerFacts, hsnTable, leftFoot, onAccent, sellerBlock, titleNotes, type Fact } from './common';
 
 export function boxedLayout(view: DocView, variant: 'classic' | 'detailed', copyLabel: string): string {
@@ -24,6 +24,10 @@ export function boxedLayout(view: DocView, variant: 'classic' | 'detailed', copy
   // The particulars in a strip across the page under the title, four to a row. Stacked beside the
   // parties they never matched their height, and ship-to on or off left one side half empty.
   const facts = headerFacts(view);
+  // The e-invoice print: the acknowledgement beside the number and date, the IRN and QR at the head.
+  const irnHead = view.eInvoiceHeader;
+  const ack = doc.compliance;
+  if (irnHead) facts.splice(2, 0, { label: bi('sales:pdf.ackNo'), value: esc(ack?.ackNo), strong: true }, { label: bi('sales:pdf.ackDate'), value: esc(ack?.ackDate), strong: true });
   const FACTS_PER_ROW = 4;
   const factRows: Fact[][] = [];
   for (let i = 0; i < facts.length; i += FACTS_PER_ROW) factRows.push(facts.slice(i, i + FACTS_PER_ROW));
@@ -135,17 +139,17 @@ export function boxedLayout(view: DocView, variant: 'classic' | 'detailed', copy
   const bank = tpl.showBank ? bankBlock(doc, company, bi) : '';
   const lf = leftFoot(view, { terms: !detailed });
   const terms = detailed && doc.terms ? `<div class="row pad"><div class="cap">${bi('sales:pdf.terms')}</div><div class="pre">${esc(doc.terms)}</div></div>` : '';
-  const einv = eInvoiceBlock(doc, bi, view.ewayBill);
+  const einv = irnHead ? '' : eInvoiceBlock(doc, bi, view.ewayBill);
   const cess = cessTable(view);
 
   const page = `
   ${copyLabel ? `<div class="copy-label">${esc(copyLabel)}</div>` : ''}
   ${cancelledStrip(doc)}
   <div class="sheet">
-    <div class="titlebar ${tpl.logoPosition}">
+    <div class="titlebar ${irnHead ? 'einv-head' : tpl.logoPosition}">
       <div class="logo-slot">${logo}</div>
-      <div class="title">${titleOf(view)}</div>
-      <div class="logo-slot"></div>
+      <div class="title">${titleOf(view)}${irnHead ? `<div class="irn">IRN : <span class="mono">${esc(ack?.irn)}</span></div>` : ''}</div>
+      <div class="logo-slot">${irnHead ? eInvoiceQr(doc) : ''}</div>
     </div>
     ${titleNotes(view)}
     ${factGrid}
@@ -181,6 +185,8 @@ export function boxedLayout(view: DocView, variant: 'classic' | 'detailed', copy
   .titlebar.right { flex-direction: row-reverse; }
   .titlebar .logo-slot { flex: 1; display: flex; }
   .titlebar.right .logo-slot:first-child { justify-content: flex-end; }
+  .titlebar.einv-head .logo-slot:last-child { justify-content: flex-end; }
+  .title .irn { font-size: 0.5em; font-weight: 400; letter-spacing: 0; margin-top: 4px; overflow-wrap: anywhere; }
   .title { font-size: 1.55em; font-weight: 700; text-align: center; padding: 0 8px; letter-spacing: 0.3px; }
   .pname { font-weight: 700; font-size: 1.08em; }
   .gstin { margin-top: 2px; }

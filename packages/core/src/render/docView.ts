@@ -40,6 +40,8 @@ export type DocumentHtmlInput = {
   layout?: InvoiceLayout | null;
   /** Which copy, printed top right; `all` prints the three one after another. Unset prints no label. */
   copy?: CopyKind | 'all';
+  /** Printed as the e-invoice: the IRN under the title and the signed QR beside it, as the portal's print has them. */
+  eInvoiceHeader?: boolean;
   /** Translator for the descriptive labels. Statutory field names stay English. */
   t: Translate;
   language: LanguageCode;
@@ -68,6 +70,8 @@ export type DocView = {
   language: LanguageCode;
   bi: (key: string) => string;
   tpl: ResolvedTemplate;
+  /** The IRN, acknowledgement and signed QR in the header rather than in a block under the totals. */
+  eInvoiceHeader: boolean;
   /** A composition dealer's invoice is a bill of supply (Rule 49). */
   billOfSupply: boolean;
   /** An invoice in a currency other than the business's own: titled a commercial invoice. */
@@ -110,6 +114,7 @@ export function buildDocView({
   customFields = [],
   template,
   layout,
+  eInvoiceHeader,
   t,
   language,
 }: DocumentHtmlInput): DocView {
@@ -161,6 +166,7 @@ export function buildDocView({
     language,
     bi,
     tpl: resolveTemplate(template ?? company?.invoiceTemplate, layout ?? doc.printLayout),
+    eInvoiceHeader: !!eInvoiceHeader && hasIrn(doc),
     billOfSupply,
     commercial,
     label,
@@ -180,6 +186,12 @@ export function buildDocView({
     lineTaxes: once(() => lineTaxes(doc)),
     hsnSummary: once(() => hsnSummary(doc, lineTaxes(doc))),
   };
+}
+
+/** Reported to the IRP: it has an IRN to print, cancelled or not. */
+export function hasIrn(doc: Pick<BusinessDocument, 'compliance'>): boolean {
+  const c = doc.compliance;
+  return !!c?.irn && (c.eInvoiceStatus === 'generated' || c.eInvoiceStatus === 'cancelled');
 }
 
 const GSTIN = /^[0-9]{2}([A-Z]{5}[0-9]{4}[A-Z])[0-9A-Z]{3}$/;

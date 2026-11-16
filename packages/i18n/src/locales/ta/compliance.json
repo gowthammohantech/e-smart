@@ -135,7 +135,8 @@
     "validityDaysToMidnight_one": "{{count}} நாள் · நள்ளிரவு வரை",
     "validityDaysToMidnight_other": "{{count}} நாட்கள் · நள்ளிரவு வரை",
     "ruleUpdates": "தூரத்தையோ சரக்கையோ மாற்றும்போது இது புதுப்பிக்கப்படும்.",
-    "transportPartB": "போக்குவரத்து · Part-B"
+    "transportPartB": "போக்குவரத்து · Part-B",
+    "print": "இ-வே பில் அச்சிடு"
   },
   "einv": {
     "cancelIrn": "IRN ரத்து செய்",
@@ -179,7 +180,8 @@
     "blocking_one": "{{count}} தடுக்கும் பிழை",
     "blocking_other": "{{count}} தடுக்கும் பிழைகள்",
     "portalChecks": "போர்ட்டல் சரிபார்ப்புகள்",
-    "allChecksPass": "எல்லாப் போர்ட்டல் சரிபார்ப்புகளும் தேறின."
+    "allChecksPass": "எல்லாப் போர்ட்டல் சரிபார்ப்புகளும் தேறின.",
+    "print": "இ-இன்வாய்ஸ் அச்சிடு"
   },
   "gstr1": {
     "outwardSupplies": "வெளிச்செல்லும் வழங்கல்கள்",

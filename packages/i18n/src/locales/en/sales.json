@@ -509,7 +509,8 @@
       "duplicate": "Duplicate for transporter",
       "triplicate": "Triplicate for supplier",
       "all": "All three"
-    }
+    },
+    "printAs": "Print as"
   },
   "pdf": {
     "billTo": "Bill to",

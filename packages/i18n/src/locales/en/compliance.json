@@ -135,7 +135,8 @@
     "validityDaysToMidnight_one": "{{count}} day · to midnight",
     "validityDaysToMidnight_other": "{{count}} days · to midnight",
     "ruleUpdates": "It updates as you change the distance or the cargo.",
-    "transportPartB": "Transport · Part-B"
+    "transportPartB": "Transport · Part-B",
+    "print": "Print e-way bill"
   },
   "einv": {
     "cancelIrn": "Cancel the IRN",
@@ -179,7 +180,8 @@
     "blocking_one": "{{count}} blocking",
     "blocking_other": "{{count}} blocking",
     "portalChecks": "Portal checks",
-    "allChecksPass": "Every portal check passes."
+    "allChecksPass": "Every portal check passes.",
+    "print": "Print e-invoice"
   },
   "gstr1": {
     "outwardSupplies": "Outward supplies",

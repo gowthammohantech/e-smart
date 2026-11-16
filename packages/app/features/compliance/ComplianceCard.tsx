@@ -24,6 +24,7 @@ import { canCancelEInvoice, isEInvoiceApplicable } from '@esmart/core/domain/eIn
 import { ewayBillStatusAt, hoursUntilExpiry, isEwayBillRequired } from '@esmart/core/domain/ewayBill';
 import { formatDate, nowISO } from '@esmart/core/lib/date';
 import { EInvoiceSheet } from './EInvoiceSheet';
+import { usePrintEwayBill } from './EwayBillDetail';
 import { EWAY_STATUS_META, E_INVOICE_STATUS_META, expiryPhrase } from './complianceMeta';
 
 /**
@@ -32,7 +33,16 @@ import { EWAY_STATUS_META, E_INVOICE_STATUS_META, expiryPhrase } from './complia
  * It shows even when nothing applies, because "not applicable, and here is
  * why" is information; a section that silently disappears is not.
  */
-export function ComplianceCard({ document: doc }: { document: BusinessDocument }) {
+export function ComplianceCard({
+  document: doc,
+  onPrintEInvoice,
+  printing,
+}: {
+  document: BusinessDocument;
+  /** Prints the invoice as an e-invoice once it has an IRN; the screen showing the card has what the page needs. */
+  onPrintEInvoice?: () => void;
+  printing?: boolean;
+}) {
   const t = useTheme();
   const { t: tr } = useTranslation(['compliance', 'lixi']);
   const router = useRouter();
@@ -46,6 +56,7 @@ export function ComplianceCard({ document: doc }: { document: BusinessDocument }
   const billLoading = !bill && !!doc.compliance?.ewayBillId && billQuery.isLoading;
 
   const [sheet, setSheet] = useState<'generate' | 'cancel' | null>(null);
+  const printBill = usePrintEwayBill(bill);
 
   const now = nowISO();
   const applicability = useMemo(
@@ -203,6 +214,18 @@ export function ComplianceCard({ document: doc }: { document: BusinessDocument }
             </View>
           ) : null}
 
+          {onPrintEInvoice && doc.compliance?.irn && (eInvoiceStatus === 'generated' || eInvoiceStatus === 'cancelled') ? (
+            <Button
+              title={tr('compliance:einv.print')}
+              icon="printer-outline"
+              size="sm"
+              variant="secondary"
+              loading={printing}
+              onPress={onPrintEInvoice}
+              fullWidth
+            />
+          ) : null}
+
           {eInvoiceStatus === 'generated' && cancellation.allowed && cancellation.deadline ? (
             <Text variant="micro" tone="muted">
               {tr('compliance:einv.cancellableUntil', {
@@ -270,6 +293,10 @@ export function ComplianceCard({ document: doc }: { document: BusinessDocument }
             </Pressable>
           ) : null}
 
+          {bill ? (
+            <Button title={tr('compliance:ewb.print')} icon="printer-outline" size="sm" variant="secondary" loading={printBill.busy} onPress={printBill.run} fullWidth />
+          ) : null}
+
           {requirement.required && !billLoading && (!bill || billStatus !== 'active') ? (
             <Button
               title={bill ? tr('compliance:ewb.raiseNew') : tr('compliance:ewb.generate')}
@@ -284,7 +311,7 @@ export function ComplianceCard({ document: doc }: { document: BusinessDocument }
       </Card>
 
       {sheet ? (
-        <EInvoiceSheet visible onClose={() => setSheet(null)} document={doc} mode={sheet} />
+        <EInvoiceSheet visible onClose={() => setSheet(null)} document={doc} mode={sheet} onPrint={onPrintEInvoice} />
       ) : null}
     </>
   );

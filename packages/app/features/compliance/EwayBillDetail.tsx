@@ -44,6 +44,8 @@ import { formatMoney } from '@esmart/core/lib/format';
 import { EWAY_STATUS_META, expiryPhrase } from './complianceMeta';
 import { portalToast } from './portalToast';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
+import { buildEwayBillHtml } from '@esmart/core/render/ewayBillHtml';
+import { deliverPdf, isUserCancel } from '../reports/exportFiles';
 
 type Entry =
   | { at: string; kind: 'partB'; label: string; detail: string; icon: 'truck-outline' }
@@ -74,6 +76,7 @@ export function EwayBillDetail({ bill }: { bill: EwayBill }) {
   const party = parties.find((p) => p.id === bill.partyId);
 
   const history = useEwayBillHistory(bill);
+  const print = usePrintEwayBill(bill);
 
   return (
     <View style={{ flex: 1 }}>
@@ -148,6 +151,8 @@ export function EwayBillDetail({ bill }: { bill: EwayBill }) {
               <Icon name="chevron-right" size={20} color={t.c.muted} />
             </Pressable>
           ) : null}
+
+          <Button title={tr('compliance:ewb.print')} icon="printer-outline" size="sm" variant="secondary" loading={print.busy} onPress={print.run} fullWidth />
         </Card>
 
         <SectionLabel>{tr('compliance:ewb.consignment')}</SectionLabel>
@@ -280,6 +285,28 @@ export function EwayBillDetail({ bill }: { bill: EwayBill }) {
 }
 
 export type EwayBillAction = 'partB' | 'extend' | 'cancel';
+
+/**
+ * The bill printed as the portal prints it, to travel with the goods: the print dialog in a
+ * browser (where it saves as a PDF), the share sheet on a phone. The goods are the document's
+ * lines when it has loaded.
+ */
+export function usePrintEwayBill(bill: EwayBill | undefined) {
+  const { t: tr } = useTranslation(['sales']);
+  const toast = useToast();
+  const doc = useAppStore((s) => (bill ? s.documents.find((d) => d.id === bill.documentId) : undefined));
+  const [busy, setBusy] = useState(false);
+  const run = () => {
+    if (busy || !bill) return;
+    setBusy(true);
+    deliverPdf(`e-way-bill-${bill.ewayBillNumber}.pdf`, buildEwayBillHtml({ bill, document: doc }))
+      .catch((err) => {
+        if (!isUserCancel(err)) toast.show(tr('sales:print.printUnavailable'), 'warning', { icon: 'printer-off-outline' });
+      })
+      .finally(() => setBusy(false));
+  };
+  return { run, busy };
+}
 
 /** A bill's Part-B updates and extensions, newest first. */
 export function useEwayBillHistory(bill: EwayBill): Entry[] {

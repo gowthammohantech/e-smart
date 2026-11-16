@@ -1,3 +1,4 @@
+import { resolveTemplate } from './invoiceTemplate';
 import { buildDocView, COPY_LABEL, type CopyKind, type DocumentHtmlInput, type DocView } from './docView';
 import { standardLayout } from './layouts/standard';
 import { boxedLayout } from './layouts/boxed';
@@ -37,6 +38,16 @@ function renderCopy(view: DocView, copy: CopyKind | undefined): string {
         : html;
     }
   }
+}
+
+/**
+ * The invoice as an e-invoice: the ruled layout the portal's own print follows, with the IRN under
+ * the title, the signed QR beside it and the acknowledgement among the particulars. The business's
+ * detailed layout stays detailed; any other prints classic.
+ */
+export function buildEInvoiceHtml(input: DocumentHtmlInput): string {
+  const chosen = resolveTemplate(input.template ?? input.company?.invoiceTemplate, input.layout ?? input.document.printLayout).layout;
+  return buildDocumentHtml({ ...input, layout: chosen === 'detailed' ? 'detailed' : 'classic', eInvoiceHeader: true });
 }
 
 const BODY = /<body([^>]*)>([\s\S]*)<\/body>/;

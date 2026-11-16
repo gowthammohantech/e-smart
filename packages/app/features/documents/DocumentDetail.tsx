@@ -36,7 +36,7 @@ import { formatMoney, formatPercent, formatQty } from '@esmart/core/lib/format';
 import { creditNoteDeadline, daysBetween, formatDate, today } from '@esmart/core/lib/date';
 import { fromMajor, money, subtract, type Money } from '@esmart/core/lib/money';
 import { INDIAN_STATES, unitShortName } from '@esmart/core/data/masters';
-import { buildDocumentHtml } from '@esmart/core/render/documentHtml';
+import { buildDocumentHtml, buildEInvoiceHtml } from '@esmart/core/render/documentHtml';
 
 import { useAppStore } from '../../store/appStore';
 import { useCostCentres } from '../../store/books';
@@ -55,6 +55,8 @@ import { fetchDocumentRecord, queryClient, useDocumentRecord, useEwayBillRecord,
 import { detailRouteFor, finaliseActionLabel, listRouteFor } from './DocumentEditor';
 import { useCustomFields } from '../customFields/CustomFieldsSection';
 import { ComplianceCard } from '../compliance/ComplianceCard';
+import { usePrintEwayBill } from '../compliance/EwayBillDetail';
+import { hasIrn } from '@esmart/core/render/docView';
 import { ApprovalBanner } from '../approvals/ApprovalBanner';
 import { EInvoiceSheet } from '../compliance/EInvoiceSheet';
 import { canCancelEInvoice, isEInvoiceApplicable } from '@esmart/core/domain/eInvoice';
@@ -65,7 +67,7 @@ import { SplitPane } from '@esmart/ui/components/Layout';
 import { Menu, MenuDivider, MenuItem, MenuSection, useMenuAnchor } from '@esmart/ui/components/Menu';
 import { Segmented } from '@esmart/ui/components/Field';
 import { HtmlPreview } from './HtmlPreview';
-import { deliverFile } from '../reports/exportFiles';
+import { deliverFile, deliverPdf, isUserCancel } from '../reports/exportFiles';
 import { documentPdf, paymentLink, pdfFileName, pdfLink, removeCreditApplication, sendDocument, shareLink, shareLinks, type SendChannel } from '../../remote/documents';
 import { describeError } from '../../remote/errors';
 import { RecurrenceSheet } from './RecurrenceSheet';
@@ -215,22 +217,30 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
   const logoSrc = useLogoSrc(company);
   // The cess item by item, under the totals, when anything on it carries cess.
   const cessRows = useCessRows(doc.lines, doc.totals, doc.currency, doc.reverseCharge);
-  const documentHtml = () =>
-    buildDocumentHtml({
-      t: tr,
-      language,
-      document: doc,
-      company,
-      logoSrc,
-      party,
-      branch,
-      ewayBill,
-      // Returns and notes name the invoice or bill they're against; an invoice the order or challan it came from.
-      source: NOTE_SOURCE[doc.kind] ? sourceDoc : undefined,
-      // Made from several, the header names them all, dated from the first, as the server's PDF does.
-      origin: !NOTE_SOURCE[doc.kind] && sourceDoc ? { number: sourceLinks.map((s) => s.number).join(', '), date: sourceDoc.date, kind: sourceDoc.kind } : undefined,
-      customFields,
-    });
+  const htmlInput = () => ({
+    t: tr,
+    language,
+    document: doc,
+    company,
+    logoSrc,
+    party,
+    branch,
+    ewayBill,
+    // Returns and notes name the invoice or bill they're against; an invoice the order or challan it came from.
+    source: NOTE_SOURCE[doc.kind] ? sourceDoc : undefined,
+    // Made from several, the header names them all, dated from the first, as the server's PDF does.
+    origin: !NOTE_SOURCE[doc.kind] && sourceDoc ? { number: sourceLinks.map((s) => s.number).join(', '), date: sourceDoc.date, kind: sourceDoc.kind } : undefined,
+    customFields,
+  });
+  const documentHtml = () => buildDocumentHtml(htmlInput());
+  const printBill = usePrintEwayBill(ewayBill);
+  /** The invoice as an e-invoice, the IRN and its QR at the head: the print dialog in a browser, the share sheet on a phone. */
+  const printEInvoice = () =>
+    oneAtATime(() =>
+      deliverPdf(`${pdfFileName(doc.kind, doc.number).replace(/\.pdf$/, '')}-e-invoice.pdf`, buildEInvoiceHtml(htmlInput())).catch((err) => {
+        if (!isUserCancel(err)) toast.show(tr('sales:print.printUnavailable'), 'warning', { icon: 'printer-off-outline' });
+      }),
+    );
 
   /** The server's PDF: downloaded in a browser, handed to the share sheet on a phone. */
   const shareDocument = () =>
@@ -923,7 +933,7 @@ ${url}`;
     <>
       {/* Compliance */}
       <ApprovalBanner doc={doc} />
-      <ComplianceCard document={doc} />
+      <ComplianceCard document={doc} onPrintEInvoice={printEInvoice} printing={busy} />
     </>
   );
   // The company's own fields, as the document holds them.
@@ -1056,6 +1066,9 @@ ${url}`;
       ? [
           // The PDF is the footer's own button, unless carrying it forward took that place.
           ...(primaryConversion ? [{ label: pdfLabel, icon: 'file-pdf-box' as const, onPress: shareDocument }] : []),
+          // Reported to the IRP, or moving under an e-way bill: those print as the portal prints them.
+          ...(hasIrn(doc) ? [{ label: tr('compliance:einv.print'), icon: 'qrcode' as const, onPress: () => void printEInvoice() }] : []),
+          ...(ewayBill ? [{ label: tr('compliance:ewb.print'), icon: 'truck-outline' as const, onPress: printBill.run }] : []),
           { label: tr('sales:detail.sendEmail'), icon: 'email-outline' as const, onPress: () => sendVia('email') },
           { label: tr('sales:detail.sendWhatsapp'), icon: 'whatsapp' as const, onPress: () => sendVia('whatsapp') },
           // An issued invoice, not itself a copy, can repeat; the server says if it can't.
@@ -1426,6 +1439,7 @@ ${url}`;
           onClose={() => setComplianceSheet(null)}
           document={doc}
           mode={complianceSheet}
+          onPrint={() => void printEInvoice()}
         />
       ) : null}
     </View>
