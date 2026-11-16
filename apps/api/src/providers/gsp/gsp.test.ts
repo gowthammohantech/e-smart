@@ -554,6 +554,22 @@ describe('Whitebooks', () => {
     expect(last.ItemList.map((i) => i.HsnCd)).toEqual(['85362010', '995461']);
   });
 
+  it('gives a service line that carries a goods-style HSN a SAC the sandbox knows (3048)', async () => {
+    let calls = 0;
+    const t = fakeTransport({
+      '/einvoice/authenticate': () => auth as GspEnvelope,
+      '/einvoice/type/GENERATE/version/V1_03': () => {
+        calls += 1;
+        return calls === 1 ? refusedWith('2176', 'HSN code(s)-23556254 is invalid') : ok({ Irn: 'WB-IRN' });
+      },
+    });
+    const svc = { ...payload, ItemList: [{ ...(payload.ItemList[0] as object), IsServc: 'Y', HsnCd: '23556254' }] } as unknown as IrpInvoicePayload;
+    const result = await new WhitebooksGateway(whitebooksConfig(), t.transport, at('2026-09-02T10:00:00Z')).submitInvoice(creds, { payload: svc, existingIrns: [], now: NOW });
+    expect(result).toMatchObject({ ok: true, irn: 'WB-IRN' });
+    const last = t.calls.filter((c) => c.path.endsWith('GENERATE/version/V1_03')).pop()!.body as { ItemList: { HsnCd: string }[] };
+    expect(last.ItemList.map((i) => i.HsnCd)).toEqual(['995461']);
+  });
+
   it('retries a direct e-way bill under an HSN the sandbox knows when it refuses the real one', async () => {
     let genCalls = 0;
     const t = fakeTransport({
