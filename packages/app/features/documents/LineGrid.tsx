@@ -263,9 +263,7 @@ export function LineGrid({
                     paddingHorizontal: 6,
                     borderRadius: t.radius.sm,
                     borderWidth: 1,
-                    // Edged like the boxes beside it, so it reads as something to change.
-                    borderColor: line.gst?.reimbursement ? 'transparent' : (state as WebPressState).hovered ? t.c.primary : t.c.inputBorder,
-                    backgroundColor: t.c.paper,
+                    borderColor: (state as WebPressState).hovered ? t.c.inputBorder : 'transparent',
                   },
                   focusRing(t, (state as WebPressState).focused),
                 ]}
@@ -428,9 +426,11 @@ function GridInput({
         paddingHorizontal: 6,
         borderRadius: t.radius.sm,
         borderWidth: 1,
-        // Edged at rest, not only once focused: a box to type in should look like one.
-        borderColor: invalid ? t.c.bad : draft !== null ? t.c.primary : t.c.inputBorder,
-        backgroundColor: t.c.paper,
+        // At rest a soft tint with an underline says "type here" without boxing every cell;
+        // focused, it becomes a full field.
+        borderColor: invalid ? t.c.bad : draft !== null ? t.c.primary : 'transparent',
+        borderBottomColor: invalid ? t.c.bad : draft !== null ? t.c.primary : t.c.lineStrong,
+        backgroundColor: draft !== null ? t.c.paper : t.c.card2,
         color: t.c.text,
         fontSize: t.fontSize.small,
         textAlign: numeric ? 'right' : 'left',
@@ -468,8 +468,8 @@ function DiscountModeMenu({ mode, currency, label, onChange }: { mode: DocumentL
             paddingHorizontal: 5,
             borderRadius: t.radius.sm,
             borderWidth: 1,
-            borderColor: (state as WebPressState).hovered || visible ? t.c.primary : t.c.inputBorder,
-            backgroundColor: t.c.paper,
+            // The arrow says it is a list; the edge only shows on hover, as on the tax beside it.
+            borderColor: (state as WebPressState).hovered || visible ? t.c.inputBorder : 'transparent',
           },
           focusRing(t, (state as WebPressState).focused),
         ]}
