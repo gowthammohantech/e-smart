@@ -94,18 +94,24 @@ function ItemFormFields({ item }: { item?: Item }) {
   const [hsnMatches, setHsnMatches] = useState<HsnMatch[]>([]);
   const [hsnLoading, setHsnLoading] = useState(false);
   useEffect(() => {
-    if (!hsnOpen || !hsnQuery.trim()) {
-      setHsnMatches([]);
-      return;
-    }
     let live = true;
-    setHsnLoading(true);
-    const timer = setTimeout(() => {
-      searchHsn(hsnQuery)
-        .then((rows) => live && setHsnMatches(rows))
-        .catch(() => live && setHsnMatches([]))
-        .finally(() => live && setHsnLoading(false));
-    }, 250);
+    const query = hsnOpen ? hsnQuery.trim() : '';
+    // Every state change is made from the timer, not the effect body itself: nothing to search clears the list at once.
+    const timer = setTimeout(
+      () => {
+        if (!query) {
+          setHsnMatches([]);
+          setHsnLoading(false);
+          return;
+        }
+        setHsnLoading(true);
+        searchHsn(query)
+          .then((rows) => live && setHsnMatches(rows))
+          .catch(() => live && setHsnMatches([]))
+          .finally(() => live && setHsnLoading(false));
+      },
+      query ? 250 : 0,
+    );
     return () => {
       live = false;
       clearTimeout(timer);
