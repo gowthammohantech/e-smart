@@ -1439,6 +1439,7 @@ ${url}`;
           onClose={() => setComplianceSheet(null)}
           document={doc}
           mode={complianceSheet}
+          onPrint={() => void printEInvoice()}
         />
       ) : null}
     </View>

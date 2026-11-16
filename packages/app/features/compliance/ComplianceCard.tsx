@@ -311,7 +311,7 @@ export function ComplianceCard({
       </Card>
 
       {sheet ? (
-        <EInvoiceSheet visible onClose={() => setSheet(null)} document={doc} mode={sheet} />
+        <EInvoiceSheet visible onClose={() => setSheet(null)} document={doc} mode={sheet} onPrint={onPrintEInvoice} />
       ) : null}
     </>
   );

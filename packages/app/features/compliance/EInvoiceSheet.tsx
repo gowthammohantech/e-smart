@@ -47,11 +47,14 @@ export function EInvoiceSheet({
   onClose,
   document: doc,
   mode,
+  onPrint,
 }: {
   visible: boolean;
   onClose: () => void;
   document: BusinessDocument;
   mode: 'generate' | 'cancel';
+  /** Prints the invoice as an e-invoice; the screen that opens the sheet has what the page needs. */
+  onPrint?: () => void;
 }) {
   const t = useTheme();
   const desktop = useIsDesktop();
@@ -296,6 +299,9 @@ export function EInvoiceSheet({
               }}
               fullWidth={!desktop}
             />
+            {onPrint ? (
+              <Button title={tr('compliance:einv.print')} variant="secondary" size="sm" icon="printer-outline" onPress={onPrint} fullWidth={!desktop} />
+            ) : null}
           </Card>
         ) : null}
 
