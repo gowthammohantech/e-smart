@@ -199,22 +199,7 @@ export function eInvoiceBlock(doc: BusinessDocument, bi: (key: string) => string
   const c = doc.compliance;
   const reported = c?.eInvoiceStatus === 'generated' || c?.eInvoiceStatus === 'cancelled';
   if (!reported || !c?.irn) return '';
-
-  // The QR is generated markup, not user content, so it must reach the page as
-  // SVG rather than being escaped like every other value interpolated here.
-  let qr = '';
-  if (c.signedQrPayload) {
-    try {
-      // Printed a little over the floor, because paper and camera angles are
-      // less forgiving than a screen.
-      qr = qrSvgString(qrMatrix(c.signedQrPayload, 'M'), {
-        size: MIN_READABLE_QR_SIZE + 20,
-        quietZone: 4,
-      });
-    } catch {
-      qr = '';
-    }
-  }
+  const qr = eInvoiceQr(doc);
 
   const ewb = ewayBill
     ? `<div class="einv-grid">
@@ -236,6 +221,21 @@ export function eInvoiceBlock(doc: BusinessDocument, bi: (key: string) => string
       ${ewb}
     </div>
   </div>`;
+}
+
+/**
+ * The signed QR of an e-invoice as SVG, or nothing. Generated markup, not user content, so it
+ * reaches the page as SVG rather than escaped like every other value interpolated here.
+ */
+export function eInvoiceQr(doc: BusinessDocument): string {
+  const payload = doc.compliance?.signedQrPayload;
+  if (!payload) return '';
+  try {
+    // Printed a little over the floor, because paper and camera angles are less forgiving than a screen.
+    return qrSvgString(qrMatrix(payload, 'M'), { size: MIN_READABLE_QR_SIZE + 20, quietZone: 4 });
+  } catch {
+    return '';
+  }
 }
 
 /** A cancelled IRN must be obvious on the page; printing one silently misleads. */
