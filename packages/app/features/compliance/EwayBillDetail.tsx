@@ -291,13 +291,13 @@ export type EwayBillAction = 'partB' | 'extend' | 'cancel';
  * browser (where it saves as a PDF), the share sheet on a phone. The goods are the document's
  * lines when it has loaded.
  */
-export function usePrintEwayBill(bill: EwayBill) {
+export function usePrintEwayBill(bill: EwayBill | undefined) {
   const { t: tr } = useTranslation(['sales']);
   const toast = useToast();
-  const doc = useAppStore((s) => s.documents.find((d) => d.id === bill.documentId));
+  const doc = useAppStore((s) => (bill ? s.documents.find((d) => d.id === bill.documentId) : undefined));
   const [busy, setBusy] = useState(false);
   const run = () => {
-    if (busy) return;
+    if (busy || !bill) return;
     setBusy(true);
     deliverPdf(`e-way-bill-${bill.ewayBillNumber}.pdf`, buildEwayBillHtml({ bill, document: doc }))
       .catch((err) => {

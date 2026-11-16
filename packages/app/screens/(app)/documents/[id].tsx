@@ -10,7 +10,9 @@ import { PickerField } from '@esmart/ui/components/Field';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { useToast } from '@esmart/ui/components/Toast';
-import { buildDocumentHtml } from '@esmart/core/render/documentHtml';
+import { buildDocumentHtml, buildEInvoiceHtml } from '@esmart/core/render/documentHtml';
+import { buildEwayBillHtml } from '@esmart/core/render/ewayBillHtml';
+import { hasIrn } from '@esmart/core/render/docView';
 import { NOTE_SOURCE } from '@esmart/core/domain/documentStates';
 import { INVOICE_LAYOUTS, isInvoiceLayout, resolveTemplate, type InvoiceLayout } from '@esmart/core/render/invoiceTemplate';
 import { documentKindLabel } from '@esmart/core/labels';
@@ -23,7 +25,7 @@ import {
 } from '../../../store/selectors';
 import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { HtmlPreview, printHtml } from '../../../features/documents/HtmlPreview';
-import { deliverFile } from '../../../features/reports/exportFiles';
+import { deliverFile, deliverPdf } from '../../../features/reports/exportFiles';
 import { documentPdf, pdfFileName, type PrintCopy } from '../../../remote/documents';
 import { api } from '../../../remote/api';
 import { applyEntity } from '../../../remote/apply';
@@ -34,12 +36,15 @@ import { useLogoSrc } from '../../../remote/logoSrc';
 import { LoadingView } from '../../../components/LoadingView';
 import { useAppStore } from '../../../store/appStore';
 
+/** What the preview prints: the document itself, or its e-invoice or e-way bill. */
+type PrintFormat = 'document' | 'eInvoice' | 'ewayBill';
+
 /** The sheet of paper's width on a desktop; the template and copy pickers above it share the same width. */
 const PAPER_WIDTH = 860;
 
 export default function DocumentPreview() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['common', 'domain', 'nav', 'sales', 'settings']);
+  const { t: tr } = useTranslation(['common', 'compliance', 'domain', 'nav', 'sales', 'settings']);
   const language = useResolvedLanguage();
   const toast = useToast();
   const insets = useSafeAreaInsets();
@@ -60,15 +65,19 @@ export default function DocumentPreview() {
   const [busy, setBusy] = useState(false);
   const desktop = useIsDesktop();
   const [copy, setCopy] = useState<PrintCopy>('original');
-  const [picking, setPicking] = useState<'layout' | 'copy' | null>(null);
+  const [picking, setPicking] = useState<'layout' | 'copy' | 'format' | null>(null);
   const [savingLayout, setSavingLayout] = useState(false);
+  // What the page is: the document, or (once it has them) its e-invoice or e-way bill.
+  const [format, setFormat] = useState<PrintFormat>('document');
+  const formats: PrintFormat[] = ['document', ...(doc && hasIrn(doc) ? ['eInvoice' as const] : []), ...(ewayBill ? ['ewayBill' as const] : [])];
+  const shownFormat = formats.includes(format) ? format : 'document';
 
   const customFields = useAppStore((s) => s.customFields);
   const logoSrc = useLogoSrc(company);
-  const html = useMemo(
-    () =>
-      doc
-        ? buildDocumentHtml({
+  const html = useMemo(() => {
+    if (!doc) return '';
+    if (shownFormat === 'ewayBill' && ewayBill) return buildEwayBillHtml({ bill: ewayBill, document: doc });
+    return (shownFormat === 'eInvoice' ? buildEInvoiceHtml : buildDocumentHtml)({
             t: tr,
             language,
             document: doc,
@@ -81,10 +90,8 @@ export default function DocumentPreview() {
             origin: !against && source ? { number: source.number, date: source.date, kind: source.kind } : undefined,
             customFields,
             copy,
-          })
-        : '',
-    [doc, company, logoSrc, party, branches, ewayBill, source, against, customFields, copy, tr, language],
-  );
+          });
+  }, [doc, company, logoSrc, party, branches, ewayBill, source, against, customFields, copy, tr, language, shownFormat]);
 
   if (!doc && remote.isLoading) return <LoadingView variant="page" title={tr('nav:title.preview')} />;
   if (!doc) {
@@ -101,6 +108,7 @@ export default function DocumentPreview() {
   const companyLayout = resolveTemplate(company.invoiceTemplate).layout;
   const shownLayout = doc.printLayout ?? companyLayout;
   const COPIES: PrintCopy[] = ['original', 'duplicate', 'triplicate', 'all'];
+  const formatName = (f: PrintFormat) => (f === 'eInvoice' ? tr('compliance:einv.eInvoice') : f === 'ewayBill' ? tr('compliance:einv.ewayBill') : label);
 
   /** This document's own template: saved on the server, so its PDF, link and emails follow. */
   const chooseLayout = async (value: string) => {
@@ -126,6 +134,14 @@ export default function DocumentPreview() {
   /** The server's PDF, the same one the customer receives: downloaded in a browser, shared on a phone. */
   const share = async () => {
     setBusy(true);
+    // The e-invoice and e-way bill are this page itself, made into a PDF here.
+    if (shownFormat !== 'document') {
+      const name = shownFormat === 'ewayBill' && ewayBill ? `e-way-bill-${ewayBill.ewayBillNumber}.pdf` : pdfFileName(doc.kind, doc.number).replace(/\.pdf$/, '-e-invoice.pdf');
+      await deliverPdf(name, html)
+        .catch(() => toast.show(tr('sales:print.printUnavailable'), 'warning', { icon: 'printer-off-outline' }))
+        .finally(() => setBusy(false));
+      return;
+    }
     try {
       await toast.promise(
         (async () => {
@@ -180,15 +196,23 @@ export default function DocumentPreview() {
         }}
       >
         <View style={[{ flexDirection: 'row', gap: t.spacing.md }, desktop ? { width: '100%', maxWidth: PAPER_WIDTH, alignSelf: 'center' } : null]}>
-          <PickerField
-            label={tr('sales:print.template')}
-            value={layoutName(shownLayout)}
-            icon="file-document-edit-outline"
-            onPress={() => setPicking('layout')}
-            disabled={savingLayout}
-            containerStyle={{ flex: 1 }}
-          />
-          <PickerField label={tr('sales:print.copy')} value={tr(`sales:print.copies.${copy}`)} icon="content-copy" onPress={() => setPicking('copy')} containerStyle={{ flex: 1 }} />
+          {formats.length > 1 ? (
+            <PickerField label={tr('sales:print.printAs')} value={formatName(shownFormat)} icon="file-swap-outline" onPress={() => setPicking('format')} containerStyle={{ flex: 1 }} />
+          ) : null}
+          {/* The e-way bill has the portal's one layout and copy. */}
+          {shownFormat === 'ewayBill' ? null : (
+            <>
+              <PickerField
+                label={tr('sales:print.template')}
+                value={layoutName(shownLayout)}
+                icon="file-document-edit-outline"
+                onPress={() => setPicking('layout')}
+                disabled={savingLayout}
+                containerStyle={{ flex: 1 }}
+              />
+              <PickerField label={tr('sales:print.copy')} value={tr(`sales:print.copies.${copy}`)} icon="content-copy" onPress={() => setPicking('copy')} containerStyle={{ flex: 1 }} />
+            </>
+          )}
         </View>
       </View>
       <SelectSheet
@@ -208,6 +232,19 @@ export default function DocumentPreview() {
             leading: <LayoutThumb layout={l} accent={resolveTemplate(company.invoiceTemplate, l).accentColor} width={30} />,
           })),
         ]}
+      />
+      <SelectSheet
+        visible={picking === 'format'}
+        onClose={() => setPicking(null)}
+        title={tr('sales:print.printAs')}
+        subtitle={doc.number}
+        searchable={false}
+        value={shownFormat}
+        onSelect={(v) => {
+          setFormat(v as PrintFormat);
+          setPicking(null);
+        }}
+        options={formats.map((f) => ({ value: f, label: formatName(f), icon: f === 'ewayBill' ? 'truck-outline' : f === 'eInvoice' ? 'qrcode' : 'file-document-outline' }))}
       />
       <SelectSheet
         visible={picking === 'copy'}

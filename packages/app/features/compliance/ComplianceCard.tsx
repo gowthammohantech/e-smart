@@ -24,6 +24,7 @@ import { canCancelEInvoice, isEInvoiceApplicable } from '@esmart/core/domain/eIn
 import { ewayBillStatusAt, hoursUntilExpiry, isEwayBillRequired } from '@esmart/core/domain/ewayBill';
 import { formatDate, nowISO } from '@esmart/core/lib/date';
 import { EInvoiceSheet } from './EInvoiceSheet';
+import { usePrintEwayBill } from './EwayBillDetail';
 import { EWAY_STATUS_META, E_INVOICE_STATUS_META, expiryPhrase } from './complianceMeta';
 
 /**
@@ -55,6 +56,7 @@ export function ComplianceCard({
   const billLoading = !bill && !!doc.compliance?.ewayBillId && billQuery.isLoading;
 
   const [sheet, setSheet] = useState<'generate' | 'cancel' | null>(null);
+  const printBill = usePrintEwayBill(bill);
 
   const now = nowISO();
   const applicability = useMemo(
@@ -289,6 +291,10 @@ export function ComplianceCard({
               </View>
               <Icon name="chevron-right" size={20} color={t.c.muted} />
             </Pressable>
+          ) : null}
+
+          {bill ? (
+            <Button title={tr('compliance:ewb.print')} icon="printer-outline" size="sm" variant="secondary" loading={printBill.busy} onPress={printBill.run} fullWidth />
           ) : null}
 
           {requirement.required && !billLoading && (!bill || billStatus !== 'active') ? (

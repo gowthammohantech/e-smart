@@ -55,6 +55,8 @@ import { fetchDocumentRecord, queryClient, useDocumentRecord, useEwayBillRecord,
 import { detailRouteFor, finaliseActionLabel, listRouteFor } from './DocumentEditor';
 import { useCustomFields } from '../customFields/CustomFieldsSection';
 import { ComplianceCard } from '../compliance/ComplianceCard';
+import { usePrintEwayBill } from '../compliance/EwayBillDetail';
+import { hasIrn } from '@esmart/core/render/docView';
 import { ApprovalBanner } from '../approvals/ApprovalBanner';
 import { EInvoiceSheet } from '../compliance/EInvoiceSheet';
 import { canCancelEInvoice, isEInvoiceApplicable } from '@esmart/core/domain/eInvoice';
@@ -231,6 +233,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
     customFields,
   });
   const documentHtml = () => buildDocumentHtml(htmlInput());
+  const printBill = usePrintEwayBill(ewayBill);
   /** The invoice as an e-invoice, the IRN and its QR at the head: the print dialog in a browser, the share sheet on a phone. */
   const printEInvoice = () =>
     oneAtATime(() =>
@@ -1063,6 +1066,9 @@ ${url}`;
       ? [
           // The PDF is the footer's own button, unless carrying it forward took that place.
           ...(primaryConversion ? [{ label: pdfLabel, icon: 'file-pdf-box' as const, onPress: shareDocument }] : []),
+          // Reported to the IRP, or moving under an e-way bill: those print as the portal prints them.
+          ...(hasIrn(doc) ? [{ label: tr('compliance:einv.print'), icon: 'qrcode' as const, onPress: () => void printEInvoice() }] : []),
+          ...(ewayBill ? [{ label: tr('compliance:ewb.print'), icon: 'truck-outline' as const, onPress: printBill.run }] : []),
           { label: tr('sales:detail.sendEmail'), icon: 'email-outline' as const, onPress: () => sendVia('email') },
           { label: tr('sales:detail.sendWhatsapp'), icon: 'whatsapp' as const, onPress: () => sendVia('whatsapp') },
           // An issued invoice, not itself a copy, can repeat; the server says if it can't.
