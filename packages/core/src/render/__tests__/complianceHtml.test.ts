@@ -8,17 +8,22 @@ import { branch, company, doc, einvoiced, ewayBill, LINES, party } from './fixtu
 
 const en = i18n.getFixedT('en', null);
 /**
- * Text without the stylesheet, tags or entities, so assertions read as the page does. Stripped
- * until nothing changes, so a removal can never leave a tag behind.
+ * The page's words, so assertions read as the page does: the body only (the stylesheet is in the
+ * head), each tag read past character by character and left as a space, `&amp;` as `&`.
  */
 const text = (html: string) => {
-  let out = html;
-  let before: string;
-  do {
-    before = out;
-    out = out.replace(/<style[\s\S]*?<\/style>/g, '').replace(/<[^>]*>/g, ' ');
-  } while (out !== before);
-  return out.replace(/&amp;/g, '&').replace(/\s+/g, ' ');
+  const start = html.indexOf('<body');
+  const body = start < 0 ? html : html.slice(start);
+  let out = '';
+  let inTag = false;
+  for (const ch of body) {
+    if (ch === '<') inTag = true;
+    else if (ch === '>' && inTag) {
+      inTag = false;
+      out += ' ';
+    } else if (!inTag) out += ch;
+  }
+  return out.split('&amp;').join('&').split(/\s+/).join(' ');
 };
 
 const place = (over: Partial<EwayBill['from']> = {}): EwayBill['from'] => ({
