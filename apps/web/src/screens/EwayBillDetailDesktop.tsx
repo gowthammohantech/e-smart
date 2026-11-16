@@ -27,7 +27,7 @@ import { useDocumentRecord, useEwayBillRecord } from '@esmart/app/remote/queries
 import { LoadingView } from '@esmart/app/components/LoadingView';
 import { useEwayBill, useParties } from '@esmart/app/store/selectors';
 import { detailRouteFor } from '@esmart/app/features/documents/DocumentEditor';
-import { EwayBillActionSheets, useEwayBillHistory, type EwayBillAction } from '@esmart/app/features/compliance/EwayBillDetail';
+import { EwayBillActionSheets, useEwayBillHistory, usePrintEwayBill, type EwayBillAction } from '@esmart/app/features/compliance/EwayBillDetail';
 import { EWAY_STATUS_META, expiryPhrase } from '@esmart/app/features/compliance/complianceMeta';
 
 /** A small label over a value, for the facts along the top. */
@@ -136,6 +136,7 @@ function EwayBillDesktop({ bill }: { bill: EwayBill }) {
   const documents = useAppStore((s) => s.documents);
   const parties = useParties();
   const history = useEwayBillHistory(bill);
+  const print = usePrintEwayBill(bill);
   const [action, setAction] = useState<EwayBillAction | null>(null);
 
   const now = nowISO();
@@ -197,6 +198,7 @@ function EwayBillDesktop({ bill }: { bill: EwayBill }) {
 
             <View style={{ alignItems: 'flex-end', gap: t.spacing.sm, maxWidth: 460 }}>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', gap: t.spacing.sm }}>
+                <Button title={tr('compliance:ewb.print')} icon="printer-outline" variant="secondary" size="sm" loading={print.busy} onPress={print.run} />
                 <Button
                   title={tr('compliance:ewb.updatePartB')}
                   icon="truck-outline"
