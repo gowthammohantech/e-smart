@@ -11,8 +11,9 @@ describe('switching modules off', () => {
     expect(moduleEnabled('pro', ['purchases'], 'payables')).toBe(false);
     expect(moduleEnabled('pro', ['expenses'], 'ocr')).toBe(false);
     expect(moduleEnabled('basic', [], 'books')).toBe(false);
-    // Retail item fields are on for every plan until switched off.
-    expect(moduleEnabled('free', [], 'pos')).toBe(true);
+    // Retail item fields (category, brand) are on for the Smart plans until switched off; the Free plan leaves them out.
+    expect(moduleEnabled('free', [], 'pos')).toBe(false);
+    expect(moduleEnabled('pro', [], 'pos')).toBe(true);
     expect(moduleEnabled('pro', ['pos'], 'pos')).toBe(false);
   });
 

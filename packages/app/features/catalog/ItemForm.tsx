@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -72,6 +72,8 @@ function ItemFormFields({ item }: { item?: Item }) {
   const [gst, setGst] = useState(item?.gst);
   const [barcode, setBarcode] = useState(item?.barcode ?? '');
   const [trackInventory, setTrackInventory] = useState(item?.trackInventory ?? (startType === 'goods' && hasInventory));
+  // The stock tracking and unit a product had, kept while the form shows it as a service so switching back restores them.
+  const goodsChoices = useRef<{ trackInventory: boolean; unit: string }>({ trackInventory: startType === 'goods' ? trackInventory : hasInventory, unit: startType === 'goods' ? unit : 'PCS' });
   const [openingStock, setOpeningStock] = useState(item ? String(item.openingStock) : '');
   const [openingStockDate, setOpeningStockDate] = useState(item?.openingStockDate ?? today());
   const [reorderLevel, setReorderLevel] = useState(item ? String(item.reorderLevel) : '');
@@ -92,18 +94,24 @@ function ItemFormFields({ item }: { item?: Item }) {
   const [hsnMatches, setHsnMatches] = useState<HsnMatch[]>([]);
   const [hsnLoading, setHsnLoading] = useState(false);
   useEffect(() => {
-    if (!hsnOpen || !hsnQuery.trim()) {
-      setHsnMatches([]);
-      return;
-    }
     let live = true;
-    setHsnLoading(true);
-    const timer = setTimeout(() => {
-      searchHsn(hsnQuery)
-        .then((rows) => live && setHsnMatches(rows))
-        .catch(() => live && setHsnMatches([]))
-        .finally(() => live && setHsnLoading(false));
-    }, 250);
+    const query = hsnOpen ? hsnQuery.trim() : '';
+    // Every state change is made from the timer, not the effect body itself: nothing to search clears the list at once.
+    const timer = setTimeout(
+      () => {
+        if (!query) {
+          setHsnMatches([]);
+          setHsnLoading(false);
+          return;
+        }
+        setHsnLoading(true);
+        searchHsn(query)
+          .then((rows) => live && setHsnMatches(rows))
+          .catch(() => live && setHsnMatches([]))
+          .finally(() => live && setHsnLoading(false));
+      },
+      query ? 250 : 0,
+    );
     return () => {
       live = false;
       clearTimeout(timer);
@@ -221,11 +229,17 @@ function ItemFormFields({ item }: { item?: Item }) {
               value={type}
               disabled={!!item}
               onChange={(v) => {
-                setType(v as ItemType);
+                if (v === type) return;
                 if (v === 'service') {
+                  // A service tracks no stock and is counted in NOS. What the product had is kept for the way back.
+                  goodsChoices.current = { trackInventory, unit };
                   setTrackInventory(false);
                   setUnit('NOS');
+                } else {
+                  setTrackInventory(goodsChoices.current.trackInventory);
+                  setUnit(goodsChoices.current.unit);
                 }
+                setType(v as ItemType);
               }}
             />
           </FieldShell>

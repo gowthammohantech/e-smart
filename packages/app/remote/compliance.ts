@@ -58,10 +58,26 @@ const docCompany = (documentId: string) => useAppStore.getState().documents.find
 const billCompany = (id: string) => useAppStore.getState().ewayBills.find((b) => b.id === id)?.companyId ?? useAppStore.getState().activeCompanyId;
 const p = (companyId: string) => ({ companyId });
 
+/**
+ * The server answers an e-invoice call with the document's new compliance block. Putting it on the stored
+ * document straight away is what makes the screen say "IRN generated" at once: the refresh that follows only
+ * lands a moment later, and until then the page still offered "Generate IRN", so a user would tap it again.
+ */
+function applyCompliance(documentId: string, data: unknown) {
+  const compliance = (data as { compliance?: Record<string, unknown> } | undefined)?.compliance;
+  if (!compliance || typeof compliance !== 'object') return;
+  useAppStore.setState(
+    (s) => ({ documents: s.documents.map((d) => (d.id === documentId ? { ...d, compliance: { ...d.compliance, ...compliance } } : d)) }) as never,
+  );
+}
+
 export async function generateEInvoice(documentId: string): Promise<ComplianceResult> {
   const unsynced = await settle(documentId);
   if (unsynced) return unsynced;
-  return call(() => api.POST('/companies/{companyId}/documents/{id}/e-invoice', { params: { path: { ...p(docCompany(documentId)), id: documentId } } }));
+  return call(
+    () => api.POST('/companies/{companyId}/documents/{id}/e-invoice', { params: { path: { ...p(docCompany(documentId)), id: documentId } } }),
+    (data) => applyCompliance(documentId, data),
+  );
 }
 
 export async function cancelEInvoice(documentId: string, reasonCode: CancelReasonCode, remark?: string): Promise<ComplianceResult> {
