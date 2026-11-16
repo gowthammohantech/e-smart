@@ -97,7 +97,12 @@ export async function extendEwayBill(id: string, args: ExtendEwayBillInput): Pro
 }
 
 export async function cancelEwayBill(id: string, reasonCode: CancelReasonCode, remark?: string): Promise<ComplianceResult> {
-  return call(() => api.POST('/companies/{companyId}/eway-bills/{id}/cancel', { params: { path: { ...p(billCompany(id)), id } }, body: { reasonCode, remark } as never }));
+  return call(
+    () => api.POST('/companies/{companyId}/eway-bills/{id}/cancel', { params: { path: { ...p(billCompany(id)), id } }, body: { reasonCode, remark } as never }),
+    // The server answers only "ok", so the cancellation is written onto the stored bill from what was sent: the page
+    // then shows "Cancelled" at once, and the refresh that follows brings the server's own copy.
+    () => applyEntity('eway_bill', { id, status: 'cancelled', cancelledAt: new Date().toISOString(), cancelReasonCode: reasonCode, cancelRemark: remark }),
+  );
 }
 
 export type PortalCredentials = {
