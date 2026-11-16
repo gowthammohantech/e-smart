@@ -89,26 +89,24 @@ function ItemFormFields({ item }: { item?: Item }) {
   // The HSN/SAC master, searched as it is typed: a pick fills the code, the description and the rate.
   const [hsnOpen, setHsnOpen] = useState(false);
   const [hsnQuery, setHsnQuery] = useState('');
-  const [hsnMatches, setHsnMatches] = useState<HsnMatch[]>([]);
-  const [hsnLoading, setHsnLoading] = useState(false);
+  // The last answer and the query it answers: the matches shown, and loading, follow from the two.
+  const [hsnAnswer, setHsnAnswer] = useState<{ query: string; rows: HsnMatch[] }>({ query: '', rows: [] });
+  const hsnSearching = hsnOpen && !!hsnQuery.trim();
+  const hsnMatches = hsnSearching && hsnAnswer.query === hsnQuery ? hsnAnswer.rows : [];
+  const hsnLoading = hsnSearching && hsnAnswer.query !== hsnQuery;
   useEffect(() => {
-    if (!hsnOpen || !hsnQuery.trim()) {
-      setHsnMatches([]);
-      return;
-    }
+    if (!hsnSearching) return;
     let live = true;
-    setHsnLoading(true);
     const timer = setTimeout(() => {
       searchHsn(hsnQuery)
-        .then((rows) => live && setHsnMatches(rows))
-        .catch(() => live && setHsnMatches([]))
-        .finally(() => live && setHsnLoading(false));
+        .then((rows) => live && setHsnAnswer({ query: hsnQuery, rows }))
+        .catch(() => live && setHsnAnswer({ query: hsnQuery, rows: [] }));
     }, 250);
     return () => {
       live = false;
       clearTimeout(timer);
     };
-  }, [hsnOpen, hsnQuery]);
+  }, [hsnSearching, hsnQuery]);
   const pickHsn = (code: string) => {
     const match = hsnMatches.find((h) => h.code === code);
     setHsnCode(code);
