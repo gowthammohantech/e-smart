@@ -7,8 +7,19 @@ import { buildEwayBillHtml, ewayBillQrPayload, ewayDateTime } from '../ewayBillH
 import { branch, company, doc, einvoiced, ewayBill, LINES, party } from './fixtures/documents';
 
 const en = i18n.getFixedT('en', null);
-/** Text without tags or entities, so assertions read as the page does. */
-const text = (html: string) => html.replace(/<style[\s\S]*?<\/style>/, '').replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ');
+/**
+ * Text without the stylesheet, tags or entities, so assertions read as the page does. Stripped
+ * until nothing changes, so a removal can never leave a tag behind.
+ */
+const text = (html: string) => {
+  let out = html;
+  let before: string;
+  do {
+    before = out;
+    out = out.replace(/<style[\s\S]*?<\/style>/g, '').replace(/<[^>]*>/g, ' ');
+  } while (out !== before);
+  return out.replace(/&amp;/g, '&').replace(/\s+/g, ' ');
+};
 
 const place = (over: Partial<EwayBill['from']> = {}): EwayBill['from'] => ({
   legalName: 'Alpha Medi Systems',
