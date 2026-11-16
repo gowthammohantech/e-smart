@@ -462,10 +462,12 @@ function DiscountModeMenu({ mode, currency, label, onChange }: { mode: DocumentL
           {
             flexDirection: 'row',
             alignItems: 'center',
+            justifyContent: 'center',
             gap: 2,
-            // As tall as the discount input beside it.
+            // As tall as the discount input beside it, and as wide for % as for a currency
+            // code, so every row's discount box is the same size.
             height: 32,
-            paddingHorizontal: 5,
+            width: 52,
             borderRadius: t.radius.sm,
             borderWidth: 1,
             // The arrow says it is a list; the edge only shows on hover, as on the tax beside it.
