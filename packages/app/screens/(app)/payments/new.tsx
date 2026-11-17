@@ -38,8 +38,9 @@ import { formatMoney, toAmountInput } from '@esmart/core/lib/format';
 import { daysBetween, formatDate, today } from '@esmart/core/lib/date';
 import { Money, fromMajor, money, subtract, zero } from '@esmart/core/lib/money';
 import { uid } from '@esmart/core/lib/id';
-import { DEFAULT_ADVANCE_RATE, advanceInterState, advanceTaxSplit } from '@esmart/core/domain/advanceTax';
-import { homeStateCode, taxAvailableOn, taxCategoriesOn } from '@esmart/core/domain/taxEngine';
+import { DEFAULT_ADVANCE_RATE } from '@esmart/core/domain/advanceTax';
+import { AdvanceGstBreakup } from '../../../features/payments/AdvanceGstBreakup';
+import { taxAvailableOn, taxCategoriesOn } from '@esmart/core/domain/taxEngine';
 
 import { useAppStore } from '../../../store/appStore';
 import {
@@ -269,8 +270,6 @@ function NewPaymentForm() {
   const taxed = taxCategoriesOn(taxCategories, date).filter((c) => c.rate > 0 && taxAvailableOn(c, date));
   // A rate not known is 18% (RULES 8.12).
   const advanceTaxCategory = taxed.find((c) => c.id === advanceTaxId) ?? taxed.find((c) => c.rate === DEFAULT_ADVANCE_RATE) ?? taxed[0];
-  // Memoised: called while rendering, the compiler would take `company` as changed by it and skip this screen.
-  const homeState = useMemo(() => homeStateCode(company), [company]);
   // A place of supply not known is taken as another state: IGST, under "Other Territory" (97).
   const pos = advancePos ?? party?.billingAddress?.stateCode;
   const canAdvance = direction === 'received' && unallocated.minor > 0 && !!company.taxRegistration?.registered && !!taxed.length;
@@ -282,8 +281,6 @@ function NewPaymentForm() {
     canAdvance && serviceAdvance && advanceTaxCategory && !goodsSac
       ? { taxCategoryId: advanceTaxCategory.id, rate: advanceTaxCategory.rate, placeOfSupplyStateCode: pos ?? '97', ...(sac && { hsn: sac }), ...(advanceCess > 0 && { cessRate: advanceCess }) }
       : null;
-  // The tax inside what was received (and what the customer kept back as TDS), shown as it is typed.
-  const advanceSplit = advanceTax ? advanceTaxSplit(Math.round((unallocated.minor + advanceTds.minor) * (exchangeRate || 1)), advanceTax.rate, advanceCess, advanceInterState(homeState, pos)) : null;
   const overAllocated = unallocated.minor < 0;
 
   /**
@@ -887,26 +884,8 @@ function NewPaymentForm() {
         </Text>
       </View>
       {/* A service advance: the GST inside it, line by line, as it is owed when received. */}
-      {advanceSplit && unallocated.minor > 0 ? (
-        <View style={{ gap: 2, marginTop: 2 }}>
-          {[
-            { label: tr('sales:payment.advanceValue'), minor: advanceSplit.taxable },
-            ...(advanceSplit.igst ? [{ label: 'IGST', minor: advanceSplit.igst }] : [{ label: 'CGST', minor: advanceSplit.cgst }, { label: 'SGST', minor: advanceSplit.sgst }]),
-            ...(advanceSplit.cess ? [{ label: tr('sales:payment.advanceCessRow'), minor: advanceSplit.cess }] : []),
-          ].map((r) => (
-            <View key={r.label} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingLeft: t.spacing.md }}>
-              <Text variant="caption" tone="muted">
-                {r.label}
-              </Text>
-              <Text variant="caption" tone="muted" style={{ fontVariant: ['tabular-nums'] }}>
-                {formatMoney(money(r.minor, baseCurrency))}
-              </Text>
-            </View>
-          ))}
-          <Text variant="caption" tone="muted" style={{ paddingLeft: t.spacing.md }}>
-            {advanceTds.minor > 0 ? tr('sales:payment.advanceGstInsideTds', { tds: formatMoney(advanceTds) }) : tr('sales:payment.advanceGstInside')}
-          </Text>
-        </View>
+      {advanceTax && unallocated.minor > 0 ? (
+        <AdvanceGstBreakup gross={money(unallocated.minor + advanceTds.minor, currency)} rate={advanceTax.rate} cessRate={advanceCess} placeOfSupply={pos} company={company} baseCurrency={baseCurrency} exchangeRate={exchangeRate} tds={advanceTds} style={{ paddingLeft: t.spacing.md, marginTop: 2 }} />
       ) : null}
       {fxGainLoss && fxGainLoss.minor !== 0 ? (
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>

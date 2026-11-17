@@ -15,7 +15,8 @@ import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { Cell, DataTable, TABLE_PAGE_SIZE } from '@esmart/ui/components/DataTable';
 import { useServerSave } from '@esmart/app/components/useServerSave';
 import { useAppStore } from '@esmart/app/store/appStore';
-import { useBaseCurrency, useCurrentUser, useDocuments, useParty, usePayment, usePaymentAccounts } from '@esmart/app/store/selectors';
+import { useActiveCompany, useBaseCurrency, useCurrentUser, useDocuments, useParty, usePayment, usePaymentAccounts } from '@esmart/app/store/selectors';
+import { AdvanceGstBreakup } from '@esmart/app/features/payments/AdvanceGstBreakup';
 import { usePaymentRecord } from '@esmart/app/remote/queries';
 import { LoadingView } from '@esmart/app/components/LoadingView';
 import { RefundAdvanceSheet } from '@esmart/app/features/payments/RefundAdvanceSheet';
@@ -81,6 +82,7 @@ export function PaymentDetailDesktop() {
   const party = useParty(payment?.partyId);
   const accounts = usePaymentAccounts();
   const baseCurrency = useBaseCurrency();
+  const company = useActiveCompany();
   const removePayment = useAppStore((s) => s.removePayment);
 
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -250,6 +252,20 @@ export function PaymentDetailDesktop() {
                     {tr('sales:payment.unallocatedNote', { amount: formatMoney(payment.unallocated) })}
                   </Text>
                 </View>
+                {/* A service advance: the GST inside what is left of it. Reverse charge (older receipts) owed none here. */}
+                {payment.advanceTax && !payment.advanceTax.reverseCharge ? (
+                  <AdvanceGstBreakup
+                    gross={money(payment.unallocated.minor + (payment.allocations.length ? 0 : (payment.advanceTds?.minor ?? 0)), payment.unallocated.currency)}
+                    rate={payment.advanceTax.rate}
+                    cessRate={payment.advanceTax.cessRate}
+                    placeOfSupply={payment.advanceTax.placeOfSupplyStateCode}
+                    company={company}
+                    baseCurrency={baseCurrency}
+                    exchangeRate={payment.exchangeRate}
+                    tds={payment.allocations.length ? undefined : payment.advanceTds}
+                    style={{ paddingLeft: 32, flexBasis: '100%' }}
+                  />
+                ) : null}
                 <View style={{ flexDirection: 'row', gap: t.spacing.sm, marginLeft: 'auto' }}>
                   {isIn ? <Button title={tr('sales:refund.action')} size="sm" variant="ghost" icon="cash-refund" onPress={() => setRefunding(true)} /> : null}
                   <Button title={tr('sales:payment.adjustAdvance')} size="sm" variant="secondary" loading={adjusting} disabled={adjusting} onPress={() => void adjustAdvance()} />
