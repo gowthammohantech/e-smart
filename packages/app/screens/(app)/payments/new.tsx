@@ -133,8 +133,6 @@ function NewPaymentForm() {
   const [advanceSac, setAdvanceSac] = useState('');
   const [advanceCess, setAdvanceCess] = useState(0);
   const cessText = useDecimalText(advanceCess, setAdvanceCess);
-  /** A service the recipient pays GST on (reverse charge): no GST is owed on the advance here. */
-  const [advanceRcm, setAdvanceRcm] = useState(false);
   /** TDS the customer deducted from an advance, before any invoice. */
   const [advanceTdsText, setAdvanceTdsText] = useState('');
   const [advanceSheet, setAdvanceSheet] = useState<'tax' | 'pos' | 'tds' | null>(null);
@@ -282,11 +280,10 @@ function NewPaymentForm() {
   const advanceTds = direction === 'received' ? fromMajor(advanceTdsText || '0', currency) : zero(currency);
   const advanceTax =
     canAdvance && serviceAdvance && advanceTaxCategory && !goodsSac
-      ? { taxCategoryId: advanceTaxCategory.id, rate: advanceTaxCategory.rate, placeOfSupplyStateCode: pos ?? '97', ...(sac && { hsn: sac }), ...(advanceCess > 0 && { cessRate: advanceCess }), ...(advanceRcm && { reverseCharge: true }) }
+      ? { taxCategoryId: advanceTaxCategory.id, rate: advanceTaxCategory.rate, placeOfSupplyStateCode: pos ?? '97', ...(sac && { hsn: sac }), ...(advanceCess > 0 && { cessRate: advanceCess }) }
       : null;
   // The tax inside what was received (and what the customer kept back as TDS), shown as it is typed.
-  // None on reverse charge: the recipient pays it.
-  const advanceSplit = advanceTax && !advanceRcm ? advanceTaxSplit(Math.round((unallocated.minor + advanceTds.minor) * (exchangeRate || 1)), advanceTax.rate, advanceCess, advanceInterState(homeState, pos)) : null;
+  const advanceSplit = advanceTax ? advanceTaxSplit(Math.round((unallocated.minor + advanceTds.minor) * (exchangeRate || 1)), advanceTax.rate, advanceCess, advanceInterState(homeState, pos)) : null;
   const overAllocated = unallocated.minor < 0;
 
   /**
@@ -889,6 +886,28 @@ function NewPaymentForm() {
           {formatMoney(overAllocated ? money(-unallocated.minor, currency) : unallocated)}
         </Text>
       </View>
+      {/* A service advance: the GST inside it, line by line, as it is owed when received. */}
+      {advanceSplit && unallocated.minor > 0 ? (
+        <View style={{ gap: 2, marginTop: 2 }}>
+          {[
+            { label: tr('sales:payment.advanceValue'), minor: advanceSplit.taxable },
+            ...(advanceSplit.igst ? [{ label: 'IGST', minor: advanceSplit.igst }] : [{ label: 'CGST', minor: advanceSplit.cgst }, { label: 'SGST', minor: advanceSplit.sgst }]),
+            ...(advanceSplit.cess ? [{ label: tr('sales:payment.advanceCessRow'), minor: advanceSplit.cess }] : []),
+          ].map((r) => (
+            <View key={r.label} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingLeft: t.spacing.md }}>
+              <Text variant="caption" tone="muted">
+                {r.label}
+              </Text>
+              <Text variant="caption" tone="muted" style={{ fontVariant: ['tabular-nums'] }}>
+                {formatMoney(money(r.minor, baseCurrency))}
+              </Text>
+            </View>
+          ))}
+          <Text variant="caption" tone="muted" style={{ paddingLeft: t.spacing.md }}>
+            {advanceTds.minor > 0 ? tr('sales:payment.advanceGstInsideTds', { tds: formatMoney(advanceTds) }) : tr('sales:payment.advanceGstInside')}
+          </Text>
+        </View>
+      ) : null}
       {fxGainLoss && fxGainLoss.minor !== 0 ? (
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
           <Text variant="caption" tone="muted">
@@ -975,25 +994,7 @@ function NewPaymentForm() {
                 />
                 <TextField label={tr('sales:payment.advanceCess')} {...cessText} keyboardType="decimal-pad" placeholder="0" />
               </FieldRow>
-              <SwitchField label={tr('sales:payment.advanceReverseCharge')} description={tr('sales:payment.advanceReverseChargeHint')} value={advanceRcm} onValueChange={setAdvanceRcm} />
             </>
-          ) : null}
-          {advanceTax && advanceRcm ? (
-            <Text variant="caption" tone="muted">
-              {tr('sales:payment.advanceRcmNote', { rate: advanceTax.rate })}
-            </Text>
-          ) : null}
-          {advanceTax && advanceSplit ? (
-            <Text variant="caption" tone="muted">
-              {[
-                tr('sales:payment.advanceTaxIs', { tax: formatMoney(money(advanceSplit.igst + advanceSplit.cgst + advanceSplit.sgst + advanceSplit.cess, baseCurrency)) }),
-                advanceSplit.igst ? `IGST ${formatMoney(money(advanceSplit.igst, baseCurrency))}` : `CGST ${formatMoney(money(advanceSplit.cgst, baseCurrency))} · SGST ${formatMoney(money(advanceSplit.sgst, baseCurrency))}`,
-                advanceSplit.cess ? tr('sales:payment.advanceCessIs', { cess: formatMoney(money(advanceSplit.cess, baseCurrency)) }) : '',
-                tr('sales:payment.advanceTaxable', { value: formatMoney(money(advanceSplit.taxable, baseCurrency)) }),
-              ]
-                .filter(Boolean)
-                .join(' · ')}
-            </Text>
           ) : null}
           <SelectSheet visible={advanceSheet === 'tax'} onClose={() => setAdvanceSheet(null)} title={tr('sales:payment.advanceRate')} options={taxed.map((c) => ({ value: c.id, label: c.name }))} value={advanceTaxCategory?.id} onSelect={setAdvanceTaxId} searchable={false} />
           <SelectSheet visible={advanceSheet === 'pos'} onClose={() => setAdvanceSheet(null)} title={tr('sales:editor.placeOfSupply')} options={INDIAN_STATES.map((st) => ({ value: st.code, label: st.name }))} value={pos} onSelect={setAdvancePos} />

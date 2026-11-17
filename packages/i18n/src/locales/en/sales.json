@@ -365,7 +365,6 @@
     "serviceAdvance": "Advance for services",
     "serviceAdvanceHint": "GST is due on an advance for services when it is received; the invoice raised later takes it back. Advances for goods carry none.",
     "advanceRate": "GST rate",
-    "advanceTaxIs": "GST on the advance: {{tax}}, inside the amount received",
     "applyTo": "Apply to",
     "summary": "Summary",
     "autoAllocateShort": "Auto-allocate",
@@ -428,11 +427,6 @@
     "advanceSac": "SAC",
     "advanceGoods": "That is goods: an advance for goods carries no GST",
     "advanceCess": "Cess %",
-    "advanceCessIs": "cess {{cess}}",
-    "advanceReverseCharge": "Tax payable on reverse charge",
-    "advanceReverseChargeHint": "The customer pays the GST on this service (reverse charge), so none is owed on the advance here. The receipt voucher says so.",
-    "advanceRcmNote": "No GST on the advance here: the customer pays it at {{rate}}% on reverse charge.",
-    "advanceTaxable": "value {{value}}",
     "deleteMessagePaid": "Any bill it was applied to will go back to being outstanding. This cannot be undone.",
     "settleAll": "Settle all",
     "sharePdf": "Share PDF",
@@ -444,7 +438,11 @@
     "applyingTo": "Applying to {{number}}",
     "adjustmentOn": "{{label}} on {{number}}",
     "noDueDate": "No due date",
-    "supplierRef": "Supplier no. {{number}}"
+    "supplierRef": "Supplier no. {{number}}",
+    "advanceValue": "Value of the advance",
+    "advanceCessRow": "Cess",
+    "advanceGstInside": "GST is included in the advance amount.",
+    "advanceGstInsideTds": "GST is included in the advance amount and the {{tds}} TDS the customer kept back."
   },
   "aging": {
     "overdue": "Overdue",
