@@ -590,38 +590,28 @@ export function SwitchField({
 }) {
   const t = useTheme();
   return (
-    <View
-      style={[
-        {
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: t.spacing.md,
-          paddingVertical: t.spacing.sm,
-          opacity: disabled ? 0.5 : 1,
-        },
-        style,
-      ]}
-    >
-      <View style={{ flex: 1, gap: 2 }}>
-        <Text variant="body" weight="500">
+    <View style={[{ gap: 2, paddingVertical: t.spacing.sm, opacity: disabled ? 0.5 : 1 }, style]}>
+      {/* The switch rides on the title's line, so a description that changes with it (on / off) never moves it. */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
+        <Text variant="body" weight="500" style={{ flex: 1 }}>
           {label}
         </Text>
-        {description ? (
-          <Text variant="caption" tone="muted">
-            {description}
-          </Text>
-        ) : null}
+        <Switch
+          value={value}
+          onValueChange={onValueChange}
+          disabled={disabled}
+          trackColor={{ true: t.c.primary, false: t.c.line }}
+          thumbColor="#FFFFFF"
+          // On the web the "on" thumb defaults to green; keep it white like the rest.
+          {...(Platform.OS === 'web' ? ({ activeThumbColor: '#FFFFFF' } as object) : null)}
+          accessibilityLabel={label}
+        />
       </View>
-      <Switch
-        value={value}
-        onValueChange={onValueChange}
-        disabled={disabled}
-        trackColor={{ true: t.c.primary, false: t.c.line }}
-        thumbColor="#FFFFFF"
-        // On the web the "on" thumb defaults to green; keep it white like the rest.
-        {...(Platform.OS === 'web' ? ({ activeThumbColor: '#FFFFFF' } as object) : null)}
-        accessibilityLabel={label}
-      />
+      {description ? (
+        <Text variant="caption" tone="muted">
+          {description}
+        </Text>
+      ) : null}
     </View>
   );
 }
