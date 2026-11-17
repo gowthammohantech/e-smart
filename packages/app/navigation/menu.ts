@@ -95,10 +95,10 @@ export const MENU: MenuSection[] = [
     pages: [
       { key: 'accountsHub', labelKey: 'reports:dash.accounts.open', icon: 'scale-balance', route: '/accounts', group: 'accounts' },
       { key: 'paymentsIn', labelKey: 'nav:title.paymentsReceived', icon: 'cash-plus', route: '/payments/received', group: 'cashFlow', createRoute: '/payments/new?direction=received' },
-      // Receipts for services with the GST on them (RULES 8.12); + opens one with the service-advance switch on.
-      { key: 'advanceReceipt', labelKey: 'nav:title.advanceReceipts', icon: 'cash-fast', route: '/payments/advances', group: 'cashFlow', createRoute: '/payments/new?direction=received&advance=1' },
       { key: 'paymentsOut', labelKey: 'nav:title.paymentsMade', icon: 'cash-minus', route: '/payments/made', group: 'cashFlow', createRoute: '/payments/new?direction=paid' },
       { key: 'receipts', labelKey: 'nav:title.receipts', icon: 'receipt', route: '/receipts', group: 'cashFlow', createRoute: '/receipts/new' },
+      // Receipts for services with the GST on them (RULES 8.12); + opens one with the service-advance switch on.
+      { key: 'advanceReceipt', labelKey: 'nav:title.advanceReceipts', icon: 'cash-fast', route: '/payments/advances', group: 'cashFlow', createRoute: '/payments/new?direction=received&advance=1' },
       // The adjustments made, advances and direct notes applied to invoices and debit notes (RULES 8.13); + makes one.
       { key: 'adjustAdvance', labelKey: 'nav:title.advanceAdjustments', icon: 'swap-horizontal', route: '/receipts/adjustments', group: 'cashFlow', createRoute: '/receipts/adjust' },
       // The transfer entry: cash and bank to each other, posted as a contra.
