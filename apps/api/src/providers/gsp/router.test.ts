@@ -2,12 +2,12 @@ import { describe, expect, it } from 'vitest';
 import type { IrpInvoicePayload } from '@esmart/core/domain/eInvoice';
 import { loadConfig } from '../../config';
 import { isUnsupported, type PortalCredentials } from '../compliance';
-import { createGspRouter, gspAvailability, GspRouter, parseGspGateway } from '.';
+import { createGspRouter, gspAvailability, GspRouter, parseGspGateway, parseGspTarget } from '.';
 import type { GspEnvelope } from './envelope';
 import { GspRequestError, type GspRequest, type GspTransport } from './transport';
 
 const NOW = '2026-09-02T10:00:00.000Z';
-const base: Omit<PortalCredentials, 'gspGateway'> = { gstin: '29AAGCB1286Q000', username: 'api_user', password: 'hunter2' };
+const base: Omit<PortalCredentials, 'gspGateway' | 'gspEnvironment'> = { gstin: '29AAGCB1286Q000', username: 'api_user', password: 'hunter2' };
 
 const payload = {
   Version: '1.1',
@@ -57,7 +57,16 @@ const everything = {
   TAXATION_WHITEBOOKS_IP_ADDRESS: '203.0.113.7',
   TAXATION_WHITEBOOKS_EINVOICE_APP_ID: 'wb-id',
   TAXATION_WHITEBOOKS_EINVOICE_APP_SECRET: 'wb-secret',
-  TAXATION_GSTIN_ALLOW_SANDBOX: 'true',
+  // Adaequare's sandbox: its own host and its own application pair, beside the live ones above.
+  TAXATION_ADAEQUARE_SANDBOX_BASE_URL: 'https://gsp.example.test/test/',
+  TAXATION_ADAEQUARE_SANDBOX_APP_ID: 'adq-sbx-id',
+  TAXATION_ADAEQUARE_SANDBOX_APP_SECRET: 'adq-sbx-secret',
+};
+/** Whitebooks production too, as it will be set once there is a subscription. */
+const withWhitebooksProduction = {
+  TAXATION_WHITEBOOKS_PRODUCTION_BASE_URL: 'https://api.example.test',
+  TAXATION_WHITEBOOKS_PRODUCTION_EINVOICE_APP_ID: 'wb-live-id',
+  TAXATION_WHITEBOOKS_PRODUCTION_EINVOICE_APP_SECRET: 'wb-live-secret',
 };
 const config = (extra: Record<string, string> = {}) => loadConfig({ ...everything, ...extra });
 const file = (router: GspRouter, creds: PortalCredentials | null) => router.submitInvoice(creds, { payload, existingIrns: [], now: NOW });
@@ -102,15 +111,15 @@ describe('GspRouter', () => {
     expect(t.authenticated).toEqual(['https://gsp.example.test/']);
   });
 
-  it('refuses a company whose gateway this deployment cannot run, rather than filing it through the other', async () => {
+  it('refuses a company whose target this deployment cannot run, rather than filing it through another', async () => {
     const t = bothGateways();
-    // Live deployment: the sandbox switch is off, so Whitebooks is not available to anyone.
-    const router = new GspRouter({ ...config({ TAXATION_GSP_PROVIDER_CODE: 'ADAEQUARE_GSP' }), TAXATION_GSTIN_ALLOW_SANDBOX: false }, { transport: t.transport });
+    // Whitebooks production has no settings here: there is nothing to run.
+    const router = new GspRouter(config({ TAXATION_GSP_PROVIDER_CODE: 'ADAEQUARE_GSP' }), { transport: t.transport });
 
-    const answer = await file(router, { ...base, gspGateway: 'whitebooks' });
+    const answer = await file(router, { ...base, gspGateway: 'whitebooks', gspEnvironment: 'production' });
 
     expect(answer).toMatchObject({ ok: false, errors: [{ code: 'GSP_NOT_CONFIGURED' }] });
-    if (!answer.ok) expect(answer.errors[0].message).toMatch(/sandbox only/);
+    if (!answer.ok) expect(answer.errors[0].message).toMatch(/TAXATION_WHITEBOOKS_PRODUCTION_BASE_URL/);
     expect(t.calls).toHaveLength(0);
     // The default still works for everyone else.
     expect(await file(router, base)).toMatchObject({ ok: true, irn: 'ADQ-IRN' });
@@ -125,11 +134,11 @@ describe('GspRouter', () => {
   });
 
   it('reports a gateway it cannot run as a failed connection test, not an exception', async () => {
-    const router = new GspRouter({ ...config(), TAXATION_GSTIN_ALLOW_SANDBOX: false }, { transport: bothGateways().transport });
-    const result = await router.testConnection({ einvoice: { ...base, gspGateway: 'whitebooks' }, ewaybill: null });
+    const router = new GspRouter(config(), { transport: bothGateways().transport });
+    const result = await router.testConnection({ einvoice: { ...base, gspGateway: 'whitebooks', gspEnvironment: 'production' }, ewaybill: null });
     expect(result.irp.ok).toBe(false);
     expect(result.ewb.ok).toBe(false);
-    expect(result.irp.message).toMatch(/sandbox only/);
+    expect(result.irp.message).toMatch(/TAXATION_WHITEBOOKS_PRODUCTION_BASE_URL/);
   });
 
   it('says a gateway has no lookup, which recovery reads as the lookup being absent', async () => {
@@ -141,7 +150,7 @@ describe('GspRouter', () => {
   });
 
   it('refuses to start when the deployment cannot run its own default', () => {
-    expect(() => new GspRouter({ ...config({ TAXATION_GSP_PROVIDER_CODE: 'WHITE_BOOKS_GSP' }), TAXATION_GSTIN_ALLOW_SANDBOX: false })).toThrow(/sandbox only/);
+    expect(() => new GspRouter(config({ TAXATION_GSP_PROVIDER_CODE: 'WHITE_BOOKS_GSP', TAXATION_GSP_ENVIRONMENT: 'production' }))).toThrow(/TAXATION_WHITEBOOKS_PRODUCTION_BASE_URL/);
   });
 
   it('is one shared instance per config, so the features share each gateway’s session', () => {
@@ -167,26 +176,125 @@ describe('parseGspGateway', () => {
 });
 
 describe('gspAvailability', () => {
-  const byName = (cfg: ReturnType<typeof config>) => Object.fromEntries(gspAvailability(cfg).map((o) => [o.gateway, o]));
+  const byTarget = (cfg: ReturnType<typeof config>) => Object.fromEntries(gspAvailability(cfg).map((o) => [`${o.gateway}:${o.environment}`, o]));
 
-  it('offers every gateway the deployment is set up for', () => {
-    expect(byName(config())).toMatchObject({ adaequare: { available: true, sandboxOnly: false }, whitebooks: { available: true, sandboxOnly: true } });
+  it('lists all four targets, in the order an operator sees them', () => {
+    expect(gspAvailability(config()).map((o) => `${o.gateway}:${o.environment}`)).toEqual(['adaequare:production', 'adaequare:sandbox', 'whitebooks:sandbox', 'whitebooks:production']);
   });
 
-  it('withholds a sandbox-only gateway unless the sandbox switch is on', () => {
-    const live = byName({ ...config(), TAXATION_GSTIN_ALLOW_SANDBOX: false });
-    expect(live.whitebooks).toMatchObject({ available: false });
-    expect(live.whitebooks.reason).toMatch(/sandbox/i);
-    expect(live.adaequare.available).toBe(true);
+  it('offers every target the deployment is set up for, and lists the rest as unavailable', () => {
+    const all = byTarget(config());
+    expect(all['adaequare:production']).toMatchObject({ available: true });
+    expect(all['adaequare:sandbox']).toMatchObject({ available: true });
+    expect(all['whitebooks:sandbox']).toMatchObject({ available: true });
+    // No subscription yet: it is there to be seen, and becomes choosable the moment its settings are filled in.
+    expect(all['whitebooks:production']).toMatchObject({ available: false });
+    expect(all['whitebooks:production'].reason).toMatch(/TAXATION_WHITEBOOKS_PRODUCTION_BASE_URL/);
+    expect(byTarget(config(withWhitebooksProduction))['whitebooks:production']).toMatchObject({ available: true });
   });
 
-  it('withholds a gateway whose URL or application credentials are missing, and says which', () => {
-    const noUrl = byName(config({ TAXATION_ADAEQUARE_BASE_URL: '' }));
-    expect(noUrl.adaequare).toMatchObject({ available: false });
-    expect(noUrl.adaequare.reason).toMatch(/TAXATION_ADAEQUARE_BASE_URL/);
+  it('withholds a target whose URL or application credentials are missing, and says which', () => {
+    const noUrl = byTarget(config({ TAXATION_ADAEQUARE_BASE_URL: '' }));
+    expect(noUrl['adaequare:production']).toMatchObject({ available: false });
+    expect(noUrl['adaequare:production'].reason).toMatch(/TAXATION_ADAEQUARE_PRODUCTION_BASE_URL/);
+    // Its sandbox is a different product with its own settings, untouched.
+    expect(noUrl['adaequare:sandbox'].available).toBe(true);
 
-    const noApp = byName(config({ TAXATION_WHITEBOOKS_EINVOICE_APP_ID: '', TAXATION_WHITEBOOKS_EINVOICE_APP_SECRET: '' }));
-    expect(noApp.whitebooks).toMatchObject({ available: false });
-    expect(noApp.whitebooks.reason).toMatch(/TAXATION_WHITEBOOKS_EINVOICE_APP/);
+    const noApp = byTarget(config({ TAXATION_WHITEBOOKS_EINVOICE_APP_ID: '', TAXATION_WHITEBOOKS_EINVOICE_APP_SECRET: '' }));
+    expect(noApp['whitebooks:sandbox']).toMatchObject({ available: false });
+    expect(noApp['whitebooks:sandbox'].reason).toMatch(/TAXATION_WHITEBOOKS_SANDBOX_EINVOICE_APP/);
+  });
+
+  it('never lets a live pair stand in for a sandbox one, or the reverse', () => {
+    // Only the older un-suffixed Adaequare settings are set: they mean production, so the sandbox has nothing.
+    const legacyOnly = byTarget(loadConfig({ TAXATION_ADAEQUARE_BASE_URL: 'https://gsp.example.test/', TAXATION_ADAEQUARE_APP_ID: 'a', TAXATION_ADAEQUARE_APP_SECRET: 'b' }));
+    expect(legacyOnly['adaequare:production'].available).toBe(true);
+    expect(legacyOnly['adaequare:sandbox'].available).toBe(false);
+    // And the older Whitebooks settings mean its sandbox.
+    const wb = byTarget(loadConfig({ TAXATION_WHITEBOOKS_BASE_URL: 'https://x.test', TAXATION_WHITEBOOKS_EINVOICE_APP_ID: 'a', TAXATION_WHITEBOOKS_EINVOICE_APP_SECRET: 'b' }));
+    expect(wb['whitebooks:sandbox'].available).toBe(true);
+    expect(wb['whitebooks:production'].available).toBe(false);
+  });
+});
+
+describe('sandbox and production are separate targets', () => {
+  const sandboxLogin = { ...base, gspGateway: 'adaequare', gspEnvironment: 'sandbox' } as const;
+  const liveLogin = { ...base, gspGateway: 'adaequare', gspEnvironment: 'production' } as const;
+
+  it('sends Adaequare sandbox to its own host and application, and production to its own, in one process', async () => {
+    const t = bothGateways();
+    const router = new GspRouter(config({ TAXATION_GSP_PROVIDER_CODE: 'WHITE_BOOKS_GSP' }), { transport: t.transport });
+
+    await file(router, sandboxLogin);
+    await file(router, liveLogin);
+
+    expect(t.calls.map((c) => c.baseUrl)).toEqual(['https://gsp.example.test/test/', 'https://gsp.example.test/']);
+    // A token minted for one is never presented to the other: each target authenticated with its own pair.
+    expect(t.authenticated).toEqual(['https://gsp.example.test/test/', 'https://gsp.example.test/']);
+  });
+
+  it('files a business as itself in production, and as the sandbox taxpayer in the sandbox', async () => {
+    const t = bothGateways();
+    const router = new GspRouter(config(), { transport: t.transport });
+
+    await file(router, liveLogin);
+    await file(router, sandboxLogin);
+
+    const [live, sandbox] = t.calls;
+    expect(live.headers).toMatchObject({ gstin: '29AAGCB1286Q000' });
+    expect((live.body as typeof payload).DocDtls.No).toBe('INV-1');
+    expect((live.body as typeof payload).BuyerDtls.Gstin).toBe('27AAGCB1286Q1Z4');
+    // Sandbox: Adaequare's test taxpayer and test buyer, our own document number; the amounts are untouched.
+    expect(sandbox.headers).toMatchObject({ gstin: '27AMBPG7773M016' });
+    expect((sandbox.body as typeof payload).SellerDtls.Gstin).toBe('27AMBPG7773M016');
+    expect((sandbox.body as typeof payload).BuyerDtls.Gstin).toBe('29AMBPG7773M000');
+    expect((sandbox.body as typeof payload).DocDtls.No).not.toBe('INV-1');
+    expect((sandbox.body as typeof payload).ValDtls.TotInvVal).toBe(118);
+  });
+
+  it('keeps the business’s own Adaequare sandbox login and swaps only the GSTIN', async () => {
+    const t = bothGateways();
+    const router = new GspRouter(config(), { transport: t.transport });
+    await file(router, sandboxLogin);
+    expect(t.calls[0].headers).toMatchObject({ user_name: 'api_user', password: 'hunter2', gstin: '27AMBPG7773M016' });
+  });
+
+  it('files in Whitebooks production exactly as the app built the document, with no sandbox stand-ins', async () => {
+    const t = bothGateways();
+    const router = new GspRouter(config(withWhitebooksProduction), { transport: t.transport });
+
+    await file(router, { ...base, gspGateway: 'whitebooks', gspEnvironment: 'production' });
+    await file(router, { ...base, gspGateway: 'whitebooks', gspEnvironment: 'sandbox' });
+
+    const live = t.calls.filter((c) => c.baseUrl === 'https://api.example.test');
+    const sandbox = t.calls.filter((c) => c.baseUrl === 'https://apisandbox.example.test');
+    // Its own application pair per environment.
+    expect(live.at(-1)?.headers).toMatchObject({ client_id: 'wb-live-id', client_secret: 'wb-live-secret' });
+    expect(sandbox.at(-1)?.headers).toMatchObject({ client_id: 'wb-id', client_secret: 'wb-secret' });
+    const generated = (calls: typeof t.calls) => calls.find((c) => c.path === '/einvoice/type/GENERATE/version/V1_03')!;
+    expect((generated(live).body as typeof payload).DocDtls.No).toBe('INV-1');
+    expect(generated(live).headers).toMatchObject({ gstin: '29AAGCB1286Q000' });
+    expect((generated(sandbox).body as typeof payload).DocDtls.No).not.toBe('INV-1');
+  });
+
+  it('reads an old login stamped with only a gateway as that gateway’s usual environment', () => {
+    const router = new GspRouter(config(), { transport: bothGateways().transport });
+    expect(router.targetOf({ gspGateway: 'whitebooks' })).toEqual({ gateway: 'whitebooks', environment: 'sandbox' });
+    expect(router.targetOf({ gspGateway: 'adaequare' })).toEqual({ gateway: 'adaequare', environment: 'production' });
+    expect(router.targetOf({})).toEqual(router.target);
+  });
+});
+
+describe('parseGspTarget', () => {
+  it('reads a stored choice, and treats anything else as no choice', () => {
+    expect(parseGspTarget('adaequare', 'sandbox')).toEqual({ gateway: 'adaequare', environment: 'sandbox' });
+    expect(parseGspTarget('whitebooks', 'production')).toEqual({ gateway: 'whitebooks', environment: 'production' });
+    expect(parseGspTarget(null, null)).toBeUndefined();
+    expect(parseGspTarget('cleartax', 'sandbox')).toBeUndefined();
+  });
+
+  it('takes a gateway with no environment as it was before environments existed', () => {
+    expect(parseGspTarget('whitebooks', null)).toEqual({ gateway: 'whitebooks', environment: 'sandbox' });
+    expect(parseGspTarget('adaequare', 'bogus')).toEqual({ gateway: 'adaequare', environment: 'production' });
   });
 });

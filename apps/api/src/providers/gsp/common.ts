@@ -57,7 +57,7 @@ export function requireLogin(creds: PortalCredentials | null): PortalCredentials
 }
 
 export function baseUrlOf(baseUrl: string | undefined): string {
-  if (!baseUrl) throw new GspConfigError('The GSP base URL is not set (TAXATION_ADAEQUARE_BASE_URL or TAXATION_WHITEBOOKS_BASE_URL)');
+  if (!baseUrl) throw new GspConfigError('The GSP base URL is not set (TAXATION_<GATEWAY>_<ENVIRONMENT>_BASE_URL, e.g. TAXATION_ADAEQUARE_PRODUCTION_BASE_URL)');
   return baseUrl;
 }
 

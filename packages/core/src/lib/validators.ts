@@ -35,8 +35,9 @@ export function validPhone(value: string | undefined): string | undefined {
 /** Shape, state code and check digit — a typo is caught here, not at the portal. */
 export function validGstin(value: string | undefined): string | undefined {
   if (!value) return undefined;
-  if (!GSTIN_RE.test(normalizeGstin(value))) return i18n.t('errors:validation.gstinShape');
-  return isValidGstin(value) ? undefined : i18n.t('errors:validation.gstinCheckDigit');
+  // isValidGstin is the one rule: a real GSTIN (shape, state, check digit) or, where sandboxes are on, a NIC test one.
+  if (isValidGstin(value)) return undefined;
+  return GSTIN_RE.test(normalizeGstin(value)) ? i18n.t('errors:validation.gstinCheckDigit') : i18n.t('errors:validation.gstinShape');
 }
 
 /** Indian PIN code: six digits, never starting with 0. */

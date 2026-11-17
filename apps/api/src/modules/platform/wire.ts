@@ -4,8 +4,8 @@ import { schema } from '@esmart/db';
 import type { Config } from '../../config';
 import type { DbOrTx } from '../../lib/audit';
 import { gspAvailability } from '../../providers/gsp/availability';
-import { resolveGspGateway } from '../../providers/gsp/provider-name';
-import { parseGspGateway } from '../../providers/gsp/router';
+import { defaultGspTarget, type GspTarget } from '../../providers/gsp/provider-name';
+import { parseGspTarget } from '../../providers/gsp/router';
 
 type AccountRow = typeof schema.accounts.$inferSelect;
 type CompanyRow = typeof schema.companies.$inferSelect;
@@ -26,24 +26,25 @@ export function companyToPlatform(c: CompanyRow, subscriptionStatus: Schema<'Pla
     plan: c.plan,
     subscriptionStatus,
     onboardingCompletedAt: iso(c.onboardingCompletedAt),
-    gspProvider: parseGspGateway(c.gspProvider) ?? null,
+    gspProvider: parseGspTarget(c.gspProvider, c.gspEnvironment)?.gateway ?? null,
+    gspEnvironment: parseGspTarget(c.gspProvider, c.gspEnvironment)?.environment ?? null,
     createdAt: c.createdAt.toISOString(),
   };
 }
 
-/** The deployment's default gateway: what a company with no choice of its own files through. */
-export const defaultGspGateway = (config: Config) => resolveGspGateway(config.TAXATION_TAXPAYER_PROVIDER, config.TAXATION_GSP_PROVIDER_CODE);
+/** The deployment's default target: what a company with no choice of its own files through. */
+export const defaultGspTargetOf = (config: Config): GspTarget => defaultGspTarget(config);
 
-/** Which gateway a company files through, why, and which the deployment could offer instead. */
+/** Which target a company files through, why, and which the deployment could offer instead. */
 export function gspToPlatform(config: Config, c: CompanyRow): Schema<'PlatformGsp'> {
-  const override = parseGspGateway(c.gspProvider) ?? null;
-  const fallback = defaultGspGateway(config);
+  const override = parseGspTarget(c.gspProvider, c.gspEnvironment) ?? null;
+  const fallback = defaultGspTargetOf(config);
   return {
     override,
     default: fallback,
     effective: override ?? fallback,
     simulated: config.COMPLIANCE_PROVIDER !== 'gsp',
-    options: gspAvailability(config).map((o) => ({ gateway: o.gateway, available: o.available, sandboxOnly: o.sandboxOnly, reason: o.reason ?? null })),
+    options: gspAvailability(config).map((o) => ({ gateway: o.gateway, environment: o.environment, available: o.available, reason: o.reason ?? null })),
   };
 }
 

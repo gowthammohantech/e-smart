@@ -13,7 +13,7 @@ import {
 } from '@esmart/core/domain/irpAdapter';
 import type { Config } from '../config';
 import { createGspRouter } from './gsp';
-import type { GspGatewayName } from './gsp/provider-name';
+import type { GspEnvironment, GspGatewayName } from './gsp/provider-name';
 
 /** What `saveComplianceCredentials` stored, decrypted for the length of one call. */
 export type PortalCredentials = {
@@ -23,6 +23,8 @@ export type PortalCredentials = {
    * which is what every company did before the choice existed.
    */
   gspGateway?: GspGatewayName;
+  /** The environment of that choice (`sandbox` or `production`). Set with `gspGateway`, never alone. */
+  gspEnvironment?: GspEnvironment;
   /** The seller's GSTIN; the IRP and EWB APIs scope every call to it. */
   gstin: string;
   username: string;

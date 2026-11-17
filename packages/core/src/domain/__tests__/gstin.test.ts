@@ -4,6 +4,7 @@ import {
   isValidGstin,
   normalizeGstin,
   panOfGstin,
+  setSandboxGstinsAllowed,
   stateCodeOfGstin,
 } from '../gstin';
 import { GST_STATE_CODES, isValidStateCode, stateNameOf } from '../stateCodes';
@@ -73,5 +74,28 @@ describe('real-shaped GSTINs', () => {
   it('all pass the check digit', () => {
     const gstins = ['27AABCV1234F1ZO', '29AACFA9876P1ZH', '29AADCL5544K1Z4', '29AAECI7788M1ZK', '27AABCT5512M1Z6', '29AABCG4321K1ZM'];
     expect(gstins.filter((g) => !isValidGstin(g))).toEqual([]);
+  });
+});
+
+describe('NIC sandbox test GSTINs', () => {
+  afterEach(() => setSandboxGstinsAllowed(false));
+
+  it('are refused until the server says it can reach a sandbox', () => {
+    expect(isValidGstin('29AAGCB1286Q000')).toBe(false);
+    expect(isValidGstin('01AMBPG7773M002')).toBe(false);
+  });
+
+  it('are admitted when it does: Whitebooks’ and Adaequare’s, which have no check digit', () => {
+    setSandboxGstinsAllowed(true);
+    expect(isValidGstin('29AAGCB1286Q000')).toBe(true);
+    expect(isValidGstin('01AMBPG7773M002')).toBe(true);
+    // An unknown state is refused either way.
+    expect(isValidGstin('99AAGCB1286Q000')).toBe(false);
+  });
+
+  it('never loosen the rule for a real GSTIN: a Z in the 14th place still needs its check digit', () => {
+    setSandboxGstinsAllowed(true);
+    expect(isValidGstin(VALID)).toBe(true);
+    expect(isValidGstin('27AAPFU0939F1ZX')).toBe(false);
   });
 });

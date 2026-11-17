@@ -20,6 +20,7 @@ import { loadOperations } from './openapi/spec';
 import { MemoryStorage } from './providers';
 import { INTERNAL_HEADER, INTERNAL_TOKEN } from './lib/internal';
 import { registerMcp } from './lixi/mcp';
+import { sandboxTargetAvailable } from './providers/gsp/availability';
 import { registerSharePages } from './modules/documents/share';
 
 export type BuildOptions = {
@@ -38,8 +39,9 @@ export async function buildApp(deps: Deps, opts: BuildOptions = {}): Promise<Fas
   // English labels for server-rendered text (PDFs, messages). The domain
   // formatters read the shared i18next instance.
   initI18n('en');
-  // NIC's sandbox GSTIN shape (`29AAGCB1286Q000`), admitted only when TAXATION_GSTIN_ALLOW_SANDBOX says so.
-  setSandboxGstinsAllowed(deps.config.TAXATION_GSTIN_ALLOW_SANDBOX);
+  // NIC's sandbox test GSTINs (`29AAGCB1286Q000`, `27AMBPG7773M016`) are admitted when this deployment can file through
+  // a sandbox target at all. The check is the deployment's, not a company's: the validator is shared with the apps.
+  setSandboxGstinsAllowed(sandboxTargetAvailable(deps.config));
 
   const app = Fastify({
     logger: opts.logger ?? {

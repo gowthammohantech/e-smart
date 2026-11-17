@@ -1,32 +1,38 @@
 import type { Config } from '../../config';
-import { gspBaseUrl } from '../../config';
+import { gspBaseUrl, gspBaseUrlVariable } from '../../config';
 import { configFor } from './build';
-import { GSP_GATEWAYS, SANDBOX_ONLY_GATEWAYS, gspApplication, type GspGatewayName } from './provider-name';
+import { GSP_TARGETS, gspApplication, type GspTarget } from './provider-name';
 
-export type GspAvailability = {
-  gateway: GspGatewayName;
-  /** Whether this deployment can file through it: allowed here, and its URL and application credentials are set. */
+export type GspAvailability = GspTarget & {
+  /** Whether this deployment can file through it: its base URL and application credentials are set. */
   available: boolean;
-  /** Why not, for the operator choosing a gateway. */
+  /** Why not, for the operator choosing a target. */
   reason?: string;
-  sandboxOnly: boolean;
 };
 
 /**
- * Which gateways a platform operator may choose for a company. A gateway is offered only when a filing through
- * it could work: choosing one the deployment cannot run would leave the company unable to file.
+ * Whether this deployment files through a GSP and has any sandbox target it can run. NIC's sandbox test GSTINs
+ * (which have no valid check digit) are admitted by the GSTIN validator only then; a deployment that cannot reach a
+ * sandbox keeps the strict rule.
+ */
+export function sandboxTargetAvailable(config: Config): boolean {
+  if (config.COMPLIANCE_PROVIDER !== 'gsp' && config.GSTIN_PROVIDER !== 'gsp') return false;
+  return gspAvailability(config).some((t) => t.environment === 'sandbox' && t.available);
+}
+
+/**
+ * Which targets a platform operator may choose for a company. A target is offered only when a filing through it
+ * could work: choosing one the deployment cannot run would leave the company unable to file. There is no
+ * hard-coded list of what is switched on: a target becomes selectable the moment its settings are filled in
+ * (Whitebooks production, once there is a subscription), with no code change.
  */
 export function gspAvailability(config: Config): GspAvailability[] {
-  return GSP_GATEWAYS.map((gateway) => {
-    const sandboxOnly = SANDBOX_ONLY_GATEWAYS.includes(gateway);
-    const base = { gateway, sandboxOnly };
-    if (sandboxOnly && !config.TAXATION_GSTIN_ALLOW_SANDBOX) {
-      return { ...base, available: false, reason: 'Sandbox only. This deployment does not allow the sandbox (TAXATION_GSTIN_ALLOW_SANDBOX).' };
+  return GSP_TARGETS.map((target) => {
+    const base = { gateway: target.gateway, environment: target.environment };
+    if (!gspBaseUrl(configFor(config, target), target)) {
+      return { ...base, available: false, reason: `Not set up here: ${gspBaseUrlVariable(target)} is missing.` };
     }
-    if (!gspBaseUrl(configFor(config, gateway))) {
-      return { ...base, available: false, reason: `Not set up here: TAXATION_${gateway.toUpperCase()}_BASE_URL is missing.` };
-    }
-    const app = gspApplication(config, gateway, gateway === 'whitebooks' ? 'EINVOICE' : 'TAXPAYER');
+    const app = gspApplication(config, target, target.gateway === 'whitebooks' ? 'EINVOICE' : 'TAXPAYER');
     if (!app.clientId || !app.clientSecret) return { ...base, available: false, reason: `Not set up here: ${app.variable} is missing.` };
     return { ...base, available: true };
   });

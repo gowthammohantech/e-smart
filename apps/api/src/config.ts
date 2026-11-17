@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { SANDBOX_ONLY_GATEWAYS, gspApplication, resolveGspGateway } from './providers/gsp/provider-name';
+import { LEGACY_ENVIRONMENT, defaultGspTarget, gspApplication, resolveGspEnvironment, resolveGspGateway, type GspTarget } from './providers/gsp/provider-name';
 
 const bool = z
   .enum(['true', 'false', '1', '0'])
@@ -145,28 +145,47 @@ const Env = z.object({
   // GSP gateway (Adaequare / Whitebooks) for e-invoice, e-way bill and GSTIN
   // lookup. Names match the Elixir Books platform's taxation service, so the
   // same values drop in. Read when COMPLIANCE_PROVIDER or GSTIN_PROVIDER is `gsp`.
-  /** The GSP account: `ADAEQUARE_GSP` or `WHITE_BOOKS_GSP`. Picks the gateway client too. */
+  //
+  // A filing goes to a TARGET: a gateway plus an environment (sandbox or production). These two settings name the
+  // deployment's default target; a platform operator can choose another for one company in the admin portal.
+  /** The default GSP account: `ADAEQUARE_GSP` or `WHITE_BOOKS_GSP`. Picks the gateway client too. */
   TAXATION_GSP_PROVIDER_CODE: z.string().min(1).default('ADAEQUARE_GSP'),
-  /** `adaequare` or `whitebooks`. Blank (normal) reads the code above. Whitebooks needs TAXATION_GSTIN_ALLOW_SANDBOX=true. */
+  /** `adaequare` or `whitebooks`. Blank (normal) reads the code above. */
   TAXATION_TAXPAYER_PROVIDER: z.string().default(''),
-  /** The gateway's base URL, e.g. https://gsp.adaequare.com/test/ or https://apisandbox.whitebooks.in */
+  /**
+   * The default target's environment: `sandbox` or `production`. Blank takes the gateway's usual one: Whitebooks
+   * sandbox, Adaequare production (what their un-suffixed settings below have always meant).
+   */
+  TAXATION_GSP_ENVIRONMENT: z.string().trim().toLowerCase().default(''),
+  /**
+   * Which target answers a GSTIN search that belongs to no company (signup, the party form), as `gateway:environment`,
+   * e.g. `adaequare:production`. Blank uses the default target. A sandbox register knows only a few test taxpayers, so a
+   * deployment that defaults to a sandbox but has a live gateway set up should point searches at the live one.
+   */
+  TAXATION_GSTIN_LOOKUP_TARGET: z.string().trim().toLowerCase().default(''),
+  /** Legacy: the base URL of a gateway's usual environment (Adaequare production, Whitebooks sandbox). Prefer the per-target URLs below. */
   TAXATION_GSP_BASE_URL: z.string().optional(),
   /** Whitebooks only: the GSP account email, sent as `?email=`. */
   TAXATION_GSP_ACCOUNT_EMAIL: z.string().default(''),
   /** Whitebooks only: the public IP this server files from, as registered with the GSP. */
   TAXATION_GSP_IP_ADDRESS: z.string().default(''),
-  /** `false` skips the GSP token exchange, for stand-in gateways that mint nothing. Needs TAXATION_GSTIN_ALLOW_SANDBOX=true. */
+  /** `false` skips the GSP token exchange, for stand-in gateways that mint nothing. Refused by the production check. */
   TAXATION_GSP_AUTH_REQUIRED: bool.default(true),
-  /**
-   * The one switch for NIC's sandbox. `true` admits the sandbox GSTIN shape (`29AAGCB1286Q000`) and is what allows
-   * the sandbox-only settings: the Whitebooks gateway, TAXATION_SANDBOX_BUYER_GSTIN and TAXATION_GSP_AUTH_REQUIRED=false.
-   * It is the deployment's own choice, whatever NODE_ENV says: leave it `false` on a live deployment.
-   */
-  TAXATION_GSTIN_ALLOW_SANDBOX: bool.default(false),
-  /** Sandbox only: file every e-invoice against this buyer, looked up from NIC's register. Whitebooks only; needs TAXATION_GSTIN_ALLOW_SANDBOX=true. */
+  /** Sandbox only: file every e-invoice against this buyer, looked up from NIC's register. Whitebooks sandbox only. */
   TAXATION_SANDBOX_BUYER_GSTIN: z.string().trim().toUpperCase().default(''),
-  /** Sandbox only: file every business as this taxpayer. Whitebooks only; blank means 29AAGCB1286Q000, the one GSTIN its sandbox accepts. */
+  /** Sandbox only: file every business as this taxpayer. Whitebooks sandbox only; blank means 29AAGCB1286Q000, the one GSTIN its sandbox accepts. */
   TAXATION_SANDBOX_GSTIN: z.string().trim().toUpperCase().default(''),
+  /**
+   * Adaequare sandbox only: its test taxpayer. Every business is filed as this GSTIN (blank means 27AMBPG7773M016,
+   * one of Adaequare's published test taxpayers). The portal login is never configured here: it is the one the
+   * business typed on its integrations screen, like everywhere else.
+   */
+  TAXATION_ADAEQUARE_SANDBOX_GSTIN: z.string().trim().toUpperCase().default(''),
+  /**
+   * Adaequare sandbox only: its e-way bill API has a test taxpayer of its own (blank GSTIN means 05AAACG2115R1ZN, from
+   * its e-way bill sandbox collection), used for bills raised without an IRN, Part B and extension.
+   */
+  TAXATION_ADAEQUARE_SANDBOX_EWB_GSTIN: z.string().trim().toUpperCase().default(''),
   /** Adaequare's only pair, and Whitebooks' GST taxpayer lookup pair. */
   TAXATION_GSP_APP_ID: z.string().trim().default(''),
   TAXATION_GSP_APP_SECRET: z.string().trim().default(''),
@@ -177,15 +196,38 @@ const Env = z.object({
   TAXATION_GSP_EWAYBILL_APP_ID: z.string().trim().default(''),
   TAXATION_GSP_EWAYBILL_APP_SECRET: z.string().trim().default(''),
 
-  // Per-provider settings. Fill in every provider you may use, side by side:
-  // switching GSP is then the one TAXATION_GSP_PROVIDER_CODE change. The
-  // un-prefixed TAXATION_GSP_* values above are the fallback when one is blank.
+  // Per-target settings. Fill in every target you may use, side by side: choosing a target for a company is then
+  // an admin-portal change, with nothing to redeploy. A target left blank is listed in the portal but cannot be chosen.
+  TAXATION_ADAEQUARE_PRODUCTION_BASE_URL: z.string().trim().default(''),
+  TAXATION_ADAEQUARE_PRODUCTION_APP_ID: z.string().trim().default(''),
+  TAXATION_ADAEQUARE_PRODUCTION_APP_SECRET: z.string().trim().default(''),
+  TAXATION_ADAEQUARE_SANDBOX_BASE_URL: z.string().trim().default(''),
+  TAXATION_ADAEQUARE_SANDBOX_APP_ID: z.string().trim().default(''),
+  TAXATION_ADAEQUARE_SANDBOX_APP_SECRET: z.string().trim().default(''),
+  TAXATION_WHITEBOOKS_SANDBOX_BASE_URL: z.string().trim().default(''),
+  TAXATION_WHITEBOOKS_SANDBOX_APP_ID: z.string().trim().default(''),
+  TAXATION_WHITEBOOKS_SANDBOX_APP_SECRET: z.string().trim().default(''),
+  TAXATION_WHITEBOOKS_SANDBOX_EINVOICE_APP_ID: z.string().trim().default(''),
+  TAXATION_WHITEBOOKS_SANDBOX_EINVOICE_APP_SECRET: z.string().trim().default(''),
+  TAXATION_WHITEBOOKS_SANDBOX_EWAYBILL_APP_ID: z.string().trim().default(''),
+  TAXATION_WHITEBOOKS_SANDBOX_EWAYBILL_APP_SECRET: z.string().trim().default(''),
+  TAXATION_WHITEBOOKS_PRODUCTION_BASE_URL: z.string().trim().default(''),
+  TAXATION_WHITEBOOKS_PRODUCTION_APP_ID: z.string().trim().default(''),
+  TAXATION_WHITEBOOKS_PRODUCTION_APP_SECRET: z.string().trim().default(''),
+  TAXATION_WHITEBOOKS_PRODUCTION_EINVOICE_APP_ID: z.string().trim().default(''),
+  TAXATION_WHITEBOOKS_PRODUCTION_EINVOICE_APP_SECRET: z.string().trim().default(''),
+  TAXATION_WHITEBOOKS_PRODUCTION_EWAYBILL_APP_ID: z.string().trim().default(''),
+  TAXATION_WHITEBOOKS_PRODUCTION_EWAYBILL_APP_SECRET: z.string().trim().default(''),
+  /** Whitebooks' account email and registered IP, shared by its sandbox and production targets. */
+  TAXATION_WHITEBOOKS_ACCOUNT_EMAIL: z.string().trim().default(''),
+  TAXATION_WHITEBOOKS_IP_ADDRESS: z.string().trim().default(''),
+
+  // Legacy, un-suffixed settings: Adaequare's mean production and Whitebooks' mean sandbox, as they always have,
+  // and they are read only when the matching per-target variable is blank. Existing deployments need no change.
   TAXATION_ADAEQUARE_BASE_URL: z.string().trim().default(''),
   TAXATION_ADAEQUARE_APP_ID: z.string().trim().default(''),
   TAXATION_ADAEQUARE_APP_SECRET: z.string().trim().default(''),
   TAXATION_WHITEBOOKS_BASE_URL: z.string().trim().default(''),
-  TAXATION_WHITEBOOKS_ACCOUNT_EMAIL: z.string().trim().default(''),
-  TAXATION_WHITEBOOKS_IP_ADDRESS: z.string().trim().default(''),
   /** Whitebooks' GST taxpayer lookup pair. */
   TAXATION_WHITEBOOKS_APP_ID: z.string().trim().default(''),
   TAXATION_WHITEBOOKS_APP_SECRET: z.string().trim().default(''),
@@ -242,7 +284,23 @@ const Env = z.object({
     ctx.addIssue({ code: 'custom', path: ['PAY4SMS_TOKEN'], message: 'PAY4SMS_TOKEN must be set for SMS_PROVIDER=pay4sms.' });
   }
   // A half-set pair would send a blank secret to the gateway and fail with a 401 that names nothing.
-  for (const prefix of ['TAXATION_GSP_APP', 'TAXATION_GSP_EINVOICE_APP', 'TAXATION_GSP_EWAYBILL_APP', 'TAXATION_ADAEQUARE_APP', 'TAXATION_WHITEBOOKS_APP', 'TAXATION_WHITEBOOKS_EINVOICE_APP', 'TAXATION_WHITEBOOKS_EWAYBILL_APP'] as const) {
+  for (const prefix of [
+    'TAXATION_GSP_APP',
+    'TAXATION_GSP_EINVOICE_APP',
+    'TAXATION_GSP_EWAYBILL_APP',
+    'TAXATION_ADAEQUARE_APP',
+    'TAXATION_ADAEQUARE_PRODUCTION_APP',
+    'TAXATION_ADAEQUARE_SANDBOX_APP',
+    'TAXATION_WHITEBOOKS_APP',
+    'TAXATION_WHITEBOOKS_EINVOICE_APP',
+    'TAXATION_WHITEBOOKS_EWAYBILL_APP',
+    'TAXATION_WHITEBOOKS_SANDBOX_APP',
+    'TAXATION_WHITEBOOKS_SANDBOX_EINVOICE_APP',
+    'TAXATION_WHITEBOOKS_SANDBOX_EWAYBILL_APP',
+    'TAXATION_WHITEBOOKS_PRODUCTION_APP',
+    'TAXATION_WHITEBOOKS_PRODUCTION_EINVOICE_APP',
+    'TAXATION_WHITEBOOKS_PRODUCTION_EWAYBILL_APP',
+  ] as const) {
     const id = env[`${prefix}_ID`];
     const secret = env[`${prefix}_SECRET`];
     if ((id === '') !== (secret === '')) {
@@ -250,7 +308,12 @@ const Env = z.object({
     }
   }
   try {
-    resolveGspGateway(env.TAXATION_TAXPAYER_PROVIDER, env.TAXATION_GSP_PROVIDER_CODE);
+    const gateway = resolveGspGateway(env.TAXATION_TAXPAYER_PROVIDER, env.TAXATION_GSP_PROVIDER_CODE);
+    try {
+      resolveGspEnvironment(env.TAXATION_GSP_ENVIRONMENT, gateway);
+    } catch (err) {
+      ctx.addIssue({ code: 'custom', path: ['TAXATION_GSP_ENVIRONMENT'], message: (err as Error).message });
+    }
   } catch (err) {
     ctx.addIssue({ code: 'custom', path: ['TAXATION_TAXPAYER_PROVIDER'], message: (err as Error).message });
   }
@@ -258,8 +321,6 @@ const Env = z.object({
   if (env.ASSISTANT_PROVIDER === 'openai' && !env.LIXI_MODEL && !isOpenRouter(env.OPENAI_BASE_URL)) {
     ctx.addIssue({ code: 'custom', path: ['LIXI_MODEL'], message: 'LIXI_MODEL must be set for ASSISTANT_PROVIDER=openai unless OPENAI_BASE_URL is OpenRouter (e.g. gpt-5-mini, llama-3.3-70b-versatile).' });
   }
-  // The sandbox-only settings are allowed by TAXATION_GSTIN_ALLOW_SANDBOX and by nothing else, in any NODE_ENV.
-  for (const message of sandboxProblems(env)) ctx.addIssue({ code: 'custom', path: ['TAXATION_GSTIN_ALLOW_SANDBOX'], message });
 });
 
 export type Config = z.infer<typeof Env>;
@@ -367,64 +428,58 @@ export function productionProblems(config: Config, env: Record<string, string | 
   return problems;
 }
 
-/**
- * The settings that only make sense against NIC's sandbox, each refused unless `TAXATION_GSTIN_ALLOW_SANDBOX=true`.
- * That flag is the deployment's own declaration that it files against the sandbox, so none of this looks at
- * `NODE_ENV`: a hosted staging deployment may run with NODE_ENV=production and still use Whitebooks.
- */
-function sandboxProblems(env: {
-  COMPLIANCE_PROVIDER: string;
-  GSTIN_PROVIDER: string;
-  TAXATION_GSTIN_ALLOW_SANDBOX: boolean;
-  TAXATION_SANDBOX_BUYER_GSTIN: string;
-  TAXATION_GSP_AUTH_REQUIRED: boolean;
-  TAXATION_TAXPAYER_PROVIDER: string;
-  TAXATION_GSP_PROVIDER_CODE: string;
-}): string[] {
-  if (env.TAXATION_GSTIN_ALLOW_SANDBOX) return [];
-  const problems: string[] = [];
-  const usesGsp = env.COMPLIANCE_PROVIDER === 'gsp' || env.GSTIN_PROVIDER === 'gsp';
-  try {
-    const gateway = resolveGspGateway(env.TAXATION_TAXPAYER_PROVIDER, env.TAXATION_GSP_PROVIDER_CODE);
-    if (usesGsp && SANDBOX_ONLY_GATEWAYS.includes(gateway)) {
-      problems.push(`The "${gateway}" gateway is sandbox only: set TAXATION_GSTIN_ALLOW_SANDBOX=true to use it, or point TAXATION_GSP_PROVIDER_CODE at a production gateway.`);
-    }
-  } catch {
-    // An unknown gateway name is reported on its own, above.
-  }
-  if (env.TAXATION_SANDBOX_BUYER_GSTIN) problems.push('TAXATION_SANDBOX_BUYER_GSTIN files every e-invoice against a test buyer: it needs TAXATION_GSTIN_ALLOW_SANDBOX=true.');
-  if (!env.TAXATION_GSP_AUTH_REQUIRED) problems.push('TAXATION_GSP_AUTH_REQUIRED=false is for stand-in test gateways: it needs TAXATION_GSTIN_ALLOW_SANDBOX=true.');
-  return problems;
-}
-
-/** The GSP gateway settings a production `gsp` provider needs. The sandbox-only ones are `sandboxProblems`. */
+/** The GSP gateway settings a production `gsp` provider needs, for the deployment's default target. */
 function gspProblems(config: Config): string[] {
   const problems: string[] = [];
   const uses = config.COMPLIANCE_PROVIDER === 'gsp' || config.GSTIN_PROVIDER === 'gsp' || config.RETURNS_PROVIDER === 'gsp';
   if (!uses) return problems;
+  const target = defaultGspTarget(config);
   // Returns go through Adaequare's taxpayer API only, for now.
-  if (config.RETURNS_PROVIDER === 'gsp' && resolveGspGateway(config.TAXATION_TAXPAYER_PROVIDER, config.TAXATION_GSP_PROVIDER_CODE) !== 'adaequare') {
+  if (config.RETURNS_PROVIDER === 'gsp' && target.gateway !== 'adaequare') {
     problems.push('RETURNS_PROVIDER=gsp needs the Adaequare gateway (TAXATION_GSP_PROVIDER_CODE=ADAEQUARE_GSP).');
   }
-  const gateway = resolveGspGateway(config.TAXATION_TAXPAYER_PROVIDER, config.TAXATION_GSP_PROVIDER_CODE);
-  if (!gspBaseUrl(config)) problems.push(`TAXATION_${gateway.toUpperCase()}_BASE_URL (or TAXATION_GSP_BASE_URL) must be set for COMPLIANCE_PROVIDER, GSTIN_PROVIDER or RETURNS_PROVIDER=gsp.`);
-  const app = gspApplication(config, gateway, config.COMPLIANCE_PROVIDER === 'gsp' && gateway === 'whitebooks' ? 'EINVOICE' : 'TAXPAYER');
-  if (!app.clientId || !app.clientSecret) problems.push(`${app.variable} must be set for the ${gateway} gateway.`);
+  if (!config.TAXATION_GSP_AUTH_REQUIRED) problems.push('TAXATION_GSP_AUTH_REQUIRED=false is for stand-in test gateways, never for a real GSP: leave it unset.');
+  if (!gspBaseUrl(config, target)) problems.push(`${gspBaseUrlVariable(target)} must be set for COMPLIANCE_PROVIDER, GSTIN_PROVIDER or RETURNS_PROVIDER=gsp.`);
+  const app = gspApplication(config, target, config.COMPLIANCE_PROVIDER === 'gsp' && target.gateway === 'whitebooks' ? 'EINVOICE' : 'TAXPAYER');
+  if (!app.clientId || !app.clientSecret) problems.push(`${app.variable} must be set for the ${target.gateway} ${target.environment} target.`);
   return problems;
 }
 
+/** The variable that names a target's base URL, for a message. */
+export const gspBaseUrlVariable = (target: GspTarget) => `TAXATION_${target.gateway.toUpperCase()}_${target.environment.toUpperCase()}_BASE_URL`;
+
 /**
- * The selected gateway's base URL: its own variable first, then
- * `TAXATION_GSP_BASE_URL`, then the older `GSP_BASE_URL`.
+ * A target's base URL: its own variable first. For a gateway's usual environment (Adaequare production, Whitebooks
+ * sandbox) the older un-suffixed variable, then `TAXATION_GSP_BASE_URL`, then `GSP_BASE_URL` follow, so a deployment set
+ * up before environments existed keeps working. They are never used for the other environment.
  */
 export function gspBaseUrl(
-  config: Pick<Config, 'TAXATION_GSP_BASE_URL' | 'GSP_BASE_URL' | 'TAXATION_ADAEQUARE_BASE_URL' | 'TAXATION_WHITEBOOKS_BASE_URL' | 'TAXATION_TAXPAYER_PROVIDER' | 'TAXATION_GSP_PROVIDER_CODE'>,
+  config: Pick<
+    Config,
+    | 'TAXATION_GSP_BASE_URL'
+    | 'GSP_BASE_URL'
+    | 'TAXATION_ADAEQUARE_BASE_URL'
+    | 'TAXATION_WHITEBOOKS_BASE_URL'
+    | 'TAXATION_ADAEQUARE_PRODUCTION_BASE_URL'
+    | 'TAXATION_ADAEQUARE_SANDBOX_BASE_URL'
+    | 'TAXATION_WHITEBOOKS_SANDBOX_BASE_URL'
+    | 'TAXATION_WHITEBOOKS_PRODUCTION_BASE_URL'
+    | 'TAXATION_TAXPAYER_PROVIDER'
+    | 'TAXATION_GSP_PROVIDER_CODE'
+    | 'TAXATION_GSP_ENVIRONMENT'
+  >,
+  target: GspTarget = defaultGspTarget(config),
 ): string | undefined {
-  const own =
-    resolveGspGateway(config.TAXATION_TAXPAYER_PROVIDER, config.TAXATION_GSP_PROVIDER_CODE) === 'whitebooks'
-      ? config.TAXATION_WHITEBOOKS_BASE_URL
-      : config.TAXATION_ADAEQUARE_BASE_URL;
-  return own.trim() || config.TAXATION_GSP_BASE_URL?.trim() || config.GSP_BASE_URL?.trim() || undefined;
+  const own = {
+    'adaequare:production': config.TAXATION_ADAEQUARE_PRODUCTION_BASE_URL,
+    'adaequare:sandbox': config.TAXATION_ADAEQUARE_SANDBOX_BASE_URL,
+    'whitebooks:sandbox': config.TAXATION_WHITEBOOKS_SANDBOX_BASE_URL,
+    'whitebooks:production': config.TAXATION_WHITEBOOKS_PRODUCTION_BASE_URL,
+  }[`${target.gateway}:${target.environment}` as const];
+  if (own.trim()) return own.trim();
+  if (target.environment !== LEGACY_ENVIRONMENT[target.gateway]) return undefined;
+  const older = target.gateway === 'whitebooks' ? config.TAXATION_WHITEBOOKS_BASE_URL : config.TAXATION_ADAEQUARE_BASE_URL;
+  return older.trim() || config.TAXATION_GSP_BASE_URL?.trim() || config.GSP_BASE_URL?.trim() || undefined;
 }
 
 /** Whitebooks' account email and registered IP: its own variable first, then the un-prefixed one. */

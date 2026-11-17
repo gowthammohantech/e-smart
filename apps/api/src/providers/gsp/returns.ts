@@ -15,7 +15,7 @@ import {
 } from '../returns';
 import { baseUrlOf } from './common';
 import { GSP_TOKEN_EXPIRY_SKEW_MS } from './constants';
-import { gspApplication } from './provider-name';
+import { defaultGspTarget, gspApplication, type GspTarget } from './provider-name';
 import { FetchGspTransport, GspAuthError, GspConfigError, GspRequestError, type GspTransport } from './transport';
 
 /**
@@ -168,12 +168,17 @@ export class AdaequareReturns implements ReturnsProvider {
     private readonly clock: () => number = Date.now,
   ) {}
 
+  /** Returns go through Adaequare, in the environment the deployment's default target is in. */
+  private get target(): GspTarget {
+    return { gateway: 'adaequare', environment: defaultGspTarget(this.config).environment };
+  }
+
   private async token(): Promise<string> {
     if (!this.config.TAXATION_GSP_AUTH_REQUIRED) return '';
     if (this.bearer && this.bearer.expiresAt - GSP_TOKEN_EXPIRY_SKEW_MS > this.clock()) return this.bearer.value;
-    const app = gspApplication(this.config, 'adaequare', 'TAXPAYER');
+    const app = gspApplication(this.config, this.target, 'TAXPAYER');
     if (!app.clientId || !app.clientSecret) throw new GspConfigError(`${app.variable} must be set for GST returns.`);
-    const minted = await this.transport.authenticate({ baseUrl: baseUrlOf(gspBaseUrl(this.config)), clientId: app.clientId, clientSecret: app.clientSecret });
+    const minted = await this.transport.authenticate({ baseUrl: baseUrlOf(gspBaseUrl(this.config, this.target)), clientId: app.clientId, clientSecret: app.clientSecret });
     this.bearer = { value: minted.accessToken, expiresAt: this.clock() + minted.expiresInSeconds * 1000 };
     return this.bearer.value;
   }
@@ -189,7 +194,7 @@ export class AdaequareReturns implements ReturnsProvider {
       ...(opts.period && { ret_period: opts.period }),
     };
     try {
-      const request = { baseUrl: baseUrlOf(gspBaseUrl(this.config)), path, token: await this.token(), headers, query: opts.query, body: opts.body };
+      const request = { baseUrl: baseUrlOf(gspBaseUrl(this.config, this.target)), path, token: await this.token(), headers, query: opts.query, body: opts.body };
       const envelope = method === 'get' ? await this.transport.get<T>(request) : await this.transport.post<T>(request);
       return (envelope.result ?? (envelope as unknown as { data: T }).data) as T;
     } catch (error) {
