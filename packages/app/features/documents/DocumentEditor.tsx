@@ -684,7 +684,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
     if (kind !== 'invoice' || !party?.creditLimit || party.creditLimit.minor <= 0) return null;
     const check = creditCheck(party.creditLimit);
     return check.exceeds
-      ? tr('sales:editor.creditLimitExceeded', {
+      ? tr(party.creditLimitBlocks ? 'sales:editor.creditLimitBlocked' : 'sales:editor.creditLimitExceeded', {
           party: party.name,
           limit: formatMoney(check.limit),
           exposure: formatMoney(check.exposure),
@@ -693,11 +693,17 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   };
 
   const creditNotice = creditLimitWarning();
+  // Over a limit that blocks: no "continue anyway"; the draft can still be kept.
+  const creditBlocked = !!creditNotice && !!party?.creditLimitBlocks;
 
   const requestFinalize = () => {
     const problem = lineProblem();
     if (problem) {
       toast.show(problem, 'error');
+      return;
+    }
+    if (creditBlocked) {
+      toast.show(creditNotice, 'error', { icon: 'cancel' });
       return;
     }
     const warning = creditLimitWarning();
@@ -1724,8 +1730,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       {/* Shown on the draft too, not only when finalising. */}
       {creditNotice ? (
         <Card variant="flat" style={{ flexDirection: 'row', gap: t.spacing.md }}>
-          <Icon name="alert-outline" size={19} color={t.c.warn} />
-          <Text variant="caption" tone="warn" style={{ flex: 1, lineHeight: 18 }}>
+          <Icon name={creditBlocked ? 'cancel' : 'alert-outline'} size={19} color={creditBlocked ? t.c.bad : t.c.warn} />
+          <Text variant="caption" tone={creditBlocked ? 'bad' : 'warn'} style={{ flex: 1, lineHeight: 18 }}>
             {creditNotice}
           </Text>
         </Card>

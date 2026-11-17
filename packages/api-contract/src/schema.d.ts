@@ -5257,6 +5257,8 @@ export interface components {
             billingAddress: components["schemas"]["Address"];
             shippingAddress?: components["schemas"]["Address"];
             creditLimit?: components["schemas"]["Money"];
+            /** @description Over creditLimit an invoice is refused (422 CREDIT_LIMIT_BLOCKED), not only warned about; overrideCreditLimit does not lift it. Unset or false warns. */
+            creditLimitBlocks?: boolean;
             openingBalance: components["schemas"]["Money"];
             /**
              * Format: date
@@ -6074,7 +6076,7 @@ export interface components {
             tdsSection?: "none" | "194C" | "194JA" | "194JB" | "194H" | "194IA" | "194IB" | "194A" | "194Q";
             /** @description On an invoice: the rate the customer will deduct at, percent. Defaults to the section's rate for the company's PAN. */
             tdsRate?: number;
-            /** @description Finalise an invoice even though it takes the customer past their credit limit; without it that is 422 CREDIT_LIMIT_EXCEEDED. */
+            /** @description Finalise an invoice even though it takes the customer past their credit limit; without it that is 422 CREDIT_LIMIT_EXCEEDED. A customer whose limit blocks (creditLimitBlocks) is refused regardless: 422 CREDIT_LIMIT_BLOCKED. */
             overrideCreditLimit?: boolean;
             /**
              * @description A non-draft value creates and finalises in one step. On create only draft, issued, sent, confirmed, delivered, received and approved are accepted; paid, partiallyPaid and overdue are derived by the server (422 STATUS_DERIVED). The enum is the full DocStatus so that BusinessDocument, which extends this schema, can carry any status.
@@ -11078,7 +11080,7 @@ export interface operations {
         requestBody?: {
             content: {
                 "application/json": {
-                    /** @description Finalise an invoice even though it takes the customer past their credit limit; without it that is 422 CREDIT_LIMIT_EXCEEDED. */
+                    /** @description Finalise an invoice even though it takes the customer past their credit limit; without it that is 422 CREDIT_LIMIT_EXCEEDED. A customer whose limit blocks (creditLimitBlocks) is refused regardless: 422 CREDIT_LIMIT_BLOCKED. */
                     overrideCreditLimit?: boolean;
                 };
             };
@@ -11117,7 +11119,7 @@ export interface operations {
                 "application/json": {
                     status: components["schemas"]["DocStatus"];
                     reason?: string;
-                    /** @description Finalise an invoice even though it takes the customer past their credit limit; without it that is 422 CREDIT_LIMIT_EXCEEDED. */
+                    /** @description Finalise an invoice even though it takes the customer past their credit limit; without it that is 422 CREDIT_LIMIT_EXCEEDED. A customer whose limit blocks (creditLimitBlocks) is refused regardless: 422 CREDIT_LIMIT_BLOCKED. */
                     overrideCreditLimit?: boolean;
                 };
             };

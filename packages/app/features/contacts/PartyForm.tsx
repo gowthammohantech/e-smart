@@ -83,6 +83,8 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
   const [currency, setCurrency] = useState(party?.currency ?? baseCurrency);
   const [terms, setTerms] = useState(party?.paymentTermsDays ?? 30);
   const [creditLimit, setCreditLimit] = useState(party?.creditLimit ? String(toMajor(party.creditLimit)) : '');
+  // Over the limit: warn (the default) or block new invoices outright.
+  const [creditLimitBlocks, setCreditLimitBlocks] = useState(!!party?.creditLimitBlocks);
   const [openingBalance, setOpeningBalance] = useState(
     party?.openingBalance && party.openingBalance.minor !== 0 ? String(Math.abs(toMajor(party.openingBalance))) : '',
   );
@@ -167,6 +169,7 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
     setEmail('');
     phone.reset();
     setCreditLimit('');
+    setCreditLimitBlocks(false);
     setOpeningBalance('');
     setOpeningDate(undefined);
     setLine1('');
@@ -271,6 +274,8 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
             country: partyCountry,
           },
       creditLimit: creditLimit ? fromMajor(creditLimit, currency) : undefined,
+      // Only means something with a limit to be over.
+      creditLimitBlocks: sellsTo(kind) && Number(creditLimit) > 0 && creditLimitBlocks ? true : undefined,
       openingBalance: openingBalance && hasLedger(kind) ? fromMajor(openingBalance, currency) : zero(currency),
       openingBalanceDate: openingBalance && hasLedger(kind) ? openingDate : undefined,
       // Said only when it isn't the kind's usual side, so most records stay as they were.
@@ -473,7 +478,18 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
   const termsField = !hasLedger(kind) ? null : <PickerField label={tr('contacts:form.paymentTerms')} value={termsLabel(terms)} onPress={() => setTermsOpen(true)} icon="calendar-clock" />;
   const creditLimitField =
     sellsTo(kind) ? (
-      <AmountField label={tr('contacts:form.creditLimit')} value={creditLimit} onChangeValue={setCreditLimit} currency={currency} hint={tr('contacts:form.creditLimitHint')} />
+      <>
+        <AmountField label={tr('contacts:form.creditLimit')} value={creditLimit} onChangeValue={setCreditLimit} currency={currency} hint={tr('contacts:form.creditLimitHint')} />
+        {/* Once there is a limit: warn before invoicing over it (off, the default), or refuse the invoice (on). */}
+        {Number(creditLimit) > 0 ? (
+          <SwitchField
+            label={tr('contacts:form.creditLimitBlocks')}
+            description={tr(creditLimitBlocks ? 'contacts:form.creditLimitBlocksOn' : 'contacts:form.creditLimitBlocksOff')}
+            value={creditLimitBlocks}
+            onValueChange={setCreditLimitBlocks}
+          />
+        ) : null}
+      </>
     ) : null;
   const openingBalanceField = !hasLedger(kind) ? null : (
     <>

@@ -345,6 +345,27 @@ describe('documents: stock and plans', () => {
     expect(overridden.body.document.status).toBe('issued');
   });
 
+  it('refuses an invoice over a credit limit that blocks, override or not, and keeps the draft', async () => {
+    const m = await moneySetup(t);
+    await t.deps.db.update(schema.parties).set({ creditLimitMinor: 300000, creditLimitBlocks: true }).where(eq(schema.parties.id, m.mumbai.id));
+    await issueInvoice(t, m); // 2,360 owed, within 3,000: under the limit it issues as usual
+
+    const draft = await t.post(`${m.c}/documents`, invoiceBody(m), { token: m.token });
+    expect(draft.status).toBe(201);
+    for (const body of [{}, { overrideCreditLimit: true }]) {
+      const res = await t.post(`${m.c}/documents/${draft.body.id}/finalize`, body, { token: m.token });
+      expect(res.status).toBe(422);
+      expect(res.body.code).toBe('CREDIT_LIMIT_BLOCKED');
+      expect(res.body.issues[0].message).toContain('Sunrise Retail would owe INR 4720.00, over their credit limit of INR 3000.00');
+    }
+    const viaCreate = await t.post(`${m.c}/documents`, invoiceBody(m, { status: 'issued', overrideCreditLimit: true }), { token: m.token });
+    expect(viaCreate.body.code).toBe('CREDIT_LIMIT_BLOCKED');
+
+    // The customer says it: blocks, read back as it was saved.
+    const party = await t.get(`${m.c}/parties/${m.mumbai.id}`, { token: m.token });
+    expect(party.body).toMatchObject({ creditLimit: { minor: 300000 }, creditLimitBlocks: true });
+  });
+
   it('never refuses a sale for stock on a plan that keeps none (Free), which has no negative-stock setting', async () => {
     const m = await moneySetup(t, 'free');
     const rod = await m.item();

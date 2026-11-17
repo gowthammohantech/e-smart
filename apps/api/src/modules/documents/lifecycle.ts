@@ -327,24 +327,31 @@ export async function reverseStock(tx: DbOrTx, company: CompanyRow, row: DocRow,
 
 /**
  * An invoice may not take its customer past their credit limit unless the
- * caller says so (`overrideCreditLimit`, which the app sends once the user
- * has seen the warning): 422 CREDIT_LIMIT_EXCEEDED. Exposure is what the
- * customer already owes on open invoices plus this one; `row` is still a
- * draft here, so it is not counted twice.
+ * caller says so (`override`, the app's `overrideCreditLimit`, sent once the user
+ * has seen the warning): 422 CREDIT_LIMIT_EXCEEDED. A customer whose limit
+ * blocks (`creditLimitBlocks`) is refused whatever the caller says:
+ * 422 CREDIT_LIMIT_BLOCKED. Exposure is what the customer already owes on open
+ * invoices plus this one; `row` is still a draft here, so it is not counted twice.
  */
-export async function checkCreditLimit(tx: DbOrTx, row: DocRow, now: Date, opts: { counted?: boolean } = {}): Promise<void> {
+export async function checkCreditLimit(tx: DbOrTx, row: DocRow, now: Date, opts: { counted?: boolean; override?: boolean } = {}): Promise<void> {
   if (row.kind !== 'invoice') return;
   const [party] = await tx.select().from(schema.parties).where(eq(schema.parties.id, row.partyId));
   if (!party?.creditLimitMinor || party.creditLimitMinor <= 0) return;
+  // A warning the user has already accepted needs no sums.
+  if (opts.override && !party.creditLimitBlocks) return;
   const balances = await partyBalances(tx, row.companyId, [{ id: party.id, kind: 'customer' }], today(now));
   // An issued invoice edited in place is already in what the customer owes.
   const exposure = (balances.get(party.id)?.outstanding ?? 0) + (opts.counted ? 0 : row.grandTotalMinor);
   if (exposure <= party.creditLimitMinor) return;
   const amount = (minor: number) => `${party.currency.trim()} ${(minor / 100).toFixed(2)}`;
-  throw unprocessable(
-    [{ field: 'partyId', message: `${party.name} would owe ${amount(exposure)}, over their credit limit of ${amount(party.creditLimitMinor)}`, severity: 'blocking' }],
-    'CREDIT_LIMIT_EXCEEDED',
-  );
+  const over = `${party.name} would owe ${amount(exposure)}, over their credit limit of ${amount(party.creditLimitMinor)}`;
+  if (party.creditLimitBlocks) {
+    throw unprocessable(
+      [{ field: 'partyId', message: `${over}. Invoices to them are blocked over the limit: take a payment or raise the limit first`, severity: 'blocking' }],
+      'CREDIT_LIMIT_BLOCKED',
+    );
+  }
+  throw unprocessable([{ field: 'partyId', message: over, severity: 'blocking' }], 'CREDIT_LIMIT_EXCEEDED');
 }
 
 /**
@@ -376,7 +383,7 @@ export async function finalizeInTx(
   await checkSupplierNumberUnique(tx, row);
   if (isReturn(row) && row.sourceDocumentId) await checkReturnWithinSource(tx, row);
   if (againstSource(row)) await checkAgainstSource(tx, row);
-  if (!opts.overrideCreditLimit) await checkCreditLimit(tx, row, now);
+  await checkCreditLimit(tx, row, now, { override: opts.overrideCreditLimit });
   // Opening invoices and bills keep their own numbers and are never drafts to finalise.
   if (row.kind === 'openingInvoice' || row.kind === 'openingBill') throw conflict('INVALID_TRANSITION', 'An opening invoice or bill is already issued');
   const number = await assignNumber(tx, { companyId: row.companyId, kind: row.kind, branchId: row.branchId, date: row.date });

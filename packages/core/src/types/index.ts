@@ -191,6 +191,8 @@ export type Party = {
   billingAddress: Address;
   shippingAddress?: Address;
   creditLimit?: Money;
+  /** Over `creditLimit` an invoice is refused, not only warned about. Unset warns. */
+  creditLimitBlocks?: boolean;
   openingBalance: Money;
   /** Positive opening balance means the party owes us (customer) / we owe them (supplier). */
   /** The day the opening balance stands at (ISO date). Unset reads as the start of the books. */

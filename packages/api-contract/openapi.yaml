@@ -2433,7 +2433,7 @@ paths:
             schema:
               type: object
               properties:
-                overrideCreditLimit: { type: boolean, writeOnly: true, description: 'Finalise an invoice even though it takes the customer past their credit limit; without it that is 422 CREDIT_LIMIT_EXCEEDED.' }
+                overrideCreditLimit: { type: boolean, writeOnly: true, description: 'Finalise an invoice even though it takes the customer past their credit limit; without it that is 422 CREDIT_LIMIT_EXCEEDED. A customer whose limit blocks (creditLimitBlocks) is refused regardless: 422 CREDIT_LIMIT_BLOCKED.' }
       responses:
         '200':
           description: Finalised
@@ -2473,7 +2473,7 @@ paths:
               properties:
                 status: { $ref: '#/components/schemas/DocStatus' }
                 reason: { type: string }
-                overrideCreditLimit: { type: boolean, writeOnly: true, description: 'Finalise an invoice even though it takes the customer past their credit limit; without it that is 422 CREDIT_LIMIT_EXCEEDED.' }
+                overrideCreditLimit: { type: boolean, writeOnly: true, description: 'Finalise an invoice even though it takes the customer past their credit limit; without it that is 422 CREDIT_LIMIT_EXCEEDED. A customer whose limit blocks (creditLimitBlocks) is refused regardless: 422 CREDIT_LIMIT_BLOCKED.' }
       responses:
         '200':
           description: Updated
@@ -7273,6 +7273,7 @@ components:
             billingAddress: { $ref: '#/components/schemas/Address' }
             shippingAddress: { $ref: '#/components/schemas/Address' }
             creditLimit: { $ref: '#/components/schemas/Money' }
+            creditLimitBlocks: { type: boolean, description: 'Over creditLimit an invoice is refused (422 CREDIT_LIMIT_BLOCKED), not only warned about; overrideCreditLimit does not lift it. Unset or false warns.' }
             openingBalance: { $ref: '#/components/schemas/Money' }
             openingBalanceDate: { type: string, format: date, description: "The day the opening balance stands at; not after today. Unset reads as the start of the books." }
             openingBalanceSide: { type: string, enum: [dr, cr], description: "dr: they owe us; cr: we owe them. Unset is the kind's usual side (customer and both dr, supplier cr). A general contact has no opening balance." }
@@ -8020,7 +8021,7 @@ components:
         tcsSection: { type: string, enum: [none, scrap, liquor, tenduLeaves, timberLease, timberOther, forestProduce, minerals, motorVehicle, luxuryGoods], description: 'On an invoice: the TCS section (s.206C) the sale falls under, or none. The rate follows the section, higher when the buyer has no PAN; a 206C(1F) sale collects only over ₹10 lakh.' }
         tdsSection: { type: string, enum: [none, 194C, 194JA, 194JB, 194H, 194IA, 194IB, 194A, 194Q], writeOnly: true, description: "On a supplier's bill or debit note: the TDS section, or none. Defaults to the supplier's; worked out only for a company with a TAN. On an invoice: the section the customer will deduct TDS under (expected TDS, not posted), or none; defaults to the party's." }
         tdsRate: { type: number, minimum: 0, maximum: 100, writeOnly: true, description: "On an invoice: the rate the customer will deduct at, percent. Defaults to the section's rate for the company's PAN." }
-        overrideCreditLimit: { type: boolean, writeOnly: true, description: 'Finalise an invoice even though it takes the customer past their credit limit; without it that is 422 CREDIT_LIMIT_EXCEEDED.' }
+        overrideCreditLimit: { type: boolean, writeOnly: true, description: 'Finalise an invoice even though it takes the customer past their credit limit; without it that is 422 CREDIT_LIMIT_EXCEEDED. A customer whose limit blocks (creditLimitBlocks) is refused regardless: 422 CREDIT_LIMIT_BLOCKED.' }
         status:
           allOf: [{ $ref: '#/components/schemas/DocStatus' }]
           default: draft

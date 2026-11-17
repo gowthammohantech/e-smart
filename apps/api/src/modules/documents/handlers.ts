@@ -221,8 +221,8 @@ async function editLatestInvoice(ctx: AnyCtx, tx: DbOrTx, current: DocRow, body:
   }
   await writeLines(tx, current.id, prepared);
   // An edit that raises what the customer owes is held to their credit limit, as issuing it was.
-  if (!body.overrideCreditLimit && (updated.grandTotalMinor > current.grandTotalMinor || updated.partyId !== current.partyId)) {
-    await checkCreditLimit(tx, updated, ctx.now, { counted: true });
+  if (updated.grandTotalMinor > current.grandTotalMinor || updated.partyId !== current.partyId) {
+    await checkCreditLimit(tx, updated, ctx.now, { counted: true, override: body.overrideCreditLimit });
   }
   await postStock(tx, ctx.company, updated, ctx.user.id);
   // Nothing is allocated to it (or it couldn't be edited); the due date may have moved its status.

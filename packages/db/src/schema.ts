@@ -936,6 +936,8 @@ export const parties = pgTable("parties", {
 	shippingPostalCode: varchar("shipping_postal_code", { length: 12 }),
 	shippingCountry: char("shipping_country", { length: 2 }),
 	creditLimitMinor: bigint("credit_limit_minor", { mode: "number" }),
+	// Over the credit limit an invoice is refused outright, not only warned about (and issued on a yes).
+	creditLimitBlocks: boolean("credit_limit_blocks").default(false).notNull(),
 	openingBalanceMinor: bigint("opening_balance_minor", { mode: "number" }).default(0).notNull(),
 	// Which side the opening balance is on; unset is the kind's usual side (customer Dr, supplier Cr).
 	openingBalanceSide: balanceSide("opening_balance_side"),
