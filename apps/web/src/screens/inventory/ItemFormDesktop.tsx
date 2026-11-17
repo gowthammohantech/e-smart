@@ -25,6 +25,8 @@ import { FROM_DOCUMENT, handBack } from '@esmart/app/navigation/handBack';
 import { CustomFieldsSection, customFieldErrors, useCustomFields } from '@esmart/app/features/customFields/CustomFieldsSection';
 import type { CustomValues } from '@esmart/core/domain/customFields';
 import { GstTreatmentFields } from '@esmart/app/features/catalog/GstTreatmentFields';
+import { HsnSearchSheet } from '@esmart/app/features/catalog/HsnSearchSheet';
+import type { HsnMatch } from '@esmart/app/remote/reference';
 
 /**
  * Add an item, laid out for a desktop: the item's identity and prices in the
@@ -89,6 +91,15 @@ function ItemFormDesktopFields({ item }: { item?: Item }) {
 
   const [unitOpen, setUnitOpen] = useState(false);
   const [taxOpen, setTaxOpen] = useState(false);
+  // The HSN/SAC master: a pick fills the code, and the description (when empty) and GST rate it usually carries.
+  const [hsnOpen, setHsnOpen] = useState(false);
+  const pickHsn = (match: HsnMatch) => {
+    if (match.code) setHsnCode(match.code);
+    if (match.description && !description.trim()) setDescription(match.description);
+    const rated = match.gstRate == null ? undefined : taxCategories.find((c) => c.rate === match.gstRate);
+    if (rated) setTaxCategoryId(rated.id);
+    setHsnOpen(false);
+  };
   const [categoryOpen, setCategoryOpen] = useState(false);
   const [brandOpen, setBrandOpen] = useState(false);
   const [errors, setErrors] = useState<Errors<'name' | 'sku' | 'hsn' | 'openingStockDate'>>({});
@@ -279,17 +290,21 @@ function ItemFormDesktopFields({ item }: { item?: Item }) {
                     onPress={() => setTaxOpen(true)}
                     icon="percent-outline"
                   />
-                  <TextField
-                    label={type === 'goods' ? tr('inventory:form.hsnCode') : tr('inventory:form.sacCode')}
-                    value={hsnCode}
-                    onChangeText={(v) => setHsnCode(v.replace(/[^0-9]/g, '').slice(0, 8))}
-                    placeholder={type === 'goods' ? '84821011' : '998719'}
-                    keyboardType="number-pad"
-                    icon="numeric"
-                    hint={tr('inventory:form.hsnHint')}
-                    error={errors.hsn}
-                    required={hsnRequired}
-                  />
+                  <View style={{ gap: t.spacing.xs }}>
+                    <TextField
+                      label={type === 'goods' ? tr('inventory:form.hsnCode') : tr('inventory:form.sacCode')}
+                      value={hsnCode}
+                      onChangeText={(v) => setHsnCode(v.replace(/[^0-9]/g, '').slice(0, 8))}
+                      placeholder={type === 'goods' ? '84821011' : '998719'}
+                      keyboardType="number-pad"
+                      icon="numeric"
+                      hint={tr('inventory:form.hsnHint')}
+                      error={errors.hsn}
+                      required={hsnRequired}
+                    />
+                    {/* Under the code it fills, as on a phone: the master list, by code or description. */}
+                    <Button title={tr('inventory:form.hsnSearch')} variant="ghost" size="sm" icon="magnify" onPress={() => setHsnOpen(true)} style={{ alignSelf: 'flex-start' }} />
+                  </View>
                 </Row>
                 {gstRegistered || gst ? <GstTreatmentFields value={gst} onChange={setGst} type={type} /> : null}
               </Panel>
@@ -388,6 +403,7 @@ function ItemFormDesktopFields({ item }: { item?: Item }) {
         onSelect={setTaxCategoryId}
         searchable={false}
       />
+      <HsnSearchSheet visible={hsnOpen} onClose={() => setHsnOpen(false)} value={hsnCode} onPick={pickHsn} />
       <SelectSheet
         visible={categoryOpen}
         onClose={() => setCategoryOpen(false)}
