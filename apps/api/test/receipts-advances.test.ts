@@ -149,6 +149,38 @@ describe('the adjustment entry', () => {
     expect(await tb(m, 'sys:gstOnAdvances')).toEqual(inr(0));
   });
 
+  it('adjusts a service advance only against an invoice whose every line is a service', async () => {
+    const m = await moneySetup(t);
+    await registered(m);
+    const adv = await t.post(
+      `${m.c}/payments`,
+      { direction: 'received', partyId: m.mumbai.id, date: '2026-09-15', amount: inr(118_000), currency: 'INR', method: 'cash', accountId: m.cash.id, advanceTax: { taxCategoryId: m.gst(18), placeOfSupplyStateCode: '27', hsn: '998311' } },
+      { token: m.token },
+    );
+    expect(adv.status).toBe(201);
+    t.setNow('2026-10-10T10:00:00Z');
+    const goods = line(m.gst(18), { name: 'Steel rod', hsnCode: '721420', quantity: 1, unitPrice: inr(50_000) });
+    const make = async (lines: unknown[]) => (await t.post(`${m.c}/documents`, { kind: 'invoice', partyId: m.mumbai.id, date: '2026-10-10', currency: 'INR', status: 'issued', lines }, { token: m.token })).body.id as string;
+    const goodsOnly = await make([goods]);
+    const mixed = await make([consulting(m, 50_000), goods]);
+
+    const list = await t.get(`${m.c}/payments/adjust`, { token: m.token, query: { partyId: m.mumbai.id } });
+    expect(list.body.open).toEqual([expect.objectContaining({ documentId: goodsOnly, servicesOnly: false, hasServiceLines: false }), expect.objectContaining({ documentId: mixed, servicesOnly: false, hasServiceLines: true })]);
+    // Oldest first passes over invoices with goods on them: nothing moves.
+    const none = await t.post(`${m.c}/payments/adjust`, { partyId: m.mumbai.id }, { token: m.token });
+    expect(none.status).toBe(200);
+    expect(none.body.applied).toEqual([]);
+    // Chosen by hand, it is refused.
+    const refused = await t.post(`${m.c}/payments/adjust`, { partyId: m.mumbai.id, allocations: [{ sourceType: 'payment', sourceId: adv.body.id, documentId: mixed, amount: inr(10_000) }] }, { token: m.token });
+    expect(refused.status).toBe(422);
+    expect(refused.body.issues[0].field).toBe('allocations[0].documentId');
+
+    // An invoice of services alone takes it.
+    const services = await make([consulting(m, 100_000)]);
+    const done = await t.post(`${m.c}/payments/adjust`, { partyId: m.mumbai.id }, { token: m.token });
+    expect(done.body.applied).toEqual([{ sourceType: 'payment', sourceId: adv.body.id, documentId: services, amount: inr(118_000) }]);
+  });
+
   it('applies a direct credit note without any GST on advance, and settles a debit note', async () => {
     const m = await moneySetup(t);
     await registered(m);

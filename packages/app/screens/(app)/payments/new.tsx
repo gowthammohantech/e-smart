@@ -237,7 +237,7 @@ function NewPaymentForm() {
     setAdjustingAdvance(true);
     try {
       // The server applies them, notes too, and a service advance's GST.
-      applied = await adjustAdvancesFor(partyId, direction, docId ? [docId] : undefined);
+      applied = (await adjustAdvancesFor(partyId, direction, docId ? [docId] : undefined)).totals;
     } catch (err) {
       toast.show(describeError(err, tr), 'error');
       return;

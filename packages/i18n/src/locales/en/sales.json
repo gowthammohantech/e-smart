@@ -386,6 +386,7 @@
     "adjustAdvance": "Adjust",
     "advanceAdjusted": "{{amount}} adjusted from advances",
     "advanceNothingToAdjust": "No advance could be adjusted",
+    "advanceNoServiceInvoice": "No open invoice has only services on it: a service advance is adjusted only against an invoice whose every line is a service.",
     "nothingLeftToApply": "All of it is applied. Increase the amount first",
     "currency": "Currency",
     "insufficientInAccount": "{{account}} has only {{balance}}",

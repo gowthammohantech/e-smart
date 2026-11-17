@@ -722,19 +722,26 @@ export async function adjustOnServer(partyId: string, side: 'customer' | 'suppli
   for (const key of [['adjustable', companyId], documentKeys.all(companyId), paymentKeys.all(companyId), partyKeys.all(companyId), ['reports', companyId], ['books', companyId]]) {
     void queryClient.invalidateQueries({ queryKey: key });
   }
+  // The payments it rewrote and the documents it settled, into the device's book now: a payment or
+  // invoice page open on them shows the adjustment at once, not after the next pull or a reload.
+  const applied = data?.applied ?? [];
+  if (applied.length) {
+    await loadForAdvances(companyId, partyId, side === 'customer' ? 'received' : 'paid', [...new Set(applied.map((a) => a.documentId))]).catch(() => {});
+  }
   return data!;
 }
 
 /**
  * "Adjust advances" from a payment screen, on the server: it applies direct credit notes too and
  * brings a service advance's GST back on the invoice's date (RULES 8.13). `documentIds` limits it to those documents,
- * oldest credit first, notes before payments on the same day. Returns what was applied, by currency.
+ * oldest credit first, notes before payments on the same day; a service advance only on a document whose
+ * every line is a service. Returns what was applied in all (by currency), and each share of it.
  */
 export async function adjustAdvancesFor(
   partyId: string,
   direction: 'received' | 'paid',
   documentIds: string[] | undefined,
-): Promise<{ minor: number; currency: string }[]> {
+): Promise<{ totals: { minor: number; currency: string }[]; applied: AdjustmentAllocation[] }> {
   const side = direction === 'received' ? 'customer' : 'supplier';
   const companyId = useAppStore.getState().activeCompanyId;
   let allocations: AdjustmentAllocation[] | undefined;
@@ -743,21 +750,21 @@ export async function adjustAdvancesFor(
     const credits = [...(data?.credits ?? [])].sort((a, b) => a.date.localeCompare(b.date) || (a.sourceType === b.sourceType ? 0 : a.sourceType === 'note' ? -1 : 1));
     const open = (data?.open ?? []).filter((o) => documentIds.includes(o.documentId));
     allocations = fifoAllocate(
-      credits.map((c) => ({ id: `${c.sourceType}:${c.id}`, date: c.date, left: c.left.minor })),
-      open.map((o) => ({ id: o.documentId, date: o.date, outstanding: o.outstanding.minor })),
+      credits.map((c) => ({ id: `${c.sourceType}:${c.id}`, date: c.date, left: c.left.minor, serviceAdvance: c.sourceType === 'payment' && !!c.advanceTax })),
+      open.map((o) => ({ id: o.documentId, date: o.date, outstanding: o.outstanding.minor, servicesOnly: o.servicesOnly })),
     ).map((m) => ({
       sourceType: m.creditId.startsWith('note:') ? 'note' : 'payment',
       sourceId: m.creditId.split(':').slice(1).join(':'),
       documentId: m.documentId,
       amount: { minor: m.amount, currency: open[0]?.outstanding.currency ?? '' },
     }));
-    if (!allocations.length) return [];
+    if (!allocations.length) return { totals: [], applied: [] };
   }
   const res = await adjustOnServer(partyId, side, allocations);
-  // The payments it rewrote reach the device's book on the next pull.
+  // Anything else it touched (balances, the party) on the next pull.
   refreshSoon();
   const total = res.applied.reduce((a, x) => a + x.amount.minor, 0);
-  return total > 0 ? [{ minor: total, currency: res.applied[0].amount.currency }] : [];
+  return { totals: total > 0 ? [{ minor: total, currency: res.applied[0].amount.currency }] : [], applied: res.applied };
 }
 
 /** How many vouchers the filters match, their total, and (for receipts) the split by what they were for. */

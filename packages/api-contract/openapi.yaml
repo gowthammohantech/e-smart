@@ -8439,6 +8439,7 @@ components:
               total: { $ref: '#/components/schemas/Money' }
               outstanding: { $ref: '#/components/schemas/Money' }
               hasServiceLines: { type: boolean, description: 'Has a line for a service (an item of type service, or a SAC code starting 99)' }
+              servicesOnly: { type: boolean, description: 'Every line is a service: the only documents a service advance (advanceTax) is adjusted against' }
     Payment:
       allOf:
         - $ref: '#/components/schemas/Versioned'

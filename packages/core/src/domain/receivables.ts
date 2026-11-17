@@ -168,8 +168,9 @@ export function statusForOutstanding(
 }
 
 /** Credit a party holds (an advance, a direct note) and a document it still owes, for FIFO matching. */
-export type FifoCredit = { id: string; date: string; left: number; currency?: string };
-export type FifoOpen = { id: string; date: string; outstanding: number; currency?: string };
+/** `serviceAdvance`: GST was paid on it as a service advance, so it goes only on a document whose every line is a service (`servicesOnly`). */
+export type FifoCredit = { id: string; date: string; left: number; currency?: string; serviceAdvance?: boolean };
+export type FifoOpen = { id: string; date: string; outstanding: number; currency?: string; servicesOnly?: boolean };
 export type FifoMatch = { creditId: string; documentId: string; amount: number };
 
 /**
@@ -190,6 +191,7 @@ export function fifoAllocate(credits: FifoCredit[], open: FifoOpen[]): FifoMatch
       for (const d of docs) {
         if (remaining <= 0) break;
         if (c.currency && d.currency && c.currency !== d.currency) continue;
+        if (c.serviceAdvance && !d.servicesOnly) continue;
         const take = Math.min(remaining, left.get(d.id) ?? 0);
         if (take <= 0) continue;
         out.push({ creditId: c.id, documentId: d.id, amount: take });

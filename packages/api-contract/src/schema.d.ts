@@ -6522,6 +6522,8 @@ export interface components {
                 outstanding: components["schemas"]["Money"];
                 /** @description Has a line for a service (an item of type service, or a SAC code starting 99) */
                 hasServiceLines?: boolean;
+                /** @description Every line is a service: the only documents a service advance (advanceTax) is adjusted against */
+                servicesOnly?: boolean;
             }[];
         };
         Payment: components["schemas"]["Versioned"] & {
