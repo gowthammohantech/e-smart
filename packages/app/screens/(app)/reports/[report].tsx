@@ -27,10 +27,11 @@ import {
   summarizeTax,
   taxByHead,
 } from '@esmart/core/domain/reports';
-import { paymentMethodLabel } from '@esmart/core/labels';
+import { documentKindLabel, paymentMethodLabel } from '@esmart/core/labels';
+import { CREDIT_KINDS } from '@esmart/core/domain/documentStates';
 import { formatMoney, formatPercent, formatQty } from '@esmart/core/lib/format';
 import { formatDate, monthLabel, monthLabelNarrow } from '@esmart/core/lib/date';
-import { money, toMajor } from '@esmart/core/lib/money';
+import { money, toMajor, type Money } from '@esmart/core/lib/money';
 import { summarizeAging, type OutstandingDoc } from '@esmart/core/domain/receivables';
 import type { tdsRegister } from '@esmart/core/domain/tds';
 import type { tds26asMatch, tdsPayableSummary, tdsReceivable, tdsReturnRows } from '@esmart/core/domain/tdsReports';
@@ -222,10 +223,18 @@ export default function Report() {
         ) : null}
       </>
     );
+    // Each invoice, then its credit notes, debit notes and returns; a note whose invoice isn't in the period last.
+    const notes = data.notes ?? [];
+    const listed = new Set(data.documents.map((d) => d.id));
+    const exportDocs = [
+      ...data.documents.flatMap((d) => [d, ...notes.filter((n) => n.sourceDocumentId === d.id).sort((a, b) => a.date.localeCompare(b.date))]),
+      ...notes.filter((n) => !n.sourceDocumentId || !listed.has(n.sourceDocumentId)),
+    ];
     exportRows = () =>
       reportTable(
         [
           tr('common:table.number'),
+          tr('common:table.type'),
           tr('common:table.date'),
           isSales ? tr('common:table.customer') : tr('common:table.supplier'),
           tr('reports:column.taxable'),
@@ -236,19 +245,23 @@ export default function Report() {
           tr('common:table.tax'),
           tr('common:table.total'),
         ],
-        data.documents.map((d) => {
+        exportDocs.map((d) => {
           const heads = taxByHead(d);
+          // A credit note or return takes away from the sale: its amounts go in less.
+          const sign = CREDIT_KINDS.includes(d.kind) ? -1 : 1;
+          const amount = (m: Money) => sign * toMajor(m) || 0;
           return [
             d.number,
+            documentKindLabel(tr, d.kind),
             d.date,
             partyNameOf(d.partyId),
-            toMajor(d.totals.taxableAmount),
-            toMajor(heads.igst),
-            toMajor(heads.cgst),
-            toMajor(heads.sgst),
-            toMajor(heads.cess),
-            toMajor(d.totals.totalTax),
-            toMajor(d.totals.grandTotal),
+            amount(d.totals.taxableAmount),
+            amount(heads.igst),
+            amount(heads.cgst),
+            amount(heads.sgst),
+            amount(heads.cess),
+            amount(d.totals.totalTax),
+            amount(d.totals.grandTotal),
           ];
         }),
       );

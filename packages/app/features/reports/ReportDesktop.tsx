@@ -21,10 +21,12 @@ import type {
   TaxSummaryRow,
   TransactionSummary,
 } from '@esmart/core/domain/reports';
-import { taxByHead } from '@esmart/core/domain/reports';
+import { ADJUSTMENT_KINDS, taxByHead } from '@esmart/core/domain/reports';
+import { CREDIT_KINDS } from '@esmart/core/domain/documentStates';
+import { Icon } from '@esmart/ui/components/Icon';
 import type { OutstandingDoc } from '@esmart/core/domain/receivables';
 import type { Branch, ExpenseCategory, Party } from '@esmart/core/types';
-import { paymentMethodLabel } from '@esmart/core/labels';
+import { documentKindLabel, paymentMethodLabel } from '@esmart/core/labels';
 import { formatDate, monthLabel, monthLabelNarrow } from '@esmart/core/lib/date';
 import { formatMoney, formatPercent, formatQty } from '@esmart/core/lib/format';
 import { Money } from '@esmart/core/lib/money';
@@ -71,11 +73,39 @@ export function ReportDesktop({ report, data }: { report: string; data: ReportDa
     const isSales = report === 'sales-summary';
     const d = isSales ? data.sales : data.purchases;
     const avg: Money = { minor: d.count ? Math.round(d.total.minor / d.count) : 0, currency: d.total.currency };
-    const columns: Column<TransactionSummary['documents'][number]>[] = [
-      { key: 'number', header: tr('common:table.number'), flex: 1.2, render: (r) => <Cell weight="600">{r.number}</Cell>, sortValue: (r) => r.number },
+    type Doc = TransactionSummary['documents'][number];
+    // Each note sits under the invoice it adjusts; one whose invoice isn't in the period stands on its own row.
+    const notes = d.notes ?? [];
+    const listed = new Set(d.documents.map((x) => x.id));
+    const notesOf = (r: Doc) => (ADJUSTMENT_KINDS.includes(r.kind) ? [] : notes.filter((n) => n.sourceDocumentId === r.id).sort((a, b) => a.date.localeCompare(b.date)));
+    const rows = [...d.documents, ...notes.filter((n) => !n.sourceDocumentId || !listed.has(n.sourceDocumentId))];
+    const isNote = (r: Doc) => ADJUSTMENT_KINDS.includes(r.kind);
+    // A credit note or return takes away from the sale: shown less.
+    const signed = (r: Doc, m: Money): Money => (CREDIT_KINDS.includes(r.kind) && m.minor ? { ...m, minor: -m.minor } : m);
+    const columns: Column<Doc>[] = [
+      {
+        key: 'number',
+        header: tr('common:table.number'),
+        flex: 1.4,
+        render: (r) =>
+          isNote(r) ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, minWidth: 0 }}>
+              <Icon name="subdirectory-arrow-right" size={14} color={t.c.muted} />
+              <View style={{ flexShrink: 1, minWidth: 0 }}>
+                <Cell weight="600">{r.number}</Cell>
+                <Text variant="micro" tone="muted" numberOfLines={1}>
+                  {documentKindLabel(tr, r.kind)}
+                </Text>
+              </View>
+            </View>
+          ) : (
+            <Cell weight="600">{r.number}</Cell>
+          ),
+        sortValue: (r) => r.number,
+      },
       { key: 'date', header: tr('common:table.date'), flex: 1, render: (r) => <Cell tone="muted">{formatDate(r.date)}</Cell>, sortValue: (r) => r.date },
       { key: 'party', header: isSales ? tr('common:table.customer') : tr('common:table.supplier'), flex: 2, render: (r) => <Cell>{partyName(r.partyId)}</Cell>, sortValue: (r) => partyName(r.partyId) },
-      { key: 'taxable', header: tr('reports:column.taxable'), flex: 1.2, align: 'right', secondary: true, render: (r) => <Cell mono>{money(r.totals.taxableAmount)}</Cell>, sortValue: (r) => sortMoney(r.totals.taxableAmount) },
+      { key: 'taxable', header: tr('reports:column.taxable'), flex: 1.2, align: 'right', secondary: true, render: (r) => <Cell mono>{money(signed(r, r.totals.taxableAmount))}</Cell>, sortValue: (r) => sortMoney(signed(r, r.totals.taxableAmount)) },
       // The tax by head, then in all.
       ...(['igst', 'cgst', 'sgst', 'cess'] as const).map((head) => ({
         key: head,
@@ -83,11 +113,22 @@ export function ReportDesktop({ report, data }: { report: string; data: ReportDa
         flex: 0.9,
         align: 'right' as const,
         secondary: true,
-        render: (r: TransactionSummary['documents'][number]) => <Cell mono tone="muted">{money(taxByHead(r)[head])}</Cell>,
-        sortValue: (r: TransactionSummary['documents'][number]) => taxByHead(r)[head].minor,
+        render: (r: Doc) => <Cell mono tone="muted">{money(signed(r, taxByHead(r)[head]))}</Cell>,
+        sortValue: (r: Doc) => signed(r, taxByHead(r)[head]).minor,
       })),
-      { key: 'tax', header: tr('common:table.tax'), flex: 1, align: 'right', secondary: true, render: (r) => <Cell mono tone="muted">{money(r.totals.totalTax)}</Cell>, sortValue: (r) => sortMoney(r.totals.totalTax) },
-      { key: 'total', header: tr('common:table.total'), flex: 1.2, align: 'right', render: (r) => <Cell mono weight="600">{money(r.totals.grandTotal)}</Cell>, sortValue: (r) => sortMoney(r.totals.grandTotal) },
+      { key: 'tax', header: tr('common:table.tax'), flex: 1, align: 'right', secondary: true, render: (r) => <Cell mono tone="muted">{money(signed(r, r.totals.totalTax))}</Cell>, sortValue: (r) => sortMoney(signed(r, r.totals.totalTax)) },
+      {
+        key: 'total',
+        header: tr('common:table.total'),
+        flex: 1.2,
+        align: 'right',
+        render: (r) => (
+          <Cell mono weight="600" tone={CREDIT_KINDS.includes(r.kind) ? 'bad' : 'default'}>
+            {money(signed(r, r.totals.grandTotal))}
+          </Cell>
+        ),
+        sortValue: (r) => sortMoney(signed(r, r.totals.grandTotal)),
+      },
     ];
     return (
       <>
@@ -126,7 +167,8 @@ export function ReportDesktop({ report, data }: { report: string; data: ReportDa
         <TableSection
           title={tr('reports:detail.withCount', { title: isSales ? tr('reports:detail.invoices') : tr('reports:detail.bills'), count: d.documents.length })}
           columns={columns}
-          rows={d.documents}
+          rows={rows}
+          subRows={notesOf}
           rowKey={(r) => r.id}
           onRowPress={(r) => router.push(detailRouteFor(r.kind, r.id) as never)}
           initialSort={{ key: 'date', dir: 'desc' }}
@@ -451,6 +493,7 @@ function TableSection<T>({
   rowKey,
   onRowPress,
   initialSort,
+  subRows,
 }: {
   title: string;
   columns: Column<T>[];
@@ -458,6 +501,8 @@ function TableSection<T>({
   rowKey: (row: T) => string;
   onRowPress?: (row: T) => void;
   initialSort?: { key: string; dir: 'asc' | 'desc' };
+  /** Rows shown under a row that belong to it: an invoice's notes. */
+  subRows?: (row: T) => T[];
 }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['reports']);
@@ -470,6 +515,7 @@ function TableSection<T>({
         rowKey={rowKey}
         onRowPress={onRowPress}
         initialSort={initialSort}
+        subRows={subRows}
         pageSize={TABLE_PAGE_SIZE}
         empty={
           <View style={{ padding: t.spacing.lg }}>

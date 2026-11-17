@@ -111,10 +111,16 @@ export function DataTable<T>({
   bulkActions,
   rowActions,
   maxWidth,
+  subRows,
 }: {
   columns: Column<T>[];
   rows: T[];
   rowKey: (row: T) => string;
+  /**
+   * Rows shown under a row, on a light band, that belong to it (an invoice's credit notes, say).
+   * They follow it through a sort and a page, aren't counted as rows, and take no checkbox or ⋯ menu.
+   */
+  subRows?: (row: T) => T[];
   onRowPress?: (row: T) => void;
   /** With `onRowPress`: whether this row opens something. Left out, every row does. */
   canPress?: (row: T) => boolean;
@@ -375,15 +381,16 @@ export function DataTable<T>({
     </View>
   ) : null;
 
-  const dataRows = visible.map((row, i) => {
+  // A row and, under it, the rows that belong to it (`subRows`): those travel with it through a sort or a page.
+  const renderRow = (row: T, last: boolean, sub: boolean) => {
     const key = rowKey(row);
-    const checked = selection.has(key);
+    const checked = !sub && selection.has(key);
     const label = rowLabel?.(row) ?? key;
     const cells = (
       <>
         {canSelect ? (
           <View style={{ width: SELECT_WIDTH, alignItems: 'center' }} role="cell">
-            <Checkbox checked={checked} onChange={(on) => toggleRow(key, on)} label={tr('common:table.selectRow', { label })} />
+            {sub ? null : <Checkbox checked={checked} onChange={(on) => toggleRow(key, on)} label={tr('common:table.selectRow', { label })} />}
           </View>
         ) : null}
         {columns.map((c) => (
@@ -393,13 +400,13 @@ export function DataTable<T>({
         ))}
         {hasActionsColumn ? (
           <View style={{ width: ACTIONS_WIDTH, alignItems: 'center' }} role="cell">
-            <RowActionsButton actions={actionsFor(row)} label={tr('common:table.rowActions', { label })} />
+            {sub ? null : <RowActionsButton actions={actionsFor(row)} label={tr('common:table.rowActions', { label })} />}
           </View>
         ) : null}
       </>
     );
-    const style = rowStyle(i === visible.length - 1 && !short && !error);
-    const tint = checked ? t.c.chip : undefined;
+    const style = [rowStyle(last), sub ? { minHeight: 40 } : null];
+    const tint = checked ? t.c.chip : sub ? t.c.card2 : undefined;
     return onRowPress && (canPress?.(row) ?? true) ? (
       <Pressable
         key={key}
@@ -411,16 +418,23 @@ export function DataTable<T>({
         accessibilityLabel={rowLabel?.(row)}
         style={(state) => {
           const { pressed, hovered, focused } = state as WebPressState;
-          return [style, { backgroundColor: tint ?? (pressed || hovered ? t.c.card2 : 'transparent') }, focusRing(t, focused)];
+          // A selected row keeps its tint; a row under another sits on a light band, a shade darker on hover.
+          const backgroundColor = checked ? t.c.chip : pressed || hovered ? (sub ? t.c.line : t.c.card2) : (tint ?? 'transparent');
+          return [...style, { backgroundColor }, focusRing(t, focused)];
         }}
       >
         {cells}
       </Pressable>
     ) : (
-      <View key={key} style={[style, tint ? { backgroundColor: tint } : null]} role="row" aria-selected={canSelect ? checked : undefined}>
+      <View key={key} style={[...style, tint ? { backgroundColor: tint } : null]} role="row" aria-selected={canSelect ? checked : undefined}>
         {cells}
       </View>
     );
+  };
+  const dataRows = visible.flatMap((row, i) => {
+    const kids = subRows?.(row) ?? [];
+    const lastOfPage = i === visible.length - 1 && !short && !error;
+    return [renderRow(row, lastOfPage && kids.length === 0, false), ...kids.map((kid, j) => renderRow(kid, lastOfPage && j === kids.length - 1, true))];
   });
 
   const body =
