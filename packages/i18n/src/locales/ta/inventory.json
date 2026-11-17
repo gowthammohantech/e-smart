@@ -266,7 +266,9 @@
     "count_other": "{{count}} நகர்வுகள்",
     "unknownItem": "தெரியாத பொருள்",
     "a11yRow": "{{name}}, {{type}}, {{qty}}",
-    "countMore": "{{count}}+ நகர்வுகள்"
+    "countMore": "{{count}}+ நகர்வுகள்",
+    "itemFilter": "பொருள்: {{name}}",
+    "clearItem": "{{name}} மட்டுமல்ல, எல்லாப் பொருட்களையும் காட்டு"
   },
   "ocr": {
     "nothingScanned": "இதுவரை எதுவும் ஸ்கேன் செய்யப்படவில்லை",

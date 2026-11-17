@@ -22,6 +22,7 @@ import { useAppStore } from '@esmart/app/store/appStore';
 import { useMovementPages } from '@esmart/app/remote/queries';
 import { useDebounced } from '@esmart/app/components/useDebounced';
 import { useQueryParams } from '@esmart/app/navigation/queryParams';
+import { ItemFilterChip } from '@esmart/app/components/PartyFilterChip';
 import { TableSkeleton } from '@esmart/app/components/ScreenSkeleton';
 
 const TYPES: (StockMovementType | 'all')[] = ['all', 'purchaseReceipt', 'salesIssue', 'adjustment', 'transferIn', 'transferOut', 'salesReturn', 'purchaseReturn', 'opening'];
@@ -43,11 +44,13 @@ export function StockMovementsDesktop() {
   const [params, setParams] = useQueryParams();
   const type = (params.type ?? 'all') as StockMovementType | 'all';
   const setType = (ty: StockMovementType | 'all') => setParams({ type: ty === 'all' ? undefined : ty });
+  // Opened from an item's page (?item=…): only its movements, until the chip is pressed.
+  const itemId = params.item || undefined;
 
   // Read from the server 50 at a time, newest first; type and search are filtered there, and each row names its item.
   const branchId = useAppStore((s) => s.activeBranchId) || undefined;
   const search = useDebounced(query);
-  const pages = useMovementPages({ branchId, type: type === 'all' ? undefined : type, q: search });
+  const pages = useMovementPages({ branchId, itemId, type: type === 'all' ? undefined : type, q: search });
   const filtered = pages.rows as unknown as (StockMovement & { itemName?: string; itemSku?: string })[];
   const names = useMemo(() => new Map(filtered.map((m) => [m.itemId, { name: m.itemName ?? '', sku: m.itemSku ?? '' }])), [filtered]);
   const itemOf = useCallback((id: string) => (names.has(id) ? { id, ...names.get(id)! } : undefined), [names]);
@@ -72,7 +75,8 @@ export function StockMovementsDesktop() {
               </Text>
             )}
           </View>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm }}>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm, alignItems: 'center' }}>
+            <ItemFilterChip itemId={itemId} onClear={() => setParams({ item: undefined })} />
             {TYPES.map((ty) => {
               const active = type === ty;
               return (
