@@ -314,6 +314,7 @@
     "link": "Link to a bill",
     "linkTitle": "Which bill is it?",
     "linkEmpty": "No unclaimed bills from this supplier",
+    "linkSearch": "Search by bill number",
     "exportExcel": "Export Excel",
     "claimAskTitle": "Claim the credit for {{period}}?",
     "claimAskBody": "The matched bills' input tax credit ({{amount}}) is booked for this period. Lines still to review aren't claimed.",

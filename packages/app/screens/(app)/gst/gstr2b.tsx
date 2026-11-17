@@ -16,6 +16,7 @@ import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { Cell, DataTable as Table, type RowAction } from '@esmart/ui/components/DataTable';
 import { Sheet } from '@esmart/ui/components/Sheet';
 import { ListRow } from '@esmart/ui/components/ListRow';
+import { SearchBar } from '@esmart/ui/components/SearchBar';
 import { formatDate } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
 import { api } from '../../../remote/api';
@@ -29,6 +30,7 @@ import { ReportFailed } from '../../../features/reports/ReportShell';
 import { ListSkeleton, ReportSkeleton } from '../../../components/ScreenSkeleton';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { useDocumentPages, usePartySearch } from '../../../remote/queries';
+import { useDebounced } from '../../../components/useDebounced';
 import { periodLabel, recentPeriods } from '../../../features/compliance/periods';
 
 type Rec = Schema<'Gstr2bReconciliation'>;
@@ -90,6 +92,13 @@ export function Gstr2bView({ mode }: { mode: 'download' | 'reconcile' }) {
   const [open, setOpen] = useState<'gstin' | 'period' | null>(null);
   const [filter, setFilter] = useState<Filter>('all');
   const [linking, setLinking] = useState<Row | null>(null);
+  // What's typed in the picker: the bills are searched on the server (number, supplier's number), 50 at a time.
+  const [linkQuery, setLinkQuery] = useState('');
+  const linkSearch = useDebounced(linkQuery);
+  const closeLinking = () => {
+    setLinking(null);
+    setLinkQuery('');
+  };
   // Until the GSTINs are known, "no GSTIN" isn't said; until a period's 2B comes, the last one's isn't shown.
   const [gstinsLoaded, setGstinsLoaded] = useState(false);
   const [loadState, setLoadState] = useState<'loading' | 'failed' | 'done'>('loading');
@@ -168,7 +177,14 @@ export function Gstr2bView({ mode }: { mode: 'download' | 'reconcile' }) {
   const supplierQ = usePartySearch('supplier', linking?.supplierGstin ?? '', !!linking && linking.documentType !== 'BOE');
   const lineSupplier = supplierQ.data?.find((p) => p.taxId === linking?.supplierGstin);
   const boe = linking?.documentType === 'BOE';
-  const supplierBills = useDocumentPages({ kinds: linking ? [KIND_OF[linking.documentType ?? 'I']] : [], partyId: boe ? undefined : lineSupplier?.id }, !!linking && (boe || !!lineSupplier));
+  const supplierBills = useDocumentPages({ kinds: linking ? [KIND_OF[linking.documentType ?? 'I']] : [], partyId: boe ? undefined : lineSupplier?.id, q: linkSearch }, !!linking && (boe || !!lineSupplier));
+  const moreBills = () => {
+    if (supplierBills.hasNextPage && !supplierBills.isFetchingNextPage) void supplierBills.fetchNextPage();
+  };
+  // Past the first 50 (a bill of entry is any supplier's): the next page on asking.
+  const moreBillsButton = supplierBills.hasNextPage ? (
+    <Button title={tr('common:documentList.loadMore')} variant="ghost" size="sm" loading={supplierBills.isFetchingNextPage} onPress={moreBills} style={{ alignSelf: 'center' }} />
+  ) : null;
   // Still finding the supplier or its bills: the sheet shimmers rather than say "no bills to link".
   const linkSearching =
     !!linking &&
@@ -540,7 +556,9 @@ export function Gstr2bView({ mode }: { mode: 'download' | 'reconcile' }) {
       <SelectSheet visible={open === 'gstin'} onClose={() => setOpen(null)} title="GSTIN" options={gstins.map((g) => ({ value: g, label: g }))} value={gstin} onSelect={setGstin} searchable={false} />
       {desktop ? (
         // Beside the table, not over it: the line being linked stays in view while the bills are compared.
-        <Sheet visible={!!linking} onClose={() => setLinking(null)} title={tr('compliance:gstr2b.linkTitle')} subtitle={linking ? `${linking.number} · ${formatMoney(linking.tax!)}` : undefined} desktopAs="drawer">
+        <Sheet visible={!!linking} onClose={closeLinking} title={tr('compliance:gstr2b.linkTitle')} subtitle={linking ? `${linking.number} · ${formatMoney(linking.tax!)}` : undefined} desktopAs="drawer">
+          <View style={{ gap: t.spacing.md }}>
+          <SearchBar value={linkQuery} onChangeText={setLinkQuery} placeholder={tr('compliance:gstr2b.linkSearch')} />
           {linkSearching ? (
             <ListSkeleton kind="list" />
           ) : candidates.length ? (
@@ -553,26 +571,35 @@ export function Gstr2bView({ mode }: { mode: 'download' | 'reconcile' }) {
                   divider={i < candidates.length - 1}
                   onPress={() => {
                     const row = linking;
-                    setLinking(null);
+                    closeLinking();
                     if (row) void decide(row, 'accepted', d.id!);
                   }}
                 />
               ))}
             </Card>
           ) : (
-            <EmptyState icon="link-variant-off" title={tr('compliance:gstr2b.linkEmpty')} compact />
+            <EmptyState icon="link-variant-off" title={tr(linkQuery ? 'common:filters.noMatch' : 'compliance:gstr2b.linkEmpty')} compact />
           )}
+          {linkSearching ? null : moreBillsButton}
+          </View>
         </Sheet>
       ) : null}
       <SelectSheet
         visible={!desktop && !!linking}
-        onClose={() => setLinking(null)}
+        onClose={closeLinking}
+        onQueryChange={setLinkQuery}
+        searchPlaceholder={tr('compliance:gstr2b.linkSearch')}
+        footer={linkSearching ? undefined : (moreBillsButton ?? undefined)}
         title={tr('compliance:gstr2b.linkTitle')}
         subtitle={linking ? `${linking.number} · ${formatMoney(linking.tax!)}` : undefined}
         options={(linkSearching ? [] : candidates).map((d) => ({ value: d.id!, label: `${d.supplierDocNumber ?? d.number} · ${formatDate(d.date!)}`, description: `${d.number} · ${d.totalTax ? formatMoney(d.totalTax) : ''}` }))}
         loading={linkSearching}
         emptyMessage={tr('compliance:gstr2b.linkEmpty')}
-        onSelect={(id) => linking && void decide(linking, 'accepted', id)}
+        onSelect={(id) => {
+          const row = linking;
+          closeLinking();
+          if (row) void decide(row, 'accepted', id);
+        }}
       />
       <SelectSheet visible={open === 'period'} onClose={() => setOpen(null)} title={tr('compliance:gstr2b.period')} options={periods.map((p) => ({ value: p, label: periodLabel(p) }))} value={period} onSelect={setPeriod} searchable={false} />
     </View>
