@@ -891,7 +891,7 @@ export default function Report() {
     body = (
       <ReportDesktop
         report={key}
-        data={{ sales, purchases, expenseSummary, receivables, payables, stock, tax, paymentSummary, advances, profit, parties, branches, expenseCategories }}
+        data={{ sales, purchases, expenseSummary, receivables, payables, stock, tax, paymentSummary, advances, profit, parties, partyNames: serverNames, branches, expenseCategories }}
       />
     );
   }

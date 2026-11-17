@@ -346,7 +346,13 @@
     "deleteDraftsBody": "வரைவுகளுக்கு இன்னும் எண் இல்லை, எனவே எந்த எண்ணும் வீணாகாது. இதைத் திரும்பப் பெற முடியாது. வரைவு அல்லாத தேர்ந்தெடுத்த ஆவணங்கள் அப்படியே இருக்கும்.",
     "deletedDrafts_one": "{{count}} வரைவு நீக்கப்பட்டது",
     "deletedDrafts_other": "{{count}} வரைவுகள் நீக்கப்பட்டன",
-    "someFailed": "{{count}} மாற்ற முடியவில்லை: {{reason}}"
+    "someFailed": "{{count}} மாற்ற முடியவில்லை: {{reason}}",
+    "expandAll": "ஒவ்வொன்றின் கீழுள்ள வரிகளைக் காட்டு",
+    "collapseAll": "ஒவ்வொன்றின் கீழுள்ள வரிகளை மறை",
+    "expandRow_one": "{{label}}-இன் கீழுள்ள {{count}} வரியைக் காட்டு",
+    "expandRow_other": "{{label}}-இன் கீழுள்ள {{count}} வரிகளைக் காட்டு",
+    "collapseRow_one": "{{label}}-இன் கீழுள்ள {{count}} வரியை மறை",
+    "collapseRow_other": "{{label}}-இன் கீழுள்ள {{count}} வரிகளை மறை"
   },
   "toast": {
     "success": "முடிந்தது",
