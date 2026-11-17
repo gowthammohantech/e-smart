@@ -153,6 +153,14 @@ export type Transporter = {
   status: 'active' | 'inactive';
 };
 
+/** A business's own name for other charges, offered beside the built-in kinds on its documents only. */
+export type ChargeName = {
+  id: string;
+  companyId: string;
+  name: string;
+  status: 'active' | 'inactive';
+};
+
 export type GstRegistrationType = 'regular' | 'composition' | 'unregistered' | 'sez' | 'overseas';
 
 /** Udyam category of an MSME supplier: their bills must be paid within 45 days (MSMED Act s.15). */
@@ -477,6 +485,8 @@ export type BusinessDocument = {
   charges: Money;
   /** What the charges are for (freight, packing…); unset reads as other charges. */
   chargesKind?: ChargesKind;
+  /** The business's own name for the charges (one of its charge names), printed in place of the kind's. Null clears it. */
+  chargesLabel?: string | null;
   applyRoundOff: boolean;
   /**
    * A round-off typed by the user (may be negative). Absent means the

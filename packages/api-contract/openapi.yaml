@@ -1294,6 +1294,62 @@ paths:
       responses:
         '204': { description: Removed }
         '409': { $ref: '#/components/responses/Conflict' }
+  /companies/{companyId}/charge-names:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Settings]
+      operationId: listChargeNames
+      description: "The business's own names for other charges, A to Z, hidden ones too (status inactive). The built-in kinds (freight, packing, insurance, handling, loading, other) are not listed."
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/ChargeName' } }
+    post:
+      tags: [Settings]
+      operationId: createChargeName
+      description: 'Adds a name for other charges to this business only. One of each name per business, whatever its case: 422 CHARGE_NAME_EXISTS.'
+      x-roles: [owner, admin, accountant, sales]
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChargeName' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChargeName' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+  /companies/{companyId}/charge-names/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    put:
+      tags: [Settings]
+      operationId: saveChargeName
+      description: "Renames or hides (status inactive) a charge name. Documents keep the name they printed (chargesLabel)."
+      x-roles: [owner, admin, accountant]
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChargeName' }
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChargeName' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
   /companies/{companyId}/exchange-rates/refresh:
     parameters: [{ $ref: '#/components/parameters/CompanyId' }]
     post:
@@ -7202,6 +7258,16 @@ components:
             transporterId: { type: string, description: 15-character GSTIN or TRANSIN }
             phone: { type: string }
             status: { type: string, enum: [active, inactive] }
+    ChargeName:
+      allOf:
+        - $ref: '#/components/schemas/Versioned'
+        - type: object
+          required: [name]
+          properties:
+            id: { type: string, readOnly: true }
+            companyId: { type: string, readOnly: true }
+            name: { type: string, minLength: 1, maxLength: 60, description: "What the charges are called on this business's documents: Courier charges, say" }
+            status: { type: string, enum: [active, inactive] }
     TransportMode: { type: string, enum: [road, rail, air, ship] }
     VehicleType: { type: string, enum: [regular, overDimensional] }
     ComplianceSettings:
@@ -7960,6 +8026,7 @@ components:
         documentDiscountValue: { type: number }
         charges: { $ref: '#/components/schemas/Money' }
         chargesKind: { type: string, enum: [freight, packing, insurance, handling, loading, other], description: 'What the charges are for; printed as their name on the document. Unset is other charges.' }
+        chargesLabel: { type: [string, 'null'], maxLength: 60, description: "The business's own name for its charges (one of its charge names), printed in place of chargesKind's. Kept as it was when chosen. null clears it." }
         applyRoundOff: { type: boolean }
         roundOffManual: { allOf: [{ $ref: '#/components/schemas/Money' }], description: A round-off the user typed; overrides the automatic one when applyRoundOff is true }
         notes: { type: string }

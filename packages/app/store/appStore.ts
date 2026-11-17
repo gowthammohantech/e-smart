@@ -273,6 +273,7 @@ export type NewDocumentInput = {
   documentDiscountValue?: number;
   charges?: Money;
   chargesKind?: BusinessDocument['chargesKind'];
+  chargesLabel?: BusinessDocument['chargesLabel'];
   shipTo?: BusinessDocument['shipTo'];
   applyRoundOff?: boolean;
   roundOffManual?: Money;
@@ -795,6 +796,7 @@ export const useAppStore = create<AppState>()(
             documentDiscountValue: draft.documentDiscountValue ?? 0,
             charges: draft.charges ?? zero(draft.currency),
             chargesKind: draft.chargesKind,
+            chargesLabel: draft.chargesLabel,
             shipTo: draft.shipTo,
             applyRoundOff: draft.applyRoundOff ?? draft.currency === 'INR',
             roundOffManual: draft.roundOffManual,
@@ -933,6 +935,7 @@ export const useAppStore = create<AppState>()(
             documentDiscountValue: src.documentDiscountValue,
             charges: src.charges,
             chargesKind: src.chargesKind,
+            chargesLabel: src.chargesLabel,
             shipTo: src.shipTo,
             applyRoundOff: src.applyRoundOff,
             roundOffManual: src.roundOffManual,
@@ -976,6 +979,7 @@ export const useAppStore = create<AppState>()(
             documentDiscountValue: src.documentDiscountValue,
             charges: src.charges,
             chargesKind: src.chargesKind,
+            chargesLabel: src.chargesLabel,
             shipTo: src.shipTo,
             applyRoundOff: src.applyRoundOff,
             roundOffManual: src.roundOffManual,

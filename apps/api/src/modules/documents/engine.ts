@@ -161,6 +161,8 @@ export type DocFields = {
   chargesMinor: number;
   /** What the charges are for; null is other charges. */
   chargesKind: ChargesKind | null;
+  /** The business's own name for the charges, as printed. */
+  chargesLabel: string | null;
   /** The consignee, when the goods go somewhere other than the buyer's own address. */
   shipTo: ShipTo | null;
   chargesCurrency?: string;
@@ -260,6 +262,8 @@ export function fieldsFromWire(body: Schema<'NewDocumentInput'>, base?: DocRow):
     documentDiscountValue: body.documentDiscountValue ?? (base ? Number(base.documentDiscountValue) : 0),
     chargesMinor: body.charges?.minor ?? base?.chargesMinor ?? 0,
     chargesKind: keep(body.chargesKind, base?.chargesKind as ChargesKind | null | undefined),
+    // Trimmed; blank reads as none, so the kind's own name prints.
+    chargesLabel: keep(body.chargesLabel === undefined ? undefined : body.chargesLabel?.trim() || null, base?.chargesLabel),
     // Another party ships to its own address unless told otherwise.
     shipTo: keep(body.shipTo === undefined ? undefined : cleanShipTo(body.shipTo), base && base.partyId !== body.partyId ? null : (base?.shipTo as ShipTo | null | undefined)),
     chargesCurrency: body.charges?.currency,
@@ -315,6 +319,7 @@ export function fieldsFromRow(row: DocRow): DocFields {
     documentDiscountValue: Number(row.documentDiscountValue),
     chargesMinor: row.chargesMinor,
     chargesKind: row.chargesKind as ChargesKind | null,
+    chargesLabel: row.chargesLabel,
     shipTo: (row.shipTo as ShipTo | null) ?? null,
     applyRoundOff: row.applyRoundOff,
     roundOffManualMinor: row.roundOffManualMinor,
@@ -716,6 +721,7 @@ export async function prepareDocument(
       chargesMinor: f.chargesMinor,
       // Named only when there is something charged.
       chargesKind: f.chargesMinor ? f.chargesKind : null,
+      chargesLabel: f.chargesMinor ? f.chargesLabel : null,
       shipTo: f.shipTo,
       applyRoundOff,
       roundOffManualMinor: f.roundOffManualMinor,

@@ -817,7 +817,7 @@ ${url}`;
       <Card style={{ marginTop: desktop ? 0 : t.spacing.md }}>
         <TotalsPanel
           totals={doc.totals}
-          chargesLabel={doc.chargesKind ? tr(`sales:editor.chargesKind.${doc.chargesKind}` as 'sales:editor.chargesKind.other') : undefined}
+          chargesLabel={doc.chargesLabel || (doc.chargesKind ? tr(`sales:editor.chargesKind.${doc.chargesKind}` as 'sales:editor.chargesKind.other') : undefined)}
           currency={doc.currency}
           baseCurrency={baseCurrency}
           exchangeRate={doc.exchangeRate}

@@ -921,6 +921,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/{companyId}/charge-names": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /** @description The business's own names for other charges, A to Z, hidden ones too (status inactive). The built-in kinds (freight, packing, insurance, handling, loading, other) are not listed. */
+        get: operations["listChargeNames"];
+        put?: never;
+        /** @description Adds a name for other charges to this business only. One of each name per business, whatever its case: 422 CHARGE_NAME_EXISTS. */
+        post: operations["createChargeName"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/charge-names/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Renames or hides (status inactive) a charge name. Documents keep the name they printed (chargesLabel). */
+        put: operations["saveChargeName"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/{companyId}/exchange-rates/refresh": {
         parameters: {
             query?: never;
@@ -5162,6 +5202,14 @@ export interface components {
             /** @enum {string} */
             status?: "active" | "inactive";
         };
+        ChargeName: components["schemas"]["Versioned"] & {
+            readonly id?: string;
+            readonly companyId?: string;
+            /** @description What the charges are called on this business's documents: Courier charges, say */
+            name: string;
+            /** @enum {string} */
+            status?: "active" | "inactive";
+        };
         /** @enum {string} */
         TransportMode: "road" | "rail" | "air" | "ship";
         /** @enum {string} */
@@ -6004,6 +6052,8 @@ export interface components {
              * @enum {string}
              */
             chargesKind?: "freight" | "packing" | "insurance" | "handling" | "loading" | "other";
+            /** @description The business's own name for its charges (one of its charge names), printed in place of chargesKind's. Kept as it was when chosen. null clears it. */
+            chargesLabel?: string | null;
             applyRoundOff?: boolean;
             /** @description A round-off the user typed; overrides the automatic one when applyRoundOff is true */
             roundOffManual?: components["schemas"]["Money"];
@@ -9478,6 +9528,91 @@ export interface operations {
                 content?: never;
             };
             409: components["responses"]["Conflict"];
+        };
+    };
+    listChargeNames: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data?: components["schemas"]["ChargeName"][];
+                    };
+                };
+            };
+        };
+    };
+    createChargeName: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChargeName"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChargeName"];
+                };
+            };
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    saveChargeName: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description ETag from the last read */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChargeName"];
+            };
+        };
+        responses: {
+            /** @description Saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChargeName"];
+                };
+            };
+            412: components["responses"]["PreconditionFailed"];
+            422: components["responses"]["Unprocessable"];
         };
     };
     refreshExchangeRates: {

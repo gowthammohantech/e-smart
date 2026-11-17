@@ -58,6 +58,7 @@ import {
 import { hasVehicles, saleTdsOnPlan } from '@esmart/core/domain/plan';
 import { PartyPickerBox } from '../contacts/PartyPickerBox';
 import { useCostCentres } from '../../store/books';
+import { addChargeName, useChargeNames } from '../../remote/chargeNames';
 import {
   DraftState,
   blankLine,
@@ -442,8 +443,23 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   const [creditOnEdit, setCreditOnEdit] = useState(false);
   const [chargesText, setChargesText] = useState(String(toMajor(draft.charges) || ''));
   const [chargesKindOpen, setChargesKindOpen] = useState(false);
-  // Goods that go out: where they go when not to the buyer's own address (the consignee).
-  const chargesLabel = tr(`sales:editor.chargesKind.${draft.chargesKind ?? 'other'}` as 'sales:editor.chargesKind.other');
+  // What the charges are called: the business's own name for them, else the built-in kind's.
+  const chargesLabel = draft.chargesLabel || tr(`sales:editor.chargesKind.${draft.chargesKind ?? 'other'}` as 'sales:editor.chargesKind.other');
+  // The business's own charge names, fetched once the list is opened; hidden ones aren't offered.
+  const chargeNames = useChargeNames(chargesKindOpen || !!draft.chargesLabel).data ?? [];
+  const pickChargeName = (name: string) => patch({ chargesKind: 'other', chargesLabel: name });
+  // A name typed into the list: one the business already has (whatever its case) is used, else it is added to its list.
+  const addCharge = async (typed: string) => {
+    const name = typed.trim().replace(/\s+/g, ' ');
+    if (!name) return;
+    const known = chargeNames.find((n) => n.name.toLowerCase() === name.toLowerCase());
+    if (known) return pickChargeName(known.name);
+    try {
+      pickChargeName((await addChargeName(name)).name);
+    } catch (e) {
+      toast.show(e instanceof Error ? e.message : String(e), 'error');
+    }
+  };
   const [discountText, setDiscountText] = useState(String(draft.documentDiscountValue || ''));
   const [roundOffText, setRoundOffText] = useState(
     draft.roundOffManual ? String(toMajor(draft.roundOffManual)) : '',
@@ -742,6 +758,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       charges: draft.charges,
       // Named only when something is charged.
       chargesKind: draft.charges.minor ? (draft.chargesKind ?? 'other') : undefined,
+      // Null clears a name chosen before, when a built-in kind names them again.
+      chargesLabel: draft.charges.minor ? (draft.chargesLabel ?? null) : undefined,
       applyRoundOff: draft.applyRoundOff,
       roundOffManual: draft.applyRoundOff ? draft.roundOffManual : undefined,
       notes: draft.notes || undefined,
@@ -2034,10 +2052,18 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           visible={chargesKindOpen}
           onClose={() => setChargesKindOpen(false)}
           title={tr('sales:editor.chargesFor')}
-          options={CHARGES_KINDS.map((k) => ({ value: k, label: tr(`sales:editor.chargesKind.${k}` as 'sales:editor.chargesKind.other') }))}
-          value={draft.chargesKind ?? 'other'}
-          onSelect={(k) => patch({ chargesKind: k as ChargesKind })}
-          searchable={false}
+          // The built-in kinds, the same for every business, then this business's own names.
+          options={[
+            ...CHARGES_KINDS.map((k) => ({ value: `kind:${k}`, label: tr(`sales:editor.chargesKind.${k}` as 'sales:editor.chargesKind.other') })),
+            ...chargeNames.filter((n) => n.status !== 'inactive' || n.name === draft.chargesLabel).map((n) => ({ value: `name:${n.name}`, label: n.name, icon: 'tag-outline' as const })),
+            // A name the document carries that the list no longer has (renamed since): kept as it is.
+            ...(draft.chargesLabel && !chargeNames.some((n) => n.name === draft.chargesLabel) ? [{ value: `name:${draft.chargesLabel}`, label: draft.chargesLabel, icon: 'tag-outline' as const }] : []),
+          ]}
+          value={draft.chargesLabel ? `name:${draft.chargesLabel}` : `kind:${draft.chargesKind ?? 'other'}`}
+          onSelect={(v) => (v.startsWith('name:') ? pickChargeName(v.slice(5)) : patch({ chargesKind: v.slice(5) as ChargesKind, chargesLabel: null }))}
+          searchPlaceholder={tr('sales:editor.chargesSearch')}
+          onCreate={(typed) => void addCharge(typed)}
+          createLabel={(typed) => tr('sales:editor.chargesAdd', { name: typed.trim() })}
         />
 
         <LineEditorSheet

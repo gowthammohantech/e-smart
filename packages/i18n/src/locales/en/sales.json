@@ -172,6 +172,8 @@
     },
     "dateKept": "An issued invoice keeps its date. To date it otherwise, cancel it and issue a new one.",
     "chargesFor": "Charges for",
+    "chargesSearch": "Search, or type a new name",
+    "chargesAdd": "Add “{{name}}” as a charge name",
     "chargesKind": {
       "freight": "Freight charges",
       "packing": "Packing and forwarding",
