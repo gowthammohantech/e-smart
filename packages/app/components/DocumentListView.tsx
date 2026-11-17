@@ -32,6 +32,7 @@ import { api } from '../remote/api';
 import { describeError } from '../remote/errors';
 import { useBaseCurrency } from '../store/selectors';
 import { useDocumentPages, useDocumentSummary, usePartyRecord, type DocumentQuery } from '../remote/queries';
+import { PartyFilterChip } from './PartyFilterChip';
 import { useDebounced } from './useDebounced';
 import { pagedTableProps, useRowsExport, useTableSelection } from './pagedTable';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
@@ -158,37 +159,7 @@ export function DocumentListView({
   // Opened from a contact (?party=…): the filter names who it is, and can be taken off.
   const filterParty = usePartyRecord(filters.partyId ?? undefined).data;
   const purchaseKind = PURCHASE_KINDS.includes(kind);
-  const partyChip = filters.partyId ? (
-    <Pressable
-      onPress={() => setFilters((f) => ({ ...f, partyId: null }))}
-      accessibilityRole="button"
-      accessibilityLabel={tr('common:documentList.clearPartyNamed', { name: filterParty?.name ?? '' })}
-      hitSlop={{ top: 4, bottom: 4 }}
-      style={{
-        height: 36,
-        flexDirection: 'row',
-        alignItems: 'center',
-        alignSelf: 'flex-start',
-        gap: 6,
-        paddingHorizontal: t.spacing.md,
-        borderRadius: t.radius.pill,
-        backgroundColor: t.c.chip,
-        borderWidth: 1,
-        borderColor: t.c.primary,
-      }}
-    >
-      <Icon name={purchaseKind ? 'truck-outline' : 'account-outline'} size={15} color={t.c.primary} />
-      {filterParty ? (
-        <Text variant="caption" weight="600" tone="primary" numberOfLines={1} style={{ maxWidth: 220 }}>
-          {tr(purchaseKind ? 'common:documentList.supplierFilter' : 'common:documentList.customerFilter', { name: filterParty.name })}
-        </Text>
-      ) : (
-        // The contact is still on its way: a bar, not "Customer: …".
-        <Skeleton height={10} width={110} radius={4} />
-      )}
-      <Icon name="close" size={15} color={t.c.primary} />
-    </Pressable>
-  ) : null;
+  const partyChip = filters.partyId ? <PartyFilterChip partyId={filters.partyId} supplier={purchaseKind} onClear={() => setFilters((f) => ({ ...f, partyId: null }))} /> : null;
   const failedState = (
     <EmptyState
       icon="cloud-off-outline"

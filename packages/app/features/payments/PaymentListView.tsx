@@ -29,6 +29,7 @@ import { presetParam, useQueryParams } from '../../navigation/queryParams';
 import { CardRowsSkeleton, MoreRowsSkeleton } from '../../components/ScreenSkeleton';
 import { Skeleton } from '@esmart/ui/components/Skeleton';
 import { BranchFilterMenu, BranchPickerChip, useListBranch } from '../../components/branchFilter';
+import { PartyFilterChip } from '../../components/PartyFilterChip';
 
 /**
  * Payments one way, as a searchable list. `advance`: just the advance receipts (money received for
@@ -51,12 +52,15 @@ export function PaymentListView({ direction, advance = false }: { direction: Pay
   const branch = useListBranch(params);
   const setBranch = (value: string) => setParams({ branch: branch.paramFor(value) });
   const desktop = useIsDesktop();
+  // Opened for one contact (?party=…, from their page's See all): only theirs, until the chip is pressed.
+  const partyId = params.party || undefined;
+  const partyChip = <PartyFilterChip partyId={partyId} supplier={direction === 'paid'} onClear={() => setParams({ party: undefined })} />;
 
   // Read from the server 50 at a time; the count and total cover every page.
   const filter = useMemo(() => {
     const r = range === 'all' ? undefined : resolveRange(range);
-    return { direction, from: r?.from, to: r?.to, q: search, branchId: branch.branchId, advance };
-  }, [direction, range, search, branch.branchId, advance]);
+    return { direction, from: r?.from, to: r?.to, q: search, branchId: branch.branchId, advance, partyId };
+  }, [direction, range, search, branch.branchId, advance, partyId]);
   const pages = usePaymentPages(filter);
   const summary = usePaymentSummary(filter);
 
@@ -65,7 +69,7 @@ export function PaymentListView({ direction, advance = false }: { direction: Pay
   const count = summary.data?.count ?? filtered.length;
   const total = (summary.data?.total as Money | undefined) ?? zero(baseCurrency);
   // Nothing recorded at all, as against nothing matching the search or range.
-  const noneAtAll = range === 'all' && !search && !branch.overridden && summary.data?.count === 0 && !filtered.length;
+  const noneAtAll = range === 'all' && !search && !branch.overridden && !partyId && summary.data?.count === 0 && !filtered.length;
   const loading = (pages.isLoading || summary.isLoading) && !filtered.length;
   // The count and total wait for the summary, even when rows are in: never "0 payments · ₹0.00".
   const totalsPending = loading || (!summary.data && summary.isLoading);
@@ -177,10 +181,14 @@ export function PaymentListView({ direction, advance = false }: { direction: Pay
             );
           })}
         </ScrollView>
-        <BranchPickerChip branch={branch} onChange={setBranch} />
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm }}>
+          <BranchPickerChip branch={branch} onChange={setBranch} />
+          {partyId ? partyChip : null}
+        </View>
         </>
         )}
         {desktop ? <BranchFilterMenu branch={branch} onChange={setBranch} /> : null}
+        {desktop && partyId ? partyChip : null}
         {desktop ? (
           // How many match and what they add up to, at the right end of the filter row (not ₹0 when it didn't load).
           summary.isError ? null : totalsPending ? (
