@@ -412,6 +412,9 @@ export function AmountField({
   const desktop = useIsDesktop();
 
   const a11y = useFieldA11y({ error, hint, required });
+  // A zero filled in for the user (0, 0.00) reads as the grey placeholder at rest, and is all
+  // selected when the field is entered, so typing replaces it rather than landing after its last 0.
+  const zero = value !== '' && /^-?0*\.?0*$/.test(value);
   return (
     <FieldShell label={label} error={error} hint={hint} required={required} style={containerStyle} messageId={a11y.messageId}>
       <View
@@ -438,7 +441,8 @@ export function AmountField({
         </Text>
         <TextInput
           // Grouped (₹9,374.51) while at rest; the raw figure while typing.
-          value={focused ? value : groupAmountText(value, currency)}
+          value={focused ? value : zero ? '' : groupAmountText(value, currency)}
+          selectTextOnFocus={zero}
           onChangeText={(v) => onChangeValue(sanitizeAmountInput(v, currency, { allowNegative }))}
           // Neither decimal pad has a minus key: iOS needs the punctuation
           // keyboard, Android's numeric keyboard carries the sign.
