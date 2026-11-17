@@ -65,6 +65,27 @@ describe('advance receipts for services', () => {
   });
 });
 
+describe('the advance receipts list', () => {
+  it('lists, counts and totals only the receipts with GST taken on them as a service advance', async () => {
+    const m = await moneySetup(t);
+    await registered(m);
+    const adv = await t.post(
+      `${m.c}/payments`,
+      { direction: 'received', partyId: m.mumbai.id, date: '2026-09-15', amount: inr(118_000), currency: 'INR', method: 'cash', accountId: m.cash.id, advanceTax: { taxCategoryId: m.gst(18), placeOfSupplyStateCode: '27', hsn: '998311' } },
+      { token: m.token },
+    );
+    expect(adv.status).toBe(201);
+    const plain = await t.post(`${m.c}/payments`, { direction: 'received', partyId: m.mumbai.id, date: '2026-09-16', amount: inr(50_000), currency: 'INR', method: 'cash', accountId: m.cash.id }, { token: m.token });
+    expect(plain.status).toBe(201);
+    const all = await t.get(`${m.c}/payments`, { token: m.token, query: { direction: 'received' } });
+    expect(all.body.data.map((p: { id: string }) => p.id).sort()).toEqual([adv.body.id, plain.body.id].sort());
+    const list = await t.get(`${m.c}/payments`, { token: m.token, query: { direction: 'received', advance: 'true' } });
+    expect(list.body.data.map((p: { id: string }) => p.id)).toEqual([adv.body.id]);
+    const summary = await t.get(`${m.c}/payments/summary`, { token: m.token, query: { direction: 'received', advance: 'true' } });
+    expect(summary.body).toEqual({ count: 1, total: inr(118_000) });
+  });
+});
+
 describe('the invoices an advance receipt lists', () => {
   it('lists only the open invoices whose every line is a service', async () => {
     const m = await moneySetup(t);

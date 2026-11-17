@@ -486,9 +486,19 @@
     "advance": "Advance",
     "count_one": "{{count}} payment",
     "count_other": "{{count}} payments",
+    "countAdvances_one": "{{count}} advance receipt",
+    "countAdvances_other": "{{count}} advance receipts",
     "appliedCount_one": "{{count}} applied",
     "appliedCount_other": "{{count}} applied",
-    "emptyBody": "Record one to see it here."
+    "emptyBody": "Record one to see it here.",
+    "searchAdvances": "Search advance receipts",
+    "noneAdvances": "No advance receipts",
+    "emptyBodyAdvances": "Money received in advance for a service, with the GST on it, shows here once recorded.",
+    "recordAdvance": "Record an advance receipt",
+    "gst": "GST",
+    "toAdjustHeader": "To adjust",
+    "toAdjust": "{{amount}} to adjust",
+    "adjusted": "Adjusted"
   },
   "print": {
     "print": "Print",

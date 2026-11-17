@@ -3050,6 +3050,7 @@ paths:
         - { name: partyId, in: query, schema: { type: string } }
         - { name: method, in: query, schema: { $ref: '#/components/schemas/PaymentMethod' } }
         - { name: accountId, in: query, schema: { type: string } }
+        - { name: advance, in: query, description: 'Only advance receipts: money received for services with GST taken on it (advanceTax)', schema: { type: boolean } }
         - { $ref: '#/components/parameters/BranchIdQuery' }
         - { $ref: '#/components/parameters/From' }
         - { $ref: '#/components/parameters/To' }
@@ -3151,6 +3152,7 @@ paths:
         - { name: partyId, in: query, schema: { type: string } }
         - { name: method, in: query, schema: { $ref: '#/components/schemas/PaymentMethod' } }
         - { name: accountId, in: query, schema: { type: string } }
+        - { name: advance, in: query, description: 'Only advance receipts: money received for services with GST taken on it (advanceTax)', schema: { type: boolean } }
         - { name: documentId, in: query, description: Payments allocated to this document, schema: { type: string } }
         - { $ref: '#/components/parameters/BranchIdQuery' }
         - { $ref: '#/components/parameters/From' }

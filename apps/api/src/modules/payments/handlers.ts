@@ -1,4 +1,4 @@
-import { and, eq, exists, gte, ilike, inArray, lte, or, sql, type SQL } from 'drizzle-orm';
+import { and, eq, exists, gte, ilike, inArray, isNotNull, lte, or, sql, type SQL } from 'drizzle-orm';
 import { schema } from '@esmart/db';
 import type { Schema } from '@esmart/api-contract';
 import { RawBody, defineHandlers, type Ctx } from '../../context';
@@ -36,7 +36,7 @@ const inputOf = requestInput;
  * Payments: listPayments, createPayment, getPayment, savePayment,
  * removePayment, getPaymentReceiptPdf.
  */
-type PaymentQuery = Pick<Ctx<'listPayments'>['query'], 'direction' | 'partyId' | 'method' | 'accountId' | 'branchId' | 'from' | 'to' | 'q'> & Partial<Pick<Ctx<'listPayments'>['query'], 'documentId'>>;
+type PaymentQuery = Pick<Ctx<'listPayments'>['query'], 'direction' | 'partyId' | 'method' | 'accountId' | 'branchId' | 'from' | 'to' | 'q'> & Partial<Pick<Ctx<'listPayments'>['query'], 'documentId' | 'advance'>>;
 
 /** The WHERE of a payment list, shared by the list and its summary so the two never disagree. */
 function paymentFilters(ctx: Pick<Ctx<'listPayments'>, 'company' | 'user' | 'db'>, q: PaymentQuery): (SQL | undefined)[] {
@@ -48,6 +48,8 @@ function paymentFilters(ctx: Pick<Ctx<'listPayments'>, 'company' | 'user' | 'db'
   if (q.accountId) filters.push(eq(PAY.accountId, q.accountId));
   if (q.branchId) filters.push(eq(PAY.branchId, q.branchId));
   if (ctx.user.branchIds.length) filters.push(inArray(PAY.branchId, ctx.user.branchIds));
+  // Advance receipts: received for services, with GST taken on them when the money came.
+  if (q.advance) filters.push(isNotNull(PAY.advanceTaxCategoryId));
   if (q.from) filters.push(gte(PAY.date, q.from));
   if (q.to) filters.push(lte(PAY.date, q.to));
   if (q.documentId) {

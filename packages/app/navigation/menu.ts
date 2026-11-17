@@ -95,8 +95,8 @@ export const MENU: MenuSection[] = [
     pages: [
       { key: 'accountsHub', labelKey: 'reports:dash.accounts.open', icon: 'scale-balance', route: '/accounts', group: 'accounts' },
       { key: 'paymentsIn', labelKey: 'nav:title.paymentsReceived', icon: 'cash-plus', route: '/payments/received', group: 'cashFlow', createRoute: '/payments/new?direction=received' },
-      // A receipt opened with the service-advance switch on: GST on it, with SAC, cess and TDS (RULES 8.12).
-      { key: 'advanceReceipt', labelKey: 'nav:title.advanceReceipt', icon: 'cash-fast', route: '/payments/new?direction=received&advance=1', group: 'cashFlow', action: true },
+      // Receipts for services with the GST on them (RULES 8.12); + opens one with the service-advance switch on.
+      { key: 'advanceReceipt', labelKey: 'nav:title.advanceReceipts', icon: 'cash-fast', route: '/payments/advances', group: 'cashFlow', createRoute: '/payments/new?direction=received&advance=1' },
       { key: 'paymentsOut', labelKey: 'nav:title.paymentsMade', icon: 'cash-minus', route: '/payments/made', group: 'cashFlow', createRoute: '/payments/new?direction=paid' },
       { key: 'receipts', labelKey: 'nav:title.receipts', icon: 'receipt', route: '/receipts', group: 'cashFlow', createRoute: '/receipts/new' },
       // The adjustment entry: advances and direct notes applied to open invoices and debit notes (RULES 8.13).

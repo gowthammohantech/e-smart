@@ -486,9 +486,19 @@
     "advance": "முன்பணம்",
     "count_one": "{{count}} கட்டணம்",
     "count_other": "{{count}} கட்டணங்கள்",
+    "countAdvances_one": "{{count}} முன்பண ரசீது",
+    "countAdvances_other": "{{count}} முன்பண ரசீதுகள்",
     "appliedCount_one": "{{count}} ஆவணத்துக்கு ஒதுக்கப்பட்டது",
     "appliedCount_other": "{{count}} ஆவணங்களுக்கு ஒதுக்கப்பட்டது",
-    "emptyBody": "ஒன்றைப் பதிவு செய்தால் இங்கே தெரியும்."
+    "emptyBody": "ஒன்றைப் பதிவு செய்தால் இங்கே தெரியும்.",
+    "searchAdvances": "முன்பண ரசீதுகளைத் தேடு",
+    "noneAdvances": "முன்பண ரசீதுகள் இல்லை",
+    "emptyBodyAdvances": "சேவைக்காக முன்கூட்டியே பெற்ற பணம், அதன் GST உடன், பதிவு செய்ததும் இங்கே தெரியும்.",
+    "recordAdvance": "முன்பண ரசீதைப் பதிவு செய்",
+    "gst": "GST",
+    "toAdjustHeader": "சரிசெய்ய வேண்டியது",
+    "toAdjust": "{{amount}} சரிசெய்ய வேண்டும்",
+    "adjusted": "சரிசெய்யப்பட்டது"
   },
   "print": {
     "print": "அச்சிடு",

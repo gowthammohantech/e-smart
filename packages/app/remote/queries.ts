@@ -278,12 +278,13 @@ export function useServerAccountBalances() {
   return q.data;
 }
 
-export type PaymentQuery = { direction: 'received' | 'paid'; from?: string; to?: string; q?: string; partyId?: string; branchId?: string };
+/** `advance`: only advance receipts, received for services with GST taken on them. */
+export type PaymentQuery = { direction: 'received' | 'paid'; from?: string; to?: string; q?: string; partyId?: string; branchId?: string; advance?: boolean };
 const paymentKeys = {
   all: (companyId: string) => ['payments', companyId] as const,
 };
 function paymentParams(f: PaymentQuery) {
-  return { direction: f.direction, from: f.from || undefined, to: f.to || undefined, q: f.q?.trim() || undefined, partyId: f.partyId || undefined, branchId: f.branchId || undefined };
+  return { direction: f.direction, from: f.from || undefined, to: f.to || undefined, q: f.q?.trim() || undefined, partyId: f.partyId || undefined, branchId: f.branchId || undefined, advance: f.advance || undefined };
 }
 
 /** Payments one way, newest first, 50 at a time. Each row carries its party's name. */

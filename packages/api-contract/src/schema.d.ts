@@ -11956,6 +11956,8 @@ export interface operations {
                 partyId?: string;
                 method?: components["schemas"]["PaymentMethod"];
                 accountId?: string;
+                /** @description Only advance receipts: money received for services with GST taken on it (advanceTax) */
+                advance?: boolean;
                 branchId?: components["parameters"]["BranchIdQuery"];
                 from?: components["parameters"]["From"];
                 to?: components["parameters"]["To"];
@@ -12075,6 +12077,8 @@ export interface operations {
                 partyId?: string;
                 method?: components["schemas"]["PaymentMethod"];
                 accountId?: string;
+                /** @description Only advance receipts: money received for services with GST taken on it (advanceTax) */
+                advance?: boolean;
                 /** @description Payments allocated to this document */
                 documentId?: string;
                 branchId?: components["parameters"]["BranchIdQuery"];
