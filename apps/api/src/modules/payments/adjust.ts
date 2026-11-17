@@ -3,6 +3,7 @@ import { alias } from 'drizzle-orm/pg-core';
 import type { Schema } from '@esmart/api-contract';
 import { PAYABLE_KINDS, RECEIVABLE_KINDS } from '@esmart/core/domain/documentStates';
 import { fifoAllocate } from '@esmart/core/domain/receivables';
+import { inclusiveTax } from '@esmart/core/lib/money';
 import { schema } from '@esmart/db';
 import { defineHandlers, type Ctx } from '../../context';
 import { notFound, unprocessable, type Issue } from '../../http/errors';
@@ -26,6 +27,13 @@ type Side = 'customer' | 'supplier';
 type Allocation = Schema<'AdjustmentAllocation'>;
 type Credit = Schema<'Adjustable'>['credits'][number];
 type Open = Schema<'Adjustable'>['open'][number];
+
+/** On a service advance taxed when received: the GST and cess inside what is left of it, so it can be shown without them. */
+function advanceTaxLeft(p: typeof PAY.$inferSelect, base: string): { leftTax?: { minor: number; currency: string } } {
+  const rate = Number(p.advanceTaxRate ?? 0) + Number(p.advanceCessRate ?? 0);
+  if (!p.advanceTaxCategoryId || p.advanceReverseCharge || !(rate > 0)) return {};
+  return { leftTax: money(inclusiveTax({ minor: p.unallocatedMinor, currency: base }, rate).minor, base) };
+}
 
 /** The party, and which side of it is read: a supplier as one, a party that is both as asked. */
 async function partySide(ctx: AnyCtx, db: DbOrTx, partyId: string, asked?: Side): Promise<{ party: typeof schema.parties.$inferSelect; side: Side }> {
@@ -106,7 +114,7 @@ export async function adjustable(ctx: AnyCtx, db: DbOrTx, partyId: string, side:
     ...[...notes.map((n) => ({ n, left: n.total - n.tds - Number(n.applied) })), ...linkedCredit]
       .filter((x) => x.left > 0)
       .map(({ n, left }) => ({ sourceType: 'note' as const, id: n.id, number: n.number, date: n.date, total: money(n.total - n.tds, base), left: money(left, base) })),
-    ...pays.map((p) => ({ sourceType: 'payment' as const, id: p.id, number: p.number, date: p.date, total: money(p.amountMinor + p.tdsMinor, base), left: money(p.unallocatedMinor, base), advanceTax: !!p.advanceTaxCategoryId })),
+    ...pays.map((p) => ({ sourceType: 'payment' as const, id: p.id, number: p.number, date: p.date, total: money(p.amountMinor + p.tdsMinor, base), left: money(p.unallocatedMinor, base), advanceTax: !!p.advanceTaxCategoryId, ...advanceTaxLeft(p, base) })),
   ].sort((a, b) => a.date.localeCompare(b.date));
   const open: (Open & { outstanding: { minor: number; currency: string } })[] = docs.map((d) => ({
     documentId: d.id,

@@ -209,9 +209,16 @@ export default function AdjustAdvances() {
                           key,
                           c.number,
                           `${tr(c.sourceType === 'note' ? 'books:adjust.note' : side === 'customer' ? 'books:adjust.advance' : 'books:adjust.advancePaid')} · ${formatDate(c.date)}`,
+                          // A service advance reads without the GST inside it; what it settles, GST and all, is below.
                           <View style={{ alignItems: 'flex-end', gap: 2 }}>
-                            <Text variant="small" weight="700">{formatMoney(c.left as Money)}</Text>
-                            {serviceAdvance(c) ? <Badge label={tr('books:adjust.gst')} tone="info" size="sm" /> : null}
+                            <Text variant="small" weight="700">{formatMoney(c.leftTax ? money((c.left as Money).minor - (c.leftTax as Money).minor, (c.left as Money).currency) : (c.left as Money))}</Text>
+                            {c.leftTax ? (
+                              <Text variant="caption" tone="muted">
+                                {tr('books:adjust.withGst', { amount: formatMoney(c.left as Money) })}
+                              </Text>
+                            ) : serviceAdvance(c) ? (
+                              <Badge label={tr('books:adjust.gst')} tone="info" size="sm" />
+                            ) : null}
                           </View>,
                           { selected: creditKey === key, onPress: () => pick(key) },
                         );

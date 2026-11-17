@@ -8423,6 +8423,7 @@ components:
               total: { $ref: '#/components/schemas/Money' }
               left: { $ref: '#/components/schemas/Money' }
               advanceTax: { type: boolean, description: A service advance taxed on receipt }
+              leftTax: { allOf: [{ $ref: '#/components/schemas/Money' }], description: 'On a service advance taxed on receipt: the GST and cess inside what is left of it (left less this is its value without GST)' }
         open:
           type: array
           description: Documents still owed, oldest first

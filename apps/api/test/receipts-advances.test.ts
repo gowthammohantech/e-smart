@@ -118,7 +118,8 @@ describe('the adjustment entry', () => {
 
     const list = await t.get(`${m.c}/payments/adjust`, { token: m.token, query: { partyId: m.mumbai.id } });
     expect(list.status).toBe(200);
-    expect(list.body.credits).toEqual([expect.objectContaining({ sourceType: 'payment', id: adv.body.id, left: inr(1_180_000), advanceTax: true })]);
+    // What is left of it, and the 18% GST inside that: ₹10,000 without GST.
+    expect(list.body.credits).toEqual([expect.objectContaining({ sourceType: 'payment', id: adv.body.id, left: inr(1_180_000), leftTax: inr(180_000), advanceTax: true })]);
     expect(list.body.open).toEqual([expect.objectContaining({ documentId: inv.body.id, outstanding: inr(1_180_000), hasServiceLines: true })]);
 
     const done = await t.post(`${m.c}/payments/adjust`, { partyId: m.mumbai.id }, { token: m.token });

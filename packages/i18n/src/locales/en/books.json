@@ -652,6 +652,7 @@
     "advance": "Advance received",
     "advancePaid": "Advance paid",
     "gst": "GST",
+    "withGst": "Excl. GST · {{amount}} with GST",
     "amount": "Apply",
     "notService": "This invoice has no service on it: GST paid on a service advance should only come back on a service invoice.",
     "autoNotService": "Some open invoices have no service on them; a service advance applied to one takes its GST back on goods. Choose by hand to avoid that.",

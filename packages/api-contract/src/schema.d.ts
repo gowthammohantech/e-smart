@@ -6508,6 +6508,8 @@ export interface components {
                 left: components["schemas"]["Money"];
                 /** @description A service advance taxed on receipt */
                 advanceTax?: boolean;
+                /** @description On a service advance taxed on receipt: the GST and cess inside what is left of it (left less this is its value without GST) */
+                leftTax?: components["schemas"]["Money"];
             }[];
             /** @description Documents still owed, oldest first */
             open: {
