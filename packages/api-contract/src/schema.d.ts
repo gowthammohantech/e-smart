@@ -5257,7 +5257,7 @@ export interface components {
             billingAddress: components["schemas"]["Address"];
             shippingAddress?: components["schemas"]["Address"];
             creditLimit?: components["schemas"]["Money"];
-11            /** @description Over creditLimit an invoice is refused (422 CREDIT_LIMIT_BLOCKED), not only warned about; overrideCreditLimit does not lift it. Once the customer owes more than the limit they are on hold: no new quote, proforma, sales order, delivery note, invoice or debit note is created, converted, moved to them or issued, not even as a draft (422 CREDIT_LIMIT_BLOCKED); receipts, credit notes and returns still are. Unset or false warns. */
+            /** @description Over creditLimit an invoice is refused (422 CREDIT_LIMIT_BLOCKED), not only warned about; overrideCreditLimit does not lift it. Once the customer owes more than the limit they are on hold: no new quote, proforma, sales order, delivery note, invoice or debit note is created, converted, moved to them or issued, not even as a draft (422 CREDIT_LIMIT_BLOCKED); receipts, credit notes and returns still are. Unset or false warns. */
             creditLimitBlocks?: boolean;
             openingBalance: components["schemas"]["Money"];
             /**
