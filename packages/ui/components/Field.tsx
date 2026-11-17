@@ -412,9 +412,12 @@ export function AmountField({
   const desktop = useIsDesktop();
 
   const a11y = useFieldA11y({ error, hint, required });
-  // A zero filled in for the user (0, 0.00) reads as the grey placeholder at rest, and is all
-  // selected when the field is entered, so typing replaces it rather than landing after its last 0.
+  // A zero filled in for the user (0, 0.00) reads as the grey placeholder, at rest and when the
+  // field is entered, until something is typed: the cursor starts in an empty box rather than
+  // after its last 0. A 0 the user types themselves stays.
   const zero = value !== '' && /^-?0*\.?0*$/.test(value);
+  const [hideZero, setHideZero] = useState(false);
+  const shown = focused ? (hideZero && zero ? '' : value) : zero ? '' : groupAmountText(value, currency);
   return (
     <FieldShell label={label} error={error} hint={hint} required={required} style={containerStyle} messageId={a11y.messageId}>
       <View
@@ -441,16 +444,21 @@ export function AmountField({
         </Text>
         <TextInput
           // Grouped (₹9,374.51) while at rest; the raw figure while typing.
-          value={focused ? value : zero ? '' : groupAmountText(value, currency)}
-          selectTextOnFocus={zero}
-          onChangeText={(v) => onChangeValue(sanitizeAmountInput(v, currency, { allowNegative }))}
+          value={shown}
+          onChangeText={(v) => {
+            setHideZero(false);
+            onChangeValue(sanitizeAmountInput(v, currency, { allowNegative }));
+          }}
           // Neither decimal pad has a minus key: iOS needs the punctuation
           // keyboard, Android's numeric keyboard carries the sign.
           keyboardType={allowNegative ? (Platform.OS === 'ios' ? 'numbers-and-punctuation' : 'numeric') : 'decimal-pad'}
           placeholder={placeholder}
           placeholderTextColor={t.c.muted}
           autoFocus={autoFocus}
-          onFocus={() => setFocused(true)}
+          onFocus={() => {
+            setHideZero(zero);
+            setFocused(true);
+          }}
           onBlur={() => setFocused(false)}
           accessibilityLabel={label}
           {...a11y.inputProps}
