@@ -168,8 +168,9 @@ export function statusForOutstanding(
 }
 
 /** Credit a party holds (an advance, a direct note) and a document it still owes, for FIFO matching. */
-export type FifoCredit = { id: string; date: string; left: number; currency?: string };
-export type FifoOpen = { id: string; date: string; outstanding: number; currency?: string };
+/** `serviceAdvance`: GST was paid on it as a service advance, so it goes only on a document whose every line is a service (`servicesOnly`). */
+export type FifoCredit = { id: string; date: string; left: number; currency?: string; serviceAdvance?: boolean };
+export type FifoOpen = { id: string; date: string; outstanding: number; currency?: string; servicesOnly?: boolean };
 export type FifoMatch = { creditId: string; documentId: string; amount: number };
 
 /**
@@ -190,6 +191,7 @@ export function fifoAllocate(credits: FifoCredit[], open: FifoOpen[]): FifoMatch
       for (const d of docs) {
         if (remaining <= 0) break;
         if (c.currency && d.currency && c.currency !== d.currency) continue;
+        if (c.serviceAdvance && !d.servicesOnly) continue;
         const take = Math.min(remaining, left.get(d.id) ?? 0);
         if (take <= 0) continue;
         out.push({ creditId: c.id, documentId: d.id, amount: take });
@@ -251,6 +253,21 @@ export type CreditCheck = {
   limit: Money;
   exceeds: boolean;
 };
+
+/**
+ * What a customer on credit hold can't be given: anything that sells to them or adds to what they
+ * owe. Receipts, credit notes and returns bring it down, and an opening invoice is history, so those go on.
+ */
+export const CREDIT_HOLD_KINDS: BusinessDocument['kind'][] = ['quote', 'proforma', 'salesOrder', 'delivery', 'invoice', 'debitNote'];
+
+/**
+ * On credit hold: the customer's limit blocks (not only warns) and they already owe more than it,
+ * `owedMinor` in the limit's currency. Then no new document of `CREDIT_HOLD_KINDS` goes to them.
+ */
+export function onCreditHold(party: { creditLimit?: Money; creditLimitBlocks?: boolean } | undefined, owedMinor: number): boolean {
+  const limit = party?.creditLimit?.minor ?? 0;
+  return !!party?.creditLimitBlocks && limit > 0 && owedMinor > limit;
+}
 
 /**
  * Would a new invoice take the party past its credit limit? Everything is

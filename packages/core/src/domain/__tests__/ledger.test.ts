@@ -1,4 +1,4 @@
-import { allocateAdvances, applyOpening, availableAdvance, buildOutstanding, bucketFor, checkCreditLimit, outstandingOf, summarizeAging } from '../receivables';
+import { allocateAdvances, applyOpening, availableAdvance, buildOutstanding, bucketFor, checkCreditLimit, fifoAllocate, outstandingOf, summarizeAging } from '../receivables';
 import { canTransition } from '../documentStates';
 import { ledgerFor, signedQuantity, stockMapOn, stockOnHand, stockShortfalls } from '../stockLedger';
 import { resolveRate, settlementGainLoss } from '../fx';
@@ -327,6 +327,25 @@ describe('advance adjustment', () => {
 
   it('sums the advance a party holds', () => {
     expect(availableAdvance([advance('100'), advance('250'), payment('inv1', '50')], 'INR').minor).toBe(35000);
+  });
+});
+
+describe('fifo allocation', () => {
+  it('puts a service advance only on a document whose every line is a service, other credit anywhere', () => {
+    const matches = fifoAllocate(
+      [
+        { id: 'pay:svc', date: '2026-09-01', left: 500, serviceAdvance: true },
+        { id: 'note:cn', date: '2026-09-02', left: 300 },
+      ],
+      [
+        { id: 'goods', date: '2026-09-05', outstanding: 400 },
+        { id: 'services', date: '2026-09-06', outstanding: 200, servicesOnly: true },
+      ],
+    );
+    expect(matches).toEqual([
+      { creditId: 'pay:svc', documentId: 'services', amount: 200 },
+      { creditId: 'note:cn', documentId: 'goods', amount: 300 },
+    ]);
   });
 });
 

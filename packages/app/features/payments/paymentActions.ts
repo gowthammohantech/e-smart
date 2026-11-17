@@ -58,10 +58,15 @@ export function usePaymentActions(payment: Payment | undefined) {
     adjust.run(async () => {
       // On the server: notes too, and a service advance's GST.
       try {
-        const applied = await adjustAdvancesFor(payment.partyId, payment.direction, undefined);
+        const { totals, applied } = await adjustAdvancesFor(payment.partyId, payment.direction, undefined);
+        // A service advance goes only on an invoice whose every line is a service: none open, none of it moved.
+        if (payment.advanceTax && !applied.some((a) => a.sourceType === 'payment' && a.sourceId === payment.id)) {
+          toast.show(tr('sales:payment.advanceNoServiceInvoice'), 'error');
+          return;
+        }
         toast.show(
-          applied.length ? tr('sales:payment.advanceAdjusted', { amount: applied.map((m) => formatMoney(m)).join(', ') }) : tr('sales:payment.advanceNothingToAdjust'),
-          applied.length ? 'success' : 'info',
+          totals.length ? tr('sales:payment.advanceAdjusted', { amount: totals.map((m) => formatMoney(m)).join(', ') }) : tr('sales:payment.advanceNothingToAdjust'),
+          totals.length ? 'success' : 'info',
         );
       } catch (err) {
         toast.show(describeError(err, tr), 'error');

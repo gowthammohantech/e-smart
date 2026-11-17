@@ -7,6 +7,7 @@ type ExpenseCategoryRow = typeof schema.expenseCategories.$inferSelect;
 type AccountRow = typeof schema.paymentAccounts.$inferSelect;
 type RateRow = typeof schema.exchangeRates.$inferSelect;
 type TransporterRow = typeof schema.transporters.$inferSelect;
+type ChargeNameRow = typeof schema.chargeNames.$inferSelect;
 type SeriesRow = typeof schema.numberingSeries.$inferSelect;
 
 /** `history` is the rates it had before its current one (`taxHistories`), so a form can charge as of any date. */
@@ -70,6 +71,10 @@ export function exchangeRateToWire(row: RateRow): Schema<'ExchangeRate'> {
 
 export function transporterToWire(row: TransporterRow): Schema<'Transporter'> {
   return compact({ id: row.id, companyId: row.companyId, name: row.name, transporterId: row.transporterId, phone: row.phone, status: row.status, ...versioned(row) });
+}
+
+export function chargeNameToWire(row: ChargeNameRow): Schema<'ChargeName'> {
+  return compact({ id: row.id, companyId: row.companyId, name: row.name, status: row.status, ...versioned(row) });
 }
 
 export function seriesToWire(row: SeriesRow): Schema<'NumberingSeries'> {

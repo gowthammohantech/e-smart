@@ -1,4 +1,4 @@
-import { and, arrayContains, arrayOverlaps, asc, desc, eq, exists, getTableColumns, gte, ilike, inArray, lte, ne, notInArray, or, sql, type SQL } from 'drizzle-orm';
+import { and, arrayContains, arrayOverlaps, asc, desc, eq, exists, getTableColumns, gte, ilike, inArray, lte, ne, notExists, notInArray, or, sql, type SQL } from 'drizzle-orm';
 import { decide, needsApproval, notifyDecision, pendingApprovals, sendForApproval, type Approval } from './approvals';
 import { MERGE_CONVERSIONS, NOTE_SOURCE, PAYABLE_KINDS, SALES_KINDS, canCancel, canMerge, canTransition, conversionBlock, isFinalized, isPayableDocument, nextStatuses } from '@esmart/core/domain/documentStates';
 import { hasModule } from '@esmart/core/domain/plan';
@@ -42,6 +42,7 @@ import {
   EDIT_BLOCK_MESSAGES,
   FINAL_STATUS,
   canEditLatest,
+  checkCreditHold,
   checkCreditLimit,
   effectiveStatus,
   effectiveStatusSql,
@@ -221,8 +222,9 @@ async function editLatestInvoice(ctx: AnyCtx, tx: DbOrTx, current: DocRow, body:
   }
   await writeLines(tx, current.id, prepared);
   // An edit that raises what the customer owes is held to their credit limit, as issuing it was.
-  if (!body.overrideCreditLimit && (updated.grandTotalMinor > current.grandTotalMinor || updated.partyId !== current.partyId)) {
-    await checkCreditLimit(tx, updated, ctx.now, { counted: true });
+  if (updated.partyId !== current.partyId) await checkCreditHold(tx, updated, ctx.now);
+  if (updated.grandTotalMinor > current.grandTotalMinor || updated.partyId !== current.partyId) {
+    await checkCreditLimit(tx, updated, ctx.now, { counted: true, override: body.overrideCreditLimit });
   }
   await postStock(tx, ctx.company, updated, ctx.user.id);
   // Nothing is allocated to it (or it couldn't be edited); the due date may have moved its status.
@@ -275,6 +277,8 @@ export async function insertDocument(
   if (!branchVisible(ctx.user, prepared.columns.branchId)) throw invalid('branchId', 'You cannot create documents in this branch');
   const draftStatus = requestedStatus(f.kind, 'draft') as DocStatus;
   const row = await ctx.db.transaction(async (tx) => {
+    // A customer on credit hold isn't given a new sale, not even a draft (made, converted, copied or recurring).
+    await checkCreditHold(tx, { companyId: ctx.company.id, kind: f.kind, partyId: prepared.columns.partyId }, ctx.now);
     const [created] = await tx
       .insert(D)
       .values({
@@ -415,6 +419,7 @@ function frozenChanges(row: DocRow, body: Schema<'NewDocumentInput'>, stored: Li
   cmp('documentDiscountValue', body.documentDiscountValue, Number(row.documentDiscountValue));
   cmp('charges', body.charges?.minor, row.chargesMinor);
   cmp('chargesKind', body.chargesKind, row.chargesKind ?? undefined);
+  cmp('chargesLabel', body.chargesLabel === undefined ? undefined : body.chargesLabel?.trim() || null, row.chargesLabel ?? null);
   cmp('shipTo', body.shipTo === undefined ? undefined : stableJson(body.shipTo ?? null), stableJson(row.shipTo ?? null));
   cmp('applyRoundOff', body.applyRoundOff, row.applyRoundOff);
   cmp('roundOffManual', body.roundOffManual?.minor, row.roundOffManualMinor);
@@ -487,7 +492,7 @@ async function eInvoiceGenerated(db: DbOrTx, documentId: string): Promise<boolea
  */
 const splitList = <T extends string>(v: T[] | undefined) => (v ?? []).flatMap((x) => String(x).split(',')).filter(Boolean) as T[];
 
-type ListQuery = Pick<Ctx<'listDocuments'>['query'], 'kind' | 'status' | 'partyId' | 'branchId' | 'from' | 'to' | 'q'> & Partial<Pick<Ctx<'listDocuments'>['query'], 'sourceDocumentId' | 'outstanding' | 'overdue' | 'eInvoiceStatus' | 'recurring'>>;
+type ListQuery = Pick<Ctx<'listDocuments'>['query'], 'kind' | 'status' | 'partyId' | 'branchId' | 'from' | 'to' | 'q'> & Partial<Pick<Ctx<'listDocuments'>['query'], 'sourceDocumentId' | 'outstanding' | 'servicesOnly' | 'overdue' | 'eInvoiceStatus' | 'recurring'>>;
 
 /** The WHERE of a document list, shared by the list and its summary so the two never disagree. */
 function listFilters(ctx: Pick<Ctx<'listDocuments'>, 'company' | 'user' | 'db' | 'now'>, q: ListQuery): (SQL | undefined)[] {
@@ -511,6 +516,14 @@ function listFilters(ctx: Pick<Ctx<'listDocuments'>, 'company' | 'user' | 'db' |
   if (q.outstanding !== undefined) {
     const open = and(inArray(D.kind, PAYABLE_KINDS), notInArray(D.status, ['draft', 'cancelled']), sql`${D.grandTotalMinor} > ${D.amountPaidMinor}`);
     filters.push(q.outstanding ? open : sql`not (${open})`);
+  }
+  if (q.servicesOnly) {
+    // A service line: an item that is a service, or a SAC (99…) on the line. Lines, and every one a service.
+    const L = schema.documentLines;
+    const I = schema.items;
+    const service = or(eq(I.type, 'service'), sql`${L.hsnCode} like '99%'`);
+    const lines = (where: SQL | undefined) => ctx.db.select({ one: sql`1` }).from(L).leftJoin(I, eq(I.id, L.itemId)).where(and(eq(L.documentId, D.id), where));
+    filters.push(exists(lines(service)), notExists(lines(sql`not coalesce(${service}, false)`)));
   }
   if (q.overdue !== undefined) filters.push(q.overdue ? sql`${effectiveStatusSql(asOf)} = 'overdue'` : sql`${effectiveStatusSql(asOf)} <> 'overdue'`);
   if (q.eInvoiceStatus) {
@@ -788,6 +801,8 @@ export const documentsHandlers = defineHandlers({
         if (body.kind !== current.kind) throw invalid('kind', 'A document cannot change kind; convert it instead');
         const prepared = await prepareDocument(tx, ctx.company, fieldsFromWire(body, current), linesFromWire(body.lines), { snapshotRates: true, documentId: current.id });
         if (!branchVisible(ctx.user, prepared.columns.branchId)) throw invalid('branchId', 'You cannot move documents to this branch');
+        // A draft moved to a customer on credit hold: as if it were made for them.
+        if (prepared.columns.partyId !== current.partyId) await checkCreditHold(tx, { companyId: ctx.company.id, kind: current.kind, partyId: prepared.columns.partyId }, ctx.now);
         // An approval is for the amount approved: a draft that changes it, or its party, asks again when issued.
         const reapprove =
           (current.approval as Approval | null)?.status === 'approved' &&

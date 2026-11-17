@@ -1,4 +1,4 @@
-import { profitSnapshot, summarizeTax } from '../reports';
+import { profitSnapshot, summarizeDocuments, summarizeTax } from '../reports';
 import { consolidateB2cs, type Gstr1Row } from '../gstr1';
 import { BusinessDocument, DocumentKind, Expense, Item } from '../../types';
 import { fromMajor, money, zero } from '../../lib/money';
@@ -77,6 +77,31 @@ const expense = (over: Partial<Expense> = {}): Expense => ({
   createdBy: 'u',
   createdAt: '2026-10-12T00:00:00.000Z',
   ...over,
+});
+
+describe('sales summary', () => {
+  it('lists the period’s credit notes, debit notes and returns beside the invoices, outside their totals', () => {
+    const s = summarizeDocuments(
+      [
+        doc('inv', 'invoice', '1000'),
+        doc('cn', 'creditNote', '200', { sourceDocumentId: 'inv' }),
+        doc('dn', 'debitNote', '50', { sourceDocumentId: 'inv' }),
+        doc('sr', 'salesReturn', '100', { sourceDocumentId: 'inv' }),
+        doc('sr2', 'salesReturn', '100', { sourceDocumentId: 'inv', status: 'requested' }), // not yet a return
+        doc('cn2', 'creditNote', '10', { date: '2026-11-02' }), // after the period
+      ],
+      [],
+      [],
+      {},
+      'INR',
+      { range },
+    );
+    expect(s.documents.map((d) => d.id)).toEqual(['inv']);
+    expect(s.notes.map((d) => d.id)).toEqual(['cn', 'dn', 'sr']);
+    // The totals stay what was invoiced.
+    expect(s.count).toBe(1);
+    expect(s.taxable.minor).toBe(100000);
+  });
 });
 
 describe('tax summary', () => {

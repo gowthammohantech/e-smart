@@ -81,6 +81,9 @@
     "itemOutOfStockBlocked": "{{name}} is out of stock at this branch. Add stock, or turn on “Allow negative stock” in company settings.",
     "creditLimitTitle": "Credit limit exceeded",
     "creditLimitExceeded": "{{party}} has a credit limit of {{limit}}. With this invoice they would owe {{exposure}}.",
+    "creditLimitBlocked": "{{party}} has a credit limit of {{limit}}, and invoices over it are blocked. With this invoice they would owe {{exposure}}. Take a payment or raise their limit to issue it; you can still save it as a draft.",
+    "creditHold": "{{party}} owes {{owed}}, over their credit limit of {{limit}}, and is on hold: no new invoices, quotes, orders or delivery notes to them until they pay or the limit is raised.",
+    "creditHoldShort": "On credit hold: over their limit",
     "creditLimitProceed": "Continue anyway",
     "returnFrom": "Lines from {{number}}",
     "otherCountry": "Other country (export)",
@@ -169,6 +172,8 @@
     },
     "dateKept": "An issued invoice keeps its date. To date it otherwise, cancel it and issue a new one.",
     "chargesFor": "Charges for",
+    "chargesSearch": "Search, or type a new name",
+    "chargesAdd": "Add “{{name}}” as a charge name",
     "chargesKind": {
       "freight": "Freight charges",
       "packing": "Packing and forwarding",
@@ -176,24 +181,6 @@
       "handling": "Handling charges",
       "loading": "Loading and unloading",
       "other": "Other charges"
-    },
-    "shipTo": {
-      "label": "Ship to a different address",
-      "offHint": "Goods go to the customer at their shipping address (or billing, without one).",
-      "onHint": "Printed as Ship to (consignee) on the document.",
-      "name": "Consignee name",
-      "gstin": "Consignee GSTIN (optional)",
-      "address": "Address",
-      "city": "City",
-      "state": "State",
-      "pin": "PIN"
-    },
-    "transport": {
-      "label": "Transport by",
-      "own": "Own vehicle",
-      "transporter": "Transporter",
-      "pick": "Pick a transporter",
-      "none": "No transporters yet: add them in Settings → Transporters."
     }
   },
   "reimburse": {
@@ -298,7 +285,14 @@
       "undoing": "Undoing the adjustment…",
       "undone": "Adjustment with {{label}} undone"
     },
-    "editIssuedKind": "An issued {{kind, lowercase}} can't be changed. Duplicate it to start again, or cancel it."
+    "editIssuedKind": "An issued {{kind, lowercase}} can't be changed. Duplicate it to start again, or cancel it.",
+    "shipTo": "Ship to",
+    "shipToGstin": "GSTIN {{gstin}}",
+    "shipToFrom": {
+      "consignee": "Consignee named on this document",
+      "shipping": "The customer’s shipping address",
+      "billing": "The customer’s billing address (no shipping address on file)"
+    }
   },
   "line": {
     "editLine": "Edit line",
@@ -371,7 +365,6 @@
     "serviceAdvance": "Advance for services",
     "serviceAdvanceHint": "GST is due on an advance for services when it is received; the invoice raised later takes it back. Advances for goods carry none.",
     "advanceRate": "GST rate",
-    "advanceTaxIs": "GST on the advance: {{tax}}, inside the amount received",
     "applyTo": "Apply to",
     "summary": "Summary",
     "autoAllocateShort": "Auto-allocate",
@@ -393,6 +386,7 @@
     "adjustAdvance": "Adjust",
     "advanceAdjusted": "{{amount}} adjusted from advances",
     "advanceNothingToAdjust": "No advance could be adjusted",
+    "advanceNoServiceInvoice": "No open invoice has only services on it: a service advance is adjusted only against an invoice whose every line is a service.",
     "nothingLeftToApply": "All of it is applied. Increase the amount first",
     "currency": "Currency",
     "insufficientInAccount": "{{account}} has only {{balance}}",
@@ -403,6 +397,10 @@
     "made": "Payment made",
     "openDocuments_one": "{{count}} open document",
     "openDocuments_other": "{{count}} open documents",
+    "openServiceDocuments_one": "{{count}} open service document",
+    "openServiceDocuments_other": "{{count}} open service documents",
+    "nothingOutstandingServices": "No service invoice outstanding",
+    "advanceReceiptHint": "An advance receipt lists only invoices whose every line is a service. This payment will be held as an advance against the contact.",
     "settlementRate": "Settlement rate",
     "allocateTo": "Allocate to {{number}}",
     "daysLate": "{{days}}d late",
@@ -434,11 +432,6 @@
     "advanceSac": "SAC",
     "advanceGoods": "That is goods: an advance for goods carries no GST",
     "advanceCess": "Cess %",
-    "advanceCessIs": "cess {{cess}}",
-    "advanceReverseCharge": "Tax payable on reverse charge",
-    "advanceReverseChargeHint": "The customer pays the GST on this service (reverse charge), so none is owed on the advance here. The receipt voucher says so.",
-    "advanceRcmNote": "No GST on the advance here: the customer pays it at {{rate}}% on reverse charge.",
-    "advanceTaxable": "value {{value}}",
     "deleteMessagePaid": "Any bill it was applied to will go back to being outstanding. This cannot be undone.",
     "settleAll": "Settle all",
     "sharePdf": "Share PDF",
@@ -450,7 +443,11 @@
     "applyingTo": "Applying to {{number}}",
     "adjustmentOn": "{{label}} on {{number}}",
     "noDueDate": "No due date",
-    "supplierRef": "Supplier no. {{number}}"
+    "supplierRef": "Supplier no. {{number}}",
+    "advanceValue": "Value of the advance",
+    "advanceCessRow": "Cess",
+    "advanceGstInside": "GST is included in the advance amount.",
+    "advanceGstInsideTds": "GST is included in the advance amount and the {{tds}} TDS the customer kept back."
   },
   "aging": {
     "overdue": "Overdue",
@@ -489,9 +486,19 @@
     "advance": "Advance",
     "count_one": "{{count}} payment",
     "count_other": "{{count}} payments",
+    "countAdvances_one": "{{count}} advance receipt",
+    "countAdvances_other": "{{count}} advance receipts",
     "appliedCount_one": "{{count}} applied",
     "appliedCount_other": "{{count}} applied",
-    "emptyBody": "Record one to see it here."
+    "emptyBody": "Record one to see it here.",
+    "searchAdvances": "Search advance receipts",
+    "noneAdvances": "No advance receipts",
+    "emptyBodyAdvances": "Money received in advance for a service, with the GST on it, shows here once recorded.",
+    "recordAdvance": "Record an advance receipt",
+    "gst": "GST",
+    "toAdjustHeader": "To adjust",
+    "toAdjust": "{{amount}} to adjust",
+    "adjusted": "Adjusted"
   },
   "print": {
     "print": "Print",

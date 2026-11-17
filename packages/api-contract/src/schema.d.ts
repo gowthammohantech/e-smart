@@ -921,6 +921,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/{companyId}/charge-names": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /** @description The business's own names for other charges, A to Z, hidden ones too (status inactive). The built-in kinds (freight, packing, insurance, handling, loading, other) are not listed. */
+        get: operations["listChargeNames"];
+        put?: never;
+        /** @description Adds a name for other charges to this business only. One of each name per business, whatever its case: 422 CHARGE_NAME_EXISTS. */
+        post: operations["createChargeName"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/charge-names/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** @description Renames or hides (status inactive) a charge name. Documents keep the name they printed (chargesLabel). */
+        put: operations["saveChargeName"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/{companyId}/exchange-rates/refresh": {
         parameters: {
             query?: never;
@@ -2129,6 +2169,49 @@ export interface paths {
          *     period (409 PERIOD_LOCKED).
          */
         delete: operations["removeCreditApplication"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/payments/adjustments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The adjustments made, newest first
+         * @description An advance used on an invoice (or bill) dated after it was received (or paid), on that
+         *     document's date, as its GST comes back (GSTR-1 11B); and a direct credit note applied to a
+         *     document, on the date applied. Base currency. `q` matches the party, the advance or note and the document.
+         */
+        get: operations["listAdjustments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/payments/adjustments/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /** How many adjustments the filters of listAdjustments match, and what they add up to */
+        get: operations["summarizeAdjustments"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -5162,6 +5245,14 @@ export interface components {
             /** @enum {string} */
             status?: "active" | "inactive";
         };
+        ChargeName: components["schemas"]["Versioned"] & {
+            readonly id?: string;
+            readonly companyId?: string;
+            /** @description What the charges are called on this business's documents: Courier charges, say */
+            name: string;
+            /** @enum {string} */
+            status?: "active" | "inactive";
+        };
         /** @enum {string} */
         TransportMode: "road" | "rail" | "air" | "ship";
         /** @enum {string} */
@@ -5257,6 +5348,8 @@ export interface components {
             billingAddress: components["schemas"]["Address"];
             shippingAddress?: components["schemas"]["Address"];
             creditLimit?: components["schemas"]["Money"];
+            /** @description Over creditLimit an invoice is refused (422 CREDIT_LIMIT_BLOCKED), not only warned about; overrideCreditLimit does not lift it. Once the customer owes more than the limit they are on hold: no new quote, proforma, sales order, delivery note, invoice or debit note is created, converted, moved to them or issued, not even as a draft (422 CREDIT_LIMIT_BLOCKED); receipts, credit notes and returns still are. Unset or false warns. */
+            creditLimitBlocks?: boolean;
             openingBalance: components["schemas"]["Money"];
             /**
              * Format: date
@@ -6002,6 +6095,8 @@ export interface components {
              * @enum {string}
              */
             chargesKind?: "freight" | "packing" | "insurance" | "handling" | "loading" | "other";
+            /** @description The business's own name for its charges (one of its charge names), printed in place of chargesKind's. Kept as it was when chosen. null clears it. */
+            chargesLabel?: string | null;
             applyRoundOff?: boolean;
             /** @description A round-off the user typed; overrides the automatic one when applyRoundOff is true */
             roundOffManual?: components["schemas"]["Money"];
@@ -6074,7 +6169,7 @@ export interface components {
             tdsSection?: "none" | "194C" | "194JA" | "194JB" | "194H" | "194IA" | "194IB" | "194A" | "194Q";
             /** @description On an invoice: the rate the customer will deduct at, percent. Defaults to the section's rate for the company's PAN. */
             tdsRate?: number;
-            /** @description Finalise an invoice even though it takes the customer past their credit limit; without it that is 422 CREDIT_LIMIT_EXCEEDED. */
+            /** @description Finalise an invoice even though it takes the customer past their credit limit; without it that is 422 CREDIT_LIMIT_EXCEEDED. A customer whose limit blocks (creditLimitBlocks) is refused regardless: 422 CREDIT_LIMIT_BLOCKED. */
             overrideCreditLimit?: boolean;
             /**
              * @description A non-draft value creates and finalises in one step. On create only draft, issued, sent, confirmed, delivered, received and approved are accepted; paid, partiallyPaid and overdue are derived by the server (422 STATUS_DERIVED). The enum is the full DocStatus so that BusinessDocument, which extends this schema, can carry any status.
@@ -6443,6 +6538,31 @@ export interface components {
             documentId: string;
             amount: components["schemas"]["Money"];
         };
+        /** @description One adjustment made, an advance used on a document or a direct note applied to one */
+        Adjustment: {
+            /** @description alloc:<allocation id> for an advance, cap:<credit application id> for a note */
+            id: string;
+            /** @enum {string} */
+            kind: "advanceReceived" | "advancePaid" | "creditNote" | "supplierCreditNote";
+            /**
+             * Format: date
+             * @description An advance: the document's date. A note: the date it was applied.
+             */
+            date: string;
+            partyId: string;
+            partyName: string;
+            branchId?: string;
+            /** @enum {string} */
+            sourceType: "payment" | "note";
+            sourceId: string;
+            sourceNumber: string;
+            documentId: string;
+            documentNumber: string;
+            documentKind: components["schemas"]["DocumentKind"];
+            amount: components["schemas"]["Money"];
+            /** @description A service advance taxed on receipt: the GST and cess inside this part of it, which come back on the document */
+            gst?: components["schemas"]["Money"];
+        };
         Adjustable: {
             /** @description Unadjusted advances and direct notes, oldest first */
             credits: {
@@ -6456,6 +6576,8 @@ export interface components {
                 left: components["schemas"]["Money"];
                 /** @description A service advance taxed on receipt */
                 advanceTax?: boolean;
+                /** @description On a service advance taxed on receipt: the GST and cess inside what is left of it (left less this is its value without GST) */
+                leftTax?: components["schemas"]["Money"];
             }[];
             /** @description Documents still owed, oldest first */
             open: {
@@ -6468,6 +6590,8 @@ export interface components {
                 outstanding: components["schemas"]["Money"];
                 /** @description Has a line for a service (an item of type service, or a SAC code starting 99) */
                 hasServiceLines?: boolean;
+                /** @description Every line is a service: the only documents a service advance (advanceTax) is adjusted against */
+                servicesOnly?: boolean;
             }[];
         };
         Payment: components["schemas"]["Versioned"] & {
@@ -9478,6 +9602,91 @@ export interface operations {
             409: components["responses"]["Conflict"];
         };
     };
+    listChargeNames: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data?: components["schemas"]["ChargeName"][];
+                    };
+                };
+            };
+        };
+    };
+    createChargeName: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Idempotency-Key"?: components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChargeName"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChargeName"];
+                };
+            };
+            422: components["responses"]["Unprocessable"];
+        };
+    };
+    saveChargeName: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description ETag from the last read */
+                "If-Match"?: components["parameters"]["IfMatch"];
+            };
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+                id: components["parameters"]["Id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChargeName"];
+            };
+        };
+        responses: {
+            /** @description Saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChargeName"];
+                };
+            };
+            412: components["responses"]["PreconditionFailed"];
+            422: components["responses"]["Unprocessable"];
+        };
+    };
     refreshExchangeRates: {
         parameters: {
             query?: never;
@@ -10680,6 +10889,8 @@ export interface operations {
                 to?: components["parameters"]["To"];
                 /** @description Only documents with an unpaid balance. Used by the payment allocation screen. */
                 outstanding?: boolean;
+                /** @description Only documents whose every line is a service (an item of type service, or a SAC code starting 99). Used by the advance receipt. */
+                servicesOnly?: boolean;
                 overdue?: boolean;
                 eInvoiceStatus?: components["schemas"]["EInvoiceStatus"];
                 sourceDocumentId?: string;
@@ -11078,7 +11289,7 @@ export interface operations {
         requestBody?: {
             content: {
                 "application/json": {
-                    /** @description Finalise an invoice even though it takes the customer past their credit limit; without it that is 422 CREDIT_LIMIT_EXCEEDED. */
+                    /** @description Finalise an invoice even though it takes the customer past their credit limit; without it that is 422 CREDIT_LIMIT_EXCEEDED. A customer whose limit blocks (creditLimitBlocks) is refused regardless: 422 CREDIT_LIMIT_BLOCKED. */
                     overrideCreditLimit?: boolean;
                 };
             };
@@ -11117,7 +11328,7 @@ export interface operations {
                 "application/json": {
                     status: components["schemas"]["DocStatus"];
                     reason?: string;
-                    /** @description Finalise an invoice even though it takes the customer past their credit limit; without it that is 422 CREDIT_LIMIT_EXCEEDED. */
+                    /** @description Finalise an invoice even though it takes the customer past their credit limit; without it that is 422 CREDIT_LIMIT_EXCEEDED. A customer whose limit blocks (creditLimitBlocks) is refused regardless: 422 CREDIT_LIMIT_BLOCKED. */
                     overrideCreditLimit?: boolean;
                 };
             };
@@ -11813,6 +12024,8 @@ export interface operations {
                 partyId?: string;
                 method?: components["schemas"]["PaymentMethod"];
                 accountId?: string;
+                /** @description Only advance receipts: money received for services with GST taken on it (advanceTax) */
+                advance?: boolean;
                 branchId?: components["parameters"]["BranchIdQuery"];
                 from?: components["parameters"]["From"];
                 to?: components["parameters"]["To"];
@@ -11862,6 +12075,71 @@ export interface operations {
             };
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+        };
+    };
+    listAdjustments: {
+        parameters: {
+            query?: {
+                partyId?: string;
+                branchId?: components["parameters"]["BranchIdQuery"];
+                from?: components["parameters"]["From"];
+                to?: components["parameters"]["To"];
+                /** @description Free-text search */
+                q?: components["parameters"]["Q"];
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page"] & {
+                        data?: components["schemas"]["Adjustment"][];
+                    };
+                };
+            };
+        };
+    };
+    summarizeAdjustments: {
+        parameters: {
+            query?: {
+                partyId?: string;
+                branchId?: components["parameters"]["BranchIdQuery"];
+                from?: components["parameters"]["From"];
+                to?: components["parameters"]["To"];
+                /** @description Free-text search */
+                q?: components["parameters"]["Q"];
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        count: number;
+                        total: components["schemas"]["Money"];
+                    };
+                };
+            };
         };
     };
     listAdjustable: {
@@ -11932,6 +12210,8 @@ export interface operations {
                 partyId?: string;
                 method?: components["schemas"]["PaymentMethod"];
                 accountId?: string;
+                /** @description Only advance receipts: money received for services with GST taken on it (advanceTax) */
+                advance?: boolean;
                 /** @description Payments allocated to this document */
                 documentId?: string;
                 branchId?: components["parameters"]["BranchIdQuery"];

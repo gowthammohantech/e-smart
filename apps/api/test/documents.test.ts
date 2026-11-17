@@ -345,6 +345,55 @@ describe('documents: stock and plans', () => {
     expect(overridden.body.document.status).toBe('issued');
   });
 
+  it('refuses an invoice over a credit limit that blocks, override or not, and keeps the draft', async () => {
+    const m = await moneySetup(t);
+    await t.deps.db.update(schema.parties).set({ creditLimitMinor: 300000, creditLimitBlocks: true }).where(eq(schema.parties.id, m.mumbai.id));
+    await issueInvoice(t, m); // 2,360 owed, within 3,000: under the limit it issues as usual
+
+    const draft = await t.post(`${m.c}/documents`, invoiceBody(m), { token: m.token });
+    expect(draft.status).toBe(201);
+    for (const body of [{}, { overrideCreditLimit: true }]) {
+      const res = await t.post(`${m.c}/documents/${draft.body.id}/finalize`, body, { token: m.token });
+      expect(res.status).toBe(422);
+      expect(res.body.code).toBe('CREDIT_LIMIT_BLOCKED');
+      expect(res.body.issues[0].message).toContain('Sunrise Retail would owe INR 4720.00, over their credit limit of INR 3000.00');
+    }
+    const viaCreate = await t.post(`${m.c}/documents`, invoiceBody(m, { status: 'issued', overrideCreditLimit: true }), { token: m.token });
+    expect(viaCreate.body.code).toBe('CREDIT_LIMIT_BLOCKED');
+
+    // Within the limit nothing is held: a quote goes as usual.
+    const quote = await t.post(`${m.c}/documents`, invoiceBody(m, { kind: 'quote' }), { token: m.token });
+    expect(quote.status).toBe(201);
+
+    // The customer says it: blocks, read back as it was saved.
+    const party = await t.get(`${m.c}/parties/${m.mumbai.id}`, { token: m.token });
+    expect(party.body).toMatchObject({ creditLimit: { minor: 300000 }, creditLimitBlocks: true });
+  });
+
+  it('puts a customer who owes more than a limit that blocks on hold: no new sale to them, not even a draft, until the limit is raised', async () => {
+    const m = await moneySetup(t);
+    await issueInvoice(t, m); // 2,360 owed
+    const earlier = await t.post(`${m.c}/documents`, invoiceBody(m), { token: m.token }); // a draft from before the hold
+    expect(earlier.status).toBe(201);
+    await t.deps.db.update(schema.parties).set({ creditLimitMinor: 200000, creditLimitBlocks: true }).where(eq(schema.parties.id, m.mumbai.id));
+
+    for (const kind of ['invoice', 'quote', 'salesOrder', 'proforma']) {
+      const res = await t.post(`${m.c}/documents`, invoiceBody(m, { kind }), { token: m.token });
+      expect(res.status, kind).toBe(422);
+      expect(res.body.code).toBe('CREDIT_LIMIT_BLOCKED');
+      expect(res.body.issues[0].message).toBe(
+        'Sunrise Retail owes INR 2360.00, over their credit limit of INR 2000.00, and is on hold: nothing new can be raised to them until they pay or the limit is raised',
+      );
+    }
+    // The draft made before isn't issued while they are on hold, accepted warning or not.
+    const issue = await t.post(`${m.c}/documents/${earlier.body.id}/finalize`, { overrideCreditLimit: true }, { token: m.token });
+    expect(issue.body.code).toBe('CREDIT_LIMIT_BLOCKED');
+
+    // Only warning over the limit: no hold, the quote goes.
+    await t.deps.db.update(schema.parties).set({ creditLimitBlocks: false }).where(eq(schema.parties.id, m.mumbai.id));
+    expect((await t.post(`${m.c}/documents`, invoiceBody(m, { kind: 'quote' }), { token: m.token })).status).toBe(201);
+  });
+
   it('never refuses a sale for stock on a plan that keeps none (Free), which has no negative-stock setting', async () => {
     const m = await moneySetup(t, 'free');
     const rod = await m.item();

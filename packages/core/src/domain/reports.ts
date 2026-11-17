@@ -76,7 +76,15 @@ export type TransactionSummary = {
   byItem: SummaryRow[];
   byBranch: SummaryRow[];
   documents: BusinessDocument[];
+  /**
+   * The period's credit notes, debit notes and returns, shown under the invoice (or bill) they adjust.
+   * Listed beside the documents, not counted in the totals above, which stay what was invoiced.
+   */
+  notes: BusinessDocument[];
 };
+
+/** Notes that adjust an invoice or a bill: listed with it in a summary, never added into its totals. */
+export const ADJUSTMENT_KINDS: BusinessDocument['kind'][] = ['creditNote', 'debitNote', 'salesReturn', 'supplierCreditNote', 'supplierDebitNote', 'purchaseReturn'];
 
 export function summarizeDocuments(
   docs: BusinessDocument[],
@@ -86,7 +94,9 @@ export function summarizeDocuments(
   baseCurrency: string,
   filters: ReportFilters,
 ): TransactionSummary {
-  const selected = docs.filter((d) => isLive(d) && matches(d, filters));
+  const live = docs.filter((d) => isLive(d) && matches(d, filters));
+  const selected = live.filter((d) => !ADJUSTMENT_KINDS.includes(d.kind));
+  const notes = live.filter((d) => ADJUSTMENT_KINDS.includes(d.kind));
 
   const total = sum(selected.map((d) => inBase(d.totals.grandTotal, d.exchangeRate, baseCurrency)), baseCurrency);
   const taxable = sum(selected.map((d) => inBase(d.totals.taxableAmount, d.exchangeRate, baseCurrency)), baseCurrency);
@@ -154,6 +164,7 @@ export function summarizeDocuments(
     byItem: toRows(itemMap, (id) => items.find((i) => i.id === id)?.name ?? 'Unknown'),
     byBranch: toRows(branchMap, (id) => branchNames[id] ?? 'Unknown'),
     documents: selected,
+    notes,
   };
 }
 

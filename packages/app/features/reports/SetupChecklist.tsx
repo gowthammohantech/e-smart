@@ -102,7 +102,7 @@ export function SetupChecklist() {
                 <Icon name={s.done ? 'check' : s.icon} size={15} color={s.done ? t.c.good : t.c.primary} />
               </View>
               <View style={{ flex: 1, gap: 1 }}>
-                <Text variant="small" weight="600" tone={s.done ? 'muted' : 'default'} style={s.done ? { textDecorationLine: 'line-through' } : undefined} numberOfLines={1}>
+                <Text variant="small" weight="600" tone={s.done ? 'muted' : 'default'} numberOfLines={1}>
                   {title}
                 </Text>
                 {!s.done ? (

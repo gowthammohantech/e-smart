@@ -27,6 +27,8 @@ export type DraftState = {
   charges: Money;
   /** What the charges are for; unset is other charges. */
   chargesKind?: ChargesKind;
+  /** The business's own name for them (one of its charge names); null when a built-in kind names them. */
+  chargesLabel?: string | null;
   /** The consignee, when the goods go somewhere other than the buyer's own address. */
   shipTo?: ShipTo;
   applyRoundOff: boolean;
@@ -123,6 +125,7 @@ export function draftFromDocument(doc: BusinessDocument): DraftState {
     documentDiscountValue: doc.documentDiscountValue,
     charges: doc.charges,
     chargesKind: doc.chargesKind,
+    chargesLabel: doc.chargesLabel ?? undefined,
     shipTo: doc.shipTo ?? undefined,
     applyRoundOff: doc.applyRoundOff,
     roundOffManual: doc.roundOffManual,

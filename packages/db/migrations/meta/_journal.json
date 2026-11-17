@@ -519,6 +519,20 @@
       "when": 1794567845216,
       "tag": "0073_pending_subscription",
       "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1794895477990,
+      "tag": "0074_party_credit_limit_blocks",
+      "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1794905907847,
+      "tag": "0075_charge_names",
+      "breakpoints": true
     }
   ]
 }

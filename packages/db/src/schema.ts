@@ -461,6 +461,26 @@ export const transporters = pgTable("transporters", {
 		}),
 ]);
 
+// A business's own names for other charges, beside the built-in freight, packing and the rest. One
+// business's names are never offered to another.
+export const chargeNames = pgTable("charge_names", {
+	id: varchar({ length: 40 }).primaryKey().notNull(),
+	companyId: varchar("company_id", { length: 40 }).notNull(),
+	name: varchar({ length: 60 }).notNull(),
+	status: activeStatus().default('active').notNull(),
+	version: integer().default(1).notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+}, (table): PgTableExtraConfigValue[] => [
+	// One of each name per business, whatever its case.
+	uniqueIndex("charge_names_company_id_name_idx").using("btree", table.companyId.asc().nullsLast(), sql`lower(${table.name})`),
+	foreignKey({
+			columns: [table.companyId],
+			foreignColumns: [companies.id],
+			name: "charge_names_company_id_fkey"
+		}),
+]);
+
 export const numberingSeries = pgTable("numbering_series", {
 	id: varchar({ length: 40 }).primaryKey().notNull(),
 	companyId: varchar("company_id", { length: 40 }).notNull(),
@@ -638,6 +658,8 @@ export const documents = pgTable("documents", {
 	chargesMinor: bigint("charges_minor", { mode: "number" }).default(0).notNull(),
 	// What the charges are for: freight, packing, insurance, handling, loading or other. Null reads as other.
 	chargesKind: varchar("charges_kind", { length: 12 }),
+	// A business's own name for its charges (Courier charges, say), printed as it was when chosen; null prints the kind's.
+	chargesLabel: varchar("charges_label", { length: 60 }),
 	applyRoundOff: boolean("apply_round_off").default(true).notNull(),
 	// A round-off the user typed, overriding the automatic one.
 	roundOffManualMinor: bigint("round_off_manual_minor", { mode: "number" }),
@@ -936,6 +958,8 @@ export const parties = pgTable("parties", {
 	shippingPostalCode: varchar("shipping_postal_code", { length: 12 }),
 	shippingCountry: char("shipping_country", { length: 2 }),
 	creditLimitMinor: bigint("credit_limit_minor", { mode: "number" }),
+	// Over the credit limit an invoice is refused outright, not only warned about (and issued on a yes).
+	creditLimitBlocks: boolean("credit_limit_blocks").default(false).notNull(),
 	openingBalanceMinor: bigint("opening_balance_minor", { mode: "number" }).default(0).notNull(),
 	// Which side the opening balance is on; unset is the kind's usual side (customer Dr, supplier Cr).
 	openingBalanceSide: balanceSide("opening_balance_side"),

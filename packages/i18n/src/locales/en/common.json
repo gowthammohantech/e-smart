@@ -346,7 +346,13 @@
     "deleteDraftsBody": "Drafts have no number yet, so none is lost. This can’t be undone. Selected documents that aren’t drafts are left alone.",
     "deletedDrafts_one": "{{count}} draft deleted",
     "deletedDrafts_other": "{{count}} drafts deleted",
-    "someFailed": "{{count}} couldn’t be changed: {{reason}}"
+    "someFailed": "{{count}} couldn’t be changed: {{reason}}",
+    "expandAll": "Show the rows under each",
+    "collapseAll": "Hide the rows under each",
+    "expandRow_one": "Show the {{count}} row under {{label}}",
+    "expandRow_other": "Show the {{count}} rows under {{label}}",
+    "collapseRow_one": "Hide the {{count}} row under {{label}}",
+    "collapseRow_other": "Hide the {{count}} rows under {{label}}"
   },
   "toast": {
     "success": "Done",

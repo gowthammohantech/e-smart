@@ -16,6 +16,7 @@ import { Fab } from '@esmart/ui/components/Fab';
 import type { Payment, PaymentDirection } from '@esmart/core/types';
 import { dateRangeLabel, paymentMethodLabel } from '@esmart/core/labels';
 import { formatMoney } from '@esmart/core/lib/format';
+import { stateNameOf } from '@esmart/core/domain/stateCodes';
 import { DATE_RANGE_PRESET_KEYS, DateRangePreset, formatDate, resolveRange } from '@esmart/core/lib/date';
 import { zero, type Money } from '@esmart/core/lib/money';
 import { useAppStore } from '../../store/appStore';
@@ -29,7 +30,11 @@ import { CardRowsSkeleton, MoreRowsSkeleton } from '../../components/ScreenSkele
 import { Skeleton } from '@esmart/ui/components/Skeleton';
 import { BranchFilterMenu, BranchPickerChip, useListBranch } from '../../components/branchFilter';
 
-export function PaymentListView({ direction }: { direction: PaymentDirection }) {
+/**
+ * Payments one way, as a searchable list. `advance`: just the advance receipts (money received for
+ * services, with the GST on it), with their GST and what is still to adjust in place of what was applied.
+ */
+export function PaymentListView({ direction, advance = false }: { direction: PaymentDirection; advance?: boolean }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['common', 'domain', 'sales', 'nav']);
   const router = useRouter();
@@ -50,8 +55,8 @@ export function PaymentListView({ direction }: { direction: PaymentDirection }) 
   // Read from the server 50 at a time; the count and total cover every page.
   const filter = useMemo(() => {
     const r = range === 'all' ? undefined : resolveRange(range);
-    return { direction, from: r?.from, to: r?.to, q: search, branchId: branch.branchId };
-  }, [direction, range, search, branch.branchId]);
+    return { direction, from: r?.from, to: r?.to, q: search, branchId: branch.branchId, advance };
+  }, [direction, range, search, branch.branchId, advance]);
   const pages = usePaymentPages(filter);
   const summary = usePaymentSummary(filter);
 
@@ -78,14 +83,38 @@ export function PaymentListView({ direction }: { direction: PaymentDirection }) 
   const exportRows = useRowsExport();
   const exportChosen = (keys: string[]) =>
     exportRows(
-      direction === 'received' ? tr('nav:title.paymentsReceived') : tr('nav:title.paymentsMade'),
+      advance ? tr('nav:title.advanceReceipts') : direction === 'received' ? tr('nav:title.paymentsReceived') : tr('nav:title.paymentsMade'),
       {
-        headers: [tr('common:table.number'), direction === 'received' ? tr('common:table.customer') : tr('common:table.supplier'), tr('common:table.date'), tr('common:table.method'), tr('common:table.reference'), tr('common:table.amount')],
+        headers: [
+          tr('common:table.number'),
+          direction === 'received' ? tr('common:table.customer') : tr('common:table.supplier'),
+          tr('common:table.date'),
+          tr('common:table.method'),
+          tr('common:table.reference'),
+          ...(advance ? [tr('sales:list.gst'), tr('sales:list.toAdjustHeader')] : []),
+          tr('common:table.amount'),
+        ],
         rows: filtered
           .filter((p) => keys.includes(p.id))
-          .map((p) => [p.number, nameOf(p), p.date, paymentMethodLabel(tr, p.method), p.reference ?? '', p.amount.minor / 100]),
+          .map((p) => [p.number, nameOf(p), p.date, paymentMethodLabel(tr, p.method), p.reference ?? '', ...(advance ? [gstOf(p), p.unallocated.minor / 100] : []), p.amount.minor / 100]),
       },
       tr('common:table.exportCancelled'),
+    );
+
+  const newRoute = advance ? '/(app)/payments/new?direction=received&advance=1' : `/(app)/payments/new?direction=${direction}`;
+  // An advance: its GST (rate, place of supply), and what of it is still to adjust against an invoice.
+  const gstOf = (p: Payment) => (p.advanceTax ? `${p.advanceTax.rate}% · ${stateNameOf(p.advanceTax.placeOfSupplyStateCode)}` : '—');
+  const appliedBadge = (p: Payment) =>
+    advance ? (
+      p.unallocated.minor > 0 ? (
+        <Badge label={tr('sales:list.toAdjust', { amount: formatMoney(p.unallocated) })} tone="warning" size="sm" />
+      ) : (
+        <Badge label={tr('sales:list.adjusted')} tone="success" size="sm" />
+      )
+    ) : p.unallocated.minor > 0 ? (
+      <Badge label={tr('sales:list.advance')} tone="warning" size="sm" />
+    ) : (
+      <Badge label={tr('sales:list.appliedCount', { count: p.allocations.length })} tone="neutral" size="sm" />
     );
 
   const moreFooter = pages.hasNextPage ? (
@@ -104,7 +133,7 @@ export function PaymentListView({ direction }: { direction: PaymentDirection }) 
         }
       >
         <View style={desktop ? { width: 300 } : undefined}>
-          <SearchBar compact value={query} onChangeText={setQuery} placeholder={tr('sales:list.search')} />
+          <SearchBar compact value={query} onChangeText={setQuery} placeholder={tr(advance ? 'sales:list.searchAdvances' : 'sales:list.search')} />
         </View>
         {desktop ? (
           <FilterMenu
@@ -161,7 +190,7 @@ export function PaymentListView({ direction }: { direction: PaymentDirection }) 
             </View>
           ) : <View style={{ marginLeft: 'auto', flexDirection: 'row', alignItems: 'baseline', gap: t.spacing.md }}>
             <Text variant="small" tone="muted">
-              {tr('sales:list.count', { count })}
+              {tr(advance ? 'sales:list.countAdvances' : 'sales:list.count', { count })}
             </Text>
             <Text variant="title" weight="700" style={{ fontVariant: ['tabular-nums'] }}>
               {formatMoney(total)}
@@ -175,7 +204,7 @@ export function PaymentListView({ direction }: { direction: PaymentDirection }) 
         ) : (
         <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
           <Text variant="caption" tone="muted">
-            {tr('sales:list.count', { count })}
+            {tr(advance ? 'sales:list.countAdvances' : 'sales:list.count', { count })}
           </Text>
           {/* Money paid out is neutral, not an error red. */}
           <Text variant="caption" weight="700" tone={direction === 'received' ? 'good' : undefined}>
@@ -204,16 +233,12 @@ export function PaymentListView({ direction }: { direction: PaymentDirection }) 
               { key: 'date', header: tr('common:table.date'), width: 120, render: (p) => <Cell tone="muted">{formatDate(p.date, 'dd MMM yyyy')}</Cell> },
               { key: 'method', secondary: true, header: tr('common:table.method'), width: 130, render: (p) => <Cell tone="muted">{paymentMethodLabel(tr, p.method)}</Cell> },
               { key: 'reference', secondary: true, header: tr('common:table.reference'), flex: 1, render: (p) => <Cell tone="muted">{p.reference || '—'}</Cell> },
+              ...(advance ? [{ key: 'gst', header: tr('sales:list.gst'), width: 160, render: (p: Payment) => <Cell tone="muted">{gstOf(p)}</Cell> }] : []),
               {
                 key: 'applied',
-                header: tr('common:table.applied'),
-                width: 130,
-                render: (p) =>
-                  p.unallocated.minor > 0 ? (
-                    <Badge label={tr('sales:list.advance')} tone="warning" size="sm" />
-                  ) : (
-                    <Badge label={tr('sales:list.appliedCount', { count: p.allocations.length })} tone="neutral" size="sm" />
-                  ),
+                header: advance ? tr('sales:list.toAdjustHeader') : tr('common:table.applied'),
+                width: advance ? 170 : 130,
+                render: (p) => appliedBadge(p),
               },
               {
                 key: 'amount',
@@ -231,7 +256,7 @@ export function PaymentListView({ direction }: { direction: PaymentDirection }) 
             rowKey={(p) => p.id}
             onRowPress={(p) => router.push(`/(app)/payments/${p.id}`)}
             rowLabel={(p) => `${p.number}, ${formatMoney(p.amount)}`}
-            {...pagedTableProps(pages, tr('common:table.loadFailed'), `payments-${direction}`)}
+            {...pagedTableProps(pages, tr('common:table.loadFailed'), advance ? 'payments-advances' : `payments-${direction}`)}
             loading={loading}
             totalCount={summary.data ? summary.data.count + (filtered.length - pages.rows.length) : undefined}
             selectable
@@ -241,7 +266,7 @@ export function PaymentListView({ direction }: { direction: PaymentDirection }) 
               <Button title={tr('common:table.exportCsv')} icon="file-export-outline" variant="ghost" size="sm" onPress={() => void exportChosen(keys)} />
             )}
             rowActions={(p) => [{ key: 'open', label: tr('common:table.open'), icon: 'eye-outline', onPress: () => router.push(`/(app)/payments/${p.id}`) }]}
-            empty={<EmptyState illustration="no-payments" icon="cash-remove" title={tr('sales:list.none')} message={noneAtAll ? tr('sales:list.emptyBody') : tr('common:filters.noMatch')} compact />}
+            empty={<EmptyState illustration="no-payments" icon="cash-remove" title={tr(advance ? 'sales:list.noneAdvances' : 'sales:list.none')} message={noneAtAll ? tr(advance ? 'sales:list.emptyBodyAdvances' : 'sales:list.emptyBody') : tr('common:filters.noMatch')} compact />}
           />
         </View>
       ) : (
@@ -270,10 +295,10 @@ export function PaymentListView({ direction }: { direction: PaymentDirection }) 
             <EmptyState
               illustration="no-payments"
               icon="cash-remove"
-              title={tr('sales:list.none')}
-              message={noneAtAll ? tr('sales:list.emptyBody') : tr('common:filters.noMatch')}
-              actionLabel={noneAtAll ? tr('common:action.recordPayment') : undefined}
-              onAction={noneAtAll ? () => router.push(`/(app)/payments/new?direction=${direction}`) : undefined}
+              title={tr(advance ? 'sales:list.noneAdvances' : 'sales:list.none')}
+              message={noneAtAll ? tr(advance ? 'sales:list.emptyBodyAdvances' : 'sales:list.emptyBody') : tr('common:filters.noMatch')}
+              actionLabel={noneAtAll ? tr(advance ? 'sales:list.recordAdvance' : 'common:action.recordPayment') : undefined}
+              onAction={noneAtAll ? () => router.push(newRoute) : undefined}
               compact
             />
           ) : (
@@ -299,18 +324,14 @@ export function PaymentListView({ direction }: { direction: PaymentDirection }) 
                     {nameOf(p)}
                   </Text>
                   <Text variant="caption" tone="muted" numberOfLines={1}>
-                    {p.number} · {formatDate(p.date, 'dd MMM')} · {paymentMethodLabel(tr, p.method)}
+                    {p.number} · {formatDate(p.date, 'dd MMM')} · {advance ? `GST ${gstOf(p)}` : paymentMethodLabel(tr, p.method)}
                   </Text>
                 </View>
                 <View style={{ alignItems: 'flex-end', gap: 4 }}>
                   <Text variant="body" weight="700" tone={direction === 'received' ? 'good' : undefined}>
                     {formatMoney(p.amount)}
                   </Text>
-                  {p.unallocated.minor > 0 ? (
-                    <Badge label={tr('sales:list.advance')} tone="warning" size="sm" />
-                  ) : (
-                    <Badge label={tr('sales:list.appliedCount', { count: p.allocations.length })} tone="neutral" size="sm" />
-                  )}
+                  {appliedBadge(p)}
                 </View>
               </Pressable>
             ))
@@ -320,7 +341,7 @@ export function PaymentListView({ direction }: { direction: PaymentDirection }) 
       </ScrollView>
       )}
 
-      <Fab icon="plus" onPress={() => router.push(`/(app)/payments/new?direction=${direction}`)} />
+      <Fab icon="plus" onPress={() => router.push(newRoute)} />
     </View>
   );
 }

@@ -22,8 +22,9 @@ import { useItems } from '../../store/selectors';
 type Col = 'name' | 'qty' | 'rate' | 'discount';
 
 // Sized to fit the editor's main column (about 730px) with the item name taking the rest.
-const W = { no: 32, qty: 104, rate: 108, discount: 104, tax: 88, amount: 116, actions: 40 };
-const ITEM_MIN = 120;
+// The discount takes its % / currency dropdown beside the box, so it is the widest of the three.
+const W = { no: 32, qty: 104, rate: 108, discount: 124, tax: 88, amount: 116, actions: 40 };
+const ITEM_MIN = 100;
 const MIN_WIDTH = W.no + ITEM_MIN + W.qty + W.rate + W.discount + W.tax + W.amount + W.actions;
 
 /**
@@ -240,28 +241,12 @@ export function LineGrid({
                   onEnter={() => onEnter(row, 'discount')}
                 />
               </View>
-              <Pressable
-                onPress={() => onUpdate(line.id, { discountMode: line.discountMode === 'percent' ? 'amount' : 'percent' })}
-                accessibilityRole="button"
-                accessibilityLabel={tr('sales:grid.discountMode', { mode: line.discountMode === 'percent' ? '%' : currency, n })}
-                style={(state) => [
-                  {
-                    minWidth: 30,
-                    // As tall as the discount input beside it.
-                    height: 32,
-                    paddingHorizontal: 4,
-                    borderRadius: t.radius.sm,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    backgroundColor: (state as WebPressState).hovered ? t.c.card2 : 'transparent',
-                  },
-                  focusRing(t, (state as WebPressState).focused),
-                ]}
-              >
-                <Text variant="caption" tone="muted" weight="600">
-                  {line.discountMode === 'percent' ? '%' : currency}
-                </Text>
-              </Pressable>
+              <DiscountModeMenu
+                mode={line.discountMode}
+                currency={currency}
+                label={tr('sales:grid.discountMode', { mode: line.discountMode === 'percent' ? '%' : currency, n })}
+                onChange={(m) => m !== line.discountMode && onUpdate(line.id, { discountMode: m })}
+              />
             </View>
             <View role="cell" style={{ width: W.tax, paddingHorizontal: 4 }}>
               <Pressable
@@ -283,7 +268,7 @@ export function LineGrid({
                   focusRing(t, (state as WebPressState).focused),
                 ]}
               >
-                <View>
+                <View style={{ flex: 1 }}>
                   <Text variant="small" style={{ fontVariant: ['tabular-nums'] }}>
                     {formatPercent(line.taxRate)}
                   </Text>
@@ -441,8 +426,11 @@ function GridInput({
         paddingHorizontal: 6,
         borderRadius: t.radius.sm,
         borderWidth: 1,
+        // At rest a soft tint with an underline says "type here" without boxing every cell;
+        // focused, it becomes a full field.
         borderColor: invalid ? t.c.bad : draft !== null ? t.c.primary : 'transparent',
-        backgroundColor: draft !== null ? t.c.paper : 'transparent',
+        borderBottomColor: invalid ? t.c.bad : draft !== null ? t.c.primary : t.c.lineStrong,
+        backgroundColor: draft !== null ? t.c.paper : t.c.card2,
         color: t.c.text,
         fontSize: t.fontSize.small,
         textAlign: numeric ? 'right' : 'left',
@@ -450,6 +438,54 @@ function GridInput({
         ...WEB_INPUT_RESET,
       }}
     />
+  );
+}
+
+/** The discount's kind, % or the currency, picked from a list. */
+function DiscountModeMenu({ mode, currency, label, onChange }: { mode: DocumentLine['discountMode']; currency: string; label: string; onChange: (mode: DocumentLine['discountMode']) => void }) {
+  const t = useTheme();
+  const { setAnchor, rect, open, close, visible } = useMenuAnchor();
+  const pick = (m: DocumentLine['discountMode']) => {
+    close();
+    onChange(m);
+  };
+  return (
+    <>
+      <Pressable
+        ref={setAnchor}
+        onPress={open}
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        aria-haspopup="menu"
+        aria-expanded={visible}
+        style={(state) => [
+          {
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 2,
+            // As tall as the discount input beside it, and as wide for % as for a currency
+            // code, so every row's discount box is the same size.
+            height: 32,
+            width: 52,
+            borderRadius: t.radius.sm,
+            borderWidth: 1,
+            // The arrow says it is a list; the edge only shows on hover, as on the tax beside it.
+            borderColor: (state as WebPressState).hovered || visible ? t.c.inputBorder : 'transparent',
+          },
+          focusRing(t, (state as WebPressState).focused),
+        ]}
+      >
+        <Text variant="caption" weight="600">
+          {mode === 'percent' ? '%' : currency}
+        </Text>
+        <Icon name="chevron-down" size={12} color={t.c.muted} />
+      </Pressable>
+      <Menu anchor={rect} onClose={close} align="right" width={120}>
+        <MenuItem label="%" selected={mode === 'percent'} onPress={() => pick('percent')} />
+        <MenuItem label={currency} selected={mode === 'amount'} onPress={() => pick('amount')} />
+      </Menu>
+    </>
   );
 }
 

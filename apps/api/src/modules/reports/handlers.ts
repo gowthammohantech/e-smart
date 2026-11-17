@@ -187,7 +187,8 @@ export const reportsHandlers = defineHandlers({
     switch (key) {
       case 'sales-summary':
       case 'purchase-summary': {
-        const { docs } = await loadDocuments(all, [key === 'sales-summary' ? 'invoice' : 'purchaseBill']);
+        // A sale's credit notes, debit notes and returns come too: listed under their invoice, outside its totals.
+        const { docs } = await loadDocuments(all, key === 'sales-summary' ? ['invoice', 'creditNote', 'debitNote', 'salesReturn'] : ['purchaseBill']);
         const parties = await partiesOf(docs);
         const partyNames = Object.fromEntries(parties.map((p) => [p.id, p.name]));
         return { ...summarizeDocuments(docs, parties, await loadItems(all), await branchNames(all), base, filters), partyNames } as never;

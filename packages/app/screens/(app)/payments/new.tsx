@@ -38,8 +38,9 @@ import { formatMoney, toAmountInput } from '@esmart/core/lib/format';
 import { daysBetween, formatDate, today } from '@esmart/core/lib/date';
 import { Money, fromMajor, money, subtract, zero } from '@esmart/core/lib/money';
 import { uid } from '@esmart/core/lib/id';
-import { DEFAULT_ADVANCE_RATE, advanceInterState, advanceTaxSplit } from '@esmart/core/domain/advanceTax';
-import { homeStateCode, taxAvailableOn, taxCategoriesOn } from '@esmart/core/domain/taxEngine';
+import { DEFAULT_ADVANCE_RATE } from '@esmart/core/domain/advanceTax';
+import { AdvanceGstBreakup } from '../../../features/payments/AdvanceGstBreakup';
+import { taxAvailableOn, taxCategoriesOn } from '@esmart/core/domain/taxEngine';
 
 import { useAppStore } from '../../../store/appStore';
 import {
@@ -133,8 +134,6 @@ function NewPaymentForm() {
   const [advanceSac, setAdvanceSac] = useState('');
   const [advanceCess, setAdvanceCess] = useState(0);
   const cessText = useDecimalText(advanceCess, setAdvanceCess);
-  /** A service the recipient pays GST on (reverse charge): no GST is owed on the advance here. */
-  const [advanceRcm, setAdvanceRcm] = useState(false);
   /** TDS the customer deducted from an advance, before any invoice. */
   const [advanceTdsText, setAdvanceTdsText] = useState('');
   const [advanceSheet, setAdvanceSheet] = useState<'tax' | 'pos' | 'tds' | null>(null);
@@ -176,7 +175,9 @@ function NewPaymentForm() {
 
   // Money in settles invoices, debit notes and opening invoices; money out, bills, supplier debit notes and opening bills. What each
   // still owes is the server's figure (returns and credit notes already off), in the payment currency, oldest first.
-  const open = useOpenDocuments(partyId, direction === 'received' ? ['invoice', 'debitNote', 'openingInvoice'] : ['purchaseBill', 'supplierDebitNote', 'openingBill']);
+  // An advance receipt lists only the invoices whose every line is a service, not the ones with goods.
+  const advanceReceipt = direction === 'received' && params.advance === '1';
+  const open = useOpenDocuments(partyId, direction === 'received' ? ['invoice', 'debitNote', 'openingInvoice'] : ['purchaseBill', 'supplierDebitNote', 'openingBill'], { servicesOnly: advanceReceipt });
   const outstanding = useMemo(() => {
     const asOf = today();
     return (open.data ?? [])
@@ -236,7 +237,7 @@ function NewPaymentForm() {
     setAdjustingAdvance(true);
     try {
       // The server applies them, notes too, and a service advance's GST.
-      applied = await adjustAdvancesFor(partyId, direction, docId ? [docId] : undefined);
+      applied = (await adjustAdvancesFor(partyId, direction, docId ? [docId] : undefined)).totals;
     } catch (err) {
       toast.show(describeError(err, tr), 'error');
       return;
@@ -271,8 +272,6 @@ function NewPaymentForm() {
   const taxed = taxCategoriesOn(taxCategories, date).filter((c) => c.rate > 0 && taxAvailableOn(c, date));
   // A rate not known is 18% (RULES 8.12).
   const advanceTaxCategory = taxed.find((c) => c.id === advanceTaxId) ?? taxed.find((c) => c.rate === DEFAULT_ADVANCE_RATE) ?? taxed[0];
-  // Memoised: called while rendering, the compiler would take `company` as changed by it and skip this screen.
-  const homeState = useMemo(() => homeStateCode(company), [company]);
   // A place of supply not known is taken as another state: IGST, under "Other Territory" (97).
   const pos = advancePos ?? party?.billingAddress?.stateCode;
   const canAdvance = direction === 'received' && unallocated.minor > 0 && !!company.taxRegistration?.registered && !!taxed.length;
@@ -282,11 +281,8 @@ function NewPaymentForm() {
   const advanceTds = direction === 'received' ? fromMajor(advanceTdsText || '0', currency) : zero(currency);
   const advanceTax =
     canAdvance && serviceAdvance && advanceTaxCategory && !goodsSac
-      ? { taxCategoryId: advanceTaxCategory.id, rate: advanceTaxCategory.rate, placeOfSupplyStateCode: pos ?? '97', ...(sac && { hsn: sac }), ...(advanceCess > 0 && { cessRate: advanceCess }), ...(advanceRcm && { reverseCharge: true }) }
+      ? { taxCategoryId: advanceTaxCategory.id, rate: advanceTaxCategory.rate, placeOfSupplyStateCode: pos ?? '97', ...(sac && { hsn: sac }), ...(advanceCess > 0 && { cessRate: advanceCess }) }
       : null;
-  // The tax inside what was received (and what the customer kept back as TDS), shown as it is typed.
-  // None on reverse charge: the recipient pays it.
-  const advanceSplit = advanceTax && !advanceRcm ? advanceTaxSplit(Math.round((unallocated.minor + advanceTds.minor) * (exchangeRate || 1)), advanceTax.rate, advanceCess, advanceInterState(homeState, pos)) : null;
   const overAllocated = unallocated.minor < 0;
 
   /**
@@ -527,7 +523,7 @@ function NewPaymentForm() {
       emptyTitle={tr(direction === 'received' ? 'sales:editor.selectCustomer' : 'sales:editor.selectSupplier')}
       accessibilityLabel={tr('sales:payment.selectContact')}
       onPress={() => setPartyOpen(true)}
-      badges={party && open.isSuccess ? <Badge label={tr('sales:payment.openDocuments', { count: outstanding.length })} tone={outstanding.length ? 'warning' : 'neutral'} size="sm" /> : null}
+      badges={party && open.isSuccess ? <Badge label={tr(advanceReceipt ? 'sales:payment.openServiceDocuments' : 'sales:payment.openDocuments', { count: outstanding.length })} tone={outstanding.length ? 'warning' : 'neutral'} size="sm" /> : null}
     />
   ) : (
     <Pressable onPress={() => setPartyOpen(true)} accessibilityRole="button" accessibilityLabel={tr('sales:payment.selectContact')}>
@@ -548,7 +544,7 @@ function NewPaymentForm() {
               </Text>
               {open.isSuccess ? (
                 <Text variant="caption" tone="muted">
-                  {tr('sales:payment.openDocuments', { count: outstanding.length })}
+                  {tr(advanceReceipt ? 'sales:payment.openServiceDocuments' : 'sales:payment.openDocuments', { count: outstanding.length })}
                 </Text>
               ) : null}
             </View>
@@ -714,8 +710,8 @@ function NewPaymentForm() {
     <EmptyState
       illustration="all-settled"
       icon="check-all"
-      title={tr('sales:payment.nothingOutstanding')}
-      message={tr('sales:payment.advanceHint')}
+      title={tr(advanceReceipt ? 'sales:payment.nothingOutstandingServices' : 'sales:payment.nothingOutstanding')}
+      message={tr(advanceReceipt ? 'sales:payment.advanceReceiptHint' : 'sales:payment.advanceHint')}
       compact
     />
   ) : (
@@ -889,6 +885,10 @@ function NewPaymentForm() {
           {formatMoney(overAllocated ? money(-unallocated.minor, currency) : unallocated)}
         </Text>
       </View>
+      {/* A service advance: the GST inside it, line by line, as it is owed when received. */}
+      {advanceTax && unallocated.minor > 0 ? (
+        <AdvanceGstBreakup gross={money(unallocated.minor + advanceTds.minor, currency)} rate={advanceTax.rate} cessRate={advanceCess} placeOfSupply={pos} company={company} baseCurrency={baseCurrency} exchangeRate={exchangeRate} tds={advanceTds} style={{ paddingLeft: t.spacing.md, marginTop: 2 }} />
+      ) : null}
       {fxGainLoss && fxGainLoss.minor !== 0 ? (
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
           <Text variant="caption" tone="muted">
@@ -975,25 +975,7 @@ function NewPaymentForm() {
                 />
                 <TextField label={tr('sales:payment.advanceCess')} {...cessText} keyboardType="decimal-pad" placeholder="0" />
               </FieldRow>
-              <SwitchField label={tr('sales:payment.advanceReverseCharge')} description={tr('sales:payment.advanceReverseChargeHint')} value={advanceRcm} onValueChange={setAdvanceRcm} />
             </>
-          ) : null}
-          {advanceTax && advanceRcm ? (
-            <Text variant="caption" tone="muted">
-              {tr('sales:payment.advanceRcmNote', { rate: advanceTax.rate })}
-            </Text>
-          ) : null}
-          {advanceTax && advanceSplit ? (
-            <Text variant="caption" tone="muted">
-              {[
-                tr('sales:payment.advanceTaxIs', { tax: formatMoney(money(advanceSplit.igst + advanceSplit.cgst + advanceSplit.sgst + advanceSplit.cess, baseCurrency)) }),
-                advanceSplit.igst ? `IGST ${formatMoney(money(advanceSplit.igst, baseCurrency))}` : `CGST ${formatMoney(money(advanceSplit.cgst, baseCurrency))} · SGST ${formatMoney(money(advanceSplit.sgst, baseCurrency))}`,
-                advanceSplit.cess ? tr('sales:payment.advanceCessIs', { cess: formatMoney(money(advanceSplit.cess, baseCurrency)) }) : '',
-                tr('sales:payment.advanceTaxable', { value: formatMoney(money(advanceSplit.taxable, baseCurrency)) }),
-              ]
-                .filter(Boolean)
-                .join(' · ')}
-            </Text>
           ) : null}
           <SelectSheet visible={advanceSheet === 'tax'} onClose={() => setAdvanceSheet(null)} title={tr('sales:payment.advanceRate')} options={taxed.map((c) => ({ value: c.id, label: c.name }))} value={advanceTaxCategory?.id} onSelect={setAdvanceTaxId} searchable={false} />
           <SelectSheet visible={advanceSheet === 'pos'} onClose={() => setAdvanceSheet(null)} title={tr('sales:editor.placeOfSupply')} options={INDIAN_STATES.map((st) => ({ value: st.code, label: st.name }))} value={pos} onSelect={setAdvancePos} />

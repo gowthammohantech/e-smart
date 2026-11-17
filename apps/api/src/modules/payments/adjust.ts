@@ -3,6 +3,7 @@ import { alias } from 'drizzle-orm/pg-core';
 import type { Schema } from '@esmart/api-contract';
 import { PAYABLE_KINDS, RECEIVABLE_KINDS } from '@esmart/core/domain/documentStates';
 import { fifoAllocate } from '@esmart/core/domain/receivables';
+import { inclusiveTax } from '@esmart/core/lib/money';
 import { schema } from '@esmart/db';
 import { defineHandlers, type Ctx } from '../../context';
 import { notFound, unprocessable, type Issue } from '../../http/errors';
@@ -26,6 +27,16 @@ type Side = 'customer' | 'supplier';
 type Allocation = Schema<'AdjustmentAllocation'>;
 type Credit = Schema<'Adjustable'>['credits'][number];
 type Open = Schema<'Adjustable'>['open'][number];
+
+/** On a service advance taxed when received: the GST and cess inside what is left of it, so it can be shown without them. */
+function advanceTaxLeft(p: typeof PAY.$inferSelect, base: string): { leftTax?: { minor: number; currency: string } } {
+  const rate = Number(p.advanceTaxRate ?? 0) + Number(p.advanceCessRate ?? 0);
+  if (!p.advanceTaxCategoryId || p.advanceReverseCharge || !(rate > 0)) return {};
+  return { leftTax: money(inclusiveTax({ minor: p.unallocatedMinor, currency: base }, rate).minor, base) };
+}
+
+/** A service advance: GST was taken on it when received, so it goes only on an invoice whose every line is a service. */
+const isServiceAdvance = (c: { sourceType: string; advanceTax?: boolean }) => c.sourceType === 'payment' && !!c.advanceTax;
 
 /** The party, and which side of it is read: a supplier as one, a party that is both as asked. */
 async function partySide(ctx: AnyCtx, db: DbOrTx, partyId: string, asked?: Side): Promise<{ party: typeof schema.parties.$inferSelect; side: Side }> {
@@ -102,11 +113,20 @@ export async function adjustable(ctx: AnyCtx, db: DbOrTx, partyId: string, side:
         .where(and(inArray(L.documentId, docs.map((d) => d.id)), or(eq(schema.items.type, 'service'), sql`${L.hsnCode} like '99%'`)))
     : [];
   const withService = new Set(service.map((s) => s.documentId));
+  // And a line that is not one: goods, which a service advance's GST must not come back on.
+  const goods = docs.length
+    ? await db
+        .selectDistinct({ documentId: L.documentId })
+        .from(L)
+        .leftJoin(schema.items, eq(schema.items.id, L.itemId))
+        .where(and(inArray(L.documentId, docs.map((d) => d.id)), sql`not coalesce(${schema.items.type} = 'service' or ${L.hsnCode} like '99%', false)`))
+    : [];
+  const withGoods = new Set(goods.map((g) => g.documentId));
   const credits: (Credit & { left: { minor: number; currency: string } })[] = [
     ...[...notes.map((n) => ({ n, left: n.total - n.tds - Number(n.applied) })), ...linkedCredit]
       .filter((x) => x.left > 0)
       .map(({ n, left }) => ({ sourceType: 'note' as const, id: n.id, number: n.number, date: n.date, total: money(n.total - n.tds, base), left: money(left, base) })),
-    ...pays.map((p) => ({ sourceType: 'payment' as const, id: p.id, number: p.number, date: p.date, total: money(p.amountMinor + p.tdsMinor, base), left: money(p.unallocatedMinor, base), advanceTax: !!p.advanceTaxCategoryId })),
+    ...pays.map((p) => ({ sourceType: 'payment' as const, id: p.id, number: p.number, date: p.date, total: money(p.amountMinor + p.tdsMinor, base), left: money(p.unallocatedMinor, base), advanceTax: !!p.advanceTaxCategoryId, ...advanceTaxLeft(p, base) })),
   ].sort((a, b) => a.date.localeCompare(b.date));
   const open: (Open & { outstanding: { minor: number; currency: string } })[] = docs.map((d) => ({
     documentId: d.id,
@@ -116,6 +136,7 @@ export async function adjustable(ctx: AnyCtx, db: DbOrTx, partyId: string, side:
     total: money(d.grandTotalMinor, base),
     outstanding: money(d.grandTotalMinor - d.amountPaidMinor, base),
     hasServiceLines: withService.has(d.id),
+    servicesOnly: withService.has(d.id) && !withGoods.has(d.id),
   }));
   return { credits, open, docs };
 }
@@ -133,20 +154,23 @@ export async function applyAdjustments(ctx: AnyCtx, tx: DbOrTx, partyId: string,
   const plan: Allocation[] =
     wanted ??
     fifoAllocate(
-      ordered.map((c) => ({ id: `${c.sourceType}:${c.id}`, date: c.date, left: c.left.minor })),
-      open.map((o) => ({ id: o.documentId, date: o.date, outstanding: o.outstanding.minor })),
+      ordered.map((c) => ({ id: `${c.sourceType}:${c.id}`, date: c.date, left: c.left.minor, serviceAdvance: isServiceAdvance(c) })),
+      open.map((o) => ({ id: o.documentId, date: o.date, outstanding: o.outstanding.minor, servicesOnly: o.servicesOnly })),
     ).map((m) => ({ sourceType: m.creditId.startsWith('note:') ? 'note' : 'payment', sourceId: m.creditId.split(':').slice(1).join(':'), documentId: m.documentId, amount: money(m.amount, base) }));
 
   const issues: Issue[] = [];
   const block = (field: string, message: string) => issues.push({ field, message, severity: 'blocking' });
   const leftOf = new Map(credits.map((c) => [`${c.sourceType}:${c.id}`, c.left.minor]));
   const owedOf = new Map(open.map((o) => [o.documentId, o.outstanding.minor]));
+  const serviceAdvances = new Set(credits.filter(isServiceAdvance).map((c) => `${c.sourceType}:${c.id}`));
+  const servicesOnly = new Set(open.filter((o) => o.servicesOnly).map((o) => o.documentId));
   plan.forEach((a, i) => {
     const field = `allocations[${i}]`;
     const key = `${a.sourceType}:${a.sourceId}`;
     if (!leftOf.has(key)) return block(`${field}.sourceId`, `No unadjusted ${a.sourceType === 'note' ? 'credit note' : 'advance'} ${a.sourceId} for this party`);
     if (!owedOf.has(a.documentId)) return block(`${field}.documentId`, `${a.documentId} is not an open document of this party`);
     if (a.amount.currency !== base) return block(`${field}.amount.currency`, `Adjustments are in ${base}`);
+    if (serviceAdvances.has(key) && !servicesOnly.has(a.documentId)) return block(`${field}.documentId`, 'A service advance is adjusted only against an invoice whose every line is a service');
     if (!(a.amount.minor > 0)) return block(`${field}.amount.minor`, 'Must be more than zero');
     const left = leftOf.get(key)!;
     const owed = owedOf.get(a.documentId)!;

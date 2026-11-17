@@ -43,6 +43,8 @@ export const TABLE_PAGE_SIZE = 10;
 export const TABLE_PAGE_SIZES = [10, 25, 50, 100];
 
 const SELECT_WIDTH = 44;
+/** The column of a table with `subRows`: a parent's chevron, and the line down to its rows. */
+const TOGGLE_WIDTH = 36;
 const ACTIONS_WIDTH = 52;
 
 function cellStyle<T>(column: Pick<Column<T>, 'width' | 'flex' | 'align'>) {
@@ -111,10 +113,16 @@ export function DataTable<T>({
   bulkActions,
   rowActions,
   maxWidth,
+  subRows,
 }: {
   columns: Column<T>[];
   rows: T[];
   rowKey: (row: T) => string;
+  /**
+   * Rows shown under a row, on a light band, that belong to it (an invoice's credit notes, say).
+   * They follow it through a sort and a page, aren't counted as rows, and take no checkbox or ⋯ menu.
+   */
+  subRows?: (row: T) => T[];
   onRowPress?: (row: T) => void;
   /** With `onRowPress`: whether this row opens something. Left out, every row does. */
   canPress?: (row: T) => boolean;
@@ -171,7 +179,8 @@ export function DataTable<T>({
   // Only a desktop window scrolls sideways; a phone never reaches this table.
   const desktop = breakpoint !== 'phone';
   const canSelect = !!selectable && !!onSelectionChange;
-  const extrasWidth = 8 + (canSelect ? SELECT_WIDTH : 0) + (rowActions ? ACTIONS_WIDTH : 0);
+  const hasSub = !!subRows;
+  const extrasWidth = 8 + (canSelect ? SELECT_WIDTH : 0) + (rowActions ? ACTIONS_WIDTH : 0) + (hasSub ? TOGGLE_WIDTH : 0);
   // The table's own width, not the window's: a sidebar, Lixi's panel or a side
   // column can leave it far narrower than the window suggests.
   const [boxWidth, setBoxWidth] = useState(0);
@@ -274,6 +283,28 @@ export function DataTable<T>({
     onSelectionChange?.([...next]);
   };
 
+  // Rows under a row start open; each parent folds them away on its own, or all on the page from the header.
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
+  const kidsOf = (row: T) => subRows?.(row) ?? [];
+  const pageParents = hasSub ? visible.filter((r) => kidsOf(r).length > 0).map(rowKey) : [];
+  const pageOpen = pageParents.some((k) => !collapsed.has(k));
+  const toggleParent = (key: string) =>
+    setCollapsed((c) => {
+      const next = new Set(c);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  const togglePage = () =>
+    setCollapsed((c) => {
+      const next = new Set(c);
+      for (const k of pageParents) {
+        if (pageOpen) next.add(k);
+        else next.delete(k);
+      }
+      return next;
+    });
+
   const header = (
     <View
       style={{
@@ -295,6 +326,13 @@ export function DataTable<T>({
             onChange={setPageSelection}
             label={tr('common:table.selectPage')}
           />
+        </View>
+      ) : null}
+      {hasSub ? (
+        <View style={{ width: TOGGLE_WIDTH, alignItems: 'center' }} role="columnheader">
+          {pageParents.length ? (
+            <ExpandToggle open={pageOpen} onPress={togglePage} label={tr(pageOpen ? 'common:table.collapseAll' : 'common:table.expandAll')} />
+          ) : null}
         </View>
       ) : null}
       {columns.map((c) => {
@@ -353,6 +391,7 @@ export function DataTable<T>({
     Array.from({ length: count }).map((_, i) => (
       <View key={`skeleton-${startAt + i}`} style={rowStyle(i === count - 1)} role="row" aria-hidden>
         {canSelect ? <View style={{ width: SELECT_WIDTH }} /> : null}
+        {hasSub ? <View style={{ width: TOGGLE_WIDTH }} /> : null}
         {columns.map((c, j) => (
           <View key={c.key} style={cellStyle(c)}>
             {/* Widths vary a little, row to row, so the stand-in reads as text and not as a grid. */}
@@ -375,15 +414,32 @@ export function DataTable<T>({
     </View>
   ) : null;
 
-  const dataRows = visible.map((row, i) => {
+  // A row and, under it, the rows that belong to it (`subRows`): those travel with it through a sort or a page.
+  const renderRow = (row: T, last: boolean, sub: boolean, group: { kids?: number; open?: boolean; lastKid?: boolean } = {}) => {
     const key = rowKey(row);
-    const checked = selection.has(key);
+    const checked = !sub && selection.has(key);
     const label = rowLabel?.(row) ?? key;
     const cells = (
       <>
         {canSelect ? (
           <View style={{ width: SELECT_WIDTH, alignItems: 'center' }} role="cell">
-            <Checkbox checked={checked} onChange={(on) => toggleRow(key, on)} label={tr('common:table.selectRow', { label })} />
+            {sub ? null : <Checkbox checked={checked} onChange={(on) => toggleRow(key, on)} label={tr('common:table.selectRow', { label })} />}
+          </View>
+        ) : null}
+        {hasSub ? (
+          // A parent's chevron, and a line from it down through its rows: └ at the last.
+          <View style={{ width: TOGGLE_WIDTH, alignSelf: 'stretch', marginVertical: -6, alignItems: 'center', justifyContent: 'center' }} role="cell">
+            {sub ? (
+              <>
+                <View style={{ position: 'absolute', left: TOGGLE_WIDTH / 2, top: 0, bottom: group.lastKid ? '50%' : 0, width: 1.5, backgroundColor: t.c.lineStrong }} />
+                <View style={{ position: 'absolute', left: TOGGLE_WIDTH / 2, top: '50%', width: TOGGLE_WIDTH / 2, height: 1.5, backgroundColor: t.c.lineStrong }} />
+              </>
+            ) : group.kids ? (
+              <>
+                {group.open ? <View style={{ position: 'absolute', left: TOGGLE_WIDTH / 2, top: '50%', bottom: 0, width: 1.5, backgroundColor: t.c.lineStrong }} /> : null}
+                <ExpandToggle open={!!group.open} onPress={() => toggleParent(key)} label={tr(group.open ? 'common:table.collapseRow' : 'common:table.expandRow', { label, count: group.kids })} />
+              </>
+            ) : null}
           </View>
         ) : null}
         {columns.map((c) => (
@@ -393,13 +449,15 @@ export function DataTable<T>({
         ))}
         {hasActionsColumn ? (
           <View style={{ width: ACTIONS_WIDTH, alignItems: 'center' }} role="cell">
-            <RowActionsButton actions={actionsFor(row)} label={tr('common:table.rowActions', { label })} />
+            {sub ? null : <RowActionsButton actions={actionsFor(row)} label={tr('common:table.rowActions', { label })} />}
           </View>
         ) : null}
       </>
     );
-    const style = rowStyle(i === visible.length - 1 && !short && !error);
-    const tint = checked ? t.c.chip : undefined;
+    // A parent and its rows read as one group: no rule inside it, one under its last row.
+    const inGroup = (!sub && group.open) || (sub && !group.lastKid);
+    const style = [rowStyle(last), sub ? { minHeight: 40 } : null, inGroup ? { borderBottomWidth: 0 } : null];
+    const tint = checked ? t.c.chip : sub ? t.c.card2 : undefined;
     return onRowPress && (canPress?.(row) ?? true) ? (
       <Pressable
         key={key}
@@ -411,16 +469,28 @@ export function DataTable<T>({
         accessibilityLabel={rowLabel?.(row)}
         style={(state) => {
           const { pressed, hovered, focused } = state as WebPressState;
-          return [style, { backgroundColor: tint ?? (pressed || hovered ? t.c.card2 : 'transparent') }, focusRing(t, focused)];
+          // A selected row keeps its tint; a row under another sits on a light band, a shade darker on hover.
+          const backgroundColor = checked ? t.c.chip : pressed || hovered ? (sub ? t.c.line : t.c.card2) : (tint ?? 'transparent');
+          return [...style, { backgroundColor }, focusRing(t, focused)];
         }}
       >
         {cells}
       </Pressable>
     ) : (
-      <View key={key} style={[style, tint ? { backgroundColor: tint } : null]} role="row" aria-selected={canSelect ? checked : undefined}>
+      <View key={key} style={[...style, tint ? { backgroundColor: tint } : null]} role="row" aria-selected={canSelect ? checked : undefined}>
         {cells}
       </View>
     );
+  };
+  const dataRows = visible.flatMap((row, i) => {
+    const kids = kidsOf(row);
+    const open = kids.length > 0 && !collapsed.has(rowKey(row));
+    const shown = open ? kids : [];
+    const lastOfPage = i === visible.length - 1 && !short && !error;
+    return [
+      renderRow(row, lastOfPage && shown.length === 0, false, { kids: kids.length, open }),
+      ...shown.map((kid, j) => renderRow(kid, lastOfPage && j === shown.length - 1, true, { lastKid: j === shown.length - 1 })),
+    ];
   });
 
   const body =
@@ -448,6 +518,7 @@ export function DataTable<T>({
       role="row"
     >
       {canSelect ? <View style={{ width: SELECT_WIDTH }} role="cell" /> : null}
+      {hasSub ? <View style={{ width: TOGGLE_WIDTH }} role="cell" /> : null}
       {columns.map((c) => (
         <View key={c.key} style={cellStyle(c)} role="cell">
           {footer[c.key] ?? null}
@@ -633,6 +704,28 @@ export function DataTable<T>({
 }
 
 /** A row's ⋯ button and the menu it opens. Renders nothing for a row with no actions. */
+/** Shows or hides the rows under a row (or every row's, in the header): a chevron that turns. */
+function ExpandToggle({ open, onPress, label }: { open: boolean; onPress: () => void; label: string }) {
+  const t = useTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      aria-expanded={open}
+      style={(state) => {
+        const { hovered, focused } = state as WebPressState;
+        return [
+          { width: 24, height: 24, borderRadius: t.radius.sm, alignItems: 'center', justifyContent: 'center', backgroundColor: hovered ? t.c.line : t.c.paper, borderWidth: 1, borderColor: t.c.line },
+          focusRing(t, focused),
+        ];
+      }}
+    >
+      <Icon name={open ? 'chevron-down' : 'chevron-right'} size={16} color={t.c.text} />
+    </Pressable>
+  );
+}
+
 function RowActionsButton({ actions, label }: { actions: RowAction[]; label: string }) {
   const t = useTheme();
   // Destructured: the compiler lint reads `setAnchor` passed as a ref as reading a ref in render.

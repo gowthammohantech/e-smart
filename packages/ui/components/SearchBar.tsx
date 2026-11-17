@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Platform, Pressable, StyleProp, TextInput, View, ViewStyle } from 'react-native';
+import { Platform, Pressable, StyleProp, TextInput, ViewStyle } from 'react-native';
 import { Icon } from './Icon';
 import { useTheme } from '../theme/ThemeProvider';
-import { WEB_INPUT_RESET, webFocusHalo } from './Field';
+import { FieldBox, WEB_INPUT_RESET, webFocusHalo } from './Field';
 import { SEARCH_MAX_WIDTH, useIsDesktop } from '../theme/breakpoints';
 
 export function SearchBar({
@@ -33,8 +33,10 @@ export function SearchBar({
   const small = !!compact && desktop;
   // Only a browser shows focus on the bar; a phone keeps its look while typing.
   const webFocused = Platform.OS === 'web' && focused;
+  const inputRef = useRef<TextInput | null>(null);
   return (
-    <View
+    <FieldBox
+      inputRef={inputRef}
       style={[
         {
           flexDirection: 'row',
@@ -55,6 +57,7 @@ export function SearchBar({
     >
       <Icon name="magnify" size={small ? 17 : 19} color={t.c.muted} />
       <TextInput
+        ref={inputRef}
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder ?? tr('common:component.search')}
@@ -74,6 +77,6 @@ export function SearchBar({
         </Pressable>
       ) : null}
       {right}
-    </View>
+    </FieldBox>
   );
 }

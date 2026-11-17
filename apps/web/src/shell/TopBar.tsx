@@ -190,7 +190,8 @@ export function TopBar() {
   // open on a small screen) just the logo and branch mark, so search keeps its room.
   const centred = barWidth > 0 && inner - 2 * Math.max(left, RIGHT_FULL) >= SEARCH_MIN + 120;
   const narrow = tablet || (barWidth > 0 && inner - (left + RIGHT_FULL) < SEARCH_MIN);
-  const sideStyle = centred ? { flex: 1, flexBasis: 0 } : null;
+  // Grow, shrink and basis each said apart: React warns when a `flex` shorthand comes and goes beside `flexShrink`.
+  const sideStyle = centred ? { flexGrow: 1, flexShrink: 1, flexBasis: 0 } : null;
 
   return (
     <View
@@ -254,7 +255,7 @@ export function TopBar() {
           { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: t.spacing.sm },
           // When room is short the buttons keep their size and the search box gives way,
           // so they never spill left over it.
-          narrow ? { flexGrow: 1, flexShrink: 0 } : { flex: 1, flexBasis: 0, minWidth: centred ? 0 : RIGHT_FULL },
+          narrow ? { flexGrow: 1, flexShrink: 0 } : { flexGrow: 1, flexShrink: 1, flexBasis: 0, minWidth: centred ? 0 : RIGHT_FULL },
         ]}
       >
       <ConnectionBadge style={{ alignSelf: 'center' }} />

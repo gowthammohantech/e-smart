@@ -21,12 +21,13 @@ import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { Avatar } from '@esmart/ui/components/Avatar';
 
-import { CHARGES_KINDS, ChargesKind, ShipTo, DocStatus, DocumentKind, DocumentLine, NoteReason, Party } from '@esmart/core/types';
+import { CHARGES_KINDS, ChargesKind, DocStatus, DocumentKind, DocumentLine, NoteReason, Party } from '@esmart/core/types';
 import { NOTE_KINDS, PURCHASE_KINDS, isAwaitingApproval, isFinalized } from '@esmart/core/domain/documentStates';
 import { TDS_SECTIONS, tdsSection } from '@esmart/core/data/tdsSections';
 import { TCS_SECTIONS, partyTcsSection, tcsAskedOn, tcsRateFor, tcsSection } from '@esmart/core/data/tcsSections';
 import { documentKindLabel } from '@esmart/core/labels';
 import { resolveRate } from '@esmart/core/domain/fx';
+import { CREDIT_HOLD_KINDS, onCreditHold } from '@esmart/core/domain/receivables';
 import { buildTaxContext, defaultCrossBorderTax, lutActive, taxAvailableOn, taxCategoriesOn, type CrossBorderTax } from '@esmart/core/domain/taxEngine';
 import { OTHER_COUNTRY_CODE } from '@esmart/core/domain/stateCodes';
 import { CURRENCIES } from '@esmart/core/lib/currencies';
@@ -52,12 +53,12 @@ import {
   useDefaultBranchId,
   useDocument,
   useTaxCategories,
-  useTransporters,
   usePlan,
 } from '../../store/selectors';
 import { hasVehicles, saleTdsOnPlan } from '@esmart/core/domain/plan';
 import { PartyPickerBox } from '../contacts/PartyPickerBox';
 import { useCostCentres } from '../../store/books';
+import { addChargeName, useChargeNames } from '../../remote/chargeNames';
 import {
   DraftState,
   blankLine,
@@ -118,8 +119,6 @@ const STEPS = ['party', 'items', 'extras', 'review'] as const;
 
 /** The documents GST is charged on, where reverse charge can apply. */
 const TAX_KINDS: DocumentKind[] = ['invoice', 'salesReturn', 'purchaseBill', 'purchaseReturn', ...NOTE_KINDS];
-/** Sales documents of goods that may go to a consignee other than the buyer. */
-const SHIP_TO_KINDS: DocumentKind[] = ['invoice', 'proforma', 'quote', 'salesOrder', 'delivery'];
 const NOTE_REASONS: NoteReason[] = ['discount', 'priceChange', 'taxCorrection', 'deficiency', 'other'];
 /** The documents goods travel with, where a vehicle is worth recording. */
 const VEHICLE_KINDS: DocumentKind[] = ['invoice', 'salesOrder', 'delivery', 'salesReturn', 'purchaseOrder', 'goodsReceipt', 'purchaseBill', 'purchaseReturn'];
@@ -444,14 +443,23 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   const [creditOnEdit, setCreditOnEdit] = useState(false);
   const [chargesText, setChargesText] = useState(String(toMajor(draft.charges) || ''));
   const [chargesKindOpen, setChargesKindOpen] = useState(false);
-  const [shipStateOpen, setShipStateOpen] = useState(false);
-  // Goods go by the business's own vehicle or with one of its transporters.
-  const [transportBy, setTransportBy] = useState<'own' | 'transporter'>(draft.transporterId ? 'transporter' : 'own');
-  const [transporterOpen, setTransporterOpen] = useState(false);
-  const transporters = useTransporters({ activeOnly: true });
-  // Goods that go out: where they go when not to the buyer's own address (the consignee).
-  const shipsTo = SHIP_TO_KINDS.includes(kind);
-  const chargesLabel = tr(`sales:editor.chargesKind.${draft.chargesKind ?? 'other'}` as 'sales:editor.chargesKind.other');
+  // What the charges are called: the business's own name for them, else the built-in kind's.
+  const chargesLabel = draft.chargesLabel || tr(`sales:editor.chargesKind.${draft.chargesKind ?? 'other'}` as 'sales:editor.chargesKind.other');
+  // The business's own charge names, fetched once the list is opened; hidden ones aren't offered.
+  const chargeNames = useChargeNames(chargesKindOpen || !!draft.chargesLabel).data ?? [];
+  const pickChargeName = (name: string) => patch({ chargesKind: 'other', chargesLabel: name });
+  // A name typed into the list: one the business already has (whatever its case) is used, else it is added to its list.
+  const addCharge = async (typed: string) => {
+    const name = typed.trim().replace(/\s+/g, ' ');
+    if (!name) return;
+    const known = chargeNames.find((n) => n.name.toLowerCase() === name.toLowerCase());
+    if (known) return pickChargeName(known.name);
+    try {
+      pickChargeName((await addChargeName(name)).name);
+    } catch (e) {
+      toast.show(e instanceof Error ? e.message : String(e), 'error');
+    }
+  };
   const [discountText, setDiscountText] = useState(String(draft.documentDiscountValue || ''));
   const [roundOffText, setRoundOffText] = useState(
     draft.roundOffManual ? String(toMajor(draft.roundOffManual)) : '',
@@ -470,7 +478,9 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   const patchBoe = (p: Partial<NonNullable<DraftState['billOfEntry']>>) => patch({ billOfEntry: { ...boe, ...p } });
   const boeAmount = (m?: Money) => (m && m.minor ? String(toMajor(m)) : '');
   // The party's other open invoices, as the server counts what they still owe.
-  const openInvoices = useOpenDocuments(kind === 'invoice' && party?.creditLimit?.minor ? draft.partyId : null, ['invoice']).data;
+  // A sale to a customer whose limit blocks reads them too, to know whether they are on hold.
+  const holdKind = CREDIT_HOLD_KINDS.includes(kind);
+  const openInvoices = useOpenDocuments((kind === 'invoice' || (holdKind && party?.creditLimitBlocks)) && party?.creditLimit?.minor ? draft.partyId : null, ['invoice']).data;
   /** Core's `checkCreditLimit`: what's owed on other invoices plus this one, in the limit's currency. */
   const creditCheck = (limit: Money) => {
     const rateToBase = (c: string) => (c === baseCurrency ? 1 : c === draft.currency ? draft.exchangeRate : resolveRate(exchangeRates, c, baseCurrency, draft.date));
@@ -478,7 +488,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
     const inLimit = (m: Money) => (m.currency === limit.currency ? m.minor : Math.round((m.minor * (rateToBase(m.currency) || 1)) / limitRate));
     const owed = (openInvoices ?? []).filter((d) => d.id !== documentId).reduce((acc, d) => acc + inLimit((d.outstanding ?? zero(d.grandTotal.currency)) as Money), 0);
     const exposureMinor = owed + inLimit(totals.grandTotal);
-    return { exposure: money(exposureMinor, limit.currency), limit, exceeds: limit.minor > 0 && exposureMinor > limit.minor };
+    return { owed: money(owed, limit.currency), exposure: money(exposureMinor, limit.currency), limit, exceeds: limit.minor > 0 && exposureMinor > limit.minor };
   };
   const branchId = draft.branchId ?? defaultBranchId ?? undefined;
   const branch = branches.find((b) => b.id === branchId);
@@ -684,7 +694,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
     if (kind !== 'invoice' || !party?.creditLimit || party.creditLimit.minor <= 0) return null;
     const check = creditCheck(party.creditLimit);
     return check.exceeds
-      ? tr('sales:editor.creditLimitExceeded', {
+      ? tr(party.creditLimitBlocks ? 'sales:editor.creditLimitBlocked' : 'sales:editor.creditLimitExceeded', {
           party: party.name,
           limit: formatMoney(check.limit),
           exposure: formatMoney(check.exposure),
@@ -692,12 +702,24 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       : null;
   };
 
-  const creditNotice = creditLimitWarning();
+  // On credit hold (their limit blocks and they already owe more than it): nothing new to them, not even a draft.
+  const holdCheck = holdKind && party?.creditLimit && openInvoices ? creditCheck(party.creditLimit) : undefined;
+  const creditHold =
+    holdCheck && onCreditHold(party, holdCheck.owed.minor)
+      ? tr('sales:editor.creditHold', { party: party?.name, owed: formatMoney(holdCheck.owed), limit: formatMoney(holdCheck.limit) })
+      : null;
+  // This invoice would take them over a limit that blocks: no "continue anyway"; the draft can still be kept.
+  const creditNotice = creditHold ?? creditLimitWarning();
+  const creditBlocked = !!creditNotice && !!party?.creditLimitBlocks;
 
   const requestFinalize = () => {
     const problem = lineProblem();
     if (problem) {
       toast.show(problem, 'error');
+      return;
+    }
+    if (creditBlocked) {
+      toast.show(creditNotice, 'error', { icon: 'cancel' });
       return;
     }
     const warning = creditLimitWarning();
@@ -707,6 +729,11 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
 
   const save = async (finalize: boolean, opts?: { overrideCreditLimit?: boolean }) => {
     if (!draft.partyId) return;
+    // A new one, or one moved to them: the server would refuse it, so say why here.
+    if (creditHold && (!documentId || existing?.partyId !== draft.partyId)) {
+      toast.show(creditHold, 'error', { icon: 'cancel' });
+      return;
+    }
     if (roundOffError) {
       toast.show(roundOffError, 'error');
       return;
@@ -731,7 +758,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       charges: draft.charges,
       // Named only when something is charged.
       chargesKind: draft.charges.minor ? (draft.chargesKind ?? 'other') : undefined,
-      shipTo: shipsTo ? (draft.shipTo ?? null) : undefined,
+      // Null clears a name chosen before, when a built-in kind names them again.
+      chargesLabel: draft.charges.minor ? (draft.chargesLabel ?? null) : undefined,
       applyRoundOff: draft.applyRoundOff,
       roundOffManual: draft.applyRoundOff ? draft.roundOffManual : undefined,
       notes: draft.notes || undefined,
@@ -758,8 +786,6 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       costCentreId: draft.costCentreId,
       customFields: draft.customFields,
       vehicleId: draft.vehicleId,
-      // Null clears a transporter picked before, when it goes by the business's own vehicle again.
-      transporterId: VEHICLE_KINDS.includes(kind) ? (draft.transporterId ?? null) : undefined,
       branchId,
       attachmentIds: draft.attachmentIds,
       sourceDocumentId: draft.sourceDocumentId,
@@ -833,7 +859,11 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
     if (onSaved) onSaved(id);
     // Sent from the detail screen, the same way its own Send by email does it.
     // A held draft isn't sent: it goes out once it is approved and issued.
-    else router.replace(`${detailRouteFor(kind, id)}${issued && sendAfter ? '?send=email' : ''}` as never);
+    // A newly issued invoice also asks there what it still needs: its e-invoice and e-way bill.
+    else {
+      const query = [issued && sendAfter ? 'send=email' : '', issued && kind === 'invoice' && !editingIssued ? 'next=compliance' : ''].filter(Boolean).join('&');
+      router.replace(`${detailRouteFor(kind, id)}${query ? `?${query}` : ''}` as never);
+    }
   };
 
   const finalizeLocal = (id: string) => {
@@ -1089,40 +1119,6 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
         </Text>
       </View>
     ) : null;
-    // Ship to: off ships to the buyer (their shipping address, else billing); on names a consignee.
-    const shipTo = draft.shipTo;
-    const patchShip = (over: Partial<ShipTo['address']> & { name?: string; gstin?: string }) => {
-      if (!shipTo) return;
-      const { name, gstin, ...address } = over;
-      patch({ shipTo: { ...shipTo, ...(name !== undefined && { name }), ...(gstin !== undefined && { gstin }), address: { ...shipTo.address, ...address } } });
-    };
-    const shipBlock = shipsTo && party ? (
-      <View style={{ gap: t.spacing.sm }}>
-        <SwitchField
-          label={tr('sales:editor.shipTo.label')}
-          description={tr(shipTo ? 'sales:editor.shipTo.onHint' : 'sales:editor.shipTo.offHint')}
-          value={!!shipTo}
-          onValueChange={(on) => {
-            const from = party.shippingAddress?.line1 ? party.shippingAddress : party.billingAddress;
-            patch({ shipTo: on ? { name: party.name, address: { line1: from?.line1 ?? '', line2: from?.line2, city: from?.city ?? '', state: from?.state ?? '', stateCode: from?.stateCode, postalCode: from?.postalCode ?? '', country: from?.country ?? 'IN' } } : undefined });
-          }}
-        />
-        {shipTo ? (
-          <>
-            <FieldRow>
-              <TextField label={tr('sales:editor.shipTo.name')} value={shipTo.name ?? ''} onChangeText={(name) => patchShip({ name })} icon="account-outline" maxLength={100} />
-              <TextField label={tr('sales:editor.shipTo.gstin')} value={shipTo.gstin ?? ''} onChangeText={(gstin) => patchShip({ gstin: gstin.toUpperCase() })} autoCapitalize="characters" maxLength={15} icon="card-account-details-outline" />
-            </FieldRow>
-            <TextField label={tr('sales:editor.shipTo.address')} value={shipTo.address.line1} onChangeText={(line1) => patchShip({ line1 })} icon="map-marker-outline" required />
-            <FieldRow>
-              <TextField label={tr('sales:editor.shipTo.city')} value={shipTo.address.city} onChangeText={(city) => patchShip({ city })} required />
-              <PickerField label={tr('sales:editor.shipTo.state')} value={shipTo.address.state} onPress={() => setShipStateOpen(true)} required />
-              <TextField label={tr('sales:editor.shipTo.pin')} value={shipTo.address.postalCode} onChangeText={(postalCode) => patchShip({ postalCode: postalCode.replace(/\D/g, '').slice(0, 6) })} keyboardType="number-pad" required />
-            </FieldRow>
-          </>
-        ) : null}
-      </View>
-    ) : null;
     const directNoteBlock = directNote ? (
       <View style={{ gap: t.spacing.sm }}>
         <Text variant="small" tone="muted" weight="500">
@@ -1183,7 +1179,6 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           {branchField}
           {posField}
           {crossBorderBlock}
-          {shipBlock}
           {currencyField}
           {noteReasonField}
           {directNoteBlock}
@@ -1226,7 +1221,6 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           </View>
         ) : null}
         {crossBorderBlock}
-        {shipBlock}
         {isdField}
         {directNoteBlock}
       </View>
@@ -1384,38 +1378,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
     </View>
   );
 
-  // Goods on the move go by the business's own vehicle or with one of its transporters (the e-way bill starts from it).
-  const pickedTransporter = transporters.find((x) => x.id === draft.transporterId);
-  const transportField = VEHICLE_KINDS.includes(kind) ? (
-    <View style={{ gap: t.spacing.sm }}>
-      <Text variant="small" tone="muted" weight="500">
-        {tr('sales:editor.transport.label')}
-      </Text>
-      <Segmented
-        options={[
-          { value: 'own', label: tr('sales:editor.transport.own') },
-          { value: 'transporter', label: tr('sales:editor.transport.transporter') },
-        ]}
-        value={transportBy}
-        onChange={(v) => {
-          setTransportBy(v as 'own' | 'transporter');
-          patch(v === 'own' ? { transporterId: null } : { vehicleId: undefined });
-        }}
-      />
-      {transportBy === 'own' ? (
-        // Free has no vehicles to pick: own transport is said, not which vehicle.
-        hasVehicles(plan) ? <VehicleField value={draft.vehicleId} onChange={(vehicleId) => patch({ vehicleId })} /> : null
-      ) : (
-        <PickerField
-          label={tr('sales:editor.transport.transporter')}
-          value={pickedTransporter ? `${pickedTransporter.name} · ${pickedTransporter.transporterId}` : undefined}
-          placeholder={tr(transporters.length ? 'sales:editor.transport.pick' : 'sales:editor.transport.none')}
-          onPress={() => setTransporterOpen(true)}
-          icon="truck-outline"
-        />
-      )}
-    </View>
-  ) : null;
+  // A vehicle goes with goods on the move; Free keeps no vehicles.
+  const transportField = VEHICLE_KINDS.includes(kind) && hasVehicles(plan) ? <VehicleField value={draft.vehicleId} onChange={(vehicleId) => patch({ vehicleId })} /> : null;
 
   const renderExtras = () => (
     <View style={{ gap: t.spacing.lg }}>
@@ -1724,8 +1688,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       {/* Shown on the draft too, not only when finalising. */}
       {creditNotice ? (
         <Card variant="flat" style={{ flexDirection: 'row', gap: t.spacing.md }}>
-          <Icon name="alert-outline" size={19} color={t.c.warn} />
-          <Text variant="caption" tone="warn" style={{ flex: 1, lineHeight: 18 }}>
+          <Icon name={creditBlocked ? 'cancel' : 'alert-outline'} size={19} color={creditBlocked ? t.c.bad : t.c.warn} />
+          <Text variant="caption" tone={creditBlocked ? 'bad' : 'warn'} style={{ flex: 1, lineHeight: 18 }}>
             {creditNotice}
           </Text>
         </Card>
@@ -1952,6 +1916,13 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
             label: p.name ?? '',
             description: [p.displayName, p.taxId, p.phone].filter(Boolean).join(' · '),
             trailing: p.currency && p.currency !== baseCurrency ? p.currency : undefined,
+            // On credit hold: shown dimmed, and picking says why.
+            ...(holdKind && !isPurchase && onCreditHold(p, p.outstanding?.minor ?? 0)
+              ? {
+                  note: { text: tr('sales:editor.creditHoldShort'), tone: 'bad' as const },
+                  blocked: tr('sales:editor.creditHold', { party: p.name, owed: formatMoney(p.outstanding!), limit: formatMoney(p.creditLimit!) }),
+                }
+              : {}),
           }))}
           onQueryChange={setPartyQuery}
           loading={partySearch.isFetching}
@@ -2081,32 +2052,18 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           visible={chargesKindOpen}
           onClose={() => setChargesKindOpen(false)}
           title={tr('sales:editor.chargesFor')}
-          options={CHARGES_KINDS.map((k) => ({ value: k, label: tr(`sales:editor.chargesKind.${k}` as 'sales:editor.chargesKind.other') }))}
-          value={draft.chargesKind ?? 'other'}
-          onSelect={(k) => patch({ chargesKind: k as ChargesKind })}
-          searchable={false}
-        />
-
-        <SelectSheet
-          visible={shipStateOpen}
-          onClose={() => setShipStateOpen(false)}
-          title={tr('sales:editor.shipTo.state')}
-          options={INDIAN_STATES.map((st) => ({ value: st.code, label: st.name }))}
-          value={draft.shipTo?.address.stateCode ?? null}
-          onSelect={(code) => {
-            const st = INDIAN_STATES.find((x) => x.code === code);
-            if (draft.shipTo && st) patch({ shipTo: { ...draft.shipTo, address: { ...draft.shipTo.address, state: st.name, stateCode: st.code } } });
-          }}
-        />
-
-        <SelectSheet
-          visible={transporterOpen}
-          onClose={() => setTransporterOpen(false)}
-          title={tr('sales:editor.transport.transporter')}
-          options={transporters.map((x) => ({ value: x.id, label: x.name, description: x.transporterId }))}
-          value={draft.transporterId ?? null}
-          onSelect={(transporterId) => patch({ transporterId })}
-          emptyMessage={tr('sales:editor.transport.none')}
+          // The built-in kinds, the same for every business, then this business's own names.
+          options={[
+            ...CHARGES_KINDS.map((k) => ({ value: `kind:${k}`, label: tr(`sales:editor.chargesKind.${k}` as 'sales:editor.chargesKind.other') })),
+            ...chargeNames.filter((n) => n.status !== 'inactive' || n.name === draft.chargesLabel).map((n) => ({ value: `name:${n.name}`, label: n.name, icon: 'tag-outline' as const })),
+            // A name the document carries that the list no longer has (renamed since): kept as it is.
+            ...(draft.chargesLabel && !chargeNames.some((n) => n.name === draft.chargesLabel) ? [{ value: `name:${draft.chargesLabel}`, label: draft.chargesLabel, icon: 'tag-outline' as const }] : []),
+          ]}
+          value={draft.chargesLabel ? `name:${draft.chargesLabel}` : `kind:${draft.chargesKind ?? 'other'}`}
+          onSelect={(v) => (v.startsWith('name:') ? pickChargeName(v.slice(5)) : patch({ chargesKind: v.slice(5) as ChargesKind, chargesLabel: null }))}
+          searchPlaceholder={tr('sales:editor.chargesSearch')}
+          onCreate={(typed) => void addCharge(typed)}
+          createLabel={(typed) => tr('sales:editor.chargesAdd', { name: typed.trim() })}
         />
 
         <LineEditorSheet

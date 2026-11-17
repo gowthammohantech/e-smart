@@ -359,7 +359,10 @@ export function PartyDetail({ party }: { party: Party }) {
           label: tr('contacts:form.paymentTerms'),
           value: party.paymentTermsDays === 0 ? tr('contacts:form.dueOnReceipt') : tr('contacts:form.termsDays', { count: party.paymentTermsDays }),
         },
-        ...(party.creditLimit ? [{ label: tr('contacts:form.creditLimit'), value: formatMoney(party.creditLimit) }] : []),
+        // The limit, and what happens over it: a warning or a block.
+        ...(party.creditLimit && party.creditLimit.minor > 0
+          ? [{ label: tr('contacts:form.creditLimit'), value: `${formatMoney(party.creditLimit)} · ${tr(party.creditLimitBlocks ? 'contacts:form.creditLimitBlocksShort' : 'contacts:form.creditLimitWarnsShort')}` }]
+          : []),
         { label: tr('contacts:form.openingBalance'), value: formatMoney(party.openingBalance) },
         {
           label: tr('contacts:form.billingAddress'),

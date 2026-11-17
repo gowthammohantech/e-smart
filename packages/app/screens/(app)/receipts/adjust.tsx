@@ -39,7 +39,7 @@ export default function AdjustAdvances() {
   const desktop = useIsDesktop();
   const router = useRouter();
   const toast = useToast();
-  const { t: tr } = useTranslation(['books', 'common', 'domain']);
+  const { t: tr } = useTranslation(['books', 'common', 'domain', 'sales']);
   const baseCurrency = useBaseCurrency();
   const params = useLocalSearchParams<{ partyId?: string; documentId?: string; side?: string }>();
   const [partyId, setPartyId] = useState<string | undefined>(params.partyId);
@@ -70,10 +70,10 @@ export default function AdjustAdvances() {
     .filter((x) => x.minor > 0);
   const typedTotal = typed.reduce((a, x) => a + x.minor, 0);
   const over = !!chosen && typedTotal > (chosen.left as Money).minor;
-  // A service advance applied to an invoice with no service line: GST taken back on goods (RULES 8.12).
-  const goodsOnly = (documentId: string) => open.find((o) => o.documentId === documentId)?.hasServiceLines === false;
+  // A service advance goes only on an invoice whose every line is a service: its GST never comes back on goods (RULES 8.12).
   const serviceAdvance = (c?: (typeof credits)[number]) => !!c && c.sourceType === 'payment' && !!c.advanceTax;
-  const autoWarning = credits.some((c) => serviceAdvance(c)) && open.some((o) => !o.hasServiceLines);
+  const autoWarning = credits.some((c) => serviceAdvance(c)) && open.some((o) => !o.servicesOnly);
+  const shownOpen = serviceAdvance(chosen) ? open.filter((o) => o.servicesOnly) : open;
 
   const pick = (key: string) => {
     setCreditKey(key === creditKey ? null : key);
@@ -209,9 +209,16 @@ export default function AdjustAdvances() {
                           key,
                           c.number,
                           `${tr(c.sourceType === 'note' ? 'books:adjust.note' : side === 'customer' ? 'books:adjust.advance' : 'books:adjust.advancePaid')} · ${formatDate(c.date)}`,
+                          // A service advance reads without the GST inside it; what it settles, GST and all, is below.
                           <View style={{ alignItems: 'flex-end', gap: 2 }}>
-                            <Text variant="small" weight="700">{formatMoney(c.left as Money)}</Text>
-                            {serviceAdvance(c) ? <Badge label={tr('books:adjust.gst')} tone="info" size="sm" /> : null}
+                            <Text variant="small" weight="700">{formatMoney(c.leftTax ? money((c.left as Money).minor - (c.leftTax as Money).minor, (c.left as Money).currency) : (c.left as Money))}</Text>
+                            {c.leftTax ? (
+                              <Text variant="caption" tone="muted">
+                                {tr('books:adjust.withGst', { amount: formatMoney(c.left as Money) })}
+                              </Text>
+                            ) : serviceAdvance(c) ? (
+                              <Badge label={tr('books:adjust.gst')} tone="info" size="sm" />
+                            ) : null}
                           </View>,
                           { selected: creditKey === key, onPress: () => pick(key) },
                         );
@@ -222,7 +229,12 @@ export default function AdjustAdvances() {
                 right={
                   <FormSection title={tr('books:adjust.open')}>
                     <Card padded={false}>
-                      {open.map((o) =>
+                      {chosen && !shownOpen.length ? (
+                        <Text variant="small" tone="muted" style={{ padding: t.spacing.lg }}>
+                          {tr('sales:payment.advanceNoServiceInvoice')}
+                        </Text>
+                      ) : null}
+                      {shownOpen.map((o) =>
                         row(
                           o.documentId,
                           o.number,
@@ -232,7 +244,6 @@ export default function AdjustAdvances() {
                             // A tap fills a document not yet given an amount; one already typed is left as it is.
                             onPress: chosen ? () => (amounts[o.documentId] ? undefined : fill(o.documentId)) : undefined,
                             selected: !!amounts[o.documentId],
-                            warn: serviceAdvance(chosen) && goodsOnly(o.documentId) ? tr('books:adjust.notService') : undefined,
                             extra: chosen ? (
                               <AmountField label={tr('books:adjust.amountFor', { number: o.number })} value={amounts[o.documentId] ?? ''} onChangeValue={(v) => setAmounts((a) => ({ ...a, [o.documentId]: v }))} currency={baseCurrency} />
                             ) : null,

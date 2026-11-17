@@ -706,5 +706,14 @@
     "narrationPlaceholder": "GST set-off for {{period}}",
     "resetPrefill": "Start again from the suggested set-off",
     "post": "Post set-off"
+  },
+  "nextSteps": {
+    "title": "{{number}} is issued",
+    "body": "It still needs these. Raise them now, or later from the invoice’s compliance card.",
+    "eInvoice": "Raise e-invoice",
+    "eInvoiceHint": "Report it to the IRP for its IRN and signed QR code.",
+    "ewayBill": "Raise e-way bill",
+    "ewayBillHint": "Its goods are moving: generate the e-way bill before they leave.",
+    "later": "Later"
   }
 }

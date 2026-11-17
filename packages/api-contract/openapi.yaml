@@ -1294,6 +1294,62 @@ paths:
       responses:
         '204': { description: Removed }
         '409': { $ref: '#/components/responses/Conflict' }
+  /companies/{companyId}/charge-names:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Settings]
+      operationId: listChargeNames
+      description: "The business's own names for other charges, A to Z, hidden ones too (status inactive). The built-in kinds (freight, packing, insurance, handling, loading, other) are not listed."
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { type: array, items: { $ref: '#/components/schemas/ChargeName' } }
+    post:
+      tags: [Settings]
+      operationId: createChargeName
+      description: 'Adds a name for other charges to this business only. One of each name per business, whatever its case: 422 CHARGE_NAME_EXISTS.'
+      x-roles: [owner, admin, accountant, sales]
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChargeName' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChargeName' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+  /companies/{companyId}/charge-names/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/CompanyId' }
+      - { $ref: '#/components/parameters/Id' }
+    put:
+      tags: [Settings]
+      operationId: saveChargeName
+      description: "Renames or hides (status inactive) a charge name. Documents keep the name they printed (chargesLabel)."
+      x-roles: [owner, admin, accountant]
+      parameters: [{ $ref: '#/components/parameters/IfMatch' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChargeName' }
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChargeName' }
+        '412': { $ref: '#/components/responses/PreconditionFailed' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
   /companies/{companyId}/exchange-rates/refresh:
     parameters: [{ $ref: '#/components/parameters/CompanyId' }]
     post:
@@ -2094,6 +2150,7 @@ paths:
         - { $ref: '#/components/parameters/From' }
         - { $ref: '#/components/parameters/To' }
         - { name: outstanding, in: query, description: Only documents with an unpaid balance. Used by the payment allocation screen., schema: { type: boolean } }
+        - { name: servicesOnly, in: query, description: 'Only documents whose every line is a service (an item of type service, or a SAC code starting 99). Used by the advance receipt.', schema: { type: boolean } }
         - { name: overdue, in: query, schema: { type: boolean } }
         - { name: eInvoiceStatus, in: query, schema: { $ref: '#/components/schemas/EInvoiceStatus' } }
         - { name: sourceDocumentId, in: query, schema: { type: string } }
@@ -2433,7 +2490,7 @@ paths:
             schema:
               type: object
               properties:
-                overrideCreditLimit: { type: boolean, writeOnly: true, description: 'Finalise an invoice even though it takes the customer past their credit limit; without it that is 422 CREDIT_LIMIT_EXCEEDED.' }
+                overrideCreditLimit: { type: boolean, writeOnly: true, description: 'Finalise an invoice even though it takes the customer past their credit limit; without it that is 422 CREDIT_LIMIT_EXCEEDED. A customer whose limit blocks (creditLimitBlocks) is refused regardless: 422 CREDIT_LIMIT_BLOCKED.' }
       responses:
         '200':
           description: Finalised
@@ -2473,7 +2530,7 @@ paths:
               properties:
                 status: { $ref: '#/components/schemas/DocStatus' }
                 reason: { type: string }
-                overrideCreditLimit: { type: boolean, writeOnly: true, description: 'Finalise an invoice even though it takes the customer past their credit limit; without it that is 422 CREDIT_LIMIT_EXCEEDED.' }
+                overrideCreditLimit: { type: boolean, writeOnly: true, description: 'Finalise an invoice even though it takes the customer past their credit limit; without it that is 422 CREDIT_LIMIT_EXCEEDED. A customer whose limit blocks (creditLimitBlocks) is refused regardless: 422 CREDIT_LIMIT_BLOCKED.' }
       responses:
         '200':
           description: Updated
@@ -2993,6 +3050,7 @@ paths:
         - { name: partyId, in: query, schema: { type: string } }
         - { name: method, in: query, schema: { $ref: '#/components/schemas/PaymentMethod' } }
         - { name: accountId, in: query, schema: { type: string } }
+        - { name: advance, in: query, description: 'Only advance receipts: money received for services with GST taken on it (advanceTax)', schema: { type: boolean } }
         - { $ref: '#/components/parameters/BranchIdQuery' }
         - { $ref: '#/components/parameters/From' }
         - { $ref: '#/components/parameters/To' }
@@ -3025,6 +3083,57 @@ paths:
         '204': { description: Removed }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
+  /companies/{companyId}/payments/adjustments:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Payments]
+      operationId: listAdjustments
+      summary: The adjustments made, newest first
+      description: |
+        An advance used on an invoice (or bill) dated after it was received (or paid), on that
+        document's date, as its GST comes back (GSTR-1 11B); and a direct credit note applied to a
+        document, on the date applied. Base currency. `q` matches the party, the advance or note and the document.
+      parameters:
+        - { name: partyId, in: query, schema: { type: string } }
+        - { $ref: '#/components/parameters/BranchIdQuery' }
+        - { $ref: '#/components/parameters/From' }
+        - { $ref: '#/components/parameters/To' }
+        - { $ref: '#/components/parameters/Q' }
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Cursor' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/Adjustment' } }
+  /companies/{companyId}/payments/adjustments/summary:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Payments]
+      operationId: summarizeAdjustments
+      summary: How many adjustments the filters of listAdjustments match, and what they add up to
+      parameters:
+        - { name: partyId, in: query, schema: { type: string } }
+        - { $ref: '#/components/parameters/BranchIdQuery' }
+        - { $ref: '#/components/parameters/From' }
+        - { $ref: '#/components/parameters/To' }
+        - { $ref: '#/components/parameters/Q' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [count, total]
+                properties:
+                  count: { type: integer }
+                  total: { $ref: '#/components/schemas/Money' }
   /companies/{companyId}/payments/adjust:
     parameters: [{ $ref: '#/components/parameters/CompanyId' }]
     get:
@@ -3094,6 +3203,7 @@ paths:
         - { name: partyId, in: query, schema: { type: string } }
         - { name: method, in: query, schema: { $ref: '#/components/schemas/PaymentMethod' } }
         - { name: accountId, in: query, schema: { type: string } }
+        - { name: advance, in: query, description: 'Only advance receipts: money received for services with GST taken on it (advanceTax)', schema: { type: boolean } }
         - { name: documentId, in: query, description: Payments allocated to this document, schema: { type: string } }
         - { $ref: '#/components/parameters/BranchIdQuery' }
         - { $ref: '#/components/parameters/From' }
@@ -7202,6 +7312,16 @@ components:
             transporterId: { type: string, description: 15-character GSTIN or TRANSIN }
             phone: { type: string }
             status: { type: string, enum: [active, inactive] }
+    ChargeName:
+      allOf:
+        - $ref: '#/components/schemas/Versioned'
+        - type: object
+          required: [name]
+          properties:
+            id: { type: string, readOnly: true }
+            companyId: { type: string, readOnly: true }
+            name: { type: string, minLength: 1, maxLength: 60, description: "What the charges are called on this business's documents: Courier charges, say" }
+            status: { type: string, enum: [active, inactive] }
     TransportMode: { type: string, enum: [road, rail, air, ship] }
     VehicleType: { type: string, enum: [regular, overDimensional] }
     ComplianceSettings:
@@ -7273,6 +7393,7 @@ components:
             billingAddress: { $ref: '#/components/schemas/Address' }
             shippingAddress: { $ref: '#/components/schemas/Address' }
             creditLimit: { $ref: '#/components/schemas/Money' }
+            creditLimitBlocks: { type: boolean, description: 'Over creditLimit an invoice is refused (422 CREDIT_LIMIT_BLOCKED), not only warned about; overrideCreditLimit does not lift it. Once the customer owes more than the limit they are on hold: no new quote, proforma, sales order, delivery note, invoice or debit note is created, converted, moved to them or issued, not even as a draft (422 CREDIT_LIMIT_BLOCKED); receipts, credit notes and returns still are. Unset or false warns.' }
             openingBalance: { $ref: '#/components/schemas/Money' }
             openingBalanceDate: { type: string, format: date, description: "The day the opening balance stands at; not after today. Unset reads as the start of the books." }
             openingBalanceSide: { type: string, enum: [dr, cr], description: "dr: they owe us; cr: we owe them. Unset is the kind's usual side (customer and both dr, supplier cr). A general contact has no opening balance." }
@@ -7959,6 +8080,7 @@ components:
         documentDiscountValue: { type: number }
         charges: { $ref: '#/components/schemas/Money' }
         chargesKind: { type: string, enum: [freight, packing, insurance, handling, loading, other], description: 'What the charges are for; printed as their name on the document. Unset is other charges.' }
+        chargesLabel: { type: [string, 'null'], maxLength: 60, description: "The business's own name for its charges (one of its charge names), printed in place of chargesKind's. Kept as it was when chosen. null clears it." }
         applyRoundOff: { type: boolean }
         roundOffManual: { allOf: [{ $ref: '#/components/schemas/Money' }], description: A round-off the user typed; overrides the automatic one when applyRoundOff is true }
         notes: { type: string }
@@ -8020,7 +8142,7 @@ components:
         tcsSection: { type: string, enum: [none, scrap, liquor, tenduLeaves, timberLease, timberOther, forestProduce, minerals, motorVehicle, luxuryGoods], description: 'On an invoice: the TCS section (s.206C) the sale falls under, or none. The rate follows the section, higher when the buyer has no PAN; a 206C(1F) sale collects only over ₹10 lakh.' }
         tdsSection: { type: string, enum: [none, 194C, 194JA, 194JB, 194H, 194IA, 194IB, 194A, 194Q], writeOnly: true, description: "On a supplier's bill or debit note: the TDS section, or none. Defaults to the supplier's; worked out only for a company with a TAN. On an invoice: the section the customer will deduct TDS under (expected TDS, not posted), or none; defaults to the party's." }
         tdsRate: { type: number, minimum: 0, maximum: 100, writeOnly: true, description: "On an invoice: the rate the customer will deduct at, percent. Defaults to the section's rate for the company's PAN." }
-        overrideCreditLimit: { type: boolean, writeOnly: true, description: 'Finalise an invoice even though it takes the customer past their credit limit; without it that is 422 CREDIT_LIMIT_EXCEEDED.' }
+        overrideCreditLimit: { type: boolean, writeOnly: true, description: 'Finalise an invoice even though it takes the customer past their credit limit; without it that is 422 CREDIT_LIMIT_EXCEEDED. A customer whose limit blocks (creditLimitBlocks) is refused regardless: 422 CREDIT_LIMIT_BLOCKED.' }
         status:
           allOf: [{ $ref: '#/components/schemas/DocStatus' }]
           default: draft
@@ -8337,6 +8459,25 @@ components:
         sourceId: { type: string }
         documentId: { type: string }
         amount: { $ref: '#/components/schemas/Money' }
+    Adjustment:
+      type: object
+      description: One adjustment made, an advance used on a document or a direct note applied to one
+      required: [id, kind, date, partyId, partyName, sourceType, sourceId, sourceNumber, documentId, documentNumber, documentKind, amount]
+      properties:
+        id: { type: string, description: 'alloc:<allocation id> for an advance, cap:<credit application id> for a note' }
+        kind: { type: string, enum: [advanceReceived, advancePaid, creditNote, supplierCreditNote] }
+        date: { type: string, format: date, description: "An advance: the document's date. A note: the date it was applied." }
+        partyId: { type: string }
+        partyName: { type: string }
+        branchId: { type: string }
+        sourceType: { type: string, enum: [payment, note] }
+        sourceId: { type: string }
+        sourceNumber: { type: string }
+        documentId: { type: string }
+        documentNumber: { type: string }
+        documentKind: { $ref: '#/components/schemas/DocumentKind' }
+        amount: { $ref: '#/components/schemas/Money' }
+        gst: { allOf: [{ $ref: '#/components/schemas/Money' }], description: 'A service advance taxed on receipt: the GST and cess inside this part of it, which come back on the document' }
     Adjustable:
       type: object
       required: [credits, open]
@@ -8355,6 +8496,7 @@ components:
               total: { $ref: '#/components/schemas/Money' }
               left: { $ref: '#/components/schemas/Money' }
               advanceTax: { type: boolean, description: A service advance taxed on receipt }
+              leftTax: { allOf: [{ $ref: '#/components/schemas/Money' }], description: 'On a service advance taxed on receipt: the GST and cess inside what is left of it (left less this is its value without GST)' }
         open:
           type: array
           description: Documents still owed, oldest first
@@ -8369,6 +8511,7 @@ components:
               total: { $ref: '#/components/schemas/Money' }
               outstanding: { $ref: '#/components/schemas/Money' }
               hasServiceLines: { type: boolean, description: 'Has a line for a service (an item of type service, or a SAC code starting 99)' }
+              servicesOnly: { type: boolean, description: 'Every line is a service: the only documents a service advance (advanceTax) is adjusted against' }
     Payment:
       allOf:
         - $ref: '#/components/schemas/Versioned'

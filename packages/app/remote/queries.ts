@@ -226,17 +226,19 @@ export async function fetchDocumentRecord(companyId: string, id: string, signal?
  * Every open document of `kinds` for a party, oldest first, with what each still owes as the server
  * counts it (the figure it checks an allocation against). Empty until a party is picked.
  */
-export function useOpenDocuments(partyId: string | null | undefined, kinds: DocumentKind[]) {
+/** `servicesOnly`: just the documents whose every line is a service, as an advance receipt lists. */
+export function useOpenDocuments(partyId: string | null | undefined, kinds: DocumentKind[], opts?: { servicesOnly?: boolean }) {
   const companyId = useAppStore((s) => s.activeCompanyId);
+  const servicesOnly = opts?.servicesOnly || undefined;
   return useQuery({
-    queryKey: [...documentKeys.all(companyId), 'open', partyId, kinds],
+    queryKey: [...documentKeys.all(companyId), 'open', partyId, kinds, servicesOnly ?? false],
     enabled: !!companyId && !!partyId,
     queryFn: async ({ signal }) => {
       const rows: ListedDocument[] = [];
       let cursor: string | undefined;
       for (let page = 0; page < 20; page++) {
         const p = documentParams(companyId, { kinds, partyId: partyId!, outstanding: true });
-        const { data } = await api.GET('/companies/{companyId}/documents', { params: { path: p.path, query: { ...p.query, sort: 'date', limit: 200, cursor } }, signal });
+        const { data } = await api.GET('/companies/{companyId}/documents', { params: { path: p.path, query: { ...p.query, servicesOnly, sort: 'date', limit: 200, cursor } }, signal });
         rows.push(...((data?.data ?? []) as ListedDocument[]));
         cursor = data?.nextCursor ?? undefined;
         if (!cursor) break;
@@ -276,12 +278,13 @@ export function useServerAccountBalances() {
   return q.data;
 }
 
-export type PaymentQuery = { direction: 'received' | 'paid'; from?: string; to?: string; q?: string; partyId?: string; branchId?: string };
+/** `advance`: only advance receipts, received for services with GST taken on them. */
+export type PaymentQuery = { direction: 'received' | 'paid'; from?: string; to?: string; q?: string; partyId?: string; branchId?: string; advance?: boolean };
 const paymentKeys = {
   all: (companyId: string) => ['payments', companyId] as const,
 };
 function paymentParams(f: PaymentQuery) {
-  return { direction: f.direction, from: f.from || undefined, to: f.to || undefined, q: f.q?.trim() || undefined, partyId: f.partyId || undefined, branchId: f.branchId || undefined };
+  return { direction: f.direction, from: f.from || undefined, to: f.to || undefined, q: f.q?.trim() || undefined, partyId: f.partyId || undefined, branchId: f.branchId || undefined, advance: f.advance || undefined };
 }
 
 /** Payments one way, newest first, 50 at a time. Each row carries its party's name. */
@@ -309,6 +312,43 @@ export function usePaymentSummary(f: PaymentQuery) {
     enabled: !!companyId,
     queryFn: async ({ signal }) => {
       const { data } = await api.GET('/companies/{companyId}/payments/summary', { params: { path: { companyId }, query: paymentParams(f) }, signal });
+      return data!;
+    },
+    placeholderData: keepWithin(companyId),
+  });
+}
+
+export type AdjustmentQuery = { from?: string; to?: string; q?: string; partyId?: string; branchId?: string };
+export type AdjustmentRow = Schema<'Adjustment'>;
+function adjustmentParams(f: AdjustmentQuery) {
+  return { from: f.from || undefined, to: f.to || undefined, q: f.q?.trim() || undefined, partyId: f.partyId || undefined, branchId: f.branchId || undefined };
+}
+
+/** The adjustments made (advances used, notes applied), newest first, 50 at a time. Stale with the payments, so an adjustment shows at once. */
+export function useAdjustmentPages(f: AdjustmentQuery) {
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  const query = useInfiniteQuery({
+    queryKey: [...paymentKeys.all(companyId), 'adjustments', f],
+    enabled: !!companyId,
+    initialPageParam: undefined as string | undefined,
+    queryFn: async ({ pageParam, signal }) => {
+      const { data } = await api.GET('/companies/{companyId}/payments/adjustments', { params: { path: { companyId }, query: { ...adjustmentParams(f), limit: PAGE, cursor: pageParam } }, signal });
+      return data!;
+    },
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
+    placeholderData: keepWithin(companyId),
+  });
+  return { ...query, rows: (query.data?.pages.flatMap((p) => p.data ?? []) ?? []) as AdjustmentRow[] };
+}
+
+/** How many adjustments the filters match, and their total in base currency. */
+export function useAdjustmentSummary(f: AdjustmentQuery) {
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  return useQuery({
+    queryKey: [...paymentKeys.all(companyId), 'adjustments', 'summary', f],
+    enabled: !!companyId,
+    queryFn: async ({ signal }) => {
+      const { data } = await api.GET('/companies/{companyId}/payments/adjustments/summary', { params: { path: { companyId }, query: adjustmentParams(f) }, signal });
       return data!;
     },
     placeholderData: keepWithin(companyId),
@@ -720,19 +760,26 @@ export async function adjustOnServer(partyId: string, side: 'customer' | 'suppli
   for (const key of [['adjustable', companyId], documentKeys.all(companyId), paymentKeys.all(companyId), partyKeys.all(companyId), ['reports', companyId], ['books', companyId]]) {
     void queryClient.invalidateQueries({ queryKey: key });
   }
+  // The payments it rewrote and the documents it settled, into the device's book now: a payment or
+  // invoice page open on them shows the adjustment at once, not after the next pull or a reload.
+  const applied = data?.applied ?? [];
+  if (applied.length) {
+    await loadForAdvances(companyId, partyId, side === 'customer' ? 'received' : 'paid', [...new Set(applied.map((a) => a.documentId))]).catch(() => {});
+  }
   return data!;
 }
 
 /**
  * "Adjust advances" from a payment screen, on the server: it applies direct credit notes too and
  * brings a service advance's GST back on the invoice's date (RULES 8.13). `documentIds` limits it to those documents,
- * oldest credit first, notes before payments on the same day. Returns what was applied, by currency.
+ * oldest credit first, notes before payments on the same day; a service advance only on a document whose
+ * every line is a service. Returns what was applied in all (by currency), and each share of it.
  */
 export async function adjustAdvancesFor(
   partyId: string,
   direction: 'received' | 'paid',
   documentIds: string[] | undefined,
-): Promise<{ minor: number; currency: string }[]> {
+): Promise<{ totals: { minor: number; currency: string }[]; applied: AdjustmentAllocation[] }> {
   const side = direction === 'received' ? 'customer' : 'supplier';
   const companyId = useAppStore.getState().activeCompanyId;
   let allocations: AdjustmentAllocation[] | undefined;
@@ -741,21 +788,21 @@ export async function adjustAdvancesFor(
     const credits = [...(data?.credits ?? [])].sort((a, b) => a.date.localeCompare(b.date) || (a.sourceType === b.sourceType ? 0 : a.sourceType === 'note' ? -1 : 1));
     const open = (data?.open ?? []).filter((o) => documentIds.includes(o.documentId));
     allocations = fifoAllocate(
-      credits.map((c) => ({ id: `${c.sourceType}:${c.id}`, date: c.date, left: c.left.minor })),
-      open.map((o) => ({ id: o.documentId, date: o.date, outstanding: o.outstanding.minor })),
+      credits.map((c) => ({ id: `${c.sourceType}:${c.id}`, date: c.date, left: c.left.minor, serviceAdvance: c.sourceType === 'payment' && !!c.advanceTax })),
+      open.map((o) => ({ id: o.documentId, date: o.date, outstanding: o.outstanding.minor, servicesOnly: o.servicesOnly })),
     ).map((m) => ({
       sourceType: m.creditId.startsWith('note:') ? 'note' : 'payment',
       sourceId: m.creditId.split(':').slice(1).join(':'),
       documentId: m.documentId,
       amount: { minor: m.amount, currency: open[0]?.outstanding.currency ?? '' },
     }));
-    if (!allocations.length) return [];
+    if (!allocations.length) return { totals: [], applied: [] };
   }
   const res = await adjustOnServer(partyId, side, allocations);
-  // The payments it rewrote reach the device's book on the next pull.
+  // Anything else it touched (balances, the party) on the next pull.
   refreshSoon();
   const total = res.applied.reduce((a, x) => a + x.amount.minor, 0);
-  return total > 0 ? [{ minor: total, currency: res.applied[0].amount.currency }] : [];
+  return { totals: total > 0 ? [{ minor: total, currency: res.applied[0].amount.currency }] : [], applied: res.applied };
 }
 
 /** How many vouchers the filters match, their total, and (for receipts) the split by what they were for. */
