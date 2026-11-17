@@ -415,7 +415,8 @@ export function AmountField({
   // A zero filled in for the user (0, 0.00) reads as the grey placeholder, at rest and when the
   // field is entered, until something is typed: the cursor starts in an empty box rather than
   // after its last 0. A 0 the user types themselves stays.
-  const zero = value !== '' && /^-?0*\.?0*$/.test(value);
+  // One character class, read once through (no backtracking), then the number itself.
+  const zero = /^[-0.]+$/.test(value) && Number(value) === 0;
   const [hideZero, setHideZero] = useState(false);
   const shown = focused ? (hideZero && zero ? '' : value) : zero ? '' : groupAmountText(value, currency);
   return (
