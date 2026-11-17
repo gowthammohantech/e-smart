@@ -318,6 +318,43 @@ export function usePaymentSummary(f: PaymentQuery) {
   });
 }
 
+export type AdjustmentQuery = { from?: string; to?: string; q?: string; partyId?: string; branchId?: string };
+export type AdjustmentRow = Schema<'Adjustment'>;
+function adjustmentParams(f: AdjustmentQuery) {
+  return { from: f.from || undefined, to: f.to || undefined, q: f.q?.trim() || undefined, partyId: f.partyId || undefined, branchId: f.branchId || undefined };
+}
+
+/** The adjustments made (advances used, notes applied), newest first, 50 at a time. Stale with the payments, so an adjustment shows at once. */
+export function useAdjustmentPages(f: AdjustmentQuery) {
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  const query = useInfiniteQuery({
+    queryKey: [...paymentKeys.all(companyId), 'adjustments', f],
+    enabled: !!companyId,
+    initialPageParam: undefined as string | undefined,
+    queryFn: async ({ pageParam, signal }) => {
+      const { data } = await api.GET('/companies/{companyId}/payments/adjustments', { params: { path: { companyId }, query: { ...adjustmentParams(f), limit: PAGE, cursor: pageParam } }, signal });
+      return data!;
+    },
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
+    placeholderData: keepWithin(companyId),
+  });
+  return { ...query, rows: (query.data?.pages.flatMap((p) => p.data ?? []) ?? []) as AdjustmentRow[] };
+}
+
+/** How many adjustments the filters match, and their total in base currency. */
+export function useAdjustmentSummary(f: AdjustmentQuery) {
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  return useQuery({
+    queryKey: [...paymentKeys.all(companyId), 'adjustments', 'summary', f],
+    enabled: !!companyId,
+    queryFn: async ({ signal }) => {
+      const { data } = await api.GET('/companies/{companyId}/payments/adjustments/summary', { params: { path: { companyId }, query: adjustmentParams(f) }, signal });
+      return data!;
+    },
+    placeholderData: keepWithin(companyId),
+  });
+}
+
 /** Opens a payment from the server, kept in the store with its party (see useDocumentRecord). */
 export function usePaymentRecord(id: string | undefined) {
   const companyId = useAppStore((s) => s.activeCompanyId);

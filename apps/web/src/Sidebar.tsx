@@ -11,7 +11,7 @@ import { BrandLogo } from '@esmart/ui/components/BrandLogo';
 import { canOpen } from '@esmart/core/domain/plan';
 import { countLabel } from '@esmart/core/lib/format';
 import { TABS, tabForPath, tabPath, type TabName } from '@esmart/app/navigation/tabs';
-import { appHref, section, type MenuPage, type PageGroup, type SidebarGroup } from '@esmart/app/navigation/menu';
+import { MENU, appHref, section, type MenuPage, type PageGroup, type SidebarGroup } from '@esmart/app/navigation/menu';
 import { useMenuBadges } from '@esmart/app/navigation/moreGroups';
 import { useDisabledModules, usePlan } from '@esmart/app/store/selectors';
 // A page swap the open form can't see coming; it asks first when there are unsaved changes.
@@ -40,7 +40,10 @@ const GROUPS: (GroupKey | null)[] = [null, 'transactions', 'finance', 'manage'];
 /** react-native-web passes `fixed` through; the native types don't know it. */
 const FIXED = 'fixed' as ViewStyle['position'];
 
-const isOn = (pathname: string, route: string) => pathname === route || pathname.startsWith(`${route}/`);
+const under = (pathname: string, route: string) => pathname === route || pathname.startsWith(`${route}/`);
+const MENU_ROUTES = MENU.flatMap((s) => s.pages.map((p) => p.route));
+/** On the page, or one under it, unless a menu page nearer to it holds it (Receipts gives way to Advance adjustments at /receipts/adjustments). */
+const isOn = (pathname: string, route: string) => under(pathname, route) && !MENU_ROUTES.some((r) => r.length > route.length && r.startsWith(`${route}/`) && under(pathname, r));
 
 /** The logo at the top of the sidebar: a link to Home, as a logo is on most sites. */
 function HomeLogo({ compact }: { compact: boolean }) {

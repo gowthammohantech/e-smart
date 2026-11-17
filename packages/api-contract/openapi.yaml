@@ -3083,6 +3083,57 @@ paths:
         '204': { description: Removed }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
+  /companies/{companyId}/payments/adjustments:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Payments]
+      operationId: listAdjustments
+      summary: The adjustments made, newest first
+      description: |
+        An advance used on an invoice (or bill) dated after it was received (or paid), on that
+        document's date, as its GST comes back (GSTR-1 11B); and a direct credit note applied to a
+        document, on the date applied. Base currency. `q` matches the party, the advance or note and the document.
+      parameters:
+        - { name: partyId, in: query, schema: { type: string } }
+        - { $ref: '#/components/parameters/BranchIdQuery' }
+        - { $ref: '#/components/parameters/From' }
+        - { $ref: '#/components/parameters/To' }
+        - { $ref: '#/components/parameters/Q' }
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Cursor' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/Adjustment' } }
+  /companies/{companyId}/payments/adjustments/summary:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Payments]
+      operationId: summarizeAdjustments
+      summary: How many adjustments the filters of listAdjustments match, and what they add up to
+      parameters:
+        - { name: partyId, in: query, schema: { type: string } }
+        - { $ref: '#/components/parameters/BranchIdQuery' }
+        - { $ref: '#/components/parameters/From' }
+        - { $ref: '#/components/parameters/To' }
+        - { $ref: '#/components/parameters/Q' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [count, total]
+                properties:
+                  count: { type: integer }
+                  total: { $ref: '#/components/schemas/Money' }
   /companies/{companyId}/payments/adjust:
     parameters: [{ $ref: '#/components/parameters/CompanyId' }]
     get:
@@ -8408,6 +8459,25 @@ components:
         sourceId: { type: string }
         documentId: { type: string }
         amount: { $ref: '#/components/schemas/Money' }
+    Adjustment:
+      type: object
+      description: One adjustment made, an advance used on a document or a direct note applied to one
+      required: [id, kind, date, partyId, partyName, sourceType, sourceId, sourceNumber, documentId, documentNumber, documentKind, amount]
+      properties:
+        id: { type: string, description: 'alloc:<allocation id> for an advance, cap:<credit application id> for a note' }
+        kind: { type: string, enum: [advanceReceived, advancePaid, creditNote, supplierCreditNote] }
+        date: { type: string, format: date, description: "An advance: the document's date. A note: the date it was applied." }
+        partyId: { type: string }
+        partyName: { type: string }
+        branchId: { type: string }
+        sourceType: { type: string, enum: [payment, note] }
+        sourceId: { type: string }
+        sourceNumber: { type: string }
+        documentId: { type: string }
+        documentNumber: { type: string }
+        documentKind: { $ref: '#/components/schemas/DocumentKind' }
+        amount: { $ref: '#/components/schemas/Money' }
+        gst: { allOf: [{ $ref: '#/components/schemas/Money' }], description: 'A service advance taxed on receipt: the GST and cess inside this part of it, which come back on the document' }
     Adjustable:
       type: object
       required: [credits, open]

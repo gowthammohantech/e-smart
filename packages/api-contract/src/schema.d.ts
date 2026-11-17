@@ -2174,6 +2174,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/{companyId}/payments/adjustments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The adjustments made, newest first
+         * @description An advance used on an invoice (or bill) dated after it was received (or paid), on that
+         *     document's date, as its GST comes back (GSTR-1 11B); and a direct credit note applied to a
+         *     document, on the date applied. Base currency. `q` matches the party, the advance or note and the document.
+         */
+        get: operations["listAdjustments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/payments/adjustments/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /** How many adjustments the filters of listAdjustments match, and what they add up to */
+        get: operations["summarizeAdjustments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/{companyId}/payments/adjust": {
         parameters: {
             query?: never;
@@ -6494,6 +6537,31 @@ export interface components {
             sourceId: string;
             documentId: string;
             amount: components["schemas"]["Money"];
+        };
+        /** @description One adjustment made, an advance used on a document or a direct note applied to one */
+        Adjustment: {
+            /** @description alloc:<allocation id> for an advance, cap:<credit application id> for a note */
+            id: string;
+            /** @enum {string} */
+            kind: "advanceReceived" | "advancePaid" | "creditNote" | "supplierCreditNote";
+            /**
+             * Format: date
+             * @description An advance: the document's date. A note: the date it was applied.
+             */
+            date: string;
+            partyId: string;
+            partyName: string;
+            branchId?: string;
+            /** @enum {string} */
+            sourceType: "payment" | "note";
+            sourceId: string;
+            sourceNumber: string;
+            documentId: string;
+            documentNumber: string;
+            documentKind: components["schemas"]["DocumentKind"];
+            amount: components["schemas"]["Money"];
+            /** @description A service advance taxed on receipt: the GST and cess inside this part of it, which come back on the document */
+            gst?: components["schemas"]["Money"];
         };
         Adjustable: {
             /** @description Unadjusted advances and direct notes, oldest first */
@@ -12007,6 +12075,71 @@ export interface operations {
             };
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+        };
+    };
+    listAdjustments: {
+        parameters: {
+            query?: {
+                partyId?: string;
+                branchId?: components["parameters"]["BranchIdQuery"];
+                from?: components["parameters"]["From"];
+                to?: components["parameters"]["To"];
+                /** @description Free-text search */
+                q?: components["parameters"]["Q"];
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page"] & {
+                        data?: components["schemas"]["Adjustment"][];
+                    };
+                };
+            };
+        };
+    };
+    summarizeAdjustments: {
+        parameters: {
+            query?: {
+                partyId?: string;
+                branchId?: components["parameters"]["BranchIdQuery"];
+                from?: components["parameters"]["From"];
+                to?: components["parameters"]["To"];
+                /** @description Free-text search */
+                q?: components["parameters"]["Q"];
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        count: number;
+                        total: components["schemas"]["Money"];
+                    };
+                };
+            };
         };
     };
     listAdjustable: {

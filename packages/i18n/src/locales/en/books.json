@@ -636,6 +636,27 @@
     "expense": "Expenses",
     "profit": "Profit"
   },
+  "adjustments": {
+    "title": "Advance adjustments",
+    "search": "Search adjustments",
+    "count_one": "{{count}} adjustment",
+    "count_other": "{{count}} adjustments",
+    "none": "No adjustments",
+    "emptyBody": "An advance used on an invoice, or a credit note applied to one, shows here once adjusted.",
+    "adjustNow": "Adjust an advance",
+    "type": "Type",
+    "source": "Advance or note",
+    "party": "Party",
+    "against": "Adjusted against",
+    "gst": "GST back",
+    "openDocument": "Open {{number}}",
+    "kind": {
+      "advanceReceived": "Advance received",
+      "advancePaid": "Advance paid",
+      "creditNote": "Credit note",
+      "supplierCreditNote": "Supplier credit note"
+    }
+  },
   "adjust": {
     "title": "Adjust advance",
     "intro": "Apply what a party has paid in advance, or a credit note not raised against an invoice, to what they still owe.",

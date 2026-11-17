@@ -229,6 +229,8 @@ const GATED_PATHS: [prefix: string, module: Module | null][] = [
   // Adjusting advances and credit notes against invoices is a payments screen, open like payments
   // (it only sits under /receipts); the supplier side's own screens are gated by payables.
   ['/receipts/adjust', null],
+  // And the list of adjustments made, which Adjust advance is the + of.
+  ['/receipts/adjustments', null],
   // Receipts are receipt vouchers.
   ['/receipts', 'books'],
   // Matching 2B needs the purchase register.

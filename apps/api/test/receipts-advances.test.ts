@@ -65,6 +65,50 @@ describe('advance receipts for services', () => {
   });
 });
 
+describe('the adjustments list', () => {
+  it('lists advances used on later invoices and notes applied, newest first, with the GST that came back', async () => {
+    const m = await moneySetup(t);
+    await registered(m);
+    const adv = await t.post(
+      `${m.c}/payments`,
+      { direction: 'received', partyId: m.mumbai.id, date: '2026-09-15', amount: inr(118_000), currency: 'INR', method: 'cash', accountId: m.cash.id, advanceTax: { taxCategoryId: m.gst(18), placeOfSupplyStateCode: '27', hsn: '998311' } },
+      { token: m.token },
+    );
+    t.setNow('2026-10-10T10:00:00Z');
+    const inv = await t.post(`${m.c}/documents`, { kind: 'invoice', partyId: m.mumbai.id, date: '2026-10-10', currency: 'INR', status: 'issued', lines: [consulting(m, 200_000)] }, { token: m.token });
+    expect((await t.post(`${m.c}/payments/adjust`, { partyId: m.mumbai.id }, { token: m.token })).status).toBe(200);
+    // Paid on the invoice's own day: it settled it, no adjustment.
+    const paid = await t.post(`${m.c}/payments`, { direction: 'received', partyId: m.mumbai.id, date: '2026-10-10', amount: inr(10_000), currency: 'INR', method: 'cash', accountId: m.cash.id, allocations: [{ documentId: inv.body.id, amount: inr(10_000) }] }, { token: m.token });
+    expect(paid.status).toBe(201);
+    t.setNow('2026-10-20T10:00:00Z');
+    const cn = await t.post(
+      `${m.c}/documents`,
+      { kind: 'creditNote', partyId: m.mumbai.id, date: '2026-10-20', currency: 'INR', noteReason: 'discount', originalNumber: 'INV/26-27/0001', originalDate: '2026-10-10', status: 'issued', lines: [line(m.gst(18), { name: 'Discount', quantity: 1, unitPrice: inr(10_000) })] },
+      { token: m.token },
+    );
+    expect(cn.status).toBe(201);
+    expect((await t.post(`${m.c}/payments/adjust`, { partyId: m.mumbai.id, allocations: [{ sourceType: 'note', sourceId: cn.body.id, documentId: inv.body.id, amount: inr(11_800) }] }, { token: m.token })).status).toBe(200);
+
+    const list = await t.get(`${m.c}/payments/adjustments`, { token: m.token });
+    expect(list.status).toBe(200);
+    expect(list.body.data).toEqual([
+      expect.objectContaining({ kind: 'creditNote', date: '2026-10-20', sourceType: 'note', sourceId: cn.body.id, documentId: inv.body.id, amount: inr(11_800), partyName: expect.any(String) }),
+      expect.objectContaining({ kind: 'advanceReceived', date: '2026-10-10', sourceType: 'payment', sourceId: adv.body.id, documentId: inv.body.id, amount: inr(118_000), gst: inr(18_000) }),
+    ]);
+    expect(list.body.data[0].gst).toBeUndefined();
+    const summary = await t.get(`${m.c}/payments/adjustments/summary`, { token: m.token });
+    expect(summary.body).toEqual({ count: 2, total: inr(129_800) });
+    // By the advance's number, and a page at a time.
+    const found = await t.get(`${m.c}/payments/adjustments`, { token: m.token, query: { q: adv.body.number } });
+    expect(found.body.data.map((r: { sourceId: string }) => r.sourceId)).toEqual([adv.body.id]);
+    const first = await t.get(`${m.c}/payments/adjustments`, { token: m.token, query: { limit: 1 } });
+    expect(first.body.data).toHaveLength(1);
+    const second = await t.get(`${m.c}/payments/adjustments`, { token: m.token, query: { limit: 1, cursor: first.body.nextCursor } });
+    expect(second.body.data.map((r: { kind: string }) => r.kind)).toEqual(['advanceReceived']);
+    expect(second.body.nextCursor).toBeNull();
+  });
+});
+
 describe('the advance receipts list', () => {
   it('lists, counts and totals only the receipts with GST taken on them as a service advance', async () => {
     const m = await moneySetup(t);

@@ -76,3 +76,22 @@ export function keyset(opts: {
     },
   };
 }
+
+/**
+ * The same paging over rows already read and sorted newest first by `key` (a list drawn from more
+ * than one table): the cursor is the last row's key, as keyset() writes it.
+ */
+export function pageInMemory<T>(rows: T[], opts: { cursor?: string | null; limit?: number | null; key: (row: T) => [string, string] }): Page<T> {
+  const limit = Math.min(Math.max(opts.limit ?? 50, 1), 200);
+  let from = rows;
+  if (opts.cursor) {
+    const [d, id] = decode(opts.cursor).map(String);
+    from = rows.filter((r) => {
+      const [rd, rid] = opts.key(r);
+      return rd < d || (rd === d && rid < id);
+    });
+  }
+  if (from.length <= limit) return { data: from, nextCursor: null };
+  const page = from.slice(0, limit);
+  return { data: page, nextCursor: encode(opts.key(page[limit - 1])) };
+}
