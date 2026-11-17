@@ -180,17 +180,6 @@
       "loading": "Loading and unloading",
       "other": "Other charges"
     },
-    "shipTo": {
-      "label": "Ship to a different address",
-      "offHint": "Goods go to the customer at their shipping address (or billing, without one).",
-      "onHint": "Printed as Ship to (consignee) on the document.",
-      "name": "Consignee name",
-      "gstin": "Consignee GSTIN (optional)",
-      "address": "Address",
-      "city": "City",
-      "state": "State",
-      "pin": "PIN"
-    },
     "transport": {
       "label": "Transport by",
       "own": "Own vehicle",
@@ -301,7 +290,14 @@
       "undoing": "Undoing the adjustment…",
       "undone": "Adjustment with {{label}} undone"
     },
-    "editIssuedKind": "An issued {{kind, lowercase}} can't be changed. Duplicate it to start again, or cancel it."
+    "editIssuedKind": "An issued {{kind, lowercase}} can't be changed. Duplicate it to start again, or cancel it.",
+    "shipTo": "Ship to",
+    "shipToGstin": "GSTIN {{gstin}}",
+    "shipToFrom": {
+      "consignee": "Consignee named on this document",
+      "shipping": "The customer’s shipping address",
+      "billing": "The customer’s billing address (no shipping address on file)"
+    }
   },
   "line": {
     "editLine": "Edit line",

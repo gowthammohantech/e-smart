@@ -80,6 +80,9 @@ import { lineRateLabel } from './lineRate';
 import { useFixedAssets } from '../../remote/fixedAssets';
 import { calculateLine } from '@esmart/core/domain/lineCalc';
 
+/** Sales documents of goods on their way to the customer: they show where those go. */
+const SHIPS_GOODS: DocumentKind[] = ['invoice', 'proforma', 'quote', 'salesOrder', 'delivery'];
+
 export function DocumentDetail({ document: doc }: { document: BusinessDocument }) {
   useRefreshOnFocus();
   const t = useTheme();
@@ -175,6 +178,16 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
     [doc, storeItems, complianceSettings],
   );
   const canCancelIrn = canCancelEInvoice(doc.compliance, new Date().toISOString()).allowed;
+
+  // Where a sale's goods go, shown under the customer: as printed and as the e-way bill takes it.
+  const shipping = (() => {
+    if (!SHIPS_GOODS.includes(doc.kind)) return null;
+    const address = doc.shipTo?.address ?? (party?.shippingAddress?.line1 ? party.shippingAddress : party?.billingAddress);
+    if (!address?.line1) return null;
+    const from: 'consignee' | 'shipping' | 'billing' = doc.shipTo ? 'consignee' : party?.shippingAddress?.line1 ? 'shipping' : 'billing';
+    const lines = [address.line1, address.line2, address.city, [address.state, address.postalCode].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+    return { name: doc.shipTo ? doc.shipTo.name : party?.name, gstin: doc.shipTo?.gstin, lines, from };
+  })();
 
   const kindName = documentKindLabel(tr, doc.kind, 1);
   const branch = branches.find((b) => b.id === doc.branchId);
@@ -645,6 +658,34 @@ ${url}`;
           )}
           <Icon name="chevron-right" size={18} color={t.c.muted} />
         </Pressable>
+
+        {/* Where the goods go: the consignee an older document named, else the customer's shipping address, else their billing. */}
+        {shipping ? (
+          <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
+            <View style={{ width: 42, alignItems: 'center', paddingTop: 2 }}>
+              <Icon name="truck-delivery-outline" size={20} color={t.c.muted} />
+            </View>
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>
+                {tr('sales:detail.shipTo')}
+              </Text>
+              {shipping.name ? (
+                <Text variant="small" weight="600">
+                  {shipping.name}
+                </Text>
+              ) : null}
+              <Text variant="small">{shipping.lines}</Text>
+              {shipping.gstin ? (
+                <Text variant="caption" tone="muted">
+                  {tr('sales:detail.shipToGstin', { gstin: shipping.gstin })}
+                </Text>
+              ) : null}
+              <Text variant="caption" tone="muted">
+                {tr(`sales:detail.shipToFrom.${shipping.from}` as 'sales:detail.shipToFrom.shipping')}
+              </Text>
+            </View>
+          </View>
+        ) : null}
 
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm }}>
           {doc.dueDate ? <Badge label={tr('sales:detail.dueOn', { date: formatDate(doc.dueDate, 'dd MMM yyyy') })} tone={overdueDays > 0 ? 'danger' : 'neutral'} /> : null}
