@@ -175,7 +175,9 @@ function NewPaymentForm() {
 
   // Money in settles invoices, debit notes and opening invoices; money out, bills, supplier debit notes and opening bills. What each
   // still owes is the server's figure (returns and credit notes already off), in the payment currency, oldest first.
-  const open = useOpenDocuments(partyId, direction === 'received' ? ['invoice', 'debitNote', 'openingInvoice'] : ['purchaseBill', 'supplierDebitNote', 'openingBill']);
+  // An advance receipt lists only the invoices whose every line is a service, not the ones with goods.
+  const advanceReceipt = direction === 'received' && params.advance === '1';
+  const open = useOpenDocuments(partyId, direction === 'received' ? ['invoice', 'debitNote', 'openingInvoice'] : ['purchaseBill', 'supplierDebitNote', 'openingBill'], { servicesOnly: advanceReceipt });
   const outstanding = useMemo(() => {
     const asOf = today();
     return (open.data ?? [])
@@ -521,7 +523,7 @@ function NewPaymentForm() {
       emptyTitle={tr(direction === 'received' ? 'sales:editor.selectCustomer' : 'sales:editor.selectSupplier')}
       accessibilityLabel={tr('sales:payment.selectContact')}
       onPress={() => setPartyOpen(true)}
-      badges={party && open.isSuccess ? <Badge label={tr('sales:payment.openDocuments', { count: outstanding.length })} tone={outstanding.length ? 'warning' : 'neutral'} size="sm" /> : null}
+      badges={party && open.isSuccess ? <Badge label={tr(advanceReceipt ? 'sales:payment.openServiceDocuments' : 'sales:payment.openDocuments', { count: outstanding.length })} tone={outstanding.length ? 'warning' : 'neutral'} size="sm" /> : null}
     />
   ) : (
     <Pressable onPress={() => setPartyOpen(true)} accessibilityRole="button" accessibilityLabel={tr('sales:payment.selectContact')}>
@@ -542,7 +544,7 @@ function NewPaymentForm() {
               </Text>
               {open.isSuccess ? (
                 <Text variant="caption" tone="muted">
-                  {tr('sales:payment.openDocuments', { count: outstanding.length })}
+                  {tr(advanceReceipt ? 'sales:payment.openServiceDocuments' : 'sales:payment.openDocuments', { count: outstanding.length })}
                 </Text>
               ) : null}
             </View>
@@ -708,8 +710,8 @@ function NewPaymentForm() {
     <EmptyState
       illustration="all-settled"
       icon="check-all"
-      title={tr('sales:payment.nothingOutstanding')}
-      message={tr('sales:payment.advanceHint')}
+      title={tr(advanceReceipt ? 'sales:payment.nothingOutstandingServices' : 'sales:payment.nothingOutstanding')}
+      message={tr(advanceReceipt ? 'sales:payment.advanceReceiptHint' : 'sales:payment.advanceHint')}
       compact
     />
   ) : (

@@ -226,17 +226,19 @@ export async function fetchDocumentRecord(companyId: string, id: string, signal?
  * Every open document of `kinds` for a party, oldest first, with what each still owes as the server
  * counts it (the figure it checks an allocation against). Empty until a party is picked.
  */
-export function useOpenDocuments(partyId: string | null | undefined, kinds: DocumentKind[]) {
+/** `servicesOnly`: just the documents whose every line is a service, as an advance receipt lists. */
+export function useOpenDocuments(partyId: string | null | undefined, kinds: DocumentKind[], opts?: { servicesOnly?: boolean }) {
   const companyId = useAppStore((s) => s.activeCompanyId);
+  const servicesOnly = opts?.servicesOnly || undefined;
   return useQuery({
-    queryKey: [...documentKeys.all(companyId), 'open', partyId, kinds],
+    queryKey: [...documentKeys.all(companyId), 'open', partyId, kinds, servicesOnly ?? false],
     enabled: !!companyId && !!partyId,
     queryFn: async ({ signal }) => {
       const rows: ListedDocument[] = [];
       let cursor: string | undefined;
       for (let page = 0; page < 20; page++) {
         const p = documentParams(companyId, { kinds, partyId: partyId!, outstanding: true });
-        const { data } = await api.GET('/companies/{companyId}/documents', { params: { path: p.path, query: { ...p.query, sort: 'date', limit: 200, cursor } }, signal });
+        const { data } = await api.GET('/companies/{companyId}/documents', { params: { path: p.path, query: { ...p.query, servicesOnly, sort: 'date', limit: 200, cursor } }, signal });
         rows.push(...((data?.data ?? []) as ListedDocument[]));
         cursor = data?.nextCursor ?? undefined;
         if (!cursor) break;

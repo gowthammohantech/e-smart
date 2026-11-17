@@ -10819,6 +10819,8 @@ export interface operations {
                 to?: components["parameters"]["To"];
                 /** @description Only documents with an unpaid balance. Used by the payment allocation screen. */
                 outstanding?: boolean;
+                /** @description Only documents whose every line is a service (an item of type service, or a SAC code starting 99). Used by the advance receipt. */
+                servicesOnly?: boolean;
                 overdue?: boolean;
                 eInvoiceStatus?: components["schemas"]["EInvoiceStatus"];
                 sourceDocumentId?: string;

@@ -1,4 +1,4 @@
-import { and, arrayContains, arrayOverlaps, asc, desc, eq, exists, getTableColumns, gte, ilike, inArray, lte, ne, notInArray, or, sql, type SQL } from 'drizzle-orm';
+import { and, arrayContains, arrayOverlaps, asc, desc, eq, exists, getTableColumns, gte, ilike, inArray, lte, ne, notExists, notInArray, or, sql, type SQL } from 'drizzle-orm';
 import { decide, needsApproval, notifyDecision, pendingApprovals, sendForApproval, type Approval } from './approvals';
 import { MERGE_CONVERSIONS, NOTE_SOURCE, PAYABLE_KINDS, SALES_KINDS, canCancel, canMerge, canTransition, conversionBlock, isFinalized, isPayableDocument, nextStatuses } from '@esmart/core/domain/documentStates';
 import { hasModule } from '@esmart/core/domain/plan';
@@ -492,7 +492,7 @@ async function eInvoiceGenerated(db: DbOrTx, documentId: string): Promise<boolea
  */
 const splitList = <T extends string>(v: T[] | undefined) => (v ?? []).flatMap((x) => String(x).split(',')).filter(Boolean) as T[];
 
-type ListQuery = Pick<Ctx<'listDocuments'>['query'], 'kind' | 'status' | 'partyId' | 'branchId' | 'from' | 'to' | 'q'> & Partial<Pick<Ctx<'listDocuments'>['query'], 'sourceDocumentId' | 'outstanding' | 'overdue' | 'eInvoiceStatus' | 'recurring'>>;
+type ListQuery = Pick<Ctx<'listDocuments'>['query'], 'kind' | 'status' | 'partyId' | 'branchId' | 'from' | 'to' | 'q'> & Partial<Pick<Ctx<'listDocuments'>['query'], 'sourceDocumentId' | 'outstanding' | 'servicesOnly' | 'overdue' | 'eInvoiceStatus' | 'recurring'>>;
 
 /** The WHERE of a document list, shared by the list and its summary so the two never disagree. */
 function listFilters(ctx: Pick<Ctx<'listDocuments'>, 'company' | 'user' | 'db' | 'now'>, q: ListQuery): (SQL | undefined)[] {
@@ -516,6 +516,14 @@ function listFilters(ctx: Pick<Ctx<'listDocuments'>, 'company' | 'user' | 'db' |
   if (q.outstanding !== undefined) {
     const open = and(inArray(D.kind, PAYABLE_KINDS), notInArray(D.status, ['draft', 'cancelled']), sql`${D.grandTotalMinor} > ${D.amountPaidMinor}`);
     filters.push(q.outstanding ? open : sql`not (${open})`);
+  }
+  if (q.servicesOnly) {
+    // A service line: an item that is a service, or a SAC (99…) on the line. Lines, and every one a service.
+    const L = schema.documentLines;
+    const I = schema.items;
+    const service = or(eq(I.type, 'service'), sql`${L.hsnCode} like '99%'`);
+    const lines = (where: SQL | undefined) => ctx.db.select({ one: sql`1` }).from(L).leftJoin(I, eq(I.id, L.itemId)).where(and(eq(L.documentId, D.id), where));
+    filters.push(exists(lines(service)), notExists(lines(sql`not coalesce(${service}, false)`)));
   }
   if (q.overdue !== undefined) filters.push(q.overdue ? sql`${effectiveStatusSql(asOf)} = 'overdue'` : sql`${effectiveStatusSql(asOf)} <> 'overdue'`);
   if (q.eInvoiceStatus) {

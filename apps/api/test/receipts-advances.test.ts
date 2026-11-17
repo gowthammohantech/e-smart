@@ -65,6 +65,21 @@ describe('advance receipts for services', () => {
   });
 });
 
+describe('the invoices an advance receipt lists', () => {
+  it('lists only the open invoices whose every line is a service', async () => {
+    const m = await moneySetup(t);
+    const make = async (lines: unknown[]) => (await t.post(`${m.c}/documents`, { kind: 'invoice', partyId: m.mumbai.id, date: '2026-09-20', currency: 'INR', status: 'issued', lines }, { token: m.token })).body.id as string;
+    const goods = line(m.gst(18), { name: 'Steel rod', hsnCode: '721420', quantity: 1, unitPrice: inr(50_000) });
+    const services = await make([consulting(m, 100_000), consulting(m, 20_000, { name: 'Review' })]);
+    await make([consulting(m, 100_000), goods]);
+    await make([goods]);
+    const all = await t.get(`${m.c}/documents`, { token: m.token, query: { kind: 'invoice', partyId: m.mumbai.id, outstanding: 'true' } });
+    expect(all.body.data).toHaveLength(3);
+    const only = await t.get(`${m.c}/documents`, { token: m.token, query: { kind: 'invoice', partyId: m.mumbai.id, outstanding: 'true', servicesOnly: 'true' } });
+    expect(only.body.data.map((d: { id: string }) => d.id)).toEqual([services]);
+  });
+});
+
 describe('an advance for a service on reverse charge', () => {
   it('owes no GST on the advance, reports none in table 11, and its voucher says tax is payable on reverse charge', async () => {
     const m = await moneySetup(t);

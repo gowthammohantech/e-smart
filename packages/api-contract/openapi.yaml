@@ -2150,6 +2150,7 @@ paths:
         - { $ref: '#/components/parameters/From' }
         - { $ref: '#/components/parameters/To' }
         - { name: outstanding, in: query, description: Only documents with an unpaid balance. Used by the payment allocation screen., schema: { type: boolean } }
+        - { name: servicesOnly, in: query, description: 'Only documents whose every line is a service (an item of type service, or a SAC code starting 99). Used by the advance receipt.', schema: { type: boolean } }
         - { name: overdue, in: query, schema: { type: boolean } }
         - { name: eInvoiceStatus, in: query, schema: { $ref: '#/components/schemas/EInvoiceStatus' } }
         - { name: sourceDocumentId, in: query, schema: { type: string } }
