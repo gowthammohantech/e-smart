@@ -34,6 +34,9 @@ import { PageSurface } from '@esmart/ui/components/Doodles';
  * The Sales plan has four — Home, Sell, GST, More — split around Lixi's orb
  * in a floating bar, so the floating orb stays out of the way.
  */
+/** Sections whose name is too long for the phone's tab bar, shown there by a short one (nav:tabBar). */
+const BAR_SHORT = { contacts: true } as const;
+
 export default function TabsLayout() {
   const t = useTheme();
   const { t: tr } = useTranslation(['nav']);
@@ -115,6 +118,8 @@ export default function TabsLayout() {
             options={{
               href: visible.includes(tab.name) ? undefined : null,
               title: tr(`nav:tab.${tab.name}` as 'nav:tab.index'),
+              // Five fit a phone's bar: a section named too long for it (Customers & Suppliers) has a short one there.
+              tabBarLabel: tab.name in BAR_SHORT ? tr(`nav:tabBar.${tab.name}` as 'nav:tabBar.contacts') : undefined,
               tabBarBadge: tab.name === 'more' && unread > 0 ? countLabel(unread) : undefined,
               tabBarBadgeStyle: { backgroundColor: t.c.bad, color: inkOn(t.c.bad), fontSize: 10 },
               tabBarIcon: ({ color, focused }) => (

@@ -19,7 +19,7 @@ export default function MoneyTab() {
 
   return (
     <View style={{ flex: 1 }}>
-      <AppHeader title={tr('nav:tab.money')} subtitle={tr('nav:money.subtitle')} />
+      <AppHeader title={tr('nav:overviewOf.money')} subtitle={tr('nav:money.subtitle')} />
       <ScrollView
         contentContainerStyle={{ paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.xxxl }}
         showsVerticalScrollIndicator={SHOW_SCROLLBAR}

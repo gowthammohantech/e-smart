@@ -1,6 +1,6 @@
 {
   "hub": {
-    "title": "Stock",
+    "title": "Inventory overview",
     "subtitle": "Items, levels and movements",
     "stockValue": "Stock value",
     "lowStock": "Low stock",

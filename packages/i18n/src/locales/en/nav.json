@@ -1,14 +1,20 @@
 {
+  "tabBar": {
+    "contacts": "Contacts"
+  },
+  "overviewOf": {
+    "money": "Income overview"
+  },
   "tab": {
     "index": "Home",
-    "sales": "Sell",
+    "sales": "Sales",
     "purchases": "Buy",
-    "inventory": "Stock",
+    "inventory": "Inventory",
     "gst": "GST",
-    "contacts": "People",
+    "contacts": "Customers & Suppliers",
     "reports": "Reports",
     "more": "More",
-    "money": "Money"
+    "money": "Accounts"
   },
   "title": {
     "about": "About",
@@ -57,7 +63,7 @@
     "newSalesReturn": "New sales return",
     "newSupplier": "New supplier",
     "openingStock": "Opening stock",
-    "payables": "Payables",
+    "payables": "Payable overview",
     "payment": "Payment",
     "paymentAccounts": "Payment accounts",
     "paymentsMade": "Payments made",
@@ -71,7 +77,7 @@
     "purchaseReturns": "Purchase returns",
     "quotation": "Quotation",
     "quotations": "Quotations",
-    "receivables": "Receivables",
+    "receivables": "Receivable overview",
     "report": "Report",
     "review": "Review",
     "reviewExtraction": "Review extraction",
@@ -121,7 +127,7 @@
     "advanceReceipt": "Advance receipt",
     "advanceReceipts": "Advance receipts",
     "adjustAdvance": "Adjust advance",
-    "advanceAdjustments": "Advance adjustments",
+    "advanceAdjustments": "Receipt adjustment",
     "costCentres": "Cost centres",
     "transfer": "Transfer",
     "gstUtilization": "Utilization entry",

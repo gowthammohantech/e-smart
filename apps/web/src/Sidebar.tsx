@@ -43,6 +43,7 @@ const FIXED = 'fixed' as ViewStyle['position'];
 const under = (pathname: string, route: string) => pathname === route || pathname.startsWith(`${route}/`);
 const MENU_ROUTES = MENU.flatMap((s) => s.pages.map((p) => p.route));
 /** On the page, or one under it, unless a menu page nearer to it holds it (Receipts gives way to Advance adjustments at /receipts/adjustments). */
+
 const isOn = (pathname: string, route: string) => under(pathname, route) && !MENU_ROUTES.some((r) => r.length > route.length && r.startsWith(`${route}/`) && under(pathname, r));
 
 /** The logo at the top of the sidebar: a link to Home, as a logo is on most sites. */
@@ -390,7 +391,7 @@ function SectionDropdown({ tab, pathname }: { tab: TabName; pathname: string }) 
     >
       {/* No overview when the plan can't open the section's own page. */}
       {canOpen(plan, hub.route) ? (
-        <PanelItem page={hub} label={tr('nav:shell.overview', { label: name })} active={pathname === hub.route} badge={undefined} />
+        <PanelItem page={hub} label={tab === 'money' ? tr('nav:overviewOf.money') : tr('nav:shell.overview', { label: name })} active={pathname === hub.route} badge={undefined} />
       ) : null}
       {columns.map((col) => (
         <View key={col.group ?? 'all'} role="group" aria-label={col.group ? tr(`nav:menuGroup.${col.group}`) : undefined} style={{ gap: 1 }}>
@@ -547,7 +548,7 @@ function SectionPanel({
           >
             <Icon name={section(tab).activeIcon} size={ICON_SIZE} color={t.c.primary} />
             <Text variant="body" weight="600" numberOfLines={1} style={{ flex: 1 }}>
-              {tr('nav:shell.overview', { label: name })}
+              {tab === 'money' ? tr('nav:overviewOf.money') : tr('nav:shell.overview', { label: name })}
             </Text>
             <Icon name="arrow-right" size={16} color={t.c.muted} />
           </Pressable>

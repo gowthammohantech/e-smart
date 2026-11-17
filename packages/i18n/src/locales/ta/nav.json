@@ -1,14 +1,20 @@
 {
+  "tabBar": {
+    "contacts": "தொடர்பு"
+  },
+  "overviewOf": {
+    "money": "வருமான மேலோட்டம்"
+  },
   "tab": {
     "index": "முகப்பு",
     "sales": "விற்பனை",
     "purchases": "கொள்முதல்",
     "inventory": "இருப்பு",
     "gst": "GST",
-    "contacts": "நபர்கள்",
+    "contacts": "வாடிக்கையாளர்கள் & சப்ளையர்கள்",
     "reports": "அறிக்கை",
     "more": "மேலும்",
-    "money": "பணம்"
+    "money": "கணக்குகள்"
   },
   "title": {
     "about": "பற்றி",
@@ -57,7 +63,7 @@
     "newSalesReturn": "புதிய விற்பனை ரிட்டர்ன்",
     "newSupplier": "புதிய சப்ளையர்",
     "openingStock": "தொடக்க இருப்பு",
-    "payables": "செலுத்த வேண்டியவை",
+    "payables": "செலுத்த வேண்டியவை மேலோட்டம்",
     "payment": "கட்டணம்",
     "paymentAccounts": "கட்டணக் கணக்குகள்",
     "paymentsMade": "செலுத்திய கட்டணங்கள்",
@@ -71,7 +77,7 @@
     "purchaseReturns": "கொள்முதல் ரிட்டர்ன்கள்",
     "quotation": "விலைப்புள்ளி",
     "quotations": "விலைப்புள்ளிகள்",
-    "receivables": "வரவேண்டியவை",
+    "receivables": "வரவேண்டியவை மேலோட்டம்",
     "report": "அறிக்கை",
     "review": "சரிபார்",
     "reviewExtraction": "பிரித்தெடுத்ததைச் சரிபார்",
@@ -121,7 +127,7 @@
     "advanceReceipt": "முன்பண ரசீது",
     "advanceReceipts": "முன்பண ரசீதுகள்",
     "adjustAdvance": "முன்பணத்தைச் சரிசெய்",
-    "advanceAdjustments": "முன்பணச் சரிசெய்தல்கள்",
+    "advanceAdjustments": "ரசீது சரிசெய்தல்",
     "costCentres": "செலவு மையங்கள்",
     "transfer": "பணப் பரிமாற்றம்",
     "gstUtilization": "வரவுப் பயன்பாட்டுப் பதிவு",
