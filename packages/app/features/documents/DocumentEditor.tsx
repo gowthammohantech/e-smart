@@ -853,7 +853,11 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
     if (onSaved) onSaved(id);
     // Sent from the detail screen, the same way its own Send by email does it.
     // A held draft isn't sent: it goes out once it is approved and issued.
-    else router.replace(`${detailRouteFor(kind, id)}${issued && sendAfter ? '?send=email' : ''}` as never);
+    // A newly issued invoice also asks there what it still needs: its e-invoice and e-way bill.
+    else {
+      const query = [issued && sendAfter ? 'send=email' : '', issued && kind === 'invoice' && !editingIssued ? 'next=compliance' : ''].filter(Boolean).join('&');
+      router.replace(`${detailRouteFor(kind, id)}${query ? `?${query}` : ''}` as never);
+    }
   };
 
   const finalizeLocal = (id: string) => {

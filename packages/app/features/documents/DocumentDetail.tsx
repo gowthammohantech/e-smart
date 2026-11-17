@@ -59,6 +59,7 @@ import { usePrintEwayBill } from '../compliance/EwayBillDetail';
 import { hasIrn } from '@esmart/core/render/docView';
 import { ApprovalBanner } from '../approvals/ApprovalBanner';
 import { EInvoiceSheet } from '../compliance/EInvoiceSheet';
+import { ComplianceNextSteps } from '../compliance/ComplianceNextSteps';
 import { canCancelEInvoice, isEInvoiceApplicable } from '@esmart/core/domain/eInvoice';
 import { ewayBillStatusAt, isEwayBillRequired } from '@esmart/core/domain/ewayBill';
 import { DIALOG_WIDTH, SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
@@ -371,7 +372,18 @@ ${url}`;
 
   // The editor's "Save & send" lands here with ?send=email: send it once, as soon as the
   // document reads as finalised, and drop the flag so a reload or Back doesn't send again.
-  const { send: sendParam } = useLocalSearchParams<{ send?: string }>();
+  const { send: sendParam, next: nextParam } = useLocalSearchParams<{ send?: string; next?: string }>();
+  // Just issued from the editor (?next=compliance): offer what it still needs, the e-invoice and the
+  // e-way bill, once. Worked out as it renders, so an IRN the company raises on its own takes its step away.
+  const [nextDone, setNextDone] = useState(false);
+  const needsEInvoice = eInvoiceApplicable && !['generated', 'cancelled'].includes(doc.compliance?.eInvoiceStatus ?? '');
+  const needsEwayBill = ewayRequired && !ewayBill;
+  const showNextSteps = nextParam === 'compliance' && !nextDone && doc.kind === 'invoice' && isFinalized(doc.status) && doc.status !== 'cancelled' && (needsEInvoice || needsEwayBill);
+  const closeNextSteps = () => {
+    setNextDone(true);
+    // A reload or Back doesn't ask again.
+    router.setParams({ next: undefined });
+  };
   const sentFromEditor = useRef(false);
   const sendNow = useRef<typeof sendVia | null>(null);
   // Kept current after each render, as the editor does for its finalise shortcut.
@@ -535,6 +547,11 @@ ${url}`;
       return;
     }
     doneToast(message, doc.number);
+    // A draft invoice issued here: what it still needs, as when it is issued from the editor.
+    if (doc.kind === 'invoice' && !isFinalized(doc.status) && isFinalized(s) && s !== 'cancelled') {
+      setNextDone(false);
+      router.setParams({ next: 'compliance' });
+    }
   };
 
   // Finalise asks once, then finalises; the status list is for anything else.
@@ -1431,6 +1448,22 @@ ${url}`;
           setConfirmCancel(false);
           void serverSave(() => setDocumentStatus(doc.id, 'cancelled'), tr('sales:detail.documentCancelled'), { icon: 'close-octagon-outline', detail: doc.number });
         }}
+      />
+
+      <ComplianceNextSteps
+        visible={showNextSteps}
+        number={doc.number}
+        eInvoice={needsEInvoice}
+        ewayBill={needsEwayBill}
+        onEInvoice={() => {
+          closeNextSteps();
+          setComplianceSheet('generate');
+        }}
+        onEwayBill={() => {
+          closeNextSteps();
+          router.push(`/(app)/compliance/eway/new?documentId=${doc.id}` as never);
+        }}
+        onLater={closeNextSteps}
       />
 
       {complianceSheet ? (
