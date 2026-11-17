@@ -302,6 +302,7 @@ export function PartyDetail({ party }: { party: Party }) {
     ) : null}
 
     {shownTab === 'payments' ? (
+      <View>
       <Card padded={false}>
         {partyPayments.length === 0 && docGroupLoading(payments) ? (
           <CardRowsSkeleton kind="list" rows={4} />
@@ -344,6 +345,11 @@ export function PartyDetail({ party }: { party: Party }) {
           ))
         )}
       </Card>
+      {/* Past the first page: the payment list, filtered to this contact. */}
+      {payments.hasNextPage && !payments.isPlaceholderData ? (
+        <Button title={tr('common:action.seeAll')} variant="ghost" size="sm" onPress={() => router.push(`/(app)/payments/${isCustomer ? 'received' : 'made'}?party=${party.id}` as never)} />
+      ) : null}
+      </View>
     ) : null}
     </>
   );

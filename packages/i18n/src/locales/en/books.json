@@ -637,7 +637,7 @@
     "profit": "Profit"
   },
   "adjustments": {
-    "title": "Advance adjustments",
+    "title": "Receipt adjustment",
     "search": "Search adjustments",
     "count_one": "{{count}} adjustment",
     "count_other": "{{count}} adjustments",

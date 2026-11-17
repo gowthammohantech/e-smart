@@ -280,6 +280,8 @@
     "baseCurrency": "Base currency",
     "rates": "Exchange rates",
     "history": "Rate history",
+    "showAll": "Show all {{count}}",
+    "showLatest": "Show the latest {{count}}",
     "baseNote": "Every report is presented in this currency. Documents raised in another currency store the rate that applied on their date, so historical totals never shift.",
     "pairMeta_one": "From {{date}} · {{count}} rate on record",
     "pairMeta_other": "From {{date}} · {{count}} rates on record",

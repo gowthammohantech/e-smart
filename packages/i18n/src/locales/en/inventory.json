@@ -1,6 +1,6 @@
 {
   "hub": {
-    "title": "Stock",
+    "title": "Inventory overview",
     "subtitle": "Items, levels and movements",
     "stockValue": "Stock value",
     "lowStock": "Low stock",
@@ -266,7 +266,9 @@
     "count_other": "{{count}} movements",
     "unknownItem": "Unknown item",
     "a11yRow": "{{name}}, {{type}}, {{qty}}",
-    "countMore": "{{count}}+ movements"
+    "countMore": "{{count}}+ movements",
+    "itemFilter": "Item: {{name}}",
+    "clearItem": "Show every item, not just {{name}}"
   },
   "ocr": {
     "nothingScanned": "Nothing scanned yet",

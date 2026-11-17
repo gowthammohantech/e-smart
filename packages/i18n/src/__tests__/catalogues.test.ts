@@ -166,7 +166,10 @@ describe('i18n catalogues', () => {
     for (const [locale, cat] of Object.entries(catalogues)) {
       const tabs = (cat.nav as Tree)?.tab;
       if (!tabs) continue;
-      for (const [key, value] of entries(tabs as Tree)) {
+      // The bar shows a section's short name (nav.tabBar) where its own is for the sidebar (Customers & Suppliers).
+      const short = ((cat.nav as Tree)?.tabBar ?? {}) as Tree;
+      for (const [key, full] of entries(tabs as Tree)) {
+        const value = (short[key] as string | undefined) ?? full;
         expect({ locale, key, len: [...value].length }).toEqual({
           locale,
           key,

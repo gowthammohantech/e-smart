@@ -6,6 +6,7 @@ import { Stack } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
 import { Card } from '@esmart/ui/components/Card';
+import { Button } from '@esmart/ui/components/Button';
 import { Badge } from '@esmart/ui/components/Badge';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { SheetActions } from '../../../features/company/SheetActions';
@@ -29,6 +30,9 @@ import { FieldRow } from '@esmart/ui/components/Layout';
 import { useSaveShortcut } from '../../../components/useSaveShortcut';
 import { useServerSave } from '../../../components/useServerSave';
 
+/** Rates the history shows before Show all. */
+const HISTORY_SHOWN = 12;
+
 export default function CurrencySettings() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
@@ -40,6 +44,9 @@ export default function CurrencySettings() {
   const company = useActiveCompany();
   const baseCurrency = useBaseCurrency();
   const rates = useExchangeRates();
+  // The history shows the latest 12, and every rate when asked.
+  const [allRates, setAllRates] = useState(false);
+  const shownRates = allRates ? rates : rates.slice(0, HISTORY_SHOWN);
   const saveExchangeRate = useAppStore((s) => s.saveExchangeRate);
   const removeExchangeRate = useAppStore((s) => s.removeExchangeRate);
 
@@ -156,7 +163,7 @@ export default function CurrencySettings() {
         {desktop ? (
           <DataTable
             scroll={false}
-            rows={rates.slice(0, 12)}
+            rows={shownRates}
             rowKey={(r) => r.id}
             rowLabel={(r) => `${r.from} → ${r.to}, ${r.rate.toFixed(4)}`}
             onRowPress={open}
@@ -169,19 +176,29 @@ export default function CurrencySettings() {
           />
         ) : (
           <Card padded={false}>
-            {rates.slice(0, 12).map((r, i) => (
+            {shownRates.map((r, i) => (
               <ListRow
                 key={r.id}
                 title={`${r.from} → ${r.to}`}
                 subtitle={tr('settings:currencies.historyRow', { rate: r.rate.toFixed(4), date: formatDate(r.effectiveFrom) })}
                 icon="history"
-                divider={i < Math.min(rates.length, 12) - 1}
+                divider={i < shownRates.length - 1}
                 right={<Badge label={sourceLabel(r.source)} tone="neutral" size="sm" />}
                 onPress={() => open(r)}
               />
             ))}
           </Card>
         )}
+        {/* The latest 12 to start; every rate on record on asking. */}
+        {rates.length > HISTORY_SHOWN ? (
+          <Button
+            title={allRates ? tr('settings:currencies.showLatest', { count: HISTORY_SHOWN }) : tr('settings:currencies.showAll', { count: rates.length })}
+            variant="ghost"
+            size="sm"
+            onPress={() => setAllRates((v) => !v)}
+            style={{ alignSelf: 'flex-start' }}
+          />
+        ) : null}
       </ScrollView>
 
       <PrimaryActionBar title={tr('settings:currencies.add')} icon="plus" onPress={() => open()} />

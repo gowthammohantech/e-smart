@@ -297,6 +297,10 @@ export default function ItemDetail() {
           )}
         </Card>
         )}
+        {/* The latest 20 here; every one in Stock movements, narrowed to this item. */}
+        {!ledgerPending && ledger.length > 20 ? (
+          <Button title={tr('common:action.seeAll')} variant="ghost" size="sm" onPress={() => router.push(`/(app)/inventory/movements?item=${item.id}` as never)} style={{ alignSelf: 'flex-start' }} />
+        ) : null}
       </>
     ) : null}
     </>

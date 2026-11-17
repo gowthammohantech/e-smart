@@ -15,6 +15,7 @@ import { useAppStore } from '../../../store/appStore';
 import { useMovementPages } from '../../../remote/queries';
 import { useDebounced } from '../../../components/useDebounced';
 import { useQueryParams } from '../../../navigation/queryParams';
+import { ItemFilterChip } from '../../../components/PartyFilterChip';
 import { signedQuantity } from '@esmart/core/domain/stockLedger';
 import { StockMovement, StockMovementType } from '@esmart/core/types';
 import { formatQty } from '@esmart/core/lib/format';
@@ -37,11 +38,13 @@ export default function StockMovements() {
   const [params, setParams] = useQueryParams();
   const type = (params.type ?? 'all') as StockMovementType | 'all';
   const setType = (ty: StockMovementType | 'all') => setParams({ type: ty === 'all' ? undefined : ty });
+  // Opened from an item's page (?item=…): only its movements, until the chip is pressed.
+  const itemId = params.item || undefined;
 
   // Read from the server 50 at a time, newest first; type and search are filtered there, and each row names its item.
   const branchId = useAppStore((s) => s.activeBranchId) || undefined;
   const search = useDebounced(query);
-  const pages = useMovementPages({ branchId, type: type === 'all' ? undefined : type, q: search });
+  const pages = useMovementPages({ branchId, itemId, type: type === 'all' ? undefined : type, q: search });
   const filtered = pages.rows as unknown as (StockMovement & { itemName?: string; itemSku?: string })[];
   const names = useMemo(() => new Map(filtered.map((m) => [m.itemId, { name: m.itemName ?? '', sku: m.itemSku ?? '' }])), [filtered]);
   const nameOf = useCallback((id: string) => (names.has(id) ? { id, ...names.get(id)! } : undefined), [names]);
@@ -80,6 +83,7 @@ export default function StockMovements() {
             );
           })}
         </ScrollView>
+        <ItemFilterChip itemId={itemId} onClear={() => setParams({ item: undefined })} />
         {/* No count until the first page is back: "0 movements" would read as none. */}
         {pages.isPending ? (
           <Skeleton height={12} width={80} radius={4} style={{ marginVertical: 2 }} />
