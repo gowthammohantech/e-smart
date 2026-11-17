@@ -1,4 +1,4 @@
-import React, { useEffect, useId, useState } from 'react';
+import React, { useEffect, useId, useImperativeHandle, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   AccessibilityInfo,
@@ -41,6 +41,39 @@ export const WEB_INPUT_RESET = (WEB ? { outlineStyle: 'none', outlineWidth: 0 } 
 /** Web only: a soft halo outside a focused field's border. Empty on native. */
 export function webFocusHalo(t: Theme, focused: boolean): ViewStyle {
   return WEB && focused ? { boxShadow: `0 0 0 3px ${t.c.primary}2E` } : {};
+}
+
+/**
+ * A field's bordered box. A click or tap anywhere in it focuses the input inside: its padding, the
+ * strip above and below the text, an icon, a ₹ or a unit, not only the line of text itself (an amount
+ * box is 40px tall and its input 17px). A click on the input itself is left to it, so the caret lands
+ * where clicked; a button inside (show password, clear) keeps its own press.
+ */
+export function FieldBox({
+  inputRef,
+  disabled,
+  style,
+  children,
+}: {
+  inputRef: React.RefObject<TextInput | null>;
+  disabled?: boolean;
+  style?: StyleProp<ViewStyle>;
+  children: React.ReactNode;
+}) {
+  return (
+    <Pressable
+      onPress={() => {
+        const input = inputRef.current;
+        if (!disabled && input && !input.isFocused()) input.focus();
+      }}
+      // Not a control of its own: the input inside is what a keyboard or screen reader reaches.
+      accessible={false}
+      focusable={false}
+      style={[style, WEB && ({ cursor: disabled ? 'default' : 'text' } as object)]}
+    >
+      {children}
+    </Pressable>
+  );
 }
 
 /* ------------------------------------------------------------------ */
@@ -172,10 +205,16 @@ export function TextField({
   // Read-only: no focus ring or text cursor on a click, and the lock a locked picker shows.
   const readOnly = rest.editable === false;
   const a11y = useFieldA11y({ error, hint, required });
+  // Its own handle on the input (for FieldBox); a ref a screen passed reaches the same input.
+  const { ref: passedRef, ...inputProps } = rest;
+  const inputRef = useRef<TextInput | null>(null);
+  useImperativeHandle(passedRef, () => inputRef.current as TextInput);
 
   return (
     <FieldShell label={label} error={error} hint={hint} required={required} style={containerStyle} messageId={a11y.messageId}>
-      <View
+      <FieldBox
+        inputRef={inputRef}
+        disabled={readOnly}
         style={{
           flexDirection: 'row',
           alignItems: multiline ? 'flex-start' : 'center',
@@ -220,7 +259,8 @@ export function TextField({
           accessibilityLabel={label}
           secureTextEntry={secureTextEntry && !revealed}
           {...a11y.inputProps}
-          {...rest}
+          {...inputProps}
+          ref={inputRef}
           // Emails are lowercase only, so capitals turn lowercase as they're typed.
           onChangeText={rest.keyboardType === 'email-address' && rest.onChangeText ? (v) => rest.onChangeText?.(v.toLowerCase()) : rest.onChangeText}
         />
@@ -243,7 +283,7 @@ export function TextField({
         ) : (
           (suffix ?? (readOnly ? <Icon name="lock-outline" size={16} color={t.c.muted} style={{ marginTop: multiline ? 14 : 0 }} /> : null))
         )}
-      </View>
+      </FieldBox>
     </FieldShell>
   );
 }
@@ -297,10 +337,13 @@ export function PhoneField({
     ...WEB_INPUT_RESET,
   };
   const a11y = useFieldA11y({ error, hint, required });
+  const inputRef = useRef<TextInput | null>(null);
 
   return (
     <FieldShell label={label} error={error} hint={hint} required={required} style={containerStyle} messageId={a11y.messageId}>
-      <View
+      <FieldBox
+        inputRef={inputRef}
+        disabled={disabled}
         style={{
           flexDirection: 'row',
           alignItems: 'center',
@@ -322,6 +365,7 @@ export function PhoneField({
         </Text>
         <View style={{ width: 1, alignSelf: 'stretch', marginVertical: t.spacing.sm, backgroundColor: t.c.line }} />
         <TextInput
+          ref={inputRef}
           value={value}
           onChangeText={(v) => onChangeText(sanitizePhoneNumber(v, dialCode))}
           keyboardType="number-pad"
@@ -340,7 +384,7 @@ export function PhoneField({
           onSubmitEditing={onSubmitEditing}
         />
         {disabled ? <Icon name="lock-outline" size={16} color={t.c.muted} /> : null}
-      </View>
+      </FieldBox>
     </FieldShell>
   );
 }
@@ -419,9 +463,11 @@ export function AmountField({
   const zero = /^[-0.]+$/.test(value) && Number(value) === 0;
   const [hideZero, setHideZero] = useState(false);
   const shown = focused ? (hideZero && zero ? '' : value) : zero ? '' : groupAmountText(value, currency);
+  const inputRef = useRef<TextInput | null>(null);
   return (
     <FieldShell label={label} error={error} hint={hint} required={required} style={containerStyle} messageId={a11y.messageId}>
-      <View
+      <FieldBox
+        inputRef={inputRef}
         style={{
           flexDirection: 'row',
           alignItems: 'center',
@@ -444,6 +490,7 @@ export function AmountField({
           {currencySymbol(currency)}
         </Text>
         <TextInput
+          ref={inputRef}
           // Grouped (₹9,374.51) while at rest; the raw figure while typing.
           value={shown}
           onChangeText={(v) => {
@@ -477,7 +524,7 @@ export function AmountField({
         <Text variant="caption" tone="muted">
           {currency}
         </Text>
-      </View>
+      </FieldBox>
     </FieldShell>
   );
 }

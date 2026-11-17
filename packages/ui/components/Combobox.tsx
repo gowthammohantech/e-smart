@@ -5,7 +5,7 @@ import { Icon } from './Icon';
 import { Text } from './Text';
 import { useTheme } from '../theme/ThemeProvider';
 import { useIsDesktop } from '../theme/breakpoints';
-import { WEB_INPUT_RESET, webFocusHalo } from './Field';
+import { FieldBox, WEB_INPUT_RESET, webFocusHalo } from './Field';
 import type { SelectOption } from './pickers/SelectSheet';
 
 const WEB = Platform.OS === 'web';
@@ -112,7 +112,8 @@ export function Combobox({
 
   return (
     <View style={[{ position: 'relative', zIndex: open ? 10 : 0 }, containerStyle]}>
-      <View
+      <FieldBox
+        inputRef={input}
         style={{
           flexDirection: 'row',
           alignItems: 'center',
@@ -159,7 +160,7 @@ export function Combobox({
           style={{ flex: 1, minWidth: 0, color: t.c.text, fontSize: t.fontSize.body, paddingVertical: t.spacing.sm, ...WEB_INPUT_RESET }}
         />
         <Icon name="chevron-down" size={16} color={t.c.muted} />
-      </View>
+      </FieldBox>
       {open ? (
         <View
           id={listId}
