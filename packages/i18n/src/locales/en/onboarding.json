@@ -117,10 +117,6 @@
     "createInvoice": "Create my first invoice",
     "goToDashboard": "Go to dashboard",
     "next": {
-      "customersLabel": "Add your customers",
-      "customersBody": "Import or add them as you invoice.",
-      "itemsLabel": "Add products or services",
-      "itemsBody": "Set prices and tax once, reuse everywhere.",
       "invoiceLabel": "Raise your first invoice",
       "invoiceBody": "Share it on WhatsApp in seconds."
     },

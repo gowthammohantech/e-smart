@@ -22,13 +22,11 @@ import { COUNTRIES } from '@esmart/core/data/masters';
 import { DEFAULT_PREFIXES, SERIES_KINDS, defaultSeries } from '@esmart/core/domain/numbering';
 import { joinPhone } from '@esmart/core/lib/phone';
 
-/** Each finishes setup and opens where that first step is done. */
+/** Each finishes setup and opens where that first step is done. Customers and items are added from an invoice, as they come. */
 const NEXT_STEPS: { icon: IconName; labelKey: string; bodyKey: string; route: string }[] = [
-  { icon: 'account-plus-outline', labelKey: 'customersLabel', bodyKey: 'customersBody', route: '/(app)/contacts/customers/new' },
-  { icon: 'tag-outline', labelKey: 'itemsLabel', bodyKey: 'itemsBody', route: '/(app)/catalog/items/new' },
   { icon: 'file-document-outline', labelKey: 'invoiceLabel', bodyKey: 'invoiceBody', route: '/(app)/sales/invoices/new' },
 ];
-const INVOICE_ROUTE = NEXT_STEPS[2].route;
+const INVOICE_ROUTE = NEXT_STEPS[0].route;
 const DASHBOARD_ROUTE = '/(app)/(tabs)';
 
 export default function Done() {
@@ -184,7 +182,7 @@ export default function Done() {
               key={s.labelKey}
               variant="flat"
               onPress={busy ? undefined : () => finish(s.route)}
-              accessibilityLabel={tr(`onboarding:done.next.${s.labelKey}` as 'onboarding:done.next.customersLabel')}
+              accessibilityLabel={tr(`onboarding:done.next.${s.labelKey}` as 'onboarding:done.next.invoiceLabel')}
               style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md, opacity: busy ? 0.6 : 1 }}
             >
               <View
@@ -201,10 +199,10 @@ export default function Done() {
               </View>
               <View style={{ flex: 1, gap: 2 }}>
                 <Text variant="body" weight="600">
-                  {tr(`onboarding:done.next.${s.labelKey}` as 'onboarding:done.next.customersLabel')}
+                  {tr(`onboarding:done.next.${s.labelKey}` as 'onboarding:done.next.invoiceLabel')}
                 </Text>
                 <Text variant="caption" tone="muted">
-                  {tr(`onboarding:done.next.${s.bodyKey}` as 'onboarding:done.next.customersBody')}
+                  {tr(`onboarding:done.next.${s.bodyKey}` as 'onboarding:done.next.invoiceBody')}
                 </Text>
               </View>
               <Icon name="chevron-right" size={18} color={t.c.muted} />
