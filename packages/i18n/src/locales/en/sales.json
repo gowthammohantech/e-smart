@@ -82,6 +82,8 @@
     "creditLimitTitle": "Credit limit exceeded",
     "creditLimitExceeded": "{{party}} has a credit limit of {{limit}}. With this invoice they would owe {{exposure}}.",
     "creditLimitBlocked": "{{party}} has a credit limit of {{limit}}, and invoices over it are blocked. With this invoice they would owe {{exposure}}. Take a payment or raise their limit to issue it; you can still save it as a draft.",
+    "creditHold": "{{party}} owes {{owed}}, over their credit limit of {{limit}}, and is on hold: no new invoices, quotes, orders or delivery notes to them until they pay or the limit is raised.",
+    "creditHoldShort": "On credit hold: over their limit",
     "creditLimitProceed": "Continue anyway",
     "returnFrom": "Lines from {{number}}",
     "otherCountry": "Other country (export)",

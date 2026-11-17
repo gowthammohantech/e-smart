@@ -253,6 +253,21 @@ export type CreditCheck = {
 };
 
 /**
+ * What a customer on credit hold can't be given: anything that sells to them or adds to what they
+ * owe. Receipts, credit notes and returns bring it down, and an opening invoice is history, so those go on.
+ */
+export const CREDIT_HOLD_KINDS: BusinessDocument['kind'][] = ['quote', 'proforma', 'salesOrder', 'delivery', 'invoice', 'debitNote'];
+
+/**
+ * On credit hold: the customer's limit blocks (not only warns) and they already owe more than it,
+ * `owedMinor` in the limit's currency. Then no new document of `CREDIT_HOLD_KINDS` goes to them.
+ */
+export function onCreditHold(party: { creditLimit?: Money; creditLimitBlocks?: boolean } | undefined, owedMinor: number): boolean {
+  const limit = party?.creditLimit?.minor ?? 0;
+  return !!party?.creditLimitBlocks && limit > 0 && owedMinor > limit;
+}
+
+/**
  * Would a new invoice take the party past its credit limit? Everything is
  * converted into the limit's currency through base, using `rateToBase`.
  * `excludeDocumentId` keeps a draft being re-finalised from counting twice.

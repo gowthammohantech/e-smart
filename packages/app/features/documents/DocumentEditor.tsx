@@ -27,6 +27,7 @@ import { TDS_SECTIONS, tdsSection } from '@esmart/core/data/tdsSections';
 import { TCS_SECTIONS, partyTcsSection, tcsAskedOn, tcsRateFor, tcsSection } from '@esmart/core/data/tcsSections';
 import { documentKindLabel } from '@esmart/core/labels';
 import { resolveRate } from '@esmart/core/domain/fx';
+import { CREDIT_HOLD_KINDS, onCreditHold } from '@esmart/core/domain/receivables';
 import { buildTaxContext, defaultCrossBorderTax, lutActive, taxAvailableOn, taxCategoriesOn, type CrossBorderTax } from '@esmart/core/domain/taxEngine';
 import { OTHER_COUNTRY_CODE } from '@esmart/core/domain/stateCodes';
 import { CURRENCIES } from '@esmart/core/lib/currencies';
@@ -470,7 +471,9 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   const patchBoe = (p: Partial<NonNullable<DraftState['billOfEntry']>>) => patch({ billOfEntry: { ...boe, ...p } });
   const boeAmount = (m?: Money) => (m && m.minor ? String(toMajor(m)) : '');
   // The party's other open invoices, as the server counts what they still owe.
-  const openInvoices = useOpenDocuments(kind === 'invoice' && party?.creditLimit?.minor ? draft.partyId : null, ['invoice']).data;
+  // A sale to a customer whose limit blocks reads them too, to know whether they are on hold.
+  const holdKind = CREDIT_HOLD_KINDS.includes(kind);
+  const openInvoices = useOpenDocuments((kind === 'invoice' || (holdKind && party?.creditLimitBlocks)) && party?.creditLimit?.minor ? draft.partyId : null, ['invoice']).data;
   /** Core's `checkCreditLimit`: what's owed on other invoices plus this one, in the limit's currency. */
   const creditCheck = (limit: Money) => {
     const rateToBase = (c: string) => (c === baseCurrency ? 1 : c === draft.currency ? draft.exchangeRate : resolveRate(exchangeRates, c, baseCurrency, draft.date));
@@ -478,7 +481,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
     const inLimit = (m: Money) => (m.currency === limit.currency ? m.minor : Math.round((m.minor * (rateToBase(m.currency) || 1)) / limitRate));
     const owed = (openInvoices ?? []).filter((d) => d.id !== documentId).reduce((acc, d) => acc + inLimit((d.outstanding ?? zero(d.grandTotal.currency)) as Money), 0);
     const exposureMinor = owed + inLimit(totals.grandTotal);
-    return { exposure: money(exposureMinor, limit.currency), limit, exceeds: limit.minor > 0 && exposureMinor > limit.minor };
+    return { owed: money(owed, limit.currency), exposure: money(exposureMinor, limit.currency), limit, exceeds: limit.minor > 0 && exposureMinor > limit.minor };
   };
   const branchId = draft.branchId ?? defaultBranchId ?? undefined;
   const branch = branches.find((b) => b.id === branchId);
@@ -692,8 +695,14 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       : null;
   };
 
-  const creditNotice = creditLimitWarning();
-  // Over a limit that blocks: no "continue anyway"; the draft can still be kept.
+  // On credit hold (their limit blocks and they already owe more than it): nothing new to them, not even a draft.
+  const holdCheck = holdKind && party?.creditLimit && openInvoices ? creditCheck(party.creditLimit) : undefined;
+  const creditHold =
+    holdCheck && onCreditHold(party, holdCheck.owed.minor)
+      ? tr('sales:editor.creditHold', { party: party?.name, owed: formatMoney(holdCheck.owed), limit: formatMoney(holdCheck.limit) })
+      : null;
+  // This invoice would take them over a limit that blocks: no "continue anyway"; the draft can still be kept.
+  const creditNotice = creditHold ?? creditLimitWarning();
   const creditBlocked = !!creditNotice && !!party?.creditLimitBlocks;
 
   const requestFinalize = () => {
@@ -713,6 +722,11 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
 
   const save = async (finalize: boolean, opts?: { overrideCreditLimit?: boolean }) => {
     if (!draft.partyId) return;
+    // A new one, or one moved to them: the server would refuse it, so say why here.
+    if (creditHold && (!documentId || existing?.partyId !== draft.partyId)) {
+      toast.show(creditHold, 'error', { icon: 'cancel' });
+      return;
+    }
     if (roundOffError) {
       toast.show(roundOffError, 'error');
       return;
@@ -1958,6 +1972,13 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
             label: p.name ?? '',
             description: [p.displayName, p.taxId, p.phone].filter(Boolean).join(' · '),
             trailing: p.currency && p.currency !== baseCurrency ? p.currency : undefined,
+            // On credit hold: shown dimmed, and picking says why.
+            ...(holdKind && !isPurchase && onCreditHold(p, p.outstanding?.minor ?? 0)
+              ? {
+                  note: { text: tr('sales:editor.creditHoldShort'), tone: 'bad' as const },
+                  blocked: tr('sales:editor.creditHold', { party: p.name, owed: formatMoney(p.outstanding!), limit: formatMoney(p.creditLimit!) }),
+                }
+              : {}),
           }))}
           onQueryChange={setPartyQuery}
           loading={partySearch.isFetching}

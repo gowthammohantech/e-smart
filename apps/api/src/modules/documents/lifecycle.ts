@@ -2,7 +2,7 @@ import { and, arrayOverlaps, desc, eq, gt, gte, inArray, ne, notInArray, or, sql
 import { businessDate, creditNoteDeadline, financialYearOf } from '@esmart/core/lib/date';
 import { INVOICE_LIMITS, hasModule, nextInvoicePlan } from '@esmart/core/domain/plan';
 import { CREDIT_KINDS, NOTE_KINDS, NOTE_SOURCE, PAYABLE_KINDS, isFinalized, isPayableDocument } from '@esmart/core/domain/documentStates';
-import { statusForOutstanding } from '@esmart/core/domain/receivables';
+import { CREDIT_HOLD_KINDS, onCreditHold, statusForOutstanding } from '@esmart/core/domain/receivables';
 import { MOVEMENT_SIGN, signedQuantity, stockMapOn } from '@esmart/core/domain/stockLedger';
 import { calculateLine, lineTreatment } from '@esmart/core/domain/lineCalc';
 import type { BusinessDocument, DocStatus, DocumentKind, DocumentLine, StockMovement, StockMovementType } from '@esmart/core/types';
@@ -355,6 +355,32 @@ export async function checkCreditLimit(tx: DbOrTx, row: DocRow, now: Date, opts:
 }
 
 /**
+ * A customer on credit hold (their limit blocks, and they already owe more than it) is given nothing
+ * new that sells to them: no invoice, quote, proforma, sales order, delivery note or debit note, not
+ * even as a draft, until they pay or the limit is raised: 422 CREDIT_LIMIT_BLOCKED. Receipts, credit
+ * notes and returns still go through; they bring what is owed down.
+ */
+export async function checkCreditHold(tx: DbOrTx, doc: { companyId: string; kind: DocumentKind; partyId: string }, now: Date): Promise<void> {
+  if (!CREDIT_HOLD_KINDS.includes(doc.kind)) return;
+  const [party] = await tx.select().from(schema.parties).where(eq(schema.parties.id, doc.partyId));
+  if (!party?.creditLimitBlocks || !party.creditLimitMinor || party.creditLimitMinor <= 0) return;
+  const balances = await partyBalances(tx, doc.companyId, [{ id: party.id, kind: 'customer' }], today(now));
+  const owed = balances.get(party.id)?.outstanding ?? 0;
+  if (!onCreditHold({ creditLimit: { minor: party.creditLimitMinor, currency: party.currency.trim() }, creditLimitBlocks: true }, owed)) return;
+  const amount = (minor: number) => `${party.currency.trim()} ${(minor / 100).toFixed(2)}`;
+  throw unprocessable(
+    [
+      {
+        field: 'partyId',
+        message: `${party.name} owes ${amount(owed)}, over their credit limit of ${amount(party.creditLimitMinor)}, and is on hold: nothing new can be raised to them until they pay or the limit is raised`,
+        severity: 'blocking',
+      },
+    ],
+    'CREDIT_LIMIT_BLOCKED',
+  );
+}
+
+/**
  * Takes a draft to a finalised status inside `tx`: draws its number from the
  * series, writes stock, and settles invoices and bills to their derived
  * status. The caller has already recomputed and saved the totals.
@@ -383,6 +409,8 @@ export async function finalizeInTx(
   await checkSupplierNumberUnique(tx, row);
   if (isReturn(row) && row.sourceDocumentId) await checkReturnWithinSource(tx, row);
   if (againstSource(row)) await checkAgainstSource(tx, row);
+  // A draft made before the customer went on hold isn't issued while they are on it.
+  await checkCreditHold(tx, row, now);
   await checkCreditLimit(tx, row, now, { override: opts.overrideCreditLimit });
   // Opening invoices and bills keep their own numbers and are never drafts to finalise.
   if (row.kind === 'openingInvoice' || row.kind === 'openingBill') throw conflict('INVALID_TRANSITION', 'An opening invoice or bill is already issued');

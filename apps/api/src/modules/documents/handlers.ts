@@ -42,6 +42,7 @@ import {
   EDIT_BLOCK_MESSAGES,
   FINAL_STATUS,
   canEditLatest,
+  checkCreditHold,
   checkCreditLimit,
   effectiveStatus,
   effectiveStatusSql,
@@ -221,6 +222,7 @@ async function editLatestInvoice(ctx: AnyCtx, tx: DbOrTx, current: DocRow, body:
   }
   await writeLines(tx, current.id, prepared);
   // An edit that raises what the customer owes is held to their credit limit, as issuing it was.
+  if (updated.partyId !== current.partyId) await checkCreditHold(tx, updated, ctx.now);
   if (updated.grandTotalMinor > current.grandTotalMinor || updated.partyId !== current.partyId) {
     await checkCreditLimit(tx, updated, ctx.now, { counted: true, override: body.overrideCreditLimit });
   }
@@ -275,6 +277,8 @@ export async function insertDocument(
   if (!branchVisible(ctx.user, prepared.columns.branchId)) throw invalid('branchId', 'You cannot create documents in this branch');
   const draftStatus = requestedStatus(f.kind, 'draft') as DocStatus;
   const row = await ctx.db.transaction(async (tx) => {
+    // A customer on credit hold isn't given a new sale, not even a draft (made, converted, copied or recurring).
+    await checkCreditHold(tx, { companyId: ctx.company.id, kind: f.kind, partyId: prepared.columns.partyId }, ctx.now);
     const [created] = await tx
       .insert(D)
       .values({
@@ -788,6 +792,8 @@ export const documentsHandlers = defineHandlers({
         if (body.kind !== current.kind) throw invalid('kind', 'A document cannot change kind; convert it instead');
         const prepared = await prepareDocument(tx, ctx.company, fieldsFromWire(body, current), linesFromWire(body.lines), { snapshotRates: true, documentId: current.id });
         if (!branchVisible(ctx.user, prepared.columns.branchId)) throw invalid('branchId', 'You cannot move documents to this branch');
+        // A draft moved to a customer on credit hold: as if it were made for them.
+        if (prepared.columns.partyId !== current.partyId) await checkCreditHold(tx, { companyId: ctx.company.id, kind: current.kind, partyId: prepared.columns.partyId }, ctx.now);
         // An approval is for the amount approved: a draft that changes it, or its party, asks again when issued.
         const reapprove =
           (current.approval as Approval | null)?.status === 'approved' &&
