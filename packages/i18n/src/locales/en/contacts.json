@@ -226,6 +226,7 @@
     "done": "{{count}} contacts imported",
     "skipped": "{{count}} left out",
     "tooMany": "Up to 1,000 at a time; split the sheet.",
+    "needsPurchases": "Suppliers, and parties that are both, need a plan with purchases; import this one as a customer or other",
     "status": {
       "invalid": "Fix",
       "duplicate": "Already there",
