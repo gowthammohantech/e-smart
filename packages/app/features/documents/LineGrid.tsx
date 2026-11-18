@@ -251,7 +251,8 @@ export function LineGrid({
             <View role="cell" style={{ width: W.tax, paddingHorizontal: 4 }}>
               <Pressable
                 onPress={() => setTaxFor(line)}
-                disabled={!!line.gst?.reimbursement}
+                // A following service takes the highest rate in the document: a rule, not chosen by hand.
+                disabled={!!line.gst?.reimbursement || !!line.gst?.followsHighestRate}
                 accessibilityRole="button"
                 accessibilityLabel={`${label(tr('sales:line.tax'))}: ${lineRateLabel(line)}`}
                 style={(state) => [

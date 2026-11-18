@@ -169,7 +169,8 @@ function ItemFormDesktopFields({ item }: { item?: Item }) {
       categoryId: categoryId || undefined,
       brandId: brandId || undefined,
       customFields,
-      gst: gst && type === 'service' && gst.capitalGoods ? { ...gst, capitalGoods: undefined } : gst,
+      // Capital goods are goods, and only a service follows the highest rate.
+      gst: gst ? { ...gst, ...(type === 'service' && { capitalGoods: undefined }), ...(type !== 'service' && { followsHighestRate: undefined }) } : gst,
       status: active ? 'active' : 'inactive',
       createdAt: item?.createdAt ?? nowISO(),
     };

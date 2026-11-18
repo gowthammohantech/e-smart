@@ -102,6 +102,7 @@ type GstColumns = {
   supplyType: NonNullable<GstFlags['supplyType']>;
   reimbursement: boolean;
   capitalGoods: boolean;
+  followsHighestRate: boolean;
   itcEligibility: NonNullable<GstFlags['itcEligibility']>;
   reverseCharge: boolean;
   cessRate: string;
@@ -113,6 +114,7 @@ export function gstFlagsFrom(row: GstColumns): GstFlags | undefined {
     ...(row.supplyType !== 'taxable' && { supplyType: row.supplyType }),
     ...(row.reimbursement && { reimbursement: true }),
     ...(row.capitalGoods && { capitalGoods: true }),
+    ...(row.followsHighestRate && { followsHighestRate: true }),
     ...(row.itcEligibility !== 'eligible' && { itcEligibility: row.itcEligibility }),
     ...(row.reverseCharge && { reverseCharge: true }),
     ...(Number(row.cessRate) > 0 && { cessRate: Number(row.cessRate) }),
@@ -125,6 +127,7 @@ export function gstColumns(flags: GstFlags | undefined): GstColumns {
     supplyType: flags?.supplyType ?? 'taxable',
     reimbursement: !!flags?.reimbursement,
     capitalGoods: !!flags?.capitalGoods,
+    followsHighestRate: !!flags?.followsHighestRate,
     itcEligibility: flags?.itcEligibility ?? 'eligible',
     reverseCharge: !!flags?.reverseCharge,
     cessRate: String(flags?.cessRate ?? 0),

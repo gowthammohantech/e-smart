@@ -38,6 +38,7 @@ import { factorOf, fromMajor, money, subtract, toMajor, zero, type Money } from 
 import { INDIAN_STATES, unitDecimals, unitShortName } from '@esmart/core/data/masters';
 import { OUTBOUND_KINDS, isLowStock, shortfallsAgainst } from '@esmart/core/domain/stockLedger';
 import { CHARGES_TAXED_FROM, calculateLine } from '@esmart/core/domain/lineCalc';
+import { applyHighestRate } from '@esmart/core/domain/highestRate';
 import { hsnMandatory, validHsn } from '@esmart/core/lib/validators';
 
 import { useAppStore } from '../../store/appStore';
@@ -351,6 +352,23 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
 
   // Each category in force on the draft's date, at its rate then: a tax that starts later isn't offered.
   const taxCategories = useMemo(() => taxCategoriesOn(allTaxCategories, draft.date).filter((c) => taxAvailableOn(c, draft.date)), [allTaxCategories, draft.date]);
+
+  // A service that follows the highest GST rate: its lines take the highest rate among the document's
+  // (counting each such service at its own rate), again whenever a line is added, removed or re-rated.
+  // A saved document opened to edit is brought in line once, and says so.
+  const highestRateAnnounced = useRef(false);
+  useEffect(() => {
+    const rateOfCategory = (id: string) => taxCategories.find((c) => c.id === id)?.rate ?? allTaxCategories.find((c) => c.id === id)?.rate ?? 0;
+    const ownCategoryOf = (l: DocumentLine) => allItems.find((i) => i.id === l.itemId)?.taxCategoryId ?? l.taxCategoryId;
+    const { changed } = applyHighestRate(draft.lines, ownCategoryOf, rateOfCategory);
+    if (!changed.length) return;
+    setDraft((d) => ({ ...d, lines: applyHighestRate(d.lines, ownCategoryOf, rateOfCategory).lines }));
+    if (documentId && !highestRateAnnounced.current) {
+      highestRateAnnounced.current = true;
+      const rate = Math.max(...changed.map((l) => l.taxRate ?? 0));
+      toast.show(tr('sales:line.highestRateApplied', { count: changed.length, names: changed.map((l) => l.name).join(', '), rate: formatPercent(rate) }), 'info');
+    }
+  }, [draft.lines, taxCategories, allTaxCategories, allItems, documentId, setDraft, toast, tr]);
 
   // A note raised against no one invoice or bill (?direct=1): it chooses its GST treatment.
   const directNote = isNote && !draft.sourceDocumentId;

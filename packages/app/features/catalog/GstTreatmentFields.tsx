@@ -13,6 +13,7 @@ function tidy(flags: GstFlags): GstFlags | undefined {
     ...(flags.supplyType && flags.supplyType !== 'taxable' && { supplyType: flags.supplyType }),
     ...(flags.reimbursement && { reimbursement: true }),
     ...(flags.capitalGoods && { capitalGoods: true }),
+    ...(flags.followsHighestRate && { followsHighestRate: true }),
     ...(flags.itcEligibility && flags.itcEligibility !== 'eligible' && { itcEligibility: flags.itcEligibility }),
     ...(flags.reverseCharge && { reverseCharge: true }),
     ...(flags.cessRate && flags.cessRate > 0 && { cessRate: flags.cessRate }),
@@ -51,6 +52,14 @@ export function GstTreatmentFields({ value, onChange, type }: { value: GstFlags 
         value={!!flags.reimbursement}
         onValueChange={(reimbursement) => set({ reimbursement })}
       />
+      {type === 'service' ? (
+        <SwitchField
+          label={tr('inventory:gst.followsHighestRate')}
+          description={tr('inventory:gst.followsHighestRateHint')}
+          value={!!flags.followsHighestRate}
+          onValueChange={(followsHighestRate) => set({ followsHighestRate })}
+        />
+      ) : null}
       {taxable ? (
         <>
           <SwitchField label={tr('inventory:gst.reverseCharge')} description={tr('inventory:gst.reverseChargeHint')} value={!!flags.reverseCharge} onValueChange={(reverseCharge) => set({ reverseCharge })} />

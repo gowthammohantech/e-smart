@@ -280,6 +280,9 @@ function LineEditorForm({
           value={category ? `${category.name} (${formatPercent(category.rate)})` : keptRate !== undefined ? formatPercent(keptRate) : tr('common:totals.noTax')}
           onPress={() => setTaxOpen(true)}
           icon="percent-outline"
+          // A following service takes the highest rate in the document: a rule, not chosen by hand.
+          disabled={!!line?.gst?.followsHighestRate}
+          hint={line?.gst?.followsHighestRate ? tr('sales:line.followsHighestRate') : undefined}
         />
 
         {reimbursement ? null : (

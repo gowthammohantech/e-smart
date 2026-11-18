@@ -581,6 +581,8 @@ export const items = pgTable("items", {
 	supplyType: supplyType("supply_type").default('taxable').notNull(),
 	reimbursement: boolean().default(false).notNull(),
 	capitalGoods: boolean("capital_goods").default(false).notNull(),
+	// A service whose line takes the highest GST rate in its document (only the rate; never by hand).
+	followsHighestRate: boolean("follows_highest_rate").default(false).notNull(),
 	itcEligibility: itcEligibility("itc_eligibility").default('eligible').notNull(),
 	reverseCharge: boolean("reverse_charge").default(false).notNull(),
 	cessRate: numeric("cess_rate", { precision: 6, scale:  3 }).default('0').notNull(),
@@ -818,6 +820,8 @@ export const documentLines = pgTable("document_lines", {
 	// A reimbursement line: the billable expense it recovers.
 	expenseId: varchar("expense_id", { length: 40 }),
 	capitalGoods: boolean("capital_goods").default(false).notNull(),
+	// A service whose line takes the highest GST rate in its document (only the rate; never by hand).
+	followsHighestRate: boolean("follows_highest_rate").default(false).notNull(),
 	itcEligibility: itcEligibility("itc_eligibility").default('eligible').notNull(),
 	reverseCharge: boolean("reverse_charge").default(false).notNull(),
 	cessRate: numeric("cess_rate", { precision: 6, scale:  3 }).default('0').notNull(),

@@ -1,0 +1,2 @@
+ALTER TABLE "document_lines" ADD COLUMN "follows_highest_rate" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "items" ADD COLUMN "follows_highest_rate" boolean DEFAULT false NOT NULL;

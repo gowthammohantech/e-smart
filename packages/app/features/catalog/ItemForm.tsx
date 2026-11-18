@@ -159,7 +159,8 @@ function ItemFormFields({ item }: { item?: Item }) {
       barcode: barcode.trim() || undefined,
       trackInventory: type === 'goods' ? trackInventory : false,
       // Capital goods are goods; a service never is one.
-      gst: gst && type === 'service' && gst.capitalGoods ? { ...gst, capitalGoods: undefined } : gst,
+      // Capital goods are goods, and only a service follows the highest rate.
+      gst: gst ? { ...gst, ...(type === 'service' && { capitalGoods: undefined }), ...(type !== 'service' && { followsHighestRate: undefined }) } : gst,
       openingStock: Number(openingStock) || 0,
       openingStockDate: takesOpeningStock ? openingStockDate : item?.openingStockDate,
       reorderLevel: Number(reorderLevel) || 0,

@@ -5990,6 +5990,8 @@ export interface components {
             reimbursement?: boolean;
             /** @description An asset; its input tax credit is reported separately */
             capitalGoods?: boolean;
+            /** @description A service whose line takes the highest GST rate among a document's lines (only the rate; its SAC and cess stay its own) */
+            followsHighestRate?: boolean;
             /**
              * @description Unset reads as eligible. Whether GST paid on it can be claimed; blocked is s.17(5)
              * @enum {string}
