@@ -251,9 +251,10 @@ export function LineGrid({
             <View role="cell" style={{ width: W.tax, paddingHorizontal: 4 }}>
               <Pressable
                 onPress={() => setTaxFor(line)}
-                disabled={!!line.gst?.reimbursement}
+                // A following service takes the highest rate in the document: a rule, not chosen by hand.
+                disabled={!!line.gst?.reimbursement || !!line.gst?.followsHighestRate}
                 accessibilityRole="button"
-                accessibilityLabel={`${label(tr('sales:line.tax'))}: ${lineRateLabel(line)}`}
+                accessibilityLabel={`${label(tr('sales:line.tax'))}: ${lineRateLabel(line)}${line.gst?.followsHighestRate ? `, ${tr('sales:line.followsHighestRate')}` : ''}`}
                 style={(state) => [
                   {
                     flexDirection: 'row',
@@ -263,7 +264,9 @@ export function LineGrid({
                     paddingHorizontal: 6,
                     borderRadius: t.radius.sm,
                     borderWidth: 1,
-                    borderColor: (state as WebPressState).hovered ? t.c.inputBorder : 'transparent',
+                    borderColor: (state as WebPressState).hovered && !line.gst?.followsHighestRate ? t.c.inputBorder : 'transparent',
+                    // Set by the rule, not picked: no hand cursor, no edge on hover.
+                    ...(line.gst?.followsHighestRate ? ({ cursor: 'default' } as object) : null),
                   },
                   focusRing(t, (state as WebPressState).focused),
                 ]}
@@ -276,6 +279,11 @@ export function LineGrid({
                     <Text variant="micro" tone="muted" numberOfLines={1} style={{ fontVariant: ['tabular-nums'] }}>
                       {tr('sales:line.plusCess', { cess: formatPercent(shownCessRate(line)) })}
                     </Text>
+                  ) : line.gst?.followsHighestRate ? (
+                    // Says why the rate can't be picked: it is the document's highest.
+                    <Text variant="micro" tone="muted" numberOfLines={1}>
+                      {tr('sales:line.highestShort')}
+                    </Text>
                   ) : null}
                 </View>
                 {line.taxInclusive ? (
@@ -283,7 +291,7 @@ export function LineGrid({
                     {tr('sales:editor.inclusive')}
                   </Text>
                 ) : null}
-                <Icon name="chevron-down" size={12} color={t.c.muted} />
+                <Icon name={line.gst?.followsHighestRate ? 'lock-outline' : 'chevron-down'} size={12} color={t.c.muted} />
               </Pressable>
             </View>
             <View role="cell" style={{ width: W.amount, paddingHorizontal: 8, alignItems: 'flex-end' }}>

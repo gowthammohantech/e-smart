@@ -1,6 +1,6 @@
 {
   "tabBar": {
-    "contacts": "Contacts"
+    "contacts": "Parties"
   },
   "overviewOf": {
     "money": "Income overview"
@@ -11,7 +11,7 @@
     "purchases": "Buy",
     "inventory": "Inventory",
     "gst": "GST",
-    "contacts": "Customers & Suppliers",
+    "contacts": "Parties",
     "reports": "Reports",
     "more": "More",
     "money": "Accounts"

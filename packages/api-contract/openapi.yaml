@@ -8004,6 +8004,7 @@ components:
         supplyType: { type: string, enum: [taxable, nil, exempt, nonGst], description: 'Unset reads as taxable. Nil-rated, exempt and non-GST supplies carry no tax and are reported separately' }
         reimbursement: { type: boolean, description: "Recovered at cost as the customer's pure agent (Rule 33): no tax, outside the taxable value" }
         capitalGoods: { type: boolean, description: An asset; its input tax credit is reported separately }
+        followsHighestRate: { type: boolean, description: "A service whose line takes the highest GST rate among a document's lines (only the rate; its SAC and cess stay its own)" }
         itcEligibility: { type: string, enum: [eligible, blocked, ineligible], description: 'Unset reads as eligible. Whether GST paid on it can be claimed; blocked is s.17(5)' }
         reverseCharge: { type: boolean, description: A notified reverse-charge supply; the buyer pays the GST }
         cessRate: { type: number, minimum: 0, maximum: 999, description: 'Compensation cess, percent of the taxable value' }

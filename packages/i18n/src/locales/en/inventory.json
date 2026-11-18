@@ -105,6 +105,8 @@
     "cessHint": "Compensation cess on top of GST, for goods like tobacco, aerated drinks and cars. Leave blank if none.",
     "capitalGoods": "Capital goods",
     "capitalGoodsHint": "Machinery or equipment you keep and use. Its input tax credit is reported separately.",
+    "followsHighestRate": "Charge at the highest GST rate in the document",
+    "followsHighestRateHint": "On an invoice, bill or any document, this service's GST rate becomes the highest rate among its lines. The service keeps its own rate here.",
     "itc": "Input tax credit",
     "itcHint": "Whether the GST you pay when buying this can be claimed back.",
     "itcOption": {

@@ -236,6 +236,8 @@ export type GstFlags = {
   reimbursement?: boolean;
   /** Machinery and other assets: their credit is reported separately. */
   capitalGoods?: boolean;
+  /** A service whose line takes the highest GST rate in its document (only the rate, never by hand); the item keeps its own. */
+  followsHighestRate?: boolean;
   /** Unset reads as eligible. `blocked` is s.17(5): food, personal vehicles, works contracts and so on. */
   itcEligibility?: ItcEligibility;
   /** A notified reverse-charge supply (GTA, legal, security): the buyer pays the GST. */

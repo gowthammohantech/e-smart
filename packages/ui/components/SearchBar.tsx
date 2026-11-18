@@ -15,6 +15,7 @@ export function SearchBar({
   onSubmitEditing,
   right,
   compact,
+  inputRef: passedRef,
 }: {
   value: string;
   onChangeText: (v: string) => void;
@@ -25,6 +26,8 @@ export function SearchBar({
   right?: React.ReactNode;
   /** Opt-in: a desktop toolbar's height (38) instead of 44, to sit level with its buttons. */
   compact?: boolean;
+  /** A handle on the input, for a screen that puts the cursor in it. */
+  inputRef?: React.RefObject<TextInput | null>;
 }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['common']);
@@ -33,7 +36,8 @@ export function SearchBar({
   const small = !!compact && desktop;
   // Only a browser shows focus on the bar; a phone keeps its look while typing.
   const webFocused = Platform.OS === 'web' && focused;
-  const inputRef = useRef<TextInput | null>(null);
+  const ownRef = useRef<TextInput | null>(null);
+  const inputRef = passedRef ?? ownRef;
   return (
     <FieldBox
       inputRef={inputRef}

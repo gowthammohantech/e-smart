@@ -473,6 +473,7 @@ function gstShape(g: LineInput['gst']) {
     supplyType: g?.supplyType ?? 'taxable',
     reimbursement: !!g?.reimbursement,
     capitalGoods: !!g?.capitalGoods,
+    followsHighestRate: !!g?.followsHighestRate,
     itcEligibility: g?.itcEligibility ?? 'eligible',
     reverseCharge: !!g?.reverseCharge,
     cessRate: g?.cessRate ?? 0,
