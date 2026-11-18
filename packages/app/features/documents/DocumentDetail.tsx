@@ -493,8 +493,10 @@ ${url}`;
   // and an order or quote carried forward once (conversionBlock).
   // The server says what it allows (it reads which linked documents were made from this one, and
   // which this one was made from, such as the order behind a challan); the store's copy also rules out
-  // one just made here before the server's copy refreshes.
-  const allowed = record?.allowedConversions;
+  // one just made here before the server's copy refreshes. That list holds for the version it was read
+  // at: once this one moves on here (a draft finalised), the store's copy decides until it is read again.
+  const recordCurrent = !!record && record.status === doc.status && (record.version === undefined || record.version === doc.version);
+  const allowed = recordCurrent ? record.allowedConversions : undefined;
   const conversions = recordPending
     ? []
     : offered.filter((c) => (!allowed || allowed.includes(c.target)) && !conversionBlock(doc, c.target, allDocuments));
