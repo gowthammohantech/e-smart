@@ -32,6 +32,10 @@
       "overdueCaption": "நிலுவைத் தேதி கடந்தது"
     },
     "tabOther": "மற்றவை",
+    "tabBoth": "இரண்டும்",
+    "bothCount_one": "{{count}} தரப்பு",
+    "bothCount_other": "{{count}} தரப்புகள்",
+    "newParty": "புதிய தரப்பு",
     "otherCount_one": "{{count}} தொடர்பு",
     "otherCount_other": "{{count}} தொடர்புகள்",
     "noOther": "வேறு தொடர்புகள் இன்னும் இல்லை",

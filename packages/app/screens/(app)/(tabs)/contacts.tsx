@@ -32,7 +32,7 @@ import { Skeleton, SkeletonGroup, SkeletonStatGrid } from '@esmart/ui/components
 import { LoadFailed } from '../../../features/company/LoadFailed';
 
 /** general: contacts with no account (a landlord, the auditor), which read like customers here. */
-type Tab = 'customer' | 'supplier' | 'general';
+type Tab = 'customer' | 'supplier' | 'both' | 'general';
 
 export default function ContactsTab() {
   const t = useTheme();
@@ -63,9 +63,9 @@ export default function ContactsTab() {
   const ahead = (p: { advance?: Money }) => p.advance?.minor ?? 0;
   // "Other" contacts have no account: no receivable, no "customers".
   const general = tab === 'general';
-  const newRoute = tab === 'supplier' ? '/(app)/contacts/suppliers/new' : tab === 'general' ? '/(app)/contacts/customers/new?kind=general' : '/(app)/contacts/customers/new';
+  const newRoute = tab === 'supplier' ? '/(app)/contacts/suppliers/new' : tab === 'general' || tab === 'both' ? `/(app)/contacts/customers/new?kind=${tab}` : '/(app)/contacts/customers/new';
   const count = summary?.count ?? filtered.length;
-  const countLabel = general ? tr('contacts:hub.otherCount', { count }) : asCustomer ? tr('contacts:hub.customerCount', { count }) : tr('contacts:hub.supplierCount', { count });
+  const countLabel = general ? tr('contacts:hub.otherCount', { count }) : tab === 'both' ? tr('contacts:hub.bothCount', { count }) : asCustomer ? tr('contacts:hub.customerCount', { count }) : tr('contacts:hub.supplierCount', { count });
   const loadMore = () => {
     if (pages.hasNextPage && !pages.isFetchingNextPage) void pages.fetchNextPage();
   };
@@ -154,6 +154,8 @@ export default function ContactsTab() {
             options={[
               { value: 'customer', label: tr('contacts:hub.customers') },
               { value: 'supplier', label: tr('contacts:hub.suppliers') },
+              // Parties that buy and sell under one ledger: also among the customers and the suppliers.
+              { value: 'both', label: tr('contacts:hub.tabBoth') },
               { value: 'general', label: tr('contacts:hub.tabOther') },
             ]}
             value={tab}
@@ -394,7 +396,7 @@ export default function ContactsTab() {
 
       <Fab
         icon="account-plus"
-        label={tab === 'supplier' ? tr('contacts:hub.newSupplier') : general ? tr('contacts:hub.newContact') : tr('contacts:hub.newCustomer')}
+        label={tab === 'supplier' ? tr('contacts:hub.newSupplier') : general ? tr('contacts:hub.newContact') : tab === 'both' ? tr('contacts:hub.newParty') : tr('contacts:hub.newCustomer')}
         onPress={() => router.push(newRoute as never)}
       />
     </View>

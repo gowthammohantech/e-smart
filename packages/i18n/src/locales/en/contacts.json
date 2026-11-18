@@ -32,6 +32,10 @@
       "overdueCaption": "Past the due date"
     },
     "tabOther": "Other",
+    "tabBoth": "Both",
+    "bothCount_one": "{{count}} party",
+    "bothCount_other": "{{count}} parties",
+    "newParty": "New party",
     "otherCount_one": "{{count}} contact",
     "otherCount_other": "{{count}} contacts",
     "noOther": "No other contacts yet",
