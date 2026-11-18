@@ -12,10 +12,10 @@ import { newestFirst } from '../audit/keyset';
 import { subscriptionToWire } from '../billing/handlers';
 import { recordUserChange, revokeAllSessions } from '../users/shared';
 import { recordPlatformAction } from './audit';
-import { GSP_GATEWAY_CODES } from '../../providers/gsp/provider-name';
+import { GSP_GATEWAY_CODES, sameTarget, type GspTarget } from '../../providers/gsp/provider-name';
 import { gspAvailability } from '../../providers/gsp/availability';
-import { parseGspGateway } from '../../providers/gsp/router';
-import { accountRow, accountsToPlatform, companyToPlatform, defaultGspGateway, gspToPlatform, subscriptionStatuses, userToPlatform } from './wire';
+import { parseGspTarget } from '../../providers/gsp/router';
+import { accountRow, accountsToPlatform, companyToPlatform, defaultGspTargetOf, gspToPlatform, subscriptionStatuses, userToPlatform } from './wire';
 
 const A = schema.accounts;
 const C = schema.companies;
@@ -335,46 +335,59 @@ export const platformHandlers = defineHandlers({
   },
 
   /**
-   * Chooses the GST gateway one company files through, or clears the choice so it follows the deployment's
-   * default. Only a gateway this deployment can run is accepted. The cached portal session belongs to the old
-   * gateway, so it is dropped with the switch; the portal login itself is the business's own and stays.
+   * Chooses the GST target (gateway and environment) one company files through, or clears the choice so it follows the
+   * deployment's default. Only a target this deployment can run is accepted, which is also what keeps a target nobody
+   * has a subscription for (Whitebooks production, until its settings are filled in) from being chosen. The cached
+   * portal session belongs to the old target, so it is dropped with the switch; the portal login itself is the
+   * business's own and stays.
    */
   async setCompanyGspProvider(ctx) {
     const reason = reasonOf(ctx.body);
-    const next = ctx.body.provider ?? null;
+    const provider = ctx.body.provider ?? null;
+    const environment = ctx.body.environment ?? null;
+    // A gateway needs an environment and an environment needs a gateway: the two are one choice.
+    if ((provider === null) !== (environment === null)) throw invalid(provider === null ? 'provider' : 'environment', 'Choose a gateway and an environment together, or neither to follow the default');
+    const next: GspTarget | null = provider !== null && environment !== null ? { gateway: provider, environment } : null;
     const config = ctx.deps.config;
     if (next) {
-      const option = gspAvailability(config).find((o) => o.gateway === next);
-      if (!option?.available) throw invalid('provider', option?.reason ?? `The ${next} gateway is not available here`);
+      const option = gspAvailability(config).find((o) => sameTarget(o, next));
+      if (!option?.available) throw invalid('provider', option?.reason ?? `The ${next.gateway} ${next.environment} target is not available here`);
     }
     const CRD = schema.complianceCredentials;
+    const label = (t: GspTarget) => `${t.gateway} ${t.environment}`;
     const result = await ctx.db.transaction(async (tx) => {
       const [company] = await tx.select().from(C).where(eq(C.id, ctx.params.companyId)).for('update');
       if (!company) throw notFound('Company');
-      const current = parseGspGateway(company.gspProvider) ?? null;
-      if (current === next) throw conflict('NO_CHANGE', next ? `This company already files through ${next}` : 'This company already follows the deployment default');
-      const [updated] = await tx.update(C).set({ gspProvider: next, version: company.version + 1, updatedAt: ctx.now }).where(eq(C.id, company.id)).returning();
-      const effective = next ?? defaultGspGateway(config);
+      const current = parseGspTarget(company.gspProvider, company.gspEnvironment) ?? null;
+      if (current === next || (current && next && sameTarget(current, next))) {
+        throw conflict('NO_CHANGE', next ? `This company already files through ${label(next)}` : 'This company already follows the deployment default');
+      }
+      const [updated] = await tx
+        .update(C)
+        .set({ gspProvider: next?.gateway ?? null, gspEnvironment: next?.environment ?? null, version: company.version + 1, updatedAt: ctx.now })
+        .where(eq(C.id, company.id))
+        .returning();
+      const effective = next ?? defaultGspTargetOf(config);
       await tx
         .update(CRD)
-        .set({ gspProvider: GSP_GATEWAY_CODES[effective], authTokenEncrypted: null, authTokenExpiresAt: null, lastTestedAt: null, lastTestOk: null })
+        .set({ gspProvider: GSP_GATEWAY_CODES[effective.gateway], authTokenEncrypted: null, authTokenExpiresAt: null, lastTestedAt: null, lastTestOk: null })
         .where(eq(CRD.companyId, company.id));
       await recordChange(tx, asSupport(ctx.user), {
         companyId: company.id,
-        action: next ? `GST gateway set to ${next}` : 'GST gateway set to the platform default',
+        action: next ? `GST gateway set to ${label(next)}` : 'GST gateway set to the platform default',
         entityType: 'company',
         entityId: company.id,
         entityLabel: company.name,
         version: updated.version,
-        before: { gspProvider: current },
-        after: { gspProvider: next },
+        before: { gspProvider: current?.gateway ?? null, gspEnvironment: current?.environment ?? null },
+        after: { gspProvider: next?.gateway ?? null, gspEnvironment: next?.environment ?? null },
       });
       await recordPlatformAction(tx, ctx.user, ctx.req, {
         action: 'company.gsp.set',
         target: { type: 'company', id: company.id, label: company.name },
         reason,
-        before: { gspProvider: current },
-        after: { gspProvider: next },
+        before: { gspProvider: current?.gateway ?? null, gspEnvironment: current?.environment ?? null },
+        after: { gspProvider: next?.gateway ?? null, gspEnvironment: next?.environment ?? null },
       });
       return updated;
     });

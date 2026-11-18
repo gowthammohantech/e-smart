@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { E_INVOICE_CANCEL_REASONS } from '@esmart/core/domain/eInvoice';
 import { EWAY_CANCEL_REASONS } from '@esmart/core/domain/ewayBill';
 import type { Config } from '../../config';
@@ -35,8 +34,23 @@ import {
 } from './common';
 import { GSP_TOKEN_EXPIRY_SKEW_MS, GSP_TOKEN_FALLBACK_TTL_SECONDS, NIC_ERROR_CODES } from './constants';
 import { asCode, carriesField, hasErrorCode, parsePortalDateAny, parsePortalDateTime, toPortalDateTime, type GspEnvelope } from './envelope';
-import { gspApplication, type GspProduct } from './provider-name';
+import { defaultGspTarget, gspApplication, type GspProduct, type GspTarget } from './provider-name';
+import {
+  DISTANCE_REFUSED,
+  IRN_HSN_REFUSED,
+  SANDBOX_ACCEPTED_HSN,
+  STANDALONE_DISTANCE_REFUSED,
+  STANDALONE_HSN_REFUSED,
+  irpHsnSwap,
+  resplitIrnTax,
+  resplitTax,
+  sandboxDocNo,
+  type PartyBlock,
+} from './sandbox';
 import { FetchGspTransport, GspAuthError, GspConfigError, GspRequestError, type GspTransport } from './transport';
+
+// They live in `sandbox.ts` now, for both gateways; re-exported so the callers that import them from here keep working.
+export { resplitIrnTax, resplitTax, sandboxDocNo };
 
 /**
  * Whitebooks' routes, relative to `TAXATION_GSP_BASE_URL`. Authenticate, generate,
@@ -73,22 +87,6 @@ const PATHS = {
  * observed sits on NIC1. A wrong portal is a refusal, not a silent wrong action.
  */
 const STANDALONE_EWAYBILL_IRP = 'NIC1';
-
-/** NIC's "distance too high" (4038) and "too high or low" (4013): the pincodes it holds disagree with the distance given. */
-const DISTANCE_REFUSED = ['4038', '4013'] as const;
-/** The same refusal from the standalone e-way bill API. */
-const STANDALONE_DISTANCE_REFUSED = '702';
-/**
- * The sandbox holds a short HSN master, so a real customer's code is refused as invalid (216). The retry
- * files the bill under one it has accepted before; the app's own record keeps the real HSN.
- */
-const STANDALONE_HSN_REFUSED = '216';
-const SANDBOX_ACCEPTED_HSN = '85362010';
-/** The same refusal on an e-invoice: 2176 "HSN code(s) … invalid". */
-const IRN_HSN_REFUSED = ['2176', '2311', '3048'] as const; // 2311: the sandbox taxpayer's turnover requires a 6-digit HSN, so a 4-digit one is refused too.
-// 3048: a goods HSN on a service line. Goods lines are swapped to a goods HSN the sandbox knows; a service line is given a SAC the sandbox knows (and one it already knows is unchanged, so a retry leaves it as it was).
-const SANDBOX_ACCEPTED_SAC = '995461';
-const irpHsnSwap = (i: { HsnCd?: string; IsServc?: string }) => (i.IsServc === 'Y' ? { ...i, HsnCd: SANDBOX_ACCEPTED_SAC } : { ...i, HsnCd: SANDBOX_ACCEPTED_HSN });
 
 /** `status_cd` when the portal did what was asked. A string, as Whitebooks sends it. */
 const SUCCESS = '1';
@@ -147,14 +145,14 @@ interface Session {
 
 type Application = { clientId: string; clientSecret: string };
 
-type PartyBlock = Record<string, unknown>;
-
 /** A refusal that, for NIC 2150, also carries the registration the portal already holds. */
 type DuplicateAware = GspRequestError & { duplicate?: IrnRecord | null };
 
 /**
- * E-invoice, e-way bill and taxpayer lookup through Whitebooks. **Sandbox only**
- * — refused at boot unless `TAXATION_GSTIN_ALLOW_SANDBOX=true`.
+ * E-invoice, e-way bill and taxpayer lookup through Whitebooks, for one environment: its sandbox or its
+ * production API (`config` is already read for that target, see `configFor`). The stand-ins a sandbox needs (the
+ * test taxpayer, test buyer, a known HSN, our own document numbers) apply only when `sandbox` is true; a
+ * production client files a business as itself.
  *
  * Unlike Adaequare, the token belongs to the *taxpayer*: `authenticate` takes the
  * NIC portal username/password/gstin beside the application's `client_id` /
@@ -174,13 +172,20 @@ export class WhitebooksGateway implements GspGateway {
   /** When each taxpayer's standalone e-way bill login lapses. */
   private readonly ewaybillSessions = new Map<string, number>();
   private sandboxBuyer: Promise<PartyBlock> | null = null;
+  /** Which target this client files against. */
+  private readonly target: GspTarget;
+  /** True against Whitebooks' sandbox, where the stand-ins below apply. */
+  private readonly sandbox: boolean;
 
   constructor(
     private readonly config: Config,
     private readonly transport: GspTransport = new FetchGspTransport(),
     private readonly clock: () => number = Date.now,
     private readonly log: (message: string) => void = () => {},
-  ) {}
+  ) {
+    this.target = defaultGspTarget(config);
+    this.sandbox = this.target.environment === 'sandbox';
+  }
 
   // ----------------------------------------------------------------- session
 
@@ -189,8 +194,8 @@ export class WhitebooksGateway implements GspGateway {
   }
 
   private application(product: GspProduct, _creds: PortalCredentials | null): Application {
-    const env = gspApplication(this.config, 'whitebooks', product);
-    if (!env.clientId || !env.clientSecret) throw new GspConfigError(`${env.variable} must be set for the Whitebooks ${product.toLowerCase()} API.`);
+    const env = gspApplication(this.config, this.target, product);
+    if (!env.clientId || !env.clientSecret) throw new GspConfigError(`${env.variable} must be set for the Whitebooks ${this.target.environment} ${product.toLowerCase()} API.`);
     return { clientId: env.clientId, clientSecret: env.clientSecret };
   }
 
@@ -378,13 +383,16 @@ export class WhitebooksGateway implements GspGateway {
       const sellered = creds?.gstin !== login.gstin ? { ...req.payload, SellerDtls: (this.sellerParty(login)) as typeof req.payload.SellerDtls } : req.payload;
       const buyered = await this.withSandboxBuyer(login, sellered);
       // The seller and buyer may now sit in other states than the document's, so the tax is re-split to match (NIC 2172).
-      const payload = prepareIrnPayload(resplitIrnTax({ ...buyered, DocDtls: { ...buyered.DocDtls, No: sandboxDocNo(this.config, login.gstin, buyered.DocDtls.No, buyered.DocDtls.Dt, req.companyId) } }));
+      // Production files the document exactly as the app built it; only the sandbox needs stand-ins.
+      const payload = prepareIrnPayload(
+        this.sandbox ? resplitIrnTax({ ...buyered, DocDtls: { ...buyered.DocDtls, No: sandboxDocNo(this.config, login.gstin, buyered.DocDtls.No, buyered.DocDtls.Dt, req.companyId) } }) : buyered,
+      );
       const file = async (p: Record<string, unknown>) => {
         try {
           return await this.filing(login, PATHS.generateIrn, 'post', { body: p });
         } catch (error) {
           const items = (p.ItemList as { HsnCd?: string; IsServc?: string }[]) ?? [];
-          if (!(error instanceof GspRequestError && IRN_HSN_REFUSED.some((code) => hasErrorCode(error.envelope, code)) && items.some((i) => irpHsnSwap(i).HsnCd !== i.HsnCd))) throw error;
+          if (!(this.sandbox && error instanceof GspRequestError && IRN_HSN_REFUSED.some((code) => hasErrorCode(error.envelope, code)) && items.some((i) => irpHsnSwap(i).HsnCd !== i.HsnCd))) throw error;
           this.log(`The sandbox does not know an HSN on this invoice: filing it under ${SANDBOX_ACCEPTED_HSN}`);
           return this.filing(login, PATHS.generateIrn, 'post', { body: { ...p, ItemList: items.map(irpHsnSwap) } });
         }
@@ -429,7 +437,7 @@ export class WhitebooksGateway implements GspGateway {
       // too high (4038) or too high or low (4013) when NIC knows that pair, and accepted when it does not (4030 otherwise asks for
       // the actual distance, so 0 cannot be sent blind). So the real distance goes first, and 0, which makes the
       // portal work it out, is the retry for 4013. The validity the portal answers with is what gets stored.
-      const sandboxBuyer = this.config.TAXATION_SANDBOX_BUYER_GSTIN !== '';
+      const sandboxBuyer = this.sandbox && this.config.TAXATION_SANDBOX_BUYER_GSTIN !== '';
       const send = async (payload: typeof req.payload) =>
         (await this.filing(login, PATHS.generateEwayBill, 'post', { withIrp: true, body: ewayBillByIrnBody(req.irn!, payload, 'TransDocNo', 'TransDocDt') })).body;
       let reply: WhitebooksEnvelope;
@@ -450,7 +458,7 @@ export class WhitebooksGateway implements GspGateway {
         const payload = {
           ...req.payload,
           ...(seller ? { fromGstin: String(seller.Gstin), fromTrdName: String(seller.LglNm), fromAddr1: String(seller.Addr1), fromAddr2: seller.Addr2 ? String(seller.Addr2) : undefined, fromPlace: String(seller.Loc), fromPincode: Number(seller.Pin), fromStateCode: String(seller.Stcd) } : {}),
-          docNo: sandboxDocNo(this.config, login.gstin, req.payload.docNo, req.payload.docDate, req.companyId),
+          docNo: this.sandbox ? sandboxDocNo(this.config, login.gstin, req.payload.docNo, req.payload.docDate, req.companyId) : req.payload.docNo,
           ...(party ? { toGstin: String(party.Gstin), toTrdName: String(party.LglNm), toAddr1: String(party.Addr1), toAddr2: party.Addr2 ? String(party.Addr2) : undefined, toPlace: String(party.Loc), toPincode: Number(party.Pin), toStateCode: String(party.Stcd) } : {}),
         };
         // The test buyer sits in a state of its own, so the bill can flip between intra- and inter-state, and NIC
@@ -462,7 +470,7 @@ export class WhitebooksGateway implements GspGateway {
           try {
             return await send(p);
           } catch (error) {
-            if (!(error instanceof GspRequestError && hasErrorCode(error.envelope, STANDALONE_HSN_REFUSED) && p.mainHsnCode !== SANDBOX_ACCEPTED_HSN)) throw error;
+            if (!(this.sandbox && error instanceof GspRequestError && hasErrorCode(error.envelope, STANDALONE_HSN_REFUSED) && p.mainHsnCode !== SANDBOX_ACCEPTED_HSN)) throw error;
             this.log(`The sandbox does not know HSN ${p.mainHsnCode}: filing under ${SANDBOX_ACCEPTED_HSN}`);
             return send({ ...p, mainHsnCode: SANDBOX_ACCEPTED_HSN });
           }
@@ -520,6 +528,8 @@ export class WhitebooksGateway implements GspGateway {
    * The business's own documents, PDFs and audit trail are untouched.
    */
   private sandboxTaxpayer(creds: PortalCredentials): PortalCredentials {
+    // Production files the business as itself.
+    if (!this.sandbox) return creds;
     const gstin = this.config.TAXATION_SANDBOX_GSTIN || SANDBOX_TAXPAYER_GSTIN;
     if (creds.gstin !== gstin) this.log(`Filing as sandbox taxpayer ${gstin} in place of ${creds.gstin || 'no GSTIN'}`);
     return { ...creds, gstin };
@@ -552,8 +562,8 @@ export class WhitebooksGateway implements GspGateway {
   /** The sandbox buyer's registration in place of `gstin`, or null when no substitution applies (switched off, or no buyer GSTIN). */
   private async sandboxParty(creds: PortalCredentials, gstin: string | undefined): Promise<PartyBlock | null> {
     const sandboxGstin = this.config.TAXATION_SANDBOX_BUYER_GSTIN;
-    // B2C carries no buyer GSTIN and is never e-invoiced; nothing to substitute.
-    if (!sandboxGstin || !gstin || gstin === 'URP') return null;
+    // B2C carries no buyer GSTIN and is never e-invoiced; nothing to substitute. Nor is anything on production.
+    if (!this.sandbox || !sandboxGstin || !gstin || gstin === 'URP') return null;
     // The promise is the memo, so two filings in flight share one lookup; a failed one is forgotten.
     this.sandboxBuyer ??= this.fetchParty(creds, sandboxGstin).catch((error) => {
       this.sandboxBuyer = null;
@@ -584,7 +594,8 @@ export class WhitebooksGateway implements GspGateway {
     const { email } = whitebooksSettings(this.config);
     if (!email) throw new GspConfigError('Whitebooks requires an account email — set TAXATION_WHITEBOOKS_ACCOUNT_EMAIL.');
     const app = this.application('TAXPAYER', null);
-    const searched = (SANDBOX_REGISTER_GSTINS as readonly string[]).includes(gstin) ? gstin : SANDBOX_REGISTER_GSTINS[0];
+    // Sandbox: its register knows four GSTINs, so any other is searched as the first. Production searches the real one.
+    const searched = !this.sandbox || (SANDBOX_REGISTER_GSTINS as readonly string[]).includes(gstin) ? gstin : SANDBOX_REGISTER_GSTINS[0];
     const envelope = await this.transport.get<Record<string, unknown>>({
       baseUrl: this.baseUrl(),
       path: PATHS.taxpayerSearch,
@@ -599,54 +610,6 @@ export class WhitebooksGateway implements GspGateway {
     const record = (body as { data?: unknown }).data;
     return isRecord(record) && Object.keys(record).length > 0 ? record : null;
   }
-}
-
-/**
- * The invoice's tax as CGST + SGST when the seller's state is the place of supply, as IGST when it is not; each
- * line's amount is unchanged. Only a payload whose tax disagrees is touched, so a consistent one passes as it came.
- */
-export function resplitIrnTax<P extends { SellerDtls: { Stcd: string }; BuyerDtls: { Pos: string }; ItemList: unknown[]; ValDtls: unknown }>(payload: P): P {
-  const intra = Number(payload.SellerDtls.Stcd) === Number(payload.BuyerDtls.Pos);
-  type Line = { IgstAmt?: number; CgstAmt?: number; SgstAmt?: number };
-  const items = payload.ItemList as Line[];
-  const wrong = items.some((i) => (intra ? (i.IgstAmt ?? 0) > 0 : (i.CgstAmt ?? 0) > 0 || (i.SgstAmt ?? 0) > 0));
-  if (!wrong) return payload;
-  const money = (n: number) => Math.round(n * 100) / 100;
-  const lines = items.map((i) => {
-    const tax = money((i.IgstAmt ?? 0) + (i.CgstAmt ?? 0) + (i.SgstAmt ?? 0));
-    if (!intra) return { ...i, IgstAmt: tax, CgstAmt: 0, SgstAmt: 0 };
-    const half = money(tax / 2);
-    return { ...i, IgstAmt: 0, CgstAmt: half, SgstAmt: money(tax - half) };
-  });
-  const sum = (key: 'IgstAmt' | 'CgstAmt' | 'SgstAmt') => money(lines.reduce((t, i) => t + (i[key] ?? 0), 0));
-  return { ...payload, ItemList: lines, ValDtls: { ...(payload.ValDtls as object), IgstVal: sum('IgstAmt'), CgstVal: sum('CgstAmt'), SgstVal: sum('SgstAmt') } };
-}
-
-/** The bill's tax as CGST + SGST when it is intra-state, as IGST when it is not; the amount is unchanged. */
-export function resplitTax(p: { fromStateCode: string; toStateCode: string; cgstValue: number; sgstValue: number; igstValue: number }): { cgstValue: number; sgstValue: number; igstValue: number } {
-  const tax = p.cgstValue + p.sgstValue + p.igstValue;
-  if (Number(p.fromStateCode) !== Number(p.toStateCode)) return { cgstValue: 0, sgstValue: 0, igstValue: tax };
-  const half = Math.round((tax / 2) * 100) / 100;
-  return { cgstValue: half, sgstValue: Math.round((tax - half) * 100) / 100, igstValue: 0 };
-}
-
-/**
- * **Sandbox only.** Every tester shares the sandbox GSTIN `29AAGCB1286Q000`, and NIC keys an IRN (and an
- * e-way bill) on GSTIN + document number + year. A document called `INV/26-27/0003` has therefore usually
- * been registered already by someone else, months ago: the portal answers 2150 "duplicate", the registration
- * it carries is adopted, and the invoice ends up holding a stranger's IRN. Raising an e-way bill on it is then
- * refused for facts about *their* document — dated more than 180 days back (4043), with a service HSN (4009),
- * and already carrying a bill (4026).
- *
- * So the portal is shown a number of our own: stable for a given document (a retry finds our own
- * registration), different from every other deployment's, and within NIC's 16 characters. The app's invoice,
- * PDF and numbering keep the real number.
- */
-export function sandboxDocNo(config: Config, gstin: string, docNo: string, docDate: string, companyId = ''): string {
-  const digest = createHash('sha256').update(`${config.PUBLIC_BASE_URL}|${gstin}|${companyId}|${docNo}|${docDate}`).digest();
-  let n = 0n;
-  for (const byte of digest.subarray(0, 8)) n = (n << 8n) | BigInt(byte);
-  return `S${n.toString(36).toUpperCase().padStart(11, '0').slice(0, 11)}`;
 }
 
 // ---------------------------------------------------------------------------

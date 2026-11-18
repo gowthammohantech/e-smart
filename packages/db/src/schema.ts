@@ -1903,6 +1903,9 @@ export const companies = pgTable("companies", {
 	// The GST gateway this company files through ('adaequare' | 'whitebooks'), set by a platform operator.
 	// Unset follows the deployment's default (TAXATION_GSP_PROVIDER_CODE).
 	gspProvider: varchar("gsp_provider", { length: 20 }),
+	// Which NIC environment that gateway is used in ('sandbox' | 'production'). Set together with gspProvider,
+	// null together with it (the deployment's default target, TAXATION_GSP_ENVIRONMENT, answers).
+	gspEnvironment: varchar("gsp_environment", { length: 12 }),
 	lockedThroughDate: date("locked_through_date"),
 	// Perpetual stock from this day, the start of a financial year: receipts and issues post to stock
 	// at cost, and the goods sold to Cost of goods sold. Null keeps the books periodic (RULES 6.2).

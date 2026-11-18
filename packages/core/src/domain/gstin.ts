@@ -15,12 +15,13 @@ const ALPHABET = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 const GSTIN_SHAPE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[0-9A-Z]{1}Z[0-9A-Z]{1}$/;
 
 /**
- * NIC's e-invoice sandbox issues test registrations as a real PAN under a state
- * code with `000` in the last three positions (`29AAGCB1286Q000`), with no
- * check digit. They exist only on the sandbox, so they are admitted only when
- * the server says so (`TAXATION_GSTIN_ALLOW_SANDBOX`, refused in production).
+ * NIC's e-invoice sandboxes issue test registrations that are not real GSTINs: a PAN under a state code with a
+ * made-up tail and no check digit (`29AAGCB1286Q000` on Whitebooks, `01AMBPG7773M002` on Adaequare). A real GSTIN
+ * always has `Z` as its 14th character, so a registration without one can only be a sandbox's. They are admitted
+ * only when the server says it can reach a sandbox (a sandbox gateway target is set up); the apps, which cannot
+ * know that, admit them and leave the server to refuse them.
  */
-const SANDBOX_GSTIN_SHAPE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]000$/;
+const SANDBOX_GSTIN_SHAPE = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z][0-9A-Y][0-9A-Z]$/;
 let sandboxGstinsAllowed = false;
 
 export function setSandboxGstinsAllowed(allowed: boolean): void {

@@ -7,7 +7,7 @@ import type { PortalCredentials } from '../compliance';
 import { createGspGateway } from '.';
 import { AdaequareGateway } from './adaequare';
 import { describeGspError, hasErrorCode, parsePortalDateAny, parsePortalDateTime, toPortalDateTime, unwrapResult, type GspEnvelope } from './envelope';
-import { resolveGspGateway } from './provider-name';
+import { defaultGspTarget, resolveGspGateway } from './provider-name';
 import { toGstinRecord } from './taxpayer';
 import { GspRequestError, type GspRequest, type GspTransport } from './transport';
 import { resplitIrnTax, resplitTax, sandboxDocNo, WhitebooksGateway } from './whitebooks';
@@ -72,7 +72,6 @@ const whitebooksConfig = (extra: Record<string, string> = {}): Config =>
     TAXATION_WHITEBOOKS_EINVOICE_APP_SECRET: 'EINS-secret',
     TAXATION_WHITEBOOKS_EWAYBILL_APP_ID: 'EWBS-app',
     TAXATION_WHITEBOOKS_EWAYBILL_APP_SECRET: 'EWBS-secret',
-    TAXATION_GSTIN_ALLOW_SANDBOX: 'true',
     ...extra,
   });
 
@@ -122,11 +121,14 @@ describe('gateway selection', () => {
     expect(createGspGateway(config)).toBe(createGspGateway(config));
   });
 
-  it('refuses a sandbox gateway in production and a sandbox buyer on Adaequare', () => {
-    // Whitebooks needs TAXATION_GSTIN_ALLOW_SANDBOX, in production or out of it.
-    expect(() => createGspGateway({ ...whitebooksConfig(), TAXATION_GSTIN_ALLOW_SANDBOX: false })).toThrow(/sandbox only/);
+  it('names the environment too, and refuses a target whose base URL is not set', () => {
+    expect(defaultGspTarget(adaequareConfig())).toEqual({ gateway: 'adaequare', environment: 'production' });
+    expect(defaultGspTarget(whitebooksConfig())).toEqual({ gateway: 'whitebooks', environment: 'sandbox' });
+    expect(defaultGspTarget(whitebooksConfig({ TAXATION_GSP_ENVIRONMENT: 'production' }))).toEqual({ gateway: 'whitebooks', environment: 'production' });
+    // Whitebooks production has nothing set: there is no switch to flip, only settings to fill in.
+    expect(() => createGspGateway(whitebooksConfig({ TAXATION_GSP_ENVIRONMENT: 'production' }))).toThrow(/TAXATION_WHITEBOOKS_PRODUCTION_BASE_URL/);
     expect(() => createGspGateway({ ...whitebooksConfig(), NODE_ENV: 'production' })).not.toThrow();
-    expect(() => createGspGateway(adaequareConfig({ TAXATION_GSTIN_ALLOW_SANDBOX: 'true', TAXATION_SANDBOX_BUYER_GSTIN: '29AWGPV7107B1Z1' }))).toThrow(/TAXATION_SANDBOX_BUYER_GSTIN/);
+    expect(() => loadConfig({ TAXATION_GSP_ENVIRONMENT: 'staging' })).toThrow(/TAXATION_GSP_ENVIRONMENT/);
   });
 });
 
@@ -141,8 +143,6 @@ describe('switching provider', () => {
     TAXATION_WHITEBOOKS_IP_ADDRESS: '203.0.113.7',
     TAXATION_WHITEBOOKS_EINVOICE_APP_ID: 'wb-id',
     TAXATION_WHITEBOOKS_EINVOICE_APP_SECRET: 'wb-secret',
-    // Whitebooks is allowed by this switch alone; switching provider is still the one code.
-    TAXATION_GSTIN_ALLOW_SANDBOX: 'true',
   };
 
   it('changes gateway, host and credentials with the one provider code', async () => {
@@ -208,7 +208,7 @@ describe('Adaequare', () => {
 
   it('skips the exchange for a stand-in gateway and sends no bearer', async () => {
     const t = fakeTransport({ '/enriched/ei/api/invoice': () => generated });
-    const gateway = new AdaequareGateway(adaequareConfig({ TAXATION_GSP_AUTH_REQUIRED: 'false', TAXATION_GSTIN_ALLOW_SANDBOX: 'true' }), t.transport);
+    const gateway = new AdaequareGateway(adaequareConfig({ TAXATION_GSP_AUTH_REQUIRED: 'false' }), t.transport);
     await gateway.submitInvoice(creds, { payload, existingIrns: [], now: NOW });
     expect(t.authenticated()).toBe(0);
     expect(t.calls[0].token).toBe('');
@@ -292,6 +292,63 @@ describe('Adaequare', () => {
     expect(t.calls[0].body).toMatchObject({ docDate: '02/09/2026', transDistance: '840', fromStateCode: 29 });
   });
 
+  it('names the user `username` on the e-way bill routes and `user_name` on the e-invoice ones', async () => {
+    const t = fakeTransport({
+      '/enriched/ewb/ewayapi': () => ({ success: true, result: { ewayBillNo: 171012272464, ewayBillDate: '02/09/2026 10:15:00 PM', validUpto: '04/09/2026 11:59:00 PM' } }),
+      '/enriched/ei/api/invoice': () => ({ success: true, result: { Irn: 'A', AckNo: 1, AckDt: '2026-09-02 15:30:00', SignedQRCode: 'qr' } }),
+    });
+    const gateway = new AdaequareGateway(adaequareConfig(), t.transport);
+    await gateway.submitEwayBill(creds, { payload: ewb, vehicleType: 'regular', now: NOW });
+    await gateway.submitInvoice(creds, { payload, existingIrns: [], now: NOW });
+    expect(t.calls[0].headers).toMatchObject({ username: 'api_user', password: 'hunter2' });
+    expect(t.calls[0].headers).not.toHaveProperty('user_name');
+    expect(t.calls[1].headers).toMatchObject({ user_name: 'api_user' });
+    expect(t.calls[1].headers).not.toHaveProperty('username');
+  });
+
+  it('sandbox: files each API family as its own test taxpayer, and a bill with no IRN to an unregistered consignee', async () => {
+    const t = fakeTransport({
+      '/enriched/ewb/ewayapi': () => ({ success: true, result: { ewayBillNo: 171012272464, ewayBillDate: '02/09/2026 10:15:00 PM', validUpto: '04/09/2026 11:59:00 PM' } }),
+      '/enriched/ei/api/invoice': () => ({ success: true, result: { Irn: 'A', AckNo: 1, AckDt: '2026-09-02 15:30:00', SignedQRCode: 'qr' } }),
+    });
+    const config = loadConfig({
+      TAXATION_GSP_ENVIRONMENT: 'sandbox',
+      TAXATION_ADAEQUARE_SANDBOX_BASE_URL: 'https://gsp.example.test/test/',
+      TAXATION_ADAEQUARE_SANDBOX_APP_ID: 'app',
+      TAXATION_ADAEQUARE_SANDBOX_APP_SECRET: 'secret',
+    });
+    const gateway = new AdaequareGateway(config, t.transport);
+    await gateway.submitEwayBill(creds, { payload: ewb, vehicleType: 'regular', now: NOW });
+    await gateway.submitInvoice(creds, { payload, existingIrns: [], now: NOW });
+    // The e-way bill API: its own taxpayer's GSTIN with the login the business typed, `username`, and our own document number; the consignee is URP.
+    expect(t.calls[0].headers).toMatchObject({ username: 'api_user', password: 'hunter2', gstin: '05AAACG2115R1ZN' });
+    expect(t.calls[0].body).toMatchObject({ fromGstin: '05AAACG2115R1ZN', fromStateCode: 27, toGstin: 'URP' });
+    expect((t.calls[0].body as { docNo: string }).docNo).not.toBe(ewb.docNo);
+    // The e-invoice API: the other test taxpayer, `user_name`.
+    expect(t.calls[1].headers).toMatchObject({ user_name: 'api_user', gstin: '27AMBPG7773M016' });
+    expect(t.calls[1].baseUrl).toBe('https://gsp.example.test/test/');
+  });
+
+  it('sandbox: a bill for a document with an IRN is raised, and cancelled, through the standalone e-way bill API', async () => {
+    // The sandbox cannot cancel a bill raised against an IRN (GSPERR300 for every bill), so it raises none that way.
+    const t = fakeTransport({
+      '/enriched/ewb/ewayapi': () => ({ success: true, result: { ewayBillNo: 171012272464, ewayBillDate: '02/09/2026 10:15:00 PM', validUpto: '04/09/2026 11:59:00 PM', cancelDate: '02/09/2026 10:20:00 PM' } }),
+    });
+    const config = loadConfig({
+      TAXATION_GSP_ENVIRONMENT: 'sandbox',
+      TAXATION_ADAEQUARE_SANDBOX_BASE_URL: 'https://gsp.example.test/test/',
+      TAXATION_ADAEQUARE_SANDBOX_APP_ID: 'app',
+      TAXATION_ADAEQUARE_SANDBOX_APP_SECRET: 'secret',
+    });
+    const gateway = new AdaequareGateway(config, t.transport);
+    await gateway.submitEwayBill(creds, { payload: ewb, irn: 'A'.repeat(64), vehicleType: 'regular', now: NOW });
+    const cancelled = await gateway.cancelEwayBill(creds, { ewayBillNumber: '171012272464', reasonCode: '2', remark: 'Cancelled the order', now: NOW });
+    expect(cancelled.ok).toBe(true);
+    expect(t.calls.map((c) => c.path)).toEqual(['/enriched/ewb/ewayapi', '/enriched/ewb/ewayapi']);
+    expect(t.calls.map((c) => (c as { query?: unknown }).query)).toEqual([{ action: 'GENEWAYBILL' }, { action: 'CANEWB' }]);
+    expect(t.calls[1].headers).toMatchObject({ username: 'api_user', gstin: '05AAACG2115R1ZN' });
+  });
+
   it('files Part B and extension in NIC’s reason codes, not the app’s', async () => {
     const t = fakeTransport({ '/enriched/ewb/ewayapi': () => ({ success: true, result: { vehUpdDate: '02/09/2026 10:15:00 PM', validUpto: '05/09/2026 11:59:00 PM' } }) });
     const gateway = new AdaequareGateway(adaequareConfig(), t.transport);
@@ -327,7 +384,7 @@ describe('Adaequare', () => {
   it('names the variable when the application pair is missing, and the step when no login is stored', async () => {
     const t = fakeTransport({});
     const noPair = new AdaequareGateway(loadConfig({ TAXATION_ADAEQUARE_BASE_URL: 'https://gsp.example.test' }), t.transport);
-    expect(await noPair.submitInvoice(creds, { payload, existingIrns: [], now: NOW })).toMatchObject({ ok: false, errors: [{ code: 'GSP_NOT_CONFIGURED', message: expect.stringContaining('TAXATION_ADAEQUARE_APP_ID') }] });
+    expect(await noPair.submitInvoice(creds, { payload, existingIrns: [], now: NOW })).toMatchObject({ ok: false, errors: [{ code: 'GSP_NOT_CONFIGURED', message: expect.stringContaining('TAXATION_ADAEQUARE_PRODUCTION_APP_ID') }] });
     expect(await new AdaequareGateway(adaequareConfig(), t.transport).submitInvoice(null, { payload, existingIrns: [], now: NOW })).toMatchObject({ ok: false, errors: [{ message: 'Store the portal credentials first' }] });
   });
 
@@ -507,7 +564,7 @@ describe('Whitebooks', () => {
     expect(await noIp.submitInvoice(creds, { payload, existingIrns: [], now: NOW })).toMatchObject({ ok: false, errors: [{ code: 'GSP_NOT_CONFIGURED', message: expect.stringContaining('TAXATION_WHITEBOOKS_IP_ADDRESS') }] });
     const noPair = new WhitebooksGateway(whitebooksConfig({ TAXATION_WHITEBOOKS_EWAYBILL_APP_ID: '', TAXATION_WHITEBOOKS_EWAYBILL_APP_SECRET: '' }), t.transport);
     expect(await noPair.cancelEwayBill(creds, { ewayBillNumber: '151012328603', reasonCode: '2', now: NOW })).toMatchObject({
-      errors: [{ code: 'GSP_NOT_CONFIGURED', message: expect.stringContaining('TAXATION_WHITEBOOKS_EWAYBILL_APP_ID') }],
+      errors: [{ code: 'GSP_NOT_CONFIGURED', message: expect.stringContaining('TAXATION_WHITEBOOKS_SANDBOX_EWAYBILL_APP_ID') }],
     });
     expect(t.calls).toHaveLength(0);
   });
@@ -685,8 +742,11 @@ describe('NIC sandbox GSTINs', () => {
       expect(isValidGstin('29AAGCB1286Q000')).toBe(false);
       setSandboxGstinsAllowed(true);
       expect(isValidGstin('29AAGCB1286Q000')).toBe(true);
+      // Adaequare's sandbox taxpayer, from its published collection.
+      expect(isValidGstin('27AMBPG7773M016')).toBe(true);
       expect(isValidGstin('99AAGCB1286Q000')).toBe(false);
-      expect(isValidGstin('29AAGCB1286Q001')).toBe(false);
+      // A real GSTIN always has a Z in the 14th place, so one with a Z and a wrong check digit is still refused.
+      expect(isValidGstin('29AAGCB1286Q1Z1')).toBe(false);
     } finally {
       setSandboxGstinsAllowed(false);
     }

@@ -9,8 +9,12 @@ export const fmtDay = (iso: string) => formatDate(iso, 'dd MMM');
 export const PLAN_LABELS: Record<string, string> = { free: 'Free', basic: 'Basic', pro: 'Pro', business: 'Business' };
 export const PLANS = ['free', 'basic', 'pro', 'business'] as const;
 
-/** The GST gateways (GSPs) a company can file through. */
-export const GSP_LABELS = { adaequare: 'Adaequare', whitebooks: 'Whitebooks (sandbox)' } as const;
+/** The GST gateways (GSPs) a company can file through, and the NIC environment each is used in. */
+export const GSP_LABELS = { adaequare: 'Adaequare', whitebooks: 'Whitebooks' } as const;
+export const GSP_ENV_LABELS = { sandbox: 'Sandbox', production: 'Production' } as const;
+
+/** `Adaequare – Production`: one target, the way an operator picks it. */
+export const gspTargetLabel = (t: { gateway: keyof typeof GSP_LABELS; environment: keyof typeof GSP_ENV_LABELS }) => `${GSP_LABELS[t.gateway]} – ${GSP_ENV_LABELS[t.environment]}`;
 
 /** `account.suspend` → `Suspended account`; an action with no label here shows as it is. */
 const ACTIONS: Record<string, string> = {

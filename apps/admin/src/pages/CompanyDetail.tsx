@@ -7,7 +7,7 @@ import { Can } from '../components/Can';
 import { ReasonDialog } from '../components/ReasonDialog';
 import { PageHeader, QueryState, EmptyState, DetailSkeleton } from '../components/ui';
 import { api, need, type Schema } from '../lib/api';
-import { fmtDate, fmtDateTime, fmtInt, GSP_LABELS, PLAN_LABELS, PLANS } from '../lib/format';
+import { fmtDate, fmtDateTime, fmtInt, gspTargetLabel, PLAN_LABELS, PLANS } from '../lib/format';
 
 /** Provider cost in US dollars; small sums keep four places so a few calls don't read as $0.00. */
 const fmtUsd = (usd: number) => `$${usd.toFixed(usd > 0 && usd < 1 ? 4 : 2)}`;
@@ -103,13 +103,21 @@ function PlanOverride({ company, billedBy, onWarning }: { company: Schema<'Platf
   );
 }
 
-/** Which GST gateway the company files e-invoices and e-way bills through, and the control to change it. */
+/** One target as the value of a select option: `adaequare:production`. */
+const targetValue = (t: Schema<'GspTarget'>) => `${t.gateway}:${t.environment}`;
+
+/**
+ * Which GST target (gateway and environment) the company files e-invoices and e-way bills through, and the control to
+ * change it. The two halves are one choice in one list, because not every combination exists: a target the
+ * deployment has no settings for (Whitebooks production, until it is subscribed) is listed but cannot be picked.
+ */
 export function GspProvider({ company, gsp }: { company: Schema<'PlatformCompany'>; gsp: Schema<'PlatformGsp'> }) {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
-  // Always one of the two gateways: a company with no choice of its own shows the one it files through today.
-  const [choice, setChoice] = useState<Schema<'GspGateway'>>(gsp.effective);
-  const picked = gsp.options.find((o) => o.gateway === choice);
+  // Always one of the targets: a company with no choice of its own shows the one it files through today.
+  const [choice, setChoice] = useState(targetValue(gsp.effective));
+  const picked = gsp.options.find((o) => targetValue(o) === choice);
+  const current = targetValue(gsp.effective);
 
   return (
     <section className="card" aria-label="GST gateway">
@@ -120,7 +128,7 @@ export function GspProvider({ company, gsp }: { company: Schema<'PlatformCompany
             className="btn small"
             type="button"
             onClick={() => {
-              setChoice(gsp.effective);
+              setChoice(current);
               setOpen(true);
             }}
           >
@@ -132,7 +140,7 @@ export function GspProvider({ company, gsp }: { company: Schema<'PlatformCompany
         <dl className="facts">
           <div>
             <dt>Files through</dt>
-            <dd>{GSP_LABELS[gsp.effective]}</dd>
+            <dd>{gspTargetLabel(gsp.effective)}</dd>
           </div>
         </dl>
         {gsp.simulated ? <p className="hint">This deployment uses the built-in simulator, so no gateway is called whichever one is chosen.</p> : null}
@@ -144,11 +152,12 @@ export function GspProvider({ company, gsp }: { company: Schema<'PlatformCompany
         confirmLabel="Change gateway"
         onClose={() => setOpen(false)}
         onConfirm={async (reason) => {
-          if (choice === gsp.effective) throw new Error(`This company already files through ${GSP_LABELS[choice]}. Pick the other gateway to change it.`);
+          if (!picked) throw new Error('Pick a gateway.');
+          if (choice === current) throw new Error(`This company already files through ${gspTargetLabel(picked)}. Pick another to change it.`);
           need(
             await api.PUT('/admin/companies/{companyId}/gsp-provider', {
               params: { path: { companyId: company.id } },
-              body: { provider: choice, reason },
+              body: { provider: picked.gateway, environment: picked.environment, reason },
             }),
           );
           await queryClient.invalidateQueries();
@@ -156,17 +165,17 @@ export function GspProvider({ company, gsp }: { company: Schema<'PlatformCompany
       >
         <label className="field">
           <span>Gateway</span>
-          <select className="select" value={choice} onChange={(e) => setChoice(e.target.value as Schema<'GspGateway'>)}>
+          <select className="select" value={choice} onChange={(e) => setChoice(e.target.value)}>
             {gsp.options.map((o) => (
-              <option key={o.gateway} value={o.gateway} disabled={!o.available}>
-                {GSP_LABELS[o.gateway]}
-                {o.gateway === gsp.effective ? ' (current)' : ''}
+              <option key={targetValue(o)} value={targetValue(o)} disabled={!o.available}>
+                {gspTargetLabel(o)}
+                {targetValue(o) === current ? ' (current)' : ''}
                 {o.available ? '' : ' (not available)'}
               </option>
             ))}
           </select>
           {picked && !picked.available ? <span className="hint">{picked.reason}</span> : null}
-          <span className="hint">A company must have its portal login registered with the gateway you choose.</span>
+          <span className="hint">Sandbox files test documents that are not valid for a customer. Choose Production only for a company that is live. A company must have its portal login registered with the gateway you choose.</span>
         </label>
       </ReasonDialog>
     </section>
@@ -246,7 +255,7 @@ export function CompanyDetail() {
               </dl>
             </section>
 
-            <GspProvider key={`${company.id}:${gsp.effective}`} company={company} gsp={gsp} />
+            <GspProvider key={`${company.id}:${targetValue(gsp.effective)}`} company={company} gsp={gsp} />
 
             <div className="grid-2">
               <section className="card">

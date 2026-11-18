@@ -13,15 +13,19 @@ vi.mock('../auth/AuthProvider', () => ({ useOperator: () => ({ platformRole: rol
 
 const company = { id: 'cmp_1', name: 'Acme Traders' } as Schema<'PlatformCompany'>;
 
+const OPTIONS: Schema<'PlatformGsp'>['options'] = [
+  { gateway: 'adaequare', environment: 'production', available: true, reason: null },
+  { gateway: 'adaequare', environment: 'sandbox', available: true, reason: null },
+  { gateway: 'whitebooks', environment: 'sandbox', available: true, reason: null },
+  { gateway: 'whitebooks', environment: 'production', available: false, reason: 'Not set up here: TAXATION_WHITEBOOKS_PRODUCTION_BASE_URL is missing.' },
+];
+
 const gsp = (over: Partial<Schema<'PlatformGsp'>> = {}): Schema<'PlatformGsp'> => ({
   override: null,
-  default: 'adaequare',
-  effective: 'adaequare',
+  default: { gateway: 'whitebooks', environment: 'sandbox' },
+  effective: { gateway: 'whitebooks', environment: 'sandbox' },
   simulated: false,
-  options: [
-    { gateway: 'adaequare', available: true, sandboxOnly: false, reason: null },
-    { gateway: 'whitebooks', available: true, sandboxOnly: true, reason: null },
-  ],
+  options: OPTIONS,
   ...over,
 });
 
@@ -45,25 +49,38 @@ beforeEach(() => {
 });
 
 describe('GspProvider', () => {
-  it('names the gateway the company files through, whether or not anyone chose it', () => {
+  it('names the gateway and environment the company files through, whether or not anyone chose it', () => {
     show(gsp());
-    expect(screen.getByText('Files through').nextElementSibling?.textContent).toBe('Adaequare');
+    expect(screen.getByText('Files through').nextElementSibling?.textContent).toBe('Whitebooks – Sandbox');
     // Nothing says where it came from.
     expect(screen.queryByText(/default/i)).toBeNull();
   });
 
-  it('names a gateway an operator chose in just the same way', () => {
-    show(gsp({ override: 'whitebooks', effective: 'whitebooks' }));
-    expect(screen.getByText('Files through').nextElementSibling?.textContent).toBe('Whitebooks (sandbox)');
+  it('names a target an operator chose in just the same way', () => {
+    const target = { gateway: 'adaequare', environment: 'production' } as const;
+    show(gsp({ override: target, effective: target }));
+    expect(screen.getByText('Files through').nextElementSibling?.textContent).toBe('Adaequare – Production');
   });
 
-  it('offers only the two gateways, with the current one selected', async () => {
-    show(gsp({ effective: 'whitebooks' }));
+  it('offers all four targets in one list, with the current one selected', async () => {
+    show(gsp());
     const dialog = await openDialog();
     const select = within(dialog).getByRole('combobox') as HTMLSelectElement;
-    expect(within(select).getAllByRole('option').map((o) => o.textContent)).toEqual(['Adaequare', 'Whitebooks (sandbox) (current)']);
-    expect(select.value).toBe('whitebooks');
-    expect(within(dialog).queryByText(/default/i)).toBeNull();
+    expect(within(select).getAllByRole('option').map((o) => o.textContent)).toEqual([
+      'Adaequare – Production',
+      'Adaequare – Sandbox',
+      'Whitebooks – Sandbox (current)',
+      'Whitebooks – Production (not available)',
+    ]);
+    expect(select.value).toBe('whitebooks:sandbox');
+  });
+
+  it('lists a target the deployment cannot run, disabled, with the reason', async () => {
+    show(gsp());
+    const dialog = await openDialog();
+    const option = within(dialog).getByRole('option', { name: /Whitebooks – Production/ }) as HTMLOptionElement;
+    expect(option.disabled).toBe(true);
+    expect(option.textContent).toContain('not available');
   });
 
   it('notes that a simulated deployment calls no gateway', () => {
@@ -77,34 +94,39 @@ describe('GspProvider', () => {
     expect(screen.queryByRole('button', { name: 'Change gateway' })).toBeNull();
   });
 
-  it('sends the chosen gateway with the reason', async () => {
+  it('sends the chosen gateway and environment with the reason', async () => {
     show(gsp());
     const dialog = await openDialog();
-    await userEvent.selectOptions(within(dialog).getByRole('combobox'), 'whitebooks');
+    await userEvent.selectOptions(within(dialog).getByRole('combobox'), 'adaequare:sandbox');
     await userEvent.type(within(dialog).getByRole('textbox'), 'Customer asked to move');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Change gateway' }));
 
     expect(put).toHaveBeenCalledWith('/admin/companies/{companyId}/gsp-provider', {
       params: { path: { companyId: 'cmp_1' } },
-      body: { provider: 'whitebooks', reason: 'Customer asked to move' },
+      body: { provider: 'adaequare', environment: 'sandbox', reason: 'Customer asked to move' },
     });
   });
 
-  it('does not send a change to the gateway the company already files through', async () => {
+  it('sends the same gateway in another environment', async () => {
+    show(gsp({ effective: { gateway: 'adaequare', environment: 'sandbox' } }));
+    const dialog = await openDialog();
+    await userEvent.selectOptions(within(dialog).getByRole('combobox'), 'adaequare:production');
+    await userEvent.type(within(dialog).getByRole('textbox'), 'Going live');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Change gateway' }));
+
+    expect(put).toHaveBeenCalledWith('/admin/companies/{companyId}/gsp-provider', {
+      params: { path: { companyId: 'cmp_1' } },
+      body: { provider: 'adaequare', environment: 'production', reason: 'Going live' },
+    });
+  });
+
+  it('does not send a change to the target the company already files through', async () => {
     show(gsp());
     const dialog = await openDialog();
     await userEvent.type(within(dialog).getByRole('textbox'), 'No real change');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Change gateway' }));
 
     expect(put).not.toHaveBeenCalled();
-    expect((await within(dialog).findByRole('alert')).textContent).toContain('already files through Adaequare');
-  });
-
-  it('offers a gateway the deployment cannot run only as unavailable, with the reason', async () => {
-    show(gsp({ options: [{ gateway: 'adaequare', available: true, sandboxOnly: false, reason: null }, { gateway: 'whitebooks', available: false, sandboxOnly: true, reason: 'Sandbox only here.' }] }));
-    const dialog = await openDialog();
-    const option = within(dialog).getByRole('option', { name: /Whitebooks/ }) as HTMLOptionElement;
-    expect(option.disabled).toBe(true);
-    expect(option.textContent).toContain('not available');
+    expect((await within(dialog).findByRole('alert')).textContent).toContain('already files through Whitebooks – Sandbox');
   });
 });

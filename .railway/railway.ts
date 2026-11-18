@@ -61,19 +61,45 @@ export default defineRailway((ctx) => {
     PDF_PROVIDER: preserve(),
     COMPLIANCE_PROVIDER: preserve(),
     GSTIN_PROVIDER: preserve(),
-    // The GSP gateway for COMPLIANCE_PROVIDER / GSTIN_PROVIDER = gsp. Production
-    // is Adaequare; the sandbox-only switches are refused there, so none is listed.
+    // The GSP targets for COMPLIANCE_PROVIDER / GSTIN_PROVIDER = gsp. A target is a gateway plus an environment
+    // (sandbox or production), each with its own URL and credentials; the default is TAXATION_GSP_PROVIDER_CODE +
+    // TAXATION_GSP_ENVIRONMENT, and an operator can pick another per company in the admin portal. A target whose
+    // variables are blank is listed there but cannot be chosen. No sandbox switch exists any more.
     TAXATION_GSP_PROVIDER_CODE: preserve(),
+    TAXATION_GSP_ENVIRONMENT: preserve(),
+    TAXATION_GSTIN_LOOKUP_TARGET: preserve(),
+    TAXATION_ADAEQUARE_PRODUCTION_BASE_URL: preserve(),
+    TAXATION_ADAEQUARE_PRODUCTION_APP_ID: preserve(),
+    TAXATION_ADAEQUARE_PRODUCTION_APP_SECRET: preserve(),
+    TAXATION_ADAEQUARE_SANDBOX_BASE_URL: preserve(),
+    TAXATION_ADAEQUARE_SANDBOX_APP_ID: preserve(),
+    TAXATION_ADAEQUARE_SANDBOX_APP_SECRET: preserve(),
+    TAXATION_ADAEQUARE_SANDBOX_GSTIN: preserve(),
+    TAXATION_ADAEQUARE_SANDBOX_EWB_GSTIN: preserve(),
+    TAXATION_WHITEBOOKS_SANDBOX_BASE_URL: preserve(),
+    TAXATION_WHITEBOOKS_SANDBOX_APP_ID: preserve(),
+    TAXATION_WHITEBOOKS_SANDBOX_APP_SECRET: preserve(),
+    TAXATION_WHITEBOOKS_SANDBOX_EINVOICE_APP_ID: preserve(),
+    TAXATION_WHITEBOOKS_SANDBOX_EINVOICE_APP_SECRET: preserve(),
+    TAXATION_WHITEBOOKS_SANDBOX_EWAYBILL_APP_ID: preserve(),
+    TAXATION_WHITEBOOKS_SANDBOX_EWAYBILL_APP_SECRET: preserve(),
+    TAXATION_WHITEBOOKS_PRODUCTION_BASE_URL: preserve(),
+    TAXATION_WHITEBOOKS_PRODUCTION_APP_ID: preserve(),
+    TAXATION_WHITEBOOKS_PRODUCTION_APP_SECRET: preserve(),
+    TAXATION_WHITEBOOKS_PRODUCTION_EINVOICE_APP_ID: preserve(),
+    TAXATION_WHITEBOOKS_PRODUCTION_EINVOICE_APP_SECRET: preserve(),
+    TAXATION_WHITEBOOKS_PRODUCTION_EWAYBILL_APP_ID: preserve(),
+    TAXATION_WHITEBOOKS_PRODUCTION_EWAYBILL_APP_SECRET: preserve(),
+    TAXATION_WHITEBOOKS_ACCOUNT_EMAIL: preserve(),
+    TAXATION_WHITEBOOKS_IP_ADDRESS: preserve(),
+    TAXATION_SANDBOX_BUYER_GSTIN: preserve(),
+    TAXATION_SANDBOX_GSTIN: preserve(),
+    // Older, un-suffixed names, still read (Adaequare production, Whitebooks sandbox): kept so a deployment that
+    // has them set keeps working untouched.
     TAXATION_ADAEQUARE_BASE_URL: preserve(),
     TAXATION_ADAEQUARE_APP_ID: preserve(),
     TAXATION_ADAEQUARE_APP_SECRET: preserve(),
-    // A staging deployment that files against NIC's sandbox through Whitebooks opts in with
-    // TAXATION_GSTIN_ALLOW_SANDBOX; the live deployment leaves all of these unset.
-    TAXATION_GSTIN_ALLOW_SANDBOX: preserve(),
-    TAXATION_SANDBOX_BUYER_GSTIN: preserve(),
     TAXATION_WHITEBOOKS_BASE_URL: preserve(),
-    TAXATION_WHITEBOOKS_ACCOUNT_EMAIL: preserve(),
-    TAXATION_WHITEBOOKS_IP_ADDRESS: preserve(),
     TAXATION_WHITEBOOKS_APP_ID: preserve(),
     TAXATION_WHITEBOOKS_APP_SECRET: preserve(),
     TAXATION_WHITEBOOKS_EINVOICE_APP_ID: preserve(),

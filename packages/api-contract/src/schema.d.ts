@@ -4633,7 +4633,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Choose the GST gateway (GSP) this company files e-invoices and e-way bills through, or clear the choice so it follows the deployment's default. Only a gateway the deployment is set up for may be chosen. The company's cached portal session is dropped, so its next filing signs in afresh through the new gateway. */
+        /** Choose the GST target (a GSP and its environment, sandbox or production) this company files e-invoices and e-way bills through, or clear the choice so it follows the deployment's default. Only a target the deployment is set up for may be chosen. The company's cached portal session is dropped, so its next filing signs in afresh through the new target. */
         put: operations["setCompanyGspProvider"];
         post?: never;
         delete?: never;
@@ -6337,6 +6337,7 @@ export interface components {
             /** @enum {string} */
             eInvoiceSupplyType?: "B2B" | "SEZWP" | "SEZWOP" | "EXPWP" | "EXPWOP" | "DEXP";
             irn?: string;
+            /** @description NIC acknowledgement number: 15 digits on the live portal and the sandboxes, 16 from the built-in simulator */
             ackNo?: string;
             /** @example 2026-09-22 14:03:11 */
             ackDate?: string;
@@ -6979,31 +6980,43 @@ export interface components {
             onboardingCompletedAt?: string | null;
             /** @description The gateway an operator chose for this company; null follows the deployment default */
             gspProvider?: components["schemas"]["GspGateway"] | null;
+            /** @description The environment of that choice; null together with gspProvider */
+            gspEnvironment?: components["schemas"]["GspEnvironment"] | null;
             /** Format: date-time */
             createdAt: string;
         };
         /** @enum {string} */
         GspGateway: "adaequare" | "whitebooks";
-        /** @description Which GST gateway (GSP) a company files through, and which ones this deployment can offer. */
+        /** @enum {string} */
+        GspEnvironment: "sandbox" | "production";
+        /** @description A GSP and the NIC environment it is used in. A filing goes to one target. */
+        GspTarget: {
+            gateway: components["schemas"]["GspGateway"];
+            environment: components["schemas"]["GspEnvironment"];
+        };
+        /** @description Which GST target (GSP and environment) a company files through, and which ones this deployment can offer. */
         PlatformGsp: {
             /** @description The choice an operator made for this company; null means none */
-            override: components["schemas"]["GspGateway"] | null;
-            default: components["schemas"]["GspGateway"];
-            effective: components["schemas"]["GspGateway"];
+            override: components["schemas"]["GspTarget"] | null;
+            default: components["schemas"]["GspTarget"];
+            effective: components["schemas"]["GspTarget"];
             /** @description True when the deployment files through the built-in simulator, so no gateway is called whatever is chosen */
             simulated: boolean;
+            /** @description Every target, whether or not it can be chosen. One that cannot (its settings are not filled in) is listed so the operator sees it. */
             options: {
                 gateway: components["schemas"]["GspGateway"];
+                environment: components["schemas"]["GspEnvironment"];
                 /** @description Whether the deployment can file through it */
                 available: boolean;
-                sandboxOnly: boolean;
                 /** @description Why it cannot be chosen */
                 reason?: string | null;
             }[];
         };
         PlatformGspChange: {
-            /** @description The gateway to use; null clears the choice so the company follows the deployment default */
+            /** @description The gateway to use; null (with a null environment) clears the choice so the company follows the deployment default */
             provider: components["schemas"]["GspGateway"] | null;
+            /** @description The environment to use it in. Set with provider, null with it. */
+            environment: components["schemas"]["GspEnvironment"] | null;
             reason: string;
         };
         PlatformUser: {

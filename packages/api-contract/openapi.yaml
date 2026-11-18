@@ -6635,7 +6635,7 @@ paths:
     put:
       tags: [Platform]
       operationId: setCompanyGspProvider
-      summary: Choose the GST gateway (GSP) this company files e-invoices and e-way bills through, or clear the choice so it follows the deployment's default. Only a gateway the deployment is set up for may be chosen. The company's cached portal session is dropped, so its next filing signs in afresh through the new gateway.
+      summary: Choose the GST target (a GSP and its environment, sandbox or production) this company files e-invoices and e-way bills through, or clear the choice so it follows the deployment's default. Only a target the deployment is set up for may be chosen. The company's cached portal session is dropped, so its next filing signs in afresh through the new target.
       x-platform-roles: [superadmin]
       requestBody:
         required: true
@@ -8290,7 +8290,7 @@ components:
         eInvoiceDocType: { type: string, enum: [INV, CRN, DBN] }
         eInvoiceSupplyType: { type: string, enum: [B2B, SEZWP, SEZWOP, EXPWP, EXPWOP, DEXP] }
         irn: { type: string, pattern: '^[0-9a-f]{64}$' }
-        ackNo: { type: string, pattern: '^[0-9]{16}$' }
+        ackNo: { type: string, pattern: '^[0-9]{15,16}$', description: 'NIC acknowledgement number: 15 digits on the live portal and the sandboxes, 16 from the built-in simulator' }
         ackDate: { type: string, example: '2026-09-22 14:03:11' }
         signedQrPayload: { type: string, description: JWS compact serialisation }
         irnGeneratedAt: { type: string, format: date-time }
@@ -8880,34 +8880,47 @@ components:
         subscriptionStatus: { type: string, enum: [active, trialing, pastDue, cancelled, none] }
         onboardingCompletedAt: { type: [string, 'null'], format: date-time }
         gspProvider: { oneOf: [{ $ref: '#/components/schemas/GspGateway' }, { type: 'null' }], description: 'The gateway an operator chose for this company; null follows the deployment default' }
+        gspEnvironment: { oneOf: [{ $ref: '#/components/schemas/GspEnvironment' }, { type: 'null' }], description: 'The environment of that choice; null together with gspProvider' }
         createdAt: { type: string, format: date-time }
     GspGateway:
       type: string
       enum: [adaequare, whitebooks]
+    GspEnvironment:
+      type: string
+      enum: [sandbox, production]
+    GspTarget:
+      type: object
+      description: A GSP and the NIC environment it is used in. A filing goes to one target.
+      required: [gateway, environment]
+      properties:
+        gateway: { $ref: '#/components/schemas/GspGateway' }
+        environment: { $ref: '#/components/schemas/GspEnvironment' }
     PlatformGsp:
       type: object
-      description: Which GST gateway (GSP) a company files through, and which ones this deployment can offer.
+      description: Which GST target (GSP and environment) a company files through, and which ones this deployment can offer.
       required: [override, default, effective, simulated, options]
       properties:
-        override: { oneOf: [{ $ref: '#/components/schemas/GspGateway' }, { type: 'null' }], description: 'The choice an operator made for this company; null means none' }
-        default: { $ref: '#/components/schemas/GspGateway' }
-        effective: { $ref: '#/components/schemas/GspGateway' }
+        override: { oneOf: [{ $ref: '#/components/schemas/GspTarget' }, { type: 'null' }], description: 'The choice an operator made for this company; null means none' }
+        default: { $ref: '#/components/schemas/GspTarget' }
+        effective: { $ref: '#/components/schemas/GspTarget' }
         simulated: { type: boolean, description: 'True when the deployment files through the built-in simulator, so no gateway is called whatever is chosen' }
         options:
           type: array
+          description: Every target, whether or not it can be chosen. One that cannot (its settings are not filled in) is listed so the operator sees it.
           items:
             type: object
-            required: [gateway, available, sandboxOnly]
+            required: [gateway, environment, available]
             properties:
               gateway: { $ref: '#/components/schemas/GspGateway' }
+              environment: { $ref: '#/components/schemas/GspEnvironment' }
               available: { type: boolean, description: Whether the deployment can file through it }
-              sandboxOnly: { type: boolean }
               reason: { type: [string, 'null'], description: Why it cannot be chosen }
     PlatformGspChange:
       type: object
-      required: [provider, reason]
+      required: [provider, environment, reason]
       properties:
-        provider: { oneOf: [{ $ref: '#/components/schemas/GspGateway' }, { type: 'null' }], description: 'The gateway to use; null clears the choice so the company follows the deployment default' }
+        provider: { oneOf: [{ $ref: '#/components/schemas/GspGateway' }, { type: 'null' }], description: 'The gateway to use; null (with a null environment) clears the choice so the company follows the deployment default' }
+        environment: { oneOf: [{ $ref: '#/components/schemas/GspEnvironment' }, { type: 'null' }], description: 'The environment to use it in. Set with provider, null with it.' }
         reason: { type: string, minLength: 3, maxLength: 500 }
     PlatformUser:
       type: object

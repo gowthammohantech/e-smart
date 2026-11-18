@@ -97,8 +97,8 @@ when:
 - a chosen provider lacks its credentials (MSG91, ACS, SES, Meta WhatsApp,
   Azure Blob, GSP, Razorpay, Open Exchange Rates, Anthropic), or `EMAIL_FROM`
   is still the example sender;
-- the GSP is Whitebooks, or `TAXATION_SANDBOX_BUYER_GSTIN` or `TAXATION_GSP_AUTH_REQUIRED=false` is set, without
-  `TAXATION_GSTIN_ALLOW_SANDBOX=true` (the one switch for the sandbox; see
+- the default GSP target lacks its base URL or application credentials, or `TAXATION_GSP_AUTH_REQUIRED=false` is
+  set (a GSP target is a gateway plus an environment; there is no sandbox switch, see
   [the GSP gateway](../../apps/api/src/providers/gsp/README.md));
 - `RAZORPAY_WEBHOOK_SECRET` or `WHATSAPP_WEBHOOK_SECRET` is the development default;
 - `CORS_ORIGINS` contains `*`;

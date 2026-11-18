@@ -8,11 +8,6 @@
  *   EXPO_PUBLIC_DEMO_LOGIN_PASSWORD   prefill for the sign-in form (demo and sandbox builds only)
  *
 
- *   EXPO_PUBLIC_TAXATION_GSTIN_ALLOW_SANDBOX
- *                                     `true` admits NIC's sandbox GSTIN shape (29AAGCB1286Q000) in the app's own
- *                                     checks, which run in the client (the e-invoice sheet validates before
- *                                     calling the API). Match the API's TAXATION_GSTIN_ALLOW_SANDBOX; sandbox only.
- *
  * Metro inlines `process.env.EXPO_PUBLIC_*` when it is written out in full,
  * so these reads stay literal. Whatever they hold is compiled into the client
  * bundle and readable by anyone who loads it: set the demo login only on a
@@ -23,7 +18,10 @@ import { setSandboxGstinsAllowed } from '@esmart/core/domain/gstin';
 declare const process: { env: Record<string, string | undefined> };
 declare const __DEV__: boolean;
 
-setSandboxGstinsAllowed(process.env.EXPO_PUBLIC_TAXATION_GSTIN_ALLOW_SANDBOX === 'true');
+// NIC's sandbox test GSTINs (no check digit) pass the app's own checks, which run in the client (the e-invoice sheet
+// validates before calling the API). Whether they are accepted is the server's decision, per deployment: it refuses
+// them when it cannot reach a sandbox gateway, so no build setting is needed here.
+setSandboxGstinsAllowed(true);
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL?.trim() || (__DEV__ ? 'http://localhost:4000' : '');
 

@@ -36,7 +36,25 @@ import {
 } from './common';
 import { GSP_TOKEN_EXPIRY_SKEW_MS, NIC_ERROR_CODES } from './constants';
 import { carriesField, hasErrorCode, parsePortalDateAny, toPortalDateTime, unwrapResult } from './envelope';
-import { gspApplication } from './provider-name';
+import { defaultGspTarget, gspApplication, type GspTarget } from './provider-name';
+import {
+  ADAEQUARE_SANDBOX_BUYER,
+  ADAEQUARE_SANDBOX_EWB_GSTIN,
+  ADAEQUARE_SANDBOX_GSTIN,
+  DISTANCE_REFUSED,
+  IRN_HSN_REFUSED,
+  SANDBOX_ACCEPTED_HSN,
+  STANDALONE_DISTANCE_REFUSED,
+  STANDALONE_HSN_REFUSED,
+  adaequareSandboxEwbSeller,
+  adaequareSandboxSeller,
+  ewayFrom,
+  irpHsnSwap,
+  resplitIrnTax,
+  resplitTax,
+  sandboxDocNo,
+  sandboxRates,
+} from './sandbox';
 import { FetchGspTransport, GspAuthError, GspConfigError, GspRequestError, type GspTransport } from './transport';
 
 /**
@@ -66,12 +84,27 @@ const PATHS = {
   irnDetails: '/enriched/ei/api/invoice/irn',
 } as const;
 
+/**
+ * The sandbox refusing the distance it was given. Adaequare's e-way bill API sends this as bare text ("The distance between
+ * the pincodes given is too high") with no NIC code, so the wording is read as well as the codes.
+ */
+const distanceRefused = (error: unknown): boolean =>
+  error instanceof GspRequestError &&
+  (DISTANCE_REFUSED.some((code) => hasErrorCode(error.envelope, code)) || hasErrorCode(error.envelope, STANDALONE_DISTANCE_REFUSED) || /distance between the pincodes/i.test(error.message));
+
 type CancelRecord = { CancelDate?: string; cancelDate?: string };
 
 type Bearer = { value: string; expiresAt: number };
 
 /**
- * E-invoice, e-way bill and taxpayer lookup through Adaequare.
+ * E-invoice, e-way bill and taxpayer lookup through Adaequare, for one environment: its production API or its
+ * sandbox (`config` is already read for that target, see `configFor`).
+ *
+ * Production files a business as itself. The sandbox has one registered taxpayer and a short list of buyers, so
+ * against it every business is filed as that test taxpayer (and, if configured, its test login), buyers are
+ * swapped for a registered one, tax is re-split to match, HSN codes the sandbox does not know are retried under one
+ * it does, and document numbers are our own. The app's own invoice, PDF and audit trail keep the real data. These
+ * stand-ins follow Adaequare's published sandbox collection; run them against the sandbox before relying on them.
  *
  * Two credentials ride every filing call and conflating them is the classic
  * mistake: the bearer proves the *application* may use the pipe (one pair for
@@ -88,20 +121,27 @@ export class AdaequareGateway implements GspGateway {
 
   private bearer: (Bearer & { clientId: string }) | null = null;
   private inFlight: Promise<Bearer> | null = null;
+  /** Which target this client files against. */
+  private readonly target: GspTarget;
+  /** True against Adaequare's sandbox, where the stand-ins apply. */
+  private readonly sandbox: boolean;
 
   constructor(
     private readonly config: Config,
     private readonly transport: GspTransport = new FetchGspTransport(),
     private readonly clock: () => number = Date.now,
     private readonly log: (message: string) => void = () => {},
-  ) {}
+  ) {
+    this.target = defaultGspTarget(config);
+    this.sandbox = this.target.environment === 'sandbox';
+  }
 
   // ----------------------------------------------------------------- session
 
   private application(_creds: PortalCredentials | null) {
-    const env = gspApplication(this.config, 'adaequare', 'EINVOICE');
+    const env = gspApplication(this.config, this.target, 'EINVOICE');
     // The application pair is ours, from the environment; the business never supplies it.
-    if (!env.clientId || !env.clientSecret) throw new GspConfigError(`${env.variable} must be set for the Adaequare gateway.`);
+    if (!env.clientId || !env.clientSecret) throw new GspConfigError(`${env.variable} must be set for the Adaequare ${this.target.environment} gateway.`);
     return { clientId: env.clientId, clientSecret: env.clientSecret };
   }
 
@@ -136,9 +176,30 @@ export class AdaequareGateway implements GspGateway {
     }
   }
 
-  /** The NIC portal headers that ride beside the bearer. `requestid` is fresh on every call, recovery lookups included. */
-  private portalHeaders(creds: PortalCredentials): Record<string, string> {
-    return { user_name: creds.username, password: creds.password, gstin: creds.gstin, requestid: randomUUID() };
+  /**
+   * The login a filing is made with. Production: the business's own. Sandbox: the business's own username and password,
+   * as typed, with only the GSTIN swapped for the sandbox's test taxpayer (the sandbox knows no real GSTIN). A wrong or
+   * missing login is refused, as it is everywhere. Adaequare's sandbox has TWO test taxpayers, one per API family: the
+   * e-invoice API (`ei`: IRN, e-way bill by IRN, cancel) files as `TAXATION_ADAEQUARE_SANDBOX_GSTIN` (27AMBPG7773M016
+   * unless set), the standalone e-way bill API (`ewb`: generate without an IRN, Part B, extension) as
+   * `TAXATION_ADAEQUARE_SANDBOX_EWB_GSTIN` (05AAACG2115R1ZN unless set). Every sandbox e-way bill is on the second one.
+   */
+  private login(creds: PortalCredentials | null, api: 'ei' | 'ewb'): PortalCredentials {
+    const own = requireLogin(creds);
+    if (!this.sandbox) return own;
+    const c = this.config;
+    const gstin = api === 'ewb' ? c.TAXATION_ADAEQUARE_SANDBOX_EWB_GSTIN || ADAEQUARE_SANDBOX_EWB_GSTIN : c.TAXATION_ADAEQUARE_SANDBOX_GSTIN || ADAEQUARE_SANDBOX_GSTIN;
+    if (own.gstin !== gstin) this.log(`Filing as Adaequare sandbox taxpayer ${gstin} in place of ${own.gstin || 'no GSTIN'}`);
+    return { ...own, gstin };
+  }
+
+  /**
+   * The NIC portal headers that ride beside the bearer. `requestid` is fresh on every call, recovery lookups included.
+   * The e-invoice routes (`/enriched/ei/…`) name the user `user_name`; the e-way bill routes (`/enriched/ewb/…`) `username`.
+   */
+  private portalHeaders(creds: PortalCredentials, path: string): Record<string, string> {
+    const user: Record<string, string> = path.startsWith('/enriched/ewb') ? { username: creds.username } : { user_name: creds.username };
+    return { ...user, password: creds.password, gstin: creds.gstin, requestid: randomUUID() };
   }
 
   private async call<T>(
@@ -149,7 +210,7 @@ export class AdaequareGateway implements GspGateway {
   ) {
     const app = this.application(creds);
     const token = await this.token(app);
-    return this.transport[method]<T>({ baseUrl: this.baseUrl(), path, token, headers: this.portalHeaders(creds), ...opts });
+    return this.transport[method]<T>({ baseUrl: this.baseUrl(), path, token, headers: this.portalHeaders(creds, path), ...opts });
   }
 
   private async guard<T extends { ok: boolean }>(run: () => Promise<T>) {
@@ -183,9 +244,21 @@ export class AdaequareGateway implements GspGateway {
 
   submitInvoice(creds: PortalCredentials | null, req: Parameters<ComplianceProvider['submitInvoice']>[1]): Promise<SubmitInvoiceResult> {
     return this.guard(async () => {
-      const login = requireLogin(creds);
+      const login = this.login(creds, 'ei');
+      const payload = this.sandbox ? this.sandboxInvoice(login, req) : req.payload;
+      const file = async (body: Record<string, unknown>) => {
+        try {
+          return await this.call<IrnRecord>('post', login, PATHS.generateIrn, { body });
+        } catch (error) {
+          // The sandbox's HSN master is short: retry once under a code it knows. The app's own invoice keeps the real one.
+          const items = (body.ItemList as { HsnCd?: string; IsServc?: string }[]) ?? [];
+          if (!(this.sandbox && error instanceof GspRequestError && IRN_HSN_REFUSED.some((code) => hasErrorCode(error.envelope, code)) && items.some((i) => irpHsnSwap(i).HsnCd !== i.HsnCd))) throw error;
+          this.log(`The sandbox does not know an HSN on this invoice: filing it under ${SANDBOX_ACCEPTED_HSN}`);
+          return this.call<IrnRecord>('post', login, PATHS.generateIrn, { body: { ...body, ItemList: items.map(irpHsnSwap) } });
+        }
+      };
       try {
-        const envelope = await this.call<IrnRecord>('post', login, PATHS.generateIrn, { body: prepareIrnPayload(req.payload) });
+        const envelope = await file(prepareIrnPayload(payload) as unknown as Record<string, unknown>);
         // `unwrapResult`, not `envelope.result`: Adaequare wraps the record, a stand-in answers with it bare.
         const record = unwrapResult(envelope);
         if (!record?.Irn) return incomplete('IRN');
@@ -195,11 +268,28 @@ export class AdaequareGateway implements GspGateway {
         // state a request that timed out mid-flight leaves behind. Fetch it and adopt it.
         const maybeRegistered = error instanceof GspRequestError && (hasErrorCode(error.envelope, NIC_ERROR_CODES.DUPLICATE_IRN) || error.source === 'transport');
         if (maybeRegistered) {
-          const found = await this.irnByDocument(login, req.payload.DocDtls).catch(() => null);
+          const found = await this.irnByDocument(login, payload.DocDtls).catch(() => null);
           if (found?.Irn) return acknowledgement(found, req.now);
         }
         throw error;
       }
+    });
+  }
+
+  /**
+   * **Sandbox only.** The invoice as the sandbox can take it: filed by its one test taxpayer (whose registration is the
+   * seller block NIC checks against the session's GSTIN), to a buyer it has registered (3028 otherwise), with the
+   * tax re-split to match those two states (NIC 2172) and a document number of our own, so a retry finds our
+   * registration and not a stranger's (see `sandboxDocNo`). Place of supply and the amounts are the document's.
+   */
+  private sandboxInvoice(login: PortalCredentials, req: Parameters<ComplianceProvider['submitInvoice']>[1]): typeof req.payload {
+    const p = req.payload;
+    const buyer = p.BuyerDtls.Gstin && p.BuyerDtls.Gstin !== 'URP' ? { ...ADAEQUARE_SANDBOX_BUYER, Pos: p.BuyerDtls.Pos } : p.BuyerDtls;
+    return resplitIrnTax({
+      ...p,
+      SellerDtls: adaequareSandboxSeller(login.gstin) as unknown as typeof p.SellerDtls,
+      BuyerDtls: buyer as unknown as typeof p.BuyerDtls,
+      DocDtls: { ...p.DocDtls, No: sandboxDocNo(this.config, login.gstin, p.DocDtls.No, p.DocDtls.Dt, req.companyId) },
     });
   }
 
@@ -211,7 +301,7 @@ export class AdaequareGateway implements GspGateway {
 
   cancelIrn(creds: PortalCredentials | null, req: Parameters<ComplianceProvider['cancelIrn']>[1]): Promise<CancelIrnResult> {
     return this.guard(async () => {
-      const login = requireLogin(creds);
+      const login = this.login(creds, 'ei');
       const envelope = await this.call<CancelRecord>('post', login, PATHS.cancelIrn, {
         // A string, per NIC's `String(1)`.
         body: { Irn: req.irn, CnlRsn: req.reasonCode, ...(req.remark?.trim() ? { CnlRem: req.remark.trim() } : {}) },
@@ -226,18 +316,57 @@ export class AdaequareGateway implements GspGateway {
 
   submitEwayBill(creds: PortalCredentials | null, req: Parameters<ComplianceProvider['submitEwayBill']>[1]): Promise<SubmitEwayBillResult> {
     return this.guard(async () => {
-      const login = requireLogin(creds);
+      // Production: by IRN it is the e-invoice API and its taxpayer; with none it is the standalone e-way bill API and its own.
+      const ewbLogin = this.login(creds, 'ewb');
       // With a live IRN the bill is raised against it (Part B only); NIC already holds the document.
-      const envelope = req.irn
-        ? await this.call<EwbRecord>('post', login, PATHS.generateEwayBillByIrn, { body: ewayBillByIrnBody(req.irn, req.payload, 'TrnDocNO', 'TrnDocDt') })
-        : await this.call<EwbRecord>('post', login, PATHS.standaloneEwayBill, { query: { action: 'GENEWAYBILL' }, body: nativeEwayBillBody(req.payload) });
+      const byIrn = (payload: typeof req.payload) => this.call<EwbRecord>('post', this.login(creds, 'ei'), PATHS.generateEwayBillByIrn, { body: ewayBillByIrnBody(req.irn!, payload, 'TrnDocNO', 'TrnDocDt') });
+      // The sandbox is shown valid GST rates on the summary line: the blend of a mixed-rate invoice (about 16.3%) is refused.
+      const direct = (payload: typeof req.payload) => this.call<EwbRecord>('post', ewbLogin, PATHS.standaloneEwayBill, { query: { action: 'GENEWAYBILL' }, body: this.sandbox ? sandboxRates(nativeEwayBillBody(payload)) : nativeEwayBillBody(payload) });
+      let envelope;
+      if (req.irn && !this.sandbox) {
+        envelope = await byIrn(req.payload);
+      } else if (!this.sandbox) {
+        envelope = await direct(req.payload);
+      } else {
+        // Sandbox: every bill is raised through the standalone e-way bill API, IRN or not. A bill raised against an IRN
+        // lives only in the e-invoice system and can never be cancelled there: its cancel route answers GSPERR300 for
+        // every bill and reason, and the e-way bill API cannot see it. So the whole lifecycle (Part B, extension, cancel)
+        // would be untestable. The standalone API checks the whole bill itself and knows only its own register: the
+        // e-way bill sandbox taxpayer stands in as the consignor, a registered consignee is shown as unregistered (URP, as
+        // in Adaequare's own sample, since the sandbox refuses a GSTIN it has not registered), the tax is re-split to match
+        // the states, and our own document number is shown.
+        const payload = {
+          ...req.payload,
+          ...ewayFrom(adaequareSandboxEwbSeller(ewbLogin.gstin)),
+          toGstin: 'URP',
+          // The sandbox register does not know a real transporter's GSTIN ("Invalid Transporter Id"): the vehicle number alone moves the goods.
+          transporterId: '',
+          docNo: sandboxDocNo(this.config, ewbLogin.gstin, req.payload.docNo, req.payload.docDate, req.companyId),
+        };
+        Object.assign(payload, resplitTax(payload));
+        const generate = async (p: typeof payload): Promise<Awaited<ReturnType<typeof direct>>> => {
+          try {
+            return await direct(p);
+          } catch (error) {
+            if (!(error instanceof GspRequestError && hasErrorCode(error.envelope, STANDALONE_HSN_REFUSED) && p.mainHsnCode !== SANDBOX_ACCEPTED_HSN)) throw error;
+            this.log(`The sandbox does not know HSN ${p.mainHsnCode}: filing under ${SANDBOX_ACCEPTED_HSN}`);
+            return direct({ ...p, mainHsnCode: SANDBOX_ACCEPTED_HSN });
+          }
+        };
+        try {
+          envelope = await generate(payload);
+        } catch (error) {
+          if (!distanceRefused(error)) throw error;
+          envelope = await generate({ ...payload, transDistance: 0 });
+        }
+      }
       return ewayBillResult(unwrapResult(envelope), req) ?? incomplete('e-way bill number');
     });
   }
 
   updatePartB(creds: PortalCredentials | null, req: Parameters<ComplianceProvider['updatePartB']>[1]): Promise<UpdatePartBResult> {
     return this.guard(async () => {
-      const login = requireLogin(creds);
+      const login = this.login(creds, 'ewb');
       const envelope = await this.call<{ vehUpdDate?: string }>('post', login, PATHS.standaloneEwayBill, { query: { action: 'VEHEWB' }, body: partBBody(req) });
       const record = unwrapResult(envelope);
       return { ok: true as const, updatedAt: (parsePortalDateAny(record?.vehUpdDate) ?? new Date(req.now)).toISOString() };
@@ -246,7 +375,7 @@ export class AdaequareGateway implements GspGateway {
 
   extend(creds: PortalCredentials | null, req: Parameters<ComplianceProvider['extend']>[1]): Promise<ExtendResult> {
     return this.guard(async () => {
-      const login = requireLogin(creds);
+      const login = this.login(creds, 'ewb');
       const envelope = await this.call<{ validUpto?: string }>('post', login, PATHS.standaloneEwayBill, { query: { action: 'EXTENDVALIDITY' }, body: extendBody(req) });
       const validUpto = parsePortalDateAny(unwrapResult(envelope)?.validUpto);
       return validUpto ? { ok: true as const, newValidUpto: validUpto.toISOString() } : incomplete('new validity');
@@ -255,9 +384,13 @@ export class AdaequareGateway implements GspGateway {
 
   cancelEwayBill(creds: PortalCredentials | null, req: Parameters<ComplianceProvider['cancelEwayBill']>[1]): Promise<CancelEwayBillResult> {
     return this.guard(async () => {
-      const login = requireLogin(creds);
       if (!Number.isSafeInteger(Number(req.ewayBillNumber))) return incomplete(`usable e-way bill number (got "${req.ewayBillNumber}")`);
-      const envelope = await this.call<CancelRecord>('post', login, PATHS.cancelEwayBill, { body: cancelEwayBillBody(req.ewayBillNumber, req.reasonCode, req.remark?.trim()) });
+      const body = cancelEwayBillBody(req.ewayBillNumber, req.reasonCode, req.remark?.trim());
+      // Sandbox: every bill was raised through the standalone e-way bill API (see submitEwayBill), so it is cancelled there,
+      // as the taxpayer that raised it. Production: the e-invoice API, which holds the bills raised against an IRN.
+      const envelope = this.sandbox
+        ? await this.call<CancelRecord>('post', this.login(creds, 'ewb'), PATHS.standaloneEwayBill, { query: { action: 'CANEWB' }, body })
+        : await this.call<CancelRecord>('post', this.login(creds, 'ei'), PATHS.cancelEwayBill, { body });
       const record = unwrapResult(envelope);
       // The stake is higher than on the IRN side: a bill wrongly recorded as cancelled is one the portal
       // still considers live, against goods on the road.
@@ -270,7 +403,7 @@ export class AdaequareGateway implements GspGateway {
   /** The bill the portal raised for a document, after a generate whose answer was lost. NIC answers 604 when there is none. */
   findEwayBillByDocument(creds: PortalCredentials | null, req: Parameters<NonNullable<ComplianceProvider['findEwayBillByDocument']>>[1]): Promise<FindEwayBillResult> {
     return this.guard(async () => {
-      const login = requireLogin(creds);
+      const login = this.login(creds, 'ewb');
       try {
         const envelope = await this.call<EwbRecord>('get', login, PATHS.ewayBillByDocument, { query: { docType: req.docType, docNo: req.docNo } });
         return { ok: true as const, found: ewayBillResult(unwrapResult(envelope), { now: req.now }) };
@@ -284,7 +417,7 @@ export class AdaequareGateway implements GspGateway {
   /** Whether an IRN is still active, after a cancel whose answer was lost. `Status` is ACT or CNL. */
   getIrnStatus(creds: PortalCredentials | null, req: Parameters<NonNullable<ComplianceProvider['getIrnStatus']>>[1]): Promise<IrnStatusResult> {
     return this.guard(async () => {
-      const login = requireLogin(creds);
+      const login = this.login(creds, 'ei');
       const envelope = await this.call<{ Status?: string; status?: string; CancelDate?: string; cancelDate?: string }>('get', login, PATHS.irnDetails, { query: { irn: req.irn } });
       const record = unwrapResult(envelope);
       const status = String(record?.Status ?? record?.status ?? '').toUpperCase();
