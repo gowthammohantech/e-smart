@@ -185,7 +185,11 @@ export const MUTATIONS: Partial<Record<keyof AppState, Builder>> = {
   saveComplianceSettings: ({ args }) => {
     const s = args[0] as ComplianceSettings;
     // One per company, always there: a plain PUT, the latest edit wins.
-    outbox.action({ method: 'PUT', path: `${c(s.companyId)}/compliance-settings`, body: s, entityType: 'compliance_settings', entityId: s.companyId, label: 'Compliance settings' });
+    // The portal usernames are not part of it: they belong to the login save (`/compliance/credentials`), which writes
+    // them on the server. A screen's copy of them can be older than that save, and sending it would put the old
+    // username back (the server keeps whatever a PUT leaves out).
+    const { irpUsername: _irp, ewbUsername: _ewb, ...body } = s;
+    outbox.action({ method: 'PUT', path: `${c(s.companyId)}/compliance-settings`, body, entityType: 'compliance_settings', entityId: s.companyId, label: 'Compliance settings' });
   },
   toggleIntegration: ({ args, after }) => {
     const i = after.integrations.find((x) => x.id === args[0] && x.companyId === after.activeCompanyId);

@@ -164,6 +164,9 @@ function EInvoicingForm() {
     if (loginEdited && !(await saveCredentials())) return;
     const settings = {
       ...draft,
+      // The draft was copied when the screen opened; a login saved since then is newer, so this screen's own copy follows it.
+      irpUsername: (loginEdited && portal === 'einvoice' ? login.username.trim() : '') || savedHere.einvoice || stored.irpUsername,
+      ewbUsername: (loginEdited && portal === 'ewaybill' ? login.username.trim() : '') || savedHere.ewaybill || stored.ewbUsername,
       annualTurnover: fromMajor(turnover || '0', currency),
       eInvoiceTurnoverThreshold: fromMajor(threshold || '0', currency),
       ewayBillThreshold: fromMajor(ewayThreshold || '0', currency),
