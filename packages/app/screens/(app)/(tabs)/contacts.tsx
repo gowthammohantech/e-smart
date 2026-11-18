@@ -18,7 +18,9 @@ import { Badge } from '@esmart/ui/components/Badge';
 import { StatTile } from '@esmart/ui/components/StatTile';
 import { StatGrid } from '@esmart/ui/components/Layout';
 import { useBaseCurrency, useHasModule } from '../../../store/selectors';
-import { usePartyPages, usePartySummary } from '../../../remote/queries';
+import { fetchPartyRecord, usePartyPages, usePartySummary } from '../../../remote/queries';
+import { describeError } from '../../../remote/errors';
+import { useToast } from '@esmart/ui/components/Toast';
 import { useDebounced } from '../../../components/useDebounced';
 import { pagedTableProps, useRowsExport, useTableSelection } from '../../../components/pagedTable';
 import { useServerSave } from '../../../components/useServerSave';
@@ -74,6 +76,8 @@ export default function ContactsTab() {
   const exportRows = useRowsExport();
   const saveParty = useAppStore((s) => s.saveParty);
   const { run: serverSave, saving } = useServerSave();
+  const toast = useToast();
+  const companyId = useAppStore((s) => s.activeCompanyId);
   const detailRoute = (p: { id: string }) => (asCustomer ? `/(app)/contacts/customers/${p.id}` : `/(app)/contacts/suppliers/${p.id}`);
   const chosen = (keys: string[]) => filtered.filter((p) => keys.includes(p.id));
   const exportChosen = (keys: string[]) =>
@@ -88,14 +92,23 @@ export default function ContactsTab() {
   const deactivate = async (keys: string[]) => {
     const parties = chosen(keys).filter((p) => p.status !== 'inactive');
     if (!parties.length) return;
+    // Each one read from the server first and kept at its version: a list row the device has never
+    // kept would otherwise go up as a new party, a duplicate of the one being set inactive.
+    let records: Party[];
+    try {
+      await Promise.all(parties.map((p) => fetchPartyRecord(companyId, p.id)));
+      const stored = useAppStore.getState().parties;
+      records = parties.map((p) => stored.find((s) => s.id === p.id)).filter((p): p is Party => !!p);
+    } catch (err) {
+      toast.show(describeError(err, tr), 'error');
+      return;
+    }
+    if (!records.length) return;
     const res = await serverSave(
       () => {
-        // The list's rows are whole parties plus read-only balances, which aren't saved back.
-        for (const { outstanding: _o, overdue: _d, ...party } of parties as (Party & { outstanding?: Money; overdue?: Money })[]) {
-          saveParty({ ...party, status: 'inactive' });
-        }
+        for (const party of records) saveParty({ ...party, status: 'inactive' });
       },
-      tr('common:table.deactivated', { count: parties.length }),
+      tr('common:table.deactivated', { count: records.length }),
       { icon: 'minus-circle-outline' },
     );
     if (res) {

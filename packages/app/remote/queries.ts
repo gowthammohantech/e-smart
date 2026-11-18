@@ -481,12 +481,18 @@ export function usePartyRecord(id: string | undefined) {
     enabled: !!companyId && !!current,
     staleTime: 0,
     retry: (count, err) => !(err instanceof ApiError && (err.status === 404 || err.status === 403)) && count < 1,
-    queryFn: async ({ signal }) => {
-      const { data } = await api.GET('/companies/{companyId}/parties/{id}', { params: { path: { companyId, id: current! } }, signal });
-      keep('party', companyId, [data]);
-      return data!;
-    },
+    queryFn: ({ signal }) => fetchPartyRecord(companyId, current!, signal),
   });
+}
+
+/**
+ * One party from the server, kept in the store at its version, so a save of it afterwards is an
+ * update of that party. A list row isn't kept: saved from the list as it is, it would go up as a new party.
+ */
+export async function fetchPartyRecord(companyId: string, id: string, signal?: AbortSignal) {
+  const { data } = await api.GET('/companies/{companyId}/parties/{id}', { params: { path: { companyId, id } }, signal });
+  keep('party', companyId, [data]);
+  return data!;
 }
 
 /**
@@ -1307,6 +1313,11 @@ export function watchStoreForQueries(): () => void {
       // Payments and expenses are what bank lines match; one edited or deleted changes the reconciliation.
       void queryClient.invalidateQueries({ queryKey: bankingKeys.all(companyId) });
     }
+    if (stale.has('parties')) {
+      // A party saved here (edited, set inactive) shows in the lists and their counts at once.
+      void queryClient.invalidateQueries({ queryKey: [...partyKeys.all(companyId), 'pages'] });
+      void queryClient.invalidateQueries({ queryKey: [...partyKeys.all(companyId), 'summary'] });
+    }
     if (stale.has('documents') || stale.has('eway')) void queryClient.invalidateQueries({ queryKey: ['compliance', companyId] });
     stale.clear();
   };
@@ -1324,6 +1335,7 @@ export function watchStoreForQueries(): () => void {
     if (s.documents !== prev.documents || s.payments !== prev.payments || s.expenses !== prev.expenses) mark('documents');
     if (s.stockMovements !== prev.stockMovements || s.documents !== prev.documents) mark('stock');
     if (s.vouchers !== prev.vouchers) mark('vouchers');
+    if (s.parties !== prev.parties) mark('parties');
     if (s.ewayBills !== prev.ewayBills) mark('eway');
   });
   return () => {

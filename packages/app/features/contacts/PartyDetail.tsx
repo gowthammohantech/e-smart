@@ -66,6 +66,8 @@ export function PartyDetail({ party }: { party: Party }) {
   const isCustomer = party.kind !== 'supplier';
   const isBoth = party.kind === 'both';
   const canTransact = party.kind !== 'general';
+  // An inactive party takes no new invoices, quotes or bills; what it still owes can be settled.
+  const canBill = canTransact && party.status !== 'inactive';
 
   // Everything below comes from the server, so the party's whole history needn't be on the device.
   // Another party's figures held over while this one's load are not shown: they'd read as this party's.
@@ -197,7 +199,7 @@ export function PartyDetail({ party }: { party: Party }) {
         {contactAction('phone', tr('contacts:detail.call'), () => Linking.openURL(`tel:${party.phone}`), !party.phone)}
         {contactAction('whatsapp', 'WhatsApp', () => Linking.openURL(`https://wa.me/${(party.phone ?? '').replace(/[^0-9]/g, '')}`), !party.phone)}
         {contactAction('email-outline', tr('contacts:form.email'), () => Linking.openURL(`mailto:${party.email}`), !party.email)}
-        {canTransact && contactAction(
+        {canBill && contactAction(
           isCustomer ? 'file-document-edit-outline' : 'cart-outline',
           isCustomer ? tr('nav:title.invoice') : tr('purchases:hub.bill'),
           () => router.push(`${isCustomer ? '/(app)/sales/invoices/new' : '/(app)/purchases/bills/new'}?partyId=${party.id}`),
@@ -399,19 +401,26 @@ export function PartyDetail({ party }: { party: Party }) {
       ? []
       : isCustomer
       ? [
-          { label: tr('common:quickAction.newInvoice'), icon: 'file-document-edit-outline' as const, onPress: () => router.push(`/(app)/sales/invoices/new?partyId=${party.id}`) },
-          { label: tr('nav:title.newQuotation'), icon: 'file-percent-outline' as const, onPress: () => router.push(`/(app)/sales/quotes/new?partyId=${party.id}`) },
+          // New documents only for an active party (canBill); its dues can still be chased and settled.
+          ...(canBill
+            ? [
+                { label: tr('common:quickAction.newInvoice'), icon: 'file-document-edit-outline' as const, onPress: () => router.push(`/(app)/sales/invoices/new?partyId=${party.id}`) },
+                { label: tr('nav:title.newQuotation'), icon: 'file-percent-outline' as const, onPress: () => router.push(`/(app)/sales/quotes/new?partyId=${party.id}`) },
+              ]
+            : []),
           // Only when something is owed; it opens the same reminder as the aging screen.
           ...(outstanding.length ? [{ label: tr('contacts:detail.sendReminder'), icon: 'bell-ring-outline' as const, onPress: () => setReminderOpen(true) }] : []),
           // A party that is both is bought from too.
           ...(isBoth
             ? [
-                { label: tr('nav:title.newPurchaseBill'), icon: 'cart-outline' as const, onPress: () => router.push(`/(app)/purchases/bills/new?partyId=${party.id}`) },
+                ...(canBill ? [{ label: tr('nav:title.newPurchaseBill'), icon: 'cart-outline' as const, onPress: () => router.push(`/(app)/purchases/bills/new?partyId=${party.id}`) }] : []),
                 { label: tr('contacts:detail.pay'), icon: 'cash-minus' as const, onPress: () => router.push(`/(app)/payments/new?direction=paid&partyId=${party.id}`) },
               ]
             : []),
         ]
-      : [{ label: tr('nav:title.newPurchaseBill'), icon: 'cart-outline' as const, onPress: () => router.push(`/(app)/purchases/bills/new?partyId=${party.id}`) }]),
+      : canBill
+        ? [{ label: tr('nav:title.newPurchaseBill'), icon: 'cart-outline' as const, onPress: () => router.push(`/(app)/purchases/bills/new?partyId=${party.id}`) }]
+        : []),
     // The server refuses a contact with documents, payments or an opening balance; when this screen already
     // sees one, delete isn't offered. Anything it can't see (expenses, journals) comes back as the server's reason.
     ...(billCount > 0 || partyPayments.length > 0 || (party.openingBalance?.minor ?? 0) !== 0
