@@ -491,11 +491,13 @@ ${url}`;
                   : [];
   // Only what can be made now: nothing from a draft or a cancelled document,
   // and an order or quote carried forward once (conversionBlock).
-  // What was made from it, as the server knows; the store's copy until that lands.
-  const made = record?.linkedDocuments
-    ? record.linkedDocuments.map((d) => ({ kind: d.kind!, status: d.status!, sourceDocumentId: doc.id }))
-    : allDocuments;
-  const conversions = recordPending ? [] : offered.filter((c) => !conversionBlock(doc, c.target, made));
+  // The server says what it allows (it reads which linked documents were made from this one, and
+  // which this one was made from, such as the order behind a challan); the store's copy also rules out
+  // one just made here before the server's copy refreshes.
+  const allowed = record?.allowedConversions;
+  const conversions = recordPending
+    ? []
+    : offered.filter((c) => (!allowed || allowed.includes(c.target)) && !conversionBlock(doc, c.target, allDocuments));
 
   const transitions = nextStatuses(doc.kind, doc.status).filter((s) => s !== 'cancelled');
   // What Finalise moves a draft to (issued, received, sent…), as the editor's Finalise does.
