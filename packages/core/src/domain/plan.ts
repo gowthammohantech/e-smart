@@ -231,7 +231,9 @@ const GATED_PATHS: [prefix: string, module: Module | null][] = [
   ['/receipts/adjust', null],
   // And the list of adjustments made, which Adjust advance is the + of.
   ['/receipts/adjustments', null],
-  // Receipts are receipt vouchers.
+  // A new receipt is a customer's payment on every plan (an account's receipt voucher only with the books).
+  ['/receipts/new', null],
+  // A saved receipt voucher, its page and its edit, are the books'. The list itself is open (OPEN_PATHS).
   ['/receipts', 'books'],
   // Matching 2B needs the purchase register.
   ['/gst/gstr2b', 'purchases'],
@@ -259,8 +261,15 @@ export function switchedModuleForPath(pathname: string): Module | null {
   return SWITCHED_PATHS.find(([prefix]) => pathname === prefix || pathname.startsWith(`${prefix}/`))?.[1] ?? null;
 }
 
+/**
+ * Pages every plan opens though they head a gated prefix: Receipts lists customers' payments on
+ * every plan, and receipt vouchers beside them only with the books.
+ */
+const OPEN_PATHS = new Set(['/receipts']);
+
 /** The module a route belongs to, or null when every plan can open it. */
 export function moduleForPath(pathname: string): Module | null {
+  if (OPEN_PATHS.has(pathname)) return null;
   for (const [prefix, module] of GATED_PATHS) {
     if (pathname === prefix || pathname.startsWith(`${prefix}/`)) return module;
   }

@@ -119,7 +119,7 @@ export default function SalesTab() {
               tone="good"
               icon="cash-check"
               delta={delta(hub?.collectedThisMonth, prev?.collected)}
-              onPress={() => router.push('/(app)/payments/received')}
+              onPress={() => router.push('/(app)/receipts?type=payment&range=all')}
             />
           </StatRow>
           <StatRow>

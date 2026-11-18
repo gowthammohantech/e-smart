@@ -467,7 +467,7 @@ export function DocumentListView({
                     label: kind === 'purchaseBill' ? tr('sales:detail.paySupplier') : tr('common:action.recordPayment'),
                     icon: 'cash-plus' as const,
                     onPress: () =>
-                      router.push(`/(app)/payments/new?direction=${kind === 'invoice' ? 'received' : 'paid'}&partyId=${d.partyId}&documentId=${d.id}` as never),
+                      router.push((kind === 'invoice' ? `/(app)/receipts/new?partyId=${d.partyId}&documentId=${d.id}` : `/(app)/payments/new?direction=paid&partyId=${d.partyId}&documentId=${d.id}`) as never),
                   },
                 ]
               : []),

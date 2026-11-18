@@ -142,7 +142,7 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
   const openDocument = (doc: Outstanding['document']) =>
     router.push((doc.kind ? detailRouteFor(doc.kind, doc.id) : isReceivable ? `/(app)/sales/invoices/${doc.id}` : `/(app)/purchases/bills/${doc.id}`) as never);
   const recordPayment = (partyId: string) =>
-    router.push(`/(app)/payments/new?direction=${isReceivable ? 'received' : 'paid'}&partyId=${partyId}`);
+    router.push(isReceivable ? `/(app)/receipts/new?partyId=${partyId}` : `/(app)/payments/new?direction=paid&partyId=${partyId}`);
 
   const reminderSheet = <PaymentReminderSheet party={reminderParty} rows={reminderRows} onClose={() => setReminderFor(null)} />;
 
@@ -340,7 +340,7 @@ export function AgingScreen({ kind }: { kind: 'receivable' | 'payable' }) {
                     title={isReceivable ? tr('common:action.recordPayment') : tr('sales:payment.makePayment')}
                     size="sm"
                     icon={isReceivable ? 'cash-plus' : 'cash-minus'}
-                    onPress={() => router.push(`/(app)/payments/new?direction=${isReceivable ? 'received' : 'paid'}&partyId=${group.id}`)}
+                    onPress={() => router.push(isReceivable ? `/(app)/receipts/new?partyId=${group.id}` : `/(app)/payments/new?direction=paid&partyId=${group.id}`)}
                     style={{ flex: 1 }}
                   />
                 </View>

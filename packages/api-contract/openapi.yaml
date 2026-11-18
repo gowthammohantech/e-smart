@@ -3038,6 +3038,75 @@ paths:
         '502': { $ref: '#/components/responses/UpstreamError' }
 
   # ------------------------------------------------------------------ Payments
+  /companies/{companyId}/money-in:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Payments]
+      operationId: listMoneyIn
+      summary: Money received, newest first - payments from customers and receipt vouchers in one list
+      description: |
+        The Receipts screen's list: payments received (`direction=received`) and receipt vouchers, merged
+        by date, newest first, paged by one cursor. Receipt vouchers are the books' and come only where
+        the `books` module is on; on a plan without it the list is payments alone. `type` narrows it to
+        one kind.
+      parameters:
+        - { name: type, in: query, schema: { type: string, enum: [payment, receipt] } }
+        - { name: partyId, in: query, schema: { type: string } }
+        - { $ref: '#/components/parameters/BranchIdQuery' }
+        - { $ref: '#/components/parameters/From' }
+        - { $ref: '#/components/parameters/To' }
+        - { $ref: '#/components/parameters/Q' }
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Cursor' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/MoneyInEntry' } }
+  /companies/{companyId}/money-in/summary:
+    parameters: [{ $ref: '#/components/parameters/CompanyId' }]
+    get:
+      tags: [Payments]
+      operationId: summarizeMoneyIn
+      summary: How many entries the money-in list's filters match, and what they add up to in base currency
+      description: Takes the filters of `listMoneyIn`. `payments` and `receipts` total each kind; `byAccount` totals the receipt vouchers by the account credited (what the money was for).
+      parameters:
+        - { name: type, in: query, schema: { type: string, enum: [payment, receipt] } }
+        - { name: partyId, in: query, schema: { type: string } }
+        - { $ref: '#/components/parameters/BranchIdQuery' }
+        - { $ref: '#/components/parameters/From' }
+        - { $ref: '#/components/parameters/To' }
+        - { $ref: '#/components/parameters/Q' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [count, total, payments, receipts, byAccount]
+                properties:
+                  count: { type: integer }
+                  total: { $ref: '#/components/schemas/Money' }
+                  payments:
+                    type: object
+                    required: [count, total]
+                    properties: { count: { type: integer }, total: { $ref: '#/components/schemas/Money' } }
+                  receipts:
+                    type: object
+                    required: [count, total]
+                    properties: { count: { type: integer }, total: { $ref: '#/components/schemas/Money' } }
+                  byAccount:
+                    type: array
+                    items:
+                      type: object
+                      required: [account, total]
+                      properties: { account: { type: string }, total: { $ref: '#/components/schemas/Money' } }
   /companies/{companyId}/payments/summary:
     parameters: [{ $ref: '#/components/parameters/CompanyId' }]
     get:
@@ -7648,6 +7717,14 @@ components:
         credit: { $ref: '#/components/schemas/Money' }
         narration: { type: string }
         costCentreId: { type: string }
+    MoneyInEntry:
+      type: object
+      description: One row of the money-in list - a payment received (`payment`) or a receipt voucher (`voucher`), as `type` says.
+      required: [type]
+      properties:
+        type: { type: string, enum: [payment, receipt] }
+        payment: { $ref: '#/components/schemas/Payment' }
+        voucher: { $ref: '#/components/schemas/Voucher' }
     Voucher:
       allOf:
         - $ref: '#/components/schemas/Versioned'

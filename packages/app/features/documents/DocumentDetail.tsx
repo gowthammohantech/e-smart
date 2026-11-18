@@ -194,7 +194,8 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
   // What money settles: invoices and debit notes (received), bills and supplier debit notes (paid).
   const isPayable = isPayableDocument(doc.kind);
   const receivable = RECEIVABLE_KINDS.includes(doc.kind);
-  const paymentRoute = `/(app)/payments/new?direction=${receivable ? 'received' : 'paid'}&partyId=${doc.partyId}&documentId=${doc.id}`;
+  // Money received is recorded on Receipts, money paid as a payment made.
+  const paymentRoute = receivable ? `/(app)/receipts/new?partyId=${doc.partyId}&documentId=${doc.id}` : `/(app)/payments/new?direction=paid&partyId=${doc.partyId}&documentId=${doc.id}`;
   // A draft's placeholder number (INVOICE-DRAFT) reads as "Draft".
   const shownNumber = doc.status === 'draft' && doc.number.endsWith('-DRAFT') ? tr('common:documentList.draftNumber') : doc.number;
   /** A line before tax: quantity × rate less its discount, as the editor and its grid show it. */

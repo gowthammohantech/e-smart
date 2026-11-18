@@ -71,6 +71,9 @@ export function SelectSheet({
   multiple = false,
   onConfirm,
   confirmLabel,
+  tabs,
+  tab,
+  onTabChange,
 }: {
   visible: boolean;
   onClose: () => void;
@@ -99,6 +102,10 @@ export function SelectSheet({
   multiple?: boolean;
   onConfirm?: (values: string[]) => void;
   confirmLabel?: (count: number) => string;
+  /** Tabs under the search box (All · Income · Customers): `tab` is the one picked, and `options` are its rows. */
+  tabs?: { key: string; label: string }[];
+  tab?: string;
+  onTabChange?: (key: string) => void;
 }) {
   const t = useTheme();
   const desktop = useIsDesktop();
@@ -132,6 +139,7 @@ export function SelectSheet({
     !onQueryChange &&
     !multiple &&
     !footer &&
+    !tabs?.length &&
     options.every((o) => !o.disabled && !o.blocked);
   useEffect(() => {
     if (dropdown) claimPickerOpener();
@@ -281,17 +289,52 @@ export function SelectSheet({
       desktopAs={showSearch ? 'drawer' : 'dialog'}
       desktopWidth={showSearch ? undefined : DIALOG_WIDTH.sm}
       header={
-        showSearch ? (
-          <View style={{ paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.sm }}>
-            <SearchBar
-              inputRef={searchRef}
-              value={query}
-              onChangeText={(q) => {
-                setQuery(q);
-                onQueryChange?.(q);
-              }}
-              placeholder={searchPlaceholder ?? tr('common:component.search')}
-            />
+        showSearch || tabs?.length ? (
+          <View style={{ paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.sm, gap: t.spacing.sm }}>
+            {showSearch ? (
+              <SearchBar
+                inputRef={searchRef}
+                value={query}
+                onChangeText={(q) => {
+                  setQuery(q);
+                  onQueryChange?.(q);
+                }}
+                placeholder={searchPlaceholder ?? tr('common:component.search')}
+              />
+            ) : null}
+            {tabs?.length ? (
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing.sm }} accessibilityRole="tablist">
+                {tabs.map((tb) => {
+                  const active = tb.key === tab;
+                  return (
+                    <Pressable
+                      key={tb.key}
+                      onPress={() => onTabChange?.(tb.key)}
+                      accessibilityRole="tab"
+                      accessibilityState={{ selected: active }}
+                      accessibilityLabel={tb.label}
+                      // The chip stays slim; the target reaches a finger's height.
+                      hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                      style={(state) => {
+                        const { hovered } = state as WebPressState;
+                        return {
+                          paddingHorizontal: t.spacing.md,
+                          paddingVertical: 6,
+                          borderRadius: t.radius.pill,
+                          backgroundColor: active ? t.c.primary : hovered ? t.c.card2 : t.c.card,
+                          borderWidth: active ? 0 : 1,
+                          borderColor: t.c.line,
+                        };
+                      }}
+                    >
+                      <Text variant="caption" weight="600" style={{ color: active ? t.c.onPrimary : t.c.muted }}>
+                        {tb.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ) : null}
           </View>
         ) : null
       }

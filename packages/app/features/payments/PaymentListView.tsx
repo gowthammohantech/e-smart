@@ -105,7 +105,7 @@ export function PaymentListView({ direction, advance = false }: { direction: Pay
       tr('common:table.exportCancelled'),
     );
 
-  const newRoute = advance ? '/(app)/payments/new?direction=received&advance=1' : `/(app)/payments/new?direction=${direction}`;
+  const newRoute = advance ? '/(app)/receipts/new?advance=1' : `/(app)/payments/new?direction=${direction}`;
   // An advance: its GST (rate, place of supply), and what of it is still to adjust against an invoice.
   const gstOf = (p: Payment) => (p.advanceTax ? `${p.advanceTax.rate}% · ${stateNameOf(p.advanceTax.placeOfSupplyStateCode)}` : '—');
   const appliedBadge = (p: Payment) =>

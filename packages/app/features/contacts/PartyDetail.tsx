@@ -433,7 +433,7 @@ export function PartyDetail({ party }: { party: Party }) {
                   <Button
                     title={isCustomer ? tr('common:quickAction.receivePayment') : tr('contacts:detail.pay')}
                     icon={isCustomer ? 'cash-plus' : 'cash-minus'}
-                    onPress={() => router.push(`/(app)/payments/new?direction=${isCustomer ? 'received' : 'paid'}&partyId=${party.id}`)}
+                    onPress={() => router.push(isCustomer ? `/(app)/receipts/new?partyId=${party.id}` : `/(app)/payments/new?direction=paid&partyId=${party.id}`)}
                   />
                 ) : null}
               </View>
@@ -517,7 +517,7 @@ export function PartyDetail({ party }: { party: Party }) {
             <Button
               title={isCustomer ? tr('common:quickAction.receivePayment') : tr('contacts:detail.pay')}
               icon={isCustomer ? 'cash-plus' : 'cash-minus'}
-              onPress={() => router.push(`/(app)/payments/new?direction=${isCustomer ? 'received' : 'paid'}&partyId=${party.id}`)}
+              onPress={() => router.push(isCustomer ? `/(app)/receipts/new?partyId=${party.id}` : `/(app)/payments/new?direction=paid&partyId=${party.id}`)}
               style={{ flex: 1 }}
             />
           ) : null}
