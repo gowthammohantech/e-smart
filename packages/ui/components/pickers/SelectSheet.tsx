@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, Pressable, View } from 'react-native';
+import { ActivityIndicator, Pressable, View, TextInput } from 'react-native';
 import { Icon, type IconName } from '../Icon';
 import { useTheme } from '../../theme/ThemeProvider';
 import { Sheet } from '../Sheet';
@@ -65,6 +65,7 @@ export function SelectSheet({
   footer,
   onCreate,
   createLabel,
+  createPrompt,
   onQueryChange,
   loading,
   multiple = false,
@@ -85,6 +86,8 @@ export function SelectSheet({
   /** Offer the typed search text as a value of its own, for lists that aren't exhaustive. */
   onCreate?: (query: string) => void;
   createLabel?: (query: string) => string;
+  /** With `onCreate`: a row shown before anything is typed ("Add your own charge name"), so a new value is found; it puts the cursor in the search. */
+  createPrompt?: string;
   /**
    * The search is done elsewhere (on the server): the sheet reports what's typed and shows the
    * options it is given as they are, rather than filtering them itself.
@@ -106,6 +109,7 @@ export function SelectSheet({
   // Kept in tap order so whatever is confirmed arrives in the order it was picked.
   const [picked, setPicked] = useState<string[]>([]);
   const sheetToastRef = useRef<ReturnType<typeof useToast> | null>(null);
+  const searchRef = useRef<TextInput | null>(null);
 
   const close = () => {
     setQuery('');
@@ -175,6 +179,29 @@ export function SelectSheet({
       <Icon name="plus" size={20} color={t.c.primary} />
       <Text variant="body" weight="600" tone="primary" numberOfLines={1} style={{ flex: 1 }}>
         {createText}
+      </Text>
+    </Pressable>
+  ) : !typed && onCreate && createPrompt && showSearch ? (
+    // Nothing typed yet: the way to a new name, which is typed in the search above.
+    <Pressable
+      onPress={() => searchRef.current?.focus()}
+      accessibilityRole="button"
+      accessibilityLabel={createPrompt}
+      style={({ pressed }) => ({
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: t.spacing.md,
+        paddingVertical: t.spacing.md,
+        paddingHorizontal: t.spacing.lg,
+        minHeight: 52,
+        borderTopWidth: 0.5,
+        borderTopColor: t.c.line,
+        backgroundColor: pressed ? t.c.card2 : 'transparent',
+      })}
+    >
+      <Icon name="plus" size={20} color={t.c.primary} />
+      <Text variant="body" weight="600" tone="primary" numberOfLines={1} style={{ flex: 1 }}>
+        {createPrompt}
       </Text>
     </Pressable>
   ) : null;
@@ -257,6 +284,7 @@ export function SelectSheet({
         showSearch ? (
           <View style={{ paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.sm }}>
             <SearchBar
+              inputRef={searchRef}
               value={query}
               onChangeText={(q) => {
                 setQuery(q);

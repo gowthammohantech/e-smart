@@ -2082,6 +2082,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           searchPlaceholder={tr('sales:editor.chargesSearch')}
           onCreate={(typed) => void addCharge(typed)}
           createLabel={(typed) => tr('sales:editor.chargesAdd', { name: typed.trim() })}
+          createPrompt={tr('sales:editor.chargesAddPrompt')}
         />
 
         <LineEditorSheet
