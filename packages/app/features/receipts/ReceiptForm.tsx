@@ -15,6 +15,7 @@ import { FieldGrid, FieldRow, FormContainer } from '@esmart/ui/components/Layout
 import { useToast } from '@esmart/ui/components/Toast';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { accountFor, chartOfAccounts, type Account } from '@esmart/core/domain/ledger/accounts';
+import { receiptSourceRule } from '@esmart/core/domain/ledger/voucherRules';
 import { fromMajor, money, zero } from '@esmart/core/lib/money';
 import { toAmountInput } from '@esmart/core/lib/format';
 import { nowISO, today } from '@esmart/core/lib/date';
@@ -30,13 +31,13 @@ import { usePartyRecord, usePartySearch, useServerBook } from '../../remote/quer
 import { uploadAttachment } from '../../remote/attachments';
 import { knownToServer } from '../../remote/meta';
 import { describeError } from '../../remote/errors';
-import { useActiveCompany, useBaseCurrency, useDefaultBranchId, useParties } from '../../store/selectors';
+import { useActiveCompany, useBaseCurrency, useCurrentUser, useDefaultBranchId, useParties } from '../../store/selectors';
 import { useAccountName, useGroupName } from '../books/names';
 import { CostCentreField } from '../books/CostCentreField';
 import { useCostCentres } from '../../store/books';
+import { ReceivedForSheet, type ReceiptCarry } from './ReceivedForSheet';
 
 const CASH: LedgerGroup[] = ['cashInHand', 'bankAccounts'];
-const INCOME: LedgerGroup[] = ['indirectIncomes', 'directIncomes'];
 
 /** What a receipt voucher was for, and where the money went: its credit and its debit line. */
 export const receiptLines = (v: Voucher) => ({ into: v.lines.find((l) => l.debit.minor > 0), source: v.lines.find((l) => l.credit.minor > 0) });
@@ -45,8 +46,25 @@ export const receiptLines = (v: Voucher) => ({ into: v.lines.find((l) => l.debit
  * Money in that isn't from an invoice: interest, rent, a refund, capital brought in. Saved as a
  * receipt voucher (Dr the cash or bank account, Cr what it's for), so it is on the books at once.
  * Taxable income belongs on an invoice, which charges and reports the GST. `voucher` edits one.
+ * A customer picked as what it's for is money against their invoices: `onPickCustomer` hands over to
+ * the payment form, with what was typed so far (`seed` brings it back the other way).
  */
-export function ReceiptForm({ voucher, onSaved }: { voucher?: Voucher; onSaved: (id: string) => void }) {
+export function ReceiptForm({
+  voucher,
+  onSaved,
+  onPickCustomer,
+  seed,
+  initialSource,
+  initialSourceLabel,
+}: {
+  voucher?: Voucher;
+  onSaved: (id: string) => void;
+  onPickCustomer?: (partyId: string, carry: ReceiptCarry) => void;
+  seed?: ReceiptCarry;
+  /** What it's for, picked on the payment form before it handed over. */
+  initialSource?: string;
+  initialSourceLabel?: string;
+}) {
   const t = useTheme();
   const desktop = useIsDesktop();
   const { t: tr } = useTranslation(['books', 'common', 'purchases']);
@@ -54,6 +72,7 @@ export function ReceiptForm({ voucher, onSaved }: { voucher?: Voucher; onSaved: 
   const goBack = useGoBack();
   const { run: serverSave, saving, blocked } = useServerSave();
   const company = useActiveCompany();
+  const role = useCurrentUser()?.role;
   const baseCurrency = useBaseCurrency();
   const defaultBranchId = useDefaultBranchId();
   const saveVoucher = useAppStore((s) => s.saveVoucher);
@@ -64,15 +83,17 @@ export function ReceiptForm({ voucher, onSaved }: { voucher?: Voucher; onSaved: 
   const groupName = useGroupName();
 
   const initial = voucher ? receiptLines(voucher) : undefined;
-  const [amount, setAmount] = useState(initial?.into ? toAmountInput(initial.into.debit) : '');
-  const [date, setDate] = useState(voucher?.date ?? today());
+  const [amount, setAmount] = useState(initial?.into ? toAmountInput(initial.into.debit) : (seed?.amount ?? ''));
+  const [date, setDate] = useState(voucher?.date ?? seed?.date ?? today());
   const [into, setInto] = useState(initial?.into?.account ?? '');
-  const [source, setSource] = useState(initial?.source?.account ?? '');
+  const [source, setSource] = useState(initial?.source?.account ?? initialSource ?? '');
+  /** The name of a contact picked from the server's search, which the chart on the device may not hold. */
+  const [sourceName, setSourceName] = useState<string | undefined>(initialSourceLabel);
   const [costCentreId, setCostCentreId] = useState<string | undefined>(initial?.source?.costCentreId);
   const [partyId, setPartyId] = useState<string | undefined>(voucher?.partyId);
   const [from, setFrom] = useState('');
-  const [reference, setReference] = useState(voucher?.reference ?? '');
-  const [narration, setNarration] = useState(voucher?.narration ?? '');
+  const [reference, setReference] = useState(voucher?.reference ?? seed?.reference ?? '');
+  const [narration, setNarration] = useState(voucher?.narration ?? seed?.notes ?? '');
   const [slipUri, setSlipUri] = useState<string | undefined>();
   /** The files already on a saved receipt, kept unless removed or replaced. */
   const [keptIds, setKeptIds] = useState<string[]>(voucher?.attachmentIds ?? []);
@@ -85,23 +106,30 @@ export function ReceiptForm({ voucher, onSaved }: { voucher?: Voucher; onSaved: 
 
   const chart = useMemo(() => chartOfAccounts(book).filter((a) => a.key !== 'sys:openingStock'), [book]);
   const cash = chart.filter((a) => CASH.includes(a.group));
-  // Incomes first; any other account that isn't cash or bank (a loan, capital) after them.
-  const sources = useMemo(() => {
-    const rest = chart.filter((a) => !CASH.includes(a.group));
-    return [...rest.filter((a) => INCOME.includes(a.group)), ...rest.filter((a) => !INCOME.includes(a.group))];
-  }, [chart]);
   const label = (key: string) => {
     const a = key ? accountFor(key, book) : undefined;
     return a ? nameOf(a) : undefined;
   };
+  // Received for a supplier or another contact: it is their ledger, so they are the party too.
+  const sourceParty = source.startsWith('party:') ? source.slice('party:'.length) : undefined;
+
+  // A supplier's ledger, a control account or earlier years' profit: an owner or admin posts it, saying why (the server asks too).
+  const needsNarration = !!source && receiptSourceRule(source, role) === 'narration';
 
   const minor = fromMajor(amount || '0', baseCurrency).minor;
-  const ready = minor > 0 && !!into && !!source;
+  const ready = minor > 0 && !!into && !!source && (!needsNarration || !!narration.trim());
   const attached = keptIds.length;
   // What the person has picked or typed, to tell an untouched form from one with changes to lose.
   const entered = JSON.stringify([amount, date, into, source, costCentreId, partyId, from, reference, narration, slipUri, keptIds]);
   const [untouched] = useState(entered);
-  const leaveGuard = useLeaveGuard(entered !== untouched);
+  // Handed over from the payment form with an amount typed there: that is a change to lose too.
+  const leaveGuard = useLeaveGuard(entered !== untouched || !!seed?.amount);
+  /** Hands over to the payment form for a customer, with what was typed here. */
+  const pickCustomer = async (id: string) => {
+    if (!onPickCustomer) return;
+    await leaveGuard.release();
+    onPickCustomer(id, { amount, date, reference, notes: narration });
+  };
 
   const addIncome = async (name: string) => {
     const id = uid('lac');
@@ -157,9 +185,9 @@ export function ReceiptForm({ voucher, onSaved }: { voucher?: Voucher; onSaved: 
       ...(voucher ?? { id: uid('vch'), companyId: company.id, branchId: defaultBranchId ?? '', number: '', createdBy: '', createdAt: nowISO() }),
       kind: 'receipt',
       date,
-      narration: [!partyId && payer && tr('books:receipts.fromNarration', { name: payer }), narration.trim()].filter(Boolean).join(' · ') || undefined,
+      narration: [!partyId && !sourceParty && payer && tr('books:receipts.fromNarration', { name: payer }), narration.trim()].filter(Boolean).join(' · ') || undefined,
       reference: reference.trim() || undefined,
-      partyId,
+      partyId: sourceParty ?? partyId,
       attachmentIds,
       lines: [
         { account: into, debit: money(minor, baseCurrency), credit: zero(baseCurrency) },
@@ -196,12 +224,13 @@ export function ReceiptForm({ voucher, onSaved }: { voucher?: Voucher; onSaved: 
             amountField
           )}
           <FieldRow>
-            <PickerField label={tr('books:receipts.source')} value={label(source)} placeholder={tr('books:receipts.pickSource')} onPress={() => setPicking('source')} icon="tag-outline" required hint={tr('books:receipts.sourceHint')} />
+            <PickerField label={tr('books:receipts.source')} value={label(source) ?? sourceName} placeholder={tr('books:receipts.pickSource')} onPress={() => setPicking('source')} icon="tag-outline" required hint={tr('books:receipts.sourceHint')} />
             <PickerField label={tr('books:receipts.into')} value={label(into)} placeholder={tr('books:receipts.pickInto')} onPress={() => setPicking('into')} icon="bank-outline" required />
           </FieldRow>
           {desktop ? null : dateField}
           {(() => {
-            const partyField = (
+            // Received for a contact's ledger: who it was from is already said.
+            const partyField = sourceParty ? null : (
               <PickerField
                 label={tr('books:receipts.party')}
                 value={party?.name}
@@ -212,7 +241,7 @@ export function ReceiptForm({ voucher, onSaved }: { voucher?: Voucher; onSaved: 
                 onClear={() => setPartyId(undefined)}
               />
             );
-            const fromField = !partyId ? <TextField label={tr('books:receipts.from')} value={from} onChangeText={setFrom} placeholder={tr('books:receipts.fromPlaceholder')} icon="account-question-outline" /> : null;
+            const fromField = !partyId && !sourceParty ? <TextField label={tr('books:receipts.from')} value={from} onChangeText={setFrom} placeholder={tr('books:receipts.fromPlaceholder')} icon="account-question-outline" /> : null;
             const costCentreField = hasCostCentres ? <CostCentreField value={costCentreId} onChange={setCostCentreId} /> : null;
             // A desktop pairs whichever of these show, two to a row; an odd one out takes the row.
             return desktop ? (
@@ -226,7 +255,15 @@ export function ReceiptForm({ voucher, onSaved }: { voucher?: Voucher; onSaved: 
               </>
             );
           })()}
-          <TextField label={tr('books:vouchers.narration')} value={narration} onChangeText={setNarration} placeholder={tr('books:vouchers.narrationPlaceholder')} multiline />
+          <TextField
+            label={tr('books:vouchers.narration')}
+            value={narration}
+            onChangeText={setNarration}
+            placeholder={tr('books:vouchers.narrationPlaceholder')}
+            multiline
+            required={needsNarration}
+            hint={needsNarration ? tr('books:receipts.narrationRequired') : undefined}
+          />
           <Card variant="flat" style={{ gap: t.spacing.md }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
               {slipUri ? (
@@ -269,15 +306,22 @@ export function ReceiptForm({ voucher, onSaved }: { voucher?: Voucher; onSaved: 
         </FormActions>
       </FormContainer>
 
-      <SelectSheet
+      <ReceivedForSheet
         visible={picking === 'source'}
         onClose={() => setPicking(null)}
-        title={tr('books:receipts.pickSource')}
-        options={options(sources)}
         value={source}
-        onSelect={setSource}
-        onCreate={(q) => void addIncome(q)}
-        createLabel={(q) => tr('books:receipts.newIncome', { name: q })}
+        // A saved receipt voucher stays one: its customers' money goes through Receipts as a payment.
+        customers={!!onPickCustomer}
+        onPick={(picked) => {
+          if (picked.kind === 'customer') {
+            void pickCustomer(picked.partyId);
+            return;
+          }
+          setSource(picked.key);
+          setSourceName(picked.label);
+          if (picked.key.startsWith('party:')) setPartyId(undefined);
+        }}
+        onCreateIncome={(name) => void addIncome(name)}
       />
       <SelectSheet visible={picking === 'into'} onClose={() => setPicking(null)} title={tr('books:receipts.pickInto')} options={options(cash)} value={into} onSelect={setInto} />
       <SelectSheet

@@ -17,7 +17,8 @@ import { formatMoney } from '@esmart/core/lib/format';
 import { api } from '../../remote/api';
 import { describeError } from '../../remote/errors';
 import { refreshSoon } from '../../remote/refresh';
-import { useBaseCurrency } from '../../store/selectors';
+import { useBaseCurrency, useHasModule } from '../../store/selectors';
+import { buysFrom } from '@esmart/core/domain/partyKinds';
 import { useAppStore } from '../../store/appStore';
 import { useCustomFields } from '../customFields/CustomFieldsSection';
 import { CAN_PICK_FILES, pickFile } from '../import/pickFile';
@@ -25,6 +26,23 @@ import { ImportFlow, type ColumnMapping, type ImportColumn } from '../import/Imp
 
 type Outcome = { index: number; status: 'created' | 'duplicate' | 'invalid'; issues?: { message?: string }[] };
 const KINDS: ImportKind[] = ['customer', 'supplier', 'both', 'general'];
+
+/**
+ * The types this plan can import, as the contact form offers them: suppliers, and parties that are
+ * both, are the buying side's, which Free and Basic leave out (the server refuses them there too).
+ * `check` turns a row whose own type column says one of those into a problem, shown before import.
+ */
+function useImportKinds() {
+  const { t: tr } = useTranslation(['contacts']);
+  const hasPurchases = useHasModule('purchases');
+  const kinds = useMemo(() => KINDS.filter((k) => hasPurchases || !buysFrom(k)), [hasPurchases]);
+  const check = useCallback(
+    (rows: ImportRow[]): ImportRow[] =>
+      hasPurchases ? rows : rows.map((r) => (r.party && buysFrom(r.party.kind) ? { ...r, party: undefined, problems: [tr('contacts:import.needsPurchases')] } : r)),
+    [hasPurchases, tr],
+  );
+  return { kinds, check };
+}
 /** A sample of the sheet: column names as spreadsheets have them, in English in every language. */
 const SAMPLE_CSV = ['Name,GSTIN,Phone,State,Opening Balance', 'Murugan Traders,33AAACM1234A1ZF,9840012345,Tamil Nadu,12500'].join('\n');
 
@@ -48,6 +66,7 @@ function ImportContactsFlow() {
   const currency = useBaseCurrency();
   const contactFields = useCustomFields('party');
   const [kind, setKind] = useState<ImportKind>('customer');
+  const { kinds, check } = useImportKinds();
 
   const fields = useMemo(() => PARTY_FIELDS.map((key) => ({ key, label: tr(`contacts:import.field.${key}`), required: key === 'name' })), [tr]);
   const detect = useCallback((rows: string[][]) => ({ headerRow: 0, mapping: guessColumns(rows[0] ?? []) }), []);
@@ -55,13 +74,13 @@ function ImportContactsFlow() {
     (rows: string[][], headerRow: number, mapping: ColumnMapping) => {
       const offset = Math.max(headerRow, 0);
       // partiesFromCsv reads the row after its first as data, and its first for custom-field headers.
-      const read = partiesFromCsv(rows.slice(offset), mapping as Partial<Record<ImportField, number>>, { kind, currency }, contactFields);
+      const read = check(partiesFromCsv(rows.slice(offset), mapping as Partial<Record<ImportField, number>>, { kind, currency }, contactFields));
       return {
         records: read.filter((r) => r.party).map((r) => ({ ...r.party!, row: r.line + offset })),
         errors: read.filter((r) => !r.party).map((r) => ({ row: r.line + offset, message: r.problems.join(' · ') })),
       };
     },
-    [kind, currency, contactFields],
+    [kind, currency, contactFields, check],
   );
   const columns = useMemo<ImportColumn<PartyRecord>[]>(
     () => [
@@ -97,7 +116,7 @@ function ImportContactsFlow() {
           <Text variant="caption" tone="muted" weight="600">
             {tr('contacts:import.defaultKind')}
           </Text>
-          <Segmented options={KINDS.map((k) => ({ value: k, label: tr(`contacts:kind.${k}`) }))} value={kind} onChange={(v) => setKind(v as ImportKind)} />
+          <Segmented options={kinds.map((k) => ({ value: k, label: tr(`contacts:kind.${k}`) }))} value={kind} onChange={(v) => setKind(v as ImportKind)} />
         </View>
       }
       onDryRun={async (records) => {
@@ -140,14 +159,15 @@ function ImportContactsPaste() {
   const [busy, setBusy] = useState(false);
   // The company's contact fields: columns named after them fill them in.
   const contactFields = useCustomFields('party');
+  const { kinds, check } = useImportKinds();
 
   // Read on every change: the preview shows what the sheet holds before anything is sent.
   const parsed = useMemo(() => {
     const rows = parseCsv(text);
     if (rows.length < 2) return { rows: [] as ImportRow[], columns: {} };
     const columns = guessColumns(rows[0]);
-    return { rows: partiesFromCsv(rows, columns, { kind, currency }, contactFields), columns };
-  }, [text, kind, currency, contactFields]);
+    return { rows: check(partiesFromCsv(rows, columns, { kind, currency }, contactFields)), columns };
+  }, [text, kind, currency, contactFields, check]);
   const good = parsed.rows.filter((r) => r.party);
   const noName = parsed.rows.length > 0 && parsed.columns.name === undefined;
 
@@ -185,7 +205,7 @@ function ImportContactsPaste() {
           <Text variant="caption" tone="muted" weight="600">
             {tr('contacts:import.defaultKind')}
           </Text>
-          <Segmented options={KINDS.map((k) => ({ value: k, label: tr(`contacts:kind.${k}`) }))} value={kind} onChange={(v) => { setKind(v as ImportKind); setOutcomes(null); }} />
+          <Segmented options={kinds.map((k) => ({ value: k, label: tr(`contacts:kind.${k}`) }))} value={kind} onChange={(v) => { setKind(v as ImportKind); setOutcomes(null); }} />
         </View>
         {CAN_PICK_FILES ? (
           <Button

@@ -44,7 +44,11 @@ describe('plan tiers', () => {
     expect(moduleForPath('/gst/challan')).toBe('books');
     expect(moduleForPath('/gst/journal')).toBe('books');
     expect(moduleForPath('/books/transfer')).toBe('books');
-    expect(moduleForPath('/receipts')).toBe('books');
+    // Receipts lists customers' payments on every plan; a saved receipt voucher is the books'.
+    expect(moduleForPath('/receipts')).toBeNull();
+    expect(moduleForPath('/receipts/new')).toBeNull();
+    expect(moduleForPath('/receipts/vch_1')).toBe('books');
+    expect(moduleForPath('/receipts/vch_1/edit')).toBe('books');
     // Adjusting advances sits under /receipts but is a payments screen, open like payments.
     expect(moduleForPath('/receipts/adjust')).toBeNull();
   });
@@ -59,6 +63,8 @@ describe('plan tiers', () => {
       '/(app)/reports/sales-summary',
       '/(app)/reports/tax-summary',
       '/(app)/payments/new?direction=received',
+      '/(app)/receipts',
+      '/(app)/receipts/new?partyId=p_1&documentId=d_1',
       '/(app)/receipts/adjust?partyId=p_1',
       '/(app)/(tabs)/gst',
     ];

@@ -283,7 +283,7 @@ export default function Home() {
               icon="cash-check"
               caption={tr('reports:home.paymentsReceived')}
               delta={delta(hub.collectedThisMonth, prev?.collected)}
-              onPress={() => router.push('/(app)/payments/received')}
+              onPress={() => router.push('/(app)/receipts?type=payment&range=all')}
             />
           </StatRow>
           {full ? (

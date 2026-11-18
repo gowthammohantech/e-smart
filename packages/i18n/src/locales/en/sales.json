@@ -609,7 +609,12 @@
     "thisOne": "This one",
     "picked_one": "{{count}} document into one",
     "picked_other": "{{count}} documents into one",
-    "fetching": "Getting their lines…"
+    "fetching": "Getting their lines…",
+    "mergeIntoDelivery_one": "Create delivery note",
+    "mergeIntoDelivery_other": "Merge {{count}} into one delivery note",
+    "oneParty": "Pick orders of one customer: a delivery note goes to one customer",
+    "openOnly": "Only finalised orders not yet delivered can go on a delivery note",
+    "cantMerge": "These orders can’t go on one delivery note: one is already delivered, or they differ in currency"
   },
   "returnPicker": {
     "salesHint": "Pick the invoice being returned. Its lines are copied into the return, where you can reduce quantities or remove lines.",

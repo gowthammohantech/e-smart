@@ -23,6 +23,7 @@ export const LIXI_ROUTES = [
   '/(app)/purchases/bills/new',
   '/(app)/purchases/orders/new',
   '/(app)/payments/new',
+  '/(app)/receipts/new',
   '/(app)/expenses/new',
   '/(app)/contacts/customers/new',
   '/(app)/contacts/suppliers/new',

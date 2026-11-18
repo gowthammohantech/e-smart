@@ -1,11 +1,11 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useRefreshOnFocus } from '../../remote/useRefreshOnFocus';
 import { useResolvedLanguage } from '../../i18n/I18nProvider';
 import { Linking, Platform, Pressable, ScrollView, Share, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Icon, type IconName } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
@@ -107,6 +107,25 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
   // The server's own view of this one: what it still owes (credit notes and returns off) and what was made from it.
   const recordQuery = useDocumentRecord(doc.id);
   const record = recordQuery.data;
+  // The server's copy is read again whenever it may have moved on: this document changed here (a
+  // status, a finalise, an edit), or the page is back in front (a delivery note made from it, a
+  // payment recorded against it). A read that finds the same version changes nothing, so it can't loop.
+  // The version the device holds, as the server last sent it (the type leaves it out).
+  const docVersion = (doc as { version?: number }).version;
+  const refetchRecord = recordQuery.refetch;
+  useEffect(() => {
+    if (record && (record.status !== doc.status || (docVersion !== undefined && record.version !== docVersion))) void refetchRecord();
+    // Only when the device's copy moves, not each time the server's lands.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doc.status, docVersion]);
+  const focusedOnce = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      // The first focus is the page opening, which reads it already.
+      if (focusedOnce.current) void refetchRecord();
+      focusedOnce.current = true;
+    }, [refetchRecord]),
+  );
   // Each document it was made from: the source, then any merged in with it (several orders into one challan).
   const sourceLinks = [
     ...(sourceDoc ? [{ id: sourceDoc.id, kind: sourceDoc.kind, number: sourceDoc.number, date: sourceDoc.date }] : []),
@@ -194,7 +213,8 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
   // What money settles: invoices and debit notes (received), bills and supplier debit notes (paid).
   const isPayable = isPayableDocument(doc.kind);
   const receivable = RECEIVABLE_KINDS.includes(doc.kind);
-  const paymentRoute = `/(app)/payments/new?direction=${receivable ? 'received' : 'paid'}&partyId=${doc.partyId}&documentId=${doc.id}`;
+  // Money received is recorded on Receipts, money paid as a payment made.
+  const paymentRoute = receivable ? `/(app)/receipts/new?partyId=${doc.partyId}&documentId=${doc.id}` : `/(app)/payments/new?direction=paid&partyId=${doc.partyId}&documentId=${doc.id}`;
   // A draft's placeholder number (INVOICE-DRAFT) reads as "Draft".
   const shownNumber = doc.status === 'draft' && doc.number.endsWith('-DRAFT') ? tr('common:documentList.draftNumber') : doc.number;
   /** A line before tax: quantity × rate less its discount, as the editor and its grid show it. */
@@ -490,11 +510,15 @@ ${url}`;
                   : [];
   // Only what can be made now: nothing from a draft or a cancelled document,
   // and an order or quote carried forward once (conversionBlock).
-  // What was made from it, as the server knows; the store's copy until that lands.
-  const made = record?.linkedDocuments
-    ? record.linkedDocuments.map((d) => ({ kind: d.kind!, status: d.status!, sourceDocumentId: doc.id }))
-    : allDocuments;
-  const conversions = recordPending ? [] : offered.filter((c) => !conversionBlock(doc, c.target, made));
+  // The server says what it allows (it reads which linked documents were made from this one, and
+  // which this one was made from, such as the order behind a challan); the store's copy also rules out
+  // one just made here before the server's copy refreshes. That list holds for the version it was read
+  // at: once this one moves on here (a draft finalised), the store's copy decides until it is read again.
+  const recordCurrent = !!record && record.status === doc.status && (docVersion === undefined || record.version === docVersion);
+  const allowed = recordCurrent ? record.allowedConversions : undefined;
+  const conversions = recordPending
+    ? []
+    : offered.filter((c) => (!allowed || allowed.includes(c.target)) && !conversionBlock(doc, c.target, allDocuments));
 
   const transitions = nextStatuses(doc.kind, doc.status).filter((s) => s !== 'cancelled');
   // What Finalise moves a draft to (issued, received, sent…), as the editor's Finalise does.
