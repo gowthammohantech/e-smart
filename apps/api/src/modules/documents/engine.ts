@@ -1,5 +1,6 @@
 import { and, eq, inArray, lte, ne, notInArray } from 'drizzle-orm';
 import { vehicleIssues } from '../settings/vehicles';
+import { applyHighestRate } from '@esmart/core/domain/highestRate';
 import { partyTcsSection, tcsAskedOn, tcsRateFor } from '@esmart/core/data/tcsSections';
 import { OPENING_KINDS } from '@esmart/core/domain/documentStates';
 import type { CustomValues } from '@esmart/core/domain/customFields';
@@ -576,6 +577,19 @@ export async function prepareDocument(
       costCentreId: l.costCentreId ?? undefined,
     };
   });
+
+  // A service that follows the highest GST rate: its lines take the highest rate among the document's, each such
+  // service counted at its item's own rate (applyHighestRate, as the app does), whatever rate was sent for them.
+  // A return, or a note against an invoice or bill, keeps the rates its source charged.
+  if (!sourceRates) {
+    const rateOfCategory = (id: string) => {
+      const c = categories.find((x) => x.id === id);
+      return c ? Number(rateOn(c)) : 0;
+    };
+    const ownCategoryOf = (l: DocumentLine) => items.find((it) => it.id === l.itemId)?.taxCategoryId ?? l.taxCategoryId;
+    const ruled = applyHighestRate(coreLines, ownCategoryOf, rateOfCategory).lines;
+    coreLines.splice(0, coreLines.length, ...ruled);
+  }
 
   // A note line that isn't one of the source's items still adjusts tax only at a rate the source charged.
   if (sourceRates?.size) {
