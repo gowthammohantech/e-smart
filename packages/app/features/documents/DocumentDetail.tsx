@@ -1,11 +1,11 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useRefreshOnFocus } from '../../remote/useRefreshOnFocus';
 import { useResolvedLanguage } from '../../i18n/I18nProvider';
 import { Linking, Platform, Pressable, ScrollView, Share, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Icon, type IconName } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Text } from '@esmart/ui/components/Text';
@@ -107,6 +107,25 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
   // The server's own view of this one: what it still owes (credit notes and returns off) and what was made from it.
   const recordQuery = useDocumentRecord(doc.id);
   const record = recordQuery.data;
+  // The server's copy is read again whenever it may have moved on: this document changed here (a
+  // status, a finalise, an edit), or the page is back in front (a delivery note made from it, a
+  // payment recorded against it). A read that finds the same version changes nothing, so it can't loop.
+  // The version the device holds, as the server last sent it (the type leaves it out).
+  const docVersion = (doc as { version?: number }).version;
+  const refetchRecord = recordQuery.refetch;
+  useEffect(() => {
+    if (record && (record.status !== doc.status || (docVersion !== undefined && record.version !== docVersion))) void refetchRecord();
+    // Only when the device's copy moves, not each time the server's lands.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doc.status, docVersion]);
+  const focusedOnce = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      // The first focus is the page opening, which reads it already.
+      if (focusedOnce.current) void refetchRecord();
+      focusedOnce.current = true;
+    }, [refetchRecord]),
+  );
   // Each document it was made from: the source, then any merged in with it (several orders into one challan).
   const sourceLinks = [
     ...(sourceDoc ? [{ id: sourceDoc.id, kind: sourceDoc.kind, number: sourceDoc.number, date: sourceDoc.date }] : []),
@@ -495,7 +514,7 @@ ${url}`;
   // which this one was made from, such as the order behind a challan); the store's copy also rules out
   // one just made here before the server's copy refreshes. That list holds for the version it was read
   // at: once this one moves on here (a draft finalised), the store's copy decides until it is read again.
-  const recordCurrent = !!record && record.status === doc.status && (record.version === undefined || record.version === doc.version);
+  const recordCurrent = !!record && record.status === doc.status && (docVersion === undefined || record.version === docVersion);
   const allowed = recordCurrent ? record.allowedConversions : undefined;
   const conversions = recordPending
     ? []
