@@ -53,7 +53,7 @@ export default function ChartOfAccounts() {
   const nameOf = useAccountName();
   const groupName = useGroupName();
   const drCr = useDrCr();
-  const { scope, setScope } = useReportScope('thisFY');
+  const { scope, setScope } = useReportScope('today');
   const tbQuery = useBooksView<ReturnType<typeof trialBalance>>('trial-balance', scope.filters.range);
   const tb = tbQuery.data;
   // Until the chart and its balances are both here, every row would read nil and the total balanced.

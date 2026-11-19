@@ -16,7 +16,7 @@ import { useAccountName } from '../../../features/books/names';
 /** Every entry in a period, voucher by voucher, with its debits and credits. */
 export default function DayBookScreen() {
   const { t: tr } = useTranslation(['books', 'common']);
-  const { scope, setScope } = useReportScope('thisMonth');
+  const { scope, setScope } = useReportScope('today');
   const { book, loaded } = useServerBook();
   const nameOf = useAccountName();
   const baseCurrency = useBaseCurrency();
