@@ -1,6 +1,7 @@
 {
   "tabBar": {
-    "contacts": "தரப்புகள்"
+    "contacts": "தரப்புகள்",
+    "customersOnly": "வாடிக்கை"
   },
   "overviewOf": {
     "money": "வருமான மேலோட்டம்"

@@ -1,6 +1,7 @@
 {
   "tabBar": {
-    "contacts": "Parties"
+    "contacts": "Parties",
+    "customersOnly": "Customers"
   },
   "overviewOf": {
     "money": "Income overview"

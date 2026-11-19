@@ -15,16 +15,17 @@ async function basics(companyId: string) {
 }
 
 describe('tax categories', () => {
-  it('lists the seeded slabs, creates one with a new HSN, and saves with If-Match', async () => {
+  it('lists the seeded slabs, creates one with an HSN code the search list has not got, and saves with If-Match', async () => {
     const { token, c } = await ownerWithCompany(t);
     const list = await t.get(`${c}/tax-categories`, { token });
     expect(list.body.data.map((x: { rate: number }) => x.rate)).toEqual([0, 5, 12, 18, 28]);
 
-    const created = await t.post(`${c}/tax-categories`, { name: 'GST 3%', rate: 3, type: 'GST', effectiveFrom: '2017-07-01', hsnCode: '71131910' }, { token });
+    const created = await t.post(`${c}/tax-categories`, { name: 'GST 3%', rate: 3, type: 'GST', effectiveFrom: '2017-07-01', hsnCode: '71139999' }, { token });
     expect(created.status).toBe(201);
-    expect(created.body).toMatchObject({ name: 'GST 3%', rate: 3, hsnCode: '71131910' });
-    const [hsn] = await t.deps.db.select().from(schema.hsnCodes).where(eq(schema.hsnCodes.code, '71131910'));
-    expect(hsn.description).toBe('Added from catalog');
+    expect(created.body).toMatchObject({ name: 'GST 3%', rate: 3, hsnCode: '71139999' });
+    // The tax rate keeps its own code; nothing is added to the shared search list (0079).
+    const [hsn] = await t.deps.db.select().from(schema.hsnCodes).where(eq(schema.hsnCodes.code, '71139999'));
+    expect(hsn).toBeUndefined();
 
     const url = `${c}/tax-categories/${created.body.id}`;
     const saved = await t.put(url, { name: 'GST 3% (jewellery)', rate: 3, type: 'GST', effectiveFrom: '2017-07-01' }, { token, headers: { 'if-match': created.headers.etag as string } });

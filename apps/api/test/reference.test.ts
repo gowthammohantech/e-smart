@@ -59,8 +59,8 @@ describe('reference data', () => {
   it('searches HSN codes by prefix and by words', async () => {
     const { token } = await ownerWithCompany(t);
     const byCode = await t.get('/reference/hsn', { token, query: { q: '8482' } });
-    // hsn_codes isn't truncated between tests, and the catalog adds codes to it.
-    expect(byCode.body.data).toContainEqual({ code: '84821011', description: 'Ball bearings', kind: 'HSN', gstRate: 18 });
+    // The master list (src/data/hsn_sac.json) has descriptions but no default rates.
+    expect(byCode.body.data).toContainEqual({ code: '84821011', description: 'NOT EXCEEDING 50MM OF BORE DIAMETER', kind: 'HSN' });
     expect(byCode.body.data.every((h: { code: string }) => h.code.startsWith('8482'))).toBe(true);
     const byText = await t.get('/reference/hsn', { token, query: { q: 'consult' } });
     expect(byText.body.data.map((h: { code: string; kind: string }) => [h.code, h.kind])).toEqual(expect.arrayContaining([

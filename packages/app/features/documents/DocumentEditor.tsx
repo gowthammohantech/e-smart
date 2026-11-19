@@ -170,8 +170,12 @@ export function DocumentEditor(props: EditorProps) {
   // Only before the form first opens. Picking a party puts it in the URL (?partyId=), which fetches
   // that party here; swapping the open form for the loader then threw its lines away, and it came
   // back with the party alone. Once open, the form stays, and keeps everything added to it.
-  const opened = useRef<string | null>(null);
-  if (opened.current !== companyId && (party.isLoading || item.isLoading || source.isLoading || missing.length)) {
+  // The business the form has opened for: set during render once nothing is waited on, React's way
+  // of keeping something from an earlier render.
+  const [opened, setOpened] = useState<string | null>(null);
+  const waiting = party.isLoading || item.isLoading || source.isLoading || missing.length > 0;
+  if (!waiting && opened !== companyId) setOpened(companyId);
+  if (opened !== companyId && waiting) {
     return (
       <>
         {missing.map((id) => (
@@ -183,7 +187,6 @@ export function DocumentEditor(props: EditorProps) {
   }
   // Keyed by business: on web the page stays open across a switch, and the form seeds its branch,
   // taxes and party from the business it opened in.
-  opened.current = companyId;
   return <DocumentEditorForm key={companyId} {...props} />;
 }
 

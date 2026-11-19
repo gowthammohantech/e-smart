@@ -1,5 +1,4 @@
 import React, { useMemo, useState } from 'react';
-import { useTranslation } from 'react-i18next';
 import { Platform, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Tabs } from 'expo-router';
@@ -40,7 +39,6 @@ const BAR_SHORT = { contacts: true } as const;
 
 export default function TabsLayout() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['nav']);
   const sectionLabel = useSectionLabel();
   const unread = useUnreadCount();
   const access = useUiStore((s) => s.lixiAccess);

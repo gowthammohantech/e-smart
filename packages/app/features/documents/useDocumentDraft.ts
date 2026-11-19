@@ -17,6 +17,7 @@ export type DraftState = {
   supplierDocNumber: string;
   /** An import bill's bill of entry (customs IGST is its credit). */
   billOfEntry?: BusinessDocument['billOfEntry'];
+  shippingBill?: BusinessDocument['shippingBill'];
   /** An Input Service Distributor's invoice: its credit is 3B 4A(4). */
   isdInvoice?: boolean;
   currency: string;
