@@ -5,9 +5,9 @@ import { formatPercent } from '@esmart/core/lib/format';
 import { searchHsn, type HsnMatch } from '../../remote/reference';
 
 /**
- * The HSN/SAC master, searched as it is typed (by code or description), for the item forms on a
- * phone and a desktop alike. Picking a row hands the whole match back: the form fills the code, and
- * the description and GST rate it usually carries.
+ * The HSN/SAC master, listed as soon as it opens and narrowed as it is typed (by code or description),
+ * for the item forms on a phone and a desktop alike. Picking a row hands the match back; the form
+ * takes its code.
  */
 export function HsnSearchSheet({ visible, onClose, value, onPick }: { visible: boolean; onClose: () => void; value?: string; onPick: (match: HsnMatch) => void }) {
   const { t: tr } = useTranslation(['inventory']);
@@ -16,12 +16,12 @@ export function HsnSearchSheet({ visible, onClose, value, onPick }: { visible: b
   const [loading, setLoading] = useState(false);
   useEffect(() => {
     let live = true;
-    const q = visible ? query.trim() : '';
-    // Every state change is made from the timer, not the effect body itself: nothing to search clears the list at once.
+    const q = query.trim();
+    // Every state change is made from the timer, not the effect body itself. Closed, nothing is asked;
+    // open with nothing typed, the list from the start shows at once.
     const timer = setTimeout(
       () => {
-        if (!q) {
-          setMatches([]);
+        if (!visible) {
           setLoading(false);
           return;
         }

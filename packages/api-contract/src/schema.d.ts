@@ -16549,8 +16549,9 @@ export interface operations {
     };
     searchHsn: {
         parameters: {
-            query: {
-                q: string;
+            query?: {
+                /** @description Left out or empty lists the codes from the start */
+                q?: string;
             };
             header?: never;
             path?: never;

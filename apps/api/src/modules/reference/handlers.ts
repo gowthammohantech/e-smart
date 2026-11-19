@@ -12,6 +12,8 @@ import { compact } from '../../lib/wire';
 /** How long a GST portal answer is trusted before asking again. */
 const GSTIN_CACHE_MS = 7 * 24 * 3_600_000;
 const SEARCH_LIMIT = 50;
+/** The HSN/SAC list before anything is typed: the reference codes, from the start. */
+const BROWSE_LIMIT = 200;
 
 type GstinLookup = typeof schema.gstinLookups.$inferSelect;
 
@@ -96,13 +98,12 @@ export const referenceHandlers = defineHandlers({
     return { data: rows.map((r) => ({ code: r.code.trim(), name: r.name, symbol: r.symbol, precision: r.minorDigits })) };
   },
 
-  /** Digits search by code prefix; words search the description. */
+  /** Digits search by code prefix; words search the description; nothing typed lists them from the start. */
   async searchHsn(ctx) {
     const H = schema.hsnCodes;
-    const q = ctx.query.q.trim();
-    if (!q) return { data: [] };
-    const where = /^\d+$/.test(q) ? ilike(H.code, `${q}%`) : or(ilike(H.description, `%${q}%`), ilike(H.code, `${q}%`));
-    const rows = await ctx.db.select().from(H).where(where).orderBy(asc(H.code)).limit(SEARCH_LIMIT);
+    const q = (ctx.query.q ?? '').trim();
+    const where = !q ? undefined : /^\d+$/.test(q) ? ilike(H.code, `${q}%`) : or(ilike(H.description, `%${q}%`), ilike(H.code, `${q}%`));
+    const rows = await ctx.db.select().from(H).where(where).orderBy(asc(H.code)).limit(q ? SEARCH_LIMIT : BROWSE_LIMIT);
     return {
       data: rows.map((r) =>
         compact({

@@ -6426,7 +6426,7 @@ paths:
       operationId: searchHsn
       summary: HSN/SAC code search with the suggested GST rate
       parameters:
-        - { name: q, in: query, required: true, schema: { type: string } }
+        - { name: q, in: query, schema: { type: string }, description: Left out or empty lists the codes from the start }
       responses:
         '200':
           description: OK
