@@ -92,13 +92,10 @@ function ItemFormDesktopFields({ item }: { item?: Item }) {
 
   const [unitOpen, setUnitOpen] = useState(false);
   const [taxOpen, setTaxOpen] = useState(false);
-  // The HSN/SAC master: a pick fills the code, and the description (when empty) and GST rate it usually carries.
+  // The HSN/SAC master: a pick fills the code only (the description and rate stay as set).
   const [hsnOpen, setHsnOpen] = useState(false);
   const pickHsn = (match: HsnMatch) => {
     if (match.code) setHsnCode(match.code);
-    if (match.description && !description.trim()) setDescription(match.description);
-    const rated = match.gstRate == null ? undefined : taxCategories.find((c) => c.rate === match.gstRate);
-    if (rated) setTaxCategoryId(rated.id);
     setHsnOpen(false);
   };
   const [categoryOpen, setCategoryOpen] = useState(false);
