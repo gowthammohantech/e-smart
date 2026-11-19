@@ -20,6 +20,7 @@ import { SIDEBAR_COMPACT_WIDTH, SIDEBAR_WIDTH, sidebarWidth as width, useSidebar
 import { SETTINGS_HREF, sectionHref } from './navLinks';
 import { TOP_BAR_HEIGHT } from './shell/TopBar';
 import { SidebarDueCard } from './shell/SidebarDueCard';
+import { useSectionLabel } from '@esmart/app/navigation/sectionLabel';
 
 export { SIDEBAR_COMPACT_WIDTH, SIDEBAR_WIDTH };
 
@@ -368,11 +369,12 @@ function sectionLayout(tab: TabName, plan: ReturnType<typeof usePlan>, disabled:
 function SectionDropdown({ tab, pathname }: { tab: TabName; pathname: string }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['nav', 'reports']);
+  const sectionLabel = useSectionLabel();
   const plan = usePlan();
   const disabled = useDisabledModules();
   const badges = useMenuBadges();
   const { columns, actions } = sectionLayout(tab, plan, disabled);
-  const name = tr(`nav:tab.${tab}` as 'nav:tab.index');
+  const name = sectionLabel(tab);
   const hub: MenuPage = { key: `hub-${tab}`, labelKey: '', icon: 'view-dashboard-outline', route: tabPath(tab) };
   return (
     <View
@@ -446,6 +448,7 @@ function SectionPanel({
 }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['nav', 'reports']);
+  const sectionLabel = useSectionLabel();
   const router = useRouter();
   const plan = usePlan();
   const disabled = useDisabledModules();
@@ -454,7 +457,7 @@ function SectionPanel({
   const panel = useRef<View>(null);
   const [height, setHeight] = useState(0);
 
-  const name = tr(`nav:tab.${tab}` as 'nav:tab.index');
+  const name = sectionLabel(tab);
   const { columns, actions } = sectionLayout(tab, plan, disabled);
   // Four categories sit two by two; up to three sit side by side.
   const across = columns.length <= 3 ? columns.length : 2;
@@ -640,6 +643,7 @@ function rollUp(pages: MenuPage[], badges: ReturnType<typeof useMenuBadges>): Ba
 export function Sidebar() {
   const t = useTheme();
   const { t: tr } = useTranslation(['nav', 'reports']);
+  const sectionLabel = useSectionLabel();
   const router = useRouter();
   const pathname = usePathname();
   const plan = usePlan();
@@ -714,7 +718,7 @@ export function Sidebar() {
   const measuring = room.card <= t.spacing.sm * 2;
   const fits = !measuring && room.box > 0 && room.content + room.card + t.spacing.md <= room.box;
 
-  const labelFor = (name: TabName) => tr(`nav:tab.${name}` as 'nav:tab.index');
+  const labelFor = (name: TabName) => sectionLabel(name);
   // A section shows while the plan can open any of its pages (Stock on Free has Items & services).
   const visible = TABS.filter((tab) => tab.name !== 'more' && sectionHref(plan, tab.name));
   const groups = GROUPS.map((key) => ({ key, tabs: visible.filter((tab) => section(tab.name).sidebarGroup === key) })).filter((g) => g.tabs.length > 0);
