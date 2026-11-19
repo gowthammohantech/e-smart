@@ -596,15 +596,19 @@ export default function GstReturnsScreen() {
           return step(r, 'file', tr('compliance:returns.filed', { name: r === 'gstr1' ? 'GSTR-1' : 'GSTR-3B' }));
         }}
       />
-      <Sheet visible={!!portalFiled} onClose={() => setPortalFiled(null)} title={portalFiled ? tr('compliance:returns.markFiledTitle', { name: portalFiled.r === 'gstr1' ? 'GSTR-1' : 'GSTR-3B', period: periodLabel(period) }) : undefined}>
+      <Sheet
+        visible={!!portalFiled}
+        onClose={() => setPortalFiled(null)}
+        contentStyle={{ paddingHorizontal: t.spacing.lg }}
+        footer={portalFiled ? <Button title={tr('compliance:returns.markFiled')} icon="check-decagram-outline" loading={busy === `${portalFiled.r}:markFiled`} disabled={!!busy} onPress={() => void markFiled()} /> : undefined}
+        title={portalFiled ? tr('compliance:returns.markFiledTitle', { name: portalFiled.r === 'gstr1' ? 'GSTR-1' : 'GSTR-3B', period: periodLabel(period) }) : undefined}>
         {portalFiled ? (
-          <View style={{ gap: t.spacing.md, paddingBottom: t.spacing.lg }}>
+          <View style={{ gap: t.spacing.md }}>
             <Text variant="small" tone="muted">
               {tr('compliance:returns.markFiledBody')}
             </Text>
             <DateField label={tr('compliance:returns.filedOn')} value={portalFiled.filedOn} onChange={(filedOn) => setPortalFiled((p) => (p ? { ...p, filedOn } : p))} maximumDate={new Date()} required />
             <TextField label={tr('compliance:returns.arnLabel')} value={portalFiled.arn} onChangeText={(arn) => setPortalFiled((p) => (p ? { ...p, arn: arn.toUpperCase().slice(0, 20) } : p))} autoCapitalize="characters" />
-            <Button title={tr('compliance:returns.markFiled')} icon="check-decagram-outline" loading={busy === `${portalFiled.r}:markFiled`} disabled={!!busy} onPress={() => void markFiled()} />
           </View>
         ) : null}
       </Sheet>
