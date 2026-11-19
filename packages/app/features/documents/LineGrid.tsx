@@ -23,7 +23,7 @@ type Col = 'name' | 'qty' | 'rate' | 'discount';
 
 // Sized to fit the editor's main column (about 730px) with the item name taking the rest.
 // The discount takes its % / currency dropdown beside the box, so it is the widest of the three.
-const W = { no: 32, qty: 104, rate: 108, discount: 124, tax: 88, amount: 116, actions: 40 };
+const W = { no: 32, qty: 104, rate: 108, discount: 124, tax: 108, amount: 116, actions: 40 };
 const ITEM_MIN = 100;
 const MIN_WIDTH = W.no + ITEM_MIN + W.qty + W.rate + W.discount + W.tax + W.amount + W.actions;
 
@@ -272,7 +272,7 @@ export function LineGrid({
                 ]}
               >
                 <View style={{ flex: 1 }}>
-                  <Text variant="small" style={{ fontVariant: ['tabular-nums'] }}>
+                  <Text variant="small" numberOfLines={1} style={{ fontVariant: ['tabular-nums'] }}>
                     {formatPercent(line.taxRate)}
                   </Text>
                   {shownCessRate(line) ? (
@@ -287,7 +287,7 @@ export function LineGrid({
                   ) : null}
                 </View>
                 {line.taxInclusive ? (
-                  <Text variant="micro" tone="primary" weight="600">
+                  <Text variant="micro" tone="primary" weight="600" numberOfLines={1} style={{ flexShrink: 0 }}>
                     {tr('sales:editor.inclusive')}
                   </Text>
                 ) : null}
