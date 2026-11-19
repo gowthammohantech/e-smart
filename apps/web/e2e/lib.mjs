@@ -47,10 +47,18 @@ export function sql(q) {
 export const serverParties = (name) => Number(sql(`select count(*) from parties where name = '${name.replace(/'/g, "''")}'`));
 
 /** Toast text shown after an action, collected as it appears. */
+/** A new customer's required fields: the name, and for a party in India its state and a PIN that state has. */
+export async function fillCustomer(page, name) {
+  await page.getByPlaceholder('Business name').fill(name);
+  await page.getByRole('button', { name: /^State, required/ }).first().click();
+  await page.getByPlaceholder('Search').last().fill('Tamil');
+  await page.getByText('Tamil Nadu', { exact: true }).last().click();
+  await page.getByPlaceholder('400001').fill('600001');
+}
 export async function addCustomer(page, name) {
   await page.goto(`${APP}/contacts/customers/new`, { waitUntil: 'domcontentloaded' });
   await page.getByPlaceholder('Business name').waitFor({ timeout: 30_000 });
-  await page.getByPlaceholder('Business name').fill(name);
+  await fillCustomer(page, name);
   const started = Date.now();
   await page.getByText('Add customer', { exact: true }).last().click();
   await page.waitForURL((u) => !u.pathname.endsWith('/new'), { timeout: 20_000 }).catch(() => {});

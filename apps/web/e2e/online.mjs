@@ -10,7 +10,7 @@
 //   npm run e2e:online -w @esmart/web
 //
 // It writes to that database only.
-import { launch, device, signIn, addCustomer, keepsBook, serverParties, results, APP, apiOffline } from './lib.mjs';
+import { launch, device, signIn, addCustomer, fillCustomer, keepsBook, serverParties, results, APP, apiOffline } from './lib.mjs';
 
 const r = results();
 const b = await launch();
@@ -36,7 +36,7 @@ await signIn(page);
   await page.getByPlaceholder('Business name').waitFor({ timeout: 30_000 });
   await apiOffline(ctx, true);
   // The app finds out from NetInfo or from its own next request.
-  await page.getByPlaceholder('Business name').fill(name);
+  await fillCustomer(page, name);
   await page.getByText('Add customer', { exact: true }).last().click().catch(() => {});
   const banner = await page.getByText('No internet connection').first().waitFor({ timeout: 20_000 }).then(() => true, () => false);
   r.check('no connection: the header says so', banner);
