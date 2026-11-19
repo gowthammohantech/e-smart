@@ -14,28 +14,61 @@ function SuspendAction({ account }: { account: Schema<'PlatformAccount'> }) {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const suspended = account.status === 'suspended';
+  // Closed by its last owner deleting themselves: their login is gone, so a new owner is invited.
+  const ownerDeleted = suspended && account.suspendedReason === 'owner-deleted';
+  const [ownerName, setOwnerName] = useState('');
+  const [ownerEmail, setOwnerEmail] = useState('');
   return (
     <Can role="superadmin">
-      <button className={`btn ${suspended ? 'primary' : 'danger'}`} type="button" onClick={() => setOpen(true)}>
+      <button
+        className={`btn ${suspended ? 'primary' : 'danger'}`}
+        type="button"
+        onClick={() => {
+          setOwnerName('');
+          setOwnerEmail('');
+          setOpen(true);
+        }}
+      >
         {suspended ? 'Reactivate account' : 'Suspend account'}
       </button>
       <ReasonDialog
         open={open}
         title={suspended ? `Reactivate ${account.name}` : `Suspend ${account.name}`}
         description={
-          suspended
-            ? 'Everyone on this account can sign in again. Sessions ended by the suspension stay signed out.'
-            : `All ${account.userCount} user(s) are signed out on every device straight away, and nobody on the account can sign in until it is reactivated. Their data is kept.`
+          ownerDeleted
+            ? 'The owner closed this account by deleting their own, so their sign-in no longer exists. Invite a new owner: they get every business on the account, and an email to set a password. The same person may come back with the same email, unless it already has an account of its own.'
+            : suspended
+              ? 'Everyone on this account can sign in again. Sessions ended by the suspension stay signed out.'
+              : `All ${account.userCount} user(s) are signed out on every device straight away, and nobody on the account can sign in until it is reactivated. Their data is kept.`
         }
-        confirmLabel={suspended ? 'Reactivate' : 'Suspend account'}
+        confirmLabel={ownerDeleted ? 'Reactivate and invite' : suspended ? 'Reactivate' : 'Suspend account'}
         danger={!suspended}
         onClose={() => setOpen(false)}
         onConfirm={async (reason) => {
-          const path = suspended ? '/admin/accounts/{accountId}/reactivate' : '/admin/accounts/{accountId}/suspend';
-          need(await api.POST(path, { params: { path: { accountId: account.id } }, body: { reason } }));
+          if (!suspended) {
+            need(await api.POST('/admin/accounts/{accountId}/suspend', { params: { path: { accountId: account.id } }, body: { reason } }));
+          } else {
+            if (ownerDeleted && (!ownerName.trim() || !ownerEmail.trim())) throw new Error('Enter the new owner’s name and email');
+            const owner = ownerDeleted ? { ownerName: ownerName.trim(), ownerEmail: ownerEmail.trim() } : {};
+            need(await api.POST('/admin/accounts/{accountId}/reactivate', { params: { path: { accountId: account.id } }, body: { reason, ...owner } }));
+          }
           await queryClient.invalidateQueries();
         }}
-      />
+      >
+        {ownerDeleted ? (
+          <>
+            <label className="field">
+              <span>New owner’s name</span>
+              <input className="input" value={ownerName} onChange={(e) => setOwnerName(e.target.value)} maxLength={100} required />
+            </label>
+            <label className="field">
+              <span>New owner’s email</span>
+              <input className="input" type="email" value={ownerEmail} onChange={(e) => setOwnerEmail(e.target.value)} maxLength={254} required />
+              <span className="hint">They get an invite to set a password and sign in as owner.</span>
+            </label>
+          </>
+        ) : null}
+      </ReasonDialog>
     </Can>
   );
 }

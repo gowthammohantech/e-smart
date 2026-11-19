@@ -4624,7 +4624,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Lift a suspension. Users sign in again; their old sessions stay revoked. */
+        /**
+         * Lift a suspension. Users sign in again; their old sessions stay revoked.
+         * @description An account closed by its last owner deleting themselves (suspendedReason owner-deleted) has nobody left who can sign in, so it needs ownerEmail and ownerName: a new owner of every business on the account, emailed an invite to set a password (422 without them; 409 EMAIL_TAKEN for an email that already signs in; 502 when the email can't be sent, and nothing is changed).
+         */
         post: operations["reactivateAccount"];
         delete?: never;
         options?: never;
@@ -7001,6 +7004,14 @@ export interface components {
         PlatformReason: {
             /** @description Why; kept in the platform audit log */
             reason: string;
+        };
+        PlatformReactivate: {
+            /** @description Why; kept in the platform audit log */
+            reason: string;
+            /** @description An account its owner deleted: the new owner to invite */
+            ownerEmail?: string;
+            /** @description An account its owner deleted: the new owner's name */
+            ownerName?: string;
         };
         PlatformRoleChange: {
             /** @description `null` removes platform access */
@@ -16847,7 +16858,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["PlatformReason"];
+                "application/json": components["schemas"]["PlatformReactivate"];
             };
         };
         responses: {

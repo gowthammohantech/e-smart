@@ -11,6 +11,8 @@ import { compact, iso } from '../../lib/wire';
 import { newestFirst } from '../audit/keyset';
 import { subscriptionToWire } from '../billing/handlers';
 import { recordUserChange, revokeAllSessions } from '../users/shared';
+import { inviteNewOwner } from '../users/handlers';
+import { OWNER_DELETED } from '../me/deleteAccount';
 import { recordPlatformAction } from './audit';
 import { GSP_GATEWAY_CODES, sameTarget, type GspTarget } from '../../providers/gsp/provider-name';
 import { gspAvailability } from '../../providers/gsp/availability';
@@ -192,25 +194,36 @@ export const platformHandlers = defineHandlers({
     return wire;
   },
 
-  /** Users sign in again; the sessions revoked at suspension stay revoked. */
+  /**
+   * Users sign in again; the sessions revoked at suspension stay revoked. An account closed by its
+   * last owner deleting themselves has nobody left to sign in (their details were erased), so it
+   * takes a new owner, invited by email to every business on it; the email goes in the same step.
+   */
   async reactivateAccount(ctx) {
     const reason = reasonOf(ctx.body);
     const account = await ctx.db.transaction(async (tx) => {
       const [current] = await tx.select().from(A).where(eq(A.id, ctx.params.accountId)).for('update');
       if (!current) throw notFound('Account');
       if (!current.suspendedAt) throw conflict('NOT_SUSPENDED', 'This account is not suspended');
+      const ownerDeleted = current.suspendedReason === OWNER_DELETED;
+      if (ownerDeleted && !ctx.body.ownerEmail?.trim()) {
+        throw invalid('ownerEmail', 'This account was closed by its owner deleting their account: give the email of a new owner to invite');
+      }
       const [updated] = await tx
         .update(A)
         // Back in use: an erase date set when it was deleted no longer applies.
         .set({ suspendedAt: null, suspendedReason: null, suspendedBy: null, purgeAfter: null, updatedAt: ctx.now })
         .where(eq(A.id, current.id))
         .returning();
+      const owner = ownerDeleted
+        ? await inviteNewOwner(tx, ctx.deps, ctx.req.log, asSupport(ctx.user), { accountId: current.id, email: ctx.body.ownerEmail!, name: ctx.body.ownerName ?? '' }, ctx.now)
+        : undefined;
       await recordPlatformAction(tx, ctx.user, ctx.req, {
         action: 'account.reactivate',
         target: { type: 'account', id: current.id, label: current.name },
         reason,
         before: { suspended: true, suspendedReason: current.suspendedReason },
-        after: { suspended: false },
+        after: { suspended: false, ...(owner && { invitedOwner: { id: owner.id, email: owner.email, name: owner.name } }) },
       });
       return updated;
     });

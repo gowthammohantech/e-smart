@@ -314,6 +314,50 @@ async function sendInviteEmail(
   }
 }
 
+/**
+ * A new owner for an account whose last owner deleted themselves (platform support reactivating it):
+ * a new person on the account, owner of every business on it, invited by email to set a password.
+ * Run inside the reactivation's transaction, email included, so a failed send undoes it all and the
+ * operator can try again (nobody is left on the account to resend it). An email anyone already signs
+ * in with is refused: moving a person across accounts isn't done here.
+ */
+export async function inviteNewOwner(
+  tx: DbOrTx,
+  deps: MailDeps,
+  log: { error: (obj: unknown, msg: string) => void },
+  actor: AuthUser,
+  owner: { accountId: string; email: string; name: string },
+  now: Date,
+): Promise<UserRow> {
+  const email = normalizeEmail(owner.email);
+  const name = owner.name.trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw invalid('ownerEmail', 'Enter the new owner’s email');
+  if (!name) throw invalid('ownerName', 'Enter the new owner’s name');
+  const [taken] = await tx.select({ id: U.id }).from(U).where(eq(U.email, email));
+  if (taken) throw conflict('EMAIL_TAKEN', 'This email already has its own Elixir Books account; use another email');
+  const companies = await accountCompanyIds(tx, owner.accountId);
+  const [created] = await tx
+    .insert(U)
+    .values({
+      id: newId('usr'),
+      accountId: owner.accountId,
+      name,
+      email,
+      phone: null,
+      passwordHash: null,
+      role: 'owner',
+      avatarColor: avatarColorFor(email),
+      status: 'invited',
+      defaultCompanyId: companies[0] ?? null,
+    })
+    .returning();
+  await replaceAccess(tx, created.id, owner.accountId, { companies, branches: [] });
+  const token = await issueInvite(tx, created, actor.id, now);
+  await recordUserChange(tx, actor, companies, { action: 'invited', user: created, after: await userToWire(tx, created) });
+  await sendInviteEmail(deps, tx, log, created, 'Elixir Books support', await businessNames(tx, companies), token);
+  return created;
+}
+
 /** Invites someone who already has an account: they get access to these businesses once they accept. */
 async function inviteExistingUser(ctx: Ctx<'inviteUser'>, existing: UserRow, body: Ctx<'inviteUser'>['body']) {
   if (!body.name.trim()) throw invalid('name', 'Name is required');
