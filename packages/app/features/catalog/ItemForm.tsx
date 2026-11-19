@@ -266,7 +266,7 @@ function ItemFormFields({ item }: { item?: Item }) {
             required={hsnRequired}
           />
           <Button title={tr('inventory:form.hsnSearch')} variant="ghost" size="sm" icon="magnify" onPress={() => setHsnOpen(true)} style={{ alignSelf: 'flex-start', marginTop: -t.spacing.sm }} />
-          {gstRegistered || gst ? <GstTreatmentFields value={gst} onChange={setGst} type={type} /> : null}
+          {gstRegistered || gst ? <GstTreatmentFields value={gst} onChange={setGst} type={type} taxCategory={category} /> : null}
 
           {type === 'goods' ? (
             <>

@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PickerField, SwitchField, TextField } from '@esmart/ui/components/Field';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
-import { GstFlags, ItcEligibility, ItemType, SupplyType } from '@esmart/core/types';
+import { GstFlags, ItcEligibility, ItemType, SupplyType, TaxCategory } from '@esmart/core/types';
 
 const SUPPLY_TYPES: SupplyType[] = ['taxable', 'nil', 'exempt', 'nonGst'];
 const ITC: ItcEligibility[] = ['eligible', 'blocked', 'ineligible'];
@@ -26,7 +26,18 @@ function tidy(flags: GstFlags): GstFlags | undefined {
  * capital goods, credit that can't be claimed, reverse charge and cess. Defaults suit almost
  * everything, so these sit together below the tax rate.
  */
-export function GstTreatmentFields({ value, onChange, type }: { value: GstFlags | undefined; onChange: (v: GstFlags | undefined) => void; type: ItemType }) {
+export function GstTreatmentFields({
+  value,
+  onChange,
+  type,
+  taxCategory,
+}: {
+  value: GstFlags | undefined;
+  onChange: (v: GstFlags | undefined) => void;
+  type: ItemType;
+  /** The item's tax rate: above 0% it is a taxable supply; at 0% it is nil-rated, exempt or non-GST. */
+  taxCategory?: Pick<TaxCategory, 'rate' | 'name'>;
+}) {
   const { t: tr } = useTranslation(['inventory']);
   const [supplyOpen, setSupplyOpen] = useState(false);
   const [itcOpen, setItcOpen] = useState(false);
@@ -35,6 +46,18 @@ export function GstTreatmentFields({ value, onChange, type }: { value: GstFlags 
   const set = (p: Partial<GstFlags>) => onChange(tidy({ ...flags, ...p }));
   const supplyType = flags.supplyType ?? 'taxable';
   const taxable = supplyType === 'taxable' && !flags.reimbursement;
+  // The types the rate allows: a rate above 0% is taxable only, and 0% is anything but taxable.
+  const zeroRate = !!taxCategory && taxCategory.rate <= 0;
+  const types = !taxCategory ? SUPPLY_TYPES : zeroRate ? SUPPLY_TYPES.filter((s) => s !== 'taxable') : (['taxable'] as SupplyType[]);
+  // A rate changed to one its type doesn't fit moves the type with it: to taxable above 0%, and at 0%
+  // to what the rate's own name says (an "Exempt" or "Non-GST" rate), else nil-rated.
+  useEffect(() => {
+    if (!taxCategory) return;
+    if (!zeroRate && supplyType !== 'taxable') set({ supplyType: 'taxable' });
+    else if (zeroRate && supplyType === 'taxable') set({ supplyType: /non[\s-]?gst/i.test(taxCategory.name) ? 'nonGst' : /exempt/i.test(taxCategory.name) ? 'exempt' : 'nil' });
+    // Only when the rate or the type changes; `set` is new each render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [taxCategory?.rate, taxCategory?.name, supplyType]);
 
   return (
     <>
@@ -93,7 +116,7 @@ export function GstTreatmentFields({ value, onChange, type }: { value: GstFlags 
         visible={supplyOpen}
         onClose={() => setSupplyOpen(false)}
         title={tr('inventory:gst.supplyType')}
-        options={SUPPLY_TYPES.map((s) => ({ value: s, label: tr(`inventory:gst.supply.${s}`), description: tr(`inventory:gst.supplyHint.${s}`) }))}
+        options={types.map((s) => ({ value: s, label: tr(`inventory:gst.supply.${s}`), description: tr(`inventory:gst.supplyHint.${s}`) }))}
         value={supplyType}
         onSelect={(s) => set({ supplyType: s as SupplyType })}
         searchable={false}

@@ -310,7 +310,7 @@ function ItemFormDesktopFields({ item }: { item?: Item }) {
                     <Button title={tr('inventory:form.hsnSearch')} variant="ghost" size="sm" icon="magnify" onPress={() => setHsnOpen(true)} style={{ alignSelf: 'flex-start' }} />
                   </View>
                 </Row>
-                {gstRegistered || gst ? <GstTreatmentFields value={gst} onChange={setGst} type={type} /> : null}
+                {gstRegistered || gst ? <GstTreatmentFields value={gst} onChange={setGst} type={type} taxCategory={category} /> : null}
               </Panel>
             </>
           }
