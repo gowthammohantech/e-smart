@@ -315,6 +315,7 @@
     "itemOrService": "Item or service",
     "unit": "Unit",
     "rate": "Rate",
+    "rateDiff": "Rate diff",
     "tax": "Tax",
     "rateIncludesTax": "Rate includes tax",
     "followsHighestRate": "Set to the highest GST rate in this document",

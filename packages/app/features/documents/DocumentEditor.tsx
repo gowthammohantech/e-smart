@@ -1405,6 +1405,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           onAddRequest={() => setItemOpen(true)}
           maxQuantity={(line) => maxReturnQty(line)}
           purchase={isPurchase}
+          note={isNote}
         />
       ) : (
         <Card padded={false}>
@@ -2215,6 +2216,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           hsnRequired={needsHsn}
           maxQuantity={maxReturnQty(editingLine)}
           purchase={isPurchase}
+          note={isNote}
         />
 
         <ConfirmDialog
