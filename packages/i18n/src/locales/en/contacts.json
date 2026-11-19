@@ -1,6 +1,9 @@
 {
   "hub": {
     "inactive": "Inactive",
+    "statusActive": "Active",
+    "noInactive": "No inactive parties",
+    "noInactiveBody": "Parties you deactivate show here, where you can reactivate them.",
     "settled": "Settled",
     "title": "Parties",
     "titleCustomersOnly": "Customers",

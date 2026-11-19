@@ -435,7 +435,7 @@ export function useExpenseRecord(id: string | undefined) {
   });
 }
 
-export type PartyQuery = { kind: 'customer' | 'supplier' | 'general'; q?: string };
+export type PartyQuery = { kind: 'customer' | 'supplier' | 'both' | 'general'; q?: string; status?: 'active' | 'inactive' };
 const partyKeys = {
   all: (companyId: string) => ['parties', companyId] as const,
 };
@@ -448,7 +448,7 @@ export function usePartyPages(f: PartyQuery) {
     enabled: !!companyId,
     initialPageParam: undefined as string | undefined,
     queryFn: async ({ pageParam, signal }) => {
-      const { data } = await api.GET('/companies/{companyId}/parties', { params: { path: { companyId }, query: { kind: f.kind, q: f.q?.trim() || undefined, limit: PAGE, cursor: pageParam } }, signal });
+      const { data } = await api.GET('/companies/{companyId}/parties', { params: { path: { companyId }, query: { kind: f.kind, status: f.status, q: f.q?.trim() || undefined, limit: PAGE, cursor: pageParam } }, signal });
       return data!;
     },
     getNextPageParam: (last) => last.nextCursor ?? undefined,
@@ -464,7 +464,7 @@ export function usePartySummary(f: PartyQuery) {
     queryKey: [...partyKeys.all(companyId), 'summary', f],
     enabled: !!companyId,
     queryFn: async ({ signal }) => {
-      const { data } = await api.GET('/companies/{companyId}/parties/summary', { params: { path: { companyId }, query: { kind: f.kind, q: f.q?.trim() || undefined } }, signal });
+      const { data } = await api.GET('/companies/{companyId}/parties/summary', { params: { path: { companyId }, query: { kind: f.kind, status: f.status, q: f.q?.trim() || undefined } }, signal });
       return data!;
     },
     placeholderData: keepWithin(companyId),
