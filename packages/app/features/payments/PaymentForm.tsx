@@ -699,8 +699,9 @@ export function PaymentForm({
       />
     ) : null;
 
+  // Earlier advances to adjust: on money paid only. A receipt keeps none and an advance receipt is one.
   const advanceCard =
-    !noAdvance && partyId && advance.minor > 0 && outstanding.length > 0 ? (
+    direction === 'paid' && partyId && advance.minor > 0 && outstanding.length > 0 ? (
       <Card style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
         <Icon name="wallet-outline" size={22} color={t.c.primary} />
         <View style={{ flex: 1, gap: 2 }}>
