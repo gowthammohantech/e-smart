@@ -1,4 +1,5 @@
-import { sql } from 'drizzle-orm';
+import { readFileSync } from 'node:fs';
+import { notInArray, sql } from 'drizzle-orm';
 import { allCities } from '@esmart/core/data/cities';
 import { COUNTRIES, INTEGRATIONS, UNITS, WORLD_COUNTRIES } from '@esmart/core/data/masters';
 import { GST_STATE_CODES } from '@esmart/core/domain/stateCodes';
@@ -11,58 +12,14 @@ import * as s from './schema';
 const UNION_TERRITORIES = new Set(['01', '04', '07', '26', '31', '34', '35', '38', '97']);
 
 /**
- * A starter HSN / SAC master: the codes the demo catalogue uses plus common
- * ones. Production loads the full CBIC list into the same table; a code a
- * user types that isn't here yet is added by the catalog on first use.
+ * The HSN / SAC master: every code a business searches (Find HSN / SAC code), from the GST HSN and
+ * SAC lists (src/data/hsn_sac.json, built from the HSN_SAC workbook: 4, 6 and 8 digit codes, chapters
+ * left out). Each entry is [code, description, isService]. No default rates: the list carries none.
  */
-export const HSN_STARTER: { code: string; description: string; isService: boolean; rate: number }[] = [
-  { code: '15152900', description: 'Rice bran oil and its fractions', isService: false, rate: 5 },
-  { code: '22011010', description: 'Mineral waters and aerated waters', isService: false, rate: 18 },
-  { code: '27101980', description: 'Lubricating oils and greases', isService: false, rate: 18 },
-  { code: '39172390', description: 'Tubes, pipes and hoses of PVC', isService: false, rate: 18 },
-  { code: '39191000', description: 'Self-adhesive plastic tape in rolls', isService: false, rate: 18 },
-  { code: '39201019', description: 'Plastic film and sheet of polyethylene', isService: false, rate: 18 },
-  { code: '39211900', description: 'Cellular plastic plates and sheets', isService: false, rate: 18 },
-  { code: '39231010', description: 'Plastic boxes, cases and ties for packing', isService: false, rate: 18 },
-  { code: '40103999', description: 'Transmission belts of vulcanised rubber', isService: false, rate: 18 },
-  { code: '48025690', description: 'Uncoated paper for writing and printing', isService: false, rate: 12 },
-  { code: '48191010', description: 'Cartons and boxes of corrugated paper', isService: false, rate: 12 },
-  { code: '61161010', description: 'Gloves, impregnated or coated', isService: false, rate: 5 },
-  { code: '73181500', description: 'Screws and bolts of iron or steel', isService: false, rate: 18 },
-  { code: '73182200', description: 'Washers of iron or steel', isService: false, rate: 18 },
-  { code: '82060010', description: 'Sets of hand tools for retail sale', isService: false, rate: 18 },
-  { code: '84821011', description: 'Ball bearings', isService: false, rate: 18 },
-  { code: '85362010', description: 'Miniature circuit breakers', isService: false, rate: 18 },
-  { code: '85389000', description: 'Parts for electrical switching apparatus', isService: false, rate: 18 },
-  { code: '85444911', description: 'Insulated copper conductors', isService: false, rate: 18 },
-  { code: '90049090', description: 'Protective goggles and spectacles', isService: false, rate: 5 },
-  { code: '90178010', description: 'Measuring rods and tapes', isService: false, rate: 18 },
-  { code: '90303100', description: 'Multimeters without recording device', isService: false, rate: 18 },
-  { code: '94054090', description: 'Electric lamps and lighting fittings', isService: false, rate: 12 },
-  // Six-digit goods codes, each checked against the NIC e-invoice sandbox. A business with turnover of 5 crore or
-  // more must report 6-digit HSN (error 2311), and the portal refuses a code it does not hold (2176).
-  { code: '721420', description: 'Bars and rods of iron or non-alloy steel, hot-rolled', isService: false, rate: 18 },
-  { code: '730890', description: 'Structures and parts of structures of iron or steel', isService: false, rate: 18 },
-  { code: '392690', description: 'Other articles of plastics', isService: false, rate: 18 },
-  { code: '401699', description: 'Other articles of vulcanised rubber', isService: false, rate: 18 },
-  { code: '847130', description: 'Portable computers, laptops and notebooks', isService: false, rate: 18 },
-  { code: '851712', description: 'Mobile phones and telephones for cellular networks', isService: false, rate: 18 },
-  { code: '252329', description: 'Portland cement, other than white', isService: false, rate: 18 },
-  { code: '100630', description: 'Semi-milled or wholly milled rice', isService: false, rate: 5 },
-  { code: '170199', description: 'Refined cane or beet sugar, other', isService: false, rate: 5 },
-  { code: '995461', description: 'Installation services', isService: true, rate: 18 },
-  { code: '996511', description: 'Road transport services of goods', isService: true, rate: 5 },
-  { code: '998346', description: 'Technical testing and analysis services', isService: true, rate: 18 },
-  { code: '998391', description: 'Specialty design services', isService: true, rate: 18 },
-  { code: '998719', description: 'Maintenance and repair of other goods', isService: true, rate: 18 },
-  { code: '998311', description: 'Management consulting services', isService: true, rate: 18 },
-  { code: '997212', description: 'Rental or leasing of non-residential property', isService: true, rate: 18 },
-  { code: '998313', description: 'Information technology consulting', isService: true, rate: 18 },
-  { code: '30049099', description: 'Medicaments in measured doses', isService: false, rate: 12 },
-  { code: '10063020', description: 'Rice, semi-milled or wholly milled', isService: false, rate: 5 },
-  { code: '84713010', description: 'Portable computers (laptops)', isService: false, rate: 18 },
-  { code: '85171300', description: 'Smartphones', isService: false, rate: 18 },
-];
+export function hsnMaster(): { code: string; description: string; isService: boolean }[] {
+  const rows = JSON.parse(readFileSync(new URL('./data/hsn_sac.json', import.meta.url), 'utf8')) as [string, string, 0 | 1][];
+  return rows.map(([code, description, isService]) => ({ code, description, isService: isService === 1 }));
+}
 
 /**
  * Loads the reference tables every environment needs: countries, currencies,
@@ -116,10 +73,17 @@ export async function seedReference(db: Db): Promise<void> {
         set: { name: sql`excluded.name`, shortName: sql`excluded.short_name`, decimals: sql`excluded.decimals` },
       });
 
-    await tx
-      .insert(s.hsnCodes)
-      .values(HSN_STARTER.map((h) => ({ code: h.code, description: h.description, isService: h.isService, defaultGstRate: String(h.rate) })))
-      .onConflictDoNothing();
+    // The HSN / SAC search list is the master file, exactly: its codes added or updated, and any
+    // other code (an older starter list's, or one typed on an item before 0079) taken out. Items keep
+    // their own codes whatever is here.
+    const hsn = hsnMaster();
+    for (let i = 0; i < hsn.length; i += 1000) {
+      await tx
+        .insert(s.hsnCodes)
+        .values(hsn.slice(i, i + 1000).map((h) => ({ code: h.code, description: h.description, isService: h.isService, defaultGstRate: null })))
+        .onConflictDoUpdate({ target: s.hsnCodes.code, set: { description: sql`excluded.description`, isService: sql`excluded.is_service`, defaultGstRate: null } });
+    }
+    await tx.delete(s.hsnCodes).where(notInArray(s.hsnCodes.code, hsn.map((h) => h.code)));
 
     await tx
       .insert(s.plans)
