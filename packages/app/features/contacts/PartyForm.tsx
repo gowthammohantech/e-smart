@@ -131,11 +131,12 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
   const [stateOpen, setStateOpen] = useState(false);
   const [currencyOpen, setCurrencyOpen] = useState(false);
   const [termsOpen, setTermsOpen] = useState(false);
-  const [errors, setErrors] = useState<Errors<'name' | 'email' | 'phone' | 'taxId' | 'country' | 'postalCode' | 'tcsSection'>>({});
+  const [errors, setErrors] = useState<Errors<'name' | 'email' | 'phone' | 'taxId' | 'country' | 'stateCode' | 'postalCode' | 'tcsSection'>>({});
 
   // Both cities hang off the one state, so a city left over from the old state goes.
   const changeState = (code: string) => {
     setStateCode(code);
+    setErrors((e) => (e.stateCode ? { ...e, stateCode: undefined } : e));
     const cities = citiesForState(code);
     if (city && !cities.includes(city)) setCity('');
     if (shipCity && !cities.includes(shipCity)) setShipCity('');
@@ -200,7 +201,7 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
 
   const save = async (another = false) => {
     const gstin = needsGstin ? taxId.trim().toUpperCase() : '';
-    const next: Errors<'name' | 'email' | 'phone' | 'taxId' | 'country' | 'postalCode' | 'tcsSection'> = {
+    const next: Errors<'name' | 'email' | 'phone' | 'taxId' | 'country' | 'stateCode' | 'postalCode' | 'tcsSection'> = {
       name: required(name, nameLabel),
       email: validEmail(email),
       phone: phone.error(),
@@ -210,7 +211,9 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
           ? tr('contacts:form.gstinStateMismatch', { state: stateNameOf(gstin.slice(0, 2)) })
           : undefined),
       country: overseas && !country ? tr('contacts:form.countryRequired') : undefined,
-      postalCode: validPostalCode(postalCode, overseas ? country : 'IN', overseas ? undefined : stateCode),
+      // In India the state is the place of supply, and the PIN is checked against it: both are asked for.
+      stateCode: overseas ? undefined : required(stateCode, tr('contacts:form.state')),
+      postalCode: (overseas ? undefined : required(postalCode, 'PIN')) ?? validPostalCode(postalCode, overseas ? country : 'IN', overseas ? undefined : stateCode),
       tcsSection: sellsTo(kind) && tcsApplicable && !tcsSectionCode ? tr('contacts:form.tcsSectionRequired') : undefined,
     };
     setErrors(next);
@@ -461,6 +464,8 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
       onPress={() => setStateOpen(true)}
       icon="map-outline"
       hint={tr('contacts:form.stateHint')}
+      error={errors.stateCode}
+      required
     />
   );
   // City and postal code share a row on a phone too, where each takes half of it.
@@ -470,7 +475,21 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
   );
   const cityField = (style?: ViewStyle) => <CityField label={tr('contacts:form.city')} value={city} onChange={setCity} stateCode={stateCode} containerStyle={style} />;
   const pinField = (style?: ViewStyle) => (
-    <TextField label="PIN" value={postalCode} onChangeText={(v) => setPostalCode(v.replace(/\D/g, '').slice(0, 6))} placeholder="400001" keyboardType="number-pad" maxLength={6} error={errors.postalCode} containerStyle={style} />
+    <TextField
+      label="PIN"
+      value={postalCode}
+      onChangeText={(v) => {
+        setPostalCode(v.replace(/\D/g, '').slice(0, 6));
+        // What Save found goes as the PIN changes; a full one is checked as typed (below).
+        if (errors.postalCode) setErrors((e) => ({ ...e, postalCode: undefined }));
+      }}
+      placeholder="400001"
+      keyboardType="number-pad"
+      maxLength={6}
+      error={errors.postalCode ?? (postalCode.length === 6 ? validPostalCode(postalCode, 'IN', stateCode) : undefined)}
+      containerStyle={style}
+      required
+    />
   );
   const sameShippingField = <SwitchField label={tr('contacts:form.sameShipping')} value={sameShipping} onValueChange={setSameShipping} />;
   const shipAddressField = <TextField label={tr('contacts:form.shippingAddress')} value={shipLine1} onChangeText={setShipLine1} placeholder={tr('contacts:form.addressPlaceholder')} icon="truck-outline" />;
