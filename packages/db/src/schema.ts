@@ -405,11 +405,7 @@ export const taxCategories = pgTable("tax_categories", {
 			foreignColumns: [companies.id],
 			name: "tax_categories_company_id_fkey"
 		}),
-	foreignKey({
-			columns: [table.hsnCode],
-			foreignColumns: [hsnCodes.code],
-			name: "tax_categories_hsn_code_fkey"
-		}),
+	// hsn_code is any valid code, not tied to the shared hsn_codes search list (0079).
 ]);
 
 export const exchangeRates = pgTable("exchange_rates", {
@@ -628,11 +624,7 @@ export const items = pgTable("items", {
 			foreignColumns: [taxCategories.id],
 			name: "items_tax_category_id_fkey"
 		}),
-	foreignKey({
-			columns: [table.hsnCode],
-			foreignColumns: [hsnCodes.code],
-			name: "items_hsn_code_fkey"
-		}),
+	// hsn_code is any valid code, not tied to the shared hsn_codes search list (0079).
 	foreignKey({
 			columns: [table.imageAttachmentId],
 			foreignColumns: [attachments.id],
