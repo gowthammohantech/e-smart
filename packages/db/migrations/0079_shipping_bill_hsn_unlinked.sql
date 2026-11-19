@@ -1,3 +1,6 @@
+-- An export invoice's shipping bill: { portCode, number?, date? }, reported in GSTR-1 EXP.
+ALTER TABLE "documents" ADD COLUMN IF NOT EXISTS "shipping_bill" jsonb;
+--> statement-breakpoint
 -- An item's or tax rate's HSN/SAC code is any valid code on its own, no longer tied to the shared
 -- hsn_codes search list: a code typed on an item had to be added there first ("Added from catalog"),
 -- which put one business's codes in every business's search.

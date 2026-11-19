@@ -44,6 +44,7 @@ import { referenceHandlers } from './reference/handlers';
 import { lixiHandlers } from './lixi/handlers';
 import { platformHandlers } from './platform/handlers';
 import { mfaHandlers } from './platform/mfa';
+import { outboundCallHandlers } from './platform/outbound';
 import { bankingHandlers } from './banking/handlers';
 export { webhookHandlers } from './webhooks/handlers';
 
@@ -94,6 +95,7 @@ export const handlers: Handlers = {
   ...referenceHandlers,
   ...lixiHandlers,
   ...platformHandlers,
+  ...outboundCallHandlers,
   ...mfaHandlers,
   ...bankingHandlers,
 };

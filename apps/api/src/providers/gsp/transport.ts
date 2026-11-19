@@ -1,5 +1,8 @@
 import { GSP_READ_TIMEOUT_MS, GSP_TOKEN_FALLBACK_TTL_SECONDS, GSP_WRITE_TIMEOUT_MS } from './constants';
+import { trackedFetch } from '../../lib/outbound';
 import { describeGspError, envelopeFailed, type GspEnvelope } from './envelope';
+import { describeGspOperation } from './operations';
+import type { GspTarget } from './provider-name';
 
 /**
  * Where a failure came from. The status alone cannot say: the transport
@@ -79,7 +82,11 @@ type FetchLike = typeof fetch;
  * how a duplicate IRN happens. The recovery is the by-document lookup.
  */
 export class FetchGspTransport implements GspTransport {
-  constructor(private readonly fetchImpl: FetchLike = (...args) => fetch(...args)) {}
+  /** `target` says which gateway and environment this transport serves, for the third-party call log. */
+  constructor(
+    private readonly fetchImpl: FetchLike = (...args) => fetch(...args),
+    private readonly target?: GspTarget,
+  ) {}
 
   async authenticate(credentials: { baseUrl: string; clientId: string; clientSecret: string }) {
     const response = await this.send(`${new URL(credentials.baseUrl).origin}${ADAEQUARE_AUTH_PATH}`, {
@@ -137,18 +144,39 @@ export class FetchGspTransport implements GspTransport {
   private async send(url: string, init: { method: string; headers: Record<string, string>; body?: string; timeoutMs: number }) {
     let response: Response;
     try {
-      response = await this.fetchImpl(url, {
-        method: init.method,
-        headers: init.headers,
-        ...(init.body === undefined ? {} : { body: init.body }),
-        signal: AbortSignal.timeout(init.timeoutMs),
-      });
+      response = await trackedFetch(
+        {
+          service: this.target?.gateway ?? 'gsp',
+          environment: this.target?.environment ?? null,
+          operation: describeGspOperation(new URL(url).pathname, Object.fromEntries(new URL(url).searchParams)),
+          classify: ({ text }) => refusedAnswer(parseJson(text)),
+          fetchImpl: this.fetchImpl,
+        },
+        url,
+        {
+          method: init.method,
+          headers: init.headers,
+          ...(init.body === undefined ? {} : { body: init.body }),
+          signal: AbortSignal.timeout(init.timeoutMs),
+        },
+      );
     } catch (error) {
       throw new GspRequestError(error instanceof Error ? error.message : String(error), 'transport', undefined, null);
     }
     const text = await response.text();
     return { ok: response.ok, status: response.status, payload: parseJson(text), body: text };
   }
+}
+
+/**
+ * A 200 the portal refused: `success: false` (Adaequare) or `status_cd: "0"` (Whitebooks). The log marks
+ * it as an envelope error, so a refusal is not mistaken for a call that worked.
+ */
+function refusedAnswer(payload: unknown): { error: string } | undefined {
+  if (!payload || typeof payload !== 'object') return undefined;
+  const body = payload as GspEnvelope & { status_cd?: string | number; status_desc?: string };
+  if (envelopeFailed(body) || String(body.status_cd ?? '') === '0') return { error: describeGspError(body, body.status_desc ?? 'The GST portal refused the request.') };
+  return undefined;
 }
 
 function parseJson(text: string): unknown {

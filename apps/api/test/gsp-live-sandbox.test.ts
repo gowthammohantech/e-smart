@@ -30,7 +30,8 @@ function dotenv(): Record<string, string> {
 const env = live ? dotenv() : {};
 const gspEnv = Object.fromEntries(Object.entries(env).filter(([k]) => k.startsWith('TAXATION_') || k === 'GSP_BASE_URL'));
 // The default is Whitebooks sandbox, as in .env; Adaequare sandbox is chosen per company below.
-const t = setupApi({ ...gspEnv, COMPLIANCE_PROVIDER: 'gsp', GSTIN_PROVIDER: 'gsp' });
+// Only a live run builds the GSP targets; elsewhere the suite is skipped and the app is the default simulator one.
+const t = setupApi(live ? { ...gspEnv, COMPLIANCE_PROVIDER: 'gsp', GSTIN_PROVIDER: 'gsp' } : {});
 
 /**
  * The login a business types on its integrations screen, per gateway and tab. Never read from .env and never kept in

@@ -19,6 +19,7 @@ import { registerRoutes } from './openapi/routes';
 import { loadOperations } from './openapi/spec';
 import { MemoryStorage } from './providers';
 import { INTERNAL_HEADER, INTERNAL_TOKEN } from './lib/internal';
+import { configureOutbound, outboundContext } from './lib/outbound';
 import { registerMcp } from './lixi/mcp';
 import { sandboxTargetAvailable } from './providers/gsp/availability';
 import { registerSharePages } from './modules/documents/share';
@@ -108,8 +109,21 @@ export async function buildApp(deps: Deps, opts: BuildOptions = {}): Promise<Fas
   await app.register(multipart, { limits: { fileSize: 10 * 1024 * 1024, files: 1 } });
   await app.register(rawBody, { global: false, encoding: 'utf8', runFirst: true });
 
+  // Third-party calls are recorded for the platform console's Integrations page. Each request opens
+  // the context a call is attributed to; the user and company are added once the guards know them.
+  const stopRecording = configureOutbound({ db: deps.systemDb, mode: deps.config.OUTBOUND_LOG, log: app.log });
+  app.addHook('onClose', async () => stopRecording());
+  app.addHook('onRequest', (req, _reply, done) => {
+    outboundContext.run({ source: 'request', requestId: req.id, route: `${req.method} ${req.routeOptions.url ?? req.url.split('?')[0]}` }, done);
+  });
+
   registerAppVersionGate(app, deps.config.MIN_APP_VERSION);
   registerGuards(app, deps);
+  app.addHook('preHandler', async (req) => {
+    const user = req.authUser;
+    if (!user) return;
+    outboundContext.patch({ userId: user.id, accountId: user.accountId, companyId: req.company?.id ?? (req.params as { companyId?: string }).companyId });
+  });
   registerIdempotency(app, deps);
 
   if (deps.providers.storage instanceof MemoryStorage) deps.providers.storage.routes(app);

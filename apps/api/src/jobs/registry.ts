@@ -15,6 +15,7 @@ import { notifyOverdueInvoices } from '../modules/documents/overdue';
 import { runQueuedExtraction } from '../modules/ocr/handlers';
 import { purgeDueAccounts, purgeDueCompanies } from '../modules/platform/purge';
 import { refreshAllExchangeRates } from '../modules/settings/rates';
+import { purgeOutboundCalls } from '../lib/outbound';
 import { backupDatabase } from './dbBackup';
 import type { Schedule } from './schedule';
 import type { JobHandler } from './worker';
@@ -38,6 +39,7 @@ export const JOB_HANDLERS: Record<string, JobHandler> = {
     await reconcileEInvoices(deps);
   },
   'jobs.prune': pruneJobs,
+  'outbound.purge': ({ deps }) => purgeOutboundCalls(deps.db, deps.now(), deps.config.OUTBOUND_LOG_RETENTION_DAYS),
   'compliance.recover': async ({ deps }) => {
     await recoverComplianceAttempts(deps);
   },
@@ -110,6 +112,7 @@ export const SCHEDULES: Schedule[] = [
   { kind: 'einvoice.reconcile', everyMinutes: 5 },
   { kind: 'compliance.recover', everyMinutes: 5 },
   { kind: 'jobs.prune', dailyAt: { hour: 3, minute: 30 } },
+  { kind: 'outbound.purge', dailyAt: { hour: 3, minute: 35 } },
   { kind: 'db.backup', dailyAt: { hour: 2, minute: 0 } },
   // After midnight IST, so the day's recurring expenses carry the new date.
   { kind: 'expenses.recur', dailyAt: { hour: 0, minute: 10 } },

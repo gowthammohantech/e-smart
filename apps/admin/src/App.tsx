@@ -6,6 +6,7 @@ import { AccountDetail } from './pages/AccountDetail';
 import { Accounts } from './pages/Accounts';
 import { AuditLog } from './pages/AuditLog';
 import { CompanyDetail } from './pages/CompanyDetail';
+import { ThirdPartyCallLogs } from './pages/ThirdPartyCallLogs';
 import { NotFound } from './pages/NotFound';
 import { SignIn } from './pages/SignIn';
 import { Users } from './pages/Users';
@@ -26,6 +27,7 @@ const router = createBrowserRouter([
       { path: 'accounts/:accountId', element: <AccountDetail /> },
       { path: 'companies/:companyId', element: <CompanyDetail /> },
       { path: 'users', element: <Users /> },
+      { path: 'third-party-call-logs', element: <ThirdPartyCallLogs /> },
       { path: 'audit', element: <AuditLog /> },
       { path: '*', element: <NotFound /> },
     ],

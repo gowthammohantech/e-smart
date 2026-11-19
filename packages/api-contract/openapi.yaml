@@ -6856,6 +6856,71 @@ paths:
                       data: { type: array, items: { $ref: '#/components/schemas/PlatformAuditEvent' } }
         '403': { $ref: '#/components/responses/Forbidden' }
 
+  /admin/outbound-calls:
+    get:
+      tags: [Platform]
+      operationId: listOutboundCalls
+      summary: Every call this API made to a third party, newest first
+      description: |
+        The third-party call log: which API route (and which user) set a call off, which third party and which of its
+        endpoints it went to, and what came back. Secrets are redacted before storage. Bodies are kept for failures
+        and sandbox calls (and for everything when `OUTBOUND_LOG=all`).
+      x-platform-roles: [superadmin, support]
+      parameters:
+        - { name: service, in: query, schema: { type: string }, description: 'adaequare, whitebooks, razorpay, msg91, resend, …' }
+        - { name: environment, in: query, schema: { type: string, enum: [sandbox, production] } }
+        - { name: outcome, in: query, schema: { type: string, enum: [ok, failed, http_error, envelope_error, timeout, network_error] }, description: '`failed` is every outcome but ok' }
+        - { name: companyId, in: query, schema: { type: string } }
+        - { name: userId, in: query, schema: { type: string } }
+        - { name: requestId, in: query, schema: { type: string }, description: All calls one API request made }
+        - { name: q, in: query, schema: { type: string }, description: 'Matches the operation, endpoint, route and error' }
+        - { $ref: '#/components/parameters/From' }
+        - { $ref: '#/components/parameters/To' }
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Cursor' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - properties:
+                      data: { type: array, items: { $ref: '#/components/schemas/OutboundCall' } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /admin/outbound-calls/summary:
+    get:
+      tags: [Platform]
+      operationId: getOutboundCallSummary
+      summary: Per third party and environment, how many calls went there and how they fared
+      x-platform-roles: [superadmin, support]
+      parameters:
+        - { name: hours, in: query, schema: { type: integer, minimum: 1, maximum: 720, default: 24 } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OutboundCallSummary' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /admin/outbound-calls/{callId}:
+    get:
+      tags: [Platform]
+      operationId: getOutboundCall
+      summary: One third-party call in full, with the other calls its request made
+      x-platform-roles: [superadmin, support]
+      parameters:
+        - { name: callId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OutboundCallDetail' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
 webhooks:
   razorpayEvent:
     post:
@@ -9199,6 +9264,77 @@ components:
         after: { type: string, description: JSON snapshot }
         ipAddress: { type: string }
         createdAt: { type: string, format: date-time }
+    OutboundCall:
+      type: object
+      required: [id, createdAt, service, operation, method, host, path, outcome, durationMs, source]
+      properties:
+        id: { type: string }
+        createdAt: { type: string, format: date-time }
+        service: { type: string, example: whitebooks }
+        environment: { type: string, enum: [sandbox, production] }
+        operation: { type: string, example: Generate e-invoice (IRN) }
+        method: { type: string }
+        host: { type: string }
+        path: { type: string, description: "The third party's endpoint, without the query string" }
+        status: { type: integer, description: The HTTP status; absent when nothing answered }
+        outcome: { type: string, enum: [ok, http_error, envelope_error, timeout, network_error], description: '`envelope_error` is a 200 the gateway said no to' }
+        durationMs: { type: integer }
+        error: { type: string }
+        source: { type: string, enum: [request, job, system], description: What set the call off }
+        route: { type: string, description: The API route that set it off }
+        jobKind: { type: string }
+        requestId: { type: string }
+        userId: { type: string }
+        userName: { type: string }
+        userEmail: { type: string }
+        companyId: { type: string }
+        companyName: { type: string }
+    OutboundCallDetail:
+      allOf:
+        - $ref: '#/components/schemas/OutboundCall'
+        - type: object
+          required: [url, truncated, related]
+          properties:
+            url: { type: string, description: 'The full URL, secrets in the query string redacted' }
+            requestHeaders: { type: string, description: 'JSON, secrets redacted' }
+            requestBody: { type: string }
+            requestBytes: { type: integer }
+            responseHeaders: { type: string, description: JSON; kept for failures }
+            responseBody: { type: string }
+            responseBytes: { type: integer }
+            truncated: { type: boolean, description: A body was cut to the size limit }
+            gsp:
+              description: For a GST gateway call made for a company, where it was set to go and where it went
+              type: object
+              required: [went, configured, default, matches]
+              properties:
+                went: { $ref: '#/components/schemas/GspTarget' }
+                configured: { oneOf: [{ $ref: '#/components/schemas/GspTarget' }, { type: 'null' }], description: "The company's own choice; null when it follows the default" }
+                default: { $ref: '#/components/schemas/GspTarget' }
+                matches: { type: boolean, description: "False when the call went somewhere other than the company's effective target" }
+            related: { type: array, items: { $ref: '#/components/schemas/OutboundCall' }, description: 'The other calls the same request made, oldest first' }
+    OutboundCallSummary:
+      type: object
+      required: [hours, recording, retentionDays, gspDefault, targets]
+      properties:
+        hours: { type: integer }
+        recording: { type: string, enum: [failures, all, off], description: How much of each call is kept (OUTBOUND_LOG) }
+        retentionDays: { type: integer }
+        gspDefault: { $ref: '#/components/schemas/GspTarget' }
+        targets:
+          type: array
+          items:
+            type: object
+            required: [service, calls, failures]
+            properties:
+              service: { type: string }
+              environment: { type: string, enum: [sandbox, production] }
+              calls: { type: integer }
+              failures: { type: integer }
+              avgMs: { type: integer }
+              p95Ms: { type: integer }
+              lastCallAt: { type: string, format: date-time }
+              lastFailureAt: { type: string, format: date-time }
     Integration:
       type: object
       properties:
