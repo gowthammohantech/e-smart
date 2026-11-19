@@ -598,12 +598,18 @@ export function useItemRecord(id: string | undefined) {
     enabled: !!companyId && !!current,
     staleTime: 0,
     retry: (count, err) => !(err instanceof ApiError && (err.status === 404 || err.status === 403)) && count < 1,
-    queryFn: async ({ signal }) => {
-      const { data } = await api.GET('/companies/{companyId}/items/{id}', { params: { path: { companyId, id: current! } }, signal });
-      keep('item', companyId, [data]);
-      return data!;
-    },
+    queryFn: ({ signal }) => fetchItemRecord(companyId, current!, signal),
   });
+}
+
+/**
+ * One item from the server, kept in the store at its version, so a save of it afterwards is an
+ * update of that item. A list row isn't kept: saved from the list as it is, it would go up as a new item.
+ */
+export async function fetchItemRecord(companyId: string, id: string, signal?: AbortSignal) {
+  const { data } = await api.GET('/companies/{companyId}/items/{id}', { params: { path: { companyId, id } }, signal });
+  keep('item', companyId, [data]);
+  return data!;
 }
 
 /** One item's on hand, value, quantity sold and movements with a running balance. */
