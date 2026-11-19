@@ -361,10 +361,10 @@ export function PaymentForm({
     setTouched(true);
     const next = { ...allocations };
     // The invoice's expected TDS settles that much without cash; the rest is what the cash applies.
-    const tds = !next[docId] && !adjustedOf(docId) ? expectedTdsOf(docId) : 0;
+    const tds = !(docId in next) && !adjustedOf(docId) ? expectedTdsOf(docId) : 0;
     if (tds) setAdjustments((a) => ({ ...a, [docId]: { ...a[docId], tdsDeducted: toAmountInput(money(tds, currency)) } }));
     const full = money(owed.minor - tds, currency);
-    if (next[docId]) {
+    if (docId in next) {
       delete next[docId];
     } else if (amountFollows) {
       next[docId] = toAmountInput(full);
@@ -419,7 +419,7 @@ export function PaymentForm({
 
   const fxGainLoss = useMemo(() => {
     if (currency === baseCurrency) return undefined;
-    const rows = outstanding.filter((o) => allocations[o.document.id]);
+    const rows = outstanding.filter((o) => o.document.id in allocations);
     if (rows.length === 0) return undefined;
     const total = rows.reduce(
       (acc, o) =>
@@ -776,7 +776,7 @@ export function PaymentForm({
         </View>
       ) : null}
       {outstanding.map((o, i) => {
-        const selected = !!allocations[o.document.id];
+        const selected = o.document.id in allocations;
         const number = o.document.number;
         const applyingField = selected ? (
           <AmountField

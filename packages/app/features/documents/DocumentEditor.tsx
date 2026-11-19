@@ -165,7 +165,10 @@ export function DocumentEditor(props: EditorProps) {
   const [settled, setSettled] = useState<string[]>([]);
   const missing = wanted.filter((id) => !held.some((i) => i.id === id) && !settled.includes(id));
   const markSettled = useCallback((id: string) => setSettled((cur) => (cur.includes(id) ? cur : [...cur, id])), []);
-  if (party.isLoading || item.isLoading || source.isLoading || missing.length) {
+  // Once the form has opened it stays open: picking a party writes `partyId` into the URL, which changes
+  // `prefill` and would otherwise send the editor back to loading, remounting it and dropping the lines.
+  const opened = useRef(false);
+  if (!opened.current && (party.isLoading || item.isLoading || source.isLoading || missing.length)) {
     return (
       <>
         {missing.map((id) => (
@@ -175,6 +178,7 @@ export function DocumentEditor(props: EditorProps) {
       </>
     );
   }
+  opened.current = true;
   // Keyed by business: on web the page stays open across a switch, and the form seeds its branch,
   // taxes and party from the business it opened in.
   return <DocumentEditorForm key={companyId} {...props} />;
