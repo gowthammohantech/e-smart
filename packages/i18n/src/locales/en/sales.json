@@ -308,6 +308,7 @@
     "rateIncludesTax": "Rate includes tax",
     "followsHighestRate": "Set to the highest GST rate in this document",
     "highestShort": "Highest rate",
+    "zeroRatedShort": "No GST (export)",
     "highestRateApplied_one": "GST on {{names}} was recalculated to {{rate}} to match the highest rate in this document",
     "highestRateApplied_other": "GST on {{names}} was recalculated to {{rate}} to match the highest rate in this document",
     "inclusiveHint": "Turn on when the price you quote already contains tax.",

@@ -1332,7 +1332,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
                       {line.name || tr('sales:editor.untitledLine')}
                     </Text>
                     <View style={{ flexDirection: 'row', gap: 5 }}>
-                      <Badge label={lineRateLabel(line)} tone="neutral" size="sm" />
+                      {/* An export without tax charges none on any line, whatever its item's rate. */}
+                      <Badge label={docTaxContext.zeroRated ? formatPercent(0) : lineRateLabel(line)} tone="neutral" size="sm" />
                       {line.taxInclusive ? <Badge label={tr('sales:editor.inclusive')} tone="info" size="sm" /> : null}
                       {line.hsnCode ? <Badge label={`HSN ${line.hsnCode}`} tone="neutral" size="sm" /> : null}
                     </View>
