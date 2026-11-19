@@ -237,6 +237,8 @@ export default function UserSettings() {
         {/* On a desktop the roles sit side by side, a few to a row, rather than one long column. */}
         <Card style={{ gap: t.spacing.md }}>
           <FieldGrid
+            // Sales and Viewer stay under Owner and Admin, not spread across the row.
+            fillLastRow={false}
             items={ROLES.map((r) => (
               <View key={r.value} style={{ gap: 3 }}>
                 <Text variant="small" weight="600">
