@@ -23,7 +23,7 @@ import { adjustOnServer, useAdjustable, usePartyRecord, usePartySearch, type Adj
 import { describeError } from '../../../remote/errors';
 import { refreshSoon } from '../../../remote/refresh';
 import { useDebounced } from '../../../components/useDebounced';
-import { useBaseCurrency, useParties } from '../../../store/selectors';
+import { useBaseCurrency, useHasModule, useParties } from '../../../store/selectors';
 import { ListSkeleton } from '../../../components/ScreenSkeleton';
 import { Skeleton } from '@esmart/ui/components/Skeleton';
 
@@ -40,6 +40,8 @@ export default function AdjustAdvances() {
   const router = useRouter();
   const toast = useToast();
   const { t: tr } = useTranslation(['books', 'common', 'domain', 'sales']);
+  // Suppliers come with purchases: without them (Free, Basic) the words are about customers only.
+  const hasSuppliers = useHasModule('purchases');
   const baseCurrency = useBaseCurrency();
   const params = useLocalSearchParams<{ partyId?: string; documentId?: string; side?: string }>();
   const [partyId, setPartyId] = useState<string | undefined>(params.partyId);
@@ -163,7 +165,7 @@ export default function AdjustAdvances() {
                     <Skeleton height={44} radius={t.radius.md} />
                   </View>
                 ) : (
-                  <PickerField label={tr('books:adjust.party')} value={party?.name} placeholder={tr('books:adjust.pickParty')} onPress={() => setPicking(true)} icon="account-outline" required />
+                  <PickerField label={tr('books:adjust.party')} value={party?.name} placeholder={tr(hasSuppliers ? 'books:adjust.pickParty' : 'books:adjust.pickCustomer')} onPress={() => setPicking(true)} icon="account-outline" required />
                 )}
                 {party?.kind === 'both' ? (
                   <Segmented

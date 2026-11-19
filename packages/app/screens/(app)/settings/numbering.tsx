@@ -13,10 +13,11 @@ import { Sheet } from '@esmart/ui/components/Sheet';
 import { PickerField, SwitchField, TextField } from '@esmart/ui/components/Field';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { NumberingSeries } from '@esmart/core/types';
-import { formatNumber } from '@esmart/core/domain/numbering';
+import { formatNumber, type SeriesKind } from '@esmart/core/domain/numbering';
 import { seriesLabel } from '@esmart/core/labels';
 import { useAppStore } from '../../../store/appStore';
-import { useBranches, useComplianceSettings, useNumberingSeries } from '../../../store/selectors';
+import { useBranches, useComplianceSettings, useDisabledModules, useNumberingSeries, usePlan } from '../../../store/selectors';
+import { moduleEnabled, type Module } from '@esmart/core/domain/plan';
 import { today, financialYearOf } from '@esmart/core/lib/date';
 import { E_INVOICE_DOC_NUMBER_MAX, sanitizePrefix } from '@esmart/core/lib/validators';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
@@ -29,12 +30,36 @@ const RESET_LABELS = {
   monthly: 'settings:numbering.reset.monthly',
 } as const satisfies Record<NumberingSeries['resetPolicy'], string>;
 
+/** The module a numbering series belongs to, for those not on every plan. */
+const SERIES_MODULE: Partial<Record<SeriesKind, Module>> = {
+  purchaseOrder: 'purchases',
+  goodsReceipt: 'purchases',
+  purchaseBill: 'purchases',
+  purchaseReturn: 'purchases',
+  supplierCreditNote: 'purchases',
+  supplierDebitNote: 'purchases',
+  selfInvoice: 'purchases',
+  expense: 'expenses',
+  tdsChallan: 'payables',
+  journal: 'books',
+  contra: 'books',
+  gstJournal: 'books',
+  receipt: 'books',
+  gstChallan: 'books',
+};
+
 export default function NumberingSettings() {
   const t = useTheme();
   const { t: tr } = useTranslation(['domain', 'nav', 'settings', 'common']);
   const { run: serverSave, saving } = useServerSave();
 
-  const series = useNumberingSeries();
+  // Only the series of what the plan has: no purchase bills or supplier notes on Free, no journals without the books.
+  const plan = usePlan();
+  const disabled = useDisabledModules();
+  const series = useNumberingSeries().filter((s) => {
+    const module = SERIES_MODULE[s.kind];
+    return !module || moduleEnabled(plan, disabled, module);
+  });
   const branches = useBranches();
   const saveNumberingSeries = useAppStore((s) => s.saveNumberingSeries);
   const activeBranchId = useAppStore((s) => s.activeBranchId);

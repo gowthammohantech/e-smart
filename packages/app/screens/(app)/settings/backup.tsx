@@ -16,7 +16,7 @@ import { SwitchField } from '@esmart/ui/components/Field';
 import { exportCompany, getBackupSettings, saveBackupSettings, type BackupSettings, type ExportFormat } from '../../../remote/exports';
 import { describeError } from '../../../remote/errors';
 import { useAppStore } from '../../../store/appStore';
-import { useActiveCompany } from '../../../store/selectors';
+import { useActiveCompany, useHasModule } from '../../../store/selectors';
 import { useCompanyUsage } from '../../../remote/queries';
 import { formatDateTime } from '@esmart/core/lib/date';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
@@ -36,6 +36,8 @@ function BackupExportBody() {
   const insets = useSafeAreaInsets();
   const desktop = useIsDesktop();
   const { t: tr } = useTranslation(['nav', 'settings', 'auth', 'reports']);
+  // Suppliers come with purchases: without them (Free, Basic) the words are about customers only.
+  const hasSuppliers = useHasModule('purchases');
   const toast = useToast();
 
   const company = useActiveCompany();
@@ -78,7 +80,7 @@ function BackupExportBody() {
   // What the server holds, which is what the export contains.
   const counts = useMemo(
     () => [
-      { label: tr('settings:backup.count.parties'), value: usage?.counts.parties, icon: 'account-group-outline' as const },
+      { label: tr(hasSuppliers ? 'settings:backup.count.parties' : 'settings:backup.count.customers'), value: usage?.counts.parties, icon: 'account-group-outline' as const },
       { label: tr('settings:backup.count.items'), value: usage?.counts.items, icon: 'tag-outline' as const },
       { label: tr('settings:backup.count.documents'), value: usage?.counts.documents, icon: 'file-document-outline' as const },
       { label: tr('settings:backup.count.payments'), value: usage?.counts.payments, icon: 'cash' as const },

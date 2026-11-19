@@ -256,6 +256,7 @@
     "preparing": "Preparing your export…",
     "count": {
       "parties": "Customers & suppliers",
+      "customers": "Customers",
       "items": "Items",
       "documents": "Documents",
       "payments": "Payments",
