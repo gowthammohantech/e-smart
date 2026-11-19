@@ -229,7 +229,7 @@ export function PaymentForm({
 
   // Seed the allocation from the invoice we were opened from, on the first
   // render where that invoice is actually in the outstanding list.
-  const prefill = params.documentId ? outstanding.find((o) => o.document.id === params.documentId) : undefined;
+  const prefill = params.documentId && !advanceReceipt ? outstanding.find((o) => o.document.id === params.documentId) : undefined;
   // TDS the customer was expected to deduct from an invoice (RULES 4.14): taken as deducted unless changed.
   const expectedTdsOf = (docId: string): number => {
     if (direction !== 'received') return 0;
@@ -1059,15 +1059,17 @@ export function PaymentForm({
       {rateField}
       {advanceCard}
 
-      {/* Allocation */}
-      <View style={{ gap: t.spacing.sm }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('sales:payment.applyTo')}</Text>
-          {allocationLinks}
-        </View>
+      {/* Allocation: none on an advance receipt, which is the customer and the amount alone. */}
+      {advanceReceipt ? null : (
+        <View style={{ gap: t.spacing.sm }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('sales:payment.applyTo')}</Text>
+            {allocationLinks}
+          </View>
 
-        <Card padded={false}>{openDocuments}</Card>
-      </View>
+          <Card padded={false}>{openDocuments}</Card>
+        </View>
+      )}
 
       {/* Allocation summary */}
       <Card style={{ gap: t.spacing.sm }}>{summaryRows}</Card>
@@ -1084,7 +1086,8 @@ export function PaymentForm({
       {addAccountLink}
     </FormSection>
   );
-  const allocation = (
+  // An advance receipt is the customer and the amount alone: no invoices to apply it to.
+  const allocation = advanceReceipt ? null : (
     <FormSection title={tr('sales:payment.applyTo')} action={allocationLinks}>
       <View style={{ borderWidth: 1, borderColor: t.c.line, borderRadius: t.radius.md, overflow: 'hidden' }}>{openDocuments}</View>
     </FormSection>
