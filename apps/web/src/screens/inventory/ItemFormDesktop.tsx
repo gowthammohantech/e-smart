@@ -329,7 +329,7 @@ function ItemFormDesktopFields({ item }: { item?: Item }) {
                 <SummaryRow label={tr('common:table.tax')} value={category ? formatPercent(category.rate) : '—'} />
               </Panel>
 
-              <Panel title={tr('inventory:form.section.unitStock')} icon="package-variant-closed">
+              <Panel title={tr(hasInventory ? 'inventory:form.section.unitStock' : 'inventory:form.section.unit')} icon="package-variant-closed">
                 <PickerField
                   label={tr('inventory:form.unit')}
                   value={unitLabel(unit)}
