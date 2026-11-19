@@ -14,6 +14,7 @@ import { partiesHandlers } from './parties/handlers';
 import { catalogHandlers } from './catalog/handlers';
 import { documentsHandlers } from './documents/handlers';
 import { paymentsHandlers } from './payments/handlers';
+import { moneyInHandlers } from './payments/moneyIn';
 import { adjustHandlers } from './payments/adjust';
 import { adjustmentListHandlers } from './payments/adjustments';
 import { paymentRequestHandlers } from './payments/requests';
@@ -64,6 +65,7 @@ export const handlers: Handlers = {
   ...catalogHandlers,
   ...documentsHandlers,
   ...paymentsHandlers,
+  ...moneyInHandlers,
   ...adjustHandlers,
   ...adjustmentListHandlers,
   ...paymentRequestHandlers,

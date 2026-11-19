@@ -18,7 +18,7 @@ import { Avatar } from '@esmart/ui/components/Avatar';
 import { Cell, DataTable, type Column, type Sort } from '@esmart/ui/components/DataTable';
 import { FilterMenu } from '@esmart/ui/components/FilterMenu';
 import type { DocStatus, DocumentKind } from '@esmart/core/types';
-import { PURCHASE_KINDS, STATUS_TONE, isFinalized, nextStatuses } from '@esmart/core/domain/documentStates';
+import { PURCHASE_KINDS, STATUS_TONE, conversionBlock, isFinalized, nextStatuses } from '@esmart/core/domain/documentStates';
 import { dateRangeLabel, documentKindLabel, statusLabel } from '@esmart/core/labels';
 import { DATE_RANGE_PRESET_KEYS, DateRangePreset, formatDate, resolveRange } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
@@ -31,7 +31,10 @@ import { useToast } from '@esmart/ui/components/Toast';
 import { api } from '../remote/api';
 import { describeError } from '../remote/errors';
 import { useBaseCurrency } from '../store/selectors';
-import { useDocumentPages, useDocumentSummary, usePartyRecord, type DocumentQuery } from '../remote/queries';
+import { fetchDocumentRecord, useDocumentPages, useDocumentSummary, usePartyRecord, type DocumentQuery } from '../remote/queries';
+import { useServerSave } from './useServerSave';
+import { MergeSourcesSheet } from '../features/documents/MergeSourcesSheet';
+import { detailRouteFor } from '../features/documents/DocumentEditor';
 import { PartyFilterChip } from './PartyFilterChip';
 import { useDebounced } from './useDebounced';
 import { pagedTableProps, useRowsExport, useTableSelection } from './pagedTable';
@@ -59,8 +62,11 @@ const DEFAULT_FILTERS: DocumentListFilters = {
 };
 
 /** One row of a list: the server's summary of a document. */
-type Row = { id: string; number: string; date: string; dueDate?: string; status: DocStatus; partyId?: string; partyName: string; grandTotal: Money; outstanding?: Money; supplierDocNumber?: string };
+type Row = { id: string; number: string; date: string; dueDate?: string; status: DocStatus; partyId?: string; branchId?: string; partyName: string; grandTotal: Money; outstanding?: Money; supplierDocNumber?: string };
 const asRowData = (r: Row) => ({ number: r.number, date: r.date, status: r.status, totals: { grandTotal: r.grandTotal } });
+
+/** Kinds whose rows the table carries forward itself: sales orders into a delivery note, one or several merged. */
+const LIST_CONVERSIONS: Partial<Record<DocumentKind, DocumentKind>> = { salesOrder: 'delivery' };
 
 /** The server sorts these columns; the rest keep the server's order. */
 const SERVER_SORT: Record<string, 'date' | 'number' | 'total'> = { date: 'date', number: 'number', amount: 'total' };
@@ -133,7 +139,7 @@ export function DocumentListView({
 
   const rows = useMemo<Row[]>(
     () =>
-      pages.rows.map((d) => ({ id: d.id!, number: d.number ?? '', date: d.date!, dueDate: d.dueDate, status: d.status as DocStatus, partyId: d.partyId, partyName: d.partyName ?? '—', grandTotal: d.grandTotal as Money, outstanding: d.outstanding as Money | undefined, supplierDocNumber: d.supplierDocNumber || undefined })),
+      pages.rows.map((d) => ({ id: d.id!, number: d.number ?? '', date: d.date!, dueDate: d.dueDate, status: d.status as DocStatus, partyId: d.partyId, branchId: d.branchId, partyName: d.partyName ?? '—', grandTotal: d.grandTotal as Money, outstanding: d.outstanding as Money | undefined, supplierDocNumber: d.supplierDocNumber || undefined })),
     [pages.rows],
   );
 
@@ -253,6 +259,88 @@ export function DocumentListView({
       (r) => api.POST('/companies/{companyId}/documents/{id}/status', { params: { path: { companyId, id: r.id } }, body: { status: 'sent' } }),
       'common:table.markedSent',
     );
+  // Carrying chosen orders forward from the table, as the order's own page does: one becomes a
+  // delivery note, several of one customer's merge into one. Their records come in whole first,
+  // since the device copies their lines; the server checks the rest (branch, place of supply).
+  const convertTarget = LIST_CONVERSIONS[kind];
+  const convertDocument = useAppStore((s) => s.convertDocument);
+  const { run: serverSave } = useServerSave();
+  const [converting, setConverting] = useState(false);
+  /** A row's Create delivery note, with the customer's other open orders to tick (the server's `mergeableWith`). */
+  const [mergeFor, setMergeFor] = useState<{ row: Row; candidates: { id: string; number: string; date: string; total?: Money }[] } | null>(null);
+  // Open: finalised, and not cancelled or already fulfilled.
+  const carriable = (r: Row) => isFinalized(r.status) && !['cancelled', 'rejected', 'fulfilled'].includes(r.status);
+  /** As far as the list can tell, the chosen can go on one delivery note: each open, all one customer's, in one branch and one currency. */
+  const convertibleTogether = (chosen: Row[]) =>
+    chosen.length > 0 &&
+    chosen.every(carriable) &&
+    new Set(chosen.map((r) => r.partyId)).size === 1 &&
+    new Set(chosen.map((r) => r.branchId)).size === 1 &&
+    new Set(chosen.map((r) => r.grandTotal.currency)).size === 1;
+  const convertRows = async (chosen: Row[]) => {
+    if (!convertTarget || !chosen.length || converting) return;
+    if (chosen.some((r) => !carriable(r))) {
+      toast.show(tr('sales:merge.openOnly'), 'warning');
+      return;
+    }
+    if (new Set(chosen.map((r) => r.partyId)).size > 1) {
+      toast.show(tr('sales:merge.oneParty'), 'warning');
+      return;
+    }
+    // Oldest first, as the server merges them: the first is the source, the rest follow its lines.
+    const ordered = [...chosen].sort((a, b) => a.date.localeCompare(b.date) || a.number.localeCompare(b.number));
+    setConverting(true);
+    try {
+      const records = await Promise.all(ordered.map((r) => fetchDocumentRecord(companyId, r.id)));
+      const docs = useAppStore.getState().documents;
+      // Already delivered, or in another currency: the device can't make it, so say why rather than nothing.
+      const blocked = records.some((d) => d.currency !== records[0].currency) || ordered.some((r) => {
+        const d = docs.find((x) => x.id === r.id);
+        return !d || !!conversionBlock(d, convertTarget, docs);
+      });
+      if (blocked) {
+        toast.show(tr('sales:merge.cantMerge'), 'warning');
+        return;
+      }
+      const [first, ...rest] = ordered;
+      const res = await serverSave(() => convertDocument(first.id, convertTarget, undefined, rest.map((r) => r.id)), tr('common:documentDetail.createdDraft', { kind: documentKindLabel(tr, convertTarget, 1) }), {
+        icon: 'file-replace-outline',
+        detail: tr('sales:detail.fromDocument', { number: ordered.map((r) => r.number).join(', ') }),
+      });
+      if (res?.result) {
+        selection.clear();
+        setMergeFor(null);
+        router.push(detailRouteFor(convertTarget, res.id ?? res.result) as never);
+      }
+    } catch (err) {
+      toast.show(describeError(err, tr), 'error');
+    } finally {
+      setConverting(false);
+    }
+  };
+  /** One order's Create delivery note: straight to it, or first a pick of the customer's other open orders. */
+  const convertRow = async (r: Row) => {
+    if (!carriable(r)) {
+      toast.show(tr('sales:merge.openOnly'), 'warning');
+      return;
+    }
+    setConverting(true);
+    let mergeable: { id?: string; number?: string; date?: string; grandTotal?: unknown }[] = [];
+    try {
+      mergeable = (await fetchDocumentRecord(companyId, r.id)).mergeableWith ?? [];
+    } catch (err) {
+      toast.show(describeError(err, tr), 'error');
+      setConverting(false);
+      return;
+    }
+    setConverting(false);
+    if (mergeable.length) {
+      setMergeFor({ row: r, candidates: mergeable.map((d) => ({ id: d.id!, number: d.number ?? '', date: d.date!, total: d.grandTotal as Money | undefined })) });
+      return;
+    }
+    await convertRows([r]);
+  };
+
   // On a phone row: what an issued invoice or bill still owes, and by when.
   const owingLabel = (d: Row) => {
     if (!(kind === 'invoice' || kind === 'purchaseBill') || !isFinalized(d.status) || d.status === 'cancelled' || !d.outstanding || d.outstanding.minor <= 0) return undefined;
@@ -446,6 +534,17 @@ export function DocumentListView({
           bulkActions={(keys) => (
             <>
               <Button title={tr('common:table.exportCsv')} icon="file-export-outline" variant="ghost" size="sm" onPress={() => void exportChosen(keys)} />
+              {/* Only when every one chosen can go on it: otherwise the button isn't there. */}
+              {convertTarget && convertibleTogether(chosenRows(keys)) ? (
+                <Button
+                  title={tr('sales:merge.mergeIntoDelivery', { count: keys.length })}
+                  icon="truck-outline"
+                  variant="ghost"
+                  size="sm"
+                  loading={converting}
+                  onPress={() => void convertRows(chosenRows(keys))}
+                />
+              ) : null}
               {sendableIn(keys).length ? (
                 <Button title={tr('common:table.markSent')} icon="send-outline" variant="ghost" size="sm" loading={bulkBusy} onPress={() => void markSent(keys)} />
               ) : null}
@@ -467,9 +566,12 @@ export function DocumentListView({
                     label: kind === 'purchaseBill' ? tr('sales:detail.paySupplier') : tr('common:action.recordPayment'),
                     icon: 'cash-plus' as const,
                     onPress: () =>
-                      router.push(`/(app)/payments/new?direction=${kind === 'invoice' ? 'received' : 'paid'}&partyId=${d.partyId}&documentId=${d.id}` as never),
+                      router.push((kind === 'invoice' ? `/(app)/receipts/new?partyId=${d.partyId}&documentId=${d.id}` : `/(app)/payments/new?direction=paid&partyId=${d.partyId}&documentId=${d.id}`) as never),
                   },
                 ]
+              : []),
+            ...(convertTarget && carriable(d)
+              ? [{ key: 'convert', label: tr('sales:detail.createDelivery'), icon: 'truck-outline' as const, onPress: () => void convertRow(d) }]
               : []),
             { key: 'preview', label: tr('common:table.preview'), icon: 'file-document-outline', onPress: () => router.push(`/(app)/documents/${d.id}` as never) },
           ]}
@@ -501,6 +603,25 @@ export function DocumentListView({
             void deleteDrafts(ids);
           }}
         />
+        {/* Mounted while open, so each time starts with only this order ticked. */}
+        {mergeFor ? (
+          <MergeSourcesSheet
+            visible
+            onClose={() => setMergeFor(null)}
+            kind="salesOrder"
+            partyName={mergeFor.row.partyName}
+            current={{ id: mergeFor.row.id, number: mergeFor.row.number, date: mergeFor.row.date, total: mergeFor.row.grandTotal }}
+            candidates={mergeFor.candidates}
+            createLabel={tr('sales:detail.createDelivery')}
+            busy={converting}
+            onCreate={(alsoFrom) =>
+              void convertRows([
+                mergeFor.row,
+                ...mergeFor.candidates.filter((c) => alsoFrom.includes(c.id)).map((c) => ({ ...mergeFor.row, id: c.id, number: c.number, date: c.date, grandTotal: c.total ?? mergeFor.row.grandTotal })),
+              ])
+            }
+          />
+        ) : null}
       </View>
     );
   }

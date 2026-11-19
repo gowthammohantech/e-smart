@@ -17,6 +17,7 @@ import { wouldOverdraw } from '../payments/engine';
 import { assertNotReconciled } from '../banking/engine';
 import { assertWithinPaymentLimit } from '../payments/requests';
 import { costCentreIssues } from './costCentres';
+import { CONTROL_KEY, GST_CASH_LEDGER_PREFIX, RETAINED_EARNINGS, RETAINED_EARNINGS_ROLES, VOUCHER_BLOCKED_KEYS } from '@esmart/core/domain/ledger/voucherRules';
 import { loadBook, loadVouchers } from './book';
 import { cashLedgerBalance } from '@esmart/core/domain/gstUtilization';
 import { postVoucher } from '@esmart/core/domain/ledger/postings';
@@ -58,17 +59,8 @@ type VoucherRow = typeof V.$inferSelect;
 type StoredLine = { account: string; debitMinor: number; creditMinor: number; narration?: string; costCentreId?: string };
 type AnyCtx = Pick<Ctx<'getVoucher'>, 'company' | 'user' | 'db' | 'now'>;
 
-/**
- * System accounts only the books themselves post to: opening stock comes from the stock ledger,
- * accumulated depreciation from the asset register, goods received not billed from goods receipts.
- * A journal into one would quietly undo what its source works out (RULES 6.10, 6.15).
- */
-export const VOUCHER_BLOCKED_KEYS = ['sys:openingStock', 'sys:accumulatedDepreciation', 'sys:goodsReceivedNotBilled'];
-/** Earlier years' profit: open to vouchers, but only posted by these roles and with a narration. */
-export const RETAINED_EARNINGS = 'sys:retainedEarnings';
-export const RETAINED_EARNINGS_ROLES: string[] = ['owner', 'admin'];
-/** Accounts the books keep from their own sources: tax, sales and the opening difference. */
-const CONTROL_KEY = /^sys:(output|input|rcmPayable|gstCashLedger|gstOnAdvances|tdsPayable|tdsReceivable|tcsPayable|customsPayable|sales|openingDifference)/;
+// What a voucher may post to lives in core, so the app offers only what saves here (voucherRules.ts).
+export { VOUCHER_BLOCKED_KEYS, RETAINED_EARNINGS, RETAINED_EARNINGS_ROLES } from '@esmart/core/domain/ledger/voucherRules';
 
 const blocking = (issues: Issue[]) => (field: string, message: string) => issues.push({ field, message, severity: 'blocking' });
 
@@ -105,7 +97,7 @@ export function voucherToWire(row: VoucherRow, base: string, attachmentIds?: str
 }
 
 /** Vouchers with the files kept with each (attachments pointing back at them). */
-async function vouchersToWire(db: DbOrTx, rows: VoucherRow[], base: string): Promise<Schema<'Voucher'>[]> {
+export async function vouchersToWire(db: DbOrTx, rows: VoucherRow[], base: string): Promise<Schema<'Voucher'>[]> {
   const AT = schema.attachments;
   const files = rows.length
     ? await db.select({ id: AT.id, entityId: AT.entityId }).from(AT).where(and(eq(AT.entityType, 'voucher'), inArray(AT.entityId, rows.map((r) => r.id))))
@@ -124,7 +116,7 @@ async function linkVoucherAttachments(tx: DbOrTx, companyId: string, voucherId: 
 type VoucherQuery = Pick<Ctx<'listVouchers'>['query'], 'kind' | 'status' | 'partyId' | 'from' | 'to' | 'q'>;
 
 /** The WHERE of a voucher list, shared by the list and its summary so the two never disagree. */
-function voucherFilters(ctx: Pick<Ctx<'listVouchers'>, 'company' | 'user' | 'db'>, q: VoucherQuery): (SQL | undefined)[] {
+export function voucherFilters(ctx: Pick<Ctx<'listVouchers'>, 'company' | 'user' | 'db'>, q: VoucherQuery): (SQL | undefined)[] {
   const filters: (SQL | undefined)[] = [
     eq(V.companyId, ctx.company.id),
     ctx.user.branchIds.length ? inArray(V.branchId, ctx.user.branchIds) : undefined,
@@ -220,7 +212,7 @@ export async function voucherColumns(ctx: AnyCtx, db: DbOrTx, body: Schema<'Vouc
   // accountant may prepare it as a draft. The GST cash ledger moves only by challan or set-off.
   if (!draft) {
     const own = (k: string) => (body.kind === 'gstJournal' && /^sys:(output|input|rcmPayable|gstCashLedger|gstInterest|gstLateFee|itcReversed|gstOnAdvances)/.test(k)) || ((body.kind === 'tdsChallan' || body.kind === 'gstChallan') && /^sys:(tdsPayable|tcsPayable|gstCashLedger)/.test(k));
-    if (lines.some((l) => l.account.startsWith('sys:gstCashLedger:')) && body.kind !== 'gstChallan' && body.kind !== 'gstJournal') {
+    if (lines.some((l) => l.account.startsWith(GST_CASH_LEDGER_PREFIX)) && body.kind !== 'gstChallan' && body.kind !== 'gstJournal') {
       block('lines', 'The GST cash ledger takes money only by a GST challan, and gives it only to a set-off');
     }
     const touchesCash = lines.some((l) => l.account.startsWith('pay:'));

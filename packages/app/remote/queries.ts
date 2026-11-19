@@ -129,14 +129,14 @@ export function keep(entityType: keyof typeof COLLECTIONS, companyId: string, ro
   applyChanges(changed.map((r) => ({ companyId, entityType, entityId: r.id, op: 'upsert', data: r })));
 }
 
-/** Customers or suppliers matching what's typed (name, code, GSTIN, phone, email), 50 at most. */
-export function usePartySearch(kind: 'customer' | 'supplier' | undefined, q: string, enabled = true) {
+/** Customers or suppliers matching what's typed (name, code, GSTIN, phone, email), 50 at most; `status` keeps only active (or inactive) ones. */
+export function usePartySearch(kind: 'customer' | 'supplier' | undefined, q: string, enabled = true, status?: 'active' | 'inactive') {
   const companyId = useAppStore((s) => s.activeCompanyId);
   return useQuery({
-    queryKey: ['parties', companyId, 'search', kind ?? '', q.trim()],
+    queryKey: ['parties', companyId, 'search', kind ?? '', q.trim(), status ?? ''],
     enabled: enabled && !!companyId,
     queryFn: async ({ signal }) => {
-      const { data } = await api.GET('/companies/{companyId}/parties', { params: { path: { companyId }, query: { kind, q: q.trim() || undefined, limit: PAGE } }, signal });
+      const { data } = await api.GET('/companies/{companyId}/parties', { params: { path: { companyId }, query: { kind, status, q: q.trim() || undefined, limit: PAGE } }, signal });
       const rows = data?.data ?? [];
       keep('party', companyId, rows);
       return rows;
@@ -481,12 +481,18 @@ export function usePartyRecord(id: string | undefined) {
     enabled: !!companyId && !!current,
     staleTime: 0,
     retry: (count, err) => !(err instanceof ApiError && (err.status === 404 || err.status === 403)) && count < 1,
-    queryFn: async ({ signal }) => {
-      const { data } = await api.GET('/companies/{companyId}/parties/{id}', { params: { path: { companyId, id: current! } }, signal });
-      keep('party', companyId, [data]);
-      return data!;
-    },
+    queryFn: ({ signal }) => fetchPartyRecord(companyId, current!, signal),
   });
+}
+
+/**
+ * One party from the server, kept in the store at its version, so a save of it afterwards is an
+ * update of that party. A list row isn't kept: saved from the list as it is, it would go up as a new party.
+ */
+export async function fetchPartyRecord(companyId: string, id: string, signal?: AbortSignal) {
+  const { data } = await api.GET('/companies/{companyId}/parties/{id}', { params: { path: { companyId, id } }, signal });
+  keep('party', companyId, [data]);
+  return data!;
 }
 
 /**
@@ -813,6 +819,45 @@ export function useVoucherSummary(f: VoucherQuery) {
     enabled: !!companyId,
     queryFn: async ({ signal }) => {
       const { data } = await api.GET('/companies/{companyId}/vouchers/summary', { params: { path: { companyId }, query: voucherParams(f) }, signal });
+      return data!;
+    },
+    placeholderData: keepWithin(companyId),
+  });
+}
+
+/** The Receipts list's filters: payments received and receipt vouchers together, or one `type` of them. */
+export type MoneyInQuery = { type?: 'payment' | 'receipt'; from?: string; to?: string; q?: string; partyId?: string; branchId?: string };
+export type MoneyInEntry = Schema<'MoneyInEntry'>;
+const moneyInKeys = {
+  all: (companyId: string) => ['moneyIn', companyId] as const,
+};
+const moneyInParams = (f: MoneyInQuery) => ({ type: f.type, from: f.from || undefined, to: f.to || undefined, q: f.q?.trim() || undefined, partyId: f.partyId || undefined, branchId: f.branchId || undefined });
+
+/** Money received, newest first, 50 at a time: payments from customers and receipt vouchers (where the books are on) in one list. */
+export function useMoneyInPages(f: MoneyInQuery) {
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  const query = useInfiniteQuery({
+    queryKey: [...moneyInKeys.all(companyId), 'pages', f],
+    enabled: !!companyId,
+    initialPageParam: undefined as string | undefined,
+    queryFn: async ({ pageParam, signal }) => {
+      const { data } = await api.GET('/companies/{companyId}/money-in', { params: { path: { companyId }, query: { ...moneyInParams(f), limit: PAGE, cursor: pageParam } }, signal });
+      return data!;
+    },
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
+    placeholderData: keepWithin(companyId),
+  });
+  return { ...query, rows: query.data?.pages.flatMap((p) => p.data ?? []) ?? [] };
+}
+
+/** How many entries the money-in filters match, their total, each kind's, and the receipts by what they were for. */
+export function useMoneyInSummary(f: MoneyInQuery) {
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  return useQuery({
+    queryKey: [...moneyInKeys.all(companyId), 'summary', f],
+    enabled: !!companyId,
+    queryFn: async ({ signal }) => {
+      const { data } = await api.GET('/companies/{companyId}/money-in/summary', { params: { path: { companyId }, query: moneyInParams(f) }, signal });
       return data!;
     },
     placeholderData: keepWithin(companyId),
@@ -1247,6 +1292,7 @@ export function watchStoreForQueries(): () => void {
       void queryClient.invalidateQueries({ queryKey: [...voucherKeys.all(companyId), 'pages'] });
       void queryClient.invalidateQueries({ queryKey: [...voucherKeys.all(companyId), 'all'] });
       void queryClient.invalidateQueries({ queryKey: [...voucherKeys.all(companyId), 'summary'] });
+      void queryClient.invalidateQueries({ queryKey: moneyInKeys.all(companyId) });
       void queryClient.invalidateQueries({ queryKey: ['books', companyId] });
       // Contra and journal lines move money between accounts.
       void queryClient.invalidateQueries({ queryKey: [...paymentKeys.all(companyId), 'balances'] });
@@ -1256,6 +1302,7 @@ export function watchStoreForQueries(): () => void {
     if (stale.has('documents')) {
       void queryClient.invalidateQueries({ queryKey: documentKeys.all(companyId) });
       void queryClient.invalidateQueries({ queryKey: paymentKeys.all(companyId) });
+      void queryClient.invalidateQueries({ queryKey: moneyInKeys.all(companyId) });
       void queryClient.invalidateQueries({ queryKey: expenseKeys.all(companyId) });
       void queryClient.invalidateQueries({ queryKey: [...partyKeys.all(companyId), 'pages'] });
       void queryClient.invalidateQueries({ queryKey: ['reports', companyId] });
@@ -1265,6 +1312,11 @@ export function watchStoreForQueries(): () => void {
       void queryClient.invalidateQueries({ queryKey: hubKeys.all(companyId) });
       // Payments and expenses are what bank lines match; one edited or deleted changes the reconciliation.
       void queryClient.invalidateQueries({ queryKey: bankingKeys.all(companyId) });
+    }
+    if (stale.has('parties')) {
+      // A party saved here (edited, set inactive) shows in the lists and their counts at once.
+      void queryClient.invalidateQueries({ queryKey: [...partyKeys.all(companyId), 'pages'] });
+      void queryClient.invalidateQueries({ queryKey: [...partyKeys.all(companyId), 'summary'] });
     }
     if (stale.has('documents') || stale.has('eway')) void queryClient.invalidateQueries({ queryKey: ['compliance', companyId] });
     stale.clear();
@@ -1283,6 +1335,7 @@ export function watchStoreForQueries(): () => void {
     if (s.documents !== prev.documents || s.payments !== prev.payments || s.expenses !== prev.expenses) mark('documents');
     if (s.stockMovements !== prev.stockMovements || s.documents !== prev.documents) mark('stock');
     if (s.vouchers !== prev.vouchers) mark('vouchers');
+    if (s.parties !== prev.parties) mark('parties');
     if (s.ewayBills !== prev.ewayBills) mark('eway');
   });
   return () => {

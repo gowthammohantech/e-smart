@@ -6,11 +6,11 @@ export type Page<T> = { data: T[]; nextCursor: string | null };
 
 type CursorValue = string | number;
 
-function encode(values: CursorValue[]): string {
+export function encode(values: CursorValue[]): string {
   return Buffer.from(JSON.stringify(values)).toString('base64url');
 }
 
-function decode(cursor: string): CursorValue[] {
+export function decode(cursor: string): CursorValue[] {
   try {
     const v = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
     if (Array.isArray(v)) return v;

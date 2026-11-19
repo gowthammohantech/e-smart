@@ -2127,6 +2127,53 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/companies/{companyId}/money-in": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Money received, newest first - payments from customers and receipt vouchers in one list
+         * @description The Receipts screen's list: payments received (`direction=received`) and receipt vouchers, merged
+         *     by date, newest first, paged by one cursor. Receipt vouchers are the books' and come only where
+         *     the `books` module is on; on a plan without it the list is payments alone. `type` narrows it to
+         *     one kind.
+         */
+        get: operations["listMoneyIn"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/companies/{companyId}/money-in/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * How many entries the money-in list's filters match, and what they add up to in base currency
+         * @description Takes the filters of `listMoneyIn`. `payments` and `receipts` total each kind; `byAccount` totals the receipt vouchers by the account credited (what the money was for).
+         */
+        get: operations["summarizeMoneyIn"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/companies/{companyId}/payments/summary": {
         parameters: {
             query?: never;
@@ -4751,7 +4798,7 @@ export interface paths {
         };
         /**
          * Every call this API made to a third party, newest first
-         * @description The Integrations log: which API route (and which user) set a call off, which third party and which of its
+         * @description The third-party call log: which API route (and which user) set a call off, which third party and which of its
          *     endpoints it went to, and what came back. Secrets are redacted before storage. Bodies are kept for failures
          *     and sandbox calls (and for everything when `OUTBOUND_LOG=all`).
          */
@@ -5669,6 +5716,13 @@ export interface components {
             credit: components["schemas"]["Money"];
             narration?: string;
             costCentreId?: string;
+        };
+        /** @description One row of the money-in list - a payment received (`payment`) or a receipt voucher (`voucher`), as `type` says. */
+        MoneyInEntry: {
+            /** @enum {string} */
+            type: "payment" | "receipt";
+            payment?: components["schemas"]["Payment"];
+            voucher?: components["schemas"]["Voucher"];
         };
         Voucher: components["schemas"]["Versioned"] & {
             readonly id?: string;
@@ -12172,6 +12226,85 @@ export interface operations {
                 content?: never;
             };
             502: components["responses"]["UpstreamError"];
+        };
+    };
+    listMoneyIn: {
+        parameters: {
+            query?: {
+                type?: "payment" | "receipt";
+                partyId?: string;
+                branchId?: components["parameters"]["BranchIdQuery"];
+                from?: components["parameters"]["From"];
+                to?: components["parameters"]["To"];
+                /** @description Free-text search */
+                q?: components["parameters"]["Q"];
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page"] & {
+                        data?: components["schemas"]["MoneyInEntry"][];
+                    };
+                };
+            };
+        };
+    };
+    summarizeMoneyIn: {
+        parameters: {
+            query?: {
+                type?: "payment" | "receipt";
+                partyId?: string;
+                branchId?: components["parameters"]["BranchIdQuery"];
+                from?: components["parameters"]["From"];
+                to?: components["parameters"]["To"];
+                /** @description Free-text search */
+                q?: components["parameters"]["Q"];
+            };
+            header?: never;
+            path: {
+                companyId: components["parameters"]["CompanyId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        count: number;
+                        total: components["schemas"]["Money"];
+                        payments: {
+                            count: number;
+                            total: components["schemas"]["Money"];
+                        };
+                        receipts: {
+                            count: number;
+                            total: components["schemas"]["Money"];
+                        };
+                        byAccount: {
+                            account: string;
+                            total: components["schemas"]["Money"];
+                        }[];
+                    };
+                };
+            };
         };
     };
     summarizePaymentList: {

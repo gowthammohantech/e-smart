@@ -39,7 +39,7 @@ const inputOf = requestInput;
 type PaymentQuery = Pick<Ctx<'listPayments'>['query'], 'direction' | 'partyId' | 'method' | 'accountId' | 'branchId' | 'from' | 'to' | 'q'> & Partial<Pick<Ctx<'listPayments'>['query'], 'documentId' | 'advance'>>;
 
 /** The WHERE of a payment list, shared by the list and its summary so the two never disagree. */
-function paymentFilters(ctx: Pick<Ctx<'listPayments'>, 'company' | 'user' | 'db'>, q: PaymentQuery): (SQL | undefined)[] {
+export function paymentFilters(ctx: Pick<Ctx<'listPayments'>, 'company' | 'user' | 'db'>, q: PaymentQuery): (SQL | undefined)[] {
   if (q.direction) assertDirectionAllowed(ctx.company, q.direction);
   const filters: (SQL | undefined)[] = [eq(PAY.companyId, ctx.company.id)];
   if (q.direction) filters.push(eq(PAY.direction, q.direction));
