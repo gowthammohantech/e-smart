@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { formatMoney } from '@esmart/core/lib/format';
 import { LIXI_DEFAULT_MODELS, isOpenRouter, lixiModels, type Config } from '../config';
+import { trackedFetch } from '../lib/outbound';
 import { estimateCostUsd } from './modelPrices';
 
 /**
@@ -177,6 +178,10 @@ function describeValue(value: unknown): string {
 }
 
 /** Claude, with the tools as client tools in a manual loop. */
+/** The SDK's own `fetch`, recorded in the third-party call log like every other third-party call. */
+const anthropicFetch = (inner?: typeof globalThis.fetch): typeof globalThis.fetch => (input, init) =>
+  trackedFetch({ service: 'ai', operation: 'Anthropic messages', redact: ['content', 'system', 'input'], fetchImpl: inner }, typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url, init);
+
 export class AnthropicAssistant implements AssistantProvider {
   readonly name = 'anthropic';
   private readonly client: Anthropic;
@@ -186,7 +191,7 @@ export class AnthropicAssistant implements AssistantProvider {
     /** Tests swap the transport. */
     fetch?: typeof globalThis.fetch,
   ) {
-    this.client = new Anthropic({ apiKey: config.ANTHROPIC_API_KEY, timeout: 60_000, maxRetries: 2, ...(fetch ? { fetch } : {}) });
+    this.client = new Anthropic({ apiKey: config.ANTHROPIC_API_KEY, timeout: 60_000, maxRetries: 2, fetch: anthropicFetch(fetch) });
   }
 
   async reply(req: AssistantRequest): Promise<AssistantReply> {
@@ -412,7 +417,7 @@ export class OpenAICompatibleAssistant implements AssistantProvider {
     for (let attempt = 0; ; attempt++) {
       let res: Response;
       try {
-        res = await this.fetch(this.url, { method: 'POST', headers, body: JSON.stringify(body), signal: AbortSignal.timeout(60_000) });
+        res = await trackedFetch({ service: 'ai', operation: `Chat completion (${requested})`, redact: ['content'], fetchImpl: this.fetch }, this.url, { method: 'POST', headers, body: JSON.stringify(body), signal: AbortSignal.timeout(60_000) });
       } catch (err) {
         if (attempt < 2) {
           await sleep(500 * 2 ** attempt);

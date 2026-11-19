@@ -1,5 +1,6 @@
 import type { Config } from '../config';
 import { upstream } from '../http/errors';
+import { trackedFetch } from '../lib/outbound';
 
 /**
  * Exchange rates for refreshExchangeRates. `rates` answers how many units of
@@ -78,7 +79,7 @@ class OpenExchangeRatesProvider implements FxProvider {
     const url = `https://openexchangerates.org/api/${path}?app_id=${encodeURIComponent(this.appId)}&symbols=${symbols}`;
     let res: Response;
     try {
-      res = await fetch(url);
+      res = await trackedFetch({ service: 'openexchangerates', operation: date >= today ? 'Latest exchange rates' : 'Historical exchange rates', redact: ['app_id'] }, url);
     } catch (err) {
       throw upstream('FX_PROVIDER_UNAVAILABLE', `Could not reach Open Exchange Rates: ${(err as Error).message}`);
     }

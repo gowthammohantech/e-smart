@@ -164,7 +164,7 @@ export class AdaequareReturns implements ReturnsProvider {
 
   constructor(
     private readonly config: Config,
-    private readonly transport: GspTransport = new FetchGspTransport(),
+    private readonly transport: GspTransport = new FetchGspTransport(undefined, { gateway: 'adaequare', environment: defaultGspTarget(config).environment }),
     private readonly clock: () => number = Date.now,
   ) {}
 

@@ -1,6 +1,7 @@
 import { and, eq, inArray, lt, sql } from 'drizzle-orm';
 import { schema } from '@esmart/db';
 import type { Deps } from '../context';
+import { outboundContext } from '../lib/outbound';
 import { reportError } from '../lib/reporter';
 
 type JobRow = typeof schema.jobs.$inferSelect;
@@ -94,7 +95,8 @@ export function createWorker(deps: Deps, handlers: Record<string, JobHandler>, o
     }, LEASE_MS / 3);
     (heartbeat as { unref?: () => void }).unref?.();
     try {
-      await handler({ deps, payload: (job.payload ?? {}) as Record<string, unknown>, job, log: opts.log });
+      // A third-party call a job makes is recorded against the job, not a request.
+      await outboundContext.run({ source: 'job', jobKind: job.kind }, () => handler({ deps, payload: (job.payload ?? {}) as Record<string, unknown>, job, log: opts.log }));
     } catch (err) {
       failure = err ?? new Error('job failed');
     } finally {

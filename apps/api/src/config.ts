@@ -76,6 +76,14 @@ const Env = z.object({
   PURGE_DRY_RUN: bool.default(true),
   /** A nightly pg_dump into object storage (src/jobs/dbBackup.ts). Needs pg_dump in the image. */
   DB_BACKUP_ENABLED: bool.default(false),
+  /**
+   * What the platform console's Third-Party Call Logs page keeps of each third-party call (src/lib/outbound.ts).
+   * `failures`: every call's metadata, and the request and answer in full for failures and sandbox calls.
+   * `all`: the bodies of successful production calls too. `off`: nothing is recorded.
+   */
+  OUTBOUND_LOG: z.enum(['failures', 'all', 'off']).default('failures'),
+  /** Days a recorded third-party call is kept. */
+  OUTBOUND_LOG_RETENTION_DAYS: z.coerce.number().int().min(1).max(365).default(30),
   /** Sign-in, sign-up, OTP and password-reset calls per IP per minute, on top of the per-account limits. */
   AUTH_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().default(10),
   /**

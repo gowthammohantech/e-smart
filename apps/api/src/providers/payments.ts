@@ -1,6 +1,7 @@
 import { createHmac, randomBytes } from 'node:crypto';
 import type { Config } from '../config';
 import { safeEqual } from '../lib/crypto';
+import { trackedFetch } from '../lib/outbound';
 
 export type PaymentLinkRequest = {
   amountMinor: number;
@@ -100,6 +101,16 @@ class SimulatorPayments implements PaymentsProvider {
 
 type RazorpayError = { error?: { code?: string; description?: string } };
 
+/** What a Razorpay call does, in words, for the third-party call log. */
+function razorpayOperation(method: string, path: string): string {
+  const route = path.split('?')[0];
+  if (route === '/payment_links') return 'Create payment link';
+  if (route === '/plans') return method === 'GET' ? 'List subscription plans' : 'Create subscription plan';
+  if (route === '/subscriptions') return 'Create subscription';
+  if (/^\/subscriptions\/[^/]+\/cancel$/.test(route)) return 'Cancel subscription';
+  return `${method} ${route}`;
+}
+
 class RazorpayPayments implements PaymentsProvider {
   readonly name = 'razorpay' as const;
   readonly hostsPaymentPage = true;
@@ -120,7 +131,7 @@ class RazorpayPayments implements PaymentsProvider {
   }
 
   private async call<T>(method: 'GET' | 'POST', path: string, body?: unknown): Promise<T> {
-    const res = await fetch(`https://api.razorpay.com/v1${path}`, {
+    const res = await trackedFetch({ service: 'razorpay', environment: this.keyId.startsWith('rzp_test_') ? 'sandbox' : 'production', operation: razorpayOperation(method, path) }, `https://api.razorpay.com/v1${path}`, {
       method,
       headers: { authorization: this.auth, 'content-type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body),

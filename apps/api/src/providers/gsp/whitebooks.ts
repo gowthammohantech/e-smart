@@ -179,7 +179,7 @@ export class WhitebooksGateway implements GspGateway {
 
   constructor(
     private readonly config: Config,
-    private readonly transport: GspTransport = new FetchGspTransport(),
+    private readonly transport: GspTransport = new FetchGspTransport(undefined, defaultGspTarget(config)),
     private readonly clock: () => number = Date.now,
     private readonly log: (message: string) => void = () => {},
   ) {
