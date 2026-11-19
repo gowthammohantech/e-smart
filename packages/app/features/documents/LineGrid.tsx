@@ -23,7 +23,8 @@ type Col = 'name' | 'qty' | 'rate' | 'discount';
 
 // Sized to fit the editor's main column (about 730px) with the item name taking the rest.
 // The discount takes its % / currency dropdown beside the box, so it is the widest of the three.
-const W = { no: 32, qty: 104, rate: 108, discount: 124, tax: 108, amount: 116, actions: 40 };
+// The quantity takes its - / + stepper; the tax keeps its rate and Incl. on one line.
+const W = { no: 32, qty: 128, rate: 108, discount: 124, tax: 100, amount: 116, actions: 40 };
 const ITEM_MIN = 100;
 const MIN_WIDTH = W.no + ITEM_MIN + W.qty + W.rate + W.discount + W.tax + W.amount + W.actions;
 
@@ -205,6 +206,27 @@ export function LineGrid({
                 }}
                 onEnter={() => onEnter(row, 'qty')}
               />
+              </View>
+              {/* Small changes by mouse: up / down by one, never below 1 or past what's allowed. */}
+              <View style={{ gap: 1 }}>
+                {([['chevron-up', 1, 'sales:grid.increaseQuantity'], ['chevron-down', -1, 'sales:grid.decreaseQuantity']] as const).map(([icon, delta, key]) => {
+                  const dec = unitDecimals(line.unit);
+                  const next = Number((line.quantity + delta).toFixed(dec));
+                  const blocked = next <= 0 || (max !== undefined && delta > 0 && line.quantity >= max);
+                  return (
+                    <Pressable
+                      key={icon}
+                      disabled={blocked}
+                      onPress={() => onUpdate(line.id, { quantity: max !== undefined ? Math.min(next, max) : next })}
+                      accessibilityRole="button"
+                      accessibilityLabel={label(tr(key))}
+                      hitSlop={2}
+                      style={({ pressed }) => ({ width: 18, height: 15, alignItems: 'center', justifyContent: 'center', borderRadius: 3, backgroundColor: t.c.card2, opacity: blocked ? 0.35 : pressed ? 0.6 : 1 })}
+                    >
+                      <Icon name={icon} size={13} color={t.c.text} />
+                    </Pressable>
+                  );
+                })}
               </View>
               {/* The unit rides along with the quantity it counts, rather than taking a column. */}
               <Text variant="micro" tone="muted" numberOfLines={1} style={{ maxWidth: 34 }}>
