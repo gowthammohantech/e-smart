@@ -12,6 +12,7 @@ import { remoteSession } from '../../remote';
 import { describeError } from '../../remote/errors';
 import { toE164 } from '../../remote/phone';
 import { LEGAL } from '../../lib/legal';
+import { useOnboardingStore } from '../../store/onboardingStore';
 import { Errors, hasErrors, minLength, required, validEmail } from '@esmart/core/lib/validators';
 
 export default function SignUp() {
@@ -20,6 +21,8 @@ export default function SignUp() {
   const router = useRouter();
 
   const [name, setName] = useState('');
+  const [businessName, setBusinessName] = useState('');
+  const businessRef = useRef<TextInput>(null);
   const [email, setEmail] = useState('');
   // Arriving from a verified OTP, the phone is already proven and can't be changed.
   const { phone: verifiedPhone, verificationId } = useLocalSearchParams<{ phone?: string; verificationId?: string }>();
@@ -27,7 +30,7 @@ export default function SignUp() {
   const phone = usePhoneInput(verified ? verifiedPhone : undefined);
   const [password, setPassword] = useState('');
   const [accepted, setAccepted] = useState(false);
-  const [errors, setErrors] = useState<Errors<'name' | 'email' | 'phone' | 'password' | 'terms' | 'form'>>({});
+  const [errors, setErrors] = useState<Errors<'name' | 'business' | 'email' | 'phone' | 'password' | 'terms' | 'form'>>({});
   const emailRef = useRef<TextInput>(null);
   const passwordRef = useRef<TextInput>(null);
   const [busy, setBusy] = useState(false);
@@ -36,8 +39,9 @@ export default function SignUp() {
 
   const submit = () => {
     if (sending.current) return;
-    const next: Errors<'name' | 'email' | 'phone' | 'password' | 'terms'> = {
+    const next: Errors<'name' | 'business' | 'email' | 'phone' | 'password' | 'terms'> = {
       name: required(name, tr('errors:field.yourName')),
+      business: required(businessName, tr('errors:field.businessName')),
       email: required(email, tr('errors:field.email')) ?? validEmail(email),
       phone: phone.error(),
       password: required(password, tr('errors:field.password')) ?? minLength(password, 8, tr('errors:field.password')),
@@ -45,6 +49,9 @@ export default function SignUp() {
     };
     setErrors(next);
     if (hasErrors(next)) return;
+
+    // The business details step starts from this; a GSTIN's registered name replaces it later.
+    useOnboardingStore.getState().set({ name: businessName.trim() });
 
     sending.current = true;
     setBusy(true);
@@ -83,6 +90,20 @@ export default function SignUp() {
         autoCapitalize="words"
         autoComplete="name"
         textContentType="name"
+        returnKeyType="next"
+        submitBehavior="submit"
+        onSubmitEditing={() => businessRef.current?.focus()}
+      />
+      <TextField
+        ref={businessRef}
+        label={tr('auth:signUp.businessName')}
+        value={businessName}
+        onChangeText={setBusinessName}
+        placeholder={tr('auth:signUp.businessNamePlaceholder')}
+        icon="storefront-outline"
+        error={errors.business}
+        required
+        autoCapitalize="words"
         returnKeyType="next"
         submitBehavior="submit"
         onSubmitEditing={() => emailRef.current?.focus()}

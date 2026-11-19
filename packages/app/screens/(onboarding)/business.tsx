@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -18,7 +18,7 @@ import { nextStepRoute, onboardingSteps, stepIndex, useOnboardingStore } from '.
 import { BUSINESS_TYPES, INDIAN_STATES } from '@esmart/core/data/masters';
 import { citiesForState } from '@esmart/core/data/cities';
 import { moduleSetFor, planInfo } from '@esmart/core/domain/plan';
-import { Errors, hasErrors, required, validEmail, validPostalCode } from '@esmart/core/lib/validators';
+import { Errors, hasErrors, required, validEmail, validGstin, validPostalCode } from '@esmart/core/lib/validators';
 import { validPhoneParts } from '@esmart/core/lib/phone';
 
 export default function BusinessStep() {
@@ -28,6 +28,17 @@ export default function BusinessStep() {
   const { draft, set, setAddress } = useOnboardingStore();
   const desktop = useIsDesktop();
   const toast = useToast();
+
+  // A valid GSTIN already says which state the business is in (its first two digits), so that can't be changed here.
+  const gstinState =
+    draft.country === 'IN' && draft.taxRegistered && draft.taxIdentifier && !validGstin(draft.taxIdentifier)
+      ? INDIAN_STATES.find((s) => s.code === draft.taxIdentifier.slice(0, 2))
+      : undefined;
+  useEffect(() => {
+    if (gstinState && draft.address.stateCode !== gstinState.code) {
+      setAddress({ stateCode: gstinState.code, state: gstinState.name });
+    }
+  }, [gstinState, draft.address.stateCode, setAddress]);
 
   const [typeOpen, setTypeOpen] = useState(false);
   const [stateOpen, setStateOpen] = useState(false);
@@ -180,6 +191,7 @@ export default function BusinessStep() {
         label={tr('onboarding:business.state')}
         value={draft.address.state || undefined}
         onPress={() => setStateOpen(true)}
+        disabled={!!gstinState}
         icon="map-outline"
         error={errors.state}
         required
