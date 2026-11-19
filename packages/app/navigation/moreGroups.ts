@@ -3,6 +3,7 @@ import type { IconName } from '@esmart/ui/components/Icon';
 import { countLabel } from '@esmart/core/lib/format';
 import { useCanOpen, useComplianceSummary, useModuleSet, useUnreadCount } from '../store/selectors';
 import { MENU, PHONE_TABS, SETTINGS, TOOLS, appHref, sectionPath, type MenuBadge, type MenuPage, type SectionName, type SettingsGroupKey } from './menu';
+import { useSectionLabel } from './sectionLabel';
 
 export type MoreEntry = {
   label: string;
@@ -58,6 +59,7 @@ export function useSettingsGroups(): MoreGroup[] {
  */
 export function useMoreGroups(): MoreGroup[] {
   const { t: tr } = useTranslation(['nav']);
+  const sectionLabel = useSectionLabel();
   const entries = useEntries();
   const canOpen = useCanOpen();
   const onBar: readonly SectionName[] = PHONE_TABS[useModuleSet()];
@@ -66,13 +68,13 @@ export function useMoreGroups(): MoreGroup[] {
   const offBar = MENU.filter((s) => s.name !== 'more' && !onBar.includes(s.name));
   const sectionGroups: MoreGroup[] = offBar
     .filter((s) => s.pages.length > 0)
-    .map((s) => ({ key: s.name, title: tr(`nav:tab.${s.name}` as 'nav:tab.index'), entries: entries(s.pages) }));
+    .map((s) => ({ key: s.name, title: sectionLabel(s.name), entries: entries(s.pages) }));
   const hubsOnly: MoreGroup = {
     key: 'moreSections',
     title: tr('nav:more.group.moreSections'),
     entries: offBar
       .filter((s) => s.pages.length === 0 && canOpen(sectionPath(s.name)))
-      .map((s) => ({ label: tr(`nav:tab.${s.name}` as 'nav:tab.index'), icon: s.icon, route: appHref(sectionPath(s.name)) })),
+      .map((s) => ({ label: sectionLabel(s.name), icon: s.icon, route: appHref(sectionPath(s.name)) })),
   };
   const tools: MoreGroup = { key: 'tools', title: tr('nav:more.group.tools'), entries: entries(TOOLS) };
   // The More screen opens with its own profile card, so the list doesn't repeat it.

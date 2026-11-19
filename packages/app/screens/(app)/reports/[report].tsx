@@ -69,7 +69,7 @@ export default function Report() {
   // Always false in the native apps, so the desktop layout only ever reaches a browser.
   const desktop = useIsDesktop();
 
-  const { scope, setScope } = useReportScope(key === 'profit' || key === 'tax-summary' || key.startsWith('tds-') || key.startsWith('tcs-') ? 'thisFY' : 'last90');
+  const { scope, setScope } = useReportScope('today');
 
   const baseCurrency = useBaseCurrency();
   const parties = useParties();

@@ -26,7 +26,6 @@ import { financialYearOf, today } from '@esmart/core/lib/date';
 import type { Address, BusinessDocument, DocStatus, DocumentKind } from '@esmart/core/types';
 import { ACCOUNT_ID, CURRENT_USER_ID, buildDemoData, type DemoData } from './demo';
 import { createDb, createPool, type Db } from './index';
-import { HSN_STARTER } from './reference';
 import * as s from './schema';
 import { runDirectly } from './runDirectly';
 
@@ -228,18 +227,7 @@ export async function seedDemo(db: Db, account: DemoAccountConfig, { reset = fal
     await deleteDemo(tx, data);
 
     /* ---- reference rows the catalogue needs ---------------------------- */
-    const hsnKnown = new Map(HSN_STARTER.map((h) => [h.code, h]));
-    const hsnCodes = [...new Set(data.items.map((i) => i.hsnCode).filter((c): c is string => !!c))];
-    await tx
-      .insert(s.hsnCodes)
-      .values(
-        hsnCodes.map((code) => {
-          const known = hsnKnown.get(code);
-          const item = data.items.find((i) => i.hsnCode === code)!;
-          return { code, description: known?.description ?? item.name, isService: known?.isService ?? code.startsWith('99'), defaultGstRate: known ? String(known.rate) : null };
-        }),
-      )
-      .onConflictDoNothing();
+    // HSN/SAC codes need none: an item keeps any valid code, and the shared search list stays the reference one.
     const unitCodes = new Set(data.items.map((i) => i.unit));
     await tx
       .insert(s.units)

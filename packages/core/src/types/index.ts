@@ -18,6 +18,9 @@ export type Address = {
 /** Subscription tier. Free and Basic sell; Pro and Business run the whole business. */
 export type PlanTier = 'free' | 'basic' | 'pro' | 'business';
 
+/** An export's shipping bill: the six-character port code, and the bill's number and date once filed at customs. */
+export type ShippingBill = { portCode: string; number?: string; date?: string };
+
 /** The account customers pay into, printed on invoices (with a UPI QR when there's a UPI ID). */
 export type BankDetails = {
   bankName?: string;
@@ -477,6 +480,8 @@ export type BusinessDocument = {
   supplierDocNumber?: string;
   /** An import bill's bill of entry, with the IGST and cess paid at customs (base currency). */
   billOfEntry?: { number: string; date: string; portCode: string; assessableValue: Money; igst: Money; cess?: Money };
+  /** An export invoice's shipping bill: the port the goods leave from, and the bill's number and date once filed. GSTR-1 EXP reports them. */
+  shippingBill?: ShippingBill | null;
   /** An Input Service Distributor's invoice: its credit is 3B 4A(4). */
   isdInvoice?: boolean;
   currency: string;

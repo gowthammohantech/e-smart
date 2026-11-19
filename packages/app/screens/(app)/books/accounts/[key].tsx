@@ -23,7 +23,7 @@ export default function AccountStatement() {
   const router = useRouter();
   const { key: raw } = useLocalSearchParams<{ key: string }>();
   const key = decodeURIComponent(raw ?? '');
-  const { scope, setScope } = useReportScope('thisFY');
+  const { scope, setScope } = useReportScope('today');
   const baseCurrency = useBaseCurrency();
   const { book, loaded } = useServerBook();
   const nameOf = useAccountName();

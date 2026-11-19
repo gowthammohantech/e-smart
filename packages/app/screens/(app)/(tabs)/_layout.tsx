@@ -1,5 +1,4 @@
 import React, { useMemo, useState } from 'react';
-import { useTranslation } from 'react-i18next';
 import { Platform, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Tabs } from 'expo-router';
@@ -20,6 +19,7 @@ import { inkOn } from '@esmart/ui/theme/contrast';
 import { TABS } from '../../../navigation/tabs';
 import { PHONE_TABS } from '../../../navigation/menu';
 import { PageSurface } from '@esmart/ui/components/Doodles';
+import { useSectionLabel } from '../../../navigation/sectionLabel';
 
 /**
  * The tab bar shows `PHONE_TABS` for the plan; every other section stays
@@ -39,7 +39,7 @@ const BAR_SHORT = { contacts: true } as const;
 
 export default function TabsLayout() {
   const t = useTheme();
-  const { t: tr } = useTranslation(['nav']);
+  const sectionLabel = useSectionLabel();
   const unread = useUnreadCount();
   const access = useUiStore((s) => s.lixiAccess);
   const markHintLearned = useUiStore((s) => s.markLixiHintLearned);
@@ -63,10 +63,10 @@ export default function TabsLayout() {
       visible.flatMap((name) =>
         TABS.filter((tab) => tab.name === name).map((tab) => ({
           ...tab,
-          title: tr(`nav:tab.${tab.name}` as 'nav:tab.index'),
+          title: sectionLabel(tab.name),
         })),
       ),
-    [visible, tr],
+    [visible, sectionLabel],
   );
 
   return (
@@ -117,9 +117,9 @@ export default function TabsLayout() {
             name={tab.name}
             options={{
               href: visible.includes(tab.name) ? undefined : null,
-              title: tr(`nav:tab.${tab.name}` as 'nav:tab.index'),
+              title: sectionLabel(tab.name),
               // Five fit a phone's bar: a section named too long for it (Customers & Suppliers) has a short one there.
-              tabBarLabel: tab.name in BAR_SHORT ? tr(`nav:tabBar.${tab.name}` as 'nav:tabBar.contacts') : undefined,
+              tabBarLabel: tab.name in BAR_SHORT ? sectionLabel(tab.name, true) : undefined,
               tabBarBadge: tab.name === 'more' && unread > 0 ? countLabel(unread) : undefined,
               tabBarBadgeStyle: { backgroundColor: t.c.bad, color: inkOn(t.c.bad), fontSize: 10 },
               tabBarIcon: ({ color, focused }) => (

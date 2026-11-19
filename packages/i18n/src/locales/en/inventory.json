@@ -84,7 +84,7 @@
     "hsnTypeToSearch": "Type a code or a few words of the description."
   },
   "gst": {
-    "supplyType": "GST treatment",
+    "supplyType": "GST type",
     "supply": {
       "taxable": "Taxable",
       "nil": "Nil-rated",

@@ -12,6 +12,8 @@ const U = schema.users;
 const OTP_MAX_ATTEMPTS = 5;
 /** GST books must be kept 72 months from the annual return's due date; 8 years from today covers it. */
 const RETENTION_YEARS = 8;
+/** The suspension reason of an account its last owner closed by deleting themselves: reactivated with a new owner. */
+export const OWNER_DELETED = 'owner-deleted';
 
 type DeleteCtx = Ctx<'deleteMe'>;
 type UserRow = typeof U.$inferSelect;
@@ -128,7 +130,7 @@ export const deleteAccountHandlers = defineHandlers({
         purgeAfter.setUTCFullYear(purgeAfter.getUTCFullYear() + RETENTION_YEARS);
         await tx
           .update(schema.accounts)
-          .set({ suspendedAt: ctx.now, suspendedReason: 'owner-deleted', purgeAfter, updatedAt: ctx.now })
+          .set({ suspendedAt: ctx.now, suspendedReason: OWNER_DELETED, purgeAfter, updatedAt: ctx.now })
           .where(eq(schema.accounts.id, user.accountId));
         for (const c of companies) {
           await tx.insert(schema.subscriptionEvents).values({ id: newId('sev'), companyId: c.id, fromPlan: null, toPlan: 'free', event: 'account.deleted' });

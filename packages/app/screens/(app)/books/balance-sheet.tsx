@@ -14,7 +14,7 @@ import { ColumnsReport, StatementViewPicker, columnsExport, useColumnsTables, ty
 /** What the business owns against what it owes and its capital, on the period's last day. */
 export default function BalanceSheetScreen() {
   const { t: tr } = useTranslation(['books']);
-  const { scope, setScope } = useReportScope('thisFY');
+  const { scope, setScope } = useReportScope('today');
   const baseCurrency = useBaseCurrency();
   const nameOf = useAccountName();
   const [view, setView] = useState<StatementView>('single');

@@ -154,6 +154,7 @@ export type DocFields = {
   reference: string | null;
   supplierDocNumber: string | null;
   billOfEntry: { number: string; date: string; portCode: string; assessableMinor: number; igstMinor: number; cessMinor: number } | null;
+  shippingBill: { portCode: string; number?: string; date?: string } | null;
   isdInvoice: boolean;
   currency: string;
   exchangeRate: number | null;
@@ -256,6 +257,14 @@ export function fieldsFromWire(body: Schema<'NewDocumentInput'>, base?: DocRow):
       body.billOfEntry !== undefined
         ? body.billOfEntry && { number: body.billOfEntry.number.trim(), date: body.billOfEntry.date, portCode: body.billOfEntry.portCode.trim().toUpperCase(), assessableMinor: body.billOfEntry.assessableValue.minor, igstMinor: body.billOfEntry.igst.minor, cessMinor: body.billOfEntry.cess?.minor ?? 0 }
         : ((base?.billOfEntry as DocFields['billOfEntry'] | undefined) ?? null),
+    shippingBill:
+      body.shippingBill !== undefined
+        ? body.shippingBill && {
+            portCode: body.shippingBill.portCode.trim().toUpperCase(),
+            ...(body.shippingBill.number?.trim() && { number: body.shippingBill.number.trim() }),
+            ...(body.shippingBill.date && { date: body.shippingBill.date }),
+          }
+        : ((base?.shippingBill as DocFields['shippingBill'] | undefined) ?? null),
     isdInvoice: body.isdInvoice ?? base?.isdInvoice ?? false,
     currency: body.currency,
     exchangeRate: body.exchangeRate ?? (base && base.currency.trim() === body.currency ? Number(base.exchangeRate) : null),
@@ -313,6 +322,7 @@ export function fieldsFromRow(row: DocRow): DocFields {
     reference: row.reference,
     supplierDocNumber: row.supplierDocNumber,
     billOfEntry: (row.billOfEntry as DocFields['billOfEntry']) ?? null,
+    shippingBill: (row.shippingBill as DocFields['shippingBill']) ?? null,
     isdInvoice: row.isdInvoice,
     currency: row.currency.trim(),
     exchangeRate: Number(row.exchangeRate),
@@ -454,6 +464,14 @@ export async function prepareDocument(
     if (!/^[A-Z0-9]{6}$/.test(f.billOfEntry.portCode)) blocking('billOfEntry.portCode', 'A six-character port code');
     if (!f.billOfEntry.number) blocking('billOfEntry.number', 'The bill of entry number is required');
     if (f.billOfEntry.igstMinor < 0 || f.billOfEntry.cessMinor < 0 || f.billOfEntry.assessableMinor < 0) blocking('billOfEntry', 'Amounts cannot be negative');
+  }
+  // A shipping bill belongs on an export invoice: goods leaving for a buyer abroad.
+  if (f.shippingBill) {
+    const abroad = party?.gstRegistrationType === 'overseas' || f.placeOfSupplyStateCode === '96';
+    if (f.kind !== 'invoice') blocking('shippingBill', 'Only an invoice carries a shipping bill');
+    else if (!abroad) blocking('shippingBill', 'A shipping bill is for an export, to a buyer abroad');
+    if (!/^[A-Z0-9]{6}$/.test(f.shippingBill.portCode)) blocking('shippingBill.portCode', 'A six-character port code');
+    if (f.shippingBill.date && f.shippingBill.date < f.date) blocking('shippingBill.date', `The shipping bill cannot be dated before the invoice (${f.date})`);
   }
   if (f.isdInvoice) {
     if (f.kind !== 'purchaseBill') blocking('isdInvoice', 'Only a purchase bill can be an ISD invoice');
@@ -727,6 +745,7 @@ export async function prepareDocument(
       reference: f.reference,
       supplierDocNumber: f.supplierDocNumber,
       billOfEntry: f.kind === 'purchaseBill' ? f.billOfEntry : null,
+      shippingBill: f.kind === 'invoice' ? f.shippingBill : null,
       isdInvoice: f.kind === 'purchaseBill' && f.isdInvoice,
       currency: f.currency,
       exchangeRate: String(exchangeRate),

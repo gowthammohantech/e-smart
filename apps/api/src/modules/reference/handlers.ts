@@ -1,4 +1,4 @@
-import { and, asc, eq, ilike, or, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, ilike, or, sql } from 'drizzle-orm';
 import { PINCODE_RE } from '@esmart/core/domain/ewayBill';
 import { isValidGstin, normalizeGstin } from '@esmart/core/domain/gstin';
 import { stateNameOf } from '@esmart/core/domain/stateCodes';
@@ -96,15 +96,26 @@ export const referenceHandlers = defineHandlers({
     return { data: rows.map((r) => ({ code: r.code.trim(), name: r.name, symbol: r.symbol, precision: r.minorDigits })) };
   },
 
-  /** Digits search by code prefix; words search the description. */
+  /**
+   * Digits search by code prefix; words search the description; nothing typed lists them from the
+   * start. A page at a time in code order: `after` is the last code of the page before.
+   */
   async searchHsn(ctx) {
     const H = schema.hsnCodes;
-    const q = ctx.query.q.trim();
-    if (!q) return { data: [] };
-    const where = /^\d+$/.test(q) ? ilike(H.code, `${q}%`) : or(ilike(H.description, `%${q}%`), ilike(H.code, `${q}%`));
-    const rows = await ctx.db.select().from(H).where(where).orderBy(asc(H.code)).limit(SEARCH_LIMIT);
+    const q = (ctx.query.q ?? '').trim();
+    const after = ctx.query.after?.trim();
+    const match = !q ? undefined : /^\d+$/.test(q) ? ilike(H.code, `${q}%`) : or(ilike(H.description, `%${q}%`), ilike(H.code, `${q}%`));
+    // One more than a page, to know whether there is another.
+    const rows = await ctx.db
+      .select()
+      .from(H)
+      .where(and(match, after ? gt(H.code, after) : undefined))
+      .orderBy(asc(H.code))
+      .limit(SEARCH_LIMIT + 1);
+    const page = rows.slice(0, SEARCH_LIMIT);
     return {
-      data: rows.map((r) =>
+      nextCursor: rows.length > SEARCH_LIMIT ? page[page.length - 1].code : null,
+      data: page.map((r) =>
         compact({
           code: r.code,
           description: r.description,

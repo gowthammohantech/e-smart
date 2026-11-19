@@ -6,6 +6,7 @@ import type { PlanTier } from '@esmart/core/types';
 import { useDisabledModules, usePlan } from '../store/selectors';
 import { MENU, SETTINGS, TOOLS, appHref, section, sectionPath, type SettingsGroupKey } from './menu';
 import type { TabName } from './tabs';
+import { useSectionLabel } from './sectionLabel';
 
 export type SubLink = { href: string; labelKey: string };
 
@@ -49,6 +50,7 @@ export type AppPage = {
  */
 export function useAppPages(): AppPage[] {
   const { t: tr } = useTranslation(['nav']);
+  const sectionLabel = useSectionLabel();
   const plan = usePlan();
   const disabled = useDisabledModules();
 
@@ -57,7 +59,7 @@ export function useAppPages(): AppPage[] {
     const add = (page: AppPage) => canOpen(plan, page.route, disabled) && list.push({ ...page, route: appHref(page.route) });
 
     MENU.filter((s) => s.name !== 'more').forEach((s) => {
-      const name = tr(`nav:tab.${s.name}` as 'nav:tab.index');
+      const name = sectionLabel(s.name);
       const href = sectionHref(plan, s.name, disabled);
       if (href) add({ key: `tab-${s.name}`, title: name, icon: s.icon, route: href });
       s.pages.forEach((p) =>
@@ -83,7 +85,7 @@ export function useAppPages(): AppPage[] {
     });
 
     return list;
-  }, [tr, plan, disabled]);
+  }, [tr, sectionLabel, plan, disabled]);
 }
 
 /** Pages whose name matches, then pages in a matching section ("sales" finds the Sales pages). */

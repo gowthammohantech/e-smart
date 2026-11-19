@@ -21,6 +21,17 @@
     "noSales": "No sales recorded yet"
   },
   "editor": {
+    "shipTo": {
+      "label": "Ship to a different address",
+      "offHint": "Goods go to the customer at their shipping address (or billing, without one).",
+      "onHint": "Printed as Ship to (consignee) on the document.",
+      "name": "Consignee name",
+      "gstin": "Consignee GSTIN (optional)",
+      "address": "Address",
+      "city": "City",
+      "state": "State",
+      "pin": "PIN"
+    },
     "dueDate": "Due date",
     "validUntil": "Valid until",
     "supplierDocNumber": "Supplier document number",
@@ -82,7 +93,7 @@
     "creditLimitTitle": "Credit limit exceeded",
     "creditLimitExceeded": "{{party}} has a credit limit of {{limit}}. With this invoice they would owe {{exposure}}.",
     "creditLimitBlocked": "{{party}} has a credit limit of {{limit}}, and invoices over it are blocked. With this invoice they would owe {{exposure}}. Take a payment or raise their limit to issue it; you can still save it as a draft.",
-    "creditHold": "{{party}} owes {{owed}}, over their credit limit of {{limit}}, and is on hold: no new invoices, quotes, orders or delivery notes to them until they pay or the limit is raised.",
+    "creditHold": "{{party}} owes {{owed}}, over their credit limit of {{limit}}, and is on hold: no new invoices, quotes, orders or delivery challans to them until they pay or the limit is raised.",
     "creditHoldShort": "On credit hold: over their limit",
     "creditLimitProceed": "Continue anyway",
     "returnFrom": "Lines from {{number}}",
@@ -234,7 +245,7 @@
     "fromDocument": "From {{number}}",
     "convertToSalesOrder": "Convert to sales order",
     "convertToInvoice": "Convert to invoice",
-    "createDelivery": "Create delivery note",
+    "createDelivery": "Create delivery challan",
     "createReturn": "Create a return",
     "createCreditNote": "Raise a credit note",
     "createDebitNote": "Raise a debit note",
@@ -308,6 +319,7 @@
     "rateIncludesTax": "Rate includes tax",
     "followsHighestRate": "Set to the highest GST rate in this document",
     "highestShort": "Highest rate",
+    "zeroRatedShort": "No GST (export)",
     "highestRateApplied_one": "GST on {{names}} was recalculated to {{rate}} to match the highest rate in this document",
     "highestRateApplied_other": "GST on {{names}} was recalculated to {{rate}} to match the highest rate in this document",
     "inclusiveHint": "Turn on when the price you quote already contains tax.",
@@ -596,13 +608,13 @@
   "merge": {
     "title": {
       "salesOrder": "Combine sales orders",
-      "delivery": "Combine delivery notes",
+      "delivery": "Combine delivery challans",
       "purchaseOrder": "Combine purchase orders",
       "goodsReceipt": "Combine goods receipts"
     },
     "hint": {
-      "salesOrder": "{{party}}’s other open orders can go on the same delivery note. Tick the ones to include: their lines follow this order’s.",
-      "delivery": "{{party}}’s other delivery notes not yet invoiced can go on the same invoice. Tick the ones to include: their lines follow this note’s. The stock has already gone out on the notes, so the invoice doesn’t move it again.",
+      "salesOrder": "{{party}}’s other open orders can go on the same delivery challan. Tick the ones to include: their lines follow this order’s.",
+      "delivery": "{{party}}’s other delivery challans not yet invoiced can go on the same invoice. Tick the ones to include: their lines follow this note’s. The stock has already gone out on the notes, so the invoice doesn’t move it again.",
       "purchaseOrder": "Other open purchase orders to {{party}} can be received on the same goods receipt. Tick the ones that came in together: their lines follow this order’s.",
       "goodsReceipt": "Other goods receipts from {{party}} not yet billed can go on the same bill. Tick the ones it covers: their lines follow this receipt’s. The stock came in on the receipts, so the bill doesn’t add it again."
     },
@@ -610,11 +622,11 @@
     "picked_one": "{{count}} document into one",
     "picked_other": "{{count}} documents into one",
     "fetching": "Getting their lines…",
-    "mergeIntoDelivery_one": "Create delivery note",
-    "mergeIntoDelivery_other": "Merge {{count}} into one delivery note",
-    "oneParty": "Pick orders of one customer: a delivery note goes to one customer",
-    "openOnly": "Only finalised orders not yet delivered can go on a delivery note",
-    "cantMerge": "These orders can’t go on one delivery note: one is already delivered, or they differ in currency"
+    "mergeIntoDelivery_one": "Create delivery challan",
+    "mergeIntoDelivery_other": "Merge {{count}} into one delivery challan",
+    "oneParty": "Pick orders of one customer: a delivery challan goes to one customer",
+    "openOnly": "Only finalised orders not yet delivered can go on a delivery challan",
+    "cantMerge": "These orders can’t go on one delivery challan: one is already delivered, or they differ in currency"
   },
   "returnPicker": {
     "salesHint": "Pick the invoice being returned. Its lines are copied into the return, where you can reduce quantities or remove lines.",
@@ -744,5 +756,12 @@
     "itemWise": "Cess by item",
     "line": "Cess {{rate}} on {{taxable}}",
     "lineReverseCharge": "Cess {{rate}} on {{taxable}}, paid by the buyer (reverse charge)"
+  },
+  "shippingBill": {
+    "hint": "Shipping bill: the port the goods leave from is reported with this export in GSTR-1. Add the bill number and date once it is filed.",
+    "port": "Port code",
+    "number": "Shipping bill no.",
+    "date": "Shipping bill date",
+    "portInvalid": "A port code is 6 letters or digits, like INMAA1"
   }
 }

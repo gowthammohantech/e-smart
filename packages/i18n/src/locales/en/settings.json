@@ -379,6 +379,7 @@
   "profile": {
     "name": "Name",
     "email": "Email",
+    "emailLocked": "Your sign-in email can't be changed",
     "phone": "Phone",
     "active": "Active",
     "save": "Save changes",

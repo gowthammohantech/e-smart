@@ -14,7 +14,7 @@ import { ColumnsReport, StatementViewPicker, columnsExport, useColumnsTables, ty
 /** Profit and loss in the Tally layout: the trading account, then indirect income and expenses. */
 export default function ProfitAndLossScreen() {
   const { t: tr } = useTranslation(['books']);
-  const { scope, setScope } = useReportScope('thisFY');
+  const { scope, setScope } = useReportScope('today');
   const baseCurrency = useBaseCurrency();
   const nameOf = useAccountName();
   const [view, setView] = useState<StatementView>('single');

@@ -48,12 +48,15 @@ export default function ContactsTab() {
   const tab: Tab = hasSuppliers ? pickedTab : 'customer';
   const asCustomer = tab !== 'supplier';
   const [query, setQuery] = useState('');
+  // Active parties, or the ones set inactive (to reactivate).
+  const [status, setStatus] = useState<'active' | 'inactive'>('active');
+  const inactiveTab = status === 'inactive';
   const desktop = useIsDesktop();
 
   // Read from the server by name, 50 at a time, each with its balance; the count and total cover every page.
   const search = useDebounced(query);
-  const pages = usePartyPages({ kind: tab, q: search });
-  const summaryQuery = usePartySummary({ kind: tab, q: search });
+  const pages = usePartyPages({ kind: tab, q: search, status });
+  const summaryQuery = usePartySummary({ kind: tab, q: search, status });
   // A tab or search change keeps the last list's rows and figures as placeholder: a customer's row
   // would open as a supplier. Those show the shimmer until the new ones arrive.
   const summary = summaryQuery.isPlaceholderData ? undefined : summaryQuery.data;
@@ -71,8 +74,8 @@ export default function ContactsTab() {
   const loadMore = () => {
     if (pages.hasNextPage && !pages.isFetchingNextPage) void pages.fetchNextPage();
   };
-  // Desktop bulk actions: the chosen contacts as a CSV, or set inactive in one save.
-  const selection = useTableSelection(`${tab}|${search}`);
+  // Desktop bulk actions: the chosen contacts as a CSV, or set inactive (active again, on Inactive) in one save.
+  const selection = useTableSelection(`${tab}|${status}|${search}`);
   const exportRows = useRowsExport();
   const saveParty = useAppStore((s) => s.saveParty);
   const { run: serverSave, saving } = useServerSave();
@@ -89,11 +92,12 @@ export default function ContactsTab() {
       },
       tr('common:table.exportCancelled'),
     );
-  const deactivate = async (keys: string[]) => {
-    const parties = chosen(keys).filter((p) => p.status !== 'inactive');
+  /** Sets the chosen parties inactive, or (from the Inactive tab) active again. */
+  const setStatusOf = async (keys: string[], next: 'active' | 'inactive') => {
+    const parties = chosen(keys).filter((p) => (p.status === 'inactive' ? 'inactive' : 'active') !== next);
     if (!parties.length) return;
     // Each one read from the server first and kept at its version: a list row the device has never
-    // kept would otherwise go up as a new party, a duplicate of the one being set inactive.
+    // kept would otherwise go up as a new party, a duplicate of the one being changed.
     let records: Party[];
     try {
       await Promise.all(parties.map((p) => fetchPartyRecord(companyId, p.id)));
@@ -106,10 +110,10 @@ export default function ContactsTab() {
     if (!records.length) return;
     const res = await serverSave(
       () => {
-        for (const party of records) saveParty({ ...party, status: 'inactive' });
+        for (const party of records) saveParty({ ...party, status: next });
       },
-      tr('common:table.deactivated', { count: records.length }),
-      { icon: 'minus-circle-outline' },
+      next === 'inactive' ? tr('common:table.deactivated', { count: records.length }) : tr('common:table.reactivated', { count: records.length }),
+      { icon: next === 'inactive' ? 'minus-circle-outline' : 'check-circle-outline' },
     );
     if (res) {
       selection.clear();
@@ -140,12 +144,26 @@ export default function ContactsTab() {
   const emptyTitle =
     !noneAtAll
       ? tr('common:component.noMatches')
-      : asCustomer
+      : inactiveTab
+        ? tr('contacts:hub.noInactive')
+        : asCustomer
         ? general
           ? tr('contacts:hub.noOther')
           : tr('contacts:hub.noCustomers')
         : tr('contacts:hub.noSuppliers');
-  const emptyMessage = noneAtAll ? tr('contacts:hub.emptyBody') : tr('contacts:hub.noMatchesBody');
+  const emptyMessage = noneAtAll ? (inactiveTab ? tr('contacts:hub.noInactiveBody') : tr('contacts:hub.emptyBody')) : tr('contacts:hub.noMatchesBody');
+  const statusTabs = (
+    <View style={desktop ? { flexBasis: 200, flexShrink: 0 } : undefined}>
+      <Segmented
+        options={[
+          { value: 'active', label: tr('contacts:hub.statusActive') },
+          { value: 'inactive', label: tr('contacts:hub.inactive') },
+        ]}
+        value={status}
+        onChange={(v) => setStatus(v as 'active' | 'inactive')}
+      />
+    </View>
+  );
 
   return (
     <View style={{ flex: 1 }}>
@@ -176,6 +194,7 @@ export default function ContactsTab() {
           />
           </View>
         ) : null}
+        {statusTabs}
         <View style={desktop ? { flexBasis: 380, flexShrink: 1, minWidth: 220 } : undefined}>
           <SearchBar
             compact
@@ -293,12 +312,20 @@ export default function ContactsTab() {
             bulkActions={(keys) => (
               <>
                 <Button title={tr('common:table.exportCsv')} icon="file-export-outline" variant="ghost" size="sm" onPress={() => void exportChosen(keys)} />
-                <Button title={tr('common:table.deactivate')} icon="minus-circle-outline" variant="ghost" size="sm" loading={saving} onPress={() => void deactivate(keys)} />
+                {inactiveTab ? (
+                  <Button title={tr('common:table.reactivate')} icon="check-circle-outline" variant="ghost" size="sm" loading={saving} onPress={() => void setStatusOf(keys, 'active')} />
+                ) : (
+                  <Button title={tr('common:table.deactivate')} icon="minus-circle-outline" variant="ghost" size="sm" loading={saving} onPress={() => void setStatusOf(keys, 'inactive')} />
+                )}
               </>
             )}
             rowActions={(p) => [
               { key: 'open', label: tr('common:table.open'), icon: 'eye-outline', onPress: () => router.push(detailRoute(p) as never) },
               { key: 'edit', label: tr('common:action.edit'), icon: 'pencil-outline', onPress: () => router.push(`${detailRoute(p)}/edit` as never) },
+              // One party at a time, as the bulk action does for several.
+              p.status === 'inactive'
+                ? { key: 'reactivate', label: tr('common:table.reactivate'), icon: 'check-circle-outline', onPress: () => void setStatusOf([p.id], 'active') }
+                : { key: 'deactivate', label: tr('common:table.deactivate'), icon: 'minus-circle-outline', onPress: () => void setStatusOf([p.id], 'inactive') },
             ]}
             empty={<EmptyState illustration="no-contacts" icon="account-group-outline" title={emptyTitle} message={emptyMessage} compact />}
           />

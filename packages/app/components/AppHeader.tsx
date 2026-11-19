@@ -22,6 +22,7 @@ import { useActiveCompany, useBranches, useListsReady, useSetupReady, useUnreadC
 import { Skeleton, SkeletonGroup } from '@esmart/ui/components/Skeleton';
 import { countLabel } from '@esmart/core/lib/format';
 import { inkOn } from '@esmart/ui/theme/contrast';
+import { useSectionLabel } from '../navigation/sectionLabel';
 
 /**
  * Tab-level header: company/branch switcher on the left, connection state or
@@ -30,6 +31,7 @@ import { inkOn } from '@esmart/ui/theme/contrast';
 export function AppHeader({ title, subtitle }: { title?: string; subtitle?: string }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['common', 'nav', 'onboarding']);
+  const sectionLabel = useSectionLabel();
   const toast = useToast();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -60,7 +62,7 @@ export function AppHeader({ title, subtitle }: { title?: string; subtitle?: stri
   if (desktop) {
     return (
       <PageHeader
-        title={title ?? tr(`nav:tab.${tabForPath(pathname)}` as 'nav:tab.index')}
+        title={title ?? sectionLabel(tabForPath(pathname))}
         subtitle={subtitle}
       />
     );

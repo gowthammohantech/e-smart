@@ -435,7 +435,7 @@ export function useExpenseRecord(id: string | undefined) {
   });
 }
 
-export type PartyQuery = { kind: 'customer' | 'supplier' | 'both' | 'general'; q?: string };
+export type PartyQuery = { kind: 'customer' | 'supplier' | 'both' | 'general'; q?: string; status?: 'active' | 'inactive' };
 const partyKeys = {
   all: (companyId: string) => ['parties', companyId] as const,
 };
@@ -448,7 +448,7 @@ export function usePartyPages(f: PartyQuery) {
     enabled: !!companyId,
     initialPageParam: undefined as string | undefined,
     queryFn: async ({ pageParam, signal }) => {
-      const { data } = await api.GET('/companies/{companyId}/parties', { params: { path: { companyId }, query: { kind: f.kind, q: f.q?.trim() || undefined, limit: PAGE, cursor: pageParam } }, signal });
+      const { data } = await api.GET('/companies/{companyId}/parties', { params: { path: { companyId }, query: { kind: f.kind, status: f.status, q: f.q?.trim() || undefined, limit: PAGE, cursor: pageParam } }, signal });
       return data!;
     },
     getNextPageParam: (last) => last.nextCursor ?? undefined,
@@ -464,7 +464,7 @@ export function usePartySummary(f: PartyQuery) {
     queryKey: [...partyKeys.all(companyId), 'summary', f],
     enabled: !!companyId,
     queryFn: async ({ signal }) => {
-      const { data } = await api.GET('/companies/{companyId}/parties/summary', { params: { path: { companyId }, query: { kind: f.kind, q: f.q?.trim() || undefined } }, signal });
+      const { data } = await api.GET('/companies/{companyId}/parties/summary', { params: { path: { companyId }, query: { kind: f.kind, status: f.status, q: f.q?.trim() || undefined } }, signal });
       return data!;
     },
     placeholderData: keepWithin(companyId),
@@ -598,12 +598,18 @@ export function useItemRecord(id: string | undefined) {
     enabled: !!companyId && !!current,
     staleTime: 0,
     retry: (count, err) => !(err instanceof ApiError && (err.status === 404 || err.status === 403)) && count < 1,
-    queryFn: async ({ signal }) => {
-      const { data } = await api.GET('/companies/{companyId}/items/{id}', { params: { path: { companyId, id: current! } }, signal });
-      keep('item', companyId, [data]);
-      return data!;
-    },
+    queryFn: ({ signal }) => fetchItemRecord(companyId, current!, signal),
   });
+}
+
+/**
+ * One item from the server, kept in the store at its version, so a save of it afterwards is an
+ * update of that item. A list row isn't kept: saved from the list as it is, it would go up as a new item.
+ */
+export async function fetchItemRecord(companyId: string, id: string, signal?: AbortSignal) {
+  const { data } = await api.GET('/companies/{companyId}/items/{id}', { params: { path: { companyId, id } }, signal });
+  keep('item', companyId, [data]);
+  return data!;
 }
 
 /** One item's on hand, value, quantity sold and movements with a running balance. */

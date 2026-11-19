@@ -164,6 +164,7 @@ export async function documentsToWire(db: DbOrTx, rows: DocRow[], now: Date, bas
       originalNumber: row.originalNumber,
       originalDate: row.originalDate,
       billOfEntry: boeToWire(row.billOfEntry, baseCurrency),
+      shippingBill: (row.shippingBill as DocumentWire['shippingBill']) ?? undefined,
       isdInvoice: row.isdInvoice || undefined,
       // On a bill, what was kept back; on an invoice, what the customer is expected to deduct (not settled).
       tds: row.kind !== 'invoice' && row.tdsSection && row.tdsAmountMinor ? { section: row.tdsSection as Schema<'TdsSectionCode'>, rate: Number(row.tdsRate), amount: m(row.tdsAmountMinor) } : undefined,

@@ -14,7 +14,7 @@ import { PhoneField, TextField, usePhoneInput } from '@esmart/ui/components/Fiel
 import { ListRow } from '@esmart/ui/components/ListRow';
 import { useAppStore } from '../../../store/appStore';
 import { useCompanies, useCurrentUser } from '../../../store/selectors';
-import { Errors, hasErrors, required, validEmail } from '@esmart/core/lib/validators';
+import { Errors, hasErrors, required } from '@esmart/core/lib/validators';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { Columns, FieldGrid } from '@esmart/ui/components/Layout';
 import type { UserRole } from '@esmart/core/types';
@@ -47,7 +47,8 @@ export default function Profile() {
   const activeCompanyId = useAppStore((s) => s.activeCompanyId);
 
   const [name, setName] = useState(user?.name ?? '');
-  const [email, setEmail] = useState(user?.email ?? '');
+  // The sign-in email is shown, not changed here.
+  const email = user?.email ?? '';
   const phone = usePhoneInput(user?.phone);
   const [errors, setErrors] = useState<Errors<'name' | 'email' | 'phone'>>({});
   const [deleting, setDeleting] = useState(false);
@@ -55,12 +56,11 @@ export default function Profile() {
   const save = async () => {
     const next: Errors<'name' | 'email' | 'phone'> = {
       name: required(name, tr('settings:profile.name')),
-      email: required(email, tr('settings:profile.email')) ?? validEmail(email),
       phone: phone.error(),
     };
     setErrors(next);
     if (hasErrors(next) || !user) return;
-    const updated = { ...user, name: name.trim(), email: email.trim(), phone: phone.value || undefined };
+    const updated = { ...user, name: name.trim(), phone: phone.value || undefined };
     // Stay on the form until the server has it, so a refusal can be fixed here.
     const res = await serverSave(() => saveUser(updated), tr('settings:profile.saved'), { icon: 'account-check-outline' });
     if (res) goBack('/(app)/(tabs)/more');
@@ -86,7 +86,7 @@ export default function Profile() {
         <FieldGrid
           items={[
             <TextField key="name" label={tr('settings:profile.name')} value={name} onChangeText={setName} icon="account-outline" error={errors.name} required />,
-            <TextField key="email" label={tr('settings:profile.email')} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" icon="email-outline" error={errors.email} required />,
+            <TextField key="email" label={tr('settings:profile.email')} value={email} editable={false} keyboardType="email-address" autoCapitalize="none" icon="email-outline" hint={tr('settings:profile.emailLocked')} />,
             <PhoneField key="phone" label={tr('settings:profile.phone')} {...phone.field} icon="cellphone" error={errors.phone} />,
           ]}
         />

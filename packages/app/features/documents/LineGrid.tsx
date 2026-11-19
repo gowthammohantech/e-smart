@@ -23,7 +23,8 @@ type Col = 'name' | 'qty' | 'rate' | 'discount';
 
 // Sized to fit the editor's main column (about 730px) with the item name taking the rest.
 // The discount takes its % / currency dropdown beside the box, so it is the widest of the three.
-const W = { no: 32, qty: 128, rate: 108, discount: 124, tax: 88, amount: 116, actions: 40 };
+// The quantity takes its - / + stepper; the tax keeps its rate and Incl. on one line.
+const W = { no: 32, qty: 128, rate: 108, discount: 124, tax: 100, amount: 116, actions: 40 };
 const ITEM_MIN = 100;
 const MIN_WIDTH = W.no + ITEM_MIN + W.qty + W.rate + W.discount + W.tax + W.amount + W.actions;
 
@@ -64,6 +65,9 @@ export function LineGrid({
   const t = useTheme();
   const { t: tr } = useTranslation(['sales', 'common', 'inventory']);
   const [taxFor, setTaxFor] = useState<DocumentLine | null>(null);
+  // An export (or SEZ supply) without tax: no line charges GST, whatever its item's rate. The rate
+  // stays on the line, and shows again when the document is switched to with tax.
+  const zeroRated = !!taxContext.zeroRated;
   const [itcFor, setItcFor] = useState<DocumentLine | null>(null);
   // A purchase line that isn't stock may carry its own cost centre (RULES 6.20); shown once there are centres.
   const [centreFor, setCentreFor] = useState<DocumentLine | null>(null);
@@ -273,9 +277,10 @@ export function LineGrid({
               <Pressable
                 onPress={() => setTaxFor(line)}
                 // A following service takes the highest rate in the document: a rule, not chosen by hand.
-                disabled={!!line.gst?.reimbursement || !!line.gst?.followsHighestRate}
+                // Without tax on an export, there is no rate to pick.
+                disabled={!!line.gst?.reimbursement || !!line.gst?.followsHighestRate || zeroRated}
                 accessibilityRole="button"
-                accessibilityLabel={`${label(tr('sales:line.tax'))}: ${lineRateLabel(line)}${line.gst?.followsHighestRate ? `, ${tr('sales:line.followsHighestRate')}` : ''}`}
+                accessibilityLabel={`${label(tr('sales:line.tax'))}: ${zeroRated ? `${formatPercent(0)}, ${tr('sales:line.zeroRatedShort')}` : lineRateLabel(line)}${!zeroRated && line.gst?.followsHighestRate ? `, ${tr('sales:line.followsHighestRate')}` : ''}`}
                 style={(state) => [
                   {
                     flexDirection: 'row',
@@ -285,18 +290,22 @@ export function LineGrid({
                     paddingHorizontal: 6,
                     borderRadius: t.radius.sm,
                     borderWidth: 1,
-                    borderColor: (state as WebPressState).hovered && !line.gst?.followsHighestRate ? t.c.inputBorder : 'transparent',
+                    borderColor: (state as WebPressState).hovered && !line.gst?.followsHighestRate && !zeroRated ? t.c.inputBorder : 'transparent',
                     // Set by the rule, not picked: no hand cursor, no edge on hover.
-                    ...(line.gst?.followsHighestRate ? ({ cursor: 'default' } as object) : null),
+                    ...(line.gst?.followsHighestRate || zeroRated ? ({ cursor: 'default' } as object) : null),
                   },
                   focusRing(t, (state as WebPressState).focused),
                 ]}
               >
                 <View style={{ flex: 1 }}>
-                  <Text variant="small" style={{ fontVariant: ['tabular-nums'] }}>
-                    {formatPercent(line.taxRate)}
+                  <Text variant="small" numberOfLines={1} style={{ fontVariant: ['tabular-nums'] }}>
+                    {formatPercent(zeroRated ? 0 : line.taxRate)}
                   </Text>
-                  {shownCessRate(line) ? (
+                  {zeroRated ? (
+                    <Text variant="micro" tone="muted" numberOfLines={1}>
+                      {tr('sales:line.zeroRatedShort')}
+                    </Text>
+                  ) : shownCessRate(line) ? (
                     <Text variant="micro" tone="muted" numberOfLines={1} style={{ fontVariant: ['tabular-nums'] }}>
                       {tr('sales:line.plusCess', { cess: formatPercent(shownCessRate(line)) })}
                     </Text>
@@ -307,12 +316,12 @@ export function LineGrid({
                     </Text>
                   ) : null}
                 </View>
-                {line.taxInclusive ? (
-                  <Text variant="micro" tone="primary" weight="600">
+                {line.taxInclusive && !zeroRated ? (
+                  <Text variant="micro" tone="primary" weight="600" numberOfLines={1} style={{ flexShrink: 0 }}>
                     {tr('sales:editor.inclusive')}
                   </Text>
                 ) : null}
-                <Icon name={line.gst?.followsHighestRate ? 'lock-outline' : 'chevron-down'} size={12} color={t.c.muted} />
+                <Icon name={line.gst?.followsHighestRate || zeroRated ? 'lock-outline' : 'chevron-down'} size={12} color={t.c.muted} />
               </Pressable>
             </View>
             <View role="cell" style={{ width: W.amount, paddingHorizontal: 8, alignItems: 'flex-end' }}>

@@ -38,6 +38,12 @@ const WEB = Platform.OS === 'web';
 // RN's types only list the outline styles native draws; react-native-web also takes 'none'.
 export const WEB_INPUT_RESET = (WEB ? { outlineStyle: 'none', outlineWidth: 0 } : {}) as TextStyle;
 
+/**
+ * Web only: a read-only input shows no caret when clicked (a browser still focuses it, and draws one),
+ * and an arrow, not a text cursor. Its text can still be selected and copied. Empty on native.
+ */
+const READ_ONLY_INPUT = (WEB ? { cursor: 'default', caretColor: 'transparent' } : {}) as object;
+
 /** Web only: a soft halo outside a focused field's border. Empty on native. */
 export function webFocusHalo(t: Theme, focused: boolean): ViewStyle {
   return WEB && focused ? { boxShadow: `0 0 0 3px ${t.c.primary}2E` } : {};
@@ -248,7 +254,7 @@ export function TextField({
               minHeight: multiline ? (t.script === 'tamil' ? 100 : 92) : undefined,
               textAlignVertical: multiline ? 'top' : 'center',
               ...WEB_INPUT_RESET,
-              ...(readOnly ? ({ cursor: 'default' } as object) : null),
+              ...(readOnly ? READ_ONLY_INPUT : null),
             },
             style,
           ]}
@@ -371,7 +377,7 @@ export function PhoneField({
           keyboardType="number-pad"
           maxLength={maxNationalDigits(dialCode)}
           placeholder={placeholder}
-          style={[input, { flex: 1 }, disabled && { color: t.c.muted }, disabled && ({ cursor: 'default' } as object)]}
+          style={[input, { flex: 1 }, disabled && { color: t.c.muted }, disabled && READ_ONLY_INPUT]}
           placeholderTextColor={t.c.muted}
           editable={!disabled}
           onFocus={() => setFocused(true)}

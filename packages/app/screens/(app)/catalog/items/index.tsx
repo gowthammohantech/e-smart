@@ -13,7 +13,9 @@ import { Cell, Column, DataTable } from '@esmart/ui/components/DataTable';
 import { Button } from '@esmart/ui/components/Button';
 import { Segmented } from '@esmart/ui/components/Field';
 import { FilterMenu } from '@esmart/ui/components/FilterMenu';
-import { useItemPages } from '../../../../remote/queries';
+import { fetchItemRecord, useItemPages } from '../../../../remote/queries';
+import { describeError } from '../../../../remote/errors';
+import { useToast } from '@esmart/ui/components/Toast';
 import { pagedTableProps, useRowsExport, useTableSelection } from '../../../../components/pagedTable';
 import { useServerSave } from '../../../../components/useServerSave';
 import { useAppStore } from '../../../../store/appStore';
@@ -74,6 +76,8 @@ export default function ItemList() {
   const exportRows = useRowsExport();
   const saveItem = useAppStore((s) => s.saveItem);
   const { run: serverSave, saving } = useServerSave();
+  const toast = useToast();
+  const companyId = useAppStore((s) => s.activeCompanyId);
   const chosen = (keys: string[]) => filtered.filter((i) => keys.includes(i.id));
   const exportChosen = (keys: string[]) =>
     exportRows(
@@ -87,14 +91,23 @@ export default function ItemList() {
   const deactivate = async (keys: string[]) => {
     const items = chosen(keys).filter((i) => i.status !== 'inactive');
     if (!items.length) return;
+    // Each one read from the server first and kept at its version: a list row the device has never
+    // kept would otherwise go up as a new item, a copy of the one being set inactive.
+    let records: Item[];
+    try {
+      await Promise.all(items.map((i) => fetchItemRecord(companyId, i.id)));
+      const stored = useAppStore.getState().items;
+      records = items.map((i) => stored.find((s) => s.id === i.id)).filter((i): i is Item => !!i);
+    } catch (err) {
+      toast.show(describeError(err, tr), 'error');
+      return;
+    }
+    if (!records.length) return;
     const res = await serverSave(
       () => {
-        // The list's rows are whole items plus read-only stock figures, which aren't saved back.
-        for (const { stockOnHand: _stock, low: _low, ...item } of items as (Item & { stockOnHand?: number; low?: boolean })[]) {
-          saveItem({ ...item, status: 'inactive' });
-        }
+        for (const item of records) saveItem({ ...item, status: 'inactive' });
       },
-      tr('common:table.deactivated', { count: items.length }),
+      tr('common:table.deactivated', { count: records.length }),
       { icon: 'minus-circle-outline' },
     );
     if (res) {

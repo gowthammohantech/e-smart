@@ -1,6 +1,9 @@
 {
   "hub": {
     "inactive": "Inactive",
+    "statusActive": "Active",
+    "noInactive": "No inactive parties",
+    "noInactiveBody": "Parties you deactivate show here, where you can reactivate them.",
     "settled": "Settled",
     "title": "Parties",
     "titleCustomersOnly": "Customers",
@@ -96,7 +99,7 @@
     "creditLimitHint": "Optional. Invoices that take them over it are warned about, or blocked if you choose.",
     "creditLimitBlocks": "Block invoices over the limit",
     "creditLimitBlocksOff": "Off: you are warned and can still issue the invoice.",
-    "creditLimitBlocksOn": "On: an invoice that takes them over the limit can’t be issued, and once they owe more than it nothing new can be raised to them (invoices, quotes, proformas, orders, delivery notes, debit notes) until they pay or the limit is raised. Receipts, credit notes and returns still go through.",
+    "creditLimitBlocksOn": "On: an invoice that takes them over the limit can’t be issued, and once they owe more than it nothing new can be raised to them (invoices, quotes, proformas, orders, delivery challans, debit notes) until they pay or the limit is raised. Receipts, credit notes and returns still go through.",
     "creditLimitBlocksShort": "blocks over it",
     "creditLimitWarnsShort": "warns over it",
     "openingBalance": "Opening balance",
@@ -227,6 +230,7 @@
     "skipped": "{{count}} left out",
     "tooMany": "Up to 1,000 at a time; split the sheet.",
     "needsPurchases": "Suppliers, and parties that are both, need a plan with purchases; import this one as a customer or other",
+    "customersOnly": "The Free plan imports customers only; set this row's type to Customer",
     "status": {
       "invalid": "Fix",
       "duplicate": "Already there",

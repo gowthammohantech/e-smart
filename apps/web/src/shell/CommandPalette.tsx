@@ -13,6 +13,7 @@ import { useGlobalSearch } from '@esmart/app/features/search/useGlobalSearch';
 import { matchPages, sectionHref, useAppPages } from '@esmart/app/navigation/pages';
 import { appHref } from '@esmart/app/navigation/menu';
 import { useCanOpen, usePlan } from '@esmart/app/store/selectors';
+import { useSectionLabel } from '@esmart/app/navigation/sectionLabel';
 
 type Entry = { key: string; group: string; title: string; subtitle?: string; trailing?: string; icon: IconName; route: string };
 
@@ -24,6 +25,7 @@ type Entry = { key: string; group: string; title: string; subtitle?: string; tra
 export function CommandPalette({ onClose }: { onClose: () => void }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['nav', 'common']);
+  const sectionLabel = useSectionLabel();
   const router = useRouter();
   const plan = usePlan();
   const allowed = useCanOpen();
@@ -57,12 +59,12 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
     const sections: Entry[] = TABS.filter((tab) => tab.name !== 'more' && sectionHref(plan, tab.name)).map((tab) => ({
       key: `tab-${tab.name}`,
       group: tr('nav:shell.goTo'),
-      title: tr(`nav:tab.${tab.name}` as 'nav:tab.index'),
+      title: sectionLabel(tab.name),
       icon: tab.icon,
       route: appHref(sectionHref(plan, tab.name) as string),
     }));
     return [...actions, ...sections];
-  }, [searching, query, pages, results, tr, t.c.primary, allowed, plan]);
+  }, [searching, query, pages, results, tr, sectionLabel, t.c.primary, allowed, plan]);
 
   // The arrow keys move the highlight; keep it in view.
   useEffect(() => {

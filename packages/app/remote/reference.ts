@@ -18,11 +18,11 @@ export async function lookupGstin(gstin: string) {
 
 export type GstinDetails = NonNullable<Awaited<ReturnType<typeof lookupGstin>>>;
 
-/** HSN/SAC codes from the master list whose code starts with, or description holds, `q`, each with its usual GST rate. */
-export async function searchHsn(q: string) {
-  if (!q.trim()) return [];
-  const { data } = await api.GET('/reference/hsn', { params: { query: { q: q.trim() } } });
-  return data?.data ?? [];
+/** HSN/SAC codes from the master list whose code starts with, or description holds, `q` (all of them, from the start, for an empty one), each with its usual GST rate. */
+export async function searchHsn(q: string, after?: string) {
+  const { data } = await api.GET('/reference/hsn', { params: { query: { ...(q.trim() && { q: q.trim() }), ...(after && { after }) } } });
+  // A page at a time: `nextCursor` asks for the one after it, null on the last.
+  return { rows: data?.data ?? [], nextCursor: data?.nextCursor ?? null };
 }
 
-export type HsnMatch = Awaited<ReturnType<typeof searchHsn>>[number];
+export type HsnMatch = Awaited<ReturnType<typeof searchHsn>>['rows'][number];

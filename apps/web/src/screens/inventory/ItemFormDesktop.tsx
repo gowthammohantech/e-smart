@@ -9,6 +9,7 @@ import { AmountField, FieldShell, focusFirstInvalid, PickerField, Segmented, Swi
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { useServerSave } from '@esmart/app/components/useServerSave';
 import { useSaveShortcut } from '@esmart/app/components/useSaveShortcut';
+import { useEnterToSave } from '@esmart/app/components/useEnterToSave';
 import { Item, ItemType } from '@esmart/core/types';
 import { unitLabel, unitsFor } from '@esmart/core/data/masters';
 import { fromMajor, money, toMajor, zero } from '@esmart/core/lib/money';
@@ -91,13 +92,10 @@ function ItemFormDesktopFields({ item }: { item?: Item }) {
 
   const [unitOpen, setUnitOpen] = useState(false);
   const [taxOpen, setTaxOpen] = useState(false);
-  // The HSN/SAC master: a pick fills the code, and the description (when empty) and GST rate it usually carries.
+  // The HSN/SAC master: a pick fills the code only (the description and rate stay as set).
   const [hsnOpen, setHsnOpen] = useState(false);
   const pickHsn = (match: HsnMatch) => {
     if (match.code) setHsnCode(match.code);
-    if (match.description && !description.trim()) setDescription(match.description);
-    const rated = match.gstRate == null ? undefined : taxCategories.find((c) => c.rate === match.gstRate);
-    if (rated) setTaxCategoryId(rated.id);
     setHsnOpen(false);
   };
   const [categoryOpen, setCategoryOpen] = useState(false);
@@ -187,6 +185,8 @@ function ItemFormDesktopFields({ item }: { item?: Item }) {
     } else router.replace(`/(app)/catalog/items/${id}`);
   };
   useSaveShortcut(() => void save(), !saving, item ? undefined : () => void save(true));
+  // Enter in a field saves, as Save does; never a link left focused behind the form (the sidebar's list).
+  useEnterToSave(() => void save(), !saving);
 
   return (
     <View style={{ flex: 1 }}>
@@ -242,7 +242,7 @@ function ItemFormDesktopFields({ item }: { item?: Item }) {
                     <SwitchField label={tr('inventory:form.active')} value={active} onValueChange={setActive} />
                   </FieldShell>
                 </View>
-                <TextField id="item-form-name" label={tr('inventory:form.name')} value={name} onChangeText={setName} placeholder={tr('inventory:form.namePlaceholderFull')} error={errors.name} required icon="tag-outline" />
+                <TextField autoFocus={!item} id="item-form-name" label={tr('inventory:form.name')} value={name} onChangeText={setName} placeholder={tr('inventory:form.namePlaceholderFull')} error={errors.name} required icon="tag-outline" />
                 {hasPos ? (
                   <Row>
                     <TextField
@@ -307,7 +307,7 @@ function ItemFormDesktopFields({ item }: { item?: Item }) {
                     <Button title={tr('inventory:form.hsnSearch')} variant="ghost" size="sm" icon="magnify" onPress={() => setHsnOpen(true)} style={{ alignSelf: 'flex-start' }} />
                   </View>
                 </Row>
-                {gstRegistered || gst ? <GstTreatmentFields value={gst} onChange={setGst} type={type} /> : null}
+                {gstRegistered || gst ? <GstTreatmentFields value={gst} onChange={setGst} type={type} taxCategory={category} /> : null}
               </Panel>
             </>
           }

@@ -1,6 +1,7 @@
 {
   "tabBar": {
-    "contacts": "Parties"
+    "contacts": "Parties",
+    "customersOnly": "Customers"
   },
   "overviewOf": {
     "money": "Income overview"
@@ -8,10 +9,11 @@
   "tab": {
     "index": "Home",
     "sales": "Sales",
-    "purchases": "Buy",
+    "purchases": "Purchases",
     "inventory": "Inventory",
     "gst": "GST",
     "contacts": "Parties",
+    "customersOnly": "Customers",
     "reports": "Reports",
     "more": "More",
     "money": "Accounts"
@@ -27,8 +29,8 @@
     "businessProfile": "Business profile",
     "currenciesAndRates": "Currencies & rates",
     "customer": "Customer",
-    "deliveryNote": "Delivery note",
-    "deliveryNotes": "Delivery notes",
+    "deliveryNote": "Delivery challan",
+    "deliveryNotes": "Delivery challans",
     "devicesAndSessions": "Devices & sessions",
     "documentNumbering": "Document numbering",
     "eInvoicingAndEWayBill": "E-invoicing & e-way bill",
@@ -50,7 +52,7 @@
     "itemsAndServices": "Items & services",
     "lowStock": "Low stock",
     "newCustomer": "New customer",
-    "newDeliveryNote": "New delivery note",
+    "newDeliveryNote": "New delivery challan",
     "newEWayBill": "New e-way bill",
     "newGoodsReceipt": "New goods receipt",
     "newInvoice": "New invoice",
@@ -239,8 +241,8 @@
       "inDays_other": "in {{count}} days",
       "overdue_one": "{{count}} day late",
       "overdue_other": "{{count}} days late",
-      "more_one": "+{{count}} more due",
-      "more_other": "+{{count}} more due",
+      "more_one": "{{count}} more filing due · View all",
+      "more_other": "{{count}} more filings due · View all",
       "allFiled": "All filings up to date",
       "allFiledHint": "Nothing left to file in the next 60 days.",
       "a11y": "Next filing: {{title}} for {{period}}, {{when}}. Open GST returns."

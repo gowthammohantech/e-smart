@@ -17,7 +17,7 @@ import { formatMoney } from '@esmart/core/lib/format';
 import { api } from '../../remote/api';
 import { describeError } from '../../remote/errors';
 import { refreshSoon } from '../../remote/refresh';
-import { useBaseCurrency, useHasModule } from '../../store/selectors';
+import { useBaseCurrency, useHasModule, usePlan } from '../../store/selectors';
 import { buysFrom } from '@esmart/core/domain/partyKinds';
 import { useAppStore } from '../../store/appStore';
 import { useCustomFields } from '../customFields/CustomFieldsSection';
@@ -30,16 +30,26 @@ const KINDS: ImportKind[] = ['customer', 'supplier', 'both', 'general'];
 /**
  * The types this plan can import, as the contact form offers them: suppliers, and parties that are
  * both, are the buying side's, which Free and Basic leave out (the server refuses them there too).
- * `check` turns a row whose own type column says one of those into a problem, shown before import.
+ * Free imports customers only. `check` turns a row whose own type column says one the plan leaves out
+ * into a problem, shown before import.
  */
 function useImportKinds() {
   const { t: tr } = useTranslation(['contacts']);
   const hasPurchases = useHasModule('purchases');
-  const kinds = useMemo(() => KINDS.filter((k) => hasPurchases || !buysFrom(k)), [hasPurchases]);
+  const customersOnly = usePlan() === 'free';
+  const kinds = useMemo(
+    () => (customersOnly ? (['customer'] as ImportKind[]) : KINDS.filter((k) => hasPurchases || !buysFrom(k))),
+    [hasPurchases, customersOnly],
+  );
   const check = useCallback(
     (rows: ImportRow[]): ImportRow[] =>
-      hasPurchases ? rows : rows.map((r) => (r.party && buysFrom(r.party.kind) ? { ...r, party: undefined, problems: [tr('contacts:import.needsPurchases')] } : r)),
-    [hasPurchases, tr],
+      rows.map((r) => {
+        if (!r.party) return r;
+        if (customersOnly && r.party.kind !== 'customer') return { ...r, party: undefined, problems: [tr('contacts:import.customersOnly')] };
+        if (!hasPurchases && buysFrom(r.party.kind)) return { ...r, party: undefined, problems: [tr('contacts:import.needsPurchases')] };
+        return r;
+      }),
+    [hasPurchases, customersOnly, tr],
   );
   return { kinds, check };
 }

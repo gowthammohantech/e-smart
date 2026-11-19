@@ -12,7 +12,7 @@ import { useAccountName } from '../../../features/books/names';
 
 export default function TrialBalanceScreen() {
   const { t: tr } = useTranslation(['books']);
-  const { scope, setScope } = useReportScope('thisFY');
+  const { scope, setScope } = useReportScope('today');
   const baseCurrency = useBaseCurrency();
   const nameOf = useAccountName();
   const query = useBooksView<ReturnType<typeof trialBalance>>('trial-balance', scope.filters.range);

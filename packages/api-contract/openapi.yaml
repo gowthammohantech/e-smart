@@ -6426,15 +6426,17 @@ paths:
       operationId: searchHsn
       summary: HSN/SAC code search with the suggested GST rate
       parameters:
-        - { name: q, in: query, required: true, schema: { type: string } }
+        - { name: q, in: query, schema: { type: string }, description: Left out or empty lists the codes from the start }
+        - { name: after, in: query, schema: { type: string, maxLength: 8 }, description: 'The next page: the codes after this one (nextCursor of the page before)' }
       responses:
         '200':
-          description: OK
+          description: OK, 50 codes at a time in code order
           content:
             application/json:
               schema:
                 type: object
                 properties:
+                  nextCursor: { type: [string, 'null'], description: 'Pass as `after` for the next page; null on the last' }
                   data:
                     type: array
                     items:
@@ -6641,12 +6643,17 @@ paths:
       tags: [Platform]
       operationId: reactivateAccount
       summary: Lift a suspension. Users sign in again; their old sessions stay revoked.
+      description: >-
+        An account closed by its last owner deleting themselves (suspendedReason owner-deleted) has
+        nobody left who can sign in, so it needs ownerEmail and ownerName: a new owner of every business
+        on the account, emailed an invite to set a password (422 without them; 409 EMAIL_TAKEN for an
+        email that already signs in; 502 when the email can't be sent, and nothing is changed).
       x-platform-roles: [superadmin]
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/PlatformReason' }
+            schema: { $ref: '#/components/schemas/PlatformReactivate' }
       responses:
         '200':
           description: Reactivated
@@ -8241,6 +8248,14 @@ components:
             assessableValue: { $ref: '#/components/schemas/Money' }
             igst: { $ref: '#/components/schemas/Money' }
             cess: { $ref: '#/components/schemas/Money' }
+        shippingBill:
+          type: [object, 'null']
+          description: "On an export invoice: the port the goods leave from (six-character port code) and, once filed at customs, the shipping bill's number and date. GSTR-1 EXP reports them (sbpcode, sbnum, sbdt). Send null to clear it."
+          required: [portCode]
+          properties:
+            portCode: { type: string, pattern: '^[A-Z0-9]{6}$' }
+            number: { type: string, maxLength: 20 }
+            date: { type: string, format: date }
         isdInvoice: { type: boolean, description: "A purchase bill that is an Input Service Distributor's invoice: its credit goes to 3B 4A(4)" }
         placeOfSupplyStateCode: { type: string }
         reverseCharge: { type: boolean, description: The whole document is under reverse charge; the buyer pays the GST }
@@ -8985,6 +9000,13 @@ components:
       required: [reason]
       properties:
         reason: { type: string, minLength: 3, maxLength: 500, description: Why; kept in the platform audit log }
+    PlatformReactivate:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 3, maxLength: 500, description: Why; kept in the platform audit log }
+        ownerEmail: { type: string, maxLength: 254, description: 'An account its owner deleted: the new owner to invite' }
+        ownerName: { type: string, maxLength: 100, description: 'An account its owner deleted: the new owner''s name' }
     PlatformRoleChange:
       type: object
       required: [platformRole, reason]

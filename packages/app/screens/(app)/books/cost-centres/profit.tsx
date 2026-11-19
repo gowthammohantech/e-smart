@@ -15,7 +15,7 @@ import { useAccountName } from '../../../../features/books/names';
 /** Income, expenses and profit by cost centre, with what each is made of. */
 export default function CostCentreProfitScreen() {
   const { t: tr } = useTranslation(['books']);
-  const { scope, setScope } = useReportScope('thisFY');
+  const { scope, setScope } = useReportScope('today');
   const baseCurrency = useBaseCurrency();
   const centres = useCostCentres(true);
   const nameOf = useAccountName();

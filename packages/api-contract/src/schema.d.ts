@@ -4624,7 +4624,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Lift a suspension. Users sign in again; their old sessions stay revoked. */
+        /**
+         * Lift a suspension. Users sign in again; their old sessions stay revoked.
+         * @description An account closed by its last owner deleting themselves (suspendedReason owner-deleted) has nobody left who can sign in, so it needs ownerEmail and ownerName: a new owner of every business on the account, emailed an invite to set a password (422 without them; 409 EMAIL_TAKEN for an email that already signs in; 502 when the email can't be sent, and nothing is changed).
+         */
         post: operations["reactivateAccount"];
         delete?: never;
         options?: never;
@@ -6226,6 +6229,13 @@ export interface components {
                 igst: components["schemas"]["Money"];
                 cess?: components["schemas"]["Money"];
             };
+            /** @description On an export invoice: the port the goods leave from (six-character port code) and, once filed at customs, the shipping bill's number and date. GSTR-1 EXP reports them (sbpcode, sbnum, sbdt). Send null to clear it. */
+            shippingBill?: {
+                portCode: string;
+                number?: string;
+                /** Format: date */
+                date?: string;
+            } | null;
             /** @description A purchase bill that is an Input Service Distributor's invoice: its credit goes to 3B 4A(4) */
             isdInvoice?: boolean;
             placeOfSupplyStateCode?: string;
@@ -7050,6 +7060,14 @@ export interface components {
         PlatformReason: {
             /** @description Why; kept in the platform audit log */
             reason: string;
+        };
+        PlatformReactivate: {
+            /** @description Why; kept in the platform audit log */
+            reason: string;
+            /** @description An account its owner deleted: the new owner to invite */
+            ownerEmail?: string;
+            /** @description An account its owner deleted: the new owner's name */
+            ownerName?: string;
         };
         PlatformRoleChange: {
             /** @description `null` removes platform access */
@@ -16684,8 +16702,11 @@ export interface operations {
     };
     searchHsn: {
         parameters: {
-            query: {
-                q: string;
+            query?: {
+                /** @description Left out or empty lists the codes from the start */
+                q?: string;
+                /** @description The next page: the codes after this one (nextCursor of the page before) */
+                after?: string;
             };
             header?: never;
             path?: never;
@@ -16693,13 +16714,15 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description OK, 50 codes at a time in code order */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": {
+                        /** @description Pass as `after` for the next page; null on the last */
+                        nextCursor?: string | null;
                         data?: {
                             code?: string;
                             description?: string;
@@ -16981,7 +17004,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["PlatformReason"];
+                "application/json": components["schemas"]["PlatformReactivate"];
             };
         };
         responses: {

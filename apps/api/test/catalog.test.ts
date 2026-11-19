@@ -39,14 +39,15 @@ function multipart(filename: string, type: string, content: Buffer) {
 }
 
 describe('catalog', () => {
-  it('creates an item with opening stock, adding an unknown HSN code to the master', async () => {
+  it('creates an item with opening stock, keeping an HSN code the search list has not got, and adding nothing to the list', async () => {
     const { token, c, item, company } = await setup();
     const created = await t.post(`${c}/items`, item({ hsnCode: '84821099' }), { token });
     expect(created.status).toBe(201);
     expect(created.headers.etag).toBe('"v1"');
     expect(created.body).toMatchObject({ unit: 'PCS', hsnCode: '84821099', openingStock: 10, trackInventory: true, version: 1 });
     const [hsn] = await t.deps.db.select().from(schema.hsnCodes).where(eq(schema.hsnCodes.code, '84821099'));
-    expect(hsn).toMatchObject({ description: 'Added from catalog', isService: false });
+    // The item keeps its own code; the shared search list is the master file only (0079).
+    expect(hsn).toBeUndefined();
 
     const moves = await t.deps.db.select().from(schema.stockMovements).where(eq(schema.stockMovements.companyId, company.id!));
     expect(moves.map((m) => [m.type, Number(m.quantity), m.unitCostMinor])).toEqual([['opening', 10, 11800]]);

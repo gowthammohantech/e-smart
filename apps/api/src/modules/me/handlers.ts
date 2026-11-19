@@ -4,7 +4,7 @@ import { defineHandlers } from '../../context';
 import { conflict, invalid, notFound, preconditionFailed } from '../../http/errors';
 import { compact, iso } from '../../lib/wire';
 import { onboardingComplete, userToWire } from '../auth/users';
-import { companyToWire } from '../companies/wire';
+import { companyWithImages } from '../companies/logo';
 import { identifyCompany, track } from '../../analytics/track';
 import { recordUserChange } from '../users/shared';
 
@@ -33,7 +33,8 @@ export const meHandlers = defineHandlers({
       user: await userToWire(ctx.db, row),
       accountId: row.accountId,
       onboardingComplete: await onboardingComplete(ctx.db, row.id),
-      companies: await Promise.all(companies.map((c) => companyToWire(ctx.deps, c))),
+      // With their logo and signature links: the app keeps this copy, and one without them blanked both.
+      companies: await Promise.all(companies.map((c) => companyWithImages(ctx.deps, ctx.db, c))),
       ...(defaultCompanyId ? { defaultCompanyId } : {}),
       platformRole: row.platformRole,
       ...(ctx.user.demo ? { demo: true } : {}),

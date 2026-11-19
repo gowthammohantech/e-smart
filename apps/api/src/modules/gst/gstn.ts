@@ -62,7 +62,16 @@ export function gstnJson(summary: Gstr1Summary, gstin: string, period: string) {
   }));
   const exp = [...byKey(byDocument(summary.exp), (d) => (d.some((r) => r.igst.minor > 0) ? 'WPAY' : 'WOPAY')).entries()].map(([exp_typ, docs]) => ({
     exp_typ,
-    inv: docs.map((d) => ({ inum: d[0].number, idt: dmy(d[0].date), val: r2(d[0].invoiceValue.minor), itms: itemsOf(d).map((i) => ({ txval: i.itm_det.txval, rt: i.itm_det.rt, iamt: i.itm_det.iamt, csamt: i.itm_det.csamt })) })),
+    inv: docs.map((d) => ({
+      inum: d[0].number,
+      idt: dmy(d[0].date),
+      val: r2(d[0].invoiceValue.minor),
+      // The shipping bill as entered on the invoice: the port code, and the bill's number and date once filed.
+      ...(d[0].portCode && { sbpcode: d[0].portCode }),
+      ...(d[0].shippingBillNumber && { sbnum: d[0].shippingBillNumber }),
+      ...(d[0].shippingBillDate && { sbdt: dmy(d[0].shippingBillDate) }),
+      itms: itemsOf(d).map((i) => ({ txval: i.itm_det.txval, rt: i.itm_det.rt, iamt: i.itm_det.iamt, csamt: i.itm_det.csamt })),
+    })),
   }));
   const cdnr = [...byKey(byDocument(summary.cdnr), (d) => d[0].gstin ?? '').entries()].map(([ctin, docs]) => ({ ctin, nt: docs.map(note) }));
   const cdnur = byDocument(summary.cdnur).map((d) => {
@@ -128,7 +137,17 @@ export function gstnJson(summary: Gstr1Summary, gstin: string, period: string) {
   const expa = a
     ? [...byKey(byDocument(a.expa), (d) => (d.some((r) => r.igst.minor > 0) ? 'WPAY' : 'WOPAY')).entries()].map(([exp_typ, docs]) => ({
         exp_typ,
-        inv: docs.map((d) => ({ oinum: orig(d).originalNumber, oidt: dmy(orig(d).originalDate), inum: d[0].number, idt: dmy(d[0].date), val: r2(d[0].invoiceValue.minor), itms: itemsOf(d).map((i) => ({ txval: i.itm_det.txval, rt: i.itm_det.rt, iamt: i.itm_det.iamt, csamt: i.itm_det.csamt })) })),
+        inv: docs.map((d) => ({
+          oinum: orig(d).originalNumber,
+          oidt: dmy(orig(d).originalDate),
+          inum: d[0].number,
+          idt: dmy(d[0].date),
+          val: r2(d[0].invoiceValue.minor),
+          ...(d[0].portCode && { sbpcode: d[0].portCode }),
+          ...(d[0].shippingBillNumber && { sbnum: d[0].shippingBillNumber }),
+          ...(d[0].shippingBillDate && { sbdt: dmy(d[0].shippingBillDate) }),
+          itms: itemsOf(d).map((i) => ({ txval: i.itm_det.txval, rt: i.itm_det.rt, iamt: i.itm_det.iamt, csamt: i.itm_det.csamt })),
+        })),
       }))
     : [];
   const cdnra = a ? [...byKey(byDocument(a.cdnra), (d) => d[0].gstin ?? '').entries()].map(([ctin, docs]) => ({ ctin, nt: docs.map((d) => ({ ont_num: orig(d).originalNumber, ont_dt: dmy(orig(d).originalDate), ...note(d) })) })) : [];

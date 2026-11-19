@@ -480,7 +480,7 @@ export function reportPartyParam(f: Pick<ReportFilters, 'partyId' | 'partyIds'>)
 }
 
 /** The report's filters, kept in the URL (`?range=lastMonth&branch=…&party=…&currency=…`). */
-export function useReportScope(initial: DateRangePreset = 'thisFY') {
+export function useReportScope(initial: DateRangePreset = 'today') {
   const [params, setParams] = useQueryParams();
   // "This FY" is the company's own financial year, which needn't start in April.
   const fyStartMonth = useActiveCompany()?.fiscalYearStartMonth;
