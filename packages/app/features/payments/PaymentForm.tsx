@@ -205,6 +205,8 @@ export function PaymentForm({
   // still owes is the server's figure (returns and credit notes already off), in the payment currency, oldest first.
   // An advance receipt lists only the invoices whose every line is a service, not the ones with goods.
   const advanceReceipt = direction === 'received' && params.advance === '1';
+  // A receipt goes in full to the invoices ticked: no advance is kept (that is an advance receipt's).
+  const noAdvance = direction === 'received' && !advanceReceipt;
   const open = useOpenDocuments(partyId, direction === 'received' ? ['invoice', 'debitNote', 'openingInvoice'] : ['purchaseBill', 'supplierDebitNote', 'openingBill'], { servicesOnly: advanceReceipt });
   const outstanding = useMemo(() => {
     const asOf = today();
@@ -302,7 +304,7 @@ export function PaymentForm({
   const advanceTaxCategory = taxed.find((c) => c.id === advanceTaxId) ?? taxed.find((c) => c.rate === DEFAULT_ADVANCE_RATE) ?? taxed[0];
   // A place of supply not known is taken as another state: IGST, under "Other Territory" (97).
   const pos = advancePos ?? party?.billingAddress?.stateCode;
-  const canAdvance = direction === 'received' && unallocated.minor > 0 && !!company.taxRegistration?.registered && !!taxed.length;
+  const canAdvance = direction === 'received' && !noAdvance && unallocated.minor > 0 && !!company.taxRegistration?.registered && !!taxed.length;
   const sac = advanceSac.trim();
   // An HSN that isn't a SAC (99…) is goods, which carry no GST on an advance (notification 66/2017).
   const goodsSac = !!sac && !sac.startsWith('99');
@@ -312,6 +314,8 @@ export function PaymentForm({
       ? { taxCategoryId: advanceTaxCategory.id, rate: advanceTaxCategory.rate, placeOfSupplyStateCode: pos ?? '97', ...(sac && { hsn: sac }), ...(advanceCess > 0 && { cessRate: advanceCess }) }
       : null;
   const overAllocated = unallocated.minor < 0;
+  /** A receipt with money left over: more than the ticked invoices owe, or not all of it applied. */
+  const notApplied = noAdvance && unallocated.minor > 0;
 
   /**
    * Spread `total` over documents oldest first, never more than each one owes.
@@ -351,6 +355,12 @@ export function PaymentForm({
   const onAmountChange = (v: string) => {
     setAmountText(v);
     setAmountFollows(false);
+    // A receipt fills the invoices oldest first, each in full, the last with what is left, and ticks
+    // only those the amount reaches.
+    if (noAdvance) {
+      setAllocations(spread(fromMajor(v || '0', currency).minor));
+      return;
+    }
     // Keep the ticked documents, but re-fit them to the new amount so a
     // smaller (partial) amount never leaves the form over-allocated.
     const ticked = Object.keys(allocations);
@@ -452,6 +462,7 @@ export function PaymentForm({
     open.isSuccess &&
     (amount.minor > 0 || (amount.minor === 0 && adjustedTotal > 0)) &&
     !overAllocated &&
+    !notApplied &&
     !!accountId &&
     !balanceBlocks &&
     (!keepsTds || direction === 'received' || !!tdsSectionPicked) &&
@@ -744,7 +755,7 @@ export function PaymentForm({
       illustration="all-settled"
       icon="check-all"
       title={tr(advanceReceipt ? 'sales:payment.nothingOutstandingServices' : 'sales:payment.nothingOutstanding')}
-      message={tr(advanceReceipt ? 'sales:payment.advanceReceiptHint' : 'sales:payment.advanceHint')}
+      message={tr(advanceReceipt ? 'sales:payment.advanceReceiptHint' : noAdvance ? 'sales:payment.noInvoicesHint' : 'sales:payment.advanceHint')}
       compact
     />
   ) : (
@@ -911,13 +922,18 @@ export function PaymentForm({
       ))}
       <View style={{ height: 1, backgroundColor: t.c.line, marginVertical: 2 }} />
       <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-        <Text variant="body" weight="700" tone={overAllocated ? 'bad' : 'default'}>
-          {overAllocated ? tr('sales:payment.overAllocatedBy') : tr('sales:payment.unallocatedAdvance')}
+        <Text variant="body" weight="700" tone={overAllocated || notApplied ? 'bad' : 'default'}>
+          {overAllocated ? tr('sales:payment.overAllocatedBy') : noAdvance ? tr('sales:payment.notApplied') : tr('sales:payment.unallocatedAdvance')}
         </Text>
-        <Text variant="body" weight="700" tone={overAllocated ? 'bad' : unallocated.minor > 0 ? 'warn' : 'good'}>
+        <Text variant="body" weight="700" tone={overAllocated || notApplied ? 'bad' : unallocated.minor > 0 ? 'warn' : 'good'}>
           {formatMoney(overAllocated ? money(-unallocated.minor, currency) : unallocated)}
         </Text>
       </View>
+      {notApplied ? (
+        <Text variant="caption" tone="bad">
+          {tr('sales:payment.notAppliedHint')}
+        </Text>
+      ) : null}
       {/* A service advance: the GST inside it, line by line, as it is owed when received. */}
       {advanceTax && unallocated.minor > 0 ? (
         <AdvanceGstBreakup gross={money(unallocated.minor + advanceTds.minor, currency)} rate={advanceTax.rate} cessRate={advanceCess} placeOfSupply={pos} company={company} baseCurrency={baseCurrency} exchangeRate={exchangeRate} tds={advanceTds} style={{ paddingLeft: t.spacing.md, marginTop: 2 }} />
@@ -937,13 +953,13 @@ export function PaymentForm({
 
   // TDS and the GST on a service advance: in the notes column on a phone, a card of their own in the
   // main column on a desktop, where the side column is too narrow for fields side by side.
-  const hasTaxFields = (direction === 'received' && unallocated.minor > 0) || keepsTds || advanceTds.minor > 0 || canAdvance;
+  const hasTaxFields = (direction === 'received' && !noAdvance && unallocated.minor > 0) || keepsTds || advanceTds.minor > 0 || canAdvance;
   const taxFields = (
     <>
       {/* The TDS amount and its section share a row on a desktop; either alone takes the row. */}
       <FieldGrid
         items={[
-          direction === 'received' && unallocated.minor > 0 ? (
+          direction === 'received' && !noAdvance && unallocated.minor > 0 ? (
             <AmountField
               label={tr('sales:payment.advanceTds')}
               value={advanceTdsText}
