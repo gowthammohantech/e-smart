@@ -40,6 +40,21 @@ export function validGstin(value: string | undefined): string | undefined {
   return GSTIN_RE.test(normalizeGstin(value)) ? i18n.t('errors:validation.gstinCheckDigit') : i18n.t('errors:validation.gstinShape');
 }
 
+/** What each of a GSTIN's 15 places takes: state digits, PAN (5 letters, 4 digits, a letter), entity, then two more. */
+const GSTIN_PLACES = [/\d/, /\d/, /[A-Z]/, /[A-Z]/, /[A-Z]/, /[A-Z]/, /[A-Z]/, /\d/, /\d/, /\d/, /\d/, /[A-Z]/, /[1-9A-Z]/, /[0-9A-Z]/, /[0-9A-Z]/];
+
+/**
+ * A GSTIN as it is typed, for a message beside the field before anything is saved: a character that
+ * can't be in its place says the shape at once, and the whole 15 are checked as `validGstin` does.
+ * An empty or still-right-so-far GSTIN has none, so the message goes as soon as it is put right.
+ */
+export function gstinAsTyped(value: string | undefined): string | undefined {
+  const v = normalizeGstin(value ?? '');
+  if (!v) return undefined;
+  if (v.length >= 15) return validGstin(v);
+  return [...v].every((ch, i) => GSTIN_PLACES[i].test(ch)) ? undefined : i18n.t('errors:validation.gstinShape');
+}
+
 /** Indian PIN code: six digits, never starting with 0. */
 export const PINCODE_RE = /^[1-9][0-9]{5}$/;
 

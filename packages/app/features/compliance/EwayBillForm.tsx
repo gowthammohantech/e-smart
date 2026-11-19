@@ -40,6 +40,7 @@ import { formatMoney } from '@esmart/core/lib/format';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { portalToast } from './portalToast';
 import { useSaveShortcut } from '../../components/useSaveShortcut';
+import { gstinAsTyped } from '@esmart/core/lib/validators';
 
 /**
  * Everything the e-way bill form holds and does, apart from how it is laid
@@ -543,7 +544,8 @@ function PlaceFields({
         onChangeText={(v) => onChange({ ...place, gstin: v.toUpperCase() })}
         autoCapitalize="characters"
         autoCorrect={false}
-        error={errors[`${prefix}.gstin`]}
+        // URP (unregistered) is typed in here too; anything else is checked as a GSTIN as it is typed.
+        error={errors[`${prefix}.gstin`] ?? (/^U(RP?)?$/.test(place.gstin) ? undefined : gstinAsTyped(place.gstin))}
         hint={tr('compliance:ewb.urpHint')}
       />
       <TextField

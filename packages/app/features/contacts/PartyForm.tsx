@@ -25,7 +25,7 @@ import { CURRENCIES } from '@esmart/core/lib/currencies';
 import { fromMajor, toMajor, zero } from '@esmart/core/lib/money';
 import { uid } from '@esmart/core/lib/id';
 import { nowISO, today } from '@esmart/core/lib/date';
-import { Errors, gstinRequiredFor, hasErrors, partyGstinError, required, validEmail, validPostalCode } from '@esmart/core/lib/validators';
+import { Errors, gstinAsTyped, gstinRequiredFor, hasErrors, partyGstinError, required, validEmail, validPostalCode } from '@esmart/core/lib/validators';
 import { useAppStore } from '../../store/appStore';
 import { useBaseCurrency, useHasModule, useParties } from '../../store/selectors';
 import { SHOW_SCROLLBAR, WIDE_FORM_MAX_WIDTH, useBreakpoint } from '@esmart/ui/theme/breakpoints';
@@ -325,6 +325,8 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
         // A GSTIN is 15 letters and digits; spaces and dashes pasted with it are dropped.
         const next = v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 15);
         setTaxId(next);
+        // What Save found goes as the GSTIN changes; what's wrong as typed shows below (gstinAsTyped).
+        if (errors.taxId) setErrors((e) => ({ ...e, taxId: undefined }));
         // The first two digits are the state; fill it in if it's still blank.
         if (!stateCode && /^\d{2}/.test(next) && INDIAN_STATES.some((s) => s.code === next.slice(0, 2))) {
           changeState(next.slice(0, 2));
@@ -333,7 +335,7 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
       placeholder="27AABCV1234F1ZO"
       autoCapitalize="characters"
       icon="card-account-details-outline"
-      error={errors.taxId}
+      error={errors.taxId ?? gstinAsTyped(taxId)}
       hint={gstinLookup.hint ?? tr('contacts:form.gstinHint')}
       suffix={gstinLookup.suffix}
       required

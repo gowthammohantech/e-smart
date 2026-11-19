@@ -47,6 +47,7 @@ import {
 } from '../../store/selectors';
 import { SHOW_SCROLLBAR, useBreakpoint } from '@esmart/ui/theme/breakpoints';
 import { useGoBack } from '../../navigation/useGoBack';
+import { gstinAsTyped } from '@esmart/core/lib/validators';
 
 /** The desktop side column (summary, receipt). */
 const SIDE_WIDTH = 360;
@@ -388,7 +389,7 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
   );
   // Without a saved supplier, the GSTIN on the bill is what the GST returns match it by.
   const gstinField = supplierId ? null : (
-    <TextField label={tr('purchases:form.supplierGstin')} value={supplierGstin} onChangeText={(v) => setSupplierGstin(v.toUpperCase().slice(0, 15))} placeholder="33AABCS1234K1ZP" autoCapitalize="characters" icon="card-account-details-outline" />
+    <TextField label={tr('purchases:form.supplierGstin')} value={supplierGstin} onChangeText={(v) => setSupplierGstin(v.toUpperCase().slice(0, 15))} placeholder="33AABCS1234K1ZP" autoCapitalize="characters" icon="card-account-details-outline" error={gstinAsTyped(supplierGstin)} />
   );
   const referenceField = (
     <TextField label={tr('purchases:form.reference')} value={reference} onChangeText={setReference} placeholder={tr('purchases:form.referencePlaceholder')} icon="pound" />

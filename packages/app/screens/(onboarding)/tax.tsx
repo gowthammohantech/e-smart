@@ -13,7 +13,7 @@ import { nextStepRoute, onboardingSteps, stepIndex, useOnboardingStore } from '.
 import { COUNTRIES, INDIAN_STATES, defaultTaxRates } from '@esmart/core/data/masters';
 import { useSignOut } from '../../features/session/useSignOut';
 import { useGstinLookup, type GstinDetails } from '../../features/gstin/useGstinLookup';
-import { validGstin } from '@esmart/core/lib/validators';
+import { gstinAsTyped, validGstin } from '@esmart/core/lib/validators';
 
 export default function TaxStep() {
   const t = useTheme();
@@ -119,7 +119,7 @@ export default function TaxStep() {
             placeholder={draft.country === 'IN' ? '27AABCV1234F1ZO' : tr('onboarding:tax.numberPlaceholder')}
             autoCapitalize="characters"
             icon="card-account-details-outline"
-            error={error}
+            error={error ?? (draft.country === 'IN' ? gstinAsTyped(draft.taxIdentifier) : undefined)}
             hint={gstinLookup.hint ?? (draft.country === 'IN' ? tr('onboarding:tax.stateHint') : undefined)}
             suffix={gstinLookup.suffix}
           />

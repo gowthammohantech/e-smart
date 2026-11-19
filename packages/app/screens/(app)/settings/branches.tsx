@@ -23,7 +23,7 @@ import { useCompanyUsage } from '../../../remote/queries';
 import { Skeleton, SkeletonGroup } from '@esmart/ui/components/Skeleton';
 import { hasModule } from '@esmart/core/domain/plan';
 import { uid } from '@esmart/core/lib/id';
-import { Errors, hasErrors, validGstin, validPostalCode } from '@esmart/core/lib/validators';
+import { Errors, gstinAsTyped, hasErrors, validGstin, validPostalCode } from '@esmart/core/lib/validators';
 import { normalizeGstin } from '@esmart/core/domain/gstin';
 import { INDIAN_STATES, stateName } from '@esmart/core/data/masters';
 import { citiesForState } from '@esmart/core/data/cities';
@@ -97,6 +97,8 @@ export default function BranchSettings() {
   const changeGstin = (v: string) => {
     const next = v.toUpperCase().replace(/\s/g, '').slice(0, 15);
     setGstin(next);
+    // What Save found goes as the GSTIN changes; what's wrong as typed shows below (gstinAsTyped).
+    setErrors((e) => (e.gstin ? { ...e, gstin: undefined } : e));
     // The first two digits are the state; fill it in if it's still blank.
     if (!stateCode && /^\d{2}/.test(next) && INDIAN_STATES.some((st) => st.code === next.slice(0, 2))) {
       setStateCode(next.slice(0, 2));
@@ -326,7 +328,7 @@ export default function BranchSettings() {
             placeholder="27AABCV1234F1ZO"
             autoCapitalize="characters"
             icon="card-account-details-outline"
-            error={errors.gstin}
+            error={errors.gstin ?? (locked ? undefined : gstinAsTyped(gstin))}
             hint={locked ? undefined : (gstinLookup.hint ?? tr('settings:branches.gstinHint'))}
             suffix={gstinLookup.suffix}
           />

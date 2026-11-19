@@ -23,6 +23,7 @@ import { useDocument, useParties } from '@esmart/app/store/selectors';
 import { useDocumentRecord } from '@esmart/app/remote/queries';
 import { LoadingView } from '@esmart/app/components/LoadingView';
 import { EwayBillFormSheets, useEwayBillForm, type EwayBillFormState } from '@esmart/app/features/compliance/EwayBillForm';
+import { gstinAsTyped } from '@esmart/core/lib/validators';
 
 function Label({ children }: { children: string }) {
   return (
@@ -73,7 +74,8 @@ function PlaceColumn({
           onChangeText={(v) => onChange({ ...place, gstin: v.toUpperCase() })}
           autoCapitalize="characters"
           autoCorrect={false}
-          error={errors[`${prefix}.gstin`]}
+          // URP (unregistered) is typed in here too; anything else is checked as a GSTIN as it is typed.
+        error={errors[`${prefix}.gstin`] ?? (/^U(RP?)?$/.test(place.gstin) ? undefined : gstinAsTyped(place.gstin))}
           hint={tr('compliance:ewb.urpHint')}
         />
         <TextField
