@@ -920,7 +920,10 @@ export const documentsHandlers = defineHandlers({
     const reverses = ['salesReturn', 'purchaseReturn', 'creditNote', 'debitNote', 'supplierCreditNote', 'supplierDebitNote'].includes(target);
     const f: DocFields = { ...fieldsFromRow(src), kind: target, date: today(ctx.now), dueDate: null, validUntil: null, sourceDocumentId: src.id, tdsSection: undefined, ...(!reverses && { exchangeRate: null }) };
     // The new draft keeps the source's tax rates: a return must reverse exactly what was charged.
-    const row = await insertDocument(ctx, f, lines.map((l) => ({ ...l, id: undefined })), requestedStatus(target, 'draft') as DocStatus, {
+    // A credit or debit note is for a difference in rate: each line starts at 0, rate and discount, for the person to fill.
+    const note = ['creditNote', 'debitNote', 'supplierCreditNote', 'supplierDebitNote'].includes(target);
+    const copied = lines.map((l) => ({ ...l, id: undefined, ...(note && { unitPriceMinor: 0, discountValue: 0 }) }));
+    const row = await insertDocument(ctx, f, copied, requestedStatus(target, 'draft') as DocStatus, {
       snapshotRates: false,
       action: `converted from ${numbers}`,
       mergedSourceIds: others.map((d) => d.id),

@@ -234,6 +234,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   const isReturn = kind === 'salesReturn' || kind === 'purchaseReturn';
   // Tax documents carry HSN/SAC per line; quotes and orders do not have to.
   const isNote = NOTE_KINDS.includes(kind);
+  // A credit or debit note is for a difference in rate: a line put on it starts at 0, rate and discount.
+  const noteStart = (l: DocumentLine): DocumentLine => (isNote ? { ...l, unitPrice: zero(l.unitPrice.currency), discountValue: 0 } : l);
   const needsHsn = hsnRequired && (kind === 'invoice' || kind === 'purchaseBill' || isReturn || isNote);
 
   // An issued invoice opened here is the latest of its series being edited in full (RULES 6.23): it is
@@ -680,7 +682,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       const made = takeHandBack();
       if (made?.kind !== 'item') return;
       const line = lineFromItem(made.record, isPurchase, taxCategories);
-      addLine({ ...line, unitPrice: reprice(line.unitPrice, draft.currency, 1, draft.exchangeRate) });
+      addLine(noteStart({ ...line, unitPrice: reprice(line.unitPrice, draft.currency, 1, draft.exchangeRate) }));
     };
   });
   useFocusEffect(useCallback(() => takeMade.current(), []));
@@ -2093,13 +2095,13 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
               if (sourceDoc) {
                 const src = sourceDoc.lines.find((l) => l.id === id);
                 const already = src && draft.lines.find((l) => (src.itemId ? l.itemId === src.itemId : l.name === src.name));
-                if (src && !already) addLine({ ...src, id: uid('ln') });
+                if (src && !already) addLine(noteStart({ ...src, id: uid('ln') }));
                 return;
               }
               const item = items.find((i) => i.id === id);
               // An item is priced in base; the line takes the document's currency.
               const line = item && lineFromItem(item, isPurchase, taxCategories);
-              if (line) addLine(newLineInclusive({ ...line, unitPrice: reprice(line.unitPrice, draft.currency, 1, draft.exchangeRate) }, draft));
+              if (line) addLine(newLineInclusive(noteStart({ ...line, unitPrice: reprice(line.unitPrice, draft.currency, 1, draft.exchangeRate) }), draft));
             })
           }
           searchPlaceholder={tr('sales:editor.searchItems')}

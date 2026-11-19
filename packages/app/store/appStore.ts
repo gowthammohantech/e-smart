@@ -51,7 +51,7 @@ import { nowISO, today } from '@esmart/core/lib/date';
 import { uid } from '@esmart/core/lib/id';
 import { calculateDocument } from '@esmart/core/domain/lineCalc';
 import { formatNumber } from '@esmart/core/domain/numbering';
-import { CREDIT_KINDS, PURCHASE_KINDS, canMerge, conversionBlock, initialStatus, isFinalized, isPayableDocument } from '@esmart/core/domain/documentStates';
+import { CREDIT_KINDS, NOTE_KINDS, PURCHASE_KINDS, canMerge, conversionBlock, initialStatus, isFinalized, isPayableDocument } from '@esmart/core/domain/documentStates';
 import { documentAuditSnapshot } from '@esmart/core/domain/auditDiff';
 import { allocateAdvances, creditedTo, settledBy, statusForOutstanding } from '@esmart/core/domain/receivables';
 import { expectedTdsForDocument, tdsForDocument } from './tds';
@@ -976,7 +976,10 @@ export const useAppStore = create<AppState>()(
                 : undefined,
             currency: src.currency,
             exchangeRate: src.exchangeRate,
-            lines: sourceLines.filter((l) => !lineIds?.length || lineIds.includes(l.id)).map((l) => ({ ...l, id: uid('ln') })),
+            // A credit or debit note is for a difference in rate: each line starts at 0, rate and discount.
+            lines: sourceLines
+              .filter((l) => !lineIds?.length || lineIds.includes(l.id))
+              .map((l) => ({ ...l, id: uid('ln'), ...(NOTE_KINDS.includes(target) && { unitPrice: zero(l.unitPrice.currency), discountValue: 0 }) })),
             documentDiscountMode: src.documentDiscountMode,
             documentDiscountValue: src.documentDiscountValue,
             charges: src.charges,
