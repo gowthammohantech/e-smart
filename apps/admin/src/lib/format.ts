@@ -42,3 +42,23 @@ const ACTIONS: Record<string, string> = {
   'mfa.reset': 'Reset two-step sign-in',
 };
 export const actionLabel = (action: string) => ACTIONS[action] ?? action;
+
+/** Third parties the API calls, as the Third-Party Call Logs page names them; one not listed shows as it is stored. */
+export const SERVICE_LABELS: Record<string, string> = {
+  adaequare: 'Adaequare',
+  whitebooks: 'Whitebooks',
+  gsp: 'GST gateway',
+  razorpay: 'Razorpay',
+  msg91: 'MSG91',
+  pay4sms: 'Pay4SMS',
+  resend: 'Resend',
+  ses: 'AWS SES',
+  acs: 'Azure email',
+  whatsapp: 'WhatsApp',
+  expo: 'Expo push',
+  ai: 'AI model',
+  openexchangerates: 'Open Exchange Rates',
+};
+export const serviceLabel = (service: string) => SERVICE_LABELS[service] ?? service;
+
+export const fmtMs = (ms: number | null | undefined) => (ms === null || ms === undefined ? '—' : ms >= 1000 ? `${(ms / 1000).toFixed(ms >= 10_000 ? 0 : 1)} s` : `${ms} ms`);

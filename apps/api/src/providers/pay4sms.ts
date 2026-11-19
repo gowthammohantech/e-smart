@@ -9,6 +9,8 @@
  * Changing any one of these strings without re-registering means every SMS stops
  * arriving and nothing reports an error.
  */
+import { trackedFetch } from '../lib/outbound';
+
 export const PAY4SMS_BASE_URL = 'http://pay4sms.in/sendsms/';
 export const PAY4SMS_SENDER_ID = 'ELIXRB';
 export const PAY4SMS_TEMPLATE_ID = '1707172527595886510';
@@ -54,7 +56,7 @@ export async function sendPay4smsOtp(
   url.searchParams.set('number', otp.phone.replace(/^\+91/, ''));
   url.searchParams.set('message', renderTemplate(PAY4SMS_TEMPLATE, { name: otp.name ?? PAY4SMS_DEFAULT_NAME, otp: otp.code }));
 
-  const res = await fetch(url, { method: 'GET', signal: AbortSignal.timeout(PAY4SMS_TIMEOUT_MS) });
+  const res = await trackedFetch({ service: 'pay4sms', operation: 'Send sign-in code by SMS', redact: ['message', 'number'] }, url, { method: 'GET', signal: AbortSignal.timeout(PAY4SMS_TIMEOUT_MS) });
   const body = await res.text();
   debug(`pay4sms response: ${body.slice(0, 200)}`);
 }

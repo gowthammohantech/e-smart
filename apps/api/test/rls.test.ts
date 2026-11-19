@@ -33,6 +33,7 @@ const GLOBAL = new Set([
   'job_schedule_runs',
   'webhook_events',
   'platform_audit_events',
+  'outbound_calls',
   'currencies',
   'countries',
   'states',

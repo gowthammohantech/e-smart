@@ -31,6 +31,7 @@ They live in the `jobs` table; the code is in `apps/api/src/jobs/` and the sched
 | `expenses.recur` | 00:10 | Recurring expenses |
 | `db.backup` | 02:00 | Only with `DB_BACKUP_ENABLED=true`; see below |
 | `jobs.prune` | 03:30 | Removes finished jobs after 14 days and dead ones after 90 |
+| `outbound.purge` | 03:35 | Deletes third-party call log rows (`outbound_calls`) older than `OUTBOUND_LOG_RETENTION_DAYS` (30) |
 | `exports.expire` | 04:00 | Deletes export files past their keep-until date |
 | `accounts.purge` | 04:30 | Erases closed accounts after 8 years. Only logs while `PURGE_DRY_RUN=true` (the default). |
 | `invoices.overdue` | 09:30 | Tells each team once about invoices that fell overdue in the past week |
@@ -54,6 +55,15 @@ They live in the `jobs` table; the code is in `apps/api/src/jobs/` and the sched
 **A dead job:**
 - `select kind, last_error, attempts from jobs where status = 'dead' order by finished_at desc limit 20`
 - To run one again: `update jobs set status = 'queued', attempts = 0, run_at = now() where id = '…'`
+
+## Third-party call logs
+
+Every call the API makes to a third party (the GST gateways, Razorpay, SMS, email, WhatsApp, push, AI, exchange rates) is recorded in `outbound_calls` and shown under **Third-Party Call Logs** in the admin portal: which API route and user set it off, which service and environment it went to, which of their endpoints, the status, how long it took, and the error. It is how to confirm that a company switched from Adaequare sandbox to Whitebooks sandbox is really calling Whitebooks: the tile for each target counts the calls that went there, and a call's detail says when it went somewhere other than the company's setting.
+
+- `OUTBOUND_LOG=failures` (default) keeps every call's metadata, and the request and answer in full for failures and for sandbox calls. `all` keeps the bodies of successful production calls too (turn on briefly, it is personal data); `off` stops recording.
+- Secrets (tokens, passwords, application secrets, OTPs, message text) are redacted before a row is written, by name (`src/lib/redact.ts`). A new integration must call `trackedFetch` (or `trackOperation` for an SDK) from `src/lib/outbound.ts`, not bare `fetch`, or it will not appear.
+- Not recorded: file storage (S3/Azure Blob) traffic, and inbound webhooks.
+- Rows are deleted after `OUTBOUND_LOG_RETENTION_DAYS` (30) by the `outbound.purge` job. To follow one request across the logs, filter by its request id.
 
 ## Backups and restore
 

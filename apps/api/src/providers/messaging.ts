@@ -2,6 +2,7 @@ import { SESv2Client, SendEmailCommand } from '@aws-sdk/client-sesv2';
 import { EmailClient } from '@azure/communication-email';
 import type { Config } from '../config';
 import { LOGO_CID, LOGO_PNG_BASE64 } from '../lib/emailLogo';
+import { trackedFetch, trackOperation } from '../lib/outbound';
 import { sendPay4smsOtp } from './pay4sms';
 
 export type SentMessage = { channel: 'sms' | 'email' | 'whatsapp' | 'push'; to: string; subject?: string; text: string; html?: string; inline?: InlineImage[]; at: Date };
@@ -91,7 +92,7 @@ export function createMessaging(config: Config, outbox: Outbox, log: (msg: strin
       : config.SMS_PROVIDER === 'msg91'
       ? {
           async send(to, text) {
-            const res = await fetch('https://control.msg91.com/api/v5/flow/', {
+            const res = await trackedFetch({ service: 'msg91', operation: 'Send SMS', redact: ['message', 'mobiles'] }, 'https://control.msg91.com/api/v5/flow/', {
               method: 'POST',
               headers: { authkey: config.MSG91_AUTH_KEY ?? '', 'content-type': 'application/json' },
               body: JSON.stringify({ template_id: config.MSG91_TEMPLATE_ID, recipients: [{ mobiles: to.replace(/^\+/, ''), message: text }] }),
@@ -118,7 +119,7 @@ export function createMessaging(config: Config, outbox: Outbox, log: (msg: strin
           async send(msg) {
             // Plain fetch against Resend's REST API, so there is no SDK to carry.
             const images = inlineImages(msg);
-            const res = await fetch('https://api.resend.com/emails', {
+            const res = await trackedFetch({ service: 'resend', operation: 'Send email', redact: ['html', 'text', 'content'] }, 'https://api.resend.com/emails', {
               method: 'POST',
               headers: { authorization: `Bearer ${config.RESEND_API_KEY ?? ''}`, 'content-type': 'application/json' },
               body: JSON.stringify({ from: config.EMAIL_FROM, to: [msg.to], subject: msg.subject, text: msg.text, ...(msg.html ? { html: msg.html } : {}), ...(config.EMAIL_REPLY_TO ? { reply_to: config.EMAIL_REPLY_TO } : {}), ...(images.length ? { attachments: images.map((i) => ({ filename: i.name, content: i.base64, content_type: i.contentType, content_id: i.cid })) } : {}) }),
@@ -133,15 +134,19 @@ export function createMessaging(config: Config, outbox: Outbox, log: (msg: strin
           async send(msg) {
             acs ??= new EmailClient(config.ACS_CONNECTION_STRING ?? '');
             const images = inlineImages(msg);
-            const poller = await acs.beginSend({
+            const client = acs;
+            const out = await trackOperation({ service: 'acs', operation: 'Send email', host: 'communication.azure.com', path: '/emails:send' }, async () => {
+            const poller = await client.beginSend({
               senderAddress: emailAddress(config.EMAIL_FROM),
               content: { subject: msg.subject, plainText: msg.text, ...(msg.html ? { html: msg.html } : {}) },
               recipients: { to: [{ address: msg.to }] },
               ...(config.EMAIL_REPLY_TO ? { replyTo: [{ address: config.EMAIL_REPLY_TO }] } : {}),
               ...(images.length ? { attachments: images.map((i) => ({ name: i.name, contentType: i.contentType, contentInBase64: i.base64, contentId: i.cid })) } : {}),
             });
-            const out = await poller.pollUntilDone();
-            if (out.status !== 'Succeeded') throw new Error(`ACS email ${out.status}${out.error?.message ? `: ${out.error.message}` : ''}`);
+            const done = await poller.pollUntilDone();
+            if (done.status !== 'Succeeded') throw new Error(`ACS email ${done.status}${done.error?.message ? `: ${done.error.message}` : ''}`);
+            return done;
+            });
             return { providerMessageId: out.id };
           },
         }
@@ -149,7 +154,8 @@ export function createMessaging(config: Config, outbox: Outbox, log: (msg: strin
       ? {
           async send(msg) {
             ses ??= new SESv2Client({ region: config.S3_REGION });
-            const out = await ses.send(
+            const client = ses;
+            const out = await trackOperation({ service: 'ses', operation: 'Send email', host: `email.${config.S3_REGION ?? 'aws'}.amazonaws.com`, path: '/v2/email/outbound-emails' }, () => client.send(
               new SendEmailCommand({
                 FromEmailAddress: config.EMAIL_FROM,
                 Destination: { ToAddresses: [msg.to] },
@@ -160,7 +166,7 @@ export function createMessaging(config: Config, outbox: Outbox, log: (msg: strin
                   },
                 },
               }),
-            );
+            ));
             return { providerMessageId: out.MessageId ?? localId('ses') };
           },
         }
@@ -180,7 +186,7 @@ export function createMessaging(config: Config, outbox: Outbox, log: (msg: strin
             const payload = msg.documentUrl
               ? { messaging_product: 'whatsapp', to, type: 'document', document: { link: msg.documentUrl, filename: msg.filename, caption: msg.text } }
               : { messaging_product: 'whatsapp', to, type: 'text', text: { body: msg.text } };
-            const res = await fetch(`https://graph.facebook.com/v21.0/${config.WHATSAPP_PHONE_NUMBER_ID}/messages`, {
+            const res = await trackedFetch({ service: 'whatsapp', operation: msg.documentUrl ? 'Send WhatsApp document' : 'Send WhatsApp message', redact: ['body', 'caption', 'link'] }, `https://graph.facebook.com/v21.0/${config.WHATSAPP_PHONE_NUMBER_ID}/messages`, {
               method: 'POST',
               headers: { authorization: `Bearer ${config.WHATSAPP_TOKEN}`, 'content-type': 'application/json' },
               body: JSON.stringify(payload),
@@ -206,7 +212,7 @@ export function createMessaging(config: Config, outbox: Outbox, log: (msg: strin
           async send(tokens, msg) {
             const outcome: PushOutcome = { tickets: [], deadTokens: [] };
             for (const part of chunk(tokens, 100)) {
-              const res = await fetch(`${EXPO_PUSH}/send`, {
+              const res = await trackedFetch({ service: 'expo', operation: 'Send push notifications', redact: ['to', 'body', 'title'] }, `${EXPO_PUSH}/send`, {
                 method: 'POST',
                 headers: { 'content-type': 'application/json', accept: 'application/json' },
                 body: JSON.stringify(part.map((to) => ({ to, title: msg.title, body: msg.body, data: msg.data, sound: 'default', channelId: msg.channelId }))),
@@ -224,7 +230,7 @@ export function createMessaging(config: Config, outbox: Outbox, log: (msg: strin
           async deadTickets(ticketIds) {
             const dead: string[] = [];
             for (const part of chunk(ticketIds, 1000)) {
-              const res = await fetch(`${EXPO_PUSH}/getReceipts`, {
+              const res = await trackedFetch({ service: 'expo', operation: 'Check push receipts' }, `${EXPO_PUSH}/getReceipts`, {
                 method: 'POST',
                 headers: { 'content-type': 'application/json', accept: 'application/json' },
                 body: JSON.stringify({ ids: part }),

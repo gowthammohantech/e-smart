@@ -4789,6 +4789,62 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/outbound-calls": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every call this API made to a third party, newest first
+         * @description The third-party call log: which API route (and which user) set a call off, which third party and which of its
+         *     endpoints it went to, and what came back. Secrets are redacted before storage. Bodies are kept for failures
+         *     and sandbox calls (and for everything when `OUTBOUND_LOG=all`).
+         */
+        get: operations["listOutboundCalls"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/outbound-calls/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Per third party and environment, how many calls went there and how they fared */
+        get: operations["getOutboundCallSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/outbound-calls/{callId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One third-party call in full, with the other calls its request made */
+        get: operations["getOutboundCall"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export interface webhooks {
     razorpayEvent: {
@@ -7236,6 +7292,92 @@ export interface components {
             ipAddress?: string;
             /** Format: date-time */
             createdAt: string;
+        };
+        OutboundCall: {
+            id: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** @example whitebooks */
+            service: string;
+            /** @enum {string} */
+            environment?: "sandbox" | "production";
+            /** @example Generate e-invoice (IRN) */
+            operation: string;
+            method: string;
+            host: string;
+            /** @description The third party's endpoint, without the query string */
+            path: string;
+            /** @description The HTTP status; absent when nothing answered */
+            status?: number;
+            /**
+             * @description `envelope_error` is a 200 the gateway said no to
+             * @enum {string}
+             */
+            outcome: "ok" | "http_error" | "envelope_error" | "timeout" | "network_error";
+            durationMs: number;
+            error?: string;
+            /**
+             * @description What set the call off
+             * @enum {string}
+             */
+            source: "request" | "job" | "system";
+            /** @description The API route that set it off */
+            route?: string;
+            jobKind?: string;
+            requestId?: string;
+            userId?: string;
+            userName?: string;
+            userEmail?: string;
+            companyId?: string;
+            companyName?: string;
+        };
+        OutboundCallDetail: components["schemas"]["OutboundCall"] & {
+            /** @description The full URL, secrets in the query string redacted */
+            url: string;
+            /** @description JSON, secrets redacted */
+            requestHeaders?: string;
+            requestBody?: string;
+            requestBytes?: number;
+            /** @description JSON; kept for failures */
+            responseHeaders?: string;
+            responseBody?: string;
+            responseBytes?: number;
+            /** @description A body was cut to the size limit */
+            truncated: boolean;
+            /** @description For a GST gateway call made for a company, where it was set to go and where it went */
+            gsp?: {
+                went: components["schemas"]["GspTarget"];
+                /** @description The company's own choice; null when it follows the default */
+                configured: components["schemas"]["GspTarget"] | null;
+                default: components["schemas"]["GspTarget"];
+                /** @description False when the call went somewhere other than the company's effective target */
+                matches: boolean;
+            };
+            /** @description The other calls the same request made, oldest first */
+            related: components["schemas"]["OutboundCall"][];
+        };
+        OutboundCallSummary: {
+            hours: number;
+            /**
+             * @description How much of each call is kept (OUTBOUND_LOG)
+             * @enum {string}
+             */
+            recording: "failures" | "all" | "off";
+            retentionDays: number;
+            gspDefault: components["schemas"]["GspTarget"];
+            targets: {
+                service: string;
+                /** @enum {string} */
+                environment?: "sandbox" | "production";
+                calls: number;
+                failures: number;
+                avgMs?: number;
+                p95Ms?: number;
+                /** Format: date-time */
+                lastCallAt?: string;
+                /** Format: date-time */
+                lastFailureAt?: string;
+            }[];
         };
         Integration: {
             id?: string;
@@ -17103,6 +17245,92 @@ export interface operations {
                 };
             };
             403: components["responses"]["Forbidden"];
+        };
+    };
+    listOutboundCalls: {
+        parameters: {
+            query?: {
+                /** @description adaequare, whitebooks, razorpay, msg91, resend, … */
+                service?: string;
+                environment?: "sandbox" | "production";
+                /** @description `failed` is every outcome but ok */
+                outcome?: "ok" | "failed" | "http_error" | "envelope_error" | "timeout" | "network_error";
+                companyId?: string;
+                userId?: string;
+                /** @description All calls one API request made */
+                requestId?: string;
+                /** @description Matches the operation, endpoint, route and error */
+                q?: string;
+                from?: components["parameters"]["From"];
+                to?: components["parameters"]["To"];
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Page"] & {
+                        data?: components["schemas"]["OutboundCall"][];
+                    };
+                };
+            };
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getOutboundCallSummary: {
+        parameters: {
+            query?: {
+                hours?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutboundCallSummary"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getOutboundCall: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                callId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OutboundCallDetail"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     razorpayWebhook: {

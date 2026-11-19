@@ -1866,6 +1866,60 @@ export const platformAuditEvents = pgTable("platform_audit_events", {
 		}),
 ]);
 
+/**
+ * Every call this API makes to a third party (the GST gateways, Razorpay, SMS, email, AI…), for the
+ * platform console's Third-Party Call Logs page. Not tied to a company: the *_ref columns say who the call was
+ * for, carry no foreign key (a log outlives what it names) and are not called company_id on purpose,
+ * so the export, purge and row-level-security catalogues leave the table alone. Secrets are redacted
+ * before a row is written; bodies are kept in full only for failures (see lib/outbound.ts).
+ */
+export const outboundCalls = pgTable("outbound_calls", {
+	id: varchar({ length: 40 }).primaryKey().notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+	/** Who we called: adaequare, whitebooks, razorpay, msg91, resend, whatsapp, expo, pay4sms, ai, fx… */
+	service: varchar({ length: 40 }).notNull(),
+	/** sandbox | production, when the service has the two; null otherwise. */
+	environment: varchar({ length: 12 }),
+	/** Plain words: "Generate e-invoice (IRN)". */
+	operation: varchar({ length: 120 }).notNull(),
+	method: varchar({ length: 10 }).notNull(),
+	host: varchar({ length: 255 }).notNull(),
+	/** The third party's endpoint, without the query string. */
+	path: varchar({ length: 500 }).notNull(),
+	/** The full URL, secrets in the query string redacted. */
+	url: text().notNull(),
+	/** The HTTP status; null when nothing answered. */
+	status: smallint(),
+	/** ok | http_error | envelope_error | timeout | network_error */
+	outcome: varchar({ length: 20 }).notNull(),
+	durationMs: integer("duration_ms").notNull(),
+	error: text(),
+	requestHeaders: jsonb("request_headers"),
+	requestBody: text("request_body"),
+	requestBytes: integer("request_bytes"),
+	responseHeaders: jsonb("response_headers"),
+	responseBody: text("response_body"),
+	responseBytes: integer("response_bytes"),
+	/** A body was cut to the size limit. */
+	truncated: boolean().default(false).notNull(),
+	/** request | job | system: what set the call off. */
+	source: varchar({ length: 12 }).notNull(),
+	/** The API route that set it off, e.g. `POST /v1/companies/{companyId}/documents/{documentId}/einvoice`. */
+	route: varchar({ length: 300 }),
+	requestId: varchar("request_id", { length: 64 }),
+	jobKind: varchar("job_kind", { length: 80 }),
+	userRef: varchar("user_ref", { length: 40 }),
+	accountRef: varchar("account_ref", { length: 40 }),
+	companyRef: varchar("company_ref", { length: 40 }),
+}, (table): PgTableExtraConfigValue[] => [
+	index("outbound_calls_created_at_idx").using("btree", table.createdAt.desc().nullsFirst(), table.id.desc().nullsFirst()),
+	index("outbound_calls_service_created_at_idx").using("btree", table.service.asc().nullsLast(), table.createdAt.desc().nullsFirst()),
+	index("outbound_calls_company_ref_created_at_idx").using("btree", table.companyRef.asc().nullsLast(), table.createdAt.desc().nullsFirst()),
+	index("outbound_calls_user_ref_created_at_idx").using("btree", table.userRef.asc().nullsLast(), table.createdAt.desc().nullsFirst()),
+	index("outbound_calls_request_id_idx").using("btree", table.requestId.asc().nullsLast()),
+	index("outbound_calls_failures_idx").using("btree", table.createdAt.desc().nullsFirst()).where(sql`${table.outcome} <> 'ok'`),
+]);
+
 export const companies = pgTable("companies", {
 	id: varchar({ length: 40 }).primaryKey().notNull(),
 	accountId: varchar("account_id", { length: 40 }).notNull(),
