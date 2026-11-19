@@ -547,6 +547,13 @@
       "when": 1794982595628,
       "tag": "0077_follows_highest_rate",
       "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1795067071976,
+      "tag": "0078_shipping_bill",
+      "breakpoints": true
     }
   ]
 }

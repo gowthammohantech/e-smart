@@ -21,7 +21,7 @@ import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { Avatar } from '@esmart/ui/components/Avatar';
 
-import { CHARGES_KINDS, ChargesKind, DocStatus, DocumentKind, DocumentLine, NoteReason, Party } from '@esmart/core/types';
+import { CHARGES_KINDS, ChargesKind, DocStatus, DocumentKind, DocumentLine, NoteReason, Party, ShippingBill } from '@esmart/core/types';
 import { NOTE_KINDS, PURCHASE_KINDS, isAwaitingApproval, isFinalized } from '@esmart/core/domain/documentStates';
 import { TDS_SECTIONS, tdsSection } from '@esmart/core/data/tdsSections';
 import { TCS_SECTIONS, partyTcsSection, tcsAskedOn, tcsRateFor, tcsSection } from '@esmart/core/data/tcsSections';
@@ -494,6 +494,10 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   const imported = party?.gstRegistrationType === 'overseas' || draft.placeOfSupplyStateCode === '96';
   const boe = draft.billOfEntry ?? { number: '', date: draft.date, portCode: '', assessableValue: zero(baseCurrency), igst: zero(baseCurrency) };
   const patchBoe = (p: Partial<NonNullable<DraftState['billOfEntry']>>) => patch({ billOfEntry: { ...boe, ...p } });
+  // An export invoice's shipping bill: the port the goods leave from, for GSTR-1 EXP, and the bill once filed.
+  const sb = draft.shippingBill ?? { portCode: '' };
+  const patchSb = (p: Partial<ShippingBill>) => patch({ shippingBill: { ...sb, ...p } });
+  const portCodeError = sb.portCode && !/^[A-Z0-9]{6}$/.test(sb.portCode) ? tr('sales:shippingBill.portInvalid') : undefined;
   const boeAmount = (m?: Money) => (m && m.minor ? String(toMajor(m)) : '');
   // The party's other open invoices, as the server counts what they still owe.
   // A sale to a customer whose limit blocks reads them too, to know whether they are on hold.
@@ -609,6 +613,24 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
               : 'sales:editor.crossBorder.withoutTaxHint';
   // IGST paid at customs goes on the bill of entry: only on an import bill that charges none itself.
   const showBillOfEntry = kind === 'purchaseBill' && imported && !withTax;
+  // The shipping bill goes on an invoice to a buyer abroad (an export), with or without tax.
+  const showShippingBill = kind === 'invoice' && imported;
+  const shippingBillFields = (
+    <>
+      <TextField
+        label={tr('sales:shippingBill.port')}
+        value={sb.portCode}
+        onChangeText={(portCode) => patchSb({ portCode: portCode.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6) })}
+        maxLength={6}
+        autoCapitalize="characters"
+        placeholder="INMAA1"
+        icon="ferry"
+        error={portCodeError}
+      />
+      <TextField label={tr('sales:shippingBill.number')} value={sb.number ?? ''} onChangeText={(number) => patchSb({ number })} maxLength={20} icon="file-certificate-outline" />
+      <DateField label={tr('sales:shippingBill.date')} value={sb.date ?? ''} onChange={(date) => patchSb({ date })} minimumDate={parseDate(draft.date)} />
+    </>
+  );
   const inclusive = inclusiveState(draft.lines);
   const interState =
     taxContext.regime === 'GST' &&
@@ -785,6 +807,12 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       reference: draft.reference || undefined,
       supplierDocNumber: draft.supplierDocNumber || undefined,
       billOfEntry: showBillOfEntry ? draft.billOfEntry : undefined,
+      // Cleared (null) once the port code is taken out; left as it was on anything but an export invoice.
+      shippingBill: showShippingBill
+        ? sb.portCode
+          ? { portCode: sb.portCode, ...(sb.number?.trim() && { number: sb.number.trim() }), ...(sb.date && { date: sb.date }) }
+          : null
+        : undefined,
       isdInvoice: kind === 'purchaseBill' && !imported ? !!draft.isdInvoice : undefined,
       placeOfSupplyStateCode: draft.placeOfSupplyStateCode,
       // Sent as false too: left out, the server keeps the supplier's (or the stored) reverse charge.
@@ -1192,6 +1220,12 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
               <AmountField label={tr('purchases:boe.cess')} value={boeAmount(boe.cess)} onChangeValue={(v) => patchBoe({ cess: fromMajor(v || '0', baseCurrency) })} currency={baseCurrency} />
             </View>
           ) : null}
+          {showShippingBill ? (
+            <View style={{ gap: t.spacing.sm }}>
+              <Text variant="caption" tone="muted">{tr('sales:shippingBill.hint')}</Text>
+              {shippingBillFields}
+            </View>
+          ) : null}
           {isdField}
           {referenceField}
           {branchField}
@@ -1236,6 +1270,12 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
               <AmountField label={tr('purchases:boe.igst')} value={boeAmount(boe.igst)} onChangeValue={(v) => patchBoe({ igst: fromMajor(v || '0', baseCurrency) })} currency={baseCurrency} />
               <AmountField label={tr('purchases:boe.cess')} value={boeAmount(boe.cess)} onChangeValue={(v) => patchBoe({ cess: fromMajor(v || '0', baseCurrency) })} currency={baseCurrency} />
             </FieldRow>
+          </View>
+        ) : null}
+        {showShippingBill ? (
+          <View style={{ gap: t.spacing.sm }}>
+            <Text variant="caption" tone="muted">{tr('sales:shippingBill.hint')}</Text>
+            <FieldRow>{shippingBillFields}</FieldRow>
           </View>
         ) : null}
         {crossBorderBlock}

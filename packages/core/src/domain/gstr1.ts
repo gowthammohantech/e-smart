@@ -52,6 +52,10 @@ export type Gstr1Row = {
   invoiceValue: Money;
   /** Set on an export, or a credit note against one. */
   exported?: boolean;
+  /** An export invoice's shipping bill (EXP's port code, bill number and date), when entered on it. */
+  portCode?: string;
+  shippingBillNumber?: string;
+  shippingBillDate?: string;
   /** Set on a supply to an SEZ unit or developer: zero-rated, reported as SEZ with or without payment. */
   sez?: boolean;
   /** Whether the supply crossed a state line, from the supplying branch's own state. */
@@ -432,6 +436,9 @@ export function gstr1Summary(args: {
         cess: part('CESS'),
         invoiceValue,
         ...(isExport(party, placeOfSupply) && { exported: true }),
+        ...(table === 'exp' && doc.shippingBill?.portCode && { portCode: doc.shippingBill.portCode }),
+        ...(table === 'exp' && doc.shippingBill?.number && { shippingBillNumber: doc.shippingBill.number }),
+        ...(table === 'exp' && doc.shippingBill?.date && { shippingBillDate: doc.shippingBill.date }),
         ...(sez && { sez: true }),
         interState,
         ...(reverseCharge && { reverseCharge: true }),

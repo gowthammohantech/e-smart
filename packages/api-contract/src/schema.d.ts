@@ -6170,6 +6170,13 @@ export interface components {
                 igst: components["schemas"]["Money"];
                 cess?: components["schemas"]["Money"];
             };
+            /** @description On an export invoice: the port the goods leave from (six-character port code) and, once filed at customs, the shipping bill's number and date. GSTR-1 EXP reports them (sbpcode, sbnum, sbdt). Send null to clear it. */
+            shippingBill?: {
+                portCode: string;
+                number?: string;
+                /** Format: date */
+                date?: string;
+            } | null;
             /** @description A purchase bill that is an Input Service Distributor's invoice: its credit goes to 3B 4A(4) */
             isdInvoice?: boolean;
             placeOfSupplyStateCode?: string;

@@ -743,5 +743,12 @@
     "itemWise": "Cess by item",
     "line": "Cess {{rate}} on {{taxable}}",
     "lineReverseCharge": "Cess {{rate}} on {{taxable}}, paid by the buyer (reverse charge)"
+  },
+  "shippingBill": {
+    "hint": "Shipping bill: the port the goods leave from is reported with this export in GSTR-1. Add the bill number and date once it is filed.",
+    "port": "Port code",
+    "number": "Shipping bill no.",
+    "date": "Shipping bill date",
+    "portInvalid": "A port code is 6 letters or digits, like INMAA1"
   }
 }

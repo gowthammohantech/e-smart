@@ -8176,6 +8176,14 @@ components:
             assessableValue: { $ref: '#/components/schemas/Money' }
             igst: { $ref: '#/components/schemas/Money' }
             cess: { $ref: '#/components/schemas/Money' }
+        shippingBill:
+          type: [object, 'null']
+          description: "On an export invoice: the port the goods leave from (six-character port code) and, once filed at customs, the shipping bill's number and date. GSTR-1 EXP reports them (sbpcode, sbnum, sbdt). Send null to clear it."
+          required: [portCode]
+          properties:
+            portCode: { type: string, pattern: '^[A-Z0-9]{6}$' }
+            number: { type: string, maxLength: 20 }
+            date: { type: string, format: date }
         isdInvoice: { type: boolean, description: "A purchase bill that is an Input Service Distributor's invoice: its credit goes to 3B 4A(4)" }
         placeOfSupplyStateCode: { type: string }
         reverseCharge: { type: boolean, description: The whole document is under reverse charge; the buyer pays the GST }

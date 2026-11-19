@@ -690,6 +690,8 @@ export const documents = pgTable("documents", {
 	originalDate: date("original_date"),
 	// An import bill's bill of entry: { number, date, portCode, assessableMinor, igstMinor, cessMinor }. IGST paid at customs.
 	billOfEntry: jsonb("bill_of_entry"),
+	// An export invoice's shipping bill: { portCode, number?, date? }, reported in GSTR-1 EXP.
+	shippingBill: jsonb("shipping_bill"),
 	// Where the goods go when not to the buyer's own address: { name?, gstin?, address }. Null ships to the buyer.
 	shipTo: jsonb("ship_to"),
 	// A bill from the business's Input Service Distributor: its credit goes to 3B 4A(4).

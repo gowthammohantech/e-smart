@@ -117,6 +117,7 @@ export function draftFromDocument(doc: BusinessDocument): DraftState {
     reference: doc.reference ?? '',
     supplierDocNumber: doc.supplierDocNumber ?? '',
     billOfEntry: doc.billOfEntry,
+    shippingBill: doc.shippingBill,
     isdInvoice: doc.isdInvoice,
     currency: doc.currency,
     exchangeRate: doc.exchangeRate,
