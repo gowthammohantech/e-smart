@@ -145,12 +145,12 @@ export function hasVehicles(tier: PlanTier): boolean {
 }
 
 /**
- * Pages Free leaves out that aren't a module's: approvals need a second user to ask (Free has one), and
- * there are no modules on Free to switch on or off.
+ * Pages Free leaves out that aren't a module's: approvals need a second user to ask (Free has one),
+ * there are no modules on Free to switch on or off, and custom fields are for the paid plans.
  */
-const NOT_ON_FREE_PATHS = ['/sales/approvals', '/settings/approvals', '/settings/modules'];
+const NOT_ON_FREE_PATHS = ['/sales/approvals', '/settings/approvals', '/settings/modules', '/settings/custom-fields'];
 
-/** Pages a plan can't open that aren't a module's: vehicles, approvals and modules on Free. */
+/** Pages a plan can't open that aren't a module's: vehicles, approvals, modules and custom fields on Free. */
 function planOpensPath(tier: PlanTier, pathname: string): boolean {
   const under = (prefix: string) => pathname === prefix || pathname.startsWith(`${prefix}/`);
   if (under('/settings/vehicles')) return hasVehicles(tier);
