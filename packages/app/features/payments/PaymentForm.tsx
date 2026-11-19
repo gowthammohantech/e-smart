@@ -700,7 +700,7 @@ export function PaymentForm({
     ) : null;
 
   const advanceCard =
-    partyId && advance.minor > 0 && outstanding.length > 0 ? (
+    !noAdvance && partyId && advance.minor > 0 && outstanding.length > 0 ? (
       <Card style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
         <Icon name="wallet-outline" size={22} color={t.c.primary} />
         <View style={{ flex: 1, gap: 2 }}>
@@ -867,7 +867,7 @@ export function PaymentForm({
               </>
             )}
 
-            {advance.minor > 0 ? (
+            {!noAdvance && advance.minor > 0 ? (
               <Pressable
                 onPress={() => void adjustAdvance(o.document.id)}
                 disabled={adjustingAdvance}
