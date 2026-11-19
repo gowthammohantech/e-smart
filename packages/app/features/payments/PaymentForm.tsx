@@ -14,7 +14,7 @@ import { PartyPickerBox } from '../contacts/PartyPickerBox';
 import { Button } from '@esmart/ui/components/Button';
 import { Avatar } from '@esmart/ui/components/Avatar';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
-import { AmountField, PickerField, SwitchField, TextField } from '@esmart/ui/components/Field';
+import { AmountField, PickerField, TextField } from '@esmart/ui/components/Field';
 import { useDecimalText } from '../../components/useDecimalText';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
@@ -38,10 +38,10 @@ import { formatMoney, toAmountInput } from '@esmart/core/lib/format';
 import { daysBetween, formatDate, today } from '@esmart/core/lib/date';
 import { Money, fromMajor, money, subtract, zero } from '@esmart/core/lib/money';
 import { uid } from '@esmart/core/lib/id';
-import { DEFAULT_ADVANCE_RATE } from '@esmart/core/domain/advanceTax';
+import { DEFAULT_ADVANCE_RATE, advanceInterState, advanceTaxSplit } from '@esmart/core/domain/advanceTax';
 import { AdvanceGstBreakup } from './AdvanceGstBreakup';
 import { ReceivedForSheet, customerValue, type ReceiptCarry } from '../receipts/ReceivedForSheet';
-import { taxAvailableOn, taxCategoriesOn } from '@esmart/core/domain/taxEngine';
+import { homeStateCode, taxAvailableOn, taxCategoriesOn } from '@esmart/core/domain/taxEngine';
 
 import { useAppStore } from '../../store/appStore';
 import {
@@ -150,7 +150,7 @@ export function PaymentForm({
   const cessText = useDecimalText(advanceCess, setAdvanceCess);
   /** TDS the customer deducted from an advance, before any invoice. */
   const [advanceTdsText, setAdvanceTdsText] = useState('');
-  const [advanceSheet, setAdvanceSheet] = useState<'tax' | 'pos' | 'tds' | null>(null);
+  const [advanceSheet, setAdvanceSheet] = useState<'taxMode' | 'tax' | 'pos' | 'tds' | null>(null);
   /** The section of TDS kept back on money paid; the supplier's own until changed. */
   const [tdsSectionChoice, setTdsSectionChoice] = useState<string | null>(null);
   const [seeded, setSeeded] = useState(false);
@@ -316,6 +316,11 @@ export function PaymentForm({
   const overAllocated = unallocated.minor < 0;
   /** A receipt with money left over: more than the ticked invoices owe, or not all of it applied. */
   const notApplied = noAdvance && unallocated.minor > 0;
+  /** The advance as the summary states it: with tax, its value without the GST inside it (850 of 1,000), the GST below it. */
+  const advanceShown =
+    advanceTax && unallocated.minor > 0
+      ? money(advanceTaxSplit(unallocated.minor + advanceTds.minor, advanceTax.rate, advanceCess, advanceInterState(homeStateCode(company), pos)).taxable, currency)
+      : unallocated;
 
   /**
    * Spread `total` over documents oldest first, never more than each one owes.
@@ -927,7 +932,7 @@ export function PaymentForm({
           {overAllocated ? tr('sales:payment.overAllocatedBy') : noAdvance ? tr('sales:payment.notApplied') : tr('sales:payment.unallocatedAdvance')}
         </Text>
         <Text variant="body" weight="700" tone={overAllocated || notApplied ? 'bad' : unallocated.minor > 0 ? 'warn' : 'good'}>
-          {formatMoney(overAllocated ? money(-unallocated.minor, currency) : unallocated)}
+          {formatMoney(overAllocated ? money(-unallocated.minor, currency) : advanceShown)}
         </Text>
       </View>
       {notApplied ? (
@@ -1001,7 +1006,26 @@ export function PaymentForm({
       ) : null}
       {canAdvance ? (
         <>
-          <SwitchField label={tr('sales:payment.serviceAdvance')} description={tr('sales:payment.serviceAdvanceHint')} value={serviceAdvance} onValueChange={setServiceAdvance} />
+          {/* With tax: the GST is inside the amount, and the advance is its value without it. Without tax: all of it. */}
+          <PickerField
+            label={tr('sales:payment.advanceTaxMode')}
+            value={tr(serviceAdvance ? 'sales:payment.withTax' : 'sales:payment.withoutTax')}
+            onPress={() => setAdvanceSheet('taxMode')}
+            icon="percent-outline"
+            hint={tr('sales:payment.serviceAdvanceHint')}
+          />
+          <SelectSheet
+            visible={advanceSheet === 'taxMode'}
+            onClose={() => setAdvanceSheet(null)}
+            title={tr('sales:payment.advanceTaxMode')}
+            options={[
+              { value: 'with', label: tr('sales:payment.withTax') },
+              { value: 'without', label: tr('sales:payment.withoutTax') },
+            ]}
+            value={serviceAdvance ? 'with' : 'without'}
+            onSelect={(v) => setServiceAdvance(v === 'with')}
+            searchable={false}
+          />
           {serviceAdvance ? (
             <>
               <FieldRow>
