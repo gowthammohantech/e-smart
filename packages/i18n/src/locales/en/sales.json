@@ -21,6 +21,17 @@
     "noSales": "No sales recorded yet"
   },
   "editor": {
+    "shipTo": {
+      "label": "Ship to a different address",
+      "offHint": "Goods go to the customer at their shipping address (or billing, without one).",
+      "onHint": "Printed as Ship to (consignee) on the document.",
+      "name": "Consignee name",
+      "gstin": "Consignee GSTIN (optional)",
+      "address": "Address",
+      "city": "City",
+      "state": "State",
+      "pin": "PIN"
+    },
     "dueDate": "Due date",
     "validUntil": "Valid until",
     "supplierDocNumber": "Supplier document number",
