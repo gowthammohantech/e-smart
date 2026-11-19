@@ -72,6 +72,7 @@ export async function paymentsToWire(db: DbOrTx, rows: PaymentRow[], baseCurrenc
       advanceTax: r.advanceTaxCategoryId
         ? compact({ taxCategoryId: r.advanceTaxCategoryId, rate: Number(r.advanceTaxRate), placeOfSupplyStateCode: r.advancePlaceOfSupply!, hsn: r.advanceHsn ?? undefined, cessRate: r.advanceCessRate != null && Number(r.advanceCessRate) > 0 ? Number(r.advanceCessRate) : undefined, reverseCharge: r.advanceReverseCharge || undefined })
         : undefined,
+      advanceItemId: r.advanceItemId ?? undefined,
       advanceTds: r.tdsMinor ? money(r.tdsMinor, currency) : undefined,
       refundOf: r.refundOfPaymentId ?? undefined,
       tdsSection: r.tdsSection ?? undefined,
