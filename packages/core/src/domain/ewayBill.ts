@@ -326,11 +326,16 @@ export type EwayPartAInput = {
   to: EwayPlace;
   subSupplyType: EwaySubSupplyType;
   subSupplyDescription?: string;
+  /** The document being moved; a challan is refused by the portal under some sub-supply types. */
+  documentKind?: DocumentKind;
   documentNumber: string;
   documentDate: string;
   consignmentValueMinor: number;
   mainHsnCode?: string;
 };
+
+/** NIC refuses document type CHL with these: "Invalid document type for the supply type". */
+const CHALLAN_REFUSED_SUB_SUPPLY: EwaySubSupplyType[] = ['supply', 'export'];
 
 export function validatePartA(input: EwayPartAInput): ComplianceIssue[] {
   const out: ComplianceIssue[] = [];
@@ -354,6 +359,9 @@ export function validatePartA(input: EwayPartAInput): ComplianceIssue[] {
 
   if (input.subSupplyType === 'others' && !input.subSupplyDescription?.trim()) {
     out.push(issue('EWB106', 'subSupplyDescription', 'Describe the sub-supply type'));
+  }
+  if (input.documentKind && ewayDocTypeFor(input.documentKind) === 'CHL' && CHALLAN_REFUSED_SUB_SUPPLY.includes(input.subSupplyType)) {
+    out.push(issue('EWB111', 'subSupplyType', `The portal does not accept a delivery challan under "${EWAY_SUB_SUPPLY_TYPES[input.subSupplyType].label}". Choose another sub-supply type (for example Others), or raise the e-way bill from the invoice`));
   }
   if (!input.documentNumber?.trim()) {
     out.push(issue('EWB107', 'documentNumber', 'The document number is missing'));
@@ -434,8 +442,14 @@ export function ewayDocTypeFor(kind: DocumentKind): EwayDocType {
  * goods going to a customer, and branch-to-branch movement goes through the
  * inventory transfer screen instead. The form lets the user pick another.
  */
-export function subSupplyTypeFor(_kind: DocumentKind): EwaySubSupplyType {
-  return 'supply';
+export function subSupplyTypeFor(kind: DocumentKind): EwaySubSupplyType {
+  // The portal refuses a challan under "Supply", so a delivery note starts at "Others" (see subSupplyDescriptionFor).
+  return ewayDocTypeFor(kind) === 'CHL' ? 'others' : 'supply';
+}
+
+/** The description "Others" needs; empty where the sub-supply type is self-explanatory. */
+export function subSupplyDescriptionFor(kind: DocumentKind): string {
+  return ewayDocTypeFor(kind) === 'CHL' ? 'Delivery challan' : '';
 }
 
 /** Build a place record from a company address. */

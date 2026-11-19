@@ -33,6 +33,7 @@ import {
   isEwayBillRequired,
   validPincode,
   validVehicleNumber,
+  subSupplyTypeFor,
   validatePartA,
   validatePartB,
   validityDays,
@@ -1186,6 +1187,15 @@ describe('e-way bill Part-A (FRD 16)', () => {
 
   it('accepts a well-formed Part-A', () => {
     expect(partA()).toHaveLength(0);
+  });
+
+  it('refuses a delivery challan under Supply or Export, which the portal rejects, and accepts it under Others', () => {
+    expect(partA({ documentKind: 'delivery', subSupplyType: 'supply' })).toContain('subSupplyType');
+    expect(partA({ documentKind: 'delivery', subSupplyType: 'export' })).toContain('subSupplyType');
+    expect(partA({ documentKind: 'invoice', subSupplyType: 'supply' })).toHaveLength(0);
+    expect(partA({ documentKind: 'delivery', subSupplyType: 'others', subSupplyDescription: 'Delivery challan' })).toHaveLength(0);
+    expect(subSupplyTypeFor('delivery')).toBe('others');
+    expect(subSupplyTypeFor('invoice')).toBe('supply');
   });
 
   it('accepts URP in place of a GSTIN for an unregistered party', () => {

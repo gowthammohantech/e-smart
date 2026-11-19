@@ -76,6 +76,8 @@
     "registeredFor": "I'm registered for {{regime}}",
     "slabsNote": "Tap a rate to leave it out, or add another. You can change them any time in Settings → Taxes.",
     "addRate": "Add a rate (%)",
+    "rateExists": "{{name}} {{rate}}% is already in the list",
+    "rateInvalid": "Enter a rate between 0 and 100",
     "add": "Add"
   },
   "numbering": {
