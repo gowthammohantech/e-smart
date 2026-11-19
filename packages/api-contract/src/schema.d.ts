@@ -16705,6 +16705,8 @@ export interface operations {
             query?: {
                 /** @description Left out or empty lists the codes from the start */
                 q?: string;
+                /** @description The next page: the codes after this one (nextCursor of the page before) */
+                after?: string;
             };
             header?: never;
             path?: never;
@@ -16712,13 +16714,15 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description OK, 50 codes at a time in code order */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": {
+                        /** @description Pass as `after` for the next page; null on the last */
+                        nextCursor?: string | null;
                         data?: {
                             code?: string;
                             description?: string;

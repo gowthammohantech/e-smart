@@ -6427,14 +6427,16 @@ paths:
       summary: HSN/SAC code search with the suggested GST rate
       parameters:
         - { name: q, in: query, schema: { type: string }, description: Left out or empty lists the codes from the start }
+        - { name: after, in: query, schema: { type: string, maxLength: 8 }, description: 'The next page: the codes after this one (nextCursor of the page before)' }
       responses:
         '200':
-          description: OK
+          description: OK, 50 codes at a time in code order
           content:
             application/json:
               schema:
                 type: object
                 properties:
+                  nextCursor: { type: [string, 'null'], description: 'Pass as `after` for the next page; null on the last' }
                   data:
                     type: array
                     items:
