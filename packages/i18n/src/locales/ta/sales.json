@@ -382,6 +382,8 @@
     "notes": "குறிப்புகள்",
     "notesPlaceholder": "உள் குறிப்பு",
     "serviceAdvance": "சேவைகளுக்கான முன்பணம்",
+    "advanceService": "சேவை",
+    "advanceServicePick": "சேவையைத் தேர்ந்தெடுக்கவும்",
     "advanceTaxMode": "வரி",
     "withTax": "வரியுடன்",
     "withoutTax": "வரி இல்லாமல்",

@@ -561,6 +561,13 @@
       "when": 1795072465842,
       "tag": "0079_shipping_bill_hsn_unlinked",
       "breakpoints": true
+    },
+    {
+      "idx": 80,
+      "version": "7",
+      "when": 1795093711104,
+      "tag": "0080_advance_item",
+      "breakpoints": true
     }
   ]
 }

@@ -901,6 +901,8 @@ export type Payment = {
    * its receipt voucher says so (Rule 50).
    */
   advanceTax?: { taxCategoryId: string; rate: number; placeOfSupplyStateCode: string; hsn?: string; cessRate?: number; reverseCharge?: boolean };
+  /** An advance receipt: the service it is for (an item of type service). */
+  advanceItemId?: string;
   /** On money received: TDS the customer deducted from an advance, before any invoice (under `tdsSection`). */
   advanceTds?: Money;
   /** On money paid: the TDS section of what its allocations kept back (26Q). */
