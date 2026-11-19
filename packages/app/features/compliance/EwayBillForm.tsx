@@ -27,6 +27,7 @@ import { compliance } from '../../remote';
 import { useActiveCompany, useComplianceSettings, useTransporters } from '../../store/selectors';
 import {
   EWAY_SUB_SUPPLY_TYPES,
+  subSupplyDescriptionFor,
   subSupplyTypeFor,
   validUptoFor,
   validityDays,
@@ -65,7 +66,7 @@ export function useEwayBillForm(doc: BusinessDocument) {
   const docVehicle = useAppStore((s) => (doc.vehicleId ? s.vehicles.find((v) => v.id === doc.vehicleId) : undefined));
 
   const [subSupplyType, setSubSupplyType] = useState<EwaySubSupplyType>(subSupplyTypeFor(doc.kind));
-  const [subSupplyDescription, setSubSupplyDescription] = useState('');
+  const [subSupplyDescription, setSubSupplyDescription] = useState(subSupplyDescriptionFor(doc.kind));
   const [subSupplyOpen, setSubSupplyOpen] = useState(false);
 
   const [from, setFrom] = useState<EwayPlace>({

@@ -396,7 +396,8 @@ function CompanySettingsForm() {
         description={tr('settings:company.compositionHint')}
         value={composition}
         onValueChange={setComposition}
-        disabled={locks.taxIdentity}
+        // Not available yet: shown, but it can't be changed.
+        disabled
       />
       {country?.regime === 'GST' ? (
         <>
