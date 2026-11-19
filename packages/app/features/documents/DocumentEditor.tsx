@@ -167,7 +167,11 @@ export function DocumentEditor(props: EditorProps) {
   const [settled, setSettled] = useState<string[]>([]);
   const missing = wanted.filter((id) => !held.some((i) => i.id === id) && !settled.includes(id));
   const markSettled = useCallback((id: string) => setSettled((cur) => (cur.includes(id) ? cur : [...cur, id])), []);
-  if (party.isLoading || item.isLoading || source.isLoading || missing.length) {
+  // Only before the form first opens. Picking a party puts it in the URL (?partyId=), which fetches
+  // that party here; swapping the open form for the loader then threw its lines away, and it came
+  // back with the party alone. Once open, the form stays, and keeps everything added to it.
+  const opened = useRef<string | null>(null);
+  if (opened.current !== companyId && (party.isLoading || item.isLoading || source.isLoading || missing.length)) {
     return (
       <>
         {missing.map((id) => (
@@ -179,6 +183,7 @@ export function DocumentEditor(props: EditorProps) {
   }
   // Keyed by business: on web the page stays open across a switch, and the form seeds its branch,
   // taxes and party from the business it opened in.
+  opened.current = companyId;
   return <DocumentEditorForm key={companyId} {...props} />;
 }
 
