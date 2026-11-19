@@ -48,10 +48,14 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
   const { then } = useLocalSearchParams<{ then?: string }>();
   // Where Cancel and Save land when there is no screen to go back to.
   // The route's kind to start with; a new contact can be both or general, and a customer or supplier can become both.
-  const [kind, setKind] = useState<PartyKind>(party?.kind ?? routeKind);
   const hasPurchases = useHasModule('purchases');
   const kindOptions: PartyKind[] = !party || party.kind === 'general' ? ['customer', 'supplier', 'both', 'general'] : party.kind === 'both' ? ['both'] : [party.kind, 'both'];
-  const allowedKinds = kindOptions.filter((k) => hasPurchases || !buysFrom(k));
+  // A plan without purchases (Free, Basic) keeps customers only: suppliers and "both" are the buying
+  // side's, and its parties list shows customers only, so an "Other" contact would vanish once saved.
+  // One saved as Other before keeps its own type.
+  const allowedKinds = kindOptions.filter((k) => hasPurchases || k === 'customer' || (k === party?.kind && !buysFrom(k)));
+  // A saved party keeps its type whatever the plan; a new one starts as the route says, if the plan has it.
+  const [kind, setKind] = useState<PartyKind>(party?.kind ?? (allowedKinds.includes(routeKind) ? routeKind : 'customer'));
   const backTo = party ? `/(app)/contacts/${party.kind === 'supplier' ? 'suppliers' : 'customers'}/${party.id}` : '/(app)/(tabs)/contacts';
   const { run: serverSave, saving, blocked } = useServerSave();
   // Always 'phone' in the native apps, so the desktop layout only ever reaches a browser.
