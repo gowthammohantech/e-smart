@@ -193,6 +193,10 @@ export const partiesHandlers = defineHandlers({
       let customFields: CustomValues = {};
       try {
         assertKindAllowed(ctx, body.kind);
+        // Free imports customers only (others are added one at a time from the contact form).
+        if (ctx.company.plan === 'free' && body.kind !== 'customer') {
+          throw new ApiError(422, 'validation_failed', 'The Free plan imports customers only', { issues: [{ field: 'kind', message: 'The Free plan imports customers only', severity: 'blocking' }] });
+        }
         await validate(ctx.db, body, day);
         customFields = await cleanCustomValues(ctx.db, ctx.company.id, 'party', body.customFields as CustomValues | undefined);
       } catch (err) {
