@@ -260,7 +260,10 @@ export function Sheet({
               scroll ? [{ paddingBottom: t.spacing.lg }, contentStyle] : undefined
             }
             keyboardShouldPersistTaps="handled"
-            keyboardDismissMode="on-drag"
+            // A phone drops its keyboard as the list is dragged. Not on the web: there any scroll event
+            // blurs the focused field, including the one a browser fires when new search results make
+            // the list shorter, which took the cursor out of the search box mid-word.
+            keyboardDismissMode={Platform.OS === 'web' ? 'none' : 'on-drag'}
           >
             {children}
           </Body>
