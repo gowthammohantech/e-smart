@@ -18,7 +18,7 @@ const utcDay = (d: string) => new Date(`${d}T00:00:00Z`);
 type Row = typeof O.$inferSelect;
 type Named = { userName: string | null; userEmail: string | null; companyName: string | null };
 
-const environmentOf = (value: string | null) => (value === 'sandbox' || value === 'production' ? value : undefined);
+const environmentOf = (value: string | null): 'sandbox' | 'production' | undefined => (value === 'sandbox' || value === 'production' ? value : undefined);
 
 function toWire(row: Row, who: Named): Schema<'OutboundCall'> {
   return compact({

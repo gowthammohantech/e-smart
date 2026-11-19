@@ -84,7 +84,7 @@ export type TrackMeta = {
 const BODY_LIMIT = 16_384;
 const ERROR_LIMIT = 600;
 
-type Init = RequestInit & { signal?: AbortSignal };
+type Init = RequestInit;
 
 /** `fetch`, recorded. Throws exactly what `fetch` throws. */
 export async function trackedFetch(meta: TrackMeta, url: string, init: Init = {}): Promise<Response> {

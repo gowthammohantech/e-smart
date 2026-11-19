@@ -192,7 +192,7 @@ describe('the third-party call log API', () => {
     expect(typeof detail.body.gsp.matches).toBe('boolean');
 
     // A company set to Whitebooks sandbox, with a call that went to Adaequare production: the mismatch is shown.
-    await t.deps.db.update(schema.companies).set({ gspProvider: 'whitebooks', gspEnvironment: 'sandbox' }).where(eq(schema.companies.id, company.id));
+    await t.deps.db.update(schema.companies).set({ gspProvider: 'whitebooks', gspEnvironment: 'sandbox' }).where(eq(schema.companies.id, company.id!));
     const mismatch = await t.get(`/admin/outbound-calls/${failures.body.data[0].id}`, { token: op.token });
     expect(mismatch.body.gsp).toMatchObject({ went: { gateway: 'adaequare', environment: 'production' }, configured: { gateway: 'whitebooks', environment: 'sandbox' }, matches: false });
 
