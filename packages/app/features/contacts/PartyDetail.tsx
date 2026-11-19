@@ -28,7 +28,9 @@ import { paymentMethodLabel } from '@esmart/core/labels';
 
 import { useAppStore } from '../../store/appStore';
 import { useBaseCurrency, usePartyOutstanding } from '../../store/selectors';
-import { useDocumentPages, useDocumentSummary, usePartyAging, usePaymentPages, usePartyRecord, type DocumentSummary } from '../../remote/queries';
+import { fetchPartyRecord, useDocumentPages, useDocumentSummary, usePartyAging, usePaymentPages, usePartyRecord, type DocumentSummary } from '../../remote/queries';
+import { describeError } from '../../remote/errors';
+import { useToast } from '@esmart/ui/components/Toast';
 import { detailRouteFor } from '../documents/DocumentEditor';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { SplitPane } from '@esmart/ui/components/Layout';
@@ -51,6 +53,26 @@ export function PartyDetail({ party }: { party: Party }) {
 
   const baseCurrency = useBaseCurrency();
   const removeParty = useAppStore((s) => s.removeParty);
+  const saveParty = useAppStore((s) => s.saveParty);
+  const companyId = useAppStore((s) => s.activeCompanyId);
+  const toast = useToast();
+  /** Sets this party inactive or active again, saved from the server's copy at its version. */
+  const setStatus = async (status: 'active' | 'inactive') => {
+    let current: Party | undefined;
+    try {
+      await fetchPartyRecord(companyId, party.id);
+      current = useAppStore.getState().parties.find((p) => p.id === party.id);
+    } catch (err) {
+      toast.show(describeError(err, tr), 'error');
+      return;
+    }
+    if (!current) return;
+    await serverSave(
+      () => saveParty({ ...current, status }),
+      status === 'inactive' ? tr('common:table.deactivated', { count: 1 }) : tr('common:table.reactivated', { count: 1 }),
+      { icon: status === 'inactive' ? 'minus-circle-outline' : 'check-circle-outline', detail: party.name },
+    );
+  };
 
   const [tab, setTab] = useState<Tab>('activity');
   const desktop = useIsDesktop();
@@ -421,6 +443,10 @@ export function PartyDetail({ party }: { party: Party }) {
       : canBill
         ? [{ label: tr('nav:title.newPurchaseBill'), icon: 'cart-outline' as const, onPress: () => router.push(`/(app)/purchases/bills/new?partyId=${party.id}`) }]
         : []),
+    // Set inactive (no new invoices, quotes or bills; dues can still be settled), or active again.
+    party.status === 'inactive'
+      ? { label: tr('common:table.reactivate'), icon: 'check-circle-outline' as const, onPress: () => void setStatus('active') }
+      : { label: tr('common:table.deactivate'), icon: 'minus-circle-outline' as const, onPress: () => void setStatus('inactive') },
     // The server refuses a contact with documents, payments or an opening balance; when this screen already
     // sees one, delete isn't offered. Anything it can't see (expenses, journals) comes back as the server's reason.
     ...(billCount > 0 || partyPayments.length > 0 || (party.openingBalance?.minor ?? 0) !== 0

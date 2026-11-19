@@ -322,6 +322,10 @@ export default function ContactsTab() {
             rowActions={(p) => [
               { key: 'open', label: tr('common:table.open'), icon: 'eye-outline', onPress: () => router.push(detailRoute(p) as never) },
               { key: 'edit', label: tr('common:action.edit'), icon: 'pencil-outline', onPress: () => router.push(`${detailRoute(p)}/edit` as never) },
+              // One party at a time, as the bulk action does for several.
+              p.status === 'inactive'
+                ? { key: 'reactivate', label: tr('common:table.reactivate'), icon: 'check-circle-outline', onPress: () => void setStatusOf([p.id], 'active') }
+                : { key: 'deactivate', label: tr('common:table.deactivate'), icon: 'minus-circle-outline', onPress: () => void setStatusOf([p.id], 'inactive') },
             ]}
             empty={<EmptyState illustration="no-contacts" icon="account-group-outline" title={emptyTitle} message={emptyMessage} compact />}
           />
