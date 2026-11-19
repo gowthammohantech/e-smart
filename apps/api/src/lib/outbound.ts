@@ -87,7 +87,7 @@ const ERROR_LIMIT = 600;
 type Init = RequestInit;
 
 /** `fetch`, recorded. Throws exactly what `fetch` throws. */
-export async function trackedFetch(meta: TrackMeta, url: string, init: Init = {}): Promise<Response> {
+export async function trackedFetch(meta: TrackMeta, url: string | URL, init: Init = {}): Promise<Response> {
   const run = meta.fetchImpl ?? ((...args: Parameters<typeof fetch>) => globalThis.fetch(...args));
   const method = (init.method ?? 'GET').toUpperCase();
   const caller = { ...outboundContext.current() };
@@ -149,7 +149,7 @@ function safeClone(response: Response): Response | null {
 const describe = (error: unknown) => (error instanceof Error ? `${error.name}: ${error.message}` : String(error)).slice(0, ERROR_LIMIT);
 
 type Finished = {
-  url: string;
+  url: string | URL;
   method: string;
   init: Init;
   caller: Partial<OutboundContext>;
@@ -180,7 +180,7 @@ function record(meta: TrackMeta, done: Finished) {
       }
     }
 
-    const where = redactUrl(done.url, extra);
+    const where = redactUrl(String(done.url), extra);
     const failed = outcome !== 'ok';
     const keepBodies = failed || target.mode === 'all' || meta.environment === 'sandbox';
     const sent = typeof done.init.body === 'string' ? done.init.body : undefined;
