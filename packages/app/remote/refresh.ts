@@ -83,27 +83,7 @@ function setupList(companyId: string, path: string): Promise<Row[]> {
  * Loads one business's setup from the server, replacing what was in memory for it. Everything is
  * fetched first, so a load that fails part-way leaves the business as it was.
  */
-/** The day each business last asked for today's exchange rates, on this device. */
-const ratesAskedOn = new Map<string, string>();
-
-/**
- * Today's exchange rates from the provider, asked once a day per business (the server's morning job
- * fetches them too), so a currency first used today has a rate. Behind the load, never in its way;
- * a role that can't (or a plan, or no connection) is simply left out.
- */
-function refreshTodaysRates(companyId: string): Promise<Row[]> {
-  const day = new Date().toISOString().slice(0, 10);
-  if (ratesAskedOn.get(companyId) === day) return Promise.resolve([]);
-  ratesAskedOn.set(companyId, day);
-  return api
-    .POST('/companies/{companyId}/exchange-rates/refresh', { params: { path: { companyId } } })
-    .then(({ data }) => (data?.data ?? []) as Row[])
-    .catch(() => []);
-}
-
 export async function loadCompany(companyId: string, started = session): Promise<void> {
-  // Asked alongside the lists; kept once they are in, so the rate list doesn't overwrite them.
-  const todaysRates = refreshTodaysRates(companyId);
   const [lists, compliance] = await Promise.all([
     Promise.all(SETUP_LISTS.map(([type, path]) => setupList(companyId, path).then((rows) => [type, rows] as const))),
     allowed(
@@ -124,9 +104,6 @@ export async function loadCompany(companyId: string, started = session): Promise
   if (compliance) next.complianceSettings = [...s.complianceSettings.filter((r) => r.companyId !== companyId), { ...compliance, companyId }];
   useAppStore.setState(next as never);
   useRemoteMeta.getState().patch({ setupLoaded: { ...useRemoteMeta.getState().setupLoaded, [companyId]: true } });
-  void todaysRates.then((rows) => {
-    if (rows.length) applyChanges(rows.filter((r) => r.id).map((r) => ({ entityType: 'exchange_rate', entityId: r.id!, op: 'upsert', data: { ...r, companyId } })));
-  });
 }
 
 /**

@@ -1,8 +1,8 @@
 import { businessDate } from '@esmart/core/lib/date';
-import { and, asc, desc, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import type { Schema } from '@esmart/api-contract';
 import { schema } from '@esmart/db';
-import { defineHandlers, type Deps } from '../../context';
+import { defineHandlers } from '../../context';
 import { checkIfMatch, setEtag } from '../../http/etag';
 import { invalid, notFound, preconditionFailed, unprocessable, type Issue } from '../../http/errors';
 import type { DbOrTx } from '../../lib/audit';
@@ -122,8 +122,7 @@ export const rateHandlers = defineHandlers({
 
   /**
    * Today's provider rate into the base currency for every foreign currency
-   * the company uses. Re-running on the same day updates today's provider rows;
-   * a rate someone set by hand for today is kept.
+   * the company uses. Re-running on the same day updates today's rows.
    */
   async refreshExchangeRates(ctx) {
     const base = ctx.company.baseCurrency.trim();
@@ -138,8 +137,6 @@ export const rateHandlers = defineHandlers({
           .select()
           .from(R)
           .where(and(eq(R.companyId, ctx.company.id), eq(R.fromCurrency, from), eq(R.toCurrency, base), eq(R.effectiveFrom, date)));
-        // A rate set by hand for today stays: the provider's only fills in or updates its own.
-        if (before && before.source !== 'provider') continue;
         const [row] = await tx
           .insert(R)
           .values({ id: newId('fxr'), companyId: ctx.company.id, fromCurrency: from, toCurrency: base, rate: String(rate), effectiveFrom: date, source: 'provider' })
@@ -159,56 +156,3 @@ export const rateHandlers = defineHandlers({
     return { data: rows.map(exchangeRateToWire) };
   },
 });
-
-/**
- * The daily `fx.refresh` job: today's provider rate into each business's base currency, for every
- * foreign currency it uses, so documents in another currency start from a current rate without
- * anyone fetching it. One provider call per base currency. A rate someone set by hand for today is
- * kept, not overwritten; a provider rate already there for today is updated. Returns rows written.
- */
-export async function refreshAllExchangeRates(deps: Deps, log: { warn: (obj: unknown, msg: string) => void }): Promise<number> {
-  const C = schema.companies;
-  const date = today(deps.now());
-  const companies = await deps.db.select({ id: C.id, base: C.baseCurrency }).from(C).where(isNull(C.archivedAt));
-  const wantedBy = new Map<string, { base: string; currencies: string[] }>();
-  const byBase = new Map<string, Set<string>>();
-  for (const c of companies) {
-    const base = c.base.trim();
-    const currencies = await currenciesInUse(deps.db, c.id, base);
-    if (!currencies.length) continue;
-    wantedBy.set(c.id, { base, currencies });
-    byBase.set(base, new Set([...(byBase.get(base) ?? []), ...currencies]));
-  }
-  const ratesByBase = new Map<string, Record<string, number>>();
-  for (const [base, currencies] of byBase) {
-    try {
-      ratesByBase.set(base, await deps.providers.fx.rates(base, [...currencies], date));
-    } catch (err) {
-      // One base's provider failure leaves its businesses on yesterday's rate; the rest go ahead.
-      log.warn({ err, base }, 'exchange rates could not be fetched');
-    }
-  }
-  let written = 0;
-  for (const [companyId, { base, currencies }] of wantedBy) {
-    const rates = ratesByBase.get(base);
-    if (!rates) continue;
-    await deps.db.transaction(async (tx) => {
-      for (const from of currencies) {
-        const rate = rates[from];
-        if (!rate) continue;
-        const [before] = await tx
-          .select({ id: R.id, source: R.source })
-          .from(R)
-          .where(and(eq(R.companyId, companyId), eq(R.fromCurrency, from), eq(R.toCurrency, base), eq(R.effectiveFrom, date)));
-        if (before && before.source !== 'provider') continue;
-        if (before) {
-          await tx.update(R).set({ rate: String(rate), version: sql`${R.version} + 1`, updatedAt: deps.now() }).where(eq(R.id, before.id));
-        } else {
-          await tx.insert(R).values({ id: newId('fxr'), companyId, fromCurrency: from, toCurrency: base, rate: String(rate), effectiveFrom: date, source: 'provider' });
-        }
-        written += 1;
-      }
-    });
-  }
-  return written;
-}

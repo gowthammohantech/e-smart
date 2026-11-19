@@ -14,7 +14,6 @@ import { fetchDueGstr2b } from '../modules/gst/gstr2b';
 import { notifyOverdueInvoices } from '../modules/documents/overdue';
 import { runQueuedExtraction } from '../modules/ocr/handlers';
 import { purgeDueAccounts, purgeDueCompanies } from '../modules/platform/purge';
-import { refreshAllExchangeRates } from '../modules/settings/rates';
 import { purgeOutboundCalls } from '../lib/outbound';
 import { backupDatabase } from './dbBackup';
 import type { Schedule } from './schedule';
@@ -69,9 +68,6 @@ export const JOB_HANDLERS: Record<string, JobHandler> = {
     await purgeDueAccounts(deps, log);
     await purgeDueCompanies(deps, log);
   },
-  'fx.refresh': async ({ deps, log }) => {
-    log.info({ written: await refreshAllExchangeRates(deps, log) }, 'exchange rates refreshed');
-  },
   'db.backup': async ({ deps, log }) => {
     if (!deps.config.DB_BACKUP_ENABLED) return;
     log.info(await backupDatabase(deps), 'database backed up');
@@ -120,8 +116,6 @@ export const SCHEDULES: Schedule[] = [
   { kind: 'backups.due', everyMinutes: 60 },
   { kind: 'exports.expire', dailyAt: { hour: 4, minute: 0 } },
   { kind: 'accounts.purge', dailyAt: { hour: 4, minute: 30 } },
-  // Today's exchange rates before the working day, so foreign-currency documents start from them.
-  { kind: 'fx.refresh', dailyAt: { hour: 6, minute: 0 } },
   // In the morning, when people are at work.
   { kind: 'invoices.overdue', dailyAt: { hour: 9, minute: 30 } },
   { kind: 'itc.reversal180', dailyAt: { hour: 5, minute: 0 } },
