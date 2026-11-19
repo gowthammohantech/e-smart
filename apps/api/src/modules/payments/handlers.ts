@@ -4,7 +4,7 @@ import type { Schema } from '@esmart/api-contract';
 import { RawBody, defineHandlers, type Ctx } from '../../context';
 import { money } from '../../lib/wire';
 import { checkIfMatch, setEtag } from '../../http/etag';
-import { notFound } from '../../http/errors';
+import { invalid, notFound } from '../../http/errors';
 import { keyset } from '../../http/pagination';
 import { track } from '../../analytics/track';
 import type { DbOrTx } from '../../lib/audit';
@@ -31,6 +31,25 @@ async function toWire(ctx: AnyCtx, row: PaymentRow) {
 }
 
 const inputOf = requestInput;
+
+/**
+ * A receipt against invoices goes to them in full: no more than they owe, nothing left over as an
+ * advance. Money taken before an invoice is an advance receipt, raised with no invoices. Checked
+ * here, for what a person records; Adjust advance and gateway payments apply advances through the
+ * engine as before. An edit of a receipt that already holds an advance keeps it.
+ */
+function assertReceiptApplied(input: ReturnType<typeof requestInput>, existingAdvance = 0) {
+  if (input.direction !== 'received' || input.refundOf || !input.allocations.length || existingAdvance > 0) return;
+  const applied = input.allocations.reduce((s, a) => s + a.amountMinor, 0);
+  const received = input.amountMinor + (input.advanceTdsMinor ?? 0);
+  if (applied < received) {
+    throw invalid(
+      'allocations',
+      `${input.currency} ${((received - applied) / 100).toFixed(2)} is not applied to an invoice; a receipt goes in full to its invoices. Money taken before an invoice is an advance receipt.`,
+      'RECEIPT_NOT_APPLIED',
+    );
+  }
+}
 
 /**
  * Payments: listPayments, createPayment, getPayment, savePayment,
@@ -88,6 +107,7 @@ export const paymentsHandlers = defineHandlers({
 
   async createPayment(ctx) {
     assertDirectionAllowed(ctx.company, ctx.body.direction, !!ctx.body.refundOf);
+    assertReceiptApplied(inputOf(ctx.body));
     // Over the company's payment rule, from someone who isn't an approver: kept for an owner or admin (RULES 6.14).
     await holdIfOverLimit(ctx.db, ctx.deps, ctx.company, ctx.user, ctx.body, ctx.now);
     const row = await ctx.db.transaction(async (tx) => {
@@ -111,6 +131,7 @@ export const paymentsHandlers = defineHandlers({
     const row = await ctx.db.transaction(async (tx) => {
       const current = await findPayment(ctx, tx, ctx.params.id, { lock: true });
       checkIfMatch(ctx.req, current.version);
+      assertReceiptApplied(inputOf(ctx.body), current.unallocatedMinor);
       await assertEditWithinLimit(tx, ctx.company, ctx.user, ctx.body, current);
       const saved = await writePayment(tx, ctx.deps, ctx.company, ctx.user, inputOf(ctx.body), { now: ctx.now, existing: current });
       await linkPaymentAttachments(tx, ctx.company.id, saved.id, ctx.body.attachmentIds);
