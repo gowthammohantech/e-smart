@@ -140,7 +140,7 @@ export function isEwayBillRequired(args: {
 
   if (!settings.ewayBillEnabled) return no('E-way bills are switched off in settings');
   if (!EWAY_MOVEMENT_KINDS.includes(doc.kind)) {
-    return no('Only invoices and delivery notes carry a movement of goods');
+    return no('Only invoices and delivery challans carry a movement of goods');
   }
   if (doc.status === 'draft' || doc.status === 'requested') {
     return no('The document has not been finalised yet');
@@ -430,7 +430,7 @@ export function ewayDocTypeFor(kind: DocumentKind): EwayDocType {
 }
 
 /**
- * Both kinds default to an ordinary supply: a delivery note here accompanies
+ * Both kinds default to an ordinary supply: a delivery challan here accompanies
  * goods going to a customer, and branch-to-branch movement goes through the
  * inventory transfer screen instead. The form lets the user pick another.
  */

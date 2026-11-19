@@ -78,7 +78,7 @@ const EMAIL_TITLES: Record<DocumentKind, string> = {
   quote: 'Quotation',
   proforma: 'Proforma invoice',
   salesOrder: 'Sales order',
-  delivery: 'Delivery note',
+  delivery: 'Delivery challan',
   invoice: 'Invoice',
   salesReturn: 'Sales return',
   purchaseOrder: 'Purchase order',

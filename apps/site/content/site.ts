@@ -163,7 +163,7 @@ export const bento = {
       icon: 'file',
       shot: 'invoice',
       title: 'Sales documents',
-      body: 'Quotations, sales orders, delivery notes, tax invoices and returns — each converts into the next. Discounts, charges, round-off and foreign currency.',
+      body: 'Quotations, sales orders, delivery challans, tax invoices and returns — each converts into the next. Discounts, charges, round-off and foreign currency.',
     },
     {
       icon: 'boxes',
