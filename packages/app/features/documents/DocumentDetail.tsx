@@ -651,8 +651,8 @@ ${url}`;
             party &&
             router.push(
               party.kind !== 'supplier'
-                ? `/(app)/contacts/customers/${party.id}`
-                : `/(app)/contacts/suppliers/${party.id}`,
+                ? `/(app)/parties/customers/${party.id}`
+                : `/(app)/parties/suppliers/${party.id}`,
             )
           }
           accessibilityRole="button"

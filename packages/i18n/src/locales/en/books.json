@@ -674,6 +674,7 @@
     "intro": "Apply what a party has paid in advance, or a credit note not raised against an invoice, to what they still owe.",
     "party": "Party",
     "pickParty": "Pick a customer or supplier",
+    "pickCustomer": "Pick a customer",
     "customerSide": "As customer",
     "supplierSide": "As supplier",
     "noCredit": "No unadjusted advance or credit note",

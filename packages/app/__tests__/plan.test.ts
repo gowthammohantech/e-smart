@@ -32,7 +32,7 @@ describe('plan tiers', () => {
 
   it('maps full-plan routes to their module, groups and all', () => {
     expect(moduleForPath('/purchases/bills/new')).toBe('purchases');
-    expect(moduleForPath('/contacts/suppliers/sup_1')).toBe('purchases');
+    expect(moduleForPath('/parties/suppliers/sup_1')).toBe('purchases');
     expect(moduleForPath('/inventory')).toBe('inventory');
     expect(moduleForPath('/payments/made')).toBe('payables');
     expect(moduleForPath('/reports/stock')).toBe('inventory');
@@ -56,7 +56,7 @@ describe('plan tiers', () => {
   it('keeps selling, GST and sales reports open on every tier', () => {
     const everywhere = [
       '/(app)/sales/invoices/new',
-      '/(app)/contacts/customers/new',
+      '/(app)/parties/customers/new',
       '/(app)/compliance',
       '/(app)/gst/gstr1',
       '/(app)/settings/transporters',

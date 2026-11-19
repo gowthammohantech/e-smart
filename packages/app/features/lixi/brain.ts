@@ -89,7 +89,7 @@ const TAB_QUESTION_KEYS: Record<string, string> = {
   sales: 'lixi:tabQuestion.sales',
   purchases: 'lixi:tabQuestion.purchases',
   inventory: 'lixi:tabQuestion.inventory',
-  contacts: 'lixi:tabQuestion.contacts',
+  parties: 'lixi:tabQuestion.parties',
   reports: 'lixi:tabQuestion.reports',
   gst: 'lixi:tabQuestion.gst',
   more: 'lixi:tabQuestion.more',

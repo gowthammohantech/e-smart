@@ -71,7 +71,7 @@ export function AppHeader({ title, subtitle }: { title?: string; subtitle?: stri
   // Customers and Reports have no slot in the phone's tab bar; they are opened
   // from More, so (like every other page opened from More) they get a way back.
   const tab = tabForPath(pathname);
-  const showBack = tab === 'contacts' || tab === 'reports';
+  const showBack = tab === 'parties' || tab === 'reports';
   const goBack = () => (router.canGoBack() ? router.back() : router.replace('/(app)/(tabs)/more' as never));
 
   const iconButton = (

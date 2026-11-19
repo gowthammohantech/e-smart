@@ -8,7 +8,7 @@ import type { IconName } from '@esmart/ui/components/Icon';
  * render; what a plan can't open is filtered out where it's shown (`canOpen`).
  */
 
-export type SectionName = 'index' | 'sales' | 'purchases' | 'inventory' | 'money' | 'gst' | 'contacts' | 'reports' | 'more';
+export type SectionName = 'index' | 'sales' | 'purchases' | 'inventory' | 'money' | 'gst' | 'parties' | 'reports' | 'more';
 
 /** A live count shown beside an entry, resolved by `useMenuBadges`. */
 export type MenuBadge = 'unread' | 'eInvoiceFailed';
@@ -131,7 +131,7 @@ export const MENU: MenuSection[] = [
       { key: 'gstJournal', labelKey: 'nav:title.gstJournal', icon: 'book-edit-outline', route: '/gst/journal', group: 'returns' },
     ],
   },
-  { name: 'contacts', icon: 'account-group-outline', activeIcon: 'account-group', sidebarGroup: 'manage', pages: [] },
+  { name: 'parties', icon: 'account-group-outline', activeIcon: 'account-group', sidebarGroup: 'manage', pages: [] },
   { name: 'reports', icon: 'chart-box-outline', activeIcon: 'chart-box', sidebarGroup: 'manage', pages: [] },
   { name: 'more', icon: 'dots-horizontal-circle-outline', activeIcon: 'dots-horizontal-circle', sidebarGroup: null, pages: [] },
 ];

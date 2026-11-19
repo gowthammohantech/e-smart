@@ -57,7 +57,7 @@ export function useSetupSteps(): { steps: SetupStep[]; doneCount: number; comple
       // Half done reads as half done: a linked bank account still needs the signature, and the other way round.
       bodyKey: hasBank && !hasSignature ? 'bank.needsSignature' : hasSignature && !hasBank ? 'bank.needsAccount' : undefined,
     },
-    { key: 'customer', icon: 'account-plus-outline', route: '/(app)/contacts/customers/new', done: (counts?.customers ?? 0) > 0 },
+    { key: 'customer', icon: 'account-plus-outline', route: '/(app)/parties/customers/new', done: (counts?.customers ?? 0) > 0 },
     { key: 'item', icon: 'tag-plus-outline', route: '/(app)/catalog/items/new', done: (counts?.items ?? 0) > 0 },
     { key: 'invoice', icon: 'file-document-edit-outline', route: '/(app)/sales/invoices/new', done: (counts?.invoices ?? 0) > 0 },
     { key: 'team', icon: 'account-group-outline', route: '/(app)/settings/users', done: teammates > 1 },

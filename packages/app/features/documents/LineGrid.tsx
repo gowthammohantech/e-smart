@@ -46,6 +46,7 @@ export function LineGrid({
   onAddRequest,
   maxQuantity,
   purchase = false,
+  note = false,
 }: {
   lines: DocumentLine[];
   currency: string;
@@ -61,6 +62,8 @@ export function LineGrid({
   maxQuantity?: (line: DocumentLine) => number | undefined;
   /** A purchase: each line also says reverse charge, capital goods and whether its credit can be claimed. */
   purchase?: boolean;
+  /** A credit or debit note: the rate is the difference in rate. */
+  note?: boolean;
 }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['sales', 'common', 'inventory']);
@@ -121,7 +124,7 @@ export function LineGrid({
         {headerCell(tr('sales:grid.lineNo'), W.no)}
         {headerCell(tr('sales:line.itemOrService'))}
         {headerCell(tr('sales:line.quantity'), W.qty, 'right')}
-        {headerCell(tr('sales:line.rate'), W.rate, 'right')}
+        {headerCell(tr(note ? 'sales:line.rateDiff' : 'sales:line.rate'), W.rate, 'right')}
         {headerCell(tr('sales:line.discount'), W.discount, 'right')}
         {headerCell(tr('sales:line.tax'), W.tax)}
         {headerCell(tr('sales:line.lineTotal'), W.amount, 'right')}
@@ -237,7 +240,7 @@ export function LineGrid({
               <GridInput
                 id={cellId(row, 'rate')}
                 value={line.unitPrice.minor ? String(toMajor(line.unitPrice)) : ''}
-                label={label(tr('sales:line.rate'))}
+                label={label(tr(note ? 'sales:line.rateDiff' : 'sales:line.rate'))}
                 numeric
                 sanitize={(v) => sanitizeAmountInput(v, currency)}
                 invalid={line.unitPrice.minor <= 0}

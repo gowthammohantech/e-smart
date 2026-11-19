@@ -37,6 +37,8 @@ type EditorProps = {
   maxQuantity?: number;
   /** A purchase line: it also says reverse charge, capital goods and whether its credit can be claimed. */
   purchase?: boolean;
+  /** A credit or debit note: the rate is the difference in rate. */
+  note?: boolean;
 };
 
 /**
@@ -62,6 +64,7 @@ function LineEditorForm({
   hsnRequired = false,
   maxQuantity,
   purchase = false,
+  note = false,
 }: EditorProps & { line: DocumentLine }) {
   const t = useTheme();
   const desktop = useIsDesktop();
@@ -243,7 +246,7 @@ function LineEditorForm({
           required={hsnRequired}
         />
 
-        <AmountField label={tr('sales:line.rate')} value={price} onChangeValue={setPrice} currency={currency} placeholder="0" error={errors.rate} required />
+        <AmountField label={tr(note ? 'sales:line.rateDiff' : 'sales:line.rate')} value={price} onChangeValue={setPrice} currency={currency} placeholder="0" error={errors.rate} required />
         </FieldRow>
 
         <View style={{ gap: 6 }}>

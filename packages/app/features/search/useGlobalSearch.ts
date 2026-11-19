@@ -47,7 +47,7 @@ export function useGlobalSearch(query: string) {
         title: p.name!,
         subtitle: join(p.code, p.phone),
         icon: p.kind !== 'supplier' ? 'account-outline' : 'truck-outline',
-        route: p.kind !== 'supplier' ? `/(app)/contacts/customers/${p.id}` : `/(app)/contacts/suppliers/${p.id}`,
+        route: p.kind !== 'supplier' ? `/(app)/parties/customers/${p.id}` : `/(app)/parties/suppliers/${p.id}`,
       });
     });
 

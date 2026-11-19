@@ -144,7 +144,7 @@ function ImportContactsFlow() {
         const res = await send(records, false);
         refreshSoon();
         toast.show(tr('contacts:import.done', { count: res.created ?? 0 }), 'success', { icon: 'account-check-outline', detail: tr('contacts:import.skipped', { count: records.length - (res.created ?? 0) }) });
-        router.replace('/(app)/(tabs)/contacts');
+        router.replace('/(app)/(tabs)/parties');
       }}
       confirmLabel={(count) => tr('contacts:import.import', { count })}
     />
@@ -193,7 +193,7 @@ function ImportContactsPaste() {
       if (!dryRun) {
         refreshSoon();
         toast.show(tr('contacts:import.done', { count: data.created ?? 0 }), 'success', { icon: 'account-check-outline', detail: tr('contacts:import.skipped', { count: parsed.rows.length - (data.created ?? 0) }) });
-        router.replace('/(app)/(tabs)/contacts');
+        router.replace('/(app)/(tabs)/parties');
       }
     } catch (err) {
       toast.show(describeError(err, tr), 'error');
