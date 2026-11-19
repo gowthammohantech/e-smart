@@ -56,7 +56,7 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
   const allowedKinds = kindOptions.filter((k) => hasPurchases || k === 'customer' || (k === party?.kind && !buysFrom(k)));
   // A saved party keeps its type whatever the plan; a new one starts as the route says, if the plan has it.
   const [kind, setKind] = useState<PartyKind>(party?.kind ?? (allowedKinds.includes(routeKind) ? routeKind : 'customer'));
-  const backTo = party ? `/(app)/contacts/${party.kind === 'supplier' ? 'suppliers' : 'customers'}/${party.id}` : '/(app)/(tabs)/contacts';
+  const backTo = party ? `/(app)/parties/${party.kind === 'supplier' ? 'suppliers' : 'customers'}/${party.id}` : '/(app)/(tabs)/parties';
   const { run: serverSave, saving, blocked } = useServerSave();
   // Always 'phone' in the native apps, so the desktop layout only ever reaches a browser.
   const breakpoint = useBreakpoint();
@@ -306,7 +306,7 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
     if (party) goBack(backTo);
     else if (another) resetForAnother();
     else if (then === 'back' && router.canGoBack()) router.back();
-    else router.replace(kind === 'supplier' ? `/(app)/contacts/suppliers/${id}` : `/(app)/contacts/customers/${id}`);
+    else router.replace(kind === 'supplier' ? `/(app)/parties/suppliers/${id}` : `/(app)/parties/customers/${id}`);
   };
   useSaveShortcut(() => void save(), !saving, offersAnother ? () => void save(true) : undefined);
 

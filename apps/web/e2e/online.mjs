@@ -32,7 +32,7 @@ await signIn(page);
 
 {
   const name = `E2E Cut off ${stamp}`;
-  await page.goto(`${APP}/contacts/customers/new`, { waitUntil: 'domcontentloaded' });
+  await page.goto(`${APP}/parties/customers/new`, { waitUntil: 'domcontentloaded' });
   await page.getByPlaceholder('Business name').waitFor({ timeout: 30_000 });
   await apiOffline(ctx, true);
   // The app finds out from NetInfo or from its own next request.

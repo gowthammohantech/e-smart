@@ -219,7 +219,7 @@ export function moduleForReport(key: string): Module | null {
  */
 const GATED_PATHS: [prefix: string, module: Module | null][] = [
   ['/purchases', 'purchases'],
-  ['/contacts/suppliers', 'purchases'],
+  ['/parties/suppliers', 'purchases'],
   ['/payables', 'payables'],
   ['/payments/made', 'payables'],
   ['/inventory', 'inventory'],

@@ -43,8 +43,8 @@ export function tabForPath(pathname: string): TabName {
     case 'gst':
     case 'compliance':
       return 'gst';
-    case 'contacts':
-      return 'contacts';
+    case 'parties':
+      return 'parties';
     case 'reports':
       return 'reports';
     default:

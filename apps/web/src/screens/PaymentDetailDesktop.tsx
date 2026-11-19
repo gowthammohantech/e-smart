@@ -355,7 +355,7 @@ export function PaymentDetailDesktop() {
                 <SectionTitle>{party.kind !== 'supplier' ? tr('common:table.customer') : tr('common:table.supplier')}</SectionTitle>
                 <Pressable
                   onPress={() =>
-                    router.push(party.kind !== 'supplier' ? `/(app)/contacts/customers/${party.id}` : `/(app)/contacts/suppliers/${party.id}`)
+                    router.push(party.kind !== 'supplier' ? `/(app)/parties/customers/${party.id}` : `/(app)/parties/suppliers/${party.id}`)
                   }
                   accessibilityRole="link"
                   accessibilityLabel={party.name}

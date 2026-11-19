@@ -24,7 +24,7 @@ export function quickActions(tr: Translate, primary: string): Action[] {
     { key: 'quote', label: tr('common:quickAction.newQuote'), icon: 'file-percent-outline', route: '/(app)/sales/quotes/new' },
     { key: 'receive', label: tr('common:quickAction.receivePayment'), icon: 'cash-plus', route: '/(app)/receipts/new' },
     { key: 'expense', label: tr('common:quickAction.addExpense'), icon: 'receipt-text-outline', route: '/(app)/expenses/new' },
-    { key: 'customer', label: tr('common:quickAction.addCustomer'), icon: 'account-plus-outline', route: '/(app)/contacts/customers/new' },
+    { key: 'customer', label: tr('common:quickAction.addCustomer'), icon: 'account-plus-outline', route: '/(app)/parties/customers/new' },
     { key: 'item', label: tr('common:quickAction.addItem'), icon: 'tag-plus-outline', route: '/(app)/catalog/items/new' },
   ];
 }

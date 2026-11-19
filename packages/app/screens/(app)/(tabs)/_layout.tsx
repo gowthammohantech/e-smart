@@ -35,7 +35,7 @@ import { useSectionLabel } from '../../../navigation/sectionLabel';
  * in a floating bar, so the floating orb stays out of the way.
  */
 /** Sections whose name is too long for the phone's tab bar, shown there by a short one (nav:tabBar). */
-const BAR_SHORT = { contacts: true } as const;
+const BAR_SHORT = { parties: true } as const;
 
 export default function TabsLayout() {
   const t = useTheme();

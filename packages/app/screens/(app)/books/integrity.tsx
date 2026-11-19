@@ -20,7 +20,7 @@ const routeOf = (ref: string) => {
   if (type === 'payment') return `/(app)/payments/${id}`;
   if (type === 'voucher') return `/(app)/books/vouchers/${id}`;
   if (type === 'expense') return `/(app)/expenses/${id}`;
-  if (type === 'party') return `/(app)/contacts/customers/${id}/statement`;
+  if (type === 'party') return `/(app)/parties/customers/${id}/statement`;
   return undefined;
 };
 

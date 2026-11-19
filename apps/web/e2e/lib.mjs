@@ -56,7 +56,7 @@ export async function fillCustomer(page, name) {
   await page.getByPlaceholder('400001').fill('600001');
 }
 export async function addCustomer(page, name) {
-  await page.goto(`${APP}/contacts/customers/new`, { waitUntil: 'domcontentloaded' });
+  await page.goto(`${APP}/parties/customers/new`, { waitUntil: 'domcontentloaded' });
   await page.getByPlaceholder('Business name').waitFor({ timeout: 30_000 });
   await fillCustomer(page, name);
   const started = Date.now();

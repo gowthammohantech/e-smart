@@ -57,8 +57,8 @@ export function FirstRunDesktop() {
             </Text>
             <View style={{ flexDirection: 'row', gap: t.spacing.md, marginTop: t.spacing.sm }}>
               <Button title={tr('reports:home.step.invoice.title')} icon="file-document-edit-outline" onPress={() => router.push('/(app)/sales/invoices/new')} />
-              {canOpen('/(app)/contacts/customers/new') ? (
-                <Button title={tr('common:quickAction.addCustomer')} icon="account-plus-outline" variant="secondary" onPress={() => router.push('/(app)/contacts/customers/new')} />
+              {canOpen('/(app)/parties/customers/new') ? (
+                <Button title={tr('common:quickAction.addCustomer')} icon="account-plus-outline" variant="secondary" onPress={() => router.push('/(app)/parties/customers/new')} />
               ) : null}
             </View>
           </View>

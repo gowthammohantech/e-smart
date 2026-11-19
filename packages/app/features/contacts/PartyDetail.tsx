@@ -417,8 +417,8 @@ export function PartyDetail({ party }: { party: Party }) {
   );
 
   const actions: { label: string; icon: IconName; destructive?: boolean; onPress: () => void }[] = [
-    { label: tr('contacts:detail.editContact'), icon: 'pencil-outline' as const, onPress: () => router.push(isCustomer ? `/(app)/contacts/customers/${party.id}/edit` : `/(app)/contacts/suppliers/${party.id}/edit`) },
-    { label: tr('contacts:detail.statement'), icon: 'book-open-outline' as const, onPress: () => router.push(`/(app)/contacts/${isCustomer ? 'customers' : 'suppliers'}/${party.id}/statement` as never) },
+    { label: tr('contacts:detail.editContact'), icon: 'pencil-outline' as const, onPress: () => router.push(isCustomer ? `/(app)/parties/customers/${party.id}/edit` : `/(app)/parties/suppliers/${party.id}/edit`) },
+    { label: tr('contacts:detail.statement'), icon: 'book-open-outline' as const, onPress: () => router.push(`/(app)/parties/${isCustomer ? 'customers' : 'suppliers'}/${party.id}/statement` as never) },
     ...(!canTransact
       ? []
       : isCustomer
@@ -613,7 +613,7 @@ export function PartyDetail({ party }: { party: Party }) {
         onConfirm={() => {
           setConfirmDelete(false);
           void serverSave(() => removeParty(party.id), tr('contacts:detail.deleted'), { icon: 'account-remove-outline' }).then((res) => {
-            if (res) goBack('/(app)/(tabs)/contacts');
+            if (res) goBack('/(app)/(tabs)/parties');
           });
         }}
       />

@@ -2056,7 +2056,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
               onPress={() => {
                 setPartyOpen(false);
                 partiesBeforeAdd.current = new Set(parties.map((p) => p.id));
-                router.push(isPurchase ? '/(app)/contacts/suppliers/new?then=back' : '/(app)/contacts/customers/new?then=back');
+                router.push(isPurchase ? '/(app)/parties/suppliers/new?then=back' : '/(app)/parties/customers/new?then=back');
               }}
             />
           }

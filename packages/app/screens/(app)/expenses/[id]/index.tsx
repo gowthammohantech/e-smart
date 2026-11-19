@@ -201,7 +201,7 @@ export default function ExpenseDetail() {
         ) : supplier ? (
           <FormSection title={tr('purchases:expense.supplier')}>
             <Pressable
-              onPress={() => router.push(`/(app)/contacts/suppliers/${supplier.id}`)}
+              onPress={() => router.push(`/(app)/parties/suppliers/${supplier.id}`)}
               accessibilityRole="link"
               accessibilityLabel={supplier.name}
               style={(state) => {

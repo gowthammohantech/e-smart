@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next';
 export function useSectionLabel() {
   const { t: tr } = useTranslation(['nav']);
   return useCallback(
-    (name: string, short = false) => (short ? tr(`nav:tabBar.${name}` as 'nav:tabBar.contacts') : tr(`nav:tab.${name}` as 'nav:tab.index')),
+    (name: string, short = false) => (short ? tr(`nav:tabBar.${name}` as 'nav:tabBar.parties') : tr(`nav:tab.${name}` as 'nav:tab.index')),
     [tr],
   );
 }

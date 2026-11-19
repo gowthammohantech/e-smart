@@ -23,7 +23,7 @@ const PAGES = [
   ['invoice list', '/sales/invoices'],
   ['invoice editor', '/sales/invoices/new'],
   ['item form', '/catalog/items/new'],
-  ['customer form', '/contacts/customers/new'],
+  ['customer form', '/parties/customers/new'],
   ['profit report', '/reports/profit'],
   ['receivables', '/receivables'],
   ['company settings', '/settings/company'],

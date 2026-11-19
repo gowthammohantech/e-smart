@@ -68,7 +68,7 @@ export default function ContactsTab() {
   const ahead = (p: { advance?: Money }) => p.advance?.minor ?? 0;
   // "Other" contacts have no account: no receivable, no "customers".
   const general = tab === 'general';
-  const newRoute = tab === 'supplier' ? '/(app)/contacts/suppliers/new' : tab === 'general' || tab === 'both' ? `/(app)/contacts/customers/new?kind=${tab}` : '/(app)/contacts/customers/new';
+  const newRoute = tab === 'supplier' ? '/(app)/parties/suppliers/new' : tab === 'general' || tab === 'both' ? `/(app)/parties/customers/new?kind=${tab}` : '/(app)/parties/customers/new';
   const count = summary?.count ?? filtered.length;
   const countLabel = general ? tr('contacts:hub.otherCount', { count }) : tab === 'both' ? tr('contacts:hub.bothCount', { count }) : asCustomer ? tr('contacts:hub.customerCount', { count }) : tr('contacts:hub.supplierCount', { count });
   const loadMore = () => {
@@ -81,7 +81,7 @@ export default function ContactsTab() {
   const { run: serverSave, saving } = useServerSave();
   const toast = useToast();
   const companyId = useAppStore((s) => s.activeCompanyId);
-  const detailRoute = (p: { id: string }) => (asCustomer ? `/(app)/contacts/customers/${p.id}` : `/(app)/contacts/suppliers/${p.id}`);
+  const detailRoute = (p: { id: string }) => (asCustomer ? `/(app)/parties/customers/${p.id}` : `/(app)/parties/suppliers/${p.id}`);
   const chosen = (keys: string[]) => filtered.filter((p) => keys.includes(p.id));
   const exportChosen = (keys: string[]) =>
     exportRows(
@@ -223,7 +223,7 @@ export default function ContactsTab() {
             ) : null}
           </Text>
           )}
-          <Button title={tr('contacts:import.action')} icon="upload" variant="ghost" size="sm" onPress={() => router.push('/(app)/contacts/import' as never)} />
+          <Button title={tr('contacts:import.action')} icon="upload" variant="ghost" size="sm" onPress={() => router.push('/(app)/parties/import' as never)} />
         </View>
       </View>
 
@@ -373,8 +373,8 @@ export default function ContactsTab() {
                 onPress={() =>
                   router.push(
                     asCustomer
-                      ? `/(app)/contacts/customers/${p.id}`
-                      : `/(app)/contacts/suppliers/${p.id}`,
+                      ? `/(app)/parties/customers/${p.id}`
+                      : `/(app)/parties/suppliers/${p.id}`,
                   )
                 }
                 accessibilityRole="button"
