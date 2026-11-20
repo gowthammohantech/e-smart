@@ -14,6 +14,8 @@ export interface GspGateway extends ComplianceProvider {
   readonly gateway: GspGatewayName;
   /** The register's record for a GSTIN as received, or null when it holds no such registration. */
   lookupTaxpayer(gstin: string): Promise<Record<string, unknown> | null>;
+  /** True when the register that answers `lookupTaxpayer` is a gateway sandbox, whose sample data can't be trusted for the state. */
+  lookupIsSandbox?(): boolean;
 }
 
 export type Failure = { ok: false; errors: ComplianceIssue[] };

@@ -728,6 +728,14 @@ describe('taxpayer record', () => {
     expect(toGstinRecord({ LegalName: 'Nic Co', AddrBno: '1', AddrLoc: 'Chennai', AddrPncd: 600001, StateCode: 33 }, '27AAGCB1286Q1Z4')?.address).toMatchObject({ stateCode: '33' });
   });
 
+  it('in a sandbox, takes the state from the GSTIN and keeps the sample city and PIN only when it is the same state', () => {
+    const sample = { lgnm: 'Sandbox Co', pradr: { addr: { bno: '252', bnm: 'Gold Hill Supreme', dst: 'Thane', pncd: '400123', stcd: 'Maharashtra' } } };
+    // Another state: the GSTIN's state wins, city and PIN are left for the person.
+    expect(toGstinRecord(sample, '33AAPFU0939F1Z2', { sandbox: true })?.address).toMatchObject({ state: 'Tamil Nadu', stateCode: '33', city: '', postalCode: '' });
+    // The same state: the sample's city and PIN stay.
+    expect(toGstinRecord(sample, '27AAGCB1286Q1Z4', { sandbox: true })?.address).toMatchObject({ stateCode: '27', city: 'Thane', postalCode: '400123' });
+  });
+
   it('reads NIC’s spelling, maps composition and cancelled, and gives up on a record with no name', () => {
     const record = toGstinRecord({ LegalName: 'Nic Co', Status: 'CANCELLED', dty: 'Composition', AddrBno: '1', AddrLoc: 'Pune', AddrPncd: 411001 }, '27AAGCB1286Q1Z4');
     expect(record).toMatchObject({ legalName: 'Nic Co', status: 'Cancelled', registrationType: 'composition', address: { line1: '1', city: 'Pune', postalCode: '411001' } });

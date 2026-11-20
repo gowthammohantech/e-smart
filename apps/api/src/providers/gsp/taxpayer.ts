@@ -47,7 +47,7 @@ function isoDate(raw: string | undefined): string | undefined {
  * sandboxes return the same shapes, but run it against a real response before
  * relying on a field that matters to you.
  */
-export function toGstinRecord(raw: Rec, gstin: string): GstinRecord | null {
+export function toGstinRecord(raw: Rec, gstin: string, opts: { sandbox?: boolean } = {}): GstinRecord | null {
   const legalName = text(raw.lgnm, raw.LegalName, raw.legalName);
   if (!legalName) return null;
 
@@ -61,20 +61,24 @@ export function toGstinRecord(raw: Rec, gstin: string): GstinRecord | null {
   // PIN and state stay one place; the GSTIN's own state only when the register gives none. They
   // agree for a real registration, but a gateway sandbox answers every GSTIN with one sample address.
   const named = text(addr.stcd)?.toLowerCase();
-  const stateCode =
-    GST_STATE_CODES.find((s) => s.name.toLowerCase() === named)?.code ??
-    stateByCode(text(raw.StateCode)?.padStart(2, '0'))?.code ??
-    gstin.slice(0, 2);
+  const addressState =
+    GST_STATE_CODES.find((s) => s.name.toLowerCase() === named)?.code ?? stateByCode(text(raw.StateCode)?.padStart(2, '0'))?.code;
+  // A gateway sandbox doesn't hold every GSTIN: it answers the rest with one sample taxpayer, so its state
+  // can't be trusted. There the GSTIN's own first two digits are the state; the sample's city and PIN are
+  // kept only when its state is that same one, and left for the person to pick when it isn't.
+  const sandbox = opts.sandbox === true;
+  const stateCode = sandbox ? gstin.slice(0, 2) : (addressState ?? gstin.slice(0, 2));
+  const sameState = !sandbox || !addressState || addressState === stateCode;
 
   const address =
-    (line1 || street || locality) && city && postalCode
+    (line1 || street || locality) && ((city && postalCode) || (sandbox && !sameState))
       ? ({
           line1: line1 || street || locality!,
           ...(line1 && street ? { line2: street } : {}),
-          city,
+          city: sameState ? city! : '',
           state: stateNameOf(stateCode),
           stateCode,
-          postalCode,
+          postalCode: sameState ? postalCode! : '',
           country: 'IN',
         } as Schema<'Address'>)
       : undefined;
