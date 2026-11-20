@@ -266,6 +266,17 @@ function checkRequestedStatus(kind: DocumentKind, status: string): DocStatus {
  * Inserts a new document from prepared fields, finalising it in the same
  * transaction when asked. Shared by create, convert and duplicate.
  */
+/**
+ * The live e-way bill of the delivery challan an invoice is made from: the goods moved under it, so the
+ * invoice takes it (shows it, and raises no second one). None for any other source, or a cancelled bill.
+ */
+async function challanEwayBill(db: DbOrTx, companyId: string, sourceId: string): Promise<string | null> {
+  const [src] = await db.select({ kind: D.kind, bill: D.currentEwayBillId }).from(D).where(and(eq(D.companyId, companyId), eq(D.id, sourceId)));
+  if (!src || src.kind !== 'delivery' || !src.bill) return null;
+  const [bill] = await db.select({ status: schema.ewayBills.status }).from(schema.ewayBills).where(eq(schema.ewayBills.id, src.bill));
+  return bill && bill.status !== 'cancelled' ? src.bill : null;
+}
+
 export async function insertDocument(
   ctx: AnyCtx,
   f: DocFields,
@@ -279,6 +290,7 @@ export async function insertDocument(
   const row = await ctx.db.transaction(async (tx) => {
     // A customer on credit hold isn't given a new sale, not even a draft (made, converted, copied or recurring).
     await checkCreditHold(tx, { companyId: ctx.company.id, kind: f.kind, partyId: prepared.columns.partyId }, ctx.now);
+    const challanBill = f.kind === 'invoice' && f.sourceDocumentId ? await challanEwayBill(tx, ctx.company.id, f.sourceDocumentId) : null;
     const [created] = await tx
       .insert(D)
       .values({
@@ -289,6 +301,7 @@ export async function insertDocument(
         createdBy: ctx.user.id,
         ...prepared.columns,
         mergedSourceIds: extra.mergedSourceIds ?? [],
+        ...(challanBill && { currentEwayBillId: challanBill }),
         createdAt: ctx.now,
         updatedAt: ctx.now,
       })
