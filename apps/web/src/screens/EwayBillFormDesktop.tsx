@@ -400,6 +400,7 @@ function EwayBillFormDesktop({ doc }: { doc: BusinessDocument }) {
           value={EWAY_SUB_SUPPLY_TYPES[subSupplyType].label}
           onPress={() => setSubSupplyOpen(true)}
           icon="tag-outline"
+          error={errors.subSupplyType}
         />
         {subSupplyType === 'others' ? (
           <TextField

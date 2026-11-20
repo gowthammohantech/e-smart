@@ -21,6 +21,12 @@ export const STANDALONE_DISTANCE_REFUSED = '702';
  * files the bill under one it has accepted before; the app's own record keeps the real HSN.
  */
 export const STANDALONE_HSN_REFUSED = '216';
+/**
+ * The sandbox knows only its own register of taxpayers, so a real transporter's GSTIN/TRANSIN is refused as an
+ * invalid transporter ID (222). The retry leaves the transporter off — the vehicle number alone is enough to
+ * move goods by road; the app's own record keeps the transporter.
+ */
+export const STANDALONE_TRANSPORTER_REFUSED = '222';
 export const SANDBOX_ACCEPTED_HSN = '85362010';
 /** The same refusal on an e-invoice: 2176 "HSN code(s) … invalid". */
 export const IRN_HSN_REFUSED = ['2176', '2311', '3048'] as const; // 2311: the sandbox taxpayer's turnover requires a 6-digit HSN, so a 4-digit one is refused too.

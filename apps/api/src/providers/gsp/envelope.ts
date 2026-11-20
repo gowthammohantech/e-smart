@@ -7,6 +7,8 @@
  * Check the envelope, never the status code alone.
  */
 
+import { nicErrorText } from './nicErrorText';
+
 export interface GspEnvelope<TResult = unknown> {
   /** May be the boolean `false` or the string `"false"`; both have been seen. */
   success?: boolean | string;
@@ -71,7 +73,8 @@ export function asCode(value: unknown): string | null {
   return null;
 }
 
-export type NicError = { code: string | null; text: string };
+/** `ours` is set when the portal sent no wording (or only its code) and the text is ours, from `nicErrorText`. */
+export type NicError = { code: string | null; text: string; ours?: boolean };
 
 /**
  * NIC returns its errors as a JSON array, which the GSP forwards as a *string*.
@@ -91,20 +94,26 @@ export function nicErrorsOf(data: GspEnvelope | null | undefined): NicError[] {
         const record = entry as Record<string, unknown>;
         const text = typeof record.ErrorMessage === 'string' ? record.ErrorMessage.trim() : '';
         const code = asCode(record.ErrorCode);
-        if (text || code) errors.push({ code, text });
+        if (text || code) errors.push(withWording(code, text));
       }
     } catch {
       // Not a JSON array of NIC errors.
     }
   }
-  if (!errors.length && top) errors.push({ code: top, text: '' });
+  if (!errors.length && top) errors.push(withWording(top, ''));
   return errors;
+}
+
+/** An error with wording a person can read: the portal's own, else ours for its code. */
+function withWording(code: string | null, text: string): NicError {
+  const wording = nicErrorText(code, text);
+  return { code, text: wording, ...(wording !== text ? { ours: true } : {}) };
 }
 
 /** One line a human can act on. */
 export function describeGspError(data: GspEnvelope | null | undefined, fallback: string): string {
   const described = nicErrorsOf(data)
-    .map((e) => (e.text === '' ? (e.code ?? '') : e.code === null ? e.text : `${e.text} (${e.code})`))
+    .map((e) => (e.ours || e.code === null ? e.text : `${e.text} (${e.code})`))
     .filter(Boolean)
     .join('; ');
   if (described) return described;

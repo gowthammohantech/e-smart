@@ -294,6 +294,7 @@ export async function generateEway(ctx: GenerateCtx, input: GenerateInput, opts:
       to: input.to,
       subSupplyType: input.subSupplyType,
       subSupplyDescription: input.subSupplyDescription,
+      docType: ewayDocTypeFor(doc.kind),
       documentNumber: core.number,
       documentDate: core.date,
       consignmentValueMinor: core.totals.grandTotal.minor,

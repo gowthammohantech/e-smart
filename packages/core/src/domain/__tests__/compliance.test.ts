@@ -24,6 +24,9 @@ import {
 import {
   EWAY_CANCEL_REASONS,
   EWAY_MAX_DISTANCE_KM,
+  EWAY_SUB_SUPPLY_TYPES,
+  subSupplyTypeFor,
+  subSupplyTypesFor,
   canCancelEwayBill,
   canExtendEwayBill,
   canUpdatePartB,
@@ -1206,6 +1209,29 @@ describe('e-way bill Part-A (FRD 16)', () => {
   it('demands a description when the sub-supply type is "others"', () => {
     expect(partA({ subSupplyType: 'others' })).toContain('subSupplyDescription');
     expect(partA({ subSupplyType: 'others', subSupplyDescription: 'Sample despatch' })).toHaveLength(0);
+  });
+
+  it('rejects a challan sent as "Supply" (portal error 611) and accepts it as "Others"', () => {
+    expect(partA({ docType: 'CHL', subSupplyType: 'supply' })).toContain('subSupplyType');
+    expect(partA({ docType: 'CHL', subSupplyType: 'others', subSupplyDescription: 'Delivery challan' })).toHaveLength(0);
+    expect(partA({ docType: 'INV', subSupplyType: 'supply' })).toHaveLength(0);
+    expect(partA({ docType: 'INV', subSupplyType: 'others', subSupplyDescription: 'x' })).toContain('subSupplyType');
+  });
+
+  it('uses the NIC master codes for the sub-supply type', () => {
+    expect(EWAY_SUB_SUPPLY_TYPES.supply.code).toBe(1);
+    expect(EWAY_SUB_SUPPLY_TYPES.salesReturn.code).toBe(7);
+    expect(EWAY_SUB_SUPPLY_TYPES.others.code).toBe(8);
+    expect(EWAY_SUB_SUPPLY_TYPES.lineSales.code).toBe(10);
+    expect(EWAY_SUB_SUPPLY_TYPES.recipientNotKnown.code).toBe(11);
+    expect(EWAY_SUB_SUPPLY_TYPES.exhibition.code).toBe(12);
+  });
+
+  it('defaults a challan to "Others" and offers only challan-valid sub-supply types', () => {
+    expect(subSupplyTypeFor('invoice')).toBe('supply');
+    expect(subSupplyTypeFor('delivery')).toBe('others');
+    expect(subSupplyTypesFor('CHL')).not.toContain('supply');
+    expect(subSupplyTypesFor('INV')).toEqual(['supply', 'export']);
   });
 
   it('demands a consignment value above zero and an HSN code', () => {

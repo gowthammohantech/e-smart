@@ -41,12 +41,15 @@ import {
   SANDBOX_ACCEPTED_HSN,
   STANDALONE_DISTANCE_REFUSED,
   STANDALONE_HSN_REFUSED,
+  STANDALONE_TRANSPORTER_REFUSED,
   irpHsnSwap,
   resplitIrnTax,
   resplitTax,
   sandboxDocNo,
+  sandboxRates,
   type PartyBlock,
 } from './sandbox';
+import { nicErrorText } from './nicErrorText';
 import { FetchGspTransport, GspAuthError, GspConfigError, GspRequestError, type GspTransport } from './transport';
 
 // They live in `sandbox.ts` now, for both gateways; re-exported so the callers that import them from here keep working.
@@ -465,11 +468,18 @@ export class WhitebooksGateway implements GspGateway {
         // refuses IGST on an intra-state bill (218, with 623) and CGST/SGST on an inter-state one. The same tax is
         // re-split to match; the total does not move.
         if (party || seller) Object.assign(payload, resplitTax(payload));
-        const send = (p: typeof payload) => this.standalone(login, PATHS.standaloneGenerate, nativeEwayBillBody(p));
+        // The summary line's rate is the blend of the document's (tax ÷ taxable value); a mixed-rate document blends to
+        // no GST slab and the sandbox refuses it (252 invalid CGST rate, 253 invalid SGST rate, 254 invalid IGST rate).
+        // So the sandbox is shown the nearest valid slab; the bill's totals are untouched.
+        const send = (p: typeof payload) => this.standalone(login, PATHS.standaloneGenerate, this.sandbox ? sandboxRates(nativeEwayBillBody(p)) : nativeEwayBillBody(p));
         const generate = async (p: typeof payload): Promise<WhitebooksEnvelope> => {
           try {
             return await send(p);
           } catch (error) {
+            if (this.sandbox && error instanceof GspRequestError && p.transporterId && hasErrorCode(error.envelope, STANDALONE_TRANSPORTER_REFUSED)) {
+              this.log('The sandbox does not know this transporter: filing without one');
+              return generate({ ...p, transporterId: undefined, transporterName: undefined });
+            }
             if (!(this.sandbox && error instanceof GspRequestError && hasErrorCode(error.envelope, STANDALONE_HSN_REFUSED) && p.mainHsnCode !== SANDBOX_ACCEPTED_HSN)) throw error;
             this.log(`The sandbox does not know HSN ${p.mainHsnCode}: filing under ${SANDBOX_ACCEPTED_HSN}`);
             return send({ ...p, mainHsnCode: SANDBOX_ACCEPTED_HSN });
@@ -642,7 +652,7 @@ function readRecord<T>(body: WhitebooksEnvelope): T | null {
   return body as unknown as T;
 }
 
-type WbError = { code: string | null; text: string };
+type WbError = { code: string | null; text: string; ours: boolean };
 
 /**
  * NIC's error array, forwarded as a string of JSON in `status_desc` with
@@ -665,31 +675,19 @@ function nicErrors(body: WhitebooksEnvelope): WbError[] {
   return parsed.flatMap((entry): WbError[] => {
     if (!isRecord(entry)) return [];
     const code = asCode(entry.errorCode ?? entry.ErrorCode);
-    let text = firstString(entry.errorMessage, entry.ErrorMessage, entry.errorDesc);
-    if (code !== null && (text === null || text === code)) text = EWAYBILL_ERROR_TEXT[code] ?? text;
-    return text === null && code === null ? [] : [{ code, text: text ?? '' }];
+    const text = firstString(entry.errorMessage, entry.ErrorMessage, entry.errorDesc)?.trim() ?? '';
+    // The portal pads its array with blank entries (`" "`); there is nothing in them to say.
+    if (text === '' && code === null) return [];
+    // The standalone API repeats the code as the message (`"252"`): that is no wording, so ours stands in.
+    const wording = nicErrorText(code, text);
+    return [{ code, text: wording, ours: wording !== text }];
   });
 }
-
-/** The wording behind the bare codes the standalone e-way bill API answers with (NIC's error list). */
-const EWAYBILL_ERROR_TEXT: Readonly<Record<string, string>> = {
-  '212': 'Invalid consignee GSTIN',
-  '216': 'Invalid HSN code',
-  '218': 'Invalid tax rate for an intra-state bill (IGST is not allowed)',
-  '219': 'Invalid tax rate for an inter-state bill (CGST/SGST is not allowed)',
-  '283': 'An HSN code of at least 6 digits is mandatory for this taxpayer',
-  '303': 'Vehicle number is required',
-  '359': 'The portal user GSTIN must match the from-GSTIN for an outward supply',
-  '604': 'An e-way bill is already generated for this document number',
-  '611': 'Invalid document type for the supply type',
-  '702': 'The distance given does not match the pincodes',
-  '820': 'The document date is more than 180 days old',
-};
 
 /** `'Duplicate IRN (2150)'`, or the plain `status_desc`, or the fallback. */
 function describe(body: WhitebooksEnvelope, fallback: string): string {
   const described = nicErrors(body)
-    .map((e) => (e.text === '' ? (e.code ?? '') : e.code === null ? e.text : `${e.text} (${e.code})`))
+    .map((e) => (e.ours || e.code === null ? e.text : `${e.text} (${e.code})`))
     .filter(Boolean)
     .join('; ');
   // The portal sometimes adds a plain sentence beside the codes (`info`); it often says more than the code does.
