@@ -43,6 +43,7 @@
     "currency": "Currency",
     "rateStored": "The rate is stored on the document so it stays reproducible.",
     "addItem": "Add item",
+    "itemTab": { "all": "All", "products": "Products", "services": "Services" },
     "addItems_one": "Add {{count}} item",
     "addItems_other": "Add {{count}} items",
     "noLines": "No lines yet",
