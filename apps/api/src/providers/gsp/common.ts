@@ -5,6 +5,7 @@ import { validUptoFor, type EwbPayload } from '@esmart/core/domain/ewayBill';
 import { whitebooksSettings, type Config } from '../../config';
 import type { ComplianceProvider, PartBUpdateRequest, PortalCredentials } from '../compliance';
 import { asCode, nicErrorsOf, parsePortalDateAny, toPortalDateTime } from './envelope';
+import { nicErrorText } from './nicErrorText';
 import type { GspGatewayName } from './provider-name';
 import { GspAuthError, GspConfigError, GspRequestError } from './transport';
 
@@ -33,10 +34,15 @@ export function failureFrom(err: unknown, log: (message: string) => void = () =>
     const issues = nicErrorsOf(err.envelope).map<ComplianceIssue>((e) => ({
       code: e.code ?? 'PORTAL',
       field: 'document',
-      message: e.text || e.code || err.message,
+      // Never a bare code: `nicErrorsOf` has already put wording to it.
+      message: e.text || err.message,
       severity: 'blocking',
     }));
-    return issues.length ? { ok: false, errors: issues } : failure(asCode(err.envelope?.errorCode) ?? 'PORTAL', err.message);
+    if (issues.length) return { ok: false, errors: issues };
+    // A refusal with no error array: the gateway's sentence, unless that is empty or only a number (a code).
+    const sentence = err.message.trim();
+    const code = asCode(err.envelope?.errorCode) ?? (/^\d+$/.test(sentence) ? sentence : null);
+    return failure(code ?? 'PORTAL', sentence && sentence !== code ? sentence : nicErrorText(code, ''));
   }
   if (err instanceof GspAuthError) {
     log(`GSP authentication failed: ${err.message}`);

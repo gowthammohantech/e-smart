@@ -42,18 +42,45 @@ export const EWAY_VEHICLE_TYPES: Record<VehicleType, { code: 'R' | 'O'; label: s
   overDimensional: { code: 'O', label: 'Over-dimensional cargo' },
 };
 
+/** NIC master codes for the sub-supply type (1 Supply, 2 Import, 3 Export, 4 Job work, 5 Own use, 6 Job work returns, 7 Sales return, 8 Others, 9 SKD/CKD, 10 Line sales, 11 Recipient not known, 12 Exhibition or fairs). */
 export const EWAY_SUB_SUPPLY_TYPES: Record<EwaySubSupplyType, { code: number; label: string }> = {
   supply: { code: 1, label: 'Supply' },
   export: { code: 3, label: 'Export' },
   jobWork: { code: 4, label: 'Job work' },
   ownUse: { code: 5, label: 'For own use' },
   jobWorkReturn: { code: 6, label: 'Job work returns' },
-  salesReturn: { code: 8, label: 'Sales return' },
-  exhibition: { code: 9, label: 'Exhibition or fairs' },
+  salesReturn: { code: 7, label: 'Sales return' },
+  others: { code: 8, label: 'Others' },
   lineSales: { code: 10, label: 'Line sales' },
   recipientNotKnown: { code: 11, label: 'Recipient not known' },
-  others: { code: 12, label: 'Others' },
+  exhibition: { code: 12, label: 'Exhibition or fairs' },
 };
+
+/**
+ * Which document types the portal accepts with each sub-supply type on an
+ * OUTWARD bill (NIC master codes). Anything else comes back as error 611,
+ * "Invalid document type for the supply type". Job work returns and sales
+ * returns are inward-only, so they accept nothing here.
+ */
+export const EWAY_OUTWARD_DOC_TYPES: Record<EwaySubSupplyType, readonly EwayDocType[]> = {
+  supply: ['INV', 'BIL'],
+  export: ['INV', 'BIL'],
+  jobWork: ['CHL'],
+  ownUse: ['CHL'],
+  jobWorkReturn: [],
+  salesReturn: [],
+  others: ['CHL', 'OTH'],
+  lineSales: ['CHL'],
+  recipientNotKnown: ['CHL', 'OTH'],
+  exhibition: ['CHL'],
+};
+
+/** The sub-supply types the portal accepts on an outward bill for this document type. */
+export function subSupplyTypesFor(docType: EwayDocType): EwaySubSupplyType[] {
+  return (Object.keys(EWAY_OUTWARD_DOC_TYPES) as EwaySubSupplyType[]).filter((key) =>
+    EWAY_OUTWARD_DOC_TYPES[key].includes(docType),
+  );
+}
 
 export const EWAY_CANCEL_REASONS: Record<CancelReasonCode, string> = {
   '1': 'Duplicate',
@@ -326,16 +353,15 @@ export type EwayPartAInput = {
   to: EwayPlace;
   subSupplyType: EwaySubSupplyType;
   subSupplyDescription?: string;
-  /** The document being moved; a challan is refused by the portal under some sub-supply types. */
+  /** The document being moved; its portal document type is checked against the sub-supply type. */
   documentKind?: DocumentKind;
+  /** Or the portal document type itself, when the caller already holds it. */
+  docType?: EwayDocType;
   documentNumber: string;
   documentDate: string;
   consignmentValueMinor: number;
   mainHsnCode?: string;
 };
-
-/** NIC refuses document type CHL with these: "Invalid document type for the supply type". */
-const CHALLAN_REFUSED_SUB_SUPPLY: EwaySubSupplyType[] = ['supply', 'export'];
 
 export function validatePartA(input: EwayPartAInput): ComplianceIssue[] {
   const out: ComplianceIssue[] = [];
@@ -360,8 +386,18 @@ export function validatePartA(input: EwayPartAInput): ComplianceIssue[] {
   if (input.subSupplyType === 'others' && !input.subSupplyDescription?.trim()) {
     out.push(issue('EWB106', 'subSupplyDescription', 'Describe the sub-supply type'));
   }
-  if (input.documentKind && ewayDocTypeFor(input.documentKind) === 'CHL' && CHALLAN_REFUSED_SUB_SUPPLY.includes(input.subSupplyType)) {
-    out.push(issue('EWB111', 'subSupplyType', `The portal does not accept a delivery challan under "${EWAY_SUB_SUPPLY_TYPES[input.subSupplyType].label}". Choose another sub-supply type (for example Others), or raise the e-way bill from the invoice`));
+  const docType = input.docType ?? (input.documentKind ? ewayDocTypeFor(input.documentKind) : undefined);
+  if (docType && !EWAY_OUTWARD_DOC_TYPES[input.subSupplyType].includes(docType)) {
+    const label = EWAY_SUB_SUPPLY_TYPES[input.subSupplyType].label;
+    out.push(
+      issue(
+        'EWB111',
+        'subSupplyType',
+        docType === 'CHL'
+          ? `The portal does not accept a delivery challan under "${label}". Choose another sub-supply type (for example Others), or raise the e-way bill from the invoice`
+          : `The portal does not accept this document under "${label}". Choose another sub-supply type`,
+      ),
+    );
   }
   if (!input.documentNumber?.trim()) {
     out.push(issue('EWB107', 'documentNumber', 'The document number is missing'));
@@ -438,9 +474,10 @@ export function ewayDocTypeFor(kind: DocumentKind): EwayDocType {
 }
 
 /**
- * Both kinds default to an ordinary supply: a delivery challan here accompanies
- * goods going to a customer, and branch-to-branch movement goes through the
- * inventory transfer screen instead. The form lets the user pick another.
+ * An invoice is an ordinary supply. The portal never accepts a challan with
+ * "Supply", so a delivery challan defaults to "Others" (the one challan-valid
+ * sub-supply that allows a different buyer). The form lets the user pick another
+ * from the types valid for the document.
  */
 export function subSupplyTypeFor(kind: DocumentKind): EwaySubSupplyType {
   // The portal refuses a challan under "Supply", so a delivery note starts at "Others" (see subSupplyDescriptionFor).
