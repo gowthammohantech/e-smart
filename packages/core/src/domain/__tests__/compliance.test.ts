@@ -24,6 +24,7 @@ import {
 import {
   EWAY_CANCEL_REASONS,
   EWAY_MAX_DISTANCE_KM,
+  EWAY_SUB_SUPPLY_TYPES,
   canCancelEwayBill,
   canExtendEwayBill,
   canUpdatePartB,
@@ -1194,6 +1195,10 @@ describe('e-way bill Part-A (FRD 16)', () => {
     expect(partA({ documentKind: 'delivery', subSupplyType: 'export' })).toContain('subSupplyType');
     expect(partA({ documentKind: 'invoice', subSupplyType: 'supply' })).toHaveLength(0);
     expect(partA({ documentKind: 'delivery', subSupplyType: 'others', subSupplyDescription: 'Delivery challan' })).toHaveLength(0);
+    // The portal's own numbers: Others is 8 (12 is Exhibition), Sales return 7.
+    expect(EWAY_SUB_SUPPLY_TYPES.others.code).toBe(8);
+    expect(EWAY_SUB_SUPPLY_TYPES.exhibition.code).toBe(12);
+    expect(EWAY_SUB_SUPPLY_TYPES.salesReturn.code).toBe(7);
     expect(subSupplyTypeFor('delivery')).toBe('others');
     expect(subSupplyTypeFor('invoice')).toBe('supply');
   });

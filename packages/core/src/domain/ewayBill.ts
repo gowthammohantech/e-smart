@@ -42,17 +42,19 @@ export const EWAY_VEHICLE_TYPES: Record<VehicleType, { code: 'R' | 'O'; label: s
   overDimensional: { code: 'O', label: 'Over-dimensional cargo' },
 };
 
+// The portal's codes: 1 Supply, 2 Import, 3 Export, 4 Job work, 5 Own use, 6 Job work returns, 7 Sales return,
+// 8 Others, 9 SKD/CKD, 10 Line sales, 11 Recipient not known, 12 Exhibition or fairs.
 export const EWAY_SUB_SUPPLY_TYPES: Record<EwaySubSupplyType, { code: number; label: string }> = {
   supply: { code: 1, label: 'Supply' },
   export: { code: 3, label: 'Export' },
   jobWork: { code: 4, label: 'Job work' },
   ownUse: { code: 5, label: 'For own use' },
   jobWorkReturn: { code: 6, label: 'Job work returns' },
-  salesReturn: { code: 8, label: 'Sales return' },
-  exhibition: { code: 9, label: 'Exhibition or fairs' },
+  salesReturn: { code: 7, label: 'Sales return' },
+  exhibition: { code: 12, label: 'Exhibition or fairs' },
   lineSales: { code: 10, label: 'Line sales' },
   recipientNotKnown: { code: 11, label: 'Recipient not known' },
-  others: { code: 12, label: 'Others' },
+  others: { code: 8, label: 'Others' },
 };
 
 export const EWAY_CANCEL_REASONS: Record<CancelReasonCode, string> = {
