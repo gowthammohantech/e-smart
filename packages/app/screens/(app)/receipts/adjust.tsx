@@ -56,8 +56,9 @@ export default function AdjustAdvances() {
   const side: Side = party?.kind === 'supplier' ? 'supplier' : party?.kind === 'both' ? sideChoice : 'customer';
   const data = useAdjustable(partyPending ? undefined : partyId, side);
   const credits = data.data?.credits ?? [];
+  // Only invoices whose every line is a service: what an advance receipt is adjusted against.
   const open = useMemo(() => {
-    const rows = data.data?.open ?? [];
+    const rows = (data.data?.open ?? []).filter((o) => o.servicesOnly);
     // Opened from an invoice: that one first.
     return params.documentId ? [...rows.filter((o) => o.documentId === params.documentId), ...rows.filter((o) => o.documentId !== params.documentId)] : rows;
   }, [data.data, params.documentId]);
@@ -74,8 +75,7 @@ export default function AdjustAdvances() {
   const over = !!chosen && typedTotal > (chosen.left as Money).minor;
   // A service advance goes only on an invoice whose every line is a service: its GST never comes back on goods (RULES 8.12).
   const serviceAdvance = (c?: (typeof credits)[number]) => !!c && c.sourceType === 'payment' && !!c.advanceTax;
-  const autoWarning = credits.some((c) => serviceAdvance(c)) && open.some((o) => !o.servicesOnly);
-  const shownOpen = serviceAdvance(chosen) ? open.filter((o) => o.servicesOnly) : open;
+  const shownOpen = open;
 
   const pick = (key: string) => {
     setCreditKey(key === creditKey ? null : key);
@@ -267,11 +267,6 @@ export default function AdjustAdvances() {
                 </>
               ) : (
                 <>
-                  {autoWarning ? (
-                    <Text variant="caption" tone="warn">
-                      {tr('books:adjust.autoNotService')}
-                    </Text>
-                  ) : null}
                   <Button title={tr('books:adjust.applyAll')} icon="sort-calendar-ascending" onPress={() => void apply()} loading={busy} disabled={busy} fullWidth={!desktop} style={desktop ? { alignSelf: 'flex-start' } : undefined} />
                   <Text variant="caption" tone="muted">
                     {tr('books:adjust.applyAllHint')}
