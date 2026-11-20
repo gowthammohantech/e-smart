@@ -25,7 +25,7 @@ import { CURRENCIES } from '@esmart/core/lib/currencies';
 import { fromMajor, toMajor, zero } from '@esmart/core/lib/money';
 import { uid } from '@esmart/core/lib/id';
 import { nowISO, today } from '@esmart/core/lib/date';
-import { Errors, gstinAsTyped, gstinRequiredFor, hasErrors, partyGstinError, required, validEmail, validPostalCode } from '@esmart/core/lib/validators';
+import { Errors, gstinRequiredFor, hasErrors, partyGstinError, required, shownError, validEmail, validGstin, validPostalCode } from '@esmart/core/lib/validators';
 import { useAppStore } from '../../store/appStore';
 import { useBaseCurrency, useHasModule, useParties } from '../../store/selectors';
 import { SHOW_SCROLLBAR, WIDE_FORM_MAX_WIDTH, useBreakpoint } from '@esmart/ui/theme/breakpoints';
@@ -199,6 +199,15 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
   // Not when the form was opened to pick a contact (?then=back): that one goes straight back.
   const offersAnother = !party && then !== 'back';
 
+  // Checked as typed: a field filled in wrong is red at once and Save waits until it is put right.
+  const live = {
+    email: validEmail(email),
+    phone: phone.error(),
+    taxId: gstinRequiredFor(registration) ? validGstin(taxId) : undefined,
+    postalCode: overseas ? undefined : validPostalCode(postalCode, 'IN', stateCode),
+  };
+  const invalid = hasErrors(live);
+
   const save = async (another = false) => {
     const gstin = needsGstin ? taxId.trim().toUpperCase() : '';
     const next: Errors<'name' | 'email' | 'phone' | 'taxId' | 'country' | 'stateCode' | 'postalCode' | 'tcsSection'> = {
@@ -332,7 +341,7 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
         // A GSTIN is 15 letters and digits; spaces and dashes pasted with it are dropped.
         const next = v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 15);
         setTaxId(next);
-        // What Save found goes as the GSTIN changes; what's wrong as typed shows below (gstinAsTyped).
+        // What Save found goes as the GSTIN changes; what's wrong as typed shows below (live).
         if (errors.taxId) setErrors((e) => ({ ...e, taxId: undefined }));
         // The first two digits are the state; fill it in if it's still blank.
         if (!stateCode && /^\d{2}/.test(next) && INDIAN_STATES.some((s) => s.code === next.slice(0, 2))) {
@@ -342,7 +351,7 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
       placeholder="27AABCV1234F1ZO"
       autoCapitalize="characters"
       icon="card-account-details-outline"
-      error={errors.taxId ?? gstinAsTyped(taxId)}
+      error={shownError(taxId, live.taxId, errors.taxId)}
       hint={gstinLookup.hint ?? tr('contacts:form.gstinHint')}
       suffix={gstinLookup.suffix}
       required
@@ -441,8 +450,8 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
       ) : null}
     </>
   ) : null;
-  const phoneField = <PhoneField label={tr('contacts:form.phone')} {...phone.field} placeholder="98765 43210" error={errors.phone} />;
-  const emailField = <TextField label={tr('contacts:form.email')} value={email} onChangeText={setEmail} placeholder={tr('contacts:form.emailPlaceholder')} keyboardType="email-address" autoCapitalize="none" icon="email-outline" error={errors.email} />;
+  const phoneField = <PhoneField label={tr('contacts:form.phone')} {...phone.field} placeholder="98765 43210" error={shownError(phone.field.value, live.phone, errors.phone)} />;
+  const emailField = <TextField label={tr('contacts:form.email')} value={email} onChangeText={setEmail} placeholder={tr('contacts:form.emailPlaceholder')} keyboardType="email-address" autoCapitalize="none" icon="email-outline" error={shownError(email, live.email, errors.email)} />;
 
   const addressField = <TextField label={tr('contacts:form.address')} value={line1} onChangeText={setLine1} placeholder={tr('contacts:form.addressPlaceholder')} icon="map-marker-outline" />;
   const countryField = (
@@ -486,7 +495,7 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
       placeholder="400001"
       keyboardType="number-pad"
       maxLength={6}
-      error={errors.postalCode ?? (postalCode.length === 6 ? validPostalCode(postalCode, 'IN', stateCode) : undefined)}
+      error={shownError(postalCode, live.postalCode, errors.postalCode)}
       containerStyle={style}
       required
     />
@@ -736,16 +745,16 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
                   variant="secondary"
                   onPress={() => void save(true)}
                   loading={saving}
-                  disabled={blocked}
+                  disabled={blocked || invalid}
                 />
               ) : null}
-              <Button shortcut="S" title={submitTitle} onPress={() => void save()} loading={saving} disabled={blocked} />
+              <Button shortcut="S" title={submitTitle} onPress={() => void save()} loading={saving} disabled={blocked || invalid} />
             </>
           ) : (
             <>
-              <Button shortcut="S" title={submitTitle} onPress={() => void save()} loading={saving} disabled={blocked} fullWidth />
+              <Button shortcut="S" title={submitTitle} onPress={() => void save()} loading={saving} disabled={blocked || invalid} fullWidth />
               {offersAnother ? (
-                <Button title={tr('common:action.saveAndAddAnother')} variant="ghost" onPress={() => void save(true)} loading={saving} disabled={blocked} fullWidth />
+                <Button title={tr('common:action.saveAndAddAnother')} variant="ghost" onPress={() => void save(true)} loading={saving} disabled={blocked || invalid} fullWidth />
               ) : null}
             </>
           )}
