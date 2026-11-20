@@ -14,7 +14,7 @@ import { PhoneField, TextField, usePhoneInput } from '@esmart/ui/components/Fiel
 import { ListRow } from '@esmart/ui/components/ListRow';
 import { useAppStore } from '../../../store/appStore';
 import { useCompanies, useCurrentUser } from '../../../store/selectors';
-import { Errors, hasErrors, required } from '@esmart/core/lib/validators';
+import { Errors, hasErrors, required, shownError } from '@esmart/core/lib/validators';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { Columns, FieldGrid } from '@esmart/ui/components/Layout';
 import type { UserRole } from '@esmart/core/types';
@@ -53,6 +53,9 @@ export default function Profile() {
   const [errors, setErrors] = useState<Errors<'name' | 'email' | 'phone'>>({});
   const [deleting, setDeleting] = useState(false);
 
+  // The phone is checked as typed: red at once if wrong, and Save waits until it is right.
+  const livePhone = phone.error();
+
   const save = async () => {
     const next: Errors<'name' | 'email' | 'phone'> = {
       name: required(name, tr('settings:profile.name')),
@@ -87,7 +90,7 @@ export default function Profile() {
           items={[
             <TextField key="name" label={tr('settings:profile.name')} value={name} onChangeText={setName} icon="account-outline" error={errors.name} required />,
             <TextField key="email" label={tr('settings:profile.email')} value={email} editable={false} keyboardType="email-address" autoCapitalize="none" icon="email-outline" hint={tr('settings:profile.emailLocked')} />,
-            <PhoneField key="phone" label={tr('settings:profile.phone')} {...phone.field} icon="cellphone" error={errors.phone} />,
+            <PhoneField key="phone" label={tr('settings:profile.phone')} {...phone.field} icon="cellphone" error={shownError(phone.field.value, livePhone, errors.phone)} />,
           ]}
         />
     </>
@@ -165,7 +168,7 @@ export default function Profile() {
       <DeleteAccountSheet visible={deleting} onClose={() => setDeleting(false)} />
 
       <FormActions>
-        <Button shortcut="S" title={tr('settings:profile.save')} onPress={save} loading={saving} disabled={saving} fullWidth={!desktop} size={desktop ? undefined : 'lg'} />
+        <Button shortcut="S" title={tr('settings:profile.save')} onPress={save} loading={saving} disabled={saving || !!livePhone} fullWidth={!desktop} size={desktop ? undefined : 'lg'} />
       </FormActions>
     </KeyboardAvoidingView>
   );
