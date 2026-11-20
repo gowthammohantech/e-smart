@@ -68,8 +68,18 @@ export function useLeaveGuard(dirty: boolean): { dialog: React.ReactNode; releas
     new Promise<void>((resolve) => {
       if (!WEB || !history.current.armed) return resolve();
       history.current.armed = false;
-      history.current.ownStep = resolve;
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        if (history.current.ownStep === finish) history.current.ownStep = null;
+        resolve();
+      };
+      history.current.ownStep = finish;
       window.history.back();
+      // The step back is not always heard (the form stopped counting as changed and took its listener
+      // away first): a save never waits on it for long, or it stayed on the form with its toast shown.
+      setTimeout(finish, 500);
     });
 
   useEffect(
@@ -95,14 +105,15 @@ export function useLeaveGuard(dirty: boolean): { dialog: React.ReactNode; releas
     if (!WEB || !dirty) return undefined;
     arm();
     const onPop = () => {
-      if (history.current.waiting) {
-        if (window.location.pathname === home) arm();
-        return;
-      }
+      // Our own step back first: a save waits on it to go on to the saved document.
       const own = history.current.ownStep;
       if (own) {
         history.current.ownStep = null;
         own();
+        return;
+      }
+      if (history.current.waiting) {
+        if (window.location.pathname === home) arm();
         return;
       }
       // Back from a page opened on top of the form, onto the extra entry: still here.
@@ -127,6 +138,12 @@ export function useLeaveGuard(dirty: boolean): { dialog: React.ReactNode; releas
     return () => {
       window.removeEventListener('popstate', onPop);
       window.removeEventListener('beforeunload', onUnload);
+      // A step back of our own still on its way would no longer be heard: let what waits on it go on.
+      const own = history.current.ownStep;
+      if (own) {
+        history.current.ownStep = null;
+        own();
+      }
       // Nothing to lose any more (the changes were undone): the entry goes.
       if (!released.current) void disarm();
     };
