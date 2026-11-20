@@ -54,7 +54,10 @@ export default function ItemList() {
   const hasInventory = useHasModule('inventory');
   const showFilters = hasPos && (categories.length > 0 || brands.length > 0);
   const filtering = categoryId !== 'all' || brandId !== 'all';
-  const pages = useItemPages({ type: tab, q: search, categoryId: categoryId === 'all' ? undefined : categoryId, brandId: brandId === 'all' ? undefined : brandId });
+  // Active items, or the ones set inactive (to reactivate), as Parties lists them.
+  const [status, setStatus] = useState<'active' | 'inactive'>('active');
+  const inactiveTab = status === 'inactive';
+  const pages = useItemPages({ type: tab, q: search, status, categoryId: categoryId === 'all' ? undefined : categoryId, brandId: brandId === 'all' ? undefined : brandId });
   const held = pages.rows as unknown as (Item & { stockOnHand?: number })[];
   // Just switched Goods/Services: the other tab's rows are held over while this one's load. They're
   // the wrong kind (services under Goods), so the list waits on placeholders instead.
@@ -74,7 +77,7 @@ export default function ItemList() {
   ) : null;
 
   // Desktop bulk actions: the chosen rows as a CSV, or set inactive in one save.
-  const selection = useTableSelection(`${tab}|${search}|${categoryId}|${brandId}`);
+  const selection = useTableSelection(`${tab}|${status}|${search}|${categoryId}|${brandId}`);
   const exportRows = useRowsExport();
   const saveItem = useAppStore((s) => s.saveItem);
   const { run: serverSave, saving } = useServerSave();
@@ -90,8 +93,9 @@ export default function ItemList() {
       },
       tr('common:table.exportCancelled'),
     );
-  const deactivate = async (keys: string[]) => {
-    const items = chosen(keys).filter((i) => i.status !== 'inactive');
+  /** Sets the chosen items inactive, or (from the Inactive tab) active again. */
+  const setStatusOf = async (keys: string[], next: 'active' | 'inactive') => {
+    const items = chosen(keys).filter((i) => (i.status === 'inactive' ? 'inactive' : 'active') !== next);
     if (!items.length) return;
     // Each one read from the server first and kept at its version: a list row the device has never
     // kept would otherwise go up as a new item, a copy of the one being set inactive.
@@ -107,10 +111,10 @@ export default function ItemList() {
     if (!records.length) return;
     const res = await serverSave(
       () => {
-        for (const item of records) saveItem({ ...item, status: 'inactive' });
+        for (const item of records) saveItem({ ...item, status: next });
       },
-      tr('common:table.deactivated', { count: records.length }),
-      { icon: 'minus-circle-outline' },
+      next === 'inactive' ? tr('common:table.deactivated', { count: records.length }) : tr('common:table.reactivated', { count: records.length }),
+      { icon: next === 'inactive' ? 'minus-circle-outline' : 'check-circle-outline' },
     );
     if (res) {
       selection.clear();
@@ -126,6 +130,16 @@ export default function ItemList() {
       ]}
       value={tab}
       onChange={(v) => setTab(v as 'goods' | 'service')}
+    />
+  );
+  const statusTabs = (
+    <Segmented
+      options={[
+        { value: 'active', label: tr('inventory:catalog.statusActive') },
+        { value: 'inactive', label: tr('inventory:catalog.statusInactive') },
+      ]}
+      value={status}
+      onChange={(v) => setStatus(v as 'active' | 'inactive')}
     />
   );
   const filters = (
@@ -153,10 +167,18 @@ export default function ItemList() {
     </>
   );
   // Nothing in this tab at all (rather than nothing matching the search).
-  const emptyTitle = inTab.length ? tr('inventory:catalog.noMatch') : tab === 'service' ? tr('inventory:catalog.noServices') : tr('inventory:catalog.noItems');
+  const emptyTitle = inTab.length
+    ? tr('inventory:catalog.noMatch')
+    : inactiveTab
+      ? tr('inventory:catalog.noInactive')
+      : tab === 'service'
+        ? tr('inventory:catalog.noServices')
+        : tr('inventory:catalog.noItems');
   const emptyMessage = inTab.length
     ? tr('inventory:catalog.noMatchBody')
-    : tab === 'service'
+    : inactiveTab
+      ? tr('inventory:catalog.noInactiveBody')
+      : tab === 'service'
       ? tr('inventory:catalog.noServicesBody')
       : tr('inventory:catalog.noItemsBody');
 
@@ -167,6 +189,7 @@ export default function ItemList() {
         <View style={{ flex: 1, paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.lg, gap: t.spacing.md }}>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: t.spacing.md }}>
             <View style={{ flexBasis: 260, flexShrink: 1, minWidth: 200 }}>{tabs}</View>
+            <View style={{ flexBasis: 200, flexShrink: 0 }}>{statusTabs}</View>
             <View style={{ flexBasis: 340, flexShrink: 1, minWidth: 220 }}>
               <SearchBar compact value={query} onChangeText={setQuery} placeholder={tr('inventory:catalog.search')} />
             </View>
@@ -219,7 +242,11 @@ export default function ItemList() {
             bulkActions={(keys) => (
               <>
                 <Button title={tr('common:table.exportCsv')} icon="file-export-outline" variant="ghost" size="sm" onPress={() => void exportChosen(keys)} />
-                <Button title={tr('common:table.deactivate')} icon="minus-circle-outline" variant="ghost" size="sm" loading={saving} onPress={() => void deactivate(keys)} />
+                {inactiveTab ? (
+                  <Button title={tr('common:table.reactivate')} icon="check-circle-outline" variant="ghost" size="sm" loading={saving} onPress={() => void setStatusOf(keys, 'active')} />
+                ) : (
+                  <Button title={tr('common:table.deactivate')} icon="minus-circle-outline" variant="ghost" size="sm" loading={saving} onPress={() => void setStatusOf(keys, 'inactive')} />
+                )}
               </>
             )}
             rowActions={(i) => [
@@ -241,6 +268,7 @@ export default function ItemList() {
         scrollEventThrottle={200}
       >
         {tabs}
+        {statusTabs}
         <SearchBar value={query} onChangeText={setQuery} placeholder={tr('inventory:catalog.search')} />
         {/* Filters on the left and Import on the right, as on a desktop. */}
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: t.spacing.sm }}>
@@ -259,8 +287,8 @@ export default function ItemList() {
             illustration="no-items"
             title={emptyTitle}
             message={emptyMessage}
-            actionLabel={inTab.length ? undefined : tr('common:quickAction.addItem')}
-            onAction={inTab.length ? undefined : () => router.push(`/(app)/catalog/items/new?type=${tab}`)}
+            actionLabel={inTab.length || inactiveTab ? undefined : tr('common:quickAction.addItem')}
+            onAction={inTab.length || inactiveTab ? undefined : () => router.push(`/(app)/catalog/items/new?type=${tab}`)}
           />
         ) : (
           <Card padded={false}>

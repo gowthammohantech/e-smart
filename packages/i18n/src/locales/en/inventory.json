@@ -309,7 +309,11 @@
     "noItems": "No items yet",
     "noItemsBody": "Add what you sell to put it on invoices in a tap.",
     "allCategories": "All categories",
-    "allBrands": "All brands"
+    "allBrands": "All brands",
+    "statusActive": "Active",
+    "statusInactive": "Inactive",
+    "noInactive": "No inactive items",
+    "noInactiveBody": "Items and services you deactivate show here, where you can reactivate them."
   },
   "type": {
     "goods": "Product",
