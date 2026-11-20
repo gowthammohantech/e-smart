@@ -214,7 +214,6 @@ function EwayBillFormDesktop({ doc }: { doc: BusinessDocument }) {
     to,
     setTo,
     setStateSheet,
-    transporters,
     transporterId,
     setTransporterId,
     transporterName,
@@ -281,16 +280,6 @@ function EwayBillFormDesktop({ doc }: { doc: BusinessDocument }) {
       </FormSection>
 
       <FormSection title={tr('compliance:ewb.transportPartB')}>
-        {transporters.length ? (
-          // The whole row, over the ID and name it fills in.
-          <PickerField
-            label={tr('compliance:ewb.savedTransporter')}
-            value={transporters.find((x) => x.transporterId === transporterId.trim().toUpperCase())?.name}
-            placeholder={tr('compliance:ewb.pickOrType')}
-            onPress={() => setTransporterOpen(true)}
-            icon="truck-outline"
-          />
-        ) : null}
         <FieldRow>
           <TextField
             label={tr('compliance:ewb.transporterId')}
@@ -302,6 +291,8 @@ function EwayBillFormDesktop({ doc }: { doc: BusinessDocument }) {
           />
           <TextField label={tr('compliance:ewb.transporterName')} value={transporterName} onChangeText={setTransporterName} />
         </FieldRow>
+        {/* As Find HSN / SAC code does: the saved transporters, searched, or a new one added; the ID and name above stay editable. */}
+        <Button title={tr('compliance:ewb.findTransporter')} variant="ghost" size="sm" icon="magnify" onPress={() => setTransporterOpen(true)} style={{ alignSelf: 'flex-start', marginTop: -t.spacing.sm }} />
         <FieldRow>
           <View style={{ gap: t.spacing.sm }}>
             <Text variant="caption" tone="muted" weight="600">

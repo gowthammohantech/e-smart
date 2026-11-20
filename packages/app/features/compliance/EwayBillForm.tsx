@@ -40,6 +40,7 @@ import { formatDate, nowISO } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { portalToast } from './portalToast';
+import { TransporterFinder } from './TransporterFinder';
 import { useSaveShortcut } from '../../components/useSaveShortcut';
 import { hasErrors, shownError, validGstin, validPostalCode } from '@esmart/core/lib/validators';
 import { isValidTransporterId } from '@esmart/core/domain/gstin';
@@ -246,7 +247,6 @@ export function EwayBillForm({ document: doc }: { document: BusinessDocument }) 
     setTransporterId,
     transporterName,
     setTransporterName,
-    transporters,
     setTransporterOpen,
     transportMode,
     setTransportMode,
@@ -324,15 +324,6 @@ export function EwayBillForm({ document: doc }: { document: BusinessDocument }) 
           {/* ---------------- Part-B ---------------- */}
           <SectionHeader title={tr('compliance:ewb.transport')} />
 
-          {transporters.length ? (
-            <PickerField
-              label={tr('compliance:ewb.savedTransporter')}
-              value={transporters.find((x) => x.transporterId === transporterId.trim().toUpperCase())?.name}
-              placeholder={tr('compliance:ewb.pickOrType')}
-              onPress={() => setTransporterOpen(true)}
-              icon="truck-outline"
-            />
-          ) : null}
           <TextField
             label={tr('compliance:ewb.transporterId')}
             value={transporterId}
@@ -342,6 +333,8 @@ export function EwayBillForm({ document: doc }: { document: BusinessDocument }) 
             placeholder={tr('compliance:ewb.transporterIdHint')}
           />
           <TextField label={tr('compliance:ewb.transporterName')} value={transporterName} onChangeText={setTransporterName} />
+          {/* As Find HSN / SAC code does: the saved transporters, searched, or a new one added; the ID and name above stay editable. */}
+          <Button title={tr('compliance:ewb.findTransporter')} variant="ghost" size="sm" icon="magnify" onPress={() => setTransporterOpen(true)} style={{ alignSelf: 'flex-start', marginTop: -t.spacing.sm }} />
 
           <View style={{ gap: t.spacing.sm, marginBottom: t.spacing.md }}>
             <Text variant="caption" tone="muted" weight="600">{tr('compliance:ewb.mode')}</Text>
@@ -504,19 +497,13 @@ export function EwayBillFormSheets({ form }: { form: EwayBillFormState }) {
         searchable={false}
       />
 
-      <SelectSheet
+      <TransporterFinder
         visible={transporterOpen}
         onClose={() => setTransporterOpen(false)}
-        title={tr('compliance:ewb.transporter')}
-        options={transporters.map((x) => ({ value: x.id, label: x.name, trailing: x.transporterId }))}
         value={transporters.find((x) => x.transporterId === transporterId.trim().toUpperCase())?.id}
-        onSelect={(id) => {
-          const picked = transporters.find((x) => x.id === id);
-          if (picked) {
-            setTransporterId(picked.transporterId);
-            setTransporterName(picked.name);
-          }
-          setTransporterOpen(false);
+        onPick={(picked) => {
+          setTransporterId(picked.transporterId);
+          setTransporterName(picked.name);
         }}
       />
       <SelectSheet
