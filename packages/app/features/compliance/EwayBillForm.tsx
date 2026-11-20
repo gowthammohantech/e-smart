@@ -26,9 +26,10 @@ import { useAppStore } from '../../store/appStore';
 import { compliance } from '../../remote';
 import { useActiveCompany, useComplianceSettings, useTransporters } from '../../store/selectors';
 import {
-  EWAY_SUB_SUPPLY_TYPES,
+  ewayDocTypeFor,
   subSupplyDescriptionFor,
   subSupplyTypeFor,
+  subSupplyTypesFor,
   validUptoFor,
   validityDays,
   normalizeVehicleNumber,
@@ -291,6 +292,7 @@ export function EwayBillForm({ document: doc }: { document: BusinessDocument }) 
             value={tr(`compliance:subSupply.${subSupplyType}`)}
             onPress={() => setSubSupplyOpen(true)}
             icon="tag-outline"
+            error={errors.subSupplyType}
           />
           {subSupplyType === 'others' ? (
             <TextField
@@ -485,7 +487,7 @@ export function EwayBillFormSheets({ form }: { form: EwayBillFormState }) {
         visible={subSupplyOpen}
         onClose={() => setSubSupplyOpen(false)}
         title={tr('compliance:ewb.subSupplyType')}
-        options={(Object.keys(EWAY_SUB_SUPPLY_TYPES) as EwaySubSupplyType[]).map((key) => ({
+        options={subSupplyTypesFor(ewayDocTypeFor(form.doc.kind)).map((key) => ({
           value: key,
           label: tr(`compliance:subSupply.${key}`),
         }))}
