@@ -389,6 +389,7 @@
     "withoutTax": "Without tax",
     "serviceAdvanceHint": "GST is due on an advance for services when it is received; the invoice raised later takes it back. Advances for goods carry none.",
     "advanceRate": "GST rate",
+    "advanceRateFromService": "The rate of {{name}}; the GST is worked back from the amount at it.",
     "applyTo": "Apply to",
     "summary": "Summary",
     "autoAllocateShort": "Auto-allocate",
