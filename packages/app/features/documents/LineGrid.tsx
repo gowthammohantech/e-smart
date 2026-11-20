@@ -467,7 +467,13 @@ function GridInput({
     <TextInput
       id={id}
       value={shown}
-      onChangeText={(v) => setDraft(sanitize ? sanitize(v) : v)}
+      onChangeText={(v) => {
+        const clean = sanitize ? sanitize(v) : v;
+        setDraft(clean);
+        // A number goes on the line as it is typed, so the line total and the bill's total move with it;
+        // the text stays as typed until the cell is left.
+        if (numeric) onCommit(clean);
+      }}
       onFocus={() => setDraft(value)}
       onBlur={commit}
       onSubmitEditing={() => {
