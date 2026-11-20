@@ -779,11 +779,13 @@ export function Sidebar() {
                             setTip(null);
                             if (!compact) {
                               // The name goes to the section's overview and shows its pages; the arrow beside it
-                              // (onToggle) only shows or hides them. Without an overview the plan can open, the
-                              // name toggles as the arrow does.
+                              // (onToggle) only shows or hides them. Without an overview the plan can open (Inventory
+                              // on Free), the name goes to the section's first page instead (Items & services).
                               const hub = tabPath(tab.name);
                               if (!canOpen(plan, hub, disabled)) {
-                                setDropped({ tab: open ? null : tab.name, at: current });
+                                const first = pages.find((p) => !p.action);
+                                setDropped({ tab: tab.name, at: current });
+                                if (first && pathname !== first.route) leaveGuarded(() => router.navigate(appHref(first.route) as never));
                                 return;
                               }
                               setDropped({ tab: tab.name, at: current });
