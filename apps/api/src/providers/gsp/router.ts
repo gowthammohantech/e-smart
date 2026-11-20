@@ -137,6 +137,10 @@ export class GspRouter implements GspGateway {
   lookupTaxpayer(gstin: string) {
     return this.gatewayFor(lookupTarget(this.config, this.target)).lookupTaxpayer(gstin);
   }
+
+  lookupIsSandbox() {
+    return lookupTarget(this.config, this.target).environment === 'sandbox';
+  }
 }
 
 /**

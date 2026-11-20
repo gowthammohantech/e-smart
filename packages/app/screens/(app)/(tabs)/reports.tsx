@@ -76,7 +76,8 @@ export default function ReportsTab() {
   // TDS and TCS together, under their own heading, so they're found in one place.
   const groups = [
     { title: tr('reports:hub.allReports'), reports: open.filter((r) => !r.tax).map(linkOf) },
-    { title: tr('reports:hub.tdsTcs'), reports: open.filter((r) => r.tax).map(linkOf) },
+    // Not in the free version: it has no TDS & TCS section at all.
+    { title: tr('reports:hub.tdsTcs'), reports: full ? open.filter((r) => r.tax).map(linkOf) : [] },
   ].filter((g) => g.reports.length);
   const range = resolveRange('thisFY', undefined, useActiveCompany()?.fiscalYearStartMonth);
   // Always 'phone' in the native apps, so the desktop layouts below only ever reach a browser.

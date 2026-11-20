@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, ScrollView, View, ViewStyle } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -210,6 +210,14 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
     postalCode: overseas ? undefined : validPostalCode(postalCode, 'IN', stateCode),
   };
   const invalid = hasErrors(live);
+
+  // A valid GSTIN already says which state the party is in (its first two digits), so that can't be changed here.
+  const gstinState =
+    needsGstin && !overseas && taxId.length === 15 && !validGstin(taxId) ? INDIAN_STATES.find((s) => s.code === taxId.slice(0, 2)) : undefined;
+  useEffect(() => {
+    if (gstinState && stateCode !== gstinState.code) changeState(gstinState.code);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gstinState, stateCode]);
 
   const save = async (another = false) => {
     const gstin = needsGstin ? taxId.trim().toUpperCase() : '';
@@ -474,6 +482,7 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
       label={tr('contacts:form.state')}
       value={INDIAN_STATES.find((s) => s.code === stateCode)?.name}
       onPress={() => setStateOpen(true)}
+      disabled={!!gstinState}
       icon="map-outline"
       hint={tr('contacts:form.stateHint')}
       error={errors.stateCode}
