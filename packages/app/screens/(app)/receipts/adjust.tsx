@@ -287,7 +287,8 @@ export default function AdjustAdvances() {
         visible={picking}
         onClose={() => setPicking(false)}
         title={tr('books:adjust.party')}
-        options={(search.data ?? []).map((p) => ({ value: p.id!, label: p.name!, description: p.phone ?? p.code }))}
+        // Only parties holding an advance (or a credit note) to adjust.
+        options={(search.data ?? []).filter((p) => ((p.advance as Money | undefined)?.minor ?? 0) > 0).map((p) => ({ value: p.id!, label: p.name!, description: p.phone ?? p.code }))}
         onQueryChange={setQuery}
         loading={search.isFetching}
         value={partyId}
