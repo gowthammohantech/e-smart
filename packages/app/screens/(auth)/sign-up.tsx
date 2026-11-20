@@ -13,7 +13,7 @@ import { describeError } from '../../remote/errors';
 import { toE164 } from '../../remote/phone';
 import { LEGAL } from '../../lib/legal';
 import { useOnboardingStore } from '../../store/onboardingStore';
-import { Errors, hasErrors, minLength, required, validEmail } from '@esmart/core/lib/validators';
+import { Errors, hasErrors, minLength, required, shownError, validEmail } from '@esmart/core/lib/validators';
 
 export default function SignUp() {
   const t = useTheme();
@@ -36,6 +36,13 @@ export default function SignUp() {
   const [busy, setBusy] = useState(false);
   // Read at once: Enter or a second tap can land before `busy` re-renders.
   const sending = useRef(false);
+
+  // Checked as typed: email, mobile and password go red at once if wrong, and Create account waits.
+  const live = {
+    email: validEmail(email),
+    phone: verified ? undefined : phone.error(),
+    password: password ? minLength(password, 8, tr('errors:field.password')) : undefined,
+  };
 
   const submit = () => {
     if (sending.current) return;
@@ -124,7 +131,7 @@ export default function SignUp() {
         submitBehavior="submit"
         onSubmitEditing={() => passwordRef.current?.focus()}
         icon="email-outline"
-        error={errors.email}
+        error={shownError(email, live.email, errors.email)}
         required
       />
       <PhoneField
@@ -133,7 +140,7 @@ export default function SignUp() {
         disabled={verified}
         placeholder="98765 43210"
         icon={verified ? 'check-circle-outline' : 'cellphone'}
-        error={errors.phone}
+        error={shownError(phone.field.value, live.phone, errors.phone)}
         hint={verified ? tr('auth:signUp.mobileVerified') : tr('auth:signUp.mobileHint')}
       />
       <TextField
@@ -148,7 +155,7 @@ export default function SignUp() {
         textContentType="newPassword"
         returnKeyType="go"
         icon="lock-outline"
-        error={errors.password}
+        error={shownError(password, live.password, errors.password)}
         required
         onSubmitEditing={submit}
       />
@@ -176,7 +183,7 @@ export default function SignUp() {
           {errors.form}
         </Text>
       ) : null}
-      <Button title={tr('auth:signUp.submit')} onPress={submit} loading={busy} fullWidth />
+      <Button title={tr('auth:signUp.submit')} onPress={submit} loading={busy} disabled={hasErrors(live)} fullWidth />
 
       <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 5, marginTop: t.spacing.sm }}>
         <Text variant="small" tone="muted">{tr('auth:signUp.haveAccount')}</Text>
