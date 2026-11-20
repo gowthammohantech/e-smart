@@ -51,7 +51,7 @@ import {
   useParty,
   usePayments,
 } from '../../store/selectors';
-import { fetchDocumentRecord, queryClient, useDocumentRecord, useEwayBillRecord, usePartyRecord, useStockAvailable, useStockMovedBy } from '../../remote/queries';
+import { fetchDocumentRecord, queryClient, useAdjustable, useDocumentRecord, useEwayBillRecord, usePartyRecord, useStockAvailable, useStockMovedBy } from '../../remote/queries';
 import { detailRouteFor, finaliseActionLabel, listRouteFor } from './DocumentEditor';
 import { useCustomFields } from '../customFields/CustomFieldsSection';
 import { ComplianceCard } from '../compliance/ComplianceCard';
@@ -246,8 +246,18 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
   const partyAdvance = (partyQuery.data as { advance?: Money } | undefined)?.advance;
   // The contact may still be on its way: a bar, not "Unknown".
   const partyPending = !!doc.partyId && !party && partyQuery.isLoading;
-  // A customer's advance is put on invoices from Receipt adjustment, not from the invoice: only a bill offers it here.
-  const canAdjust = outstanding.minor > 0 && isFinalized(doc.status) && (partyAdvance?.minor ?? 0) > 0 && ['purchaseBill', 'supplierDebitNote'].includes(doc.kind);
+  // On an invoice or debit note, Adjust advance only where Receipt adjustment could do it: this one is all
+  // services and still owed, and the customer has an advance with something left to adjust (its value
+  // without GST). Read from the same list that screen uses. A bill offers it for any supplier advance.
+  const customerSide = doc.kind === 'invoice' || doc.kind === 'debitNote';
+  const owedHere = outstanding.minor > 0 && isFinalized(doc.status);
+  const adjustable = useAdjustable(customerSide && owedHere && (partyAdvance?.minor ?? 0) > 0 ? doc.partyId : undefined, 'customer');
+  const serviceOpen = adjustable.data?.open?.some((o) => o.documentId === doc.id && o.servicesOnly) ?? false;
+  const customerCredit = (adjustable.data?.credits ?? []).reduce((a, c) => a + (c.left as Money).minor, 0);
+  const canAdjust = customerSide
+    ? owedHere && serviceOpen && customerCredit > 0
+    : owedHere && (partyAdvance?.minor ?? 0) > 0 && ['purchaseBill', 'supplierDebitNote'].includes(doc.kind);
+  const adjustAmount = customerSide ? money(customerCredit, doc.currency) : partyAdvance;
   const adjustRoute = `/(app)/receipts/adjust?partyId=${doc.partyId}&documentId=${doc.id}${['purchaseBill', 'supplierDebitNote'].includes(doc.kind) ? '&side=supplier' : ''}`;
 
   const customFields = useAppStore((s) => s.customFields);
@@ -742,7 +752,7 @@ ${url}`;
         ) : null}
         {canAdjust && !recordPending ? (
           <Button
-            title={tr('sales:detail.adjustAdvance', { amount: formatMoney(partyAdvance!) })}
+            title={tr('sales:detail.adjustAdvance', { amount: formatMoney(adjustAmount!) })}
             icon="swap-horizontal"
             variant="secondary"
             onPress={() => router.push(adjustRoute as never)}
