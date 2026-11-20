@@ -679,6 +679,7 @@
     "supplierSide": "As supplier",
     "noCredit": "No unadjusted advance or credit note",
     "noOpen": "Nothing is owed on an invoice or note",
+    "noServiceInvoices": "No open service invoices to adjust against yet.",
     "emptyHint": "Advances and direct credit notes show here once there is something open to apply them to.",
     "credits": "Advances and credit notes",
     "open": "Open invoices and notes",

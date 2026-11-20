@@ -222,8 +222,8 @@ export default function AdjustAdvances() {
               onAction={() => void data.refetch()}
               compact
             />
-          ) : !credits.length || !open.length ? (
-            <EmptyState icon="swap-horizontal" title={!credits.length ? tr('books:adjust.noCredit') : tr('books:adjust.noOpen')} message={tr('books:adjust.emptyHint')} compact />
+          ) : !credits.length ? (
+            <EmptyState icon="swap-horizontal" title={tr('books:adjust.noCredit')} message={tr('books:adjust.emptyHint')} compact />
           ) : (
             <>
               <Columns
@@ -256,9 +256,10 @@ export default function AdjustAdvances() {
                 right={
                   <FormSection title={tr('books:adjust.open')}>
                     <Card padded={false}>
-                      {chosen && !shownOpen.length ? (
+                      {/* The party's advances still show on the left; here, that there is nothing yet to put them on. */}
+                      {!shownOpen.length ? (
                         <Text variant="small" tone="muted" style={{ padding: t.spacing.lg }}>
-                          {tr('sales:payment.advanceNoServiceInvoice')}
+                          {tr('books:adjust.noServiceInvoices')}
                         </Text>
                       ) : null}
                       {shownOpen.map((o) =>
@@ -281,7 +282,7 @@ export default function AdjustAdvances() {
                   </FormSection>
                 }
               />
-              {chosen ? (
+              {!shownOpen.length ? null : chosen ? (
                 <>
                   {over ? (
                     <Text variant="caption" tone="bad">
