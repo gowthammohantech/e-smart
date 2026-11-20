@@ -433,6 +433,7 @@
     "allocated": "Allocated",
     "overAllocatedBy": "Over-allocated by",
     "unallocatedAdvance": "Unallocated (advance)",
+    "advanceLine": "Advance",
     "notApplied": "Not applied to an invoice",
     "notAppliedHint": "A receipt goes in full to the invoices ticked and can't be more than they owe. Money taken before an invoice is an advance receipt.",
     "fxGain": "FX gain",
