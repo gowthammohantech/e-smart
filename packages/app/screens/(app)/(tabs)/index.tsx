@@ -9,7 +9,7 @@ import { Screen, SectionHeader } from '@esmart/ui/components/Screen';
 import { Card } from '@esmart/ui/components/Card';
 import { Text } from '@esmart/ui/components/Text';
 import { StatRow, StatTile } from '@esmart/ui/components/StatTile';
-import { Columns, StatGrid } from '@esmart/ui/components/Layout';
+import { BalancedColumns, Columns, StatGrid } from '@esmart/ui/components/Layout';
 import { QuickActions , quickActions } from '../../../components/QuickActions';
 import { BarChart } from '@esmart/ui/components/charts/BarChart';
 import { AgingBars } from '@esmart/ui/components/charts/AgingBars';
@@ -473,8 +473,15 @@ export default function Home() {
                   </Card>
                 </>
               ) : null}
-
-              {attention.length > 0 ? (
+            </>
+          }
+        />
+        {/* Lists that are long for one company and empty for another: each goes to the shorter column, so the page ends level. */}
+        <BalancedColumns
+          blocks={[
+              {
+                key: 'attention',
+                node: attention.length > 0 ? (
                 <>
                   <SectionHeader title={tr('reports:home.attention')} />
                   <Card padded={false}>
@@ -508,9 +515,11 @@ export default function Home() {
                     ))}
                   </Card>
                 </>
-              ) : null}
-
-              {overdueInvoices.length > 0 ? (
+              ) : null,
+              },
+              {
+                key: 'chase',
+                node: overdueInvoices.length > 0 ? (
                 <>
                   <SectionHeader title={tr('reports:home.attentionCaption')} action={tr('nav:shell.viewAll')} onAction={() => router.push('/(app)/receivables')} />
                   <Card padded={false}>
@@ -526,16 +535,47 @@ export default function Home() {
                     ))}
                   </Card>
                 </>
-              ) : null}
-
-              <FilingCards branchId={scope.branchId} limit={4} />
-            </>
-          }
-        />
-        {/* The last two side by side under both columns, so the page ends level rather than one long column. */}
-        <Columns
-          left={
-            <>
+              ) : null,
+              },
+              {
+                key: 'filings',
+                node: <FilingCards branchId={scope.branchId} limit={4} />,
+              },
+              {
+                key: 'recent',
+                node: (
+                  <>
+              <SectionHeader title={tr('reports:home.recentInvoices')} action={tr('nav:shell.viewAll')} onAction={() => router.push('/(app)/sales/invoices')} />
+              <Card padded={false}>
+                {recent.length === 0 ? (
+                  <EmptyState
+                    illustration="no-documents"
+                    icon="file-document-outline"
+                    title={tr('reports:home.noInvoices')}
+                    message={tr('reports:home.noInvoicesBody')}
+                    actionLabel={tr('reports:home.newInvoice')}
+                    onAction={() => router.push('/(app)/sales/invoices/new')}
+                    compact
+                  />
+                ) : (
+                  recent.map((d, i) => (
+                    <DocumentRow
+                      key={d.id}
+                      document={{ number: d.number ?? '', date: d.date!, status: d.status as DocStatus, totals: { grandTotal: d.grandTotal as Money } }}
+                      partyName={nameOf(d)}
+                      divider={i < recent.length - 1}
+                      onPress={() => router.push(`/(app)/sales/invoices/${d.id}`)}
+                    />
+                  ))
+                )}
+              </Card>
+                  </>
+                ),
+              },
+              {
+                key: 'movement',
+                node: (
+                  <>
               <SectionHeader
                 title={tr('reports:dash.home.movement')}
                 action={hub.moneyMovement.length ? tr('reports:dash.export.csv') : undefined}
@@ -564,36 +604,10 @@ export default function Home() {
                   ))
                 )}
               </Card>
-            </>
-          }
-          right={
-            <>
-              <SectionHeader title={tr('reports:home.recentInvoices')} action={tr('nav:shell.viewAll')} onAction={() => router.push('/(app)/sales/invoices')} />
-              <Card padded={false}>
-                {recent.length === 0 ? (
-                  <EmptyState
-                    illustration="no-documents"
-                    icon="file-document-outline"
-                    title={tr('reports:home.noInvoices')}
-                    message={tr('reports:home.noInvoicesBody')}
-                    actionLabel={tr('reports:home.newInvoice')}
-                    onAction={() => router.push('/(app)/sales/invoices/new')}
-                    compact
-                  />
-                ) : (
-                  recent.map((d, i) => (
-                    <DocumentRow
-                      key={d.id}
-                      document={{ number: d.number ?? '', date: d.date!, status: d.status as DocStatus, totals: { grandTotal: d.grandTotal as Money } }}
-                      partyName={nameOf(d)}
-                      divider={i < recent.length - 1}
-                      onPress={() => router.push(`/(app)/sales/invoices/${d.id}`)}
-                    />
-                  ))
-                )}
-              </Card>
-            </>
-          }
+                  </>
+                ),
+              },
+          ]}
         />
       </Screen>
 

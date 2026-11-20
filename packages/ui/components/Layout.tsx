@@ -30,6 +30,44 @@ export function Columns({ left, right, ratio = [1, 1] }: { left: React.ReactNode
 }
 
 /**
+ * Blocks of changing height (lists that are long for one company and empty for another) in two
+ * equal columns on a desktop, each block going to the column that is shorter so far, so the two
+ * end level whatever is in them. Heights are measured as they render; until then a block counts
+ * as 300. On a phone they stack in the order given.
+ */
+export function BalancedColumns({ blocks }: { blocks: { key: string; node: React.ReactNode }[] }) {
+  const t = useTheme();
+  const desktop = useIsDesktop();
+  const [heights, setHeights] = React.useState<Record<string, number>>({});
+  const shown = blocks.filter((b) => b.node);
+  if (!desktop) return <>{shown.map((b) => <React.Fragment key={b.key}>{b.node}</React.Fragment>)}</>;
+  const columns: (typeof shown)[] = [[], []];
+  const total = [0, 0];
+  for (const b of shown) {
+    const i = total[1] < total[0] ? 1 : 0;
+    columns[i].push(b);
+    total[i] += heights[b.key] ?? 300;
+  }
+  const measure = (key: string) => (e: { nativeEvent: { layout: { height: number } } }) => {
+    const h = Math.round(e.nativeEvent.layout.height);
+    setHeights((prev) => (prev[key] === h ? prev : { ...prev, [key]: h }));
+  };
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: t.spacing.xl }}>
+      {columns.map((col, i) => (
+        <View key={i} style={{ flex: 1, minWidth: 0 }}>
+          {col.map((b) => (
+            <View key={b.key} onLayout={measure(b.key)}>
+              {b.node}
+            </View>
+          ))}
+        </View>
+      ))}
+    </View>
+  );
+}
+
+/**
  * Stacks its children (usually StatRows) on a phone and lays them out in one
  * line on a desktop, so four stat tiles sit across instead of in pairs.
  */
