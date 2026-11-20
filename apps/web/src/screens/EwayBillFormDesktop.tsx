@@ -23,7 +23,6 @@ import { useDocument, useParties } from '@esmart/app/store/selectors';
 import { useDocumentRecord } from '@esmart/app/remote/queries';
 import { LoadingView } from '@esmart/app/components/LoadingView';
 import { EwayBillFormSheets, useEwayBillForm, type EwayBillFormState } from '@esmart/app/features/compliance/EwayBillForm';
-import { gstinAsTyped } from '@esmart/core/lib/validators';
 
 function Label({ children }: { children: string }) {
   return (
@@ -75,7 +74,7 @@ function PlaceColumn({
           autoCapitalize="characters"
           autoCorrect={false}
           // URP (unregistered) is typed in here too; anything else is checked as a GSTIN as it is typed.
-        error={errors[`${prefix}.gstin`] ?? (/^U(RP?)?$/.test(place.gstin) ? undefined : gstinAsTyped(place.gstin))}
+        error={errors[`${prefix}.gstin`]}
           hint={tr('compliance:ewb.urpHint')}
         />
         <TextField
@@ -415,7 +414,7 @@ function EwayBillFormDesktop({ doc }: { doc: BusinessDocument }) {
 
       <ValidityCard form={form} />
 
-      {inHeader ? null : <Button shortcut="S" title={tr('compliance:ewb.generate')} icon="truck-fast-outline" loading={busy} onPress={submit} fullWidth />}
+      {inHeader ? null : <Button shortcut="S" title={tr('compliance:ewb.generate')} icon="truck-fast-outline" loading={busy} disabled={form.invalid} onPress={submit} fullWidth />}
     </>
   );
 

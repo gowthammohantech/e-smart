@@ -41,7 +41,7 @@ import { formatMoney } from '@esmart/core/lib/format';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { portalToast } from './portalToast';
 import { useSaveShortcut } from '../../components/useSaveShortcut';
-import { gstinAsTyped } from '@esmart/core/lib/validators';
+import { hasErrors, shownError, validGstin, validPostalCode } from '@esmart/core/lib/validators';
 
 /**
  * Everything the e-way bill form holds and does, apart from how it is laid
@@ -101,7 +101,22 @@ export function useEwayBillForm(doc: BusinessDocument) {
   const [distanceKm, setDistanceKm] = useState(String(settings.defaultDistanceKm));
 
   const [busy, setBusy] = useState(false);
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [savedErrors, setErrors] = useState<Record<string, string>>({});
+  // Checked as typed: a GSTIN (URP aside) or PIN filled in wrong is red at once, and Generate waits.
+  const liveOf = (prefix: 'from' | 'to', p: EwayPlace): Record<string, string | undefined> => ({
+    [`${prefix}.gstin`]: /^URP$/.test(p.gstin.trim()) ? undefined : validGstin(p.gstin),
+    [`${prefix}.pincode`]: validPostalCode(p.pincode, 'IN', p.stateCode),
+  });
+  const live = { ...liveOf('from', from), ...liveOf('to', to) };
+  const invalid = hasErrors(live);
+  // What each field shows: filled in, its check as typed; empty, what the portal said on Generate.
+  const valueOf: Record<string, string> = { 'from.gstin': from.gstin, 'from.pincode': from.pincode, 'to.gstin': to.gstin, 'to.pincode': to.pincode };
+  const errors: Record<string, string> = { ...savedErrors };
+  for (const [k, v] of Object.entries(live)) {
+    const shown = shownError(valueOf[k], v, savedErrors[k]);
+    if (shown) errors[k] = shown;
+    else delete errors[k];
+  }
 
   const distance = Number(distanceKm) || 0;
   const preview = useMemo(() => {
@@ -112,6 +127,7 @@ export function useEwayBillForm(doc: BusinessDocument) {
   const byRoad = transportMode === 'road';
 
   const submit = async () => {
+    if (invalid) return;
     setBusy(true);
     const outcome = await portalToast(toast, compliance.generateEwayBill({
       documentId: doc.id,
@@ -190,6 +206,7 @@ export function useEwayBillForm(doc: BusinessDocument) {
     byRoad,
     busy,
     errors,
+    invalid,
     submit,
   };
 }
@@ -409,6 +426,7 @@ export function EwayBillForm({ document: doc }: { document: BusinessDocument }) 
             shortcut="S"
             icon="truck-fast-outline"
             loading={busy}
+            disabled={form.invalid}
             onPress={submit}
             fullWidth
           />
@@ -546,7 +564,7 @@ function PlaceFields({
         autoCapitalize="characters"
         autoCorrect={false}
         // URP (unregistered) is typed in here too; anything else is checked as a GSTIN as it is typed.
-        error={errors[`${prefix}.gstin`] ?? (/^U(RP?)?$/.test(place.gstin) ? undefined : gstinAsTyped(place.gstin))}
+        error={errors[`${prefix}.gstin`]}
         hint={tr('compliance:ewb.urpHint')}
       />
       <TextField
