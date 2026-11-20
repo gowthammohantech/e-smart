@@ -34,7 +34,7 @@ import { INDIAN_STATES, PAYMENT_METHODS } from '@esmart/core/data/masters';
 import { CURRENCIES } from '@esmart/core/lib/currencies';
 import { TDS_SECTIONS, tdsSection } from '@esmart/core/data/tdsSections';
 import { documentKindLabel, paymentMethodLabel } from '@esmart/core/labels';
-import { formatMoney, toAmountInput } from '@esmart/core/lib/format';
+import { formatMoney, formatPercent, toAmountInput } from '@esmart/core/lib/format';
 import { daysBetween, formatDate, today } from '@esmart/core/lib/date';
 import { Money, fromMajor, money, subtract, zero } from '@esmart/core/lib/money';
 import { uid } from '@esmart/core/lib/id';
@@ -149,7 +149,7 @@ export function PaymentForm({
   const [advanceCess, setAdvanceCess] = useState(0);
   const cessText = useDecimalText(advanceCess, setAdvanceCess);
   /** An advance receipt: the service it is for, picked from the company's services. */
-  const [advanceItem, setAdvanceItem] = useState<{ id: string; name: string } | null>(null);
+  const [advanceItem, setAdvanceItem] = useState<{ id: string; name: string; taxCategoryId: string } | null>(null);
   const [serviceQuery, setServiceQuery] = useState('');
   /** TDS the customer deducted from an advance, before any invoice. */
   const [advanceTdsText, setAdvanceTdsText] = useState('');
@@ -306,8 +306,15 @@ export function PaymentForm({
   const unallocated = subtract(amount, allocatedTotal);
   // Each at its rate on the receipt's date: the server taxes the advance at that day's rate.
   const taxed = taxCategoriesOn(taxCategories, date).filter((c) => c.rate > 0 && taxAvailableOn(c, date));
-  // A rate not known is 18% (RULES 8.12).
-  const advanceTaxCategory = taxed.find((c) => c.id === advanceTaxId) ?? taxed.find((c) => c.rate === DEFAULT_ADVANCE_RATE) ?? taxed[0];
+  // An advance receipt for a service, with tax: the GST is worked back at that service's own rate on the
+  // day; a service at 0% (nil rated, exempt) carries none. Otherwise the rate picked, or 18% when not known (RULES 8.12).
+  const serviceCategory = advanceReceipt && advanceItem ? taxCategoriesOn(taxCategories, date).find((c) => c.id === advanceItem.taxCategoryId) : undefined;
+  const advanceTaxCategory =
+    advanceReceipt && advanceItem
+      ? serviceCategory && serviceCategory.rate > 0 && taxAvailableOn(serviceCategory, date)
+        ? serviceCategory
+        : undefined
+      : (taxed.find((c) => c.id === advanceTaxId) ?? taxed.find((c) => c.rate === DEFAULT_ADVANCE_RATE) ?? taxed[0]);
   // A place of supply not known is taken as another state: IGST, under "Other Territory" (97).
   const pos = advancePos ?? party?.billingAddress?.stateCode;
   const canAdvance = direction === 'received' && !noAdvance && unallocated.minor > 0 && !!company.taxRegistration?.registered && !!taxed.length;
@@ -665,9 +672,8 @@ export function PaymentForm({
         onSelect={(id) => {
           const picked = services.find((i) => i.id === id);
           if (!picked) return;
-          setAdvanceItem({ id: picked.id, name: picked.name });
+          setAdvanceItem({ id: picked.id, name: picked.name, taxCategoryId: picked.taxCategoryId });
           if (picked.hsnCode?.startsWith('99')) setAdvanceSac(picked.hsnCode.slice(0, 8));
-          if (taxed.some((c) => c.id === picked.taxCategoryId)) setAdvanceTaxId(picked.taxCategoryId);
         }}
       />
     </>
@@ -1067,7 +1073,15 @@ export function PaymentForm({
           {serviceAdvance ? (
             <>
               <FieldRow>
-                <PickerField label={tr('sales:payment.advanceRate')} value={advanceTaxCategory?.name} onPress={() => setAdvanceSheet('tax')} icon="percent-outline" />
+                {/* The service's own rate once one is picked: shown, not changed here. */}
+                <PickerField
+                  label={tr('sales:payment.advanceRate')}
+                  value={advanceTaxCategory?.name ?? (advanceItem ? formatPercent(0) : undefined)}
+                  onPress={() => setAdvanceSheet('tax')}
+                  icon="percent-outline"
+                  disabled={advanceReceipt && !!advanceItem}
+                  hint={advanceReceipt && advanceItem ? tr('sales:payment.advanceRateFromService', { name: advanceItem.name }) : undefined}
+                />
                 <PickerField
                   label={tr('sales:editor.placeOfSupply')}
                   value={pos ? INDIAN_STATES.find((st) => st.code === pos)?.name : undefined}
