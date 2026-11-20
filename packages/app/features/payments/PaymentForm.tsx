@@ -195,7 +195,7 @@ export function PaymentForm({
   const partySearch = usePartySearch(direction === 'received' ? 'customer' : 'supplier', useDebounced(partyQuery), partyOpen && !receipts);
   // The services an advance receipt can be for: active items of type service, searched by name, SKU or SAC.
   const serviceSearch = useItemSearch(useDebounced(serviceQuery), advanceSheet === 'service');
-  const services = (serviceSearch.data ?? []).filter((i) => i.type === 'service');
+  const services = (serviceSearch.data ?? []).filter((i): i is typeof i & { id: string } => i.type === 'service' && !!i.id);
   const pickParty = (id: string) => {
     setPartyId(id);
     setAllocations({});
