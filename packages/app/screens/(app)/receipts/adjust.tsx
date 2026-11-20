@@ -90,6 +90,17 @@ export default function AdjustAdvances() {
     const room = chosenLeft - typedTotal + (amounts[documentId] ? fromMajor(amounts[documentId], baseCurrency).minor : 0);
     const take = Math.min(room, (row.outstanding as Money).minor);
     if (take > 0) setAmounts((a) => ({ ...a, [documentId]: toAmountInput(money(take, baseCurrency)) }));
+    // All the ticked advances have is on other invoices: say so, rather than the tap doing nothing.
+    else toast.show(tr('books:adjust.nothingLeft'), 'warning', { icon: 'cash-remove' });
+  };
+  /** A tap ticks an invoice (filled with what is left) or unticks it (its amount freed for the others). */
+  const toggle = (documentId: string) => {
+    if (!amounts[documentId]) return fill(documentId);
+    setAmounts((a) => {
+      const next = { ...a };
+      delete next[documentId];
+      return next;
+    });
   };
 
   const apply = async (allocations?: AdjustmentAllocation[]) => {
@@ -270,8 +281,9 @@ export default function AdjustAdvances() {
                           <Text variant="small" weight="700">{formatMoney(o.outstanding as Money)}</Text>,
                           {
                             // A tap fills a document not yet given an amount; one already typed is left as it is.
-                            onPress: chosen ? () => (amounts[o.documentId] ? undefined : fill(o.documentId)) : undefined,
+                            onPress: chosen ? () => toggle(o.documentId) : undefined,
                             selected: !!amounts[o.documentId],
+                            multi: true,
                             extra: chosen ? (
                               <AmountField label={tr('books:adjust.amountFor', { number: o.number })} value={amounts[o.documentId] ?? ''} onChangeValue={(v) => setAmounts((a) => ({ ...a, [o.documentId]: v }))} currency={baseCurrency} />
                             ) : null,
