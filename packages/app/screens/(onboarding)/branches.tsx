@@ -16,7 +16,7 @@ import { nextStepRoute, onboardingSteps, stepIndex, useOnboardingStore } from '.
 import { INDIAN_STATES, stateName } from '@esmart/core/data/masters';
 import { citiesForState } from '@esmart/core/data/cities';
 import { normalizeGstin } from '@esmart/core/domain/gstin';
-import { gstinAsTyped, validGstin, validPostalCode } from '@esmart/core/lib/validators';
+import { validGstin, validPostalCode } from '@esmart/core/lib/validators';
 import { FieldRow } from '@esmart/ui/components/Layout';
 import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
 
@@ -169,7 +169,7 @@ export default function BranchesStep() {
           placeholder="27AABCV1234F1ZO"
           autoCapitalize="characters"
           icon="card-account-details-outline"
-          error={gstinAsTyped(gstin)}
+          error={gstinError}
           hint={tr('settings:branches.gstinHint')}
         />
         <View style={desktop ? { flexDirection: 'row', justifyContent: 'flex-end' } : undefined}>

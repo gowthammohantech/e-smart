@@ -18,7 +18,7 @@ import { nextStepRoute, onboardingSteps, stepIndex, useOnboardingStore } from '.
 import { BUSINESS_TYPES, INDIAN_STATES } from '@esmart/core/data/masters';
 import { citiesForState } from '@esmart/core/data/cities';
 import { moduleSetFor, planInfo } from '@esmart/core/domain/plan';
-import { Errors, hasErrors, required, validEmail, validGstin, validPostalCode } from '@esmart/core/lib/validators';
+import { Errors, hasErrors, required, shownError, validEmail, validGstin, validPostalCode } from '@esmart/core/lib/validators';
 import { validPhoneParts } from '@esmart/core/lib/phone';
 
 export default function BusinessStep() {
@@ -60,14 +60,19 @@ export default function BusinessStep() {
     set({ logoUri: picked.uri });
   };
 
+  // Checked as typed: a field filled in wrong is red at once and Continue waits until it is put right.
+  const live = {
+    email: validEmail(draft.email),
+    phone: validPhoneParts(draft.phoneDialCode, draft.phone),
+    postalCode: validPostalCode(draft.address.postalCode, draft.address.country, draft.address.stateCode),
+  };
+
   const next = () => {
     const nextErrors: Errors<'name' | 'city' | 'state' | 'email' | 'phone' | 'postalCode'> = {
       name: required(draft.name, tr('errors:field.businessName')),
       city: required(draft.address.city, tr('onboarding:business.city')),
       state: required(draft.address.state, tr('onboarding:business.state')),
-      email: validEmail(draft.email),
-      phone: validPhoneParts(draft.phoneDialCode, draft.phone),
-      postalCode: validPostalCode(draft.address.postalCode, draft.address.country, draft.address.stateCode),
+      ...live,
     };
     setErrors(nextErrors);
     if (hasErrors(nextErrors)) {
@@ -87,6 +92,7 @@ export default function BusinessStep() {
       steps={onboardingSteps(draft.plan)}
       currentStep={stepIndex('business', draft.plan)}
       onPrimary={next}
+      primaryDisabled={hasErrors(live)}
     >
       <View style={desktop ? { flexDirection: 'row', alignItems: 'center', gap: t.spacing.lg } : { alignItems: 'center', gap: t.spacing.sm }}>
         <Pressable
@@ -223,7 +229,7 @@ export default function BusinessStep() {
           autoComplete="postal-code"
           textContentType="postalCode"
           maxLength={draft.address.country === 'IN' ? 6 : undefined}
-          error={errors.postalCode}
+          error={shownError(draft.address.postalCode, live.postalCode, errors.postalCode)}
           containerStyle={{ flex: 1 }}
         />
       </View>
@@ -244,7 +250,7 @@ export default function BusinessStep() {
         keyboardType="email-address"
         autoCapitalize="none"
         icon="email-outline"
-        error={errors.email}
+        error={shownError(draft.email, live.email, errors.email)}
       />
       <PhoneField
         label={tr('onboarding:business.phone')}
@@ -255,7 +261,7 @@ export default function BusinessStep() {
           clear('phone');
         }}
         placeholder="98765 43210"
-        error={errors.phone}
+        error={shownError(draft.phone, live.phone, errors.phone)}
       />
       </FieldRow>
 

@@ -23,7 +23,6 @@ import { useDocument, useParties } from '@esmart/app/store/selectors';
 import { useDocumentRecord } from '@esmart/app/remote/queries';
 import { LoadingView } from '@esmart/app/components/LoadingView';
 import { EwayBillFormSheets, useEwayBillForm, type EwayBillFormState } from '@esmart/app/features/compliance/EwayBillForm';
-import { gstinAsTyped } from '@esmart/core/lib/validators';
 
 function Label({ children }: { children: string }) {
   return (
@@ -75,7 +74,7 @@ function PlaceColumn({
           autoCapitalize="characters"
           autoCorrect={false}
           // URP (unregistered) is typed in here too; anything else is checked as a GSTIN as it is typed.
-        error={errors[`${prefix}.gstin`] ?? (/^U(RP?)?$/.test(place.gstin) ? undefined : gstinAsTyped(place.gstin))}
+        error={errors[`${prefix}.gstin`]}
           hint={tr('compliance:ewb.urpHint')}
         />
         <TextField
@@ -215,7 +214,6 @@ function EwayBillFormDesktop({ doc }: { doc: BusinessDocument }) {
     to,
     setTo,
     setStateSheet,
-    transporters,
     transporterId,
     setTransporterId,
     transporterName,
@@ -282,16 +280,6 @@ function EwayBillFormDesktop({ doc }: { doc: BusinessDocument }) {
       </FormSection>
 
       <FormSection title={tr('compliance:ewb.transportPartB')}>
-        {transporters.length ? (
-          // The whole row, over the ID and name it fills in.
-          <PickerField
-            label={tr('compliance:ewb.savedTransporter')}
-            value={transporters.find((x) => x.transporterId === transporterId.trim().toUpperCase())?.name}
-            placeholder={tr('compliance:ewb.pickOrType')}
-            onPress={() => setTransporterOpen(true)}
-            icon="truck-outline"
-          />
-        ) : null}
         <FieldRow>
           <TextField
             label={tr('compliance:ewb.transporterId')}
@@ -303,6 +291,8 @@ function EwayBillFormDesktop({ doc }: { doc: BusinessDocument }) {
           />
           <TextField label={tr('compliance:ewb.transporterName')} value={transporterName} onChangeText={setTransporterName} />
         </FieldRow>
+        {/* As Find HSN / SAC code does: the saved transporters, searched, or a new one added; the ID and name above stay editable. */}
+        <Button title={tr('compliance:ewb.findTransporter')} variant="ghost" size="sm" icon="magnify" onPress={() => setTransporterOpen(true)} style={{ alignSelf: 'flex-start', marginTop: -t.spacing.sm }} />
         <FieldRow>
           <View style={{ gap: t.spacing.sm }}>
             <Text variant="caption" tone="muted" weight="600">
@@ -415,7 +405,7 @@ function EwayBillFormDesktop({ doc }: { doc: BusinessDocument }) {
 
       <ValidityCard form={form} />
 
-      {inHeader ? null : <Button shortcut="S" title={tr('compliance:ewb.generate')} icon="truck-fast-outline" loading={busy} onPress={submit} fullWidth />}
+      {inHeader ? null : <Button shortcut="S" title={tr('compliance:ewb.generate')} icon="truck-fast-outline" loading={busy} disabled={form.invalid} onPress={submit} fullWidth />}
     </>
   );
 

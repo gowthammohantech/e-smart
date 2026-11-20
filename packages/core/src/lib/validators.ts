@@ -163,6 +163,24 @@ export function firstError<T extends string>(errors: Errors<T>): string | undefi
   return Object.values(errors).find((e): e is string => typeof e === 'string' && e.length > 0);
 }
 
+/** Indian bank branch code: four letters, a zero, then six letters or digits (e.g. HDFC0001234). */
+export const IFSC_RE = /^[A-Z]{4}0[A-Z0-9]{6}$/;
+
+export function validIfsc(value: string | undefined): string | undefined {
+  const v = (value ?? '').trim().toUpperCase();
+  if (!v) return undefined;
+  return IFSC_RE.test(v) ? undefined : i18n.t('errors:validation.ifscShape');
+}
+
+/**
+ * What a field shows as it is typed. Filled in, what is wrong with it now (`live`), so the red goes
+ * the moment it is put right; empty, what Save found (`saved`, e.g. that it is required), so a new
+ * form does not open in red.
+ */
+export function shownError(value: string | undefined | null, live: string | undefined, saved: string | undefined): string | undefined {
+  return (value ?? '').trim() ? live : saved;
+}
+
 export function hasErrors<T extends string>(errors: Errors<T>): boolean {
   return Object.values(errors).some((e) => typeof e === 'string' && e.length > 0);
 }

@@ -25,7 +25,7 @@ import { useActiveCompany, useCurrentUser, useListsReady } from '../../../store/
 import { CardRowsSkeleton } from '../../../components/ScreenSkeleton';
 import { remoteUsers } from '../../../remote';
 import { describeError } from '../../../remote/errors';
-import { Errors, hasErrors, required, validEmail } from '@esmart/core/lib/validators';
+import { Errors, hasErrors, required, shownError, validEmail } from '@esmart/core/lib/validators';
 import { formatRelative } from '@esmart/core/lib/date';
 import { uid } from '@esmart/core/lib/id';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
@@ -104,6 +104,9 @@ export default function UserSettings() {
   const { run: serverSave } = useServerSave();
   /** The clock the resend countdown reads, moved on each second while it runs. */
   const [now, setNow] = useState(() => Date.now());
+
+  // The email is checked as typed: red at once if it is wrong, and the invite waits until it is right.
+  const liveEmail = editing?.id ? undefined : validEmail(email);
 
   const save = async () => {
     const next: Errors<'name' | 'email'> = { name: required(name, tr('settings:users.name')), email: required(email, tr('settings:users.email')) ?? validEmail(email) };
@@ -288,7 +291,7 @@ export default function UserSettings() {
                 style={desktop ? undefined : { flex: 2 }}
               />
             ) : null}
-            {isGuest ? null : <Button shortcut="S" title={editing?.id ? tr('common:action.save') : tr('settings:users.sendInvite')} onPress={save} loading={busy} style={desktop ? undefined : { flex: 2 }} />}
+            {isGuest ? null : <Button shortcut="S" title={editing?.id ? tr('common:action.save') : tr('settings:users.sendInvite')} onPress={save} loading={busy} disabled={!!liveEmail} style={desktop ? undefined : { flex: 2 }} />}
           </View>
         }
       >
@@ -301,7 +304,7 @@ export default function UserSettings() {
             keyboardType="email-address"
             autoCapitalize="none"
             icon="email-outline"
-            error={errors.email}
+            error={shownError(email, liveEmail, errors.email)}
             required
             editable={!editing?.id}
           />

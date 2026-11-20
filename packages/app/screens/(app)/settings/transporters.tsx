@@ -17,6 +17,7 @@ import { useAppStore } from '../../../store/appStore';
 import { useTransporters } from '../../../store/selectors';
 import { Transporter } from '@esmart/core/types';
 import { formatGstin, isValidTransporterId } from '@esmart/core/domain/gstin';
+import { shownError } from '@esmart/core/lib/validators';
 import { uid } from '@esmart/core/lib/id';
 import { useSaveShortcut } from '../../../components/useSaveShortcut';
 import { useServerSave } from '../../../components/useServerSave';
@@ -33,6 +34,10 @@ export default function TransportersSettings() {
   const activeCompanyId = useAppStore((s) => s.activeCompanyId);
 
   const [editing, setEditing] = useState<Transporter | null>(null);
+  // A new transporter's id, fixed when the form opens: once saved it is in the list, and the ID
+  // check must not then find it there as "another transporter" before the sheet closes.
+  const [newId, setNewId] = useState(() => uid('trn'));
+  const ownId = editing?.id ?? newId;
   const [name, setName] = useState('');
   const [transporterId, setTransporterId] = useState('');
   const phone = usePhoneInput();
@@ -43,6 +48,7 @@ export default function TransportersSettings() {
 
   const open = (transporter?: Transporter) => {
     setEditing(transporter ?? null);
+    if (!transporter) setNewId(uid('trn'));
     setName(transporter?.name ?? '');
     setTransporterId(transporter?.transporterId ?? '');
     phone.reset(transporter?.phone);
@@ -54,12 +60,23 @@ export default function TransportersSettings() {
 
   const [sheetOpen, setSheetOpen] = useState(false);
 
+  // Checked as typed: the transporter ID and phone go red at once if wrong, and Save waits until they are right.
+  const typedId = transporterId.trim().toUpperCase();
+  const liveId = !typedId
+    ? undefined
+    : !isValidTransporterId(typedId)
+      ? tr('settings:transporters.idInvalid')
+      : transporters.some((x) => x.transporterId === typedId && x.id !== ownId)
+        ? tr('settings:transporters.idTaken')
+        : undefined;
+  const livePhone = phone.error();
+
   const save = async () => {
     const id = transporterId.trim().toUpperCase();
     const badName = name.trim() ? undefined : tr('errors:validation.required', { field: tr('settings:transporters.name') });
     const badId = !isValidTransporterId(id)
       ? tr('settings:transporters.idInvalid')
-      : transporters.some((x) => x.transporterId === id && x.id !== editing?.id)
+      : transporters.some((x) => x.transporterId === id && x.id !== ownId)
         ? tr('settings:transporters.idTaken')
         : undefined;
     const badPhone = phone.error();
@@ -68,7 +85,7 @@ export default function TransportersSettings() {
     setPhoneError(badPhone);
     if (badName || badId || badPhone) return;
     const transporter: Transporter = {
-      id: editing?.id ?? uid('trn'),
+      id: ownId,
       companyId: editing?.companyId ?? activeCompanyId,
       name: name.trim(),
       transporterId: transporterId.trim().toUpperCase(),
@@ -133,6 +150,7 @@ export default function TransportersSettings() {
             saveLabel={tr('settings:transporters.save')}
             onSave={save}
             saving={saving}
+            saveDisabled={!!liveId || !!livePhone}
             deleteLabel={tr('settings:transporters.delete')}
             onDelete={
               editing
@@ -155,10 +173,10 @@ export default function TransportersSettings() {
             placeholder="27AABCT5512M1Z6"
             autoCapitalize="characters"
             maxLength={15}
-            error={idError}
+            error={shownError(transporterId, liveId, idError)}
             hint={tr('settings:transporters.idHint')}
           />
-          <PhoneField label={tr('settings:transporters.phone')} {...phone.field} placeholder="22 6789 1000" error={phoneError} />
+          <PhoneField label={tr('settings:transporters.phone')} {...phone.field} placeholder="22 6789 1000" error={shownError(phone.field.value, livePhone, phoneError)} />
         </View>
       </Sheet>
 

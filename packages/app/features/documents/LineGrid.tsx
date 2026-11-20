@@ -1,4 +1,4 @@
-import React, { useId, useState } from 'react';
+import React, { useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, TextInput, View } from 'react-native';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
@@ -47,6 +47,7 @@ export function LineGrid({
   maxQuantity,
   purchase = false,
   note = false,
+  focusLine,
 }: {
   lines: DocumentLine[];
   currency: string;
@@ -64,6 +65,8 @@ export function LineGrid({
   purchase?: boolean;
   /** A credit or debit note: the rate is the difference in rate. */
   note?: boolean;
+  /** A line just added: its quantity takes the cursor (`at` tells one request from the next). */
+  focusLine?: { id: string; at: number } | null;
 }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['sales', 'common', 'inventory']);
@@ -99,6 +102,22 @@ export function LineGrid({
   const gridId = useId().replace(/:/g, '');
   const cellId = (row: number, col: Col) => `${gridId}-${row}-${col}`;
   const focusCell = (row: number, col: Col) => (globalThis.document?.getElementById(cellId(row, col)) as HTMLElement | null)?.focus();
+  // A line just added takes the cursor in its quantity, once it is in the grid and the picker has closed
+  // (closing hands focus back to what opened it). Each request is acted on once.
+  const focusedAt = useRef(0);
+  useEffect(() => {
+    if (!focusLine || focusLine.at === focusedAt.current) return;
+    const row = lines.findIndex((l) => l.id === focusLine.id);
+    if (row < 0) return;
+    focusedAt.current = focusLine.at;
+    const id = `${gridId}-${row}-qty`;
+    setTimeout(() => {
+      const el = globalThis.document?.getElementById(id) as HTMLInputElement | null;
+      el?.focus();
+      el?.select?.();
+    }, 350);
+  }, [focusLine, lines, gridId]);
+
   const onEnter = (row: number, col: Col) => {
     if (row < lines.length - 1) focusCell(row + 1, col);
     else onAddRequest();
@@ -261,7 +280,8 @@ export function LineGrid({
                   numeric
                   sanitize={(v) => decimalInput(v, 2)}
                   placeholder="0"
-                  invalid={line.unitPrice.minor > 0 && calc.taxable.minor <= 0}
+                  // Red only for a discount that wipes out a line with a quantity and a rate, not an empty one on a new line.
+                  invalid={line.discountValue > 0 && line.quantity > 0 && line.unitPrice.minor > 0 && calc.taxable.minor <= 0}
                   onCommit={(v) => {
                     const d = Number(v) || 0;
                     if (d !== line.discountValue) onUpdate(line.id, { discountValue: d });
@@ -448,7 +468,13 @@ function GridInput({
     <TextInput
       id={id}
       value={shown}
-      onChangeText={(v) => setDraft(sanitize ? sanitize(v) : v)}
+      onChangeText={(v) => {
+        const clean = sanitize ? sanitize(v) : v;
+        setDraft(clean);
+        // A number goes on the line as it is typed, so the line total and the bill's total move with it;
+        // the text stays as typed until the cell is left.
+        if (numeric) onCommit(clean);
+      }}
       onFocus={() => setDraft(value)}
       onBlur={commit}
       onSubmitEditing={() => {

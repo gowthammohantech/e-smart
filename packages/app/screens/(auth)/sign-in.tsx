@@ -12,7 +12,7 @@ import { DEMO_LOGIN, remoteSession } from '../../remote';
 import { describeError } from '../../remote/errors';
 import { trackAnonymous } from '../../lib/analytics';
 import { useWelcomeToast } from '../../features/session/useWelcomeToast';
-import { Errors, required, validEmail, hasErrors } from '@esmart/core/lib/validators';
+import { Errors, required, shownError, validEmail, hasErrors } from '@esmart/core/lib/validators';
 
 type Mode = 'email' | 'phone';
 
@@ -48,6 +48,10 @@ export default function SignIn() {
   const unlessBusy = (fn: () => void) => () => {
     if (!busy) fn();
   };
+
+  // Email and mobile are checked as typed: red at once if wrong, and the button waits until they are right.
+  const liveEmail = validEmail(email);
+  const livePhone = phone.error();
 
   const signInWith = (who: string, secret: string) => {
     if (busy) return;
@@ -127,7 +131,7 @@ export default function SignIn() {
             submitBehavior="submit"
             onSubmitEditing={() => passwordRef.current?.focus()}
             icon="email-outline"
-            error={errors.email}
+            error={shownError(email, liveEmail, errors.email)}
           />
           <TextField
             // React 19 hands `ref` to TextField, which passes it on to its input.
@@ -156,7 +160,7 @@ export default function SignIn() {
               {tr('auth:signIn.forgot')}
             </Text>
           ) : null}
-          <Button title={tr('auth:signIn.submit')} onPress={submitEmail} loading={busy} fullWidth />
+          <Button title={tr('auth:signIn.submit')} onPress={submitEmail} loading={busy} disabled={!!liveEmail} fullWidth />
           {desktop ? null : (
             <Button title={tr('auth:signIn.forgot')} variant="ghost" onPress={unlessBusy(() => router.push('/(auth)/forgot-password'))} />
           )}
@@ -168,11 +172,11 @@ export default function SignIn() {
             {...phone.field}
             placeholder="98765 43210"
             icon="cellphone"
-            error={errors.phone}
+            error={shownError(phone.field.value, livePhone, errors.phone)}
             hint={tr('auth:signIn.otpHint')}
             onSubmitEditing={submitPhone}
           />
-          <Button title={tr('auth:signIn.sendCode')} onPress={submitPhone} fullWidth />
+          <Button title={tr('auth:signIn.sendCode')} onPress={submitPhone} disabled={!!livePhone} fullWidth />
         </View>
       )}
 

@@ -47,7 +47,7 @@ import {
 } from '../../store/selectors';
 import { SHOW_SCROLLBAR, useBreakpoint } from '@esmart/ui/theme/breakpoints';
 import { useGoBack } from '../../navigation/useGoBack';
-import { gstinAsTyped } from '@esmart/core/lib/validators';
+import { validGstin } from '@esmart/core/lib/validators';
 
 /** The desktop side column (summary, receipt). */
 const SIDE_WIDTH = 360;
@@ -118,6 +118,8 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
   const [reverseCharge, setReverseCharge] = useState(!!expense?.reverseCharge);
   const [itcEligibility, setItcEligibility] = useState<ItcEligibility>(expense?.itcEligibility ?? 'eligible');
   const [supplierGstin, setSupplierGstin] = useState(expense?.supplierGstin ?? '');
+  // Checked as typed: red at once if it is wrong, and Save waits until it is right.
+  const liveGstin = validGstin(supplierGstin);
   const [itcOpen, setItcOpen] = useState(false);
   const [reference, setReference] = useState(expense?.reference ?? initial?.reference ?? '');
   const [notes, setNotes] = useState(expense?.notes ?? initial?.notes ?? '');
@@ -389,7 +391,7 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
   );
   // Without a saved supplier, the GSTIN on the bill is what the GST returns match it by.
   const gstinField = supplierId ? null : (
-    <TextField label={tr('purchases:form.supplierGstin')} value={supplierGstin} onChangeText={(v) => setSupplierGstin(v.toUpperCase().slice(0, 15))} placeholder="33AABCS1234K1ZP" autoCapitalize="characters" icon="card-account-details-outline" error={gstinAsTyped(supplierGstin)} />
+    <TextField label={tr('purchases:form.supplierGstin')} value={supplierGstin} onChangeText={(v) => setSupplierGstin(v.toUpperCase().slice(0, 15))} placeholder="33AABCS1234K1ZP" autoCapitalize="characters" icon="card-account-details-outline" error={liveGstin} />
   );
   const referenceField = (
     <TextField label={tr('purchases:form.reference')} value={reference} onChangeText={setReference} placeholder={tr('purchases:form.referencePlaceholder')} icon="pound" />
@@ -625,11 +627,11 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
         {desktop ? (
           <FormActions>
             <Button title={tr('common:action.cancel')} variant="ghost" onPress={() => goBack(expense ? `/(app)/expenses/${expense.id}` : '/(app)/expenses')} />
-            <Button shortcut="S" title={submitTitle} onPress={() => void save()} loading={saving || uploading} disabled={blocked || amount.minor <= 0} />
+            <Button shortcut="S" title={submitTitle} onPress={() => void save()} loading={saving || uploading} disabled={blocked || amount.minor <= 0 || !!liveGstin} />
           </FormActions>
         ) : (
           <FormActions>
-            <Button shortcut="S" title={submitTitle} onPress={() => void save()} loading={saving || uploading} disabled={blocked || amount.minor <= 0} fullWidth />
+            <Button shortcut="S" title={submitTitle} onPress={() => void save()} loading={saving || uploading} disabled={blocked || amount.minor <= 0 || !!liveGstin} fullWidth />
           </FormActions>
         )}
 

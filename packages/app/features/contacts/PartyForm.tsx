@@ -25,9 +25,10 @@ import { CURRENCIES } from '@esmart/core/lib/currencies';
 import { fromMajor, toMajor, zero } from '@esmart/core/lib/money';
 import { uid } from '@esmart/core/lib/id';
 import { nowISO, today } from '@esmart/core/lib/date';
-import { Errors, gstinAsTyped, gstinRequiredFor, hasErrors, partyGstinError, required, validEmail, validPostalCode } from '@esmart/core/lib/validators';
+import { Errors, gstinRequiredFor, hasErrors, partyGstinError, required, shownError, validEmail, validGstin, validPostalCode } from '@esmart/core/lib/validators';
 import { useAppStore } from '../../store/appStore';
-import { useBaseCurrency, useHasModule, useParties } from '../../store/selectors';
+import { useBaseCurrency, useHasModule, useParties, usePlan } from '../../store/selectors';
+import { tcsOnPlan } from '@esmart/core/domain/plan';
 import { SHOW_SCROLLBAR, WIDE_FORM_MAX_WIDTH, useBreakpoint } from '@esmart/ui/theme/breakpoints';
 import { useGoBack } from '../../navigation/useGoBack';
 import { useGstinLookup, type GstinDetails } from '../gstin/useGstinLookup';
@@ -49,6 +50,8 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
   // Where Cancel and Save land when there is no screen to go back to.
   // The route's kind to start with; a new contact can be both or general, and a customer or supplier can become both.
   const hasPurchases = useHasModule('purchases');
+  // TCS (s.206C) is not on Free: no TCS switch or section on its customers.
+  const hasTcs = tcsOnPlan(usePlan());
   const kindOptions: PartyKind[] = !party || party.kind === 'general' ? ['customer', 'supplier', 'both', 'general'] : party.kind === 'both' ? ['both'] : [party.kind, 'both'];
   // A plan without purchases (Free, Basic) keeps customers only: suppliers and "both" are the buying
   // side's, and its parties list shows customers only, so an "Other" contact would vanish once saved.
@@ -199,6 +202,15 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
   // Not when the form was opened to pick a contact (?then=back): that one goes straight back.
   const offersAnother = !party && then !== 'back';
 
+  // Checked as typed: a field filled in wrong is red at once and Save waits until it is put right.
+  const live = {
+    email: validEmail(email),
+    phone: phone.error(),
+    taxId: gstinRequiredFor(registration) ? validGstin(taxId) : undefined,
+    postalCode: overseas ? undefined : validPostalCode(postalCode, 'IN', stateCode),
+  };
+  const invalid = hasErrors(live);
+
   const save = async (another = false) => {
     const gstin = needsGstin ? taxId.trim().toUpperCase() : '';
     const next: Errors<'name' | 'email' | 'phone' | 'taxId' | 'country' | 'stateCode' | 'postalCode' | 'tcsSection'> = {
@@ -214,7 +226,7 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
       // In India the state is the place of supply, and the PIN is checked against it: both are asked for.
       stateCode: overseas ? undefined : required(stateCode, tr('contacts:form.state')),
       postalCode: (overseas ? undefined : required(postalCode, 'PIN')) ?? validPostalCode(postalCode, overseas ? country : 'IN', overseas ? undefined : stateCode),
-      tcsSection: sellsTo(kind) && tcsApplicable && !tcsSectionCode ? tr('contacts:form.tcsSectionRequired') : undefined,
+      tcsSection: hasTcs && sellsTo(kind) && tcsApplicable && !tcsSectionCode ? tr('contacts:form.tcsSectionRequired') : undefined,
     };
     setErrors(next);
     setCustomTried(true);
@@ -257,8 +269,8 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
               ...(certLimit && Number(certLimit) > 0 && { limit: { minor: Math.round(Number(certLimit) * 100), currency: 'INR' } }),
             }
           : undefined,
-      tcsApplicable: sellsTo(kind) && tcsApplicable ? true : undefined,
-      tcsSection: sellsTo(kind) && tcsApplicable ? tcsSectionCode : undefined,
+      tcsApplicable: hasTcs && sellsTo(kind) && tcsApplicable ? true : undefined,
+      tcsSection: hasTcs && sellsTo(kind) && tcsApplicable ? tcsSectionCode : undefined,
       email: email.trim().toLowerCase() || undefined,
       phone: phone.value || undefined,
       currency,
@@ -332,7 +344,7 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
         // A GSTIN is 15 letters and digits; spaces and dashes pasted with it are dropped.
         const next = v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 15);
         setTaxId(next);
-        // What Save found goes as the GSTIN changes; what's wrong as typed shows below (gstinAsTyped).
+        // What Save found goes as the GSTIN changes; what's wrong as typed shows below (live).
         if (errors.taxId) setErrors((e) => ({ ...e, taxId: undefined }));
         // The first two digits are the state; fill it in if it's still blank.
         if (!stateCode && /^\d{2}/.test(next) && INDIAN_STATES.some((s) => s.code === next.slice(0, 2))) {
@@ -342,7 +354,7 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
       placeholder="27AABCV1234F1ZO"
       autoCapitalize="characters"
       icon="card-account-details-outline"
-      error={errors.taxId ?? gstinAsTyped(taxId)}
+      error={shownError(taxId, live.taxId, errors.taxId)}
       hint={gstinLookup.hint ?? tr('contacts:form.gstinHint')}
       suffix={gstinLookup.suffix}
       required
@@ -416,8 +428,8 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
         ) : null}
       </>
     ) : null;
-  // TCS is collected on sales (s.206C), so only from someone the business sells to.
-  const customerTaxFields = sellsTo(kind) ? (
+  // TCS is collected on sales (s.206C), so only from someone the business sells to, and not on Free.
+  const customerTaxFields = hasTcs && sellsTo(kind) ? (
     <>
       <SwitchField
         label={tr('contacts:form.tcsApplicable')}
@@ -441,8 +453,8 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
       ) : null}
     </>
   ) : null;
-  const phoneField = <PhoneField label={tr('contacts:form.phone')} {...phone.field} placeholder="98765 43210" error={errors.phone} />;
-  const emailField = <TextField label={tr('contacts:form.email')} value={email} onChangeText={setEmail} placeholder={tr('contacts:form.emailPlaceholder')} keyboardType="email-address" autoCapitalize="none" icon="email-outline" error={errors.email} />;
+  const phoneField = <PhoneField label={tr('contacts:form.phone')} {...phone.field} placeholder="98765 43210" error={shownError(phone.field.value, live.phone, errors.phone)} />;
+  const emailField = <TextField label={tr('contacts:form.email')} value={email} onChangeText={setEmail} placeholder={tr('contacts:form.emailPlaceholder')} keyboardType="email-address" autoCapitalize="none" icon="email-outline" error={shownError(email, live.email, errors.email)} />;
 
   const addressField = <TextField label={tr('contacts:form.address')} value={line1} onChangeText={setLine1} placeholder={tr('contacts:form.addressPlaceholder')} icon="map-marker-outline" />;
   const countryField = (
@@ -486,7 +498,7 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
       placeholder="400001"
       keyboardType="number-pad"
       maxLength={6}
-      error={errors.postalCode ?? (postalCode.length === 6 ? validPostalCode(postalCode, 'IN', stateCode) : undefined)}
+      error={shownError(postalCode, live.postalCode, errors.postalCode)}
       containerStyle={style}
       required
     />
@@ -736,16 +748,16 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
                   variant="secondary"
                   onPress={() => void save(true)}
                   loading={saving}
-                  disabled={blocked}
+                  disabled={blocked || invalid}
                 />
               ) : null}
-              <Button shortcut="S" title={submitTitle} onPress={() => void save()} loading={saving} disabled={blocked} />
+              <Button shortcut="S" title={submitTitle} onPress={() => void save()} loading={saving} disabled={blocked || invalid} />
             </>
           ) : (
             <>
-              <Button shortcut="S" title={submitTitle} onPress={() => void save()} loading={saving} disabled={blocked} fullWidth />
+              <Button shortcut="S" title={submitTitle} onPress={() => void save()} loading={saving} disabled={blocked || invalid} fullWidth />
               {offersAnother ? (
-                <Button title={tr('common:action.saveAndAddAnother')} variant="ghost" onPress={() => void save(true)} loading={saving} disabled={blocked} fullWidth />
+                <Button title={tr('common:action.saveAndAddAnother')} variant="ghost" onPress={() => void save(true)} loading={saving} disabled={blocked || invalid} fullWidth />
               ) : null}
             </>
           )}

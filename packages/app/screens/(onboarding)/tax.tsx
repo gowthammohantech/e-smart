@@ -13,7 +13,7 @@ import { nextStepRoute, onboardingSteps, stepIndex, useOnboardingStore } from '.
 import { COUNTRIES, INDIAN_STATES, defaultTaxRates } from '@esmart/core/data/masters';
 import { useSignOut } from '../../features/session/useSignOut';
 import { useGstinLookup, type GstinDetails } from '../../features/gstin/useGstinLookup';
-import { gstinAsTyped, validGstin } from '@esmart/core/lib/validators';
+import { shownError, validGstin } from '@esmart/core/lib/validators';
 
 export default function TaxStep() {
   const t = useTheme();
@@ -76,6 +76,9 @@ export default function TaxStep() {
     fill: fillFromPortal,
   });
 
+  // The GSTIN is checked as typed: red at once if it is wrong, and Continue waits until it is right.
+  const liveGstin = draft.taxRegistered && isGst && draft.country === 'IN' ? validGstin(draft.taxIdentifier) : undefined;
+
   const next = () => {
     if (draft.taxRegistered && isGst && draft.country === 'IN') {
       const e = validGstin(draft.taxIdentifier);
@@ -95,6 +98,7 @@ export default function TaxStep() {
       steps={onboardingSteps(draft.plan)}
       currentStep={stepIndex('tax', draft.plan)}
       onPrimary={next}
+      primaryDisabled={!!liveGstin}
       onSkip={() => {
         // Skipping leaves no half-made registration behind: a business marked GST-registered needs a valid GSTIN.
         const india = isGst && draft.country === 'IN';
@@ -130,7 +134,7 @@ export default function TaxStep() {
             placeholder={draft.country === 'IN' ? '27AABCV1234F1ZO' : tr('onboarding:tax.numberPlaceholder')}
             autoCapitalize="characters"
             icon="card-account-details-outline"
-            error={error ?? (draft.country === 'IN' ? gstinAsTyped(draft.taxIdentifier) : undefined)}
+            error={shownError(draft.taxIdentifier, liveGstin, error)}
             hint={gstinLookup.hint ?? (draft.country === 'IN' ? tr('onboarding:tax.stateHint') : undefined)}
             suffix={gstinLookup.suffix}
           />

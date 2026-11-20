@@ -108,6 +108,14 @@ export function saleTdsOnPlan(tier: PlanTier): boolean {
   return tier !== 'free';
 }
 
+/**
+ * Whether TCS (s.206C) is on the plan: a customer's TCS section, TCS on an invoice and the TCS
+ * register. Not on Free, which collects none, the 1 April 2025 cut-over included.
+ */
+export function tcsOnPlan(tier: PlanTier): boolean {
+  return tier !== 'free';
+}
+
 export function userLimit(tier: PlanTier): number | null {
   return USER_LIMITS[tier];
 }
@@ -148,7 +156,8 @@ export function hasVehicles(tier: PlanTier): boolean {
  * Pages Free leaves out that aren't a module's: approvals need a second user to ask (Free has one),
  * there are no modules on Free to switch on or off, and custom fields are for the paid plans.
  */
-const NOT_ON_FREE_PATHS = ['/sales/approvals', '/settings/approvals', '/settings/modules', '/settings/custom-fields'];
+// TCS (s.206C) is not on Free either: its register (and what is owed, which reads the books) does not open.
+const NOT_ON_FREE_PATHS = ['/sales/approvals', '/settings/approvals', '/settings/modules', '/settings/custom-fields', '/reports/tcs-register', '/reports/tcs-payable'];
 
 /** Pages a plan can't open that aren't a module's: vehicles, approvals, modules and custom fields on Free. */
 function planOpensPath(tier: PlanTier, pathname: string): boolean {

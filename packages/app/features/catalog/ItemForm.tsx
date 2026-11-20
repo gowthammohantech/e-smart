@@ -18,7 +18,7 @@ import { formatPercent } from '@esmart/core/lib/format';
 import { uid } from '@esmart/core/lib/id';
 import { formatDate, nowISO, today } from '@esmart/core/lib/date';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
-import { Errors, hasErrors, hsnMandatory, required, validHsn } from '@esmart/core/lib/validators';
+import { Errors, hasErrors, hsnMandatory, required, shownError, validHsn } from '@esmart/core/lib/validators';
 import { useAppStore } from '../../store/appStore';
 import type { HsnMatch } from '../../remote/reference';
 import { HsnSearchSheet } from './HsnSearchSheet';
@@ -71,6 +71,8 @@ function ItemFormFields({ item }: { item?: Item }) {
   const [purchasePrice, setPurchasePrice] = useState(item && item.purchasePrice.minor !== 0 ? String(toMajor(item.purchasePrice)) : '');
   const [taxCategoryId, setTaxCategoryId] = useState(item?.taxCategoryId ?? taxCategories.find((c) => c.rate === 18)?.id ?? taxCategories[0]?.id ?? '');
   const [hsnCode, setHsnCode] = useState(item?.hsnCode ?? '');
+  // The code is checked as typed (4, 6 or 8 digits): red at once if wrong, and Save waits until it is right.
+  const liveHsn = validHsn(hsnCode, { required: false });
   const [gst, setGst] = useState(item?.gst);
   const [barcode, setBarcode] = useState(item?.barcode ?? '');
   const [trackInventory, setTrackInventory] = useState(item?.trackInventory ?? (startType === 'goods' && hasInventory));
@@ -259,7 +261,7 @@ function ItemFormFields({ item }: { item?: Item }) {
             keyboardType="number-pad"
             icon="numeric"
             hint={tr('inventory:form.hsnHint')}
-            error={errors.hsn}
+            error={shownError(hsnCode, liveHsn, errors.hsn)}
             required={hsnRequired}
           />
           <Button title={tr('inventory:form.hsnSearch')} variant="ghost" size="sm" icon="magnify" onPress={() => setHsnOpen(true)} style={{ alignSelf: 'flex-start', marginTop: -t.spacing.sm }} />
@@ -318,9 +320,9 @@ function ItemFormFields({ item }: { item?: Item }) {
         </ScrollView>
 
         <FormActions>
-          <Button shortcut="S" title={item ? tr('inventory:form.saveChanges') : tr('common:quickAction.addItem')} onPress={() => void save()} loading={saving} disabled={blocked} fullWidth />
+          <Button shortcut="S" title={item ? tr('inventory:form.saveChanges') : tr('common:quickAction.addItem')} onPress={() => void save()} loading={saving} disabled={blocked || !!liveHsn} fullWidth />
           {item ? null : (
-            <Button title={tr('common:action.saveAndAddAnother')} variant="ghost" onPress={() => void save(true)} loading={saving} disabled={blocked} fullWidth />
+            <Button title={tr('common:action.saveAndAddAnother')} variant="ghost" onPress={() => void save(true)} loading={saving} disabled={blocked || !!liveHsn} fullWidth />
           )}
         </FormActions>
 

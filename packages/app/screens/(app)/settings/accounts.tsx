@@ -68,7 +68,6 @@ export default function AccountSettings() {
   const [branchName, setBranchName] = useState('');
   const [ifsc, setIfsc] = useState('');
   const [upiId, setUpiId] = useState('');
-  const [errors, setErrors] = useState<{ ifsc?: string; upiId?: string }>({});
   const [openingBalance, setOpeningBalance] = useState('');
   // Blank: the balance stands at the start of the books. A date: it stands on that day.
   const [openingBalanceDate, setOpeningBalanceDate] = useState<string | undefined>(undefined);
@@ -117,21 +116,20 @@ export default function AccountSettings() {
     setBranchName(a?.branchName ?? '');
     setIfsc(a?.ifsc ?? '');
     setUpiId(a?.upiId ?? '');
-    setErrors({});
     setOpeningBalance(a ? String(toMajor(a.openingBalance)) : '');
     setOpeningBalanceDate(a?.openingBalanceDate);
     setIsDefault(a?.isDefault ?? false);
   };
 
+  // The same shapes the server checks, said here in words, as they are typed: red at once, and Save waits.
+  const live = {
+    ifsc: type === 'bank' && ifsc.trim() && !/^[A-Za-z]{4}0[A-Za-z0-9]{6}$/.test(ifsc.trim()) ? tr('settings:company.ifscInvalid') : undefined,
+    upiId: type === 'bank' && upiId.trim() && !/^[A-Za-z0-9.\-_]{2,256}@[A-Za-z][A-Za-z0-9]{1,63}$/.test(upiId.trim()) ? tr('settings:company.upiInvalid') : undefined,
+  };
+
   const save = async () => {
     if (!editing || !name.trim()) return;
-    // The same shapes the server checks, said here in words.
-    const next = {
-      ifsc: type === 'bank' && ifsc.trim() && !/^[A-Za-z]{4}0[A-Za-z0-9]{6}$/.test(ifsc.trim()) ? tr('settings:company.ifscInvalid') : undefined,
-      upiId: type === 'bank' && upiId.trim() && !/^[A-Za-z0-9.\-_]{2,256}@[A-Za-z][A-Za-z0-9]{1,63}$/.test(upiId.trim()) ? tr('settings:company.upiInvalid') : undefined,
-    };
-    setErrors(next);
-    if (next.ifsc || next.upiId) return;
+    if (live.ifsc || live.upiId) return;
     const text = (v: string) => v.trim() || undefined;
     const account = {
       ...paymentAccountFromForm(
@@ -286,7 +284,7 @@ export default function AccountSettings() {
             saveLabel={tr('settings:accounts.save')}
             onSave={save}
             saving={saving}
-            saveDisabled={!name.trim()}
+            saveDisabled={!name.trim() || !!live.ifsc || !!live.upiId}
             deleteLabel={tr('settings:accounts.delete')}
             onDelete={
               editing?.id && accounts.length > 1 && !inUse
@@ -338,7 +336,7 @@ export default function AccountSettings() {
                   onChangeText={(v) => setIfsc(v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 11))}
                   autoCapitalize="characters"
                   placeholder="HDFC0001234"
-                  error={errors.ifsc}
+                  error={live.ifsc}
                   containerStyle={{ flex: 1 }}
                 />
               </View>
@@ -350,7 +348,7 @@ export default function AccountSettings() {
                 keyboardType="email-address"
                 icon="qrcode"
                 placeholder={UPI_SAMPLE}
-                error={errors.upiId}
+                error={live.upiId}
               />
             </>
           )}

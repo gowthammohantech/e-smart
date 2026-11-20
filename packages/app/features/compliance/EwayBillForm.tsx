@@ -40,8 +40,10 @@ import { formatDate, nowISO } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { portalToast } from './portalToast';
+import { TransporterFinder } from './TransporterFinder';
 import { useSaveShortcut } from '../../components/useSaveShortcut';
-import { gstinAsTyped } from '@esmart/core/lib/validators';
+import { hasErrors, shownError, validGstin, validPostalCode } from '@esmart/core/lib/validators';
+import { isValidTransporterId } from '@esmart/core/domain/gstin';
 
 /**
  * Everything the e-way bill form holds and does, apart from how it is laid
@@ -101,7 +103,27 @@ export function useEwayBillForm(doc: BusinessDocument) {
   const [distanceKm, setDistanceKm] = useState(String(settings.defaultDistanceKm));
 
   const [busy, setBusy] = useState(false);
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [savedErrors, setErrors] = useState<Record<string, string>>({});
+  // Checked as typed: a GSTIN (URP aside) or PIN filled in wrong is red at once, and Generate waits.
+  const liveOf = (prefix: 'from' | 'to', p: EwayPlace): Record<string, string | undefined> => ({
+    [`${prefix}.gstin`]: /^URP$/.test(p.gstin.trim()) ? undefined : validGstin(p.gstin),
+    [`${prefix}.pincode`]: validPostalCode(p.pincode, 'IN', p.stateCode),
+  });
+  const typedTransporter = transporterId.trim().toUpperCase();
+  const live = {
+    ...liveOf('from', from),
+    ...liveOf('to', to),
+    transporterId: typedTransporter && !isValidTransporterId(typedTransporter) ? tr('settings:transporters.idInvalid') : undefined,
+  };
+  const invalid = hasErrors(live);
+  // What each field shows: filled in, its check as typed; empty, what the portal said on Generate.
+  const valueOf: Record<string, string> = { 'from.gstin': from.gstin, 'from.pincode': from.pincode, 'to.gstin': to.gstin, 'to.pincode': to.pincode, transporterId };
+  const errors: Record<string, string> = { ...savedErrors };
+  for (const [k, v] of Object.entries(live)) {
+    const shown = shownError(valueOf[k], v, savedErrors[k]);
+    if (shown) errors[k] = shown;
+    else delete errors[k];
+  }
 
   const distance = Number(distanceKm) || 0;
   const preview = useMemo(() => {
@@ -112,6 +134,7 @@ export function useEwayBillForm(doc: BusinessDocument) {
   const byRoad = transportMode === 'road';
 
   const submit = async () => {
+    if (invalid) return;
     setBusy(true);
     const outcome = await portalToast(toast, compliance.generateEwayBill({
       documentId: doc.id,
@@ -190,6 +213,7 @@ export function useEwayBillForm(doc: BusinessDocument) {
     byRoad,
     busy,
     errors,
+    invalid,
     submit,
   };
 }
@@ -223,7 +247,6 @@ export function EwayBillForm({ document: doc }: { document: BusinessDocument }) 
     setTransporterId,
     transporterName,
     setTransporterName,
-    transporters,
     setTransporterOpen,
     transportMode,
     setTransportMode,
@@ -301,15 +324,6 @@ export function EwayBillForm({ document: doc }: { document: BusinessDocument }) 
           {/* ---------------- Part-B ---------------- */}
           <SectionHeader title={tr('compliance:ewb.transport')} />
 
-          {transporters.length ? (
-            <PickerField
-              label={tr('compliance:ewb.savedTransporter')}
-              value={transporters.find((x) => x.transporterId === transporterId.trim().toUpperCase())?.name}
-              placeholder={tr('compliance:ewb.pickOrType')}
-              onPress={() => setTransporterOpen(true)}
-              icon="truck-outline"
-            />
-          ) : null}
           <TextField
             label={tr('compliance:ewb.transporterId')}
             value={transporterId}
@@ -319,6 +333,8 @@ export function EwayBillForm({ document: doc }: { document: BusinessDocument }) 
             placeholder={tr('compliance:ewb.transporterIdHint')}
           />
           <TextField label={tr('compliance:ewb.transporterName')} value={transporterName} onChangeText={setTransporterName} />
+          {/* As Find HSN / SAC code does: the saved transporters, searched, or a new one added; the ID and name above stay editable. */}
+          <Button title={tr('compliance:ewb.findTransporter')} variant="ghost" size="sm" icon="magnify" onPress={() => setTransporterOpen(true)} style={{ alignSelf: 'flex-start', marginTop: -t.spacing.sm }} />
 
           <View style={{ gap: t.spacing.sm, marginBottom: t.spacing.md }}>
             <Text variant="caption" tone="muted" weight="600">{tr('compliance:ewb.mode')}</Text>
@@ -409,6 +425,7 @@ export function EwayBillForm({ document: doc }: { document: BusinessDocument }) 
             shortcut="S"
             icon="truck-fast-outline"
             loading={busy}
+            disabled={form.invalid}
             onPress={submit}
             fullWidth
           />
@@ -480,19 +497,13 @@ export function EwayBillFormSheets({ form }: { form: EwayBillFormState }) {
         searchable={false}
       />
 
-      <SelectSheet
+      <TransporterFinder
         visible={transporterOpen}
         onClose={() => setTransporterOpen(false)}
-        title={tr('compliance:ewb.transporter')}
-        options={transporters.map((x) => ({ value: x.id, label: x.name, trailing: x.transporterId }))}
         value={transporters.find((x) => x.transporterId === transporterId.trim().toUpperCase())?.id}
-        onSelect={(id) => {
-          const picked = transporters.find((x) => x.id === id);
-          if (picked) {
-            setTransporterId(picked.transporterId);
-            setTransporterName(picked.name);
-          }
-          setTransporterOpen(false);
+        onPick={(picked) => {
+          setTransporterId(picked.transporterId);
+          setTransporterName(picked.name);
         }}
       />
       <SelectSheet
@@ -546,7 +557,7 @@ function PlaceFields({
         autoCapitalize="characters"
         autoCorrect={false}
         // URP (unregistered) is typed in here too; anything else is checked as a GSTIN as it is typed.
-        error={errors[`${prefix}.gstin`] ?? (/^U(RP?)?$/.test(place.gstin) ? undefined : gstinAsTyped(place.gstin))}
+        error={errors[`${prefix}.gstin`]}
         hint={tr('compliance:ewb.urpHint')}
       />
       <TextField

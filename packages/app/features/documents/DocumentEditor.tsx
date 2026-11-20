@@ -39,7 +39,7 @@ import { INDIAN_STATES, unitDecimals, unitShortName } from '@esmart/core/data/ma
 import { OUTBOUND_KINDS, isLowStock, shortfallsAgainst } from '@esmart/core/domain/stockLedger';
 import { CHARGES_TAXED_FROM, calculateLine } from '@esmart/core/domain/lineCalc';
 import { applyHighestRate } from '@esmart/core/domain/highestRate';
-import { gstinAsTyped, hsnMandatory, validHsn } from '@esmart/core/lib/validators';
+import { hasErrors, hsnMandatory, validGstin, validHsn, validPostalCode } from '@esmart/core/lib/validators';
 
 import { useAppStore } from '../../store/appStore';
 import {
@@ -56,7 +56,7 @@ import {
   useTaxCategories,
   usePlan,
 } from '../../store/selectors';
-import { hasVehicles, saleTdsOnPlan } from '@esmart/core/domain/plan';
+import { hasVehicles, saleTdsOnPlan, tcsOnPlan } from '@esmart/core/domain/plan';
 import { PartyPickerBox } from '../contacts/PartyPickerBox';
 import { useCostCentres } from '../../store/books';
 import { addChargeName, useChargeNames } from '../../remote/chargeNames';
@@ -210,6 +210,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   const { save: saveOnline, saving, release: releaseSave } = useSaveOnline();
   // View-only (no internet, offline not agreed to): the header's badge says so and offers offline mode.
   const blocked = !useCanWrite();
+  // TCS (s.206C) is not on Free: no TCS section on its invoices, and none collected.
+  const hasTcs = tcsOnPlan(usePlan());
   const insets = useSafeAreaInsets();
   const desktop = useIsDesktop();
   // Whether these pickers show at all, so a desktop doesn't keep an empty row for them.
@@ -275,7 +277,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
         // A supplier under reverse charge puts their bills under it; the bill can still say otherwise.
         ...(isPurchase && { reverseCharge: !!p.reverseCharge }),
         // A customer with TCS puts their invoices under its section; another party clears one picked before.
-        ...(kind === 'invoice' && { tcsSection: partyTcsSection(p) ?? (d.tcsSection ? 'none' : undefined) }),
+        ...(kind === 'invoice' && hasTcs && { tcsSection: partyTcsSection(p) ?? (d.tcsSection ? 'none' : undefined) }),
       },
       p.currency,
       p.currency === baseCurrency ? 1 : resolveRate(exchangeRates, p.currency, baseCurrency, d.date),
@@ -344,12 +346,12 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   // TCS on an invoice (s.206C): the section's rate, higher for a buyer with no PAN, over the 206C(1F) threshold only.
   const tcsRateOfDraft = useCallback(
     (d: { tcsSection?: string; partyId?: string | null; date?: string }, totalBaseMinor: number) => {
-      // Not asked from TCS_ENDS_ON: none is collected on an invoice dated then or later.
-      if (!tcsAskedOn(d.date)) return 0;
+      // Not on Free, and not asked from TCS_ENDS_ON: none is collected on an invoice dated then or later.
+      if (!hasTcs || !tcsAskedOn(d.date)) return 0;
       const buyer = parties.find((p) => p.id === d.partyId);
       return tcsRateFor(d.tcsSection, !!(buyer?.pan || buyer?.taxId), totalBaseMinor);
     },
-    [parties],
+    [parties, hasTcs],
   );
   // A credit note or return against an invoice that collected TCS gives it back at that invoice's rate.
   const tcsRateOfNote = useCallback((d: { sourceDocumentId?: string }) => documents.find((x) => x.id === d.sourceDocumentId)?.tcs?.rate ?? 0, [documents]);
@@ -474,8 +476,16 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   const [chargesText, setChargesText] = useState(String(toMajor(draft.charges) || ''));
   const [chargesKindOpen, setChargesKindOpen] = useState(false);
   const [shipStateOpen, setShipStateOpen] = useState(false);
+  /** The line whose quantity takes the cursor once the grid has it: the first of the items just picked. */
+  const [focusLine, setFocusLine] = useState<{ id: string; at: number } | null>(null);
   // Goods that go out: where they go when not to the buyer's own address (the consignee).
   const shipsTo = SHIP_TO_KINDS.includes(kind);
+  // The consignee's GSTIN and PIN are checked as typed: red at once if wrong, and saving waits until they are right.
+  const shipLive: { gstin?: string; postalCode?: string } =
+    shipsTo && draft.shipTo
+      ? { gstin: validGstin(draft.shipTo.gstin), postalCode: validPostalCode(draft.shipTo.address.postalCode, 'IN', draft.shipTo.address.stateCode) }
+      : {};
+  const saveHeld = blocked || hasErrors(shipLive);
   // What the charges are called: the business's own name for them, else the built-in kind's.
   const chargesLabel = draft.chargesLabel || tr(`sales:editor.chargesKind.${draft.chargesKind ?? 'other'}` as 'sales:editor.chargesKind.other');
   // The business's own charge names, fetched once the list is opened; hidden ones aren't offered.
@@ -683,6 +693,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       if (made?.kind !== 'item') return;
       const line = lineFromItem(made.record, isPurchase, taxCategories);
       addLine(noteStart({ ...line, unitPrice: reprice(line.unitPrice, draft.currency, 1, draft.exchangeRate) }));
+      // Its quantity takes the cursor, as a picked item's does.
+      setFocusLine({ id: line.id, at: Date.now() });
     };
   });
   useFocusEffect(useCallback(() => takeMade.current(), []));
@@ -783,6 +795,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   };
 
   const save = async (finalize: boolean, opts?: { overrideCreditLimit?: boolean }) => {
+    if (hasErrors(shipLive)) return;
     if (!draft.partyId) return;
     // A new one, or one moved to them: the server would refuse it, so say why here.
     if (creditHold && (!documentId || existing?.partyId !== draft.partyId)) {
@@ -845,7 +858,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       tdsRate: saleTds && draft.tdsSection && draft.tdsSection !== 'none' ? draft.tdsRate : undefined,
       // `none` is sent as itself: unset on a new invoice would take the customer's section.
       // From TCS_ENDS_ON it is 'none' outright, so the server doesn't take the customer's section either.
-      tcsSection: kind === 'invoice' ? (tcsAskedOn(draft.date) ? draft.tcsSection : 'none') : undefined,
+      tcsSection: kind === 'invoice' ? (hasTcs && tcsAskedOn(draft.date) ? draft.tcsSection : 'none') : undefined,
       costCentreId: draft.costCentreId,
       customFields: draft.customFields,
       vehicleId: draft.vehicleId,
@@ -1211,14 +1224,14 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
                 autoCapitalize="characters"
                 maxLength={15}
                 icon="card-account-details-outline"
-                error={gstinAsTyped(shipTo.gstin)}
+                error={shipLive.gstin}
               />
             </FieldRow>
             <TextField label={tr('sales:editor.shipTo.address')} value={shipTo.address.line1} onChangeText={(line1) => patchShip({ line1 })} icon="map-marker-outline" required />
             <FieldRow>
               <TextField label={tr('sales:editor.shipTo.city')} value={shipTo.address.city} onChangeText={(city) => patchShip({ city })} required />
               <PickerField label={tr('sales:editor.shipTo.state')} value={shipTo.address.state} onPress={() => setShipStateOpen(true)} required />
-              <TextField label={tr('sales:editor.shipTo.pin')} value={shipTo.address.postalCode} onChangeText={(postalCode) => patchShip({ postalCode: postalCode.replace(/\D/g, '').slice(0, 6) })} keyboardType="number-pad" required />
+              <TextField label={tr('sales:editor.shipTo.pin')} value={shipTo.address.postalCode} onChangeText={(postalCode) => patchShip({ postalCode: postalCode.replace(/\D/g, '').slice(0, 6) })} keyboardType="number-pad" error={shipLive.postalCode} required />
             </FieldRow>
           </>
         ) : null}
@@ -1406,6 +1419,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           maxQuantity={(line) => maxReturnQty(line)}
           purchase={isPurchase}
           note={isNote}
+          focusLine={focusLine}
         />
       ) : (
         <Card padded={false}>
@@ -1559,7 +1573,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
               hint={tr('sales:tds.rateHint')}
             />
           ) : null,
-          kind === 'invoice' && tcsAskedOn(draft.date) ? (
+          kind === 'invoice' && hasTcs && tcsAskedOn(draft.date) ? (
             <PickerField
               label={tr('sales:tcs.section')}
               value={draft.tcsSection && draft.tcsSection !== 'none' ? `${tcsSection(draft.tcsSection)?.label ?? draft.tcsSection} · ${tcsSection(draft.tcsSection)?.nature ?? ''}` : tr('sales:tcs.none')}
@@ -1839,10 +1853,10 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
               options={{
                 headerRight: () => (
                   editingIssued ? (
-                    <Button shortcut="S" title={tr('sales:editor.saveChanges')} icon="content-save-outline" onPress={() => void save(false)} loading={saving} disabled={blocked || !draft.partyId || draft.lines.length === 0} />
+                    <Button shortcut="S" title={tr('sales:editor.saveChanges')} icon="content-save-outline" onPress={() => void save(false)} loading={saving} disabled={saveHeld || !draft.partyId || draft.lines.length === 0} />
                   ) : (
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
-                    <Button shortcut="S" title={tr('sales:editor.saveDraft')} variant="ghost" onPress={() => void save(false)} loading={saving} disabled={blocked || !draft.partyId} />
+                    <Button shortcut="S" title={tr('sales:editor.saveDraft')} variant="ghost" onPress={() => void save(false)} loading={saving} disabled={saveHeld || !draft.partyId} />
                     {canSend && !onSaved ? (
                       <Button
                         title={tr('sales:editor.saveAndSend')}
@@ -1854,7 +1868,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
                           requestFinalize();
                         }}
                         loading={saving}
-                        disabled={blocked || !draft.partyId || draft.lines.length === 0}
+                        disabled={saveHeld || !draft.partyId || draft.lines.length === 0}
                       />
                     ) : null}
                     <Button
@@ -1866,7 +1880,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
                         requestFinalize();
                       }}
                       loading={saving}
-                      disabled={blocked || !draft.partyId || draft.lines.length === 0}
+                      disabled={saveHeld || !draft.partyId || draft.lines.length === 0}
                     />
                   </View>
                   )
@@ -1911,7 +1925,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
             options={{
               headerRight:
                 step < STEPS.length - 1 && !editingIssued
-                  ? () => <Button title={tr('sales:editor.saveDraft')} variant="ghost" size="sm" onPress={() => void save(false)} loading={saving} disabled={blocked || !draft.partyId} />
+                  ? () => <Button title={tr('sales:editor.saveDraft')} variant="ghost" size="sm" onPress={() => void save(false)} loading={saving} disabled={saveHeld || !draft.partyId} />
                   : undefined,
             }}
           />
@@ -1959,7 +1973,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
                   requestFinalize();
                 }}
                 loading={saving}
-                disabled={blocked || !draft.partyId || draft.lines.length === 0}
+                disabled={saveHeld || !draft.partyId || draft.lines.length === 0}
                 fullWidth
               />
             ) : null}
@@ -1976,10 +1990,10 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
                 />
               ) : (
                 editingIssued ? (
-                  <Button shortcut="S" title={tr('sales:editor.saveChanges')} onPress={() => void save(false)} loading={saving} disabled={blocked} style={{ flex: 1 }} />
+                  <Button shortcut="S" title={tr('sales:editor.saveChanges')} onPress={() => void save(false)} loading={saving} disabled={saveHeld} style={{ flex: 1 }} />
                 ) : (
                 <>
-                  <Button shortcut="S" title={tr('sales:editor.saveDraft')} variant="ghost" onPress={() => void save(false)} loading={saving} disabled={blocked} style={{ flex: 1 }} />
+                  <Button shortcut="S" title={tr('sales:editor.saveDraft')} variant="ghost" onPress={() => void save(false)} loading={saving} disabled={saveHeld} style={{ flex: 1 }} />
                   <Button
                     title={finaliseLabel}
                     onPress={() => {
@@ -1987,7 +2001,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
                       requestFinalize();
                     }}
                     loading={saving}
-                    disabled={blocked}
+                    disabled={saveHeld}
                     style={{ flex: 1 }}
                   />
                 </>
@@ -2091,20 +2105,40 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           loading={!sourceDoc && itemSearch.isFetching}
           multiple
           confirmLabel={(count) => tr('sales:editor.addItems', { count })}
-          onConfirm={(ids) =>
+          onConfirm={(ids) => {
+            // The first of what was picked takes the cursor, in its quantity: 1, 2, 3 picked puts it on 1;
+            // 4, 5, 6 picked after puts it on 4. An item already on the document is that line.
+            let first: string | undefined;
             ids.forEach((id) => {
               if (sourceDoc) {
                 const src = sourceDoc.lines.find((l) => l.id === id);
                 const already = src && draft.lines.find((l) => (src.itemId ? l.itemId === src.itemId : l.name === src.name));
-                if (src && !already) addLine(noteStart({ ...src, id: uid('ln') }));
+                if (already) {
+                  first = first ?? already.id;
+                  return;
+                }
+                if (!src) return;
+                // From the source too, the quantity starts at 0 for the person to type.
+                const added = noteStart({ ...src, id: uid('ln'), quantity: 0 });
+                addLine(added);
+                first = first ?? added.id;
                 return;
               }
               const item = items.find((i) => i.id === id);
+              const already = item && draft.lines.find((l) => l.itemId === item.id);
+              if (already) {
+                first = first ?? already.id;
+                return;
+              }
               // An item is priced in base; the line takes the document's currency.
               const line = item && lineFromItem(item, isPurchase, taxCategories);
-              if (line) addLine(newLineInclusive(noteStart({ ...line, unitPrice: reprice(line.unitPrice, draft.currency, 1, draft.exchangeRate) }), draft));
-            })
-          }
+              if (!line) return;
+              const added = newLineInclusive(noteStart({ ...line, unitPrice: reprice(line.unitPrice, draft.currency, 1, draft.exchangeRate) }), draft);
+              addLine(added);
+              first = first ?? added.id;
+            });
+            if (first) setFocusLine({ id: first, at: Date.now() });
+          }}
           searchPlaceholder={tr('sales:editor.searchItems')}
           footer={
             sourceDoc ? undefined : (

@@ -23,7 +23,7 @@ import { useCompanyUsage } from '../../../remote/queries';
 import { Skeleton, SkeletonGroup } from '@esmart/ui/components/Skeleton';
 import { hasModule } from '@esmart/core/domain/plan';
 import { uid } from '@esmart/core/lib/id';
-import { Errors, gstinAsTyped, hasErrors, validGstin, validPostalCode } from '@esmart/core/lib/validators';
+import { Errors, hasErrors, shownError, validGstin, validPostalCode } from '@esmart/core/lib/validators';
 import { normalizeGstin } from '@esmart/core/domain/gstin';
 import { INDIAN_STATES, stateName } from '@esmart/core/data/masters';
 import { citiesForState } from '@esmart/core/data/cities';
@@ -97,7 +97,7 @@ export default function BranchSettings() {
   const changeGstin = (v: string) => {
     const next = v.toUpperCase().replace(/\s/g, '').slice(0, 15);
     setGstin(next);
-    // What Save found goes as the GSTIN changes; what's wrong as typed shows below (gstinAsTyped).
+    // What Save found goes as the GSTIN changes; what's wrong as typed shows below (live).
     setErrors((e) => (e.gstin ? { ...e, gstin: undefined } : e));
     // The first two digits are the state; fill it in if it's still blank.
     if (!stateCode && /^\d{2}/.test(next) && INDIAN_STATES.some((st) => st.code === next.slice(0, 2))) {
@@ -120,6 +120,20 @@ export default function BranchSettings() {
     if (a.postalCode) setPostalCode(a.postalCode);
   };
   const gstinLookup = useGstinLookup({ gstin, opened: editing?.gstin, enabled: !!editing && !locked, fill: fillFromPortal });
+
+  // Checked as typed: a field filled in wrong is red at once and Save waits until it is put right.
+  const liveGstin = gstin ? normalizeGstin(gstin) : '';
+  const live: Errors<'gstin' | 'postalCode' | 'phone'> = locked
+    ? {}
+    : {
+        gstin: liveGstin
+          ? (validGstin(liveGstin) ??
+            (stateCode && liveGstin.slice(0, 2) !== stateCode ? tr('settings:branches.gstinStateMismatch', { state: stateName(liveGstin.slice(0, 2)) }) : undefined))
+          : undefined,
+        postalCode: validPostalCode(postalCode, company?.address.country, stateCode),
+        phone: phone.error(),
+      };
+  const invalid = hasErrors(live);
 
   const save = async () => {
     if (!editing) return;
@@ -300,6 +314,7 @@ export default function BranchSettings() {
             saveLabel={tr('settings:branches.save')}
             onSave={save}
             saving={saving}
+            saveDisabled={invalid}
             deleteLabel={tr('settings:branches.delete')}
             onDelete={
               editing?.id && !editing.isPrimary && !locked
@@ -328,7 +343,7 @@ export default function BranchSettings() {
             placeholder="27AABCV1234F1ZO"
             autoCapitalize="characters"
             icon="card-account-details-outline"
-            error={errors.gstin ?? (locked ? undefined : gstinAsTyped(gstin))}
+            error={shownError(gstin, live.gstin, errors.gstin)}
             hint={locked ? undefined : (gstinLookup.hint ?? tr('settings:branches.gstinHint'))}
             suffix={gstinLookup.suffix}
           />
@@ -365,10 +380,10 @@ export default function BranchSettings() {
                 placeholder="411001"
                 keyboardType="number-pad"
                 icon="mailbox-outline"
-                error={errors.postalCode}
+                error={shownError(postalCode, live.postalCode, errors.postalCode)}
                 editable={!locked}
               />,
-              <PhoneField key="phone" label={tr('settings:branches.phone')} {...phone.field} error={errors.phone} disabled={locked} />,
+              <PhoneField key="phone" label={tr('settings:branches.phone')} {...phone.field} error={shownError(phone.field.value, live.phone, errors.phone)} disabled={locked} />,
             ]}
           />
           <SwitchField label={tr('settings:branches.primaryBranch')} description={tr('settings:branches.primaryHint')} value={isPrimary} onValueChange={setIsPrimary} disabled={locked} />
