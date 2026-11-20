@@ -101,7 +101,9 @@ export default function AccountSettings() {
     payments.some((p) => p.accountId === id) ||
     expenses.some((e) => e.accountId === id) ||
     vouchers.some((v) => v.lines.some((l) => l.account === `pay:${id}`));
-  const inUse = !!editing?.id && ((usage?.paymentAccounts[editing.id]?.inUse ?? true) || usedHere(editing.id));
+  // An account the server's list doesn't have yet was made after it was read: nothing has used it, so it
+  // can be deleted (or its type changed) at once. Until the list is in, every account counts as used.
+  const inUse = !!editing?.id && ((usage ? (usage.paymentAccounts[editing.id]?.inUse ?? false) : true) || usedHere(editing.id));
   // The business profile prints this account's details on invoices.
   const onInvoices = !!editing?.id && invoiceAccountId === editing.id;
 
