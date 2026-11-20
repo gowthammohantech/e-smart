@@ -108,6 +108,14 @@ export function saleTdsOnPlan(tier: PlanTier): boolean {
   return tier !== 'free';
 }
 
+/**
+ * Whether TCS (s.206C) is on the plan: a customer's TCS section, TCS on an invoice and the TCS
+ * register. Not on Free, which collects none, the 1 April 2025 cut-over included.
+ */
+export function tcsOnPlan(tier: PlanTier): boolean {
+  return tier !== 'free';
+}
+
 export function userLimit(tier: PlanTier): number | null {
   return USER_LIMITS[tier];
 }

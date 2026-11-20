@@ -10,7 +10,7 @@ import { buysFrom, sellsTo } from '@esmart/core/domain/partyKinds';
 import { NOTE_KINDS, PURCHASE_KINDS, initialStatus, isPayableDocument } from '@esmart/core/domain/documentStates';
 import { resolveRate } from '@esmart/core/domain/fx';
 import { calculateDocument, calculateLine } from '@esmart/core/domain/lineCalc';
-import { FULL_PLAN, hasModule, saleTdsOnPlan } from '@esmart/core/domain/plan';
+import { FULL_PLAN, hasModule, saleTdsOnPlan, tcsOnPlan } from '@esmart/core/domain/plan';
 import { OTHER_COUNTRY_CODE } from '@esmart/core/domain/stateCodes';
 import { buildTaxContext, taxAvailableOn, taxRateOn, type CrossBorderTax } from '@esmart/core/domain/taxEngine';
 import { addDaysISO } from '@esmart/core/lib/date';
@@ -685,7 +685,8 @@ export async function prepareDocument(
   // TCS the seller collects on an invoice under its section (s.206C), worked on the price with GST.
   let tcsCode = f.tcsSection === undefined ? (partyTcsSection(party!) ?? null) : f.tcsSection;
   // From TCS_ENDS_ON an invoice collects none, whatever section was sent or the customer has on file.
-  let tcsRate = f.kind === 'invoice' && tcsAskedOn(f.date) ? tcsRateFor(tcsCode, !!(party!.pan || party!.taxId), totals.grandTotalBase.minor) : 0;
+  // Free collects no TCS at all, whatever the customer has on file.
+  let tcsRate = f.kind === 'invoice' && tcsOnPlan(company.plan) && tcsAskedOn(f.date) ? tcsRateFor(tcsCode, !!(party!.pan || party!.taxId), totals.grandTotalBase.minor) : 0;
   // A credit note or return against an invoice that collected TCS gives it back in proportion: at the
   // invoice's rate and under its section, on the note's own value (RULES 6.13, pending CA).
   if ((f.kind === 'creditNote' || f.kind === 'salesReturn') && f.sourceDocumentId) {

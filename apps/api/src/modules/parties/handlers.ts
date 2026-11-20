@@ -3,7 +3,7 @@ import type { CustomValues } from '@esmart/core/domain/customFields';
 import { cleanCustomValues } from '../settings/customFields';
 import { buysFrom, hasLedger, sellsTo } from '@esmart/core/domain/partyKinds';
 import { tcsSection } from '@esmart/core/data/tcsSections';
-import { FULL_PLAN, hasModule } from '@esmart/core/domain/plan';
+import { FULL_PLAN, hasModule, tcsOnPlan } from '@esmart/core/domain/plan';
 import { isValidGstin } from '@esmart/core/domain/gstin';
 import { schema } from '@esmart/db';
 import type { Schema } from '@esmart/api-contract';
@@ -35,6 +35,13 @@ async function findParty(db: DbOrTx, companyId: string, id: string): Promise<Par
 /** Suppliers, and parties that are both, belong to the buying side, which the Sales plans don't include. */
 function assertKindAllowed(ctx: { company: { plan: Schema<'PlanTier'> } }, kind: Schema<'PartyKind'>) {
   if (buysFrom(kind) && !hasModule(ctx.company.plan, 'purchases')) throw planUpgradeRequired(FULL_PLAN, 'purchases');
+}
+
+/** Free collects no TCS (s.206C): a customer's TCS section is not kept on that plan. */
+function dropTcsOnFree(ctx: { company: { plan: Schema<'PlanTier'> } }, body: Schema<'Party'>) {
+  if (tcsOnPlan(ctx.company.plan)) return;
+  body.tcsApplicable = false;
+  body.tcsSection = undefined;
 }
 
 async function validate(db: DbOrTx, body: Schema<'Party'>, today: string) {
@@ -159,6 +166,7 @@ export const partiesHandlers = defineHandlers({
 
   async createParty(ctx) {
     assertKindAllowed(ctx, ctx.body.kind);
+    dropTcsOnFree(ctx, ctx.body);
     await validate(ctx.db, ctx.body, today(ctx.now));
     if (ctx.body.openingBalance.minor) assertOpeningOpen(ctx.company, ctx.body.openingBalanceDate);
     const customFields = await cleanCustomValues(ctx.db, ctx.company.id, 'party', ctx.body.customFields as CustomValues | undefined);
@@ -193,6 +201,7 @@ export const partiesHandlers = defineHandlers({
       let customFields: CustomValues = {};
       try {
         assertKindAllowed(ctx, body.kind);
+        dropTcsOnFree(ctx, body);
         // Free imports customers only (others are added one at a time from the contact form).
         if (ctx.company.plan === 'free' && body.kind !== 'customer') {
           throw new ApiError(422, 'validation_failed', 'The Free plan imports customers only', { issues: [{ field: 'kind', message: 'The Free plan imports customers only', severity: 'blocking' }] });
@@ -253,6 +262,7 @@ export const partiesHandlers = defineHandlers({
     const current = await findParty(ctx.db, ctx.company.id, ctx.params.id);
     checkIfMatch(ctx.req, current.version);
     assertKindAllowed(ctx, ctx.body.kind);
+    dropTcsOnFree(ctx, ctx.body);
     await validate(ctx.db, ctx.body, today(ctx.now));
     // A customer or supplier who starts trading the other way too becomes both and keeps its one ledger (RULES 6.11).
     const widening = ctx.body.kind === 'both' && (current.kind === 'customer' || current.kind === 'supplier');
