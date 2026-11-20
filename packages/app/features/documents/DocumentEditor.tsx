@@ -474,6 +474,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   const [chargesText, setChargesText] = useState(String(toMajor(draft.charges) || ''));
   const [chargesKindOpen, setChargesKindOpen] = useState(false);
   const [shipStateOpen, setShipStateOpen] = useState(false);
+  /** The line whose quantity takes the cursor once the grid has it: the first of the items just picked. */
+  const [focusLine, setFocusLine] = useState<{ id: string; at: number } | null>(null);
   // Goods that go out: where they go when not to the buyer's own address (the consignee).
   const shipsTo = SHIP_TO_KINDS.includes(kind);
   // The consignee's GSTIN and PIN are checked as typed: red at once if wrong, and saving waits until they are right.
@@ -689,6 +691,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       if (made?.kind !== 'item') return;
       const line = lineFromItem(made.record, isPurchase, taxCategories);
       addLine(noteStart({ ...line, unitPrice: reprice(line.unitPrice, draft.currency, 1, draft.exchangeRate) }));
+      // Its quantity takes the cursor, as a picked item's does.
+      setFocusLine({ id: line.id, at: Date.now() });
     };
   });
   useFocusEffect(useCallback(() => takeMade.current(), []));
@@ -1413,6 +1417,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           maxQuantity={(line) => maxReturnQty(line)}
           purchase={isPurchase}
           note={isNote}
+          focusLine={focusLine}
         />
       ) : (
         <Card padded={false}>
@@ -2098,21 +2103,40 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           loading={!sourceDoc && itemSearch.isFetching}
           multiple
           confirmLabel={(count) => tr('sales:editor.addItems', { count })}
-          onConfirm={(ids) =>
+          onConfirm={(ids) => {
+            // The first of what was picked takes the cursor, in its quantity: 1, 2, 3 picked puts it on 1;
+            // 4, 5, 6 picked after puts it on 4. An item already on the document is that line.
+            let first: string | undefined;
             ids.forEach((id) => {
               if (sourceDoc) {
                 const src = sourceDoc.lines.find((l) => l.id === id);
                 const already = src && draft.lines.find((l) => (src.itemId ? l.itemId === src.itemId : l.name === src.name));
+                if (already) {
+                  first = first ?? already.id;
+                  return;
+                }
+                if (!src) return;
                 // From the source too, the quantity starts at 0 for the person to type.
-                if (src && !already) addLine(noteStart({ ...src, id: uid('ln'), quantity: 0 }));
+                const added = noteStart({ ...src, id: uid('ln'), quantity: 0 });
+                addLine(added);
+                first = first ?? added.id;
                 return;
               }
               const item = items.find((i) => i.id === id);
+              const already = item && draft.lines.find((l) => l.itemId === item.id);
+              if (already) {
+                first = first ?? already.id;
+                return;
+              }
               // An item is priced in base; the line takes the document's currency.
               const line = item && lineFromItem(item, isPurchase, taxCategories);
-              if (line) addLine(newLineInclusive(noteStart({ ...line, unitPrice: reprice(line.unitPrice, draft.currency, 1, draft.exchangeRate) }), draft));
-            })
-          }
+              if (!line) return;
+              const added = newLineInclusive(noteStart({ ...line, unitPrice: reprice(line.unitPrice, draft.currency, 1, draft.exchangeRate) }), draft);
+              addLine(added);
+              first = first ?? added.id;
+            });
+            if (first) setFocusLine({ id: first, at: Date.now() });
+          }}
           searchPlaceholder={tr('sales:editor.searchItems')}
           footer={
             sourceDoc ? undefined : (
