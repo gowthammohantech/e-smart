@@ -251,7 +251,8 @@ export function LineGrid({
                 })}
               </View>
               {/* The unit rides along with the quantity it counts, rather than taking a column. */}
-              <Text variant="micro" tone="muted" numberOfLines={1} style={{ maxWidth: 34 }}>
+              {/* A set width, so the arrows stand in one line down the column whatever the unit (Kg, Pcs, Nos). */}
+              <Text variant="micro" tone="muted" numberOfLines={1} style={{ width: 34 }}>
                 {unitShortName(line.unit)}
               </Text>
             </View>
