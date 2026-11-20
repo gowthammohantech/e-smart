@@ -184,7 +184,6 @@ export default function ReceiptsList() {
         ))}
       </Card>
     ) : null;
-  const adjustButton = <Button title={tr('books:receipts.adjust')} icon="swap-horizontal" variant="ghost" size="sm" onPress={() => router.push('/(app)/receipts/adjust' as never)} />;
   const kinds: { key: Kind; label: string }[] = [
     { key: 'all', label: tr('books:receipts.allKinds') },
     { key: 'payment', label: tr('books:receipts.fromCustomers') },
@@ -227,7 +226,6 @@ export default function ReceiptsList() {
           ) : null}
           <BranchFilterMenu branch={branch} onChange={setBranch} />
           {partyId ? partyChip : null}
-          {adjustButton}
           {summary.isError ? null : totalsPending ? (
             <View style={{ marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
               <Skeleton height={12} width={80} radius={4} />
@@ -324,7 +322,6 @@ export default function ReceiptsList() {
           </StatRow>
         )}
         {splitCard}
-        <View style={{ alignItems: 'flex-start' }}>{adjustButton}</View>
         <Card padded={false}>
           {rowsLoading ? (
             <CardRowsSkeleton />

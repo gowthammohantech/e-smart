@@ -6701,6 +6701,8 @@ export interface components {
                 advanceTax?: boolean;
                 /** @description On a service advance taxed on receipt: the GST and cess inside what is left of it (left less this is its value without GST) */
                 leftTax?: components["schemas"]["Money"];
+                /** @description On a service advance taxed on receipt: the GST and cess in what was received (`total`), which is not adjusted; `left` is the value without it */
+                gst?: components["schemas"]["Money"];
             }[];
             /** @description Documents still owed, oldest first */
             open: {
@@ -6750,6 +6752,8 @@ export interface components {
                 /** @description The service is one the recipient pays GST on (reverse charge): no GST is owed on the advance, none goes to GSTR-1 table 11, and the receipt voucher says the tax is payable on reverse charge (Rule 50) */
                 reverseCharge?: boolean;
             };
+            /** @description On an advance receipt: the service (an item of type service) the advance is for */
+            advanceItemId?: string;
             /** @description On money received: TDS the customer deducted from an advance before any invoice, under `tdsSection`. It credits the customer as money would, so it adds to the advance. */
             advanceTds?: components["schemas"]["Money"];
             /** @description The TDS section of what its allocations settled as tdsDeducted: on money paid, what was kept back (26Q and TDS payable); on money received, what the customer deducted (TDS receivable by section, matched to 26AS) */

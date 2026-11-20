@@ -274,6 +274,7 @@ export function requestInput(body: PaymentBody): PaymentInput {
     accountId: body.accountId,
     notes: body.notes,
     advanceTax: body.advanceTax ?? null,
+    advanceItemId: body.advanceItemId ?? null,
     refundOf: body.refundOf ?? null,
     tdsSection: body.tdsSection ?? null,
     advanceTdsMinor: body.advanceTds?.minor ?? 0,

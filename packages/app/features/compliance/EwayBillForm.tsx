@@ -27,6 +27,7 @@ import { compliance } from '../../remote';
 import { useActiveCompany, useComplianceSettings, useTransporters } from '../../store/selectors';
 import {
   ewayDocTypeFor,
+  subSupplyDescriptionFor,
   subSupplyTypeFor,
   subSupplyTypesFor,
   validUptoFor,
@@ -66,8 +67,7 @@ export function useEwayBillForm(doc: BusinessDocument) {
   const docVehicle = useAppStore((s) => (doc.vehicleId ? s.vehicles.find((v) => v.id === doc.vehicleId) : undefined));
 
   const [subSupplyType, setSubSupplyType] = useState<EwaySubSupplyType>(subSupplyTypeFor(doc.kind));
-  // "Others" needs a description, so a challan starts with the obvious one.
-  const [subSupplyDescription, setSubSupplyDescription] = useState(subSupplyType === 'others' ? 'Delivery challan' : '');
+  const [subSupplyDescription, setSubSupplyDescription] = useState(subSupplyDescriptionFor(doc.kind));
   const [subSupplyOpen, setSubSupplyOpen] = useState(false);
 
   const [from, setFrom] = useState<EwayPlace>({

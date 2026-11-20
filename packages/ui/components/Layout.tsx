@@ -101,10 +101,11 @@ const FIELD_GRID_THREE_MIN = 1000;
 /**
  * Fields across rows on a desktop: two to a row, or three when the grid is wide enough (1000px
  * and more), or `columns` to fix it. A last row that isn't full shares its width between what is
- * in it, so no field has an empty slot beside it. Pass fields that may not show as null: only
+ * in it, so no field has an empty slot beside it; `fillLastRow={false}` keeps it in the columns
+ * above, for a grid of like cards. Pass fields that may not show as null: only
  * those shown are laid out. A phone stacks them, with no wrapper, in the parent column's spacing.
  */
-export function FieldGrid({ items, columns }: { items: React.ReactNode[]; columns?: 2 | 3 }) {
+export function FieldGrid({ items, columns, fillLastRow = true }: { items: React.ReactNode[]; columns?: 2 | 3; fillLastRow?: boolean }) {
   const t = useTheme();
   const desktop = useIsDesktop();
   const [width, setWidth] = React.useState(0);
@@ -122,6 +123,8 @@ export function FieldGrid({ items, columns }: { items: React.ReactNode[]; column
               {node}
             </View>
           ))}
+          {/* Kept in the columns above instead: the short last row leaves its empty slots empty. */}
+          {fillLastRow ? null : Array.from({ length: per - row.length }, (_, c) => <View key={`gap${c}`} style={{ flex: 1, minWidth: 0 }} />)}
         </View>
       ))}
     </View>

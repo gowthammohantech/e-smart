@@ -353,7 +353,9 @@ export type EwayPartAInput = {
   to: EwayPlace;
   subSupplyType: EwaySubSupplyType;
   subSupplyDescription?: string;
-  /** When given, the pair with `subSupplyType` is checked against the portal's rules. */
+  /** The document being moved; its portal document type is checked against the sub-supply type. */
+  documentKind?: DocumentKind;
+  /** Or the portal document type itself, when the caller already holds it. */
   docType?: EwayDocType;
   documentNumber: string;
   documentDate: string;
@@ -384,14 +386,16 @@ export function validatePartA(input: EwayPartAInput): ComplianceIssue[] {
   if (input.subSupplyType === 'others' && !input.subSupplyDescription?.trim()) {
     out.push(issue('EWB106', 'subSupplyDescription', 'Describe the sub-supply type'));
   }
-  if (input.docType && !EWAY_OUTWARD_DOC_TYPES[input.subSupplyType].includes(input.docType)) {
+  const docType = input.docType ?? (input.documentKind ? ewayDocTypeFor(input.documentKind) : undefined);
+  if (docType && !EWAY_OUTWARD_DOC_TYPES[input.subSupplyType].includes(docType)) {
+    const label = EWAY_SUB_SUPPLY_TYPES[input.subSupplyType].label;
     out.push(
       issue(
         'EWB111',
         'subSupplyType',
-        input.docType === 'CHL'
-          ? `A delivery challan can't be sent as "${EWAY_SUB_SUPPLY_TYPES[input.subSupplyType].label}"; choose another sub-supply type, such as Others`
-          : `This document can't be sent as "${EWAY_SUB_SUPPLY_TYPES[input.subSupplyType].label}"; choose another sub-supply type`,
+        docType === 'CHL'
+          ? `The portal does not accept a delivery challan under "${label}". Choose another sub-supply type (for example Others), or raise the e-way bill from the invoice`
+          : `The portal does not accept this document under "${label}". Choose another sub-supply type`,
       ),
     );
   }
@@ -476,7 +480,13 @@ export function ewayDocTypeFor(kind: DocumentKind): EwayDocType {
  * from the types valid for the document.
  */
 export function subSupplyTypeFor(kind: DocumentKind): EwaySubSupplyType {
-  return kind === 'invoice' ? 'supply' : 'others';
+  // The portal refuses a challan under "Supply", so a delivery note starts at "Others" (see subSupplyDescriptionFor).
+  return ewayDocTypeFor(kind) === 'CHL' ? 'others' : 'supply';
+}
+
+/** The description "Others" needs; empty where the sub-supply type is self-explanatory. */
+export function subSupplyDescriptionFor(kind: DocumentKind): string {
+  return ewayDocTypeFor(kind) === 'CHL' ? 'Delivery challan' : '';
 }
 
 /** Build a place record from a company address. */

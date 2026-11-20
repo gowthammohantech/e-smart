@@ -56,6 +56,7 @@ import { detailRouteFor, finaliseActionLabel, listRouteFor } from './DocumentEdi
 import { useCustomFields } from '../customFields/CustomFieldsSection';
 import { ComplianceCard } from '../compliance/ComplianceCard';
 import { usePrintEwayBill } from '../compliance/EwayBillDetail';
+import { useEwayLoginGate } from '../compliance/useEwayLoginGate';
 import { hasIrn } from '@esmart/core/render/docView';
 import { ApprovalBanner } from '../approvals/ApprovalBanner';
 import { EInvoiceSheet } from '../compliance/EInvoiceSheet';
@@ -91,6 +92,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
   const { t: tr } = useTranslation(['common', 'domain', 'sales', 'compliance', 'purchases']);
   const language = useResolvedLanguage();
   const router = useRouter();
+  const ewayGate = useEwayLoginGate();
   const goBack = useGoBack();
   const toast = useToast();
   const { run: serverSave } = useServerSave();
@@ -1196,7 +1198,7 @@ ${url}`;
     ...(ewayBill
       ? [{ label: tr('sales:detail.viewEwayBill'), icon: 'truck-fast-outline' as const, onPress: () => { setActionsOpen(false); router.push(`/(app)/compliance/eway/${ewayBill.id}`); } }]
       : ewayRequired
-        ? [{ label: tr('compliance:ewb.generate'), icon: 'truck-fast-outline' as const, onPress: () => { setActionsOpen(false); router.push(`/(app)/compliance/eway/new?documentId=${doc.id}`); } }]
+        ? [{ label: tr('compliance:ewb.generate'), icon: 'truck-fast-outline' as const, onPress: () => { setActionsOpen(false); ewayGate.open(doc.id); } }]
         : []),
     { label: tr('sales:detail.duplicate'), icon: 'content-duplicate' as const, onPress: () => {
       setActionsOpen(false);
@@ -1459,6 +1461,7 @@ ${url}`;
         )}
       </Sheet>
 
+      {ewayGate.dialog}
       <ConfirmDialog
         visible={confirmFinalize}
         title={tr('common:documentEditor.finaliseTitle', { kind: kindName })}
@@ -1526,7 +1529,7 @@ ${url}`;
         }}
         onEwayBill={() => {
           closeNextSteps();
-          router.push(`/(app)/compliance/eway/new?documentId=${doc.id}` as never);
+          ewayGate.open(doc.id);
         }}
         onLater={closeNextSteps}
       />

@@ -56,37 +56,51 @@ export default function AdjustAdvances() {
   const side: Side = party?.kind === 'supplier' ? 'supplier' : party?.kind === 'both' ? sideChoice : 'customer';
   const data = useAdjustable(partyPending ? undefined : partyId, side);
   const credits = data.data?.credits ?? [];
+  // Only invoices whose every line is a service: what an advance receipt is adjusted against.
   const open = useMemo(() => {
-    const rows = data.data?.open ?? [];
+    const rows = (data.data?.open ?? []).filter((o) => o.servicesOnly);
     // Opened from an invoice: that one first.
     return params.documentId ? [...rows.filter((o) => o.documentId === params.documentId), ...rows.filter((o) => o.documentId !== params.documentId)] : rows;
   }, [data.data, params.documentId]);
 
-  // Manual: one credit chosen, amounts typed per document. Left alone, everything goes oldest first.
-  const [creditKey, setCreditKey] = useState<string | null>(null);
+  // Manual: one or more credits chosen, amounts typed per document. Left alone, everything goes oldest first.
+  const [creditKeys, setCreditKeys] = useState<string[]>([]);
   const [amounts, setAmounts] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
-  const chosen = credits.find((c) => `${c.sourceType}:${c.id}` === creditKey);
+  /** The credits ticked, oldest first: the amounts typed are drawn from them in that order. */
+  const chosenList = credits.filter((c) => creditKeys.includes(`${c.sourceType}:${c.id}`));
+  const chosen = chosenList.length > 0;
+  const chosenLeft = chosenList.reduce((a, c) => a + (c.left as Money).minor, 0);
   const typed = Object.entries(amounts)
     .map(([documentId, v]) => ({ documentId, minor: fromMajor(v || '0', baseCurrency).minor }))
     .filter((x) => x.minor > 0);
   const typedTotal = typed.reduce((a, x) => a + x.minor, 0);
-  const over = !!chosen && typedTotal > (chosen.left as Money).minor;
-  // A service advance goes only on an invoice whose every line is a service: its GST never comes back on goods (RULES 8.12).
+  // Never more than the ticked advances have left between them.
+  const over = chosen && typedTotal > chosenLeft;
   const serviceAdvance = (c?: (typeof credits)[number]) => !!c && c.sourceType === 'payment' && !!c.advanceTax;
-  const autoWarning = credits.some((c) => serviceAdvance(c)) && open.some((o) => !o.servicesOnly);
-  const shownOpen = serviceAdvance(chosen) ? open.filter((o) => o.servicesOnly) : open;
+  const shownOpen = open;
 
   const pick = (key: string) => {
-    setCreditKey(key === creditKey ? null : key);
+    setCreditKeys((keys) => (keys.includes(key) ? keys.filter((k) => k !== key) : [...keys, key]));
     setAmounts({});
   };
   const fill = (documentId: string) => {
     if (!chosen) return;
     const row = open.find((o) => o.documentId === documentId)!;
-    const room = (chosen.left as Money).minor - typedTotal + (amounts[documentId] ? fromMajor(amounts[documentId], baseCurrency).minor : 0);
+    const room = chosenLeft - typedTotal + (amounts[documentId] ? fromMajor(amounts[documentId], baseCurrency).minor : 0);
     const take = Math.min(room, (row.outstanding as Money).minor);
     if (take > 0) setAmounts((a) => ({ ...a, [documentId]: toAmountInput(money(take, baseCurrency)) }));
+    // All the ticked advances have is on other invoices: say so, rather than the tap doing nothing.
+    else toast.show(tr('books:adjust.nothingLeft'), 'warning', { icon: 'cash-remove' });
+  };
+  /** A tap ticks an invoice (filled with what is left) or unticks it (its amount freed for the others). */
+  const toggle = (documentId: string) => {
+    if (!amounts[documentId]) return fill(documentId);
+    setAmounts((a) => {
+      const next = { ...a };
+      delete next[documentId];
+      return next;
+    });
   };
 
   const apply = async (allocations?: AdjustmentAllocation[]) => {
@@ -96,7 +110,7 @@ export default function AdjustAdvances() {
       const res = await adjustOnServer(partyId, side, allocations);
       const applied = res.applied.reduce((a, x) => a + x.amount.minor, 0);
       toast.show(applied ? tr('books:adjust.done', { amount: formatMoney(money(applied, baseCurrency)) }) : tr('books:adjust.nothing'), applied ? 'success' : 'info', { icon: 'swap-horizontal' });
-      setCreditKey(null);
+      setCreditKeys([]);
       setAmounts({});
       refreshSoon();
     } catch (err) {
@@ -105,13 +119,29 @@ export default function AdjustAdvances() {
       setBusy(false);
     }
   };
-  const applyChosen = () =>
-    chosen && void apply(typed.map((x) => ({ sourceType: chosen.sourceType, sourceId: chosen.id, documentId: x.documentId, amount: money(x.minor, baseCurrency) })));
+  // Each document's amount is drawn from the ticked credits oldest first, the next taking over as one runs out.
+  const applyChosen = () => {
+    if (!chosen || over) return;
+    const left = chosenList.map((c) => ({ c, left: (c.left as Money).minor }));
+    const allocations: AdjustmentAllocation[] = [];
+    for (const x of typed) {
+      let need = x.minor;
+      for (const l of left) {
+        if (need <= 0) break;
+        const take = Math.min(need, l.left);
+        if (take <= 0) continue;
+        allocations.push({ sourceType: l.c.sourceType, sourceId: l.c.id, documentId: x.documentId, amount: money(take, baseCurrency) });
+        l.left -= take;
+        need -= take;
+      }
+    }
+    void apply(allocations);
+  };
 
   const kindLabel = (kind: DocumentKind) => documentKindLabel(tr, kind, 1);
   // The row is the tap target; a field under it sits outside it, so typing in the field never
   // re-fills it with the most it can take.
-  const row = (key: string, title: string, subtitle: string, right: React.ReactNode, opts: { selected?: boolean; onPress?: () => void; warn?: string; extra?: React.ReactNode }) => (
+  const row = (key: string, title: string, subtitle: string, right: React.ReactNode, opts: { selected?: boolean; onPress?: () => void; warn?: string; extra?: React.ReactNode; multi?: boolean }) => (
     <View key={key} style={{ borderBottomWidth: 0.5, borderBottomColor: t.c.line, backgroundColor: opts.selected ? t.c.card2 : 'transparent' }}>
       <Pressable
         onPress={opts.onPress}
@@ -120,7 +150,13 @@ export default function AdjustAdvances() {
         accessibilityState={opts.onPress ? { selected: !!opts.selected } : undefined}
         style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md, padding: t.spacing.md, minHeight: 48 }}
       >
-        {opts.onPress ? <Icon name={opts.selected ? 'radiobox-marked' : 'radiobox-blank'} size={18} color={opts.selected ? t.c.primary : t.c.muted} /> : null}
+        {opts.onPress ? (
+          <Icon
+            name={opts.multi ? (opts.selected ? 'checkbox-marked' : 'checkbox-blank-outline') : opts.selected ? 'radiobox-marked' : 'radiobox-blank'}
+            size={18}
+            color={opts.selected ? t.c.primary : t.c.muted}
+          />
+        ) : null}
         <View style={{ flex: 1, gap: 2 }}>
           <Text variant="body" weight="600" numberOfLines={1}>
             {title}
@@ -176,7 +212,7 @@ export default function AdjustAdvances() {
                     value={sideChoice}
                     onChange={(v) => {
                       setSide(v);
-                      setCreditKey(null);
+                      setCreditKeys([]);
                       setAmounts({});
                     }}
                   />
@@ -197,8 +233,8 @@ export default function AdjustAdvances() {
               onAction={() => void data.refetch()}
               compact
             />
-          ) : !credits.length || !open.length ? (
-            <EmptyState icon="swap-horizontal" title={!credits.length ? tr('books:adjust.noCredit') : tr('books:adjust.noOpen')} message={tr('books:adjust.emptyHint')} compact />
+          ) : !credits.length ? (
+            <EmptyState icon="swap-horizontal" title={tr('books:adjust.noCredit')} message={tr('books:adjust.emptyHint')} compact />
           ) : (
             <>
               <Columns
@@ -211,18 +247,22 @@ export default function AdjustAdvances() {
                           key,
                           c.number,
                           `${tr(c.sourceType === 'note' ? 'books:adjust.note' : side === 'customer' ? 'books:adjust.advance' : 'books:adjust.advancePaid')} · ${formatDate(c.date)}`,
-                          // A service advance reads without the GST inside it; what it settles, GST and all, is below.
+                          // A service advance with GST: what is left to adjust (its value without the GST), and
+                          // under it what the customer paid and the GST in that, which is not adjusted.
                           <View style={{ alignItems: 'flex-end', gap: 2 }}>
-                            <Text variant="small" weight="700">{formatMoney(c.leftTax ? money((c.left as Money).minor - (c.leftTax as Money).minor, (c.left as Money).currency) : (c.left as Money))}</Text>
-                            {c.leftTax ? (
-                              <Text variant="caption" tone="muted">
-                                {tr('books:adjust.withGst', { amount: formatMoney(c.left as Money) })}
-                              </Text>
+                            <Text variant="small" weight="700">{formatMoney(c.left as Money)}</Text>
+                            {c.gst && c.total ? (
+                              <>
+                                <Text variant="caption" tone="muted">
+                                  {tr('books:adjust.paidWithGst', { paid: formatMoney(c.total as Money), gst: formatMoney(c.gst as Money) })}
+                                </Text>
+                                <Badge label={tr('books:adjust.toAdjust', { amount: formatMoney(c.left as Money) })} tone="info" size="sm" />
+                              </>
                             ) : serviceAdvance(c) ? (
                               <Badge label={tr('books:adjust.gst')} tone="info" size="sm" />
                             ) : null}
                           </View>,
-                          { selected: creditKey === key, onPress: () => pick(key) },
+                          { selected: creditKeys.includes(key), onPress: () => pick(key), multi: true },
                         );
                       })}
                     </Card>
@@ -231,9 +271,10 @@ export default function AdjustAdvances() {
                 right={
                   <FormSection title={tr('books:adjust.open')}>
                     <Card padded={false}>
-                      {chosen && !shownOpen.length ? (
+                      {/* The party's advances still show on the left; here, that there is nothing yet to put them on. */}
+                      {!shownOpen.length ? (
                         <Text variant="small" tone="muted" style={{ padding: t.spacing.lg }}>
-                          {tr('sales:payment.advanceNoServiceInvoice')}
+                          {tr('books:adjust.noServiceInvoices')}
                         </Text>
                       ) : null}
                       {shownOpen.map((o) =>
@@ -244,8 +285,9 @@ export default function AdjustAdvances() {
                           <Text variant="small" weight="700">{formatMoney(o.outstanding as Money)}</Text>,
                           {
                             // A tap fills a document not yet given an amount; one already typed is left as it is.
-                            onPress: chosen ? () => (amounts[o.documentId] ? undefined : fill(o.documentId)) : undefined,
+                            onPress: chosen ? () => toggle(o.documentId) : undefined,
                             selected: !!amounts[o.documentId],
+                            multi: true,
                             extra: chosen ? (
                               <AmountField label={tr('books:adjust.amountFor', { number: o.number })} value={amounts[o.documentId] ?? ''} onChangeValue={(v) => setAmounts((a) => ({ ...a, [o.documentId]: v }))} currency={baseCurrency} />
                             ) : null,
@@ -256,22 +298,17 @@ export default function AdjustAdvances() {
                   </FormSection>
                 }
               />
-              {chosen ? (
+              {!shownOpen.length ? null : chosen ? (
                 <>
                   {over ? (
                     <Text variant="caption" tone="bad">
-                      {tr('books:adjust.over', { amount: formatMoney(chosen.left as Money) })}
+                      {tr('books:adjust.over', { amount: formatMoney(money(chosenLeft, baseCurrency)) })}
                     </Text>
                   ) : null}
                   <Button title={tr('books:adjust.applyChosen', { amount: formatMoney(money(typedTotal, baseCurrency)) })} onPress={applyChosen} loading={busy} disabled={busy || !typed.length || over} fullWidth={!desktop} style={desktop ? { alignSelf: 'flex-start' } : undefined} />
                 </>
               ) : (
                 <>
-                  {autoWarning ? (
-                    <Text variant="caption" tone="warn">
-                      {tr('books:adjust.autoNotService')}
-                    </Text>
-                  ) : null}
                   <Button title={tr('books:adjust.applyAll')} icon="sort-calendar-ascending" onPress={() => void apply()} loading={busy} disabled={busy} fullWidth={!desktop} style={desktop ? { alignSelf: 'flex-start' } : undefined} />
                   <Text variant="caption" tone="muted">
                     {tr('books:adjust.applyAllHint')}
@@ -287,13 +324,14 @@ export default function AdjustAdvances() {
         visible={picking}
         onClose={() => setPicking(false)}
         title={tr('books:adjust.party')}
-        options={(search.data ?? []).map((p) => ({ value: p.id!, label: p.name!, description: p.phone ?? p.code }))}
+        // Only parties holding an advance (or a credit note) to adjust.
+        options={(search.data ?? []).filter((p) => ((p.advance as Money | undefined)?.minor ?? 0) > 0).map((p) => ({ value: p.id!, label: p.name!, description: p.phone ?? p.code }))}
         onQueryChange={setQuery}
         loading={search.isFetching}
         value={partyId}
         onSelect={(id) => {
           setPartyId(id);
-          setCreditKey(null);
+          setCreditKeys([]);
           setAmounts({});
         }}
       />

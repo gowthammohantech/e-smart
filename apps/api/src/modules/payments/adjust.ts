@@ -28,11 +28,15 @@ type Allocation = Schema<'AdjustmentAllocation'>;
 type Credit = Schema<'Adjustable'>['credits'][number];
 type Open = Schema<'Adjustable'>['open'][number];
 
-/** On a service advance taxed when received: the GST and cess inside what is left of it, so it can be shown without them. */
-function advanceTaxLeft(p: typeof PAY.$inferSelect, base: string): { leftTax?: { minor: number; currency: string } } {
+/**
+ * What of an advance can be adjusted. A service advance taxed when received adjusts only its value
+ * without the GST: of ₹1,000 with ₹150 GST in it, ₹850, and the invoice it settles still owes ₹150.
+ */
+function adjustableLeft(p: typeof PAY.$inferSelect, base: string): { left: number; gst?: number } {
   const rate = Number(p.advanceTaxRate ?? 0) + Number(p.advanceCessRate ?? 0);
-  if (!p.advanceTaxCategoryId || p.advanceReverseCharge || !(rate > 0)) return {};
-  return { leftTax: money(inclusiveTax({ minor: p.unallocatedMinor, currency: base }, rate).minor, base) };
+  if (!p.advanceTaxCategoryId || p.advanceReverseCharge || !(rate > 0)) return { left: p.unallocatedMinor };
+  const gst = inclusiveTax({ minor: p.amountMinor + p.tdsMinor, currency: base }, rate).minor;
+  return { left: Math.max(p.unallocatedMinor - gst, 0), gst };
 }
 
 /** A service advance: GST was taken on it when received, so it goes only on an invoice whose every line is a service. */
@@ -126,7 +130,10 @@ export async function adjustable(ctx: AnyCtx, db: DbOrTx, partyId: string, side:
     ...[...notes.map((n) => ({ n, left: n.total - n.tds - Number(n.applied) })), ...linkedCredit]
       .filter((x) => x.left > 0)
       .map(({ n, left }) => ({ sourceType: 'note' as const, id: n.id, number: n.number, date: n.date, total: money(n.total - n.tds, base), left: money(left, base) })),
-    ...pays.map((p) => ({ sourceType: 'payment' as const, id: p.id, number: p.number, date: p.date, total: money(p.amountMinor + p.tdsMinor, base), left: money(p.unallocatedMinor, base), advanceTax: !!p.advanceTaxCategoryId, ...advanceTaxLeft(p, base) })),
+    ...pays.flatMap((p) => {
+      const { left, gst } = adjustableLeft(p, base);
+      return left > 0 ? [{ sourceType: 'payment' as const, id: p.id, number: p.number, date: p.date, total: money(p.amountMinor + p.tdsMinor, base), left: money(left, base), advanceTax: !!p.advanceTaxCategoryId, ...(gst !== undefined && { gst: money(gst, base) }) }] : [];
+    }),
   ].sort((a, b) => a.date.localeCompare(b.date));
   const open: (Open & { outstanding: { minor: number; currency: string } })[] = docs.map((d) => ({
     documentId: d.id,

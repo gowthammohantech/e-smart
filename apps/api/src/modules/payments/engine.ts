@@ -161,6 +161,8 @@ export type PaymentInput = {
   notes?: string | null;
   /** An advance for services, taxed when received at this category's rate and place of supply. */
   advanceTax?: { taxCategoryId: string; placeOfSupplyStateCode: string; hsn?: string; cessRate?: number; reverseCharge?: boolean } | null;
+  /** An advance receipt: the service it is for (an item of type service). */
+  advanceItemId?: string | null;
   /** On money received: TDS the customer deducted from an advance, not tied to an invoice. Credits them as money does. */
   advanceTdsMinor?: number;
   /** Money paid back to a customer out of this advance receipt (a refund voucher, Rule 51). */
@@ -368,6 +370,14 @@ export async function writePayment(
     if (advanceTds > ceiling) blocking('advanceTds', `TDS under ${input.tdsSection ?? 'a section'} is at most ${r}% of what was due; on ${input.currency} ${(input.amountMinor / 100).toFixed(2)} received that is ${input.currency} ${(ceiling / 100).toFixed(2)}`);
   }
   const credit = input.amountMinor + Math.max(advanceTds, 0);
+  // An advance receipt's service: one of the company's services, on money received.
+  const advanceItemId = input.advanceItemId || null;
+  if (advanceItemId) {
+    if (input.direction !== 'received') blocking('advanceItemId', 'Only an advance receipt names a service');
+    const [svc] = await tx.select({ type: schema.items.type }).from(schema.items).where(and(eq(schema.items.companyId, company.id), eq(schema.items.id, advanceItemId)));
+    if (!svc) blocking('advanceItemId', 'No such service in this company');
+    else if (svc.type !== 'service') blocking('advanceItemId', 'An advance receipt is for a service, not goods');
+  }
   if (allocated > credit) blocking('allocations', `Allocations (${input.currency} ${(allocated / 100).toFixed(2)}) exceed the payment (${input.currency} ${(credit / 100).toFixed(2)})`);
 
   // No account pays out more than it holds: cash, bank or wallet. Money taken back out of an
@@ -492,6 +502,7 @@ export async function writePayment(
     advanceHsn: advance?.hsn?.trim() || null,
     advanceCessRate: advance?.cessRate ? String(advance.cessRate) : null,
     advanceReverseCharge: !!advance?.reverseCharge,
+    advanceItemId: input.direction === 'received' ? advanceItemId : null,
     tdsMinor: input.direction === 'received' ? Math.max(advanceTds, 0) : 0,
     refundOfPaymentId: refundOf,
     // Paid: what was kept back (26Q). Received: what the customer deducted, so it reaches that section's receivable (26AS).

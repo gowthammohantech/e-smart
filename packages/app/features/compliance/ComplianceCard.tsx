@@ -25,6 +25,7 @@ import { ewayBillStatusAt, hoursUntilExpiry, isEwayBillRequired } from '@esmart/
 import { formatDate, nowISO } from '@esmart/core/lib/date';
 import { EInvoiceSheet } from './EInvoiceSheet';
 import { usePrintEwayBill } from './EwayBillDetail';
+import { useEwayLoginGate } from './useEwayLoginGate';
 import { EWAY_STATUS_META, E_INVOICE_STATUS_META, expiryPhrase } from './complianceMeta';
 
 /**
@@ -48,6 +49,7 @@ export function ComplianceCard({
   const router = useRouter();
   const company = useActiveCompany();
   const settings = useComplianceSettings();
+  const ewayGate = useEwayLoginGate();
   const parties = useAppStore((s) => s.parties);
   const items = useAppStore((s) => s.items);
   const bill = useActiveEwayBill(doc.id);
@@ -303,7 +305,7 @@ export function ComplianceCard({
               icon="truck-fast-outline"
               size="sm"
               variant="secondary"
-              onPress={() => router.push(`/(app)/compliance/eway/new?documentId=${doc.id}`)}
+              onPress={() => ewayGate.open(doc.id)}
               fullWidth
             />
           ) : null}
@@ -313,6 +315,7 @@ export function ComplianceCard({
       {sheet ? (
         <EInvoiceSheet visible onClose={() => setSheet(null)} document={doc} mode={sheet} onPrint={onPrintEInvoice} />
       ) : null}
+      {ewayGate.dialog}
     </>
   );
 }

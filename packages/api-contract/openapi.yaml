@@ -8655,6 +8655,7 @@ components:
               left: { $ref: '#/components/schemas/Money' }
               advanceTax: { type: boolean, description: A service advance taxed on receipt }
               leftTax: { allOf: [{ $ref: '#/components/schemas/Money' }], description: 'On a service advance taxed on receipt: the GST and cess inside what is left of it (left less this is its value without GST)' }
+              gst: { allOf: [{ $ref: '#/components/schemas/Money' }], description: 'On a service advance taxed on receipt: the GST and cess in what was received (`total`), which is not adjusted; `left` is the value without it' }
         open:
           type: array
           description: Documents still owed, oldest first
@@ -8704,6 +8705,7 @@ components:
                 hsn: { type: string, pattern: '^\d{4,8}$', description: 'The SAC (or HSN) of the service the advance is for, for table 11 and the receipt voucher' }
                 cessRate: { type: number, minimum: 0, description: 'Cess on the advance, percent of its value; the amount received includes it' }
                 reverseCharge: { type: boolean, description: 'The service is one the recipient pays GST on (reverse charge): no GST is owed on the advance, none goes to GSTR-1 table 11, and the receipt voucher says the tax is payable on reverse charge (Rule 50)' }
+            advanceItemId: { type: string, description: "On an advance receipt: the service (an item of type service) the advance is for" }
             advanceTds: { allOf: [{ $ref: '#/components/schemas/Money' }], description: "On money received: TDS the customer deducted from an advance before any invoice, under `tdsSection`. It credits the customer as money would, so it adds to the advance." }
             tdsSection: { type: string, description: "The TDS section of what its allocations settled as tdsDeducted: on money paid, what was kept back (26Q and TDS payable); on money received, what the customer deducted (TDS receivable by section, matched to 26AS)" }
             refundOf:

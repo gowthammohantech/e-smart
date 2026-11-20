@@ -14,7 +14,7 @@ import { PartyPickerBox } from '../contacts/PartyPickerBox';
 import { Button } from '@esmart/ui/components/Button';
 import { Avatar } from '@esmart/ui/components/Avatar';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
-import { AmountField, PickerField, SwitchField, TextField } from '@esmart/ui/components/Field';
+import { AmountField, PickerField, TextField } from '@esmart/ui/components/Field';
 import { useDecimalText } from '../../components/useDecimalText';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
@@ -34,14 +34,14 @@ import { INDIAN_STATES, PAYMENT_METHODS } from '@esmart/core/data/masters';
 import { CURRENCIES } from '@esmart/core/lib/currencies';
 import { TDS_SECTIONS, tdsSection } from '@esmart/core/data/tdsSections';
 import { documentKindLabel, paymentMethodLabel } from '@esmart/core/labels';
-import { formatMoney, toAmountInput } from '@esmart/core/lib/format';
+import { formatMoney, formatPercent, toAmountInput } from '@esmart/core/lib/format';
 import { daysBetween, formatDate, today } from '@esmart/core/lib/date';
 import { Money, fromMajor, money, subtract, zero } from '@esmart/core/lib/money';
 import { uid } from '@esmart/core/lib/id';
-import { DEFAULT_ADVANCE_RATE } from '@esmart/core/domain/advanceTax';
+import { DEFAULT_ADVANCE_RATE, advanceInterState, advanceTaxSplit } from '@esmart/core/domain/advanceTax';
 import { AdvanceGstBreakup } from './AdvanceGstBreakup';
 import { ReceivedForSheet, customerValue, type ReceiptCarry } from '../receipts/ReceivedForSheet';
-import { taxAvailableOn, taxCategoriesOn } from '@esmart/core/domain/taxEngine';
+import { homeStateCode, taxAvailableOn, taxCategoriesOn } from '@esmart/core/domain/taxEngine';
 
 import { useAppStore } from '../../store/appStore';
 import {
@@ -56,7 +56,7 @@ import {
   useTaxCategories,
 } from '../../store/selectors';
 import { describeError } from '../../remote/errors';
-import { adjustAdvancesFor, loadForAdvances, queryClient, useOpenDocuments, usePartyRecord, usePartySearch, useServerAccountBalances } from '../../remote/queries';
+import { adjustAdvancesFor, loadForAdvances, queryClient, useItemSearch, useOpenDocuments, usePartyRecord, usePartySearch, useServerAccountBalances } from '../../remote/queries';
 import { useDebounced } from '../../components/useDebounced';
 import { SHOW_SCROLLBAR, useBreakpoint } from '@esmart/ui/theme/breakpoints';
 import { useGoBack } from '../../navigation/useGoBack';
@@ -148,9 +148,12 @@ export function PaymentForm({
   const [advanceSac, setAdvanceSac] = useState('');
   const [advanceCess, setAdvanceCess] = useState(0);
   const cessText = useDecimalText(advanceCess, setAdvanceCess);
+  /** An advance receipt: the service it is for, picked from the company's services. */
+  const [advanceItem, setAdvanceItem] = useState<{ id: string; name: string; taxCategoryId: string } | null>(null);
+  const [serviceQuery, setServiceQuery] = useState('');
   /** TDS the customer deducted from an advance, before any invoice. */
   const [advanceTdsText, setAdvanceTdsText] = useState('');
-  const [advanceSheet, setAdvanceSheet] = useState<'tax' | 'pos' | 'tds' | null>(null);
+  const [advanceSheet, setAdvanceSheet] = useState<'service' | 'taxMode' | 'tax' | 'pos' | 'tds' | null>(null);
   /** The section of TDS kept back on money paid; the supplier's own until changed. */
   const [tdsSectionChoice, setTdsSectionChoice] = useState<string | null>(null);
   const [seeded, setSeeded] = useState(false);
@@ -190,6 +193,9 @@ export function PaymentForm({
   const [partyQuery, setPartyQuery] = useState('');
   // On Receipts the Received for sheet does its own searching.
   const partySearch = usePartySearch(direction === 'received' ? 'customer' : 'supplier', useDebounced(partyQuery), partyOpen && !receipts);
+  // The services an advance receipt can be for: active items of type service, searched by name, SKU or SAC.
+  const serviceSearch = useItemSearch(useDebounced(serviceQuery), advanceSheet === 'service');
+  const services = (serviceSearch.data ?? []).filter((i) => i.type === 'service');
   const pickParty = (id: string) => {
     setPartyId(id);
     setAllocations({});
@@ -205,6 +211,8 @@ export function PaymentForm({
   // still owes is the server's figure (returns and credit notes already off), in the payment currency, oldest first.
   // An advance receipt lists only the invoices whose every line is a service, not the ones with goods.
   const advanceReceipt = direction === 'received' && params.advance === '1';
+  // A receipt goes in full to the invoices ticked: no advance is kept (that is an advance receipt's).
+  const noAdvance = direction === 'received' && !advanceReceipt;
   const open = useOpenDocuments(partyId, direction === 'received' ? ['invoice', 'debitNote', 'openingInvoice'] : ['purchaseBill', 'supplierDebitNote', 'openingBill'], { servicesOnly: advanceReceipt });
   const outstanding = useMemo(() => {
     const asOf = today();
@@ -227,7 +235,7 @@ export function PaymentForm({
 
   // Seed the allocation from the invoice we were opened from, on the first
   // render where that invoice is actually in the outstanding list.
-  const prefill = params.documentId ? outstanding.find((o) => o.document.id === params.documentId) : undefined;
+  const prefill = params.documentId && !advanceReceipt ? outstanding.find((o) => o.document.id === params.documentId) : undefined;
   // TDS the customer was expected to deduct from an invoice (RULES 4.14): taken as deducted unless changed.
   const expectedTdsOf = (docId: string): number => {
     if (direction !== 'received') return 0;
@@ -298,11 +306,18 @@ export function PaymentForm({
   const unallocated = subtract(amount, allocatedTotal);
   // Each at its rate on the receipt's date: the server taxes the advance at that day's rate.
   const taxed = taxCategoriesOn(taxCategories, date).filter((c) => c.rate > 0 && taxAvailableOn(c, date));
-  // A rate not known is 18% (RULES 8.12).
-  const advanceTaxCategory = taxed.find((c) => c.id === advanceTaxId) ?? taxed.find((c) => c.rate === DEFAULT_ADVANCE_RATE) ?? taxed[0];
+  // An advance receipt for a service, with tax: the GST is worked back at that service's own rate on the
+  // day; a service at 0% (nil rated, exempt) carries none. Otherwise the rate picked, or 18% when not known (RULES 8.12).
+  const serviceCategory = advanceReceipt && advanceItem ? taxCategoriesOn(taxCategories, date).find((c) => c.id === advanceItem.taxCategoryId) : undefined;
+  const advanceTaxCategory =
+    advanceReceipt && advanceItem
+      ? serviceCategory && serviceCategory.rate > 0 && taxAvailableOn(serviceCategory, date)
+        ? serviceCategory
+        : undefined
+      : (taxed.find((c) => c.id === advanceTaxId) ?? taxed.find((c) => c.rate === DEFAULT_ADVANCE_RATE) ?? taxed[0]);
   // A place of supply not known is taken as another state: IGST, under "Other Territory" (97).
   const pos = advancePos ?? party?.billingAddress?.stateCode;
-  const canAdvance = direction === 'received' && unallocated.minor > 0 && !!company.taxRegistration?.registered && !!taxed.length;
+  const canAdvance = direction === 'received' && !noAdvance && unallocated.minor > 0 && !!company.taxRegistration?.registered && !!taxed.length;
   const sac = advanceSac.trim();
   // An HSN that isn't a SAC (99…) is goods, which carry no GST on an advance (notification 66/2017).
   const goodsSac = !!sac && !sac.startsWith('99');
@@ -312,6 +327,13 @@ export function PaymentForm({
       ? { taxCategoryId: advanceTaxCategory.id, rate: advanceTaxCategory.rate, placeOfSupplyStateCode: pos ?? '97', ...(sac && { hsn: sac }), ...(advanceCess > 0 && { cessRate: advanceCess }) }
       : null;
   const overAllocated = unallocated.minor < 0;
+  /** A receipt with money left over: more than the ticked invoices owe, or not all of it applied. */
+  const notApplied = noAdvance && unallocated.minor > 0;
+  /** The advance as the summary states it: with tax, its value without the GST inside it (850 of 1,000), the GST below it. */
+  const advanceShown =
+    advanceTax && unallocated.minor > 0
+      ? money(advanceTaxSplit(unallocated.minor + advanceTds.minor, advanceTax.rate, advanceCess, advanceInterState(homeStateCode(company), pos)).taxable, currency)
+      : unallocated;
 
   /**
    * Spread `total` over documents oldest first, never more than each one owes.
@@ -351,6 +373,14 @@ export function PaymentForm({
   const onAmountChange = (v: string) => {
     setAmountText(v);
     setAmountFollows(false);
+    // An advance receipt goes on no invoice: all of the amount is the advance.
+    if (advanceReceipt) return;
+    // A receipt fills the invoices oldest first, each in full, the last with what is left, and ticks
+    // only those the amount reaches.
+    if (noAdvance) {
+      setAllocations(spread(fromMajor(v || '0', currency).minor));
+      return;
+    }
     // Keep the ticked documents, but re-fit them to the new amount so a
     // smaller (partial) amount never leaves the form over-allocated.
     const ticked = Object.keys(allocations);
@@ -452,12 +482,15 @@ export function PaymentForm({
     open.isSuccess &&
     (amount.minor > 0 || (amount.minor === 0 && adjustedTotal > 0)) &&
     !overAllocated &&
+    !notApplied &&
     !!accountId &&
     !balanceBlocks &&
     (!keepsTds || direction === 'received' || !!tdsSectionPicked) &&
     // TDS on an advance goes to a section's receivable (26AS); an advance for goods takes no GST.
     (advanceTds.minor === 0 || !!tdsSectionPicked) &&
-    !(serviceAdvance && canAdvance && goodsSac);
+    !(serviceAdvance && canAdvance && goodsSac) &&
+    // An advance receipt names the service it is for.
+    (!advanceReceipt || !!advanceItem);
 
   const save = async () => {
     if (!canSave || !partyId) return;
@@ -466,8 +499,9 @@ export function PaymentForm({
       const m = fromMajor(adjustments[docId]?.[key] || '0', currency);
       return m.minor > 0 ? m : undefined;
     };
+    // An advance receipt carries no allocations, whatever was ticked before.
     const allocationRows: PaymentAllocation[] = outstanding
-      .filter((o) => o.document.id in allocations && fromMajor(allocations[o.document.id] || '0', currency).minor + adjustedOf(o.document.id) > 0)
+      .filter((o) => !advanceReceipt && o.document.id in allocations && fromMajor(allocations[o.document.id] || '0', currency).minor + adjustedOf(o.document.id) > 0)
       .map((o) => ({
         documentId: o.document.id,
         documentNumber: o.document.number,
@@ -496,6 +530,7 @@ export function PaymentForm({
       unallocated: unallocated.minor > 0 ? money(unallocated.minor + advanceTds.minor, currency) : zero(currency),
       fxGainLoss,
       advanceTax: advanceTax ?? undefined,
+      advanceItemId: advanceReceipt ? advanceItem?.id : undefined,
       advanceTds: advanceTds.minor > 0 ? advanceTds : undefined,
       tdsSection: keepsTds || advanceTds.minor > 0 ? tdsSectionPicked : undefined,
       notes: notes || undefined,
@@ -618,6 +653,34 @@ export function PaymentForm({
   );
 
   const dateField = <DateField label={tr('sales:payment.date')} value={date} onChange={setDate} required />;
+  // An advance receipt is for one of the company's services: required, and its SAC and GST rate fill the tax fields.
+  const serviceField = advanceReceipt ? (
+    <>
+      <PickerField
+        label={tr('sales:payment.advanceService')}
+        value={advanceItem?.name}
+        placeholder={tr('sales:payment.advanceServicePick')}
+        onPress={() => setAdvanceSheet('service')}
+        icon="briefcase-outline"
+        required
+      />
+      <SelectSheet
+        visible={advanceSheet === 'service'}
+        onClose={() => setAdvanceSheet(null)}
+        title={tr('sales:payment.advanceService')}
+        options={services.map((i) => ({ value: i.id, label: i.name, trailing: i.hsnCode || undefined }))}
+        value={advanceItem?.id}
+        onQueryChange={setServiceQuery}
+        loading={serviceSearch.isFetching}
+        onSelect={(id) => {
+          const picked = services.find((i) => i.id === id);
+          if (!picked) return;
+          setAdvanceItem({ id: picked.id, name: picked.name, taxCategoryId: picked.taxCategoryId });
+          if (picked.hsnCode?.startsWith('99')) setAdvanceSac(picked.hsnCode.slice(0, 8));
+        }}
+      />
+    </>
+  ) : null;
 
   const currencyField = (
     <PickerField
@@ -688,8 +751,9 @@ export function PaymentForm({
       />
     ) : null;
 
+  // Earlier advances to adjust: on money paid only. A receipt keeps none and an advance receipt is one.
   const advanceCard =
-    partyId && advance.minor > 0 && outstanding.length > 0 ? (
+    direction === 'paid' && partyId && advance.minor > 0 && outstanding.length > 0 ? (
       <Card style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
         <Icon name="wallet-outline" size={22} color={t.c.primary} />
         <View style={{ flex: 1, gap: 2 }}>
@@ -744,7 +808,7 @@ export function PaymentForm({
       illustration="all-settled"
       icon="check-all"
       title={tr(advanceReceipt ? 'sales:payment.nothingOutstandingServices' : 'sales:payment.nothingOutstanding')}
-      message={tr(advanceReceipt ? 'sales:payment.advanceReceiptHint' : 'sales:payment.advanceHint')}
+      message={tr(advanceReceipt ? 'sales:payment.advanceReceiptHint' : noAdvance ? 'sales:payment.noInvoicesHint' : 'sales:payment.advanceHint')}
       compact
     />
   ) : (
@@ -856,7 +920,7 @@ export function PaymentForm({
               </>
             )}
 
-            {advance.minor > 0 ? (
+            {!noAdvance && advance.minor > 0 ? (
               <Pressable
                 onPress={() => void adjustAdvance(o.document.id)}
                 disabled={adjustingAdvance}
@@ -897,7 +961,8 @@ export function PaymentForm({
     <>
       {[
         { label: tr('sales:payment.paymentAmount'), value: formatMoney(amount) },
-        { label: tr('sales:payment.allocated'), value: formatMoney(allocatedTotal) },
+        // An advance receipt goes on no invoice: nothing is allocated, so no line for it.
+        ...(advanceReceipt ? [] : [{ label: tr('sales:payment.allocated'), value: formatMoney(allocatedTotal) }]),
         ...(adjustedTotal > 0 ? [{ label: tr('sales:payment.settledWithoutCash'), value: formatMoney(money(adjustedTotal, currency)) }] : []),
       ].map((r) => (
         <View key={r.label} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
@@ -911,13 +976,18 @@ export function PaymentForm({
       ))}
       <View style={{ height: 1, backgroundColor: t.c.line, marginVertical: 2 }} />
       <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-        <Text variant="body" weight="700" tone={overAllocated ? 'bad' : 'default'}>
-          {overAllocated ? tr('sales:payment.overAllocatedBy') : tr('sales:payment.unallocatedAdvance')}
+        <Text variant="body" weight="700" tone={overAllocated || notApplied ? 'bad' : 'default'}>
+          {overAllocated ? tr('sales:payment.overAllocatedBy') : noAdvance ? tr('sales:payment.notApplied') : advanceReceipt ? tr('sales:payment.advanceLine') : tr('sales:payment.unallocatedAdvance')}
         </Text>
-        <Text variant="body" weight="700" tone={overAllocated ? 'bad' : unallocated.minor > 0 ? 'warn' : 'good'}>
-          {formatMoney(overAllocated ? money(-unallocated.minor, currency) : unallocated)}
+        <Text variant="body" weight="700" tone={overAllocated || notApplied ? 'bad' : unallocated.minor > 0 ? 'warn' : 'good'}>
+          {formatMoney(overAllocated ? money(-unallocated.minor, currency) : advanceShown)}
         </Text>
       </View>
+      {notApplied ? (
+        <Text variant="caption" tone="bad">
+          {tr('sales:payment.notAppliedHint')}
+        </Text>
+      ) : null}
       {/* A service advance: the GST inside it, line by line, as it is owed when received. */}
       {advanceTax && unallocated.minor > 0 ? (
         <AdvanceGstBreakup gross={money(unallocated.minor + advanceTds.minor, currency)} rate={advanceTax.rate} cessRate={advanceCess} placeOfSupply={pos} company={company} baseCurrency={baseCurrency} exchangeRate={exchangeRate} tds={advanceTds} style={{ paddingLeft: t.spacing.md, marginTop: 2 }} />
@@ -937,13 +1007,13 @@ export function PaymentForm({
 
   // TDS and the GST on a service advance: in the notes column on a phone, a card of their own in the
   // main column on a desktop, where the side column is too narrow for fields side by side.
-  const hasTaxFields = (direction === 'received' && unallocated.minor > 0) || keepsTds || advanceTds.minor > 0 || canAdvance;
+  const hasTaxFields = (direction === 'received' && !noAdvance && unallocated.minor > 0) || keepsTds || advanceTds.minor > 0 || canAdvance;
   const taxFields = (
     <>
       {/* The TDS amount and its section share a row on a desktop; either alone takes the row. */}
       <FieldGrid
         items={[
-          direction === 'received' && unallocated.minor > 0 ? (
+          direction === 'received' && !noAdvance && unallocated.minor > 0 ? (
             <AmountField
               label={tr('sales:payment.advanceTds')}
               value={advanceTdsText}
@@ -984,11 +1054,38 @@ export function PaymentForm({
       ) : null}
       {canAdvance ? (
         <>
-          <SwitchField label={tr('sales:payment.serviceAdvance')} description={tr('sales:payment.serviceAdvanceHint')} value={serviceAdvance} onValueChange={setServiceAdvance} />
+          {/* With tax: the GST is inside the amount, and the advance is its value without it. Without tax: all of it. */}
+          <PickerField
+            label={tr('sales:payment.advanceTaxMode')}
+            value={tr(serviceAdvance ? 'sales:payment.withTax' : 'sales:payment.withoutTax')}
+            onPress={() => setAdvanceSheet('taxMode')}
+            icon="percent-outline"
+            hint={tr('sales:payment.serviceAdvanceHint')}
+          />
+          <SelectSheet
+            visible={advanceSheet === 'taxMode'}
+            onClose={() => setAdvanceSheet(null)}
+            title={tr('sales:payment.advanceTaxMode')}
+            options={[
+              { value: 'with', label: tr('sales:payment.withTax') },
+              { value: 'without', label: tr('sales:payment.withoutTax') },
+            ]}
+            value={serviceAdvance ? 'with' : 'without'}
+            onSelect={(v) => setServiceAdvance(v === 'with')}
+            searchable={false}
+          />
           {serviceAdvance ? (
             <>
               <FieldRow>
-                <PickerField label={tr('sales:payment.advanceRate')} value={advanceTaxCategory?.name} onPress={() => setAdvanceSheet('tax')} icon="percent-outline" />
+                {/* The service's own rate once one is picked: shown, not changed here. */}
+                <PickerField
+                  label={tr('sales:payment.advanceRate')}
+                  value={advanceTaxCategory?.name ?? (advanceItem ? formatPercent(0) : undefined)}
+                  onPress={() => setAdvanceSheet('tax')}
+                  icon="percent-outline"
+                  disabled={advanceReceipt && !!advanceItem}
+                  hint={advanceReceipt && advanceItem ? tr('sales:payment.advanceRateFromService', { name: advanceItem.name }) : undefined}
+                />
                 <PickerField
                   label={tr('sales:editor.placeOfSupply')}
                   value={pos ? INDIAN_STATES.find((st) => st.code === pos)?.name : undefined}
@@ -1034,6 +1131,7 @@ export function PaymentForm({
     >
       {partyCard}
       {amountField('lg')}
+      {serviceField}
       {dateField}
       {currencyField}
       {methodField}
@@ -1043,15 +1141,17 @@ export function PaymentForm({
       {rateField}
       {advanceCard}
 
-      {/* Allocation */}
-      <View style={{ gap: t.spacing.sm }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('sales:payment.applyTo')}</Text>
-          {allocationLinks}
-        </View>
+      {/* Allocation: none on an advance receipt, which is the customer and the amount alone. */}
+      {advanceReceipt ? null : (
+        <View style={{ gap: t.spacing.sm }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('sales:payment.applyTo')}</Text>
+            {allocationLinks}
+          </View>
 
-        <Card padded={false}>{openDocuments}</Card>
-      </View>
+          <Card padded={false}>{openDocuments}</Card>
+        </View>
+      )}
 
       {/* Allocation summary */}
       <Card style={{ gap: t.spacing.sm }}>{summaryRows}</Card>
@@ -1064,11 +1164,12 @@ export function PaymentForm({
     <FormSection title={tr('sales:payment.details')}>
       {/* Who across the top, as on the invoice; the amount, date and the rest two to a row below. */}
       {partyCard}
-      <FieldGrid items={[amountField(), dateField, methodField, accountField, currencyField, referenceField, rateField]} />
+      <FieldGrid items={[amountField(), serviceField, dateField, methodField, accountField, currencyField, referenceField, rateField]} />
       {addAccountLink}
     </FormSection>
   );
-  const allocation = (
+  // An advance receipt is the customer and the amount alone: no invoices to apply it to.
+  const allocation = advanceReceipt ? null : (
     <FormSection title={tr('sales:payment.applyTo')} action={allocationLinks}>
       <View style={{ borderWidth: 1, borderColor: t.c.line, borderRadius: t.radius.md, overflow: 'hidden' }}>{openDocuments}</View>
     </FormSection>

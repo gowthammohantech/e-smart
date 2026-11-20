@@ -71,7 +71,8 @@
       "pricing": "Pricing and tax",
       "pricingHint": "What you charge and what it costs you",
       "summary": "Summary",
-      "unitStock": "Unit and stock"
+      "unitStock": "Unit and stock",
+      "unit": "Unit"
     },
     "category": "Category",
     "brand": "Brand",

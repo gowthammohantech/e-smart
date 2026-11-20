@@ -31,11 +31,22 @@ export default function TaxStep() {
   const rates = draft.taxRates ?? defaults;
   const shownRates = [...new Set([...defaults, ...rates])].sort((a, b) => a - b);
   const [rateText, setRateText] = useState('');
+  const [rateError, setRateError] = useState<string | undefined>();
   // At least one rate stays: a business registered for tax needs one to charge.
   const toggleRate = (r: number) => set({ taxRates: rates.includes(r) ? (rates.length > 1 ? rates.filter((x) => x !== r) : rates) : [...rates, r].sort((a, b) => a - b) });
   const addRate = () => {
     const r = Number(rateText);
-    if (rateText && Number.isFinite(r) && r >= 0 && r <= 100 && !rates.includes(r)) set({ taxRates: [...rates, r].sort((a, b) => a - b) });
+    if (!rateText || !Number.isFinite(r) || r < 0 || r > 100) {
+      setRateError(tr('onboarding:tax.rateInvalid'));
+      return;
+    }
+    if (shownRates.includes(r) && rates.includes(r)) {
+      setRateError(tr('onboarding:tax.rateExists', { name: taxName, rate: r }));
+      return;
+    }
+    // A default the person had left out comes back on; a new rate is added.
+    set({ taxRates: [...rates, r].sort((a, b) => a - b) });
+    setRateError(undefined);
     setRateText('');
   };
 
@@ -130,6 +141,8 @@ export default function TaxStep() {
               description={tr('onboarding:tax.compositionHint')}
               value={draft.compositionScheme}
               onValueChange={(v) => set({ compositionScheme: v })}
+              // Not available yet: shown, but it can't be turned on.
+              disabled
             />
           ) : null}
 
@@ -157,7 +170,11 @@ export default function TaxStep() {
               <TextField
                 label={tr('onboarding:tax.addRate')}
                 value={rateText}
-                onChangeText={(v) => setRateText(v.replace(/[^0-9.]/g, ''))}
+                onChangeText={(v) => {
+                  setRateText(v.replace(/[^0-9.]/g, ''));
+                  setRateError(undefined);
+                }}
+                error={rateError}
                 keyboardType="decimal-pad"
                 placeholder="3"
                 containerStyle={{ flex: 1 }}
