@@ -280,7 +280,8 @@ export function LineGrid({
                   numeric
                   sanitize={(v) => decimalInput(v, 2)}
                   placeholder="0"
-                  invalid={line.unitPrice.minor > 0 && calc.taxable.minor <= 0}
+                  // Red only for a discount that wipes out a line with a quantity and a rate, not an empty one on a new line.
+                  invalid={line.discountValue > 0 && line.quantity > 0 && line.unitPrice.minor > 0 && calc.taxable.minor <= 0}
                   onCommit={(v) => {
                     const d = Number(v) || 0;
                     if (d !== line.discountValue) onUpdate(line.id, { discountValue: d });
