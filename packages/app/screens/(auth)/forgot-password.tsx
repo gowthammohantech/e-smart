@@ -5,7 +5,7 @@ import { AuthShell } from '@esmart/ui/components/AuthShell';
 import { TextField } from '@esmart/ui/components/Field';
 import { Button } from '@esmart/ui/components/Button';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
-import { Errors, hasErrors, required, validEmail } from '@esmart/core/lib/validators';
+import { Errors, hasErrors, required, shownError, validEmail } from '@esmart/core/lib/validators';
 import { remoteSession } from '../../remote';
 import { describeError } from '../../remote/errors';
 
@@ -18,6 +18,9 @@ export default function ForgotPassword() {
   const [busy, setBusy] = useState(false);
   // Read at once: a second tap or Enter can land before `busy` re-renders, and would send a second email.
   const sending = useRef(false);
+
+  // The email is checked as typed: red at once if wrong, and the button waits until it is right.
+  const liveEmail = validEmail(email);
 
   const submit = () => {
     if (sending.current) return;
@@ -66,10 +69,10 @@ export default function ForgotPassword() {
         returnKeyType="send"
         onSubmitEditing={submit}
         icon="email-outline"
-        error={errors.email}
+        error={shownError(email, liveEmail, errors.email)}
         required
       />
-      <Button title={tr('auth:forgot.submit')} onPress={submit} loading={busy} fullWidth />
+      <Button title={tr('auth:forgot.submit')} onPress={submit} loading={busy} disabled={!!liveEmail} fullWidth />
     </AuthShell>
   );
 }
