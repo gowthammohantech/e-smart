@@ -26,7 +26,7 @@ import { BUSINESS_TYPES, COUNTRIES, INDIAN_STATES } from '@esmart/core/data/mast
 import { citiesForState } from '@esmart/core/data/cities';
 import { CURRENCIES } from '@esmart/core/lib/currencies';
 import { monthNames } from '@esmart/core/lib/date';
-import { Errors, hasErrors, required, validEmail, validGstin, validPostalCode, validTan } from '@esmart/core/lib/validators';
+import { Errors, hasErrors, required, shownError, validEmail, validGstin, validPostalCode, validTan } from '@esmart/core/lib/validators';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { useGoBack } from '../../../navigation/useGoBack';
 import { LogoSection } from '../../../features/company/LogoSection';
@@ -128,20 +128,25 @@ function CompanySettingsForm() {
   const country = COUNTRIES.find((c) => c.code === company?.country);
   const currency = CURRENCIES.find((c) => c.code === company?.baseCurrency);
 
+  // Checked as typed: a field filled in wrong is red at once and Save waits until it is put right.
+  // In the order the fields sit on the page, so the toast names the first one you'd reach.
+  const live = {
+    email: validEmail(email),
+    phone: phone.error(),
+    postalCode: validPostalCode(postalCode, company?.country, stateCode),
+    // The same shapes the server checks, said here in words.
+    accountNumber: !bookAccount && accountNumber.trim() && !/^(?:[0-9A-Za-z] ?){6,34}$/.test(accountNumber.trim()) ? tr('settings:company.accountNumberInvalid') : undefined,
+    ifsc: !bookAccount && ifsc.trim() && !/^[A-Za-z]{4}0[A-Za-z0-9]{6}$/.test(ifsc.trim()) ? tr('settings:company.ifscInvalid') : undefined,
+    upiId: !bookAccount && upiId.trim() && !/^[A-Za-z0-9.\-_]{2,256}@[A-Za-z][A-Za-z0-9]{1,63}$/.test(upiId.trim()) ? tr('settings:company.upiInvalid') : undefined,
+    taxId: taxRegistered && company?.country === 'IN' ? validGstin(taxId) : undefined,
+    tan: taxRegistered ? validTan(tan) : undefined,
+  };
+  const invalid = hasErrors(live);
+
   const save = async () => {
-    // In the order the fields sit on the page, so the toast names the first one you'd reach.
     const next: Errors<'name' | 'email' | 'phone' | 'taxId' | 'postalCode' | 'tan' | 'ifsc' | 'accountNumber' | 'upiId'> = {
       name: required(name, tr('errors:field.businessName')),
-      email: validEmail(email),
-      phone: phone.error(),
-      postalCode: validPostalCode(postalCode, company?.country, stateCode),
-      // The same shapes the server checks, said here in words.
-      accountNumber: !bookAccount && accountNumber.trim() && !/^(?:[0-9A-Za-z] ?){6,34}$/.test(accountNumber.trim()) ? tr('settings:company.accountNumberInvalid') : undefined,
-      ifsc: !bookAccount && ifsc.trim() && !/^[A-Za-z]{4}0[A-Za-z0-9]{6}$/.test(ifsc.trim()) ? tr('settings:company.ifscInvalid') : undefined,
-      upiId: !bookAccount && upiId.trim() && !/^[A-Za-z0-9.\-_]{2,256}@[A-Za-z][A-Za-z0-9]{1,63}$/.test(upiId.trim()) ? tr('settings:company.upiInvalid') : undefined,
-      taxId: taxRegistered && company?.country === 'IN' ? validGstin(taxId) : undefined,
-      tan: taxRegistered ? validTan(tan) : undefined,
-      // Out of range is said on the field, not quietly swapped for the default.
+      ...live,
     };
     setErrors(next);
     if (hasErrors(next)) {
@@ -215,13 +220,13 @@ function CompanySettingsForm() {
   );
   const cityField = <CityField label={tr('settings:company.city')} value={city} onChange={setCity} stateCode={stateCode} containerStyle={half} />;
   const pinField = (
-    <TextField label="PIN" value={postalCode} onChangeText={setPostalCode} keyboardType="number-pad" maxLength={company?.country === 'IN' ? 6 : undefined} error={errors.postalCode} containerStyle={half} />
+    <TextField label="PIN" value={postalCode} onChangeText={setPostalCode} keyboardType="number-pad" maxLength={company?.country === 'IN' ? 6 : undefined} error={shownError(postalCode, live.postalCode, errors.postalCode)} containerStyle={half} />
   );
   const accountNameField = <TextField key="accName" label={tr('settings:company.accountName')} value={accountName} onChangeText={setAccountName} icon="account-outline" placeholder={name} />;
   const bankNameField = <TextField key="bank" label={tr('settings:company.bankName')} value={bankName} onChangeText={setBankName} icon="bank-outline" containerStyle={half} />;
   const branchField = <TextField key="branch" label={tr('settings:company.branchName')} value={bankBranch} onChangeText={setBankBranch} containerStyle={half} />;
   const accountNumberField = (
-    <TextField key="accNo" label={tr('settings:company.accountNumber')} value={accountNumber} onChangeText={setAccountNumber} keyboardType="number-pad" error={errors.accountNumber} containerStyle={half} />
+    <TextField key="accNo" label={tr('settings:company.accountNumber')} value={accountNumber} onChangeText={setAccountNumber} keyboardType="number-pad" error={shownError(accountNumber, live.accountNumber, errors.accountNumber)} containerStyle={half} />
   );
   const ifscField = (
     <TextField
@@ -231,7 +236,7 @@ function CompanySettingsForm() {
       onChangeText={(v) => setIfsc(v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 11))}
       autoCapitalize="characters"
       placeholder="HDFC0001234"
-      error={errors.ifsc}
+      error={shownError(ifsc, live.ifsc, errors.ifsc)}
       containerStyle={half}
     />
   );
@@ -245,7 +250,7 @@ function CompanySettingsForm() {
       keyboardType="email-address"
       icon="qrcode"
       placeholder={UPI_SAMPLE}
-      error={errors.upiId}
+      error={shownError(upiId, live.upiId, errors.upiId)}
     />
   );
 
@@ -325,9 +330,9 @@ function CompanySettingsForm() {
     <TextField key="legal" label={tr('settings:company.legalName')} value={legalName} onChangeText={setLegalName} placeholder={tr('settings:company.legalPlaceholder')} editable={!locks.legalName} />
   );
   const emailField = (
-    <TextField key="email" label={tr('settings:company.email')} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" icon="email-outline" error={errors.email} />
+    <TextField key="email" label={tr('settings:company.email')} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" icon="email-outline" error={shownError(email, live.email, errors.email)} />
   );
-  const phoneField = <PhoneField key="phone" label={tr('settings:company.phone')} {...phone.field} error={errors.phone} />;
+  const phoneField = <PhoneField key="phone" label={tr('settings:company.phone')} {...phone.field} error={shownError(phone.field.value, live.phone, errors.phone)} />;
   const typeField = (
     <PickerField key="type" label={tr('settings:company.type')} value={tr(`onboarding:businessType.${businessType}` as 'onboarding:businessType.other')} onPress={() => setTypeOpen(true)} icon="storefront-outline" />
   );
@@ -363,7 +368,7 @@ function CompanySettingsForm() {
       icon="bank-minus"
       placeholder="MUMA12345B"
       hint={tr('settings:company.tanHint')}
-      error={errors.tan}
+      error={shownError(tan, live.tan, errors.tan)}
     />
   );
   const lutField = (
@@ -388,7 +393,7 @@ function CompanySettingsForm() {
         onChangeText={(v) => setTaxId(v.toUpperCase())}
         autoCapitalize="characters"
         icon="card-account-details-outline"
-        error={errors.taxId}
+        error={shownError(taxId, live.taxId, errors.taxId)}
         editable={!locks.taxIdentity}
       />
       <SwitchField
@@ -544,7 +549,7 @@ function CompanySettingsForm() {
       </ScrollView>
 
       <FormActions>
-        <Button shortcut="S" title={tr('settings:company.save')} onPress={() => void save()} loading={saving} disabled={blocked} fullWidth={!desktop} size={desktop ? undefined : 'lg'} />
+        <Button shortcut="S" title={tr('settings:company.save')} onPress={() => void save()} loading={saving} disabled={blocked || invalid} fullWidth={!desktop} size={desktop ? undefined : 'lg'} />
       </FormActions>
 
       <SelectSheet visible={typeOpen} onClose={() => setTypeOpen(false)} title={tr('settings:company.type')} options={BUSINESS_TYPES.map((b) => ({ value: b, label: tr(`onboarding:businessType.${b}` as 'onboarding:businessType.other') }))} value={businessType} onSelect={setBusinessType} />
