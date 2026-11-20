@@ -157,9 +157,12 @@ export function SelectSheet({
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q || onQueryChange) return options;
-    return options.filter(
-      (o) => o.label.toLowerCase().includes(q) || (o.description ?? '').toLowerCase().includes(q),
-    );
+    // What starts with the search comes first, A to Z, then the rest that hold it, A to Z:
+    // "k" lists Kavya and Kumar before Ankit and Mukesh.
+    const starts = (o: SelectOption) => (o.label.toLowerCase().startsWith(q) ? 0 : 1);
+    return options
+      .filter((o) => o.label.toLowerCase().includes(q) || (o.description ?? '').toLowerCase().includes(q))
+      .sort((a, b) => starts(a) - starts(b) || a.label.localeCompare(b.label));
   }, [options, query, onQueryChange]);
 
   const typed = query.trim();
