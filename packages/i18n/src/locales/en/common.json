@@ -18,7 +18,8 @@
     "recordPayment": "Record payment",
     "seeAll": "See all",
     "saveAndAddAnother": "Save & add another",
-    "saveAndAddAnotherShortcut": "Save, then start the next one ({{keys}})"
+    "saveAndAddAnotherShortcut": "Save, then start the next one ({{keys}})",
+    "showLess": "Show less"
   },
   "placeholder": {
     "none": "—",
