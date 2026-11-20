@@ -373,6 +373,8 @@ export function PaymentForm({
   const onAmountChange = (v: string) => {
     setAmountText(v);
     setAmountFollows(false);
+    // An advance receipt goes on no invoice: all of the amount is the advance.
+    if (advanceReceipt) return;
     // A receipt fills the invoices oldest first, each in full, the last with what is left, and ticks
     // only those the amount reaches.
     if (noAdvance) {
@@ -497,8 +499,9 @@ export function PaymentForm({
       const m = fromMajor(adjustments[docId]?.[key] || '0', currency);
       return m.minor > 0 ? m : undefined;
     };
+    // An advance receipt carries no allocations, whatever was ticked before.
     const allocationRows: PaymentAllocation[] = outstanding
-      .filter((o) => o.document.id in allocations && fromMajor(allocations[o.document.id] || '0', currency).minor + adjustedOf(o.document.id) > 0)
+      .filter((o) => !advanceReceipt && o.document.id in allocations && fromMajor(allocations[o.document.id] || '0', currency).minor + adjustedOf(o.document.id) > 0)
       .map((o) => ({
         documentId: o.document.id,
         documentNumber: o.document.number,
