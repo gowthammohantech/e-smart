@@ -703,7 +703,7 @@
     "moreDetails": "More details",
     "lineActions": "Actions for line {{n}}",
     "discountMode": "Discount as {{mode}}, line {{n}}. Change",
-    "enterHint": "Enter moves down a column; on the last line it adds an item.",
+    "enterHint": "Enter moves down a column; on the last line it adds an item (from the quantity it stays put).",
     "increaseQuantity": "Increase quantity",
     "decreaseQuantity": "Decrease quantity"
   },
