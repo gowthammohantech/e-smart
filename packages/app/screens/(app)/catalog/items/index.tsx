@@ -13,6 +13,7 @@ import { Cell, Column, DataTable } from '@esmart/ui/components/DataTable';
 import { Button } from '@esmart/ui/components/Button';
 import { Segmented } from '@esmart/ui/components/Field';
 import { FilterMenu } from '@esmart/ui/components/FilterMenu';
+import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { fetchItemRecord, useItemPages } from '../../../../remote/queries';
 import { describeError } from '../../../../remote/errors';
 import { useToast } from '@esmart/ui/components/Toast';
@@ -116,6 +117,24 @@ export default function ItemList() {
       next === 'inactive' ? tr('common:table.deactivated', { count: records.length }) : tr('common:table.reactivated', { count: records.length }),
       { icon: next === 'inactive' ? 'minus-circle-outline' : 'check-circle-outline' },
     );
+    if (res) {
+      selection.clear();
+      void pages.refetch();
+    }
+  };
+
+  // Delete from the row: asked first, as on the item's own screen.
+  const removeItem = useAppStore((s) => s.removeItem);
+  const [deleting, setDeleting] = useState<Item | null>(null);
+  const remove = async (item: Item) => {
+    // Read from the server first: a delete goes up only for an item the device holds.
+    try {
+      await fetchItemRecord(companyId, item.id);
+    } catch (err) {
+      toast.show(describeError(err, tr), 'error');
+      return;
+    }
+    const res = await serverSave(() => removeItem(item.id), tr('inventory:detail.deleted'), { icon: 'tag-remove-outline' });
     if (res) {
       selection.clear();
       void pages.refetch();
@@ -249,9 +268,11 @@ export default function ItemList() {
                 )}
               </>
             )}
+            // Edit and Delete as icons in the row itself; a click on the row still opens the item.
+            inlineActions
             rowActions={(i) => [
-              { key: 'open', label: tr('common:table.open'), icon: 'eye-outline', onPress: () => router.push(`/(app)/catalog/items/${i.id}`) },
               { key: 'edit', label: tr('common:action.edit'), icon: 'pencil-outline', onPress: () => router.push(`/(app)/catalog/items/${i.id}/edit`) },
+              { key: 'delete', label: tr('inventory:detail.deleteItem'), icon: 'trash-can-outline', destructive: true, onPress: () => setDeleting(i) },
             ]}
             empty={<EmptyState illustration="no-items" title={emptyTitle} message={emptyMessage} compact />}
           />
@@ -319,6 +340,20 @@ export default function ItemList() {
       )}
       {/* A new one starts on the tab it was added from. */}
       <Fab icon="plus" onPress={() => router.push(`/(app)/catalog/items/new?type=${tab}`)} />
+      {/* The same question the item's own screen asks before it deletes. */}
+      <ConfirmDialog
+        visible={!!deleting}
+        title={tr('inventory:detail.deleteTitle', { name: deleting?.name ?? '' })}
+        message={tr('inventory:detail.deleteMessage')}
+        confirmLabel={tr('inventory:detail.delete')}
+        destructive
+        onCancel={() => setDeleting(null)}
+        onConfirm={() => {
+          const item = deleting;
+          setDeleting(null);
+          if (item) void remove(item);
+        }}
+      />
     </View>
   );
 }
