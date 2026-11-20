@@ -33,6 +33,9 @@
     "ewayEmpty": "Bills appear here once goods start moving."
   },
   "ewb": {
+    "loginMissingTitle": "E-way bill login needed",
+    "loginMissingBody": "You haven't saved your e-way bill portal login yet. Add it in Settings first, then come back to raise the bill.",
+    "loginMissingConfirm": "Add login",
     "supply": "Supply",
     "documentType": "Document type",
     "taxableValue": "Taxable value",

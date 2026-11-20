@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, View } from 'react-native';
+import { Animated, Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Icon } from '@esmart/ui/components/Icon';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
@@ -27,10 +27,32 @@ export function SetupChecklist() {
   const dismissed = useUiStore((s) => s.setupDismissed.includes(companyId));
   const dismiss = useUiStore((s) => s.dismissSetup);
   const { steps, doneCount, complete, loading } = useSetupSteps();
+  // A short pulse when the checklist shows, so a new person sees it is what to do before the first invoice.
+  const pulse = useRef(new Animated.Value(0)).current;
+  const shown = !(loading || complete || dismissed || !steps.length);
+  useEffect(() => {
+    if (!shown) return;
+    const run = Animated.sequence(
+      Array.from({ length: 3 }, () => Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 600, useNativeDriver: false }),
+        Animated.timing(pulse, { toValue: 0, duration: 600, useNativeDriver: false }),
+      ])),
+    );
+    run.start();
+    return () => run.stop();
+  }, [shown, pulse]);
   if (loading || complete || dismissed || !steps.length) return null;
 
   const progress = doneCount / steps.length;
   return (
+    <Animated.View
+      style={{
+        borderRadius: t.radius.lg + 2,
+        borderWidth: 2,
+        borderColor: pulse.interpolate({ inputRange: [0, 1], outputRange: ['rgba(0,0,0,0)', t.c.primary] }),
+        backgroundColor: pulse.interpolate({ inputRange: [0, 1], outputRange: ['rgba(0,0,0,0)', t.c.chip] }),
+      }}
+    >
     <Card style={{ gap: t.spacing.md }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
         <Text variant="title" weight="600" style={{ flex: 1 }} role="heading" aria-level={2}>
@@ -117,5 +139,6 @@ export function SetupChecklist() {
         })}
       </View>
     </Card>
+    </Animated.View>
   );
 }
