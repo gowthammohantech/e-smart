@@ -961,7 +961,8 @@ export function PaymentForm({
     <>
       {[
         { label: tr('sales:payment.paymentAmount'), value: formatMoney(amount) },
-        { label: tr('sales:payment.allocated'), value: formatMoney(allocatedTotal) },
+        // An advance receipt goes on no invoice: nothing is allocated, so no line for it.
+        ...(advanceReceipt ? [] : [{ label: tr('sales:payment.allocated'), value: formatMoney(allocatedTotal) }]),
         ...(adjustedTotal > 0 ? [{ label: tr('sales:payment.settledWithoutCash'), value: formatMoney(money(adjustedTotal, currency)) }] : []),
       ].map((r) => (
         <View key={r.label} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
@@ -976,7 +977,7 @@ export function PaymentForm({
       <View style={{ height: 1, backgroundColor: t.c.line, marginVertical: 2 }} />
       <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
         <Text variant="body" weight="700" tone={overAllocated || notApplied ? 'bad' : 'default'}>
-          {overAllocated ? tr('sales:payment.overAllocatedBy') : noAdvance ? tr('sales:payment.notApplied') : tr('sales:payment.unallocatedAdvance')}
+          {overAllocated ? tr('sales:payment.overAllocatedBy') : noAdvance ? tr('sales:payment.notApplied') : advanceReceipt ? tr('sales:payment.advanceLine') : tr('sales:payment.unallocatedAdvance')}
         </Text>
         <Text variant="body" weight="700" tone={overAllocated || notApplied ? 'bad' : unallocated.minor > 0 ? 'warn' : 'good'}>
           {formatMoney(overAllocated ? money(-unallocated.minor, currency) : advanceShown)}
