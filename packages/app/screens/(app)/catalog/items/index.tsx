@@ -50,6 +50,8 @@ export default function ItemList() {
   const brands = useBrands();
   // Switched off, SKU, category and brand leave the list too.
   const hasPos = useHasModule('pos');
+  // No stock is kept without inventory (Free): no On hand column, figure or export column.
+  const hasInventory = useHasModule('inventory');
   const showFilters = hasPos && (categories.length > 0 || brands.length > 0);
   const filtering = categoryId !== 'all' || brandId !== 'all';
   const pages = useItemPages({ type: tab, q: search, categoryId: categoryId === 'all' ? undefined : categoryId, brandId: brandId === 'all' ? undefined : brandId });
@@ -83,8 +85,8 @@ export default function ItemList() {
     exportRows(
       tr('nav:title.itemsAndServices'),
       {
-        headers: [tr('common:table.name'), tr('common:table.sku'), tr('common:table.hsn'), tr('common:table.unit'), tr('common:table.onHand'), tr('common:table.price')],
-        rows: chosen(keys).map((i) => [i.name, i.sku, i.hsnCode ?? '', i.unit, i.trackInventory ? (stock[i.id] ?? 0) : '', i.salePrice.minor / 100]),
+        headers: [tr('common:table.name'), tr('common:table.sku'), tr('common:table.hsn'), tr('common:table.unit'), ...(hasInventory ? [tr('common:table.onHand')] : []), tr('common:table.price')],
+        rows: chosen(keys).map((i) => [i.name, i.sku, i.hsnCode ?? '', i.unit, ...(hasInventory ? [i.trackInventory ? (stock[i.id] ?? 0) : ''] : []), i.salePrice.minor / 100]),
       },
       tr('common:table.exportCancelled'),
     );
@@ -204,7 +206,7 @@ export default function ItemList() {
                 render: (i) => <Cell weight="600" mono>{formatMoney(i.salePrice)}</Cell>,
               },
               // A service carries no stock (nor a goods unit to show as its type), so its tab leaves those out.
-            ] satisfies Column<(typeof filtered)[number]>[]).filter((c) => (tab === 'goods' || (c.key !== 'onHand' && c.key !== 'unit')) && (hasPos || c.key !== 'sku'))}
+            ] satisfies Column<(typeof filtered)[number]>[]).filter((c) => (tab === 'goods' || (c.key !== 'onHand' && c.key !== 'unit')) && (hasPos || c.key !== 'sku') && (hasInventory || c.key !== 'onHand'))}
             rows={filtered}
             rowKey={(i) => i.id}
             onRowPress={(i) => router.push(`/(app)/catalog/items/${i.id}`)}
@@ -271,7 +273,7 @@ export default function ItemList() {
                 right={
                   item.type === 'service' ? (
                     <Badge label={tr('inventory:catalog.service')} tone="neutral" size="sm" />
-                  ) : item.trackInventory ? (
+                  ) : item.trackInventory && hasInventory ? (
                     // What's on hand, as the desktop table shows it.
                     <Text variant="small" weight="700" tone={(stock[item.id] ?? 0) <= (item.reorderLevel ?? 0) ? 'bad' : 'default'} style={{ fontVariant: ['tabular-nums'] }}>
                       {formatQty(stock[item.id] ?? 0)} {unitShortName(item.unit)}

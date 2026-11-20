@@ -155,7 +155,7 @@ describe('payment accounts', () => {
     expect(created.body.openingBalanceDate).toBe('2026-04-01');
   });
 
-  it('hands the default on when the default account is deleted', async () => {
+  it('keeps the default until another account is made the default', async () => {
     const { token, c } = await ownerWithCompany(t);
     const [cash] = (await t.get(`${c}/payment-accounts`, { token })).body.data;
     const upi = await t.post(`${c}/payment-accounts`, { name: 'UPI', type: 'wallet', currency: 'INR', openingBalance: { minor: 0, currency: 'INR' } }, { token });
@@ -165,6 +165,13 @@ describe('payment accounts', () => {
     // Nothing has gone through it yet, so its type can still change.
     const retyped = await t.put(`${c}/payment-accounts/${upi.body.id}`, { ...upi.body, type: 'bank' }, { token });
     expect(retyped.body).toMatchObject({ id: upi.body.id, type: 'bank', version: 2 });
+    // The default can't be deleted while it is the default.
+    const refused = await t.del(`${c}/payment-accounts/${cash.id}`, { token });
+    expect(refused.status).toBe(409);
+    expect(refused.body.code).toBe('PAYMENT_ACCOUNT_DEFAULT');
+    // Once another account is the default, it can.
+    const promoted = await t.put(`${c}/payment-accounts/${upi.body.id}`, { ...retyped.body, isDefault: true }, { token });
+    expect(promoted.body.isDefault).toBe(true);
     expect((await t.del(`${c}/payment-accounts/${cash.id}`, { token })).status).toBe(204);
     const list = await t.get(`${c}/payment-accounts`, { token });
     expect(list.body.data).toEqual([expect.objectContaining({ id: upi.body.id, isDefault: true })]);

@@ -128,6 +128,7 @@
     "openingBalanceDateHint": "The day this balance was counted. It can’t be a future date.",
     "useDefault": "Use as default",
     "useDefaultHint": "Pre-selected when recording payments and expenses.",
+    "defaultNotDeletable": "This is the default account. To delete it, first make another account the default.",
     "deleteMessage": "Only an account with no payments, expenses, bank statements, vouchers or opening balance can be deleted, and not the one your invoices print. This cannot be undone.",
     "deleted": "Account deleted",
     "cashAndBank": "Cash and bank balance",

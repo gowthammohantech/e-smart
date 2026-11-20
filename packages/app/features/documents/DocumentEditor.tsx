@@ -453,10 +453,14 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   const itemSearch = useItemSearch(useDebounced(itemQuery), itemOpen && !(isReturn && draft.sourceDocumentId));
   const partyOptions = partySearch.data ?? [];
   // Looked up in the store, where the search keeps what it found, for stock and opening-date checks.
+  // Products and services on tabs of their own in the picker, All showing both.
+  const [itemTab, setItemTab] = useState<'all' | 'goods' | 'service'>('all');
   const itemOptions = useMemo(() => {
     const byId = new Map(items.map((i) => [i.id, i]));
-    return (itemSearch.data ?? []).flatMap((r) => (r.id && byId.get(r.id) ? [byId.get(r.id)!] : []));
-  }, [itemSearch.data, items]);
+    return (itemSearch.data ?? [])
+      .flatMap((r) => (r.id && byId.get(r.id) ? [byId.get(r.id)!] : []))
+      .filter((i) => itemTab === 'all' || (itemTab === 'service' ? i.type === 'service' : i.type !== 'service'));
+  }, [itemSearch.data, items, itemTab]);
   const [currencyOpen, setCurrencyOpen] = useState(false);
   const [posOpen, setPosOpen] = useState(false);
   const [reasonOpen, setReasonOpen] = useState(false);
@@ -2103,6 +2107,18 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           }
           onQueryChange={sourceDoc ? undefined : setItemQuery}
           loading={!sourceDoc && itemSearch.isFetching}
+          // Lines picked from a source document have no tabs; the catalogue does.
+          tabs={
+            sourceDoc
+              ? undefined
+              : [
+                  { key: 'all', label: tr('sales:editor.itemTab.all') },
+                  { key: 'goods', label: tr('sales:editor.itemTab.products') },
+                  { key: 'service', label: tr('sales:editor.itemTab.services') },
+                ]
+          }
+          tab={itemTab}
+          onTabChange={(key) => setItemTab(key as 'all' | 'goods' | 'service')}
           multiple
           confirmLabel={(count) => tr('sales:editor.addItems', { count })}
           onConfirm={(ids) => {

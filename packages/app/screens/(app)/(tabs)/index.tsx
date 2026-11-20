@@ -528,7 +528,13 @@ export default function Home() {
               ) : null}
 
               <FilingCards branchId={scope.branchId} limit={4} />
-
+            </>
+          }
+        />
+        {/* The last two side by side under both columns, so the page ends level rather than one long column. */}
+        <Columns
+          left={
+            <>
               <SectionHeader
                 title={tr('reports:dash.home.movement')}
                 action={hub.moneyMovement.length ? tr('reports:dash.export.csv') : undefined}
@@ -557,7 +563,10 @@ export default function Home() {
                   ))
                 )}
               </Card>
-
+            </>
+          }
+          right={
+            <>
               <SectionHeader title={tr('reports:home.recentInvoices')} action={tr('nav:shell.viewAll')} onAction={() => router.push('/(app)/sales/invoices')} />
               <Card padded={false}>
                 {recent.length === 0 ? (

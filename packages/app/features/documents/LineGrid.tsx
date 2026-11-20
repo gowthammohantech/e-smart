@@ -483,6 +483,9 @@ function GridInput({
       }}
       blurOnSubmit={false}
       keyboardType={numeric ? 'decimal-pad' : 'default'}
+      // No browser suggestions of what was typed before (a past quantity, rate or name) over the grid.
+      autoComplete="off"
+      autoCorrect={false}
       accessibilityLabel={label}
       aria-invalid={invalid || undefined}
       placeholder={placeholder}

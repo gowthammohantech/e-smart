@@ -248,6 +248,8 @@ export const accountHandlers = defineHandlers({
   async removePaymentAccount(ctx) {
     const current = await findAccount(ctx.db, ctx.company.id, ctx.params.id);
     checkIfMatch(ctx.req, current.version);
+    // The default stays until another account is made the default, so there is always one.
+    if (current.isDefault) throw conflict('PAYMENT_ACCOUNT_DEFAULT', 'This is the default account; make another account the default before deleting it');
     const used = await accountUse(ctx.db, current.id);
     if (used) throw conflict('PAYMENT_ACCOUNT_IN_USE', `This account has ${used}; it can't be deleted`);
     if (ctx.company.bankPaymentAccountId === current.id) {
@@ -259,14 +261,6 @@ export const accountHandlers = defineHandlers({
     await ctx.db.transaction(async (tx) => {
       await tx.delete(A).where(eq(A.id, current.id));
       await audit(tx, ctx.user, ctx.company.id, 'payment_account', 'deleted', current, current.name, { before: paymentAccountToWire(current, current.openingBalanceMinor) });
-      if (current.isDefault) {
-        // Hand the default to the oldest remaining account, if any.
-        const [next] = await tx.select().from(A).where(eq(A.companyId, ctx.company.id)).orderBy(asc(A.createdAt), asc(A.id)).limit(1);
-        if (next) {
-          const [promoted] = await tx.update(A).set({ isDefault: true, version: next.version + 1, updatedAt: ctx.now }).where(eq(A.id, next.id)).returning();
-          await audit(tx, ctx.user, ctx.company.id, 'payment_account', 'updated', promoted, promoted.name, { after: paymentAccountToWire(promoted, promoted.openingBalanceMinor) });
-        }
-      }
     });
     return undefined;
   },

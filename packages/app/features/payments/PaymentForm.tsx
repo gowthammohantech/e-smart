@@ -213,6 +213,8 @@ export function PaymentForm({
   const advanceReceipt = direction === 'received' && params.advance === '1';
   // A receipt goes in full to the invoices ticked: no advance is kept (that is an advance receipt's).
   const noAdvance = direction === 'received' && !advanceReceipt;
+  // Record payment on an invoice: the amount goes to that invoice alone, so there is no Apply to list.
+  const fromInvoice = direction === 'received' && !advanceReceipt && !!params.documentId;
   const open = useOpenDocuments(partyId, direction === 'received' ? ['invoice', 'debitNote', 'openingInvoice'] : ['purchaseBill', 'supplierDebitNote', 'openingBill'], { servicesOnly: advanceReceipt });
   const outstanding = useMemo(() => {
     const asOf = today();
@@ -375,6 +377,11 @@ export function PaymentForm({
     setAmountFollows(false);
     // An advance receipt goes on no invoice: all of the amount is the advance.
     if (advanceReceipt) return;
+    // From an invoice, all of it is that invoice's.
+    if (fromInvoice && params.documentId) {
+      setAllocations({ [params.documentId]: v });
+      return;
+    }
     // A receipt fills the invoices oldest first, each in full, the last with what is left, and ticks
     // only those the amount reaches.
     if (noAdvance) {
@@ -475,6 +482,11 @@ export function PaymentForm({
 
   // A TDS section is needed for TDS kept back on money paid, and for TDS on an advance.
   const needsTdsSection = (keepsTds && direction === 'paid') || advanceTds.minor > 0;
+  // From an invoice, never more than it still owes (less any TDS taken as deducted on it).
+  const invoiceRow = fromInvoice ? outstanding.find((o) => o.document.id === params.documentId) : undefined;
+  const invoiceRoom = invoiceRow ? invoiceRow.outstanding.minor - adjustedOf(invoiceRow.document.id) : 0;
+  const overInvoice = !!invoiceRow && amount.minor > invoiceRoom;
+
   // A receipt may move no money when it only records TDS deducted, a discount or a write-off.
   const canSave =
     !!partyId &&
@@ -483,6 +495,7 @@ export function PaymentForm({
     (amount.minor > 0 || (amount.minor === 0 && adjustedTotal > 0)) &&
     !overAllocated &&
     !notApplied &&
+    !overInvoice &&
     !!accountId &&
     !balanceBlocks &&
     (!keepsTds || direction === 'received' || !!tdsSectionPicked) &&
@@ -649,6 +662,7 @@ export function PaymentForm({
       currency={currency}
       size={size}
       required
+      error={overInvoice ? tr('sales:payment.overInvoice', { amount: formatMoney(money(invoiceRoom, currency)) }) : undefined}
     />
   );
 
@@ -1142,7 +1156,7 @@ export function PaymentForm({
       {advanceCard}
 
       {/* Allocation: none on an advance receipt, which is the customer and the amount alone. */}
-      {advanceReceipt ? null : (
+      {advanceReceipt || fromInvoice ? null : (
         <View style={{ gap: t.spacing.sm }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
             <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('sales:payment.applyTo')}</Text>
@@ -1169,7 +1183,7 @@ export function PaymentForm({
     </FormSection>
   );
   // An advance receipt is the customer and the amount alone: no invoices to apply it to.
-  const allocation = advanceReceipt ? null : (
+  const allocation = advanceReceipt || fromInvoice ? null : (
     <FormSection title={tr('sales:payment.applyTo')} action={allocationLinks}>
       <View style={{ borderWidth: 1, borderColor: t.c.line, borderRadius: t.radius.md, overflow: 'hidden' }}>{openDocuments}</View>
     </FormSection>

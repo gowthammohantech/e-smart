@@ -101,7 +101,9 @@ export default function AccountSettings() {
     payments.some((p) => p.accountId === id) ||
     expenses.some((e) => e.accountId === id) ||
     vouchers.some((v) => v.lines.some((l) => l.account === `pay:${id}`));
-  const inUse = !!editing?.id && ((usage?.paymentAccounts[editing.id]?.inUse ?? true) || usedHere(editing.id));
+  // An account the server's list doesn't have yet was made after it was read: nothing has used it, so it
+  // can be deleted (or its type changed) at once. Until the list is in, every account counts as used.
+  const inUse = !!editing?.id && ((usage ? (usage.paymentAccounts[editing.id]?.inUse ?? false) : true) || usedHere(editing.id));
   // The business profile prints this account's details on invoices.
   const onInvoices = !!editing?.id && invoiceAccountId === editing.id;
 
@@ -287,7 +289,8 @@ export default function AccountSettings() {
             saveDisabled={!name.trim() || !!live.ifsc || !!live.upiId}
             deleteLabel={tr('settings:accounts.delete')}
             onDelete={
-              editing?.id && accounts.length > 1 && !inUse
+              // The default can't go until another account is made the default.
+              editing?.id && accounts.length > 1 && !inUse && !editing.isDefault
                 ? () => {
                   const a = editing;
                   setEditing(null);
@@ -381,6 +384,11 @@ export default function AccountSettings() {
             />
           ) : null}
           <SwitchField label={tr('settings:accounts.useDefault')} description={tr('settings:accounts.useDefaultHint')} value={isDefault} onValueChange={setIsDefault} />
+          {editing?.id && editing.isDefault && accounts.length > 1 ? (
+            <Text variant="caption" tone="muted">
+              {tr('settings:accounts.defaultNotDeletable')}
+            </Text>
+          ) : null}
         </View>
       </Sheet>
 
