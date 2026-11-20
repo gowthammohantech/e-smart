@@ -39,7 +39,7 @@ import { INDIAN_STATES, unitDecimals, unitShortName } from '@esmart/core/data/ma
 import { OUTBOUND_KINDS, isLowStock, shortfallsAgainst } from '@esmart/core/domain/stockLedger';
 import { CHARGES_TAXED_FROM, calculateLine } from '@esmart/core/domain/lineCalc';
 import { applyHighestRate } from '@esmart/core/domain/highestRate';
-import { gstinAsTyped, hsnMandatory, validHsn } from '@esmart/core/lib/validators';
+import { hasErrors, hsnMandatory, validGstin, validHsn, validPostalCode } from '@esmart/core/lib/validators';
 
 import { useAppStore } from '../../store/appStore';
 import {
@@ -476,6 +476,12 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   const [shipStateOpen, setShipStateOpen] = useState(false);
   // Goods that go out: where they go when not to the buyer's own address (the consignee).
   const shipsTo = SHIP_TO_KINDS.includes(kind);
+  // The consignee's GSTIN and PIN are checked as typed: red at once if wrong, and saving waits until they are right.
+  const shipLive: { gstin?: string; postalCode?: string } =
+    shipsTo && draft.shipTo
+      ? { gstin: validGstin(draft.shipTo.gstin), postalCode: validPostalCode(draft.shipTo.address.postalCode, 'IN', draft.shipTo.address.stateCode) }
+      : {};
+  const saveHeld = blocked || hasErrors(shipLive);
   // What the charges are called: the business's own name for them, else the built-in kind's.
   const chargesLabel = draft.chargesLabel || tr(`sales:editor.chargesKind.${draft.chargesKind ?? 'other'}` as 'sales:editor.chargesKind.other');
   // The business's own charge names, fetched once the list is opened; hidden ones aren't offered.
@@ -783,6 +789,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   };
 
   const save = async (finalize: boolean, opts?: { overrideCreditLimit?: boolean }) => {
+    if (hasErrors(shipLive)) return;
     if (!draft.partyId) return;
     // A new one, or one moved to them: the server would refuse it, so say why here.
     if (creditHold && (!documentId || existing?.partyId !== draft.partyId)) {
@@ -1211,14 +1218,14 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
                 autoCapitalize="characters"
                 maxLength={15}
                 icon="card-account-details-outline"
-                error={gstinAsTyped(shipTo.gstin)}
+                error={shipLive.gstin}
               />
             </FieldRow>
             <TextField label={tr('sales:editor.shipTo.address')} value={shipTo.address.line1} onChangeText={(line1) => patchShip({ line1 })} icon="map-marker-outline" required />
             <FieldRow>
               <TextField label={tr('sales:editor.shipTo.city')} value={shipTo.address.city} onChangeText={(city) => patchShip({ city })} required />
               <PickerField label={tr('sales:editor.shipTo.state')} value={shipTo.address.state} onPress={() => setShipStateOpen(true)} required />
-              <TextField label={tr('sales:editor.shipTo.pin')} value={shipTo.address.postalCode} onChangeText={(postalCode) => patchShip({ postalCode: postalCode.replace(/\D/g, '').slice(0, 6) })} keyboardType="number-pad" required />
+              <TextField label={tr('sales:editor.shipTo.pin')} value={shipTo.address.postalCode} onChangeText={(postalCode) => patchShip({ postalCode: postalCode.replace(/\D/g, '').slice(0, 6) })} keyboardType="number-pad" error={shipLive.postalCode} required />
             </FieldRow>
           </>
         ) : null}
@@ -1839,10 +1846,10 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
               options={{
                 headerRight: () => (
                   editingIssued ? (
-                    <Button shortcut="S" title={tr('sales:editor.saveChanges')} icon="content-save-outline" onPress={() => void save(false)} loading={saving} disabled={blocked || !draft.partyId || draft.lines.length === 0} />
+                    <Button shortcut="S" title={tr('sales:editor.saveChanges')} icon="content-save-outline" onPress={() => void save(false)} loading={saving} disabled={saveHeld || !draft.partyId || draft.lines.length === 0} />
                   ) : (
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
-                    <Button shortcut="S" title={tr('sales:editor.saveDraft')} variant="ghost" onPress={() => void save(false)} loading={saving} disabled={blocked || !draft.partyId} />
+                    <Button shortcut="S" title={tr('sales:editor.saveDraft')} variant="ghost" onPress={() => void save(false)} loading={saving} disabled={saveHeld || !draft.partyId} />
                     {canSend && !onSaved ? (
                       <Button
                         title={tr('sales:editor.saveAndSend')}
@@ -1854,7 +1861,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
                           requestFinalize();
                         }}
                         loading={saving}
-                        disabled={blocked || !draft.partyId || draft.lines.length === 0}
+                        disabled={saveHeld || !draft.partyId || draft.lines.length === 0}
                       />
                     ) : null}
                     <Button
@@ -1866,7 +1873,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
                         requestFinalize();
                       }}
                       loading={saving}
-                      disabled={blocked || !draft.partyId || draft.lines.length === 0}
+                      disabled={saveHeld || !draft.partyId || draft.lines.length === 0}
                     />
                   </View>
                   )
@@ -1911,7 +1918,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
             options={{
               headerRight:
                 step < STEPS.length - 1 && !editingIssued
-                  ? () => <Button title={tr('sales:editor.saveDraft')} variant="ghost" size="sm" onPress={() => void save(false)} loading={saving} disabled={blocked || !draft.partyId} />
+                  ? () => <Button title={tr('sales:editor.saveDraft')} variant="ghost" size="sm" onPress={() => void save(false)} loading={saving} disabled={saveHeld || !draft.partyId} />
                   : undefined,
             }}
           />
@@ -1959,7 +1966,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
                   requestFinalize();
                 }}
                 loading={saving}
-                disabled={blocked || !draft.partyId || draft.lines.length === 0}
+                disabled={saveHeld || !draft.partyId || draft.lines.length === 0}
                 fullWidth
               />
             ) : null}
@@ -1976,10 +1983,10 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
                 />
               ) : (
                 editingIssued ? (
-                  <Button shortcut="S" title={tr('sales:editor.saveChanges')} onPress={() => void save(false)} loading={saving} disabled={blocked} style={{ flex: 1 }} />
+                  <Button shortcut="S" title={tr('sales:editor.saveChanges')} onPress={() => void save(false)} loading={saving} disabled={saveHeld} style={{ flex: 1 }} />
                 ) : (
                 <>
-                  <Button shortcut="S" title={tr('sales:editor.saveDraft')} variant="ghost" onPress={() => void save(false)} loading={saving} disabled={blocked} style={{ flex: 1 }} />
+                  <Button shortcut="S" title={tr('sales:editor.saveDraft')} variant="ghost" onPress={() => void save(false)} loading={saving} disabled={saveHeld} style={{ flex: 1 }} />
                   <Button
                     title={finaliseLabel}
                     onPress={() => {
@@ -1987,7 +1994,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
                       requestFinalize();
                     }}
                     loading={saving}
-                    disabled={blocked}
+                    disabled={saveHeld}
                     style={{ flex: 1 }}
                   />
                 </>
