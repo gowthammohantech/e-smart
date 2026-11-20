@@ -289,7 +289,8 @@ export default function AccountSettings() {
             saveDisabled={!name.trim() || !!live.ifsc || !!live.upiId}
             deleteLabel={tr('settings:accounts.delete')}
             onDelete={
-              editing?.id && accounts.length > 1 && !inUse
+              // The default can't go until another account is made the default.
+              editing?.id && accounts.length > 1 && !inUse && !editing.isDefault
                 ? () => {
                   const a = editing;
                   setEditing(null);
@@ -383,6 +384,11 @@ export default function AccountSettings() {
             />
           ) : null}
           <SwitchField label={tr('settings:accounts.useDefault')} description={tr('settings:accounts.useDefaultHint')} value={isDefault} onValueChange={setIsDefault} />
+          {editing?.id && editing.isDefault && accounts.length > 1 ? (
+            <Text variant="caption" tone="muted">
+              {tr('settings:accounts.defaultNotDeletable')}
+            </Text>
+          ) : null}
         </View>
       </Sheet>
 
