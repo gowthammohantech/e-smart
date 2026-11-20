@@ -384,7 +384,28 @@ export default function Home() {
                   }))}
                 />
               </Card>
+            </>
+          }
+          right={
+            <>
+              <SectionHeader title={tr('reports:dash.home.cash')} />
+              <Card style={{ gap: t.spacing.md }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+                  <Text variant="h2" weight="700" tone={hub.cash.total.minor < 0 ? 'bad' : 'default'}>
+                    {formatMoney(hub.cash.total)}
+                  </Text>
+                  <Text variant="caption" tone="muted">{tr('reports:dash.home.cashAccounts', { count: hub.cash.accounts.length })}</Text>
+                </View>
+                {hub.cash.accounts.slice(0, 4).map((a) => (
+                  <View key={a.id} style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
+                    <Icon name={a.type === 'cash' ? 'cash-multiple' : 'bank'} size={16} color={t.c.muted} />
+                    <Text variant="small" style={{ flex: 1 }} numberOfLines={1}>{a.name}</Text>
+                    <Text variant="small" weight="600" tone={a.balance.minor < 0 ? 'bad' : 'default'}>{formatMoney(a.balance)}</Text>
+                  </View>
+                ))}
+              </Card>
 
+              {/* What is owed both ways sits with cash, so the summary cards stand together and the columns end level. */}
               <SectionHeader title={tr('reports:home.owedToYou')} action={tr('nav:shell.viewAll')} onAction={() => router.push('/(app)/receivables')} />
               <Card style={{ gap: t.spacing.lg }}>
                 {/* On a narrow phone the badges drop under the amount rather than squeezing it. */}
@@ -432,26 +453,6 @@ export default function Home() {
               </Card>
                 </>
               ) : null}
-            </>
-          }
-          right={
-            <>
-              <SectionHeader title={tr('reports:dash.home.cash')} />
-              <Card style={{ gap: t.spacing.md }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-                  <Text variant="h2" weight="700" tone={hub.cash.total.minor < 0 ? 'bad' : 'default'}>
-                    {formatMoney(hub.cash.total)}
-                  </Text>
-                  <Text variant="caption" tone="muted">{tr('reports:dash.home.cashAccounts', { count: hub.cash.accounts.length })}</Text>
-                </View>
-                {hub.cash.accounts.slice(0, 4).map((a) => (
-                  <View key={a.id} style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
-                    <Icon name={a.type === 'cash' ? 'cash-multiple' : 'bank'} size={16} color={t.c.muted} />
-                    <Text variant="small" style={{ flex: 1 }} numberOfLines={1}>{a.name}</Text>
-                    <Text variant="small" weight="600" tone={a.balance.minor < 0 ? 'bad' : 'default'}>{formatMoney(a.balance)}</Text>
-                  </View>
-                ))}
-              </Card>
 
               {hub.inventory && withStock ? (
                 <>
