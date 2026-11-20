@@ -246,7 +246,8 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
   const partyAdvance = (partyQuery.data as { advance?: Money } | undefined)?.advance;
   // The contact may still be on its way: a bar, not "Unknown".
   const partyPending = !!doc.partyId && !party && partyQuery.isLoading;
-  const canAdjust = outstanding.minor > 0 && isFinalized(doc.status) && (partyAdvance?.minor ?? 0) > 0 && ['invoice', 'debitNote', 'purchaseBill', 'supplierDebitNote'].includes(doc.kind);
+  // A customer's advance is put on invoices from Receipt adjustment, not from the invoice: only a bill offers it here.
+  const canAdjust = outstanding.minor > 0 && isFinalized(doc.status) && (partyAdvance?.minor ?? 0) > 0 && ['purchaseBill', 'supplierDebitNote'].includes(doc.kind);
   const adjustRoute = `/(app)/receipts/adjust?partyId=${doc.partyId}&documentId=${doc.id}${['purchaseBill', 'supplierDebitNote'].includes(doc.kind) ? '&side=supplier' : ''}`;
 
   const customFields = useAppStore((s) => s.customFields);
