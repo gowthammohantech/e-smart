@@ -94,7 +94,7 @@
     "awaiting": "Awaiting IRN",
     "liveEwb": "Live EWBs",
     "expiredEwb": "Expired EWBs",
-    "action": "GST compliance"
+    "action": "E-invoice & E-way bill"
   },
   "payables": {
     "none": "You don't owe any supplier right now.",
