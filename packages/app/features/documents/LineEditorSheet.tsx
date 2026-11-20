@@ -15,7 +15,7 @@ import { DocumentLine, GstFlags, TaxCategory } from '@esmart/core/types';
 import { formatMoney, formatPercent } from '@esmart/core/lib/format';
 import { fromMajor, subtract, toMajor } from '@esmart/core/lib/money';
 import { calculateLine } from '@esmart/core/domain/lineCalc';
-import { validHsn } from '@esmart/core/lib/validators';
+import { shownError, validHsn } from '@esmart/core/lib/validators';
 import { TaxContext } from '@esmart/core/domain/taxEngine';
 import { unitDecimals, unitShortName, unitsFor } from '@esmart/core/data/masters';
 import { useItems } from '../../store/selectors';
@@ -89,6 +89,8 @@ function LineEditorForm({
   // Cleared on a line that had some, it is sent as {} (plain), so the server doesn't take the item's back.
   const gst = flags || reimbursement ? { ...flags, reimbursement: reimbursement || undefined } : line?.gst ? {} : undefined;
   const [hsnCode, setHsnCode] = useState(line?.hsnCode ?? '');
+  // The code is checked as typed (4, 6 or 8 digits): red at once if wrong, and Save line waits.
+  const liveHsn = validHsn(hsnCode, { required: false });
   const [unitOpen, setUnitOpen] = useState(false);
   const [taxOpen, setTaxOpen] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
@@ -185,7 +187,7 @@ function LineEditorForm({
               style={desktop ? undefined : { flex: 1 }}
             />
           ) : null}
-          <Button shortcut="S" title={tr('sales:line.saveLine')} onPress={save} style={desktop ? undefined : { flex: 2, marginLeft: onRemove ? t.spacing.md : 0 }} />
+          <Button shortcut="S" title={tr('sales:line.saveLine')} onPress={save} disabled={!!liveHsn} style={desktop ? undefined : { flex: 2, marginLeft: onRemove ? t.spacing.md : 0 }} />
         </View>
       }
     >
@@ -242,7 +244,7 @@ function LineEditorForm({
           icon="numeric"
           editable={!fromCatalogue || !item?.hsnCode}
           hint={fromCatalogue && item?.hsnCode ? tr('sales:line.hsnFromItem') : undefined}
-          error={errors.hsn}
+          error={shownError(hsnCode, liveHsn, errors.hsn)}
           required={hsnRequired}
         />
 
