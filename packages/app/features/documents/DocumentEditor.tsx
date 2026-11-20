@@ -56,7 +56,7 @@ import {
   useTaxCategories,
   usePlan,
 } from '../../store/selectors';
-import { hasVehicles, saleTdsOnPlan } from '@esmart/core/domain/plan';
+import { hasVehicles, saleTdsOnPlan, tcsOnPlan } from '@esmart/core/domain/plan';
 import { PartyPickerBox } from '../contacts/PartyPickerBox';
 import { useCostCentres } from '../../store/books';
 import { addChargeName, useChargeNames } from '../../remote/chargeNames';
@@ -210,6 +210,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   const { save: saveOnline, saving, release: releaseSave } = useSaveOnline();
   // View-only (no internet, offline not agreed to): the header's badge says so and offers offline mode.
   const blocked = !useCanWrite();
+  // TCS (s.206C) is not on Free: no TCS section on its invoices, and none collected.
+  const hasTcs = tcsOnPlan(usePlan());
   const insets = useSafeAreaInsets();
   const desktop = useIsDesktop();
   // Whether these pickers show at all, so a desktop doesn't keep an empty row for them.
@@ -275,7 +277,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
         // A supplier under reverse charge puts their bills under it; the bill can still say otherwise.
         ...(isPurchase && { reverseCharge: !!p.reverseCharge }),
         // A customer with TCS puts their invoices under its section; another party clears one picked before.
-        ...(kind === 'invoice' && { tcsSection: partyTcsSection(p) ?? (d.tcsSection ? 'none' : undefined) }),
+        ...(kind === 'invoice' && hasTcs && { tcsSection: partyTcsSection(p) ?? (d.tcsSection ? 'none' : undefined) }),
       },
       p.currency,
       p.currency === baseCurrency ? 1 : resolveRate(exchangeRates, p.currency, baseCurrency, d.date),
@@ -344,12 +346,12 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   // TCS on an invoice (s.206C): the section's rate, higher for a buyer with no PAN, over the 206C(1F) threshold only.
   const tcsRateOfDraft = useCallback(
     (d: { tcsSection?: string; partyId?: string | null; date?: string }, totalBaseMinor: number) => {
-      // Not asked from TCS_ENDS_ON: none is collected on an invoice dated then or later.
-      if (!tcsAskedOn(d.date)) return 0;
+      // Not on Free, and not asked from TCS_ENDS_ON: none is collected on an invoice dated then or later.
+      if (!hasTcs || !tcsAskedOn(d.date)) return 0;
       const buyer = parties.find((p) => p.id === d.partyId);
       return tcsRateFor(d.tcsSection, !!(buyer?.pan || buyer?.taxId), totalBaseMinor);
     },
-    [parties],
+    [parties, hasTcs],
   );
   // A credit note or return against an invoice that collected TCS gives it back at that invoice's rate.
   const tcsRateOfNote = useCallback((d: { sourceDocumentId?: string }) => documents.find((x) => x.id === d.sourceDocumentId)?.tcs?.rate ?? 0, [documents]);
@@ -856,7 +858,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       tdsRate: saleTds && draft.tdsSection && draft.tdsSection !== 'none' ? draft.tdsRate : undefined,
       // `none` is sent as itself: unset on a new invoice would take the customer's section.
       // From TCS_ENDS_ON it is 'none' outright, so the server doesn't take the customer's section either.
-      tcsSection: kind === 'invoice' ? (tcsAskedOn(draft.date) ? draft.tcsSection : 'none') : undefined,
+      tcsSection: kind === 'invoice' ? (hasTcs && tcsAskedOn(draft.date) ? draft.tcsSection : 'none') : undefined,
       costCentreId: draft.costCentreId,
       customFields: draft.customFields,
       vehicleId: draft.vehicleId,
@@ -1571,7 +1573,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
               hint={tr('sales:tds.rateHint')}
             />
           ) : null,
-          kind === 'invoice' && tcsAskedOn(draft.date) ? (
+          kind === 'invoice' && hasTcs && tcsAskedOn(draft.date) ? (
             <PickerField
               label={tr('sales:tcs.section')}
               value={draft.tcsSection && draft.tcsSection !== 'none' ? `${tcsSection(draft.tcsSection)?.label ?? draft.tcsSection} · ${tcsSection(draft.tcsSection)?.nature ?? ''}` : tr('sales:tcs.none')}

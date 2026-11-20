@@ -27,7 +27,8 @@ import { uid } from '@esmart/core/lib/id';
 import { nowISO, today } from '@esmart/core/lib/date';
 import { Errors, gstinRequiredFor, hasErrors, partyGstinError, required, shownError, validEmail, validGstin, validPostalCode } from '@esmart/core/lib/validators';
 import { useAppStore } from '../../store/appStore';
-import { useBaseCurrency, useHasModule, useParties } from '../../store/selectors';
+import { useBaseCurrency, useHasModule, useParties, usePlan } from '../../store/selectors';
+import { tcsOnPlan } from '@esmart/core/domain/plan';
 import { SHOW_SCROLLBAR, WIDE_FORM_MAX_WIDTH, useBreakpoint } from '@esmart/ui/theme/breakpoints';
 import { useGoBack } from '../../navigation/useGoBack';
 import { useGstinLookup, type GstinDetails } from '../gstin/useGstinLookup';
@@ -49,6 +50,8 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
   // Where Cancel and Save land when there is no screen to go back to.
   // The route's kind to start with; a new contact can be both or general, and a customer or supplier can become both.
   const hasPurchases = useHasModule('purchases');
+  // TCS (s.206C) is not on Free: no TCS switch or section on its customers.
+  const hasTcs = tcsOnPlan(usePlan());
   const kindOptions: PartyKind[] = !party || party.kind === 'general' ? ['customer', 'supplier', 'both', 'general'] : party.kind === 'both' ? ['both'] : [party.kind, 'both'];
   // A plan without purchases (Free, Basic) keeps customers only: suppliers and "both" are the buying
   // side's, and its parties list shows customers only, so an "Other" contact would vanish once saved.
@@ -223,7 +226,7 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
       // In India the state is the place of supply, and the PIN is checked against it: both are asked for.
       stateCode: overseas ? undefined : required(stateCode, tr('contacts:form.state')),
       postalCode: (overseas ? undefined : required(postalCode, 'PIN')) ?? validPostalCode(postalCode, overseas ? country : 'IN', overseas ? undefined : stateCode),
-      tcsSection: sellsTo(kind) && tcsApplicable && !tcsSectionCode ? tr('contacts:form.tcsSectionRequired') : undefined,
+      tcsSection: hasTcs && sellsTo(kind) && tcsApplicable && !tcsSectionCode ? tr('contacts:form.tcsSectionRequired') : undefined,
     };
     setErrors(next);
     setCustomTried(true);
@@ -266,8 +269,8 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
               ...(certLimit && Number(certLimit) > 0 && { limit: { minor: Math.round(Number(certLimit) * 100), currency: 'INR' } }),
             }
           : undefined,
-      tcsApplicable: sellsTo(kind) && tcsApplicable ? true : undefined,
-      tcsSection: sellsTo(kind) && tcsApplicable ? tcsSectionCode : undefined,
+      tcsApplicable: hasTcs && sellsTo(kind) && tcsApplicable ? true : undefined,
+      tcsSection: hasTcs && sellsTo(kind) && tcsApplicable ? tcsSectionCode : undefined,
       email: email.trim().toLowerCase() || undefined,
       phone: phone.value || undefined,
       currency,
@@ -425,8 +428,8 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
         ) : null}
       </>
     ) : null;
-  // TCS is collected on sales (s.206C), so only from someone the business sells to.
-  const customerTaxFields = sellsTo(kind) ? (
+  // TCS is collected on sales (s.206C), so only from someone the business sells to, and not on Free.
+  const customerTaxFields = hasTcs && sellsTo(kind) ? (
     <>
       <SwitchField
         label={tr('contacts:form.tcsApplicable')}
