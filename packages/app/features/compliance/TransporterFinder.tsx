@@ -29,6 +29,9 @@ export function TransporterFinder({ visible, onClose, value, onPick }: { visible
   const activeCompanyId = useAppStore((s) => s.activeCompanyId);
 
   const [adding, setAdding] = useState(false);
+  // The new transporter's id, fixed when the form opens: once saved it is in the list, and the
+  // ID check must not then find it there as "another transporter".
+  const [newId, setNewId] = useState(() => uid('trn'));
   const [name, setName] = useState('');
   const [transporterId, setTransporterId] = useState('');
   const phone = usePhoneInput();
@@ -40,12 +43,13 @@ export function TransporterFinder({ visible, onClose, value, onPick }: { visible
     ? undefined
     : !isValidTransporterId(typedId)
       ? tr('settings:transporters.idInvalid')
-      : transporters.some((x) => x.transporterId === typedId)
+      : transporters.some((x) => x.transporterId === typedId && x.id !== newId)
         ? tr('settings:transporters.idTaken')
         : undefined;
   const livePhone = phone.error();
 
   const startAdding = () => {
+    setNewId(uid('trn'));
     setName('');
     setTransporterId('');
     phone.reset(undefined);
@@ -63,7 +67,7 @@ export function TransporterFinder({ visible, onClose, value, onPick }: { visible
     setNameError(badName);
     if (badName || !typedId || liveId || livePhone) return;
     const transporter: Transporter = {
-      id: uid('trn'),
+      id: newId,
       companyId: activeCompanyId,
       name: name.trim(),
       transporterId: typedId,

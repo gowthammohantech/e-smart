@@ -34,6 +34,10 @@ export default function TransportersSettings() {
   const activeCompanyId = useAppStore((s) => s.activeCompanyId);
 
   const [editing, setEditing] = useState<Transporter | null>(null);
+  // A new transporter's id, fixed when the form opens: once saved it is in the list, and the ID
+  // check must not then find it there as "another transporter" before the sheet closes.
+  const [newId, setNewId] = useState(() => uid('trn'));
+  const ownId = editing?.id ?? newId;
   const [name, setName] = useState('');
   const [transporterId, setTransporterId] = useState('');
   const phone = usePhoneInput();
@@ -44,6 +48,7 @@ export default function TransportersSettings() {
 
   const open = (transporter?: Transporter) => {
     setEditing(transporter ?? null);
+    if (!transporter) setNewId(uid('trn'));
     setName(transporter?.name ?? '');
     setTransporterId(transporter?.transporterId ?? '');
     phone.reset(transporter?.phone);
@@ -61,7 +66,7 @@ export default function TransportersSettings() {
     ? undefined
     : !isValidTransporterId(typedId)
       ? tr('settings:transporters.idInvalid')
-      : transporters.some((x) => x.transporterId === typedId && x.id !== editing?.id)
+      : transporters.some((x) => x.transporterId === typedId && x.id !== ownId)
         ? tr('settings:transporters.idTaken')
         : undefined;
   const livePhone = phone.error();
@@ -71,7 +76,7 @@ export default function TransportersSettings() {
     const badName = name.trim() ? undefined : tr('errors:validation.required', { field: tr('settings:transporters.name') });
     const badId = !isValidTransporterId(id)
       ? tr('settings:transporters.idInvalid')
-      : transporters.some((x) => x.transporterId === id && x.id !== editing?.id)
+      : transporters.some((x) => x.transporterId === id && x.id !== ownId)
         ? tr('settings:transporters.idTaken')
         : undefined;
     const badPhone = phone.error();
@@ -80,7 +85,7 @@ export default function TransportersSettings() {
     setPhoneError(badPhone);
     if (badName || badId || badPhone) return;
     const transporter: Transporter = {
-      id: editing?.id ?? uid('trn'),
+      id: ownId,
       companyId: editing?.companyId ?? activeCompanyId,
       name: name.trim(),
       transporterId: transporterId.trim().toUpperCase(),
