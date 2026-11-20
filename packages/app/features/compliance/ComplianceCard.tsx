@@ -18,6 +18,7 @@ import { Skeleton, SkeletonGroup } from '@esmart/ui/components/Skeleton';
 import {
   useActiveCompany,
   useActiveEwayBill,
+  useEwayBillsForDocument,
   useComplianceSettings,
 } from '../../store/selectors';
 import { canCancelEInvoice, isEInvoiceApplicable } from '@esmart/core/domain/eInvoice';
@@ -53,6 +54,9 @@ export function ComplianceCard({
   const parties = useAppStore((s) => s.parties);
   const items = useAppStore((s) => s.items);
   const bill = useActiveEwayBill(doc.id);
+  // With no live bill, whether the last one was cancelled: it says Cancelled, not Not raised.
+  const lastBill = useEwayBillsForDocument(doc.id)[0];
+  const cancelledBill = !bill && lastBill?.status === 'cancelled' ? lastBill : undefined;
   // A document that has a bill shows it once it's here, never "Pending" and a button to raise another meanwhile.
   const billQuery = useEwayBillRecord(doc.compliance?.ewayBillId);
   const billLoading = !bill && !!doc.compliance?.ewayBillId && billQuery.isLoading;
@@ -248,6 +252,8 @@ export function ComplianceCard({
               <Skeleton height={22} width={80} radius={11} />
             ) : billMeta ? (
               <Badge label={keyLabel(tr, billMeta.labelKey)} tone={expiringSoon ? 'warning' : billMeta.tone} icon={billMeta.icon} />
+            ) : cancelledBill ? (
+              <Badge label={tr('compliance:status.docEway.cancelled')} tone="neutral" icon="close-octagon-outline" />
             ) : (
               <Badge
                 label={requirement.required ? tr('compliance:status.docEway.pending') : tr('compliance:status.docEway.notRequired')}
