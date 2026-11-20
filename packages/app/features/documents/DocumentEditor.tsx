@@ -2103,7 +2103,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
               if (sourceDoc) {
                 const src = sourceDoc.lines.find((l) => l.id === id);
                 const already = src && draft.lines.find((l) => (src.itemId ? l.itemId === src.itemId : l.name === src.name));
-                if (src && !already) addLine(noteStart({ ...src, id: uid('ln') }));
+                // From the source too, the quantity starts at 0 for the person to type.
+                if (src && !already) addLine(noteStart({ ...src, id: uid('ln'), quantity: 0 }));
                 return;
               }
               const item = items.find((i) => i.id === id);

@@ -164,7 +164,8 @@ export function lineFromItem(item: Item, isPurchase: boolean, taxCategories: Tax
     name: item.name,
     description: item.description,
     hsnCode: item.hsnCode,
-    quantity: 1,
+    // A line put on starts at 0: the quantity is what the person types next (the cursor goes there).
+    quantity: 0,
     unit: item.unit,
     unitPrice: isPurchase ? item.purchasePrice : item.salePrice,
     discountMode: 'amount',
@@ -252,7 +253,7 @@ export function blankLine(currency: string, taxCategories: TaxCategory[]): Docum
   return {
     id: uid('ln'),
     name: '',
-    quantity: 1,
+    quantity: 0,
     unit: 'NOS',
     unitPrice: zero(currency),
     discountMode: 'amount',
