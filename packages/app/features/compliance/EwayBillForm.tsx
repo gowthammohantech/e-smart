@@ -42,6 +42,7 @@ import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { portalToast } from './portalToast';
 import { useSaveShortcut } from '../../components/useSaveShortcut';
 import { hasErrors, shownError, validGstin, validPostalCode } from '@esmart/core/lib/validators';
+import { isValidTransporterId } from '@esmart/core/domain/gstin';
 
 /**
  * Everything the e-way bill form holds and does, apart from how it is laid
@@ -107,10 +108,15 @@ export function useEwayBillForm(doc: BusinessDocument) {
     [`${prefix}.gstin`]: /^URP$/.test(p.gstin.trim()) ? undefined : validGstin(p.gstin),
     [`${prefix}.pincode`]: validPostalCode(p.pincode, 'IN', p.stateCode),
   });
-  const live = { ...liveOf('from', from), ...liveOf('to', to) };
+  const typedTransporter = transporterId.trim().toUpperCase();
+  const live = {
+    ...liveOf('from', from),
+    ...liveOf('to', to),
+    transporterId: typedTransporter && !isValidTransporterId(typedTransporter) ? tr('settings:transporters.idInvalid') : undefined,
+  };
   const invalid = hasErrors(live);
   // What each field shows: filled in, its check as typed; empty, what the portal said on Generate.
-  const valueOf: Record<string, string> = { 'from.gstin': from.gstin, 'from.pincode': from.pincode, 'to.gstin': to.gstin, 'to.pincode': to.pincode };
+  const valueOf: Record<string, string> = { 'from.gstin': from.gstin, 'from.pincode': from.pincode, 'to.gstin': to.gstin, 'to.pincode': to.pincode, transporterId };
   const errors: Record<string, string> = { ...savedErrors };
   for (const [k, v] of Object.entries(live)) {
     const shown = shownError(valueOf[k], v, savedErrors[k]);
