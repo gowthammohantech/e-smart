@@ -72,7 +72,8 @@ describe('parties', () => {
   });
 
   it('keeps a customer\'s TCS section, and forgets it when TCS is switched off', async () => {
-    const { token, c } = await ownerWithCompany(t);
+    // TCS is on the paid plans; Free keeps none (tcsOnPlan).
+    const { token, c } = await ownerWithCompany(t, { plan: 'pro' });
     const created = await t.post(`${c}/parties`, customer({ tcsApplicable: true, tcsSection: 'scrap' }), { token });
     expect(created.status).toBe(201);
     expect(created.body).toMatchObject({ tcsApplicable: true, tcsSection: 'scrap' });

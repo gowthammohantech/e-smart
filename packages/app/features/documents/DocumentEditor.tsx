@@ -698,7 +698,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       const line = lineFromItem(made.record, isPurchase, taxCategories);
       addLine(noteStart({ ...line, unitPrice: reprice(line.unitPrice, draft.currency, 1, draft.exchangeRate) }));
       // Its quantity takes the cursor, as a picked item's does.
-      setFocusLine({ id: line.id, at: Date.now() });
+      setFocusLine((prev) => ({ id: line.id, at: (prev?.at ?? 0) + 1 }));
     };
   });
   useFocusEffect(useCallback(() => takeMade.current(), []));
@@ -2153,7 +2153,9 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
               addLine(added);
               first = first ?? added.id;
             });
-            if (first) setFocusLine({ id: first, at: Date.now() });
+            // A count, not the time, so each pick is a new focus.
+            const target = first;
+            if (target) setFocusLine((prev) => ({ id: target, at: (prev?.at ?? 0) + 1 }));
           }}
           searchPlaceholder={tr('sales:editor.searchItems')}
           footer={

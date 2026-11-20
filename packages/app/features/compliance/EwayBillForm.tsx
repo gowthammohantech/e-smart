@@ -51,7 +51,7 @@ import { isValidTransporterId } from '@esmart/core/domain/gstin';
  * out: the phone form below and the desktop one (apps/web) both use it.
  */
 export function useEwayBillForm(doc: BusinessDocument) {
-  const { t: tr } = useTranslation(['compliance']);
+  const { t: tr } = useTranslation(['compliance', 'settings']);
   const router = useRouter();
   const toast = useToast();
   const company = useActiveCompany();
