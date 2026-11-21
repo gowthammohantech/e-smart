@@ -1,4 +1,4 @@
-import { and, asc, desc, gt, lt, or, eq, type SQL } from 'drizzle-orm';
+import { and, asc, desc, gt, lt, not, or, eq, sql, type SQL } from 'drizzle-orm';
 import type { PgColumn } from 'drizzle-orm/pg-core';
 import { badRequest } from './errors';
 
@@ -73,6 +73,40 @@ export function keyset(opts: {
       const last = rows[limit - 1];
       const values = [cursorValue(last[sortKey]), ...(opts.then ? [cursorValue(last[jsKey(opts.then)])] : []), last[idKey] as CursorValue];
       return { data: mapped.slice(0, limit), nextCursor: encode(values) };
+    },
+  };
+}
+
+/**
+ * Keyset over a search by name: the names that start with what was typed first, then the others that
+ * hold it, each in name order (then id). "k" lists Kumar and Kavya before Ankit and Mukesh. Without
+ * a search it is the plain name order of `keyset`. The cursor carries which of the two it stopped in.
+ */
+export function nameSearchKeyset(opts: { cursor?: string | null; limit?: number | null; q?: string | null; name: PgColumn; id: PgColumn }) {
+  const q = opts.q?.trim();
+  if (!q) return keyset({ cursor: opts.cursor, limit: opts.limit, sort: opts.name, id: opts.id, order: 'asc' });
+  const limit = Math.min(Math.max(opts.limit ?? 50, 1), 200);
+  // What was typed, taken literally: % and _ match themselves.
+  const prefix = `${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+  const starts = sql`${opts.name} ilike ${prefix}`;
+  const group = sql`case when ${opts.name} ilike ${prefix} then 0 else 1 end`;
+  let where: SQL | undefined;
+  if (opts.cursor) {
+    const [g, name, id] = decode(opts.cursor);
+    const after = or(gt(opts.name, name), and(eq(opts.name, name), gt(opts.id, id)))!;
+    where = g === 0 ? or(and(starts, after), not(starts)) : and(not(starts), after);
+  }
+  const nameKey = jsKey(opts.name);
+  return {
+    where,
+    orderBy: [asc(group), asc(opts.name), asc(opts.id)],
+    take: limit + 1,
+    page<W>(mapped: W[], rows: Record<string, unknown>[]): Page<W> {
+      if (rows.length <= limit) return { data: mapped, nextCursor: null };
+      const last = rows[limit - 1];
+      const name = String(last[nameKey]);
+      const g = name.toLowerCase().startsWith(q.toLowerCase()) ? 0 : 1;
+      return { data: mapped.slice(0, limit), nextCursor: encode([g, name, last.id as CursorValue]) };
     },
   };
 }

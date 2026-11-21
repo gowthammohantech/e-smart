@@ -10,7 +10,7 @@ import type { Schema } from '@esmart/api-contract';
 import { RawBody, defineHandlers, type Ctx } from '../../context';
 import { checkIfMatch, setEtag } from '../../http/etag';
 import { ApiError, conflict, notFound, planUpgradeRequired, preconditionFailed, unprocessable, type Issue } from '../../http/errors';
-import { keyset } from '../../http/pagination';
+import { nameSearchKeyset } from '../../http/pagination';
 import { recordChange, type DbOrTx } from '../../lib/audit';
 import { partyBalances } from '../../lib/balances';
 import { newId } from '../../lib/ids';
@@ -148,7 +148,8 @@ export const partiesHandlers = defineHandlers({
 
   async listParties(ctx) {
     const { limit, cursor } = ctx.query;
-    const k = keyset({ cursor, limit, sort: P.name, id: P.id, order: 'asc' });
+    // A search lists the names that start with it first, then the rest that hold it.
+    const k = nameSearchKeyset({ cursor, limit, q: ctx.query.q, name: P.name, id: P.id });
     const filters = partyFilters(ctx.company.id, ctx.query);
     const rows = await ctx.db
       .select()

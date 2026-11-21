@@ -13,6 +13,7 @@ import { Cell, Column, DataTable } from '@esmart/ui/components/DataTable';
 import { Button } from '@esmart/ui/components/Button';
 import { Segmented } from '@esmart/ui/components/Field';
 import { FilterMenu } from '@esmart/ui/components/FilterMenu';
+import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { fetchItemRecord, useItemPages } from '../../../../remote/queries';
 import { describeError } from '../../../../remote/errors';
 import { useToast } from '@esmart/ui/components/Toast';
@@ -50,9 +51,14 @@ export default function ItemList() {
   const brands = useBrands();
   // Switched off, SKU, category and brand leave the list too.
   const hasPos = useHasModule('pos');
+  // No stock is kept without inventory (Free): no On hand column, figure or export column.
+  const hasInventory = useHasModule('inventory');
   const showFilters = hasPos && (categories.length > 0 || brands.length > 0);
   const filtering = categoryId !== 'all' || brandId !== 'all';
-  const pages = useItemPages({ type: tab, q: search, categoryId: categoryId === 'all' ? undefined : categoryId, brandId: brandId === 'all' ? undefined : brandId });
+  // Active items, or the ones set inactive (to reactivate), as Parties lists them.
+  const [status, setStatus] = useState<'active' | 'inactive'>('active');
+  const inactiveTab = status === 'inactive';
+  const pages = useItemPages({ type: tab, q: search, status, categoryId: categoryId === 'all' ? undefined : categoryId, brandId: brandId === 'all' ? undefined : brandId });
   const held = pages.rows as unknown as (Item & { stockOnHand?: number })[];
   // Just switched Goods/Services: the other tab's rows are held over while this one's load. They're
   // the wrong kind (services under Goods), so the list waits on placeholders instead.
@@ -72,7 +78,7 @@ export default function ItemList() {
   ) : null;
 
   // Desktop bulk actions: the chosen rows as a CSV, or set inactive in one save.
-  const selection = useTableSelection(`${tab}|${search}|${categoryId}|${brandId}`);
+  const selection = useTableSelection(`${tab}|${status}|${search}|${categoryId}|${brandId}`);
   const exportRows = useRowsExport();
   const saveItem = useAppStore((s) => s.saveItem);
   const { run: serverSave, saving } = useServerSave();
@@ -83,13 +89,14 @@ export default function ItemList() {
     exportRows(
       tr('nav:title.itemsAndServices'),
       {
-        headers: [tr('common:table.name'), tr('common:table.sku'), tr('common:table.hsn'), tr('common:table.unit'), tr('common:table.onHand'), tr('common:table.price')],
-        rows: chosen(keys).map((i) => [i.name, i.sku, i.hsnCode ?? '', i.unit, i.trackInventory ? (stock[i.id] ?? 0) : '', i.salePrice.minor / 100]),
+        headers: [tr('common:table.name'), tr('common:table.sku'), tr('common:table.hsn'), tr('common:table.unit'), ...(hasInventory ? [tr('common:table.onHand')] : []), tr('common:table.price')],
+        rows: chosen(keys).map((i) => [i.name, i.sku, i.hsnCode ?? '', i.unit, ...(hasInventory ? [i.trackInventory ? (stock[i.id] ?? 0) : ''] : []), i.salePrice.minor / 100]),
       },
       tr('common:table.exportCancelled'),
     );
-  const deactivate = async (keys: string[]) => {
-    const items = chosen(keys).filter((i) => i.status !== 'inactive');
+  /** Sets the chosen items inactive, or (from the Inactive tab) active again. */
+  const setStatusOf = async (keys: string[], next: 'active' | 'inactive') => {
+    const items = chosen(keys).filter((i) => (i.status === 'inactive' ? 'inactive' : 'active') !== next);
     if (!items.length) return;
     // Each one read from the server first and kept at its version: a list row the device has never
     // kept would otherwise go up as a new item, a copy of the one being set inactive.
@@ -105,11 +112,31 @@ export default function ItemList() {
     if (!records.length) return;
     const res = await serverSave(
       () => {
-        for (const item of records) saveItem({ ...item, status: 'inactive' });
+        for (const item of records) saveItem({ ...item, status: next });
       },
-      tr('common:table.deactivated', { count: records.length }),
-      { icon: 'minus-circle-outline' },
+      next === 'inactive' ? tr('common:table.deactivated', { count: records.length }) : tr('common:table.reactivated', { count: records.length }),
+      { icon: next === 'inactive' ? 'minus-circle-outline' : 'check-circle-outline' },
     );
+    if (res) {
+      selection.clear();
+      void pages.refetch();
+    }
+  };
+
+  // Delete from the row: asked first, as on the item's own screen.
+  const removeItem = useAppStore((s) => s.removeItem);
+  // The item stays set while the dialog closes, so its name doesn't vanish from the title mid-fade.
+  const [deleting, setDeleting] = useState<Item | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const remove = async (item: Item) => {
+    // Read from the server first: a delete goes up only for an item the device holds.
+    try {
+      await fetchItemRecord(companyId, item.id);
+    } catch (err) {
+      toast.show(describeError(err, tr), 'error');
+      return;
+    }
+    const res = await serverSave(() => removeItem(item.id), tr('inventory:detail.deleted'), { icon: 'tag-remove-outline' });
     if (res) {
       selection.clear();
       void pages.refetch();
@@ -124,6 +151,16 @@ export default function ItemList() {
       ]}
       value={tab}
       onChange={(v) => setTab(v as 'goods' | 'service')}
+    />
+  );
+  const statusTabs = (
+    <Segmented
+      options={[
+        { value: 'active', label: tr('inventory:catalog.statusActive') },
+        { value: 'inactive', label: tr('inventory:catalog.statusInactive') },
+      ]}
+      value={status}
+      onChange={(v) => setStatus(v as 'active' | 'inactive')}
     />
   );
   const filters = (
@@ -151,10 +188,18 @@ export default function ItemList() {
     </>
   );
   // Nothing in this tab at all (rather than nothing matching the search).
-  const emptyTitle = inTab.length ? tr('inventory:catalog.noMatch') : tab === 'service' ? tr('inventory:catalog.noServices') : tr('inventory:catalog.noItems');
+  const emptyTitle = inTab.length
+    ? tr('inventory:catalog.noMatch')
+    : inactiveTab
+      ? tr('inventory:catalog.noInactive')
+      : tab === 'service'
+        ? tr('inventory:catalog.noServices')
+        : tr('inventory:catalog.noItems');
   const emptyMessage = inTab.length
     ? tr('inventory:catalog.noMatchBody')
-    : tab === 'service'
+    : inactiveTab
+      ? tr('inventory:catalog.noInactiveBody')
+      : tab === 'service'
       ? tr('inventory:catalog.noServicesBody')
       : tr('inventory:catalog.noItemsBody');
 
@@ -165,6 +210,7 @@ export default function ItemList() {
         <View style={{ flex: 1, paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.lg, gap: t.spacing.md }}>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: t.spacing.md }}>
             <View style={{ flexBasis: 260, flexShrink: 1, minWidth: 200 }}>{tabs}</View>
+            <View style={{ flexBasis: 200, flexShrink: 0 }}>{statusTabs}</View>
             <View style={{ flexBasis: 340, flexShrink: 1, minWidth: 220 }}>
               <SearchBar compact value={query} onChangeText={setQuery} placeholder={tr('inventory:catalog.search')} />
             </View>
@@ -204,7 +250,7 @@ export default function ItemList() {
                 render: (i) => <Cell weight="600" mono>{formatMoney(i.salePrice)}</Cell>,
               },
               // A service carries no stock (nor a goods unit to show as its type), so its tab leaves those out.
-            ] satisfies Column<(typeof filtered)[number]>[]).filter((c) => (tab === 'goods' || (c.key !== 'onHand' && c.key !== 'unit')) && (hasPos || c.key !== 'sku'))}
+            ] satisfies Column<(typeof filtered)[number]>[]).filter((c) => (tab === 'goods' || (c.key !== 'onHand' && c.key !== 'unit')) && (hasPos || c.key !== 'sku') && (hasInventory || c.key !== 'onHand'))}
             rows={filtered}
             rowKey={(i) => i.id}
             onRowPress={(i) => router.push(`/(app)/catalog/items/${i.id}`)}
@@ -217,12 +263,18 @@ export default function ItemList() {
             bulkActions={(keys) => (
               <>
                 <Button title={tr('common:table.exportCsv')} icon="file-export-outline" variant="ghost" size="sm" onPress={() => void exportChosen(keys)} />
-                <Button title={tr('common:table.deactivate')} icon="minus-circle-outline" variant="ghost" size="sm" loading={saving} onPress={() => void deactivate(keys)} />
+                {inactiveTab ? (
+                  <Button title={tr('common:table.reactivate')} icon="check-circle-outline" variant="ghost" size="sm" loading={saving} onPress={() => void setStatusOf(keys, 'active')} />
+                ) : (
+                  <Button title={tr('common:table.deactivate')} icon="minus-circle-outline" variant="ghost" size="sm" loading={saving} onPress={() => void setStatusOf(keys, 'inactive')} />
+                )}
               </>
             )}
+            // Edit and Delete as icons in the row itself; a click on the row still opens the item.
+            inlineActions
             rowActions={(i) => [
-              { key: 'open', label: tr('common:table.open'), icon: 'eye-outline', onPress: () => router.push(`/(app)/catalog/items/${i.id}`) },
               { key: 'edit', label: tr('common:action.edit'), icon: 'pencil-outline', onPress: () => router.push(`/(app)/catalog/items/${i.id}/edit`) },
+              { key: 'delete', label: tr('inventory:detail.deleteItem'), icon: 'trash-can-outline', destructive: true, onPress: () => { setDeleting(i); setDeleteOpen(true); } },
             ]}
             empty={<EmptyState illustration="no-items" title={emptyTitle} message={emptyMessage} compact />}
           />
@@ -239,6 +291,7 @@ export default function ItemList() {
         scrollEventThrottle={200}
       >
         {tabs}
+        {statusTabs}
         <SearchBar value={query} onChangeText={setQuery} placeholder={tr('inventory:catalog.search')} />
         {/* Filters on the left and Import on the right, as on a desktop. */}
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: t.spacing.sm }}>
@@ -257,8 +310,8 @@ export default function ItemList() {
             illustration="no-items"
             title={emptyTitle}
             message={emptyMessage}
-            actionLabel={inTab.length ? undefined : tr('common:quickAction.addItem')}
-            onAction={inTab.length ? undefined : () => router.push(`/(app)/catalog/items/new?type=${tab}`)}
+            actionLabel={inTab.length || inactiveTab ? undefined : tr('common:quickAction.addItem')}
+            onAction={inTab.length || inactiveTab ? undefined : () => router.push(`/(app)/catalog/items/new?type=${tab}`)}
           />
         ) : (
           <Card padded={false}>
@@ -271,7 +324,7 @@ export default function ItemList() {
                 right={
                   item.type === 'service' ? (
                     <Badge label={tr('inventory:catalog.service')} tone="neutral" size="sm" />
-                  ) : item.trackInventory ? (
+                  ) : item.trackInventory && hasInventory ? (
                     // What's on hand, as the desktop table shows it.
                     <Text variant="small" weight="700" tone={(stock[item.id] ?? 0) <= (item.reorderLevel ?? 0) ? 'bad' : 'default'} style={{ fontVariant: ['tabular-nums'] }}>
                       {formatQty(stock[item.id] ?? 0)} {unitShortName(item.unit)}
@@ -289,6 +342,19 @@ export default function ItemList() {
       )}
       {/* A new one starts on the tab it was added from. */}
       <Fab icon="plus" onPress={() => router.push(`/(app)/catalog/items/new?type=${tab}`)} />
+      {/* The same question the item's own screen asks before it deletes. */}
+      <ConfirmDialog
+        visible={deleteOpen}
+        title={tr('inventory:detail.deleteTitle', { name: deleting?.name ?? '' })}
+        message={tr('inventory:detail.deleteMessage')}
+        confirmLabel={tr('inventory:detail.delete')}
+        destructive
+        onCancel={() => setDeleteOpen(false)}
+        onConfirm={() => {
+          setDeleteOpen(false);
+          if (deleting) void remove(deleting);
+        }}
+      />
     </View>
   );
 }

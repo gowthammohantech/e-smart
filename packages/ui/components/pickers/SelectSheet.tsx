@@ -10,8 +10,8 @@ import { EmptyState } from '../EmptyState';
 import { Button } from '../Button';
 import { useToast } from '../Toast';
 import { useKeepScrollWhileOpen } from '../ScrollKeep';
-import { DIALOG_WIDTH, useIsDesktop } from '../../theme/breakpoints';
-import { Menu, MenuItem } from '../Menu';
+import { useIsDesktop } from '../../theme/breakpoints';
+import { SearchDropdown } from './SearchDropdown';
 import { claimPickerOpener, clearPickerOpener, usePickerOpener } from './pickerOpener';
 import type { WebPressState } from '../../theme/interaction';
 
@@ -42,9 +42,12 @@ function ToastCapture({ intoRef }: { intoRef: React.MutableRefObject<ReturnType<
 /** The most options a desktop shows as a dropdown under its field; more get the searchable drawer. */
 const DROPDOWN_MAX_OPTIONS = 12;
 
-/** A creatable list always needs the search box — it is where the new value is typed. */
-function showSearchFor(count: number, searchable: boolean, creatable: boolean, remote: boolean) {
-  return searchable && (count > 6 || creatable || remote);
+/**
+ * Every list can be searched, however short: the box is always there (`searchable` is kept so
+ * callers still compile, but no longer turns it off).
+ */
+function showSearchFor(_count: number, _searchable: boolean, _creatable: boolean, _remote: boolean) {
+  return true;
 }
 
 /**
@@ -125,9 +128,8 @@ export function SelectSheet({
     onClose();
   };
 
-  // A desktop drops a short, plain list down under the field it was opened from, as a web select
-  // does, rather than opening a dialog: up to a dozen options, which a select shows without a
-  // search box. Anything longer, typed into, ticked, with a footer or with rows to explain keeps
+  // A desktop drops a short, plain list down under the field it was opened from rather than
+  // opening a dialog: up to a dozen options, searched by typing in the field itself. Anything longer, typed into, ticked, with a footer or with rows to explain keeps
   // the sheet. Opened from somewhere other than a picker field, there is nothing to hang from.
   const opener = usePickerOpener();
   const dropdown =
@@ -157,9 +159,12 @@ export function SelectSheet({
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q || onQueryChange) return options;
-    return options.filter(
-      (o) => o.label.toLowerCase().includes(q) || (o.description ?? '').toLowerCase().includes(q),
-    );
+    // What starts with the search comes first, A to Z, then the rest that hold it, A to Z:
+    // "k" lists Kavya and Kumar before Ankit and Mukesh.
+    const starts = (o: SelectOption) => (o.label.toLowerCase().startsWith(q) ? 0 : 1);
+    return options
+      .filter((o) => o.label.toLowerCase().includes(q) || (o.description ?? '').toLowerCase().includes(q))
+      .sort((a, b) => starts(a) - starts(b) || a.label.localeCompare(b.label));
   }, [options, query, onQueryChange]);
 
   const typed = query.trim();
@@ -216,42 +221,17 @@ export function SelectSheet({
 
   if (dropdown && opener) {
     return (
-      <Menu anchor={opener} onClose={closeDropdown} width={Math.min(Math.max(opener.width, 220), DIALOG_WIDTH.sm)} maxHeight={360}>
-        {subtitle ? (
-          <Text variant="caption" tone="muted" style={{ paddingHorizontal: t.spacing.lg, paddingVertical: t.spacing.xs }}>
-            {subtitle}
-          </Text>
-        ) : null}
-        {options.length === 0 && loading ? (
-          <ActivityIndicator color={t.c.muted} style={{ padding: t.spacing.md }} />
-        ) : options.length === 0 ? (
-          <Text variant="small" tone="muted" style={{ paddingHorizontal: t.spacing.lg, paddingVertical: t.spacing.sm }}>
-            {emptyMessage ?? tr('common:component.noMatches')}
-          </Text>
-        ) : (
-          options.map((o) => (
-            <MenuItem
-              key={o.value}
-              icon={o.icon}
-              leading={o.leading}
-              label={o.label}
-              description={o.description}
-              selected={o.value === value}
-              trailing={
-                o.trailing ? (
-                  <Text variant="caption" tone="muted">
-                    {o.trailing}
-                  </Text>
-                ) : undefined
-              }
-              onPress={() => {
-                onSelect?.(o.value);
-                closeDropdown();
-              }}
-            />
-          ))
-        )}
-      </Menu>
+      <SearchDropdown
+        anchor={opener}
+        options={options}
+        value={value}
+        onSelect={(v) => onSelect?.(v)}
+        onClose={closeDropdown}
+        loading={loading}
+        emptyMessage={emptyMessage}
+        subtitle={subtitle}
+        label={title}
+      />
     );
   }
 
@@ -286,8 +266,7 @@ export function SelectSheet({
       ownToasts
       // On a desktop a list worth searching opens down the right edge, beside the form it fills;
       // a handful of options is a small dialog.
-      desktopAs={showSearch ? 'drawer' : 'dialog'}
-      desktopWidth={showSearch ? undefined : DIALOG_WIDTH.sm}
+      desktopAs="drawer"
       header={
         showSearch || tabs?.length ? (
           <View style={{ paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.sm, gap: t.spacing.sm }}>

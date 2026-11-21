@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Animated, Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -28,7 +28,7 @@ export function SetupChecklist() {
   const dismiss = useUiStore((s) => s.dismissSetup);
   const { steps, doneCount, complete, loading } = useSetupSteps();
   // A short pulse when the checklist shows, so a new person sees it is what to do before the first invoice.
-  const pulse = useRef(new Animated.Value(0)).current;
+  const [pulse] = useState(() => new Animated.Value(0));
   const shown = !(loading || complete || dismissed || !steps.length);
   useEffect(() => {
     if (!shown) return;

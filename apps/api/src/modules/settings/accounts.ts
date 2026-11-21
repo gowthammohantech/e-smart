@@ -256,17 +256,11 @@ export const accountHandlers = defineHandlers({
     // Contras and journals name it by key with no foreign key; deleting it would leave their lines posting to nothing.
     const named = (await ledgerKeyUse(ctx.db, ctx.company.id, `pay:${current.id}`)) ?? (current.openingBalanceMinor ? 'an opening balance' : null);
     if (named) throw conflict('PAYMENT_ACCOUNT_IN_USE', `This account is on ${named}; it can't be deleted`);
+    // Used, it says so above (it can never go); unused, the default still stays until another account is made the default, so there is always one.
+    if (current.isDefault) throw conflict('PAYMENT_ACCOUNT_DEFAULT', 'This is the default account; make another account the default before deleting it');
     await ctx.db.transaction(async (tx) => {
       await tx.delete(A).where(eq(A.id, current.id));
       await audit(tx, ctx.user, ctx.company.id, 'payment_account', 'deleted', current, current.name, { before: paymentAccountToWire(current, current.openingBalanceMinor) });
-      if (current.isDefault) {
-        // Hand the default to the oldest remaining account, if any.
-        const [next] = await tx.select().from(A).where(eq(A.companyId, ctx.company.id)).orderBy(asc(A.createdAt), asc(A.id)).limit(1);
-        if (next) {
-          const [promoted] = await tx.update(A).set({ isDefault: true, version: next.version + 1, updatedAt: ctx.now }).where(eq(A.id, next.id)).returning();
-          await audit(tx, ctx.user, ctx.company.id, 'payment_account', 'updated', promoted, promoted.name, { after: paymentAccountToWire(promoted, promoted.openingBalanceMinor) });
-        }
-      }
     });
     return undefined;
   },

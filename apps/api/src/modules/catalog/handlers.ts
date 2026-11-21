@@ -8,7 +8,7 @@ import { schema } from '@esmart/db';
 import { defineHandlers, type AuthUser, type Deps } from '../../context';
 import { checkIfMatch, setEtag } from '../../http/etag';
 import { ApiError, conflict, forbidden, invalid, notFound, preconditionFailed, unprocessable, type Issue } from '../../http/errors';
-import { keyset } from '../../http/pagination';
+import { nameSearchKeyset } from '../../http/pagination';
 import { recordChange, type DbOrTx } from '../../lib/audit';
 import { newId } from '../../lib/ids';
 import { storageKeyFor } from '../attachments/keys';
@@ -139,7 +139,8 @@ export const catalogHandlers = defineHandlers({
     const limited = ctx.user.branchIds;
     if (branchId && limited.length && !limited.includes(branchId)) throw forbidden('BRANCH_NOT_ALLOWED', 'You do not work in this branch');
     const onHand = onHandSql(ctx.company.id, I.id, branchId ?? (limited.length ? limited : undefined));
-    const k = keyset({ cursor, limit, sort: I.name, id: I.id, order: 'asc' });
+    // A search lists the names that start with it first, then the rest that hold it.
+    const k = nameSearchKeyset({ cursor, limit, q, name: I.name, id: I.id });
     const filters = [eq(I.companyId, ctx.company.id)];
     if (type) filters.push(eq(I.type, type));
     if (status) filters.push(eq(I.status, status));

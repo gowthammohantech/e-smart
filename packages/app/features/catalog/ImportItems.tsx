@@ -16,6 +16,7 @@ import { parseCsv } from '@esmart/core/lib/csv';
 import { customFieldColumns, guessItemColumns, itemsFromCsv, type ImportedItem, type ItemImportField, type ItemImportRow } from '@esmart/core/domain/itemImport';
 import type { CustomField } from '@esmart/core/domain/customFields';
 import { ImportFlow, type ColumnMapping, type ImportColumn } from '../import/ImportFlow';
+import { SampleSheet, type ImportSample } from '../import/SampleSheet';
 import { formatMoney, formatPercent } from '@esmart/core/lib/format';
 import { today } from '@esmart/core/lib/date';
 import { api } from '../../remote/api';
@@ -27,9 +28,15 @@ import { useAppStore } from '../../store/appStore';
 import { useCustomFields } from '../customFields/CustomFieldsSection';
 
 type Outcome = { index: number; status: 'created' | 'duplicate' | 'invalid'; issues?: { message?: string }[] };
-/** A sample of the sheet: column names as spreadsheets have them, in English in every language; the business's own item fields after them. */
-const sampleCsv = (custom: CustomField[]) =>
-  [['Name,SKU,Unit,Sale price,Purchase price,GST %,HSN,Opening stock', ...custom.map((f) => f.label)].join(','), ['Ball Bearing 6203,BRG-6203,Nos,250,180,18,84821011,40', ...custom.map(() => '')].join(',')].join('\n');
+/** A sample of the sheet: every column it reads, named as spreadsheets have them (in English in every language), and one record; the business's own item fields after them. */
+const itemSample = (custom: CustomField[]): ImportSample => ({
+  columns: ['Name', 'SKU', 'Type', 'Unit', 'Sale Price', 'Purchase Price', 'GST %', 'HSN', 'Barcode', 'Opening Stock', 'Reorder Level', 'Description', ...custom.map((f) => f.label)],
+  row: ['Ball Bearing 6203', 'BRG-6203', 'Goods', 'Nos', '250', '180', '18', '84821011', '8901234567890', '40', '10', 'Deep groove ball bearing', ...custom.map(() => '')],
+});
+const sampleCsv = (custom: CustomField[]) => {
+  const s = itemSample(custom);
+  return [s.columns.join(','), s.row.join(',')].join('\n');
+};
 /** The hint, with the columns the business's own fields are read from. */
 const withCustomHint = (hint: string, custom: CustomField[], line: (labels: string) => string) => (custom.length ? `${hint} ${line(custom.map((f) => f.label).join(', '))}` : hint);
 
@@ -109,6 +116,7 @@ function ImportItemsFlow() {
       toRecords={toRecords}
       columns={columns}
       maxRecords={1000}
+      sample={itemSample(customFields)}
       onDryRun={async (records) => {
         const res = await send(records, true);
         return {
@@ -216,6 +224,7 @@ function ImportItemsPaste() {
             }
           />
         ) : null}
+        <SampleSheet sample={itemSample(customFields)} />
         <TextField label={tr('inventory:import.paste')} value={text} onChangeText={changeText} placeholder={sampleCsv(customFields)} multiline autoCapitalize="none" />
 
         {noName ? (

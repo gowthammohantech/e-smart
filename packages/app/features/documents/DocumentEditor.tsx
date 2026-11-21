@@ -453,10 +453,14 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   const itemSearch = useItemSearch(useDebounced(itemQuery), itemOpen && !(isReturn && draft.sourceDocumentId));
   const partyOptions = partySearch.data ?? [];
   // Looked up in the store, where the search keeps what it found, for stock and opening-date checks.
+  // Products and services on tabs of their own in the picker, All showing both.
+  const [itemTab, setItemTab] = useState<'all' | 'goods' | 'service'>('all');
   const itemOptions = useMemo(() => {
     const byId = new Map(items.map((i) => [i.id, i]));
-    return (itemSearch.data ?? []).flatMap((r) => (r.id && byId.get(r.id) ? [byId.get(r.id)!] : []));
-  }, [itemSearch.data, items]);
+    return (itemSearch.data ?? [])
+      .flatMap((r) => (r.id && byId.get(r.id) ? [byId.get(r.id)!] : []))
+      .filter((i) => itemTab === 'all' || (itemTab === 'service' ? i.type === 'service' : i.type !== 'service'));
+  }, [itemSearch.data, items, itemTab]);
   const [currencyOpen, setCurrencyOpen] = useState(false);
   const [posOpen, setPosOpen] = useState(false);
   const [reasonOpen, setReasonOpen] = useState(false);
@@ -694,7 +698,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       const line = lineFromItem(made.record, isPurchase, taxCategories);
       addLine(noteStart({ ...line, unitPrice: reprice(line.unitPrice, draft.currency, 1, draft.exchangeRate) }));
       // Its quantity takes the cursor, as a picked item's does.
-      setFocusLine({ id: line.id, at: Date.now() });
+      setFocusLine((prev) => ({ id: line.id, at: (prev?.at ?? 0) + 1 }));
     };
   });
   useFocusEffect(useCallback(() => takeMade.current(), []));
@@ -2103,6 +2107,18 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           }
           onQueryChange={sourceDoc ? undefined : setItemQuery}
           loading={!sourceDoc && itemSearch.isFetching}
+          // Lines picked from a source document have no tabs; the catalogue does.
+          tabs={
+            sourceDoc
+              ? undefined
+              : [
+                  { key: 'all', label: tr('sales:editor.itemTab.all') },
+                  { key: 'goods', label: tr('sales:editor.itemTab.products') },
+                  { key: 'service', label: tr('sales:editor.itemTab.services') },
+                ]
+          }
+          tab={itemTab}
+          onTabChange={(key) => setItemTab(key as 'all' | 'goods' | 'service')}
           multiple
           confirmLabel={(count) => tr('sales:editor.addItems', { count })}
           onConfirm={(ids) => {
@@ -2137,7 +2153,9 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
               addLine(added);
               first = first ?? added.id;
             });
-            if (first) setFocusLine({ id: first, at: Date.now() });
+            // A count, not the time, so each pick is a new focus.
+            const target = first;
+            if (target) setFocusLine((prev) => ({ id: target, at: (prev?.at ?? 0) + 1 }));
           }}
           searchPlaceholder={tr('sales:editor.searchItems')}
           footer={

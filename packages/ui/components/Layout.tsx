@@ -30,6 +30,38 @@ export function Columns({ left, right, ratio = [1, 1] }: { left: React.ReactNode
 }
 
 /**
+ * Boxes two to a row on a desktop, the two in a row always the same height: each box is a section
+ * header and one card, and the card takes usePairFill's style to grow to the row's height.
+ * An odd one at the end takes the whole row. On a phone they stack in the order given.
+ */
+export function PairedRows({ blocks }: { blocks: { key: string; node: React.ReactNode }[] }) {
+  const t = useTheme();
+  const desktop = useIsDesktop();
+  const shown = blocks.filter((b) => b.node);
+  if (!desktop) return <>{shown.map((b) => <React.Fragment key={b.key}>{b.node}</React.Fragment>)}</>;
+  const rows: (typeof shown)[] = [];
+  for (let i = 0; i < shown.length; i += 2) rows.push(shown.slice(i, i + 2));
+  return (
+    <>
+      {rows.map((row) => (
+        <View key={row.map((b) => b.key).join('|')} style={{ flexDirection: 'row', alignItems: 'stretch', gap: t.spacing.xl }}>
+          {row.map((b) => (
+            <View key={b.key} style={{ flex: 1, minWidth: 0 }}>
+              {b.node}
+            </View>
+          ))}
+        </View>
+      ))}
+    </>
+  );
+}
+
+/** The style a PairedRows box's card takes to grow to its row's height (nothing on a phone). */
+export function usePairFill(): ViewStyle | undefined {
+  return useIsDesktop() ? { flexGrow: 1 } : undefined;
+}
+
+/**
  * Stacks its children (usually StatRows) on a phone and lays them out in one
  * line on a desktop, so four stat tiles sit across instead of in pairs.
  */

@@ -46,6 +46,8 @@ const SELECT_WIDTH = 44;
 /** The column of a table with `subRows`: a parent's chevron, and the line down to its rows. */
 const TOGGLE_WIDTH = 36;
 const ACTIONS_WIDTH = 52;
+/** One icon button of a row's inline actions. */
+const INLINE_ACTION_WIDTH = 34;
 
 function cellStyle<T>(column: Pick<Column<T>, 'width' | 'flex' | 'align'>) {
   return {
@@ -112,6 +114,7 @@ export function DataTable<T>({
   onSelectionChange,
   bulkActions,
   rowActions,
+  inlineActions,
   maxWidth,
   subRows,
 }: {
@@ -166,6 +169,8 @@ export function DataTable<T>({
   bulkActions?: (keys: string[]) => React.ReactNode;
   /** The entries of a row's ⋯ menu; none (or an empty list) leaves the row without one. */
   rowActions?: (row: T) => RowAction[];
+  /** The row actions as icon buttons side by side in the row (Edit, Delete), not behind a ⋯ menu. Three at most. */
+  inlineActions?: boolean;
   /**
    * The table's widest: a table of two to four columns reads better at its own width than
    * spread across the page. Left-aligned; columns still share whatever width it gets.
@@ -180,7 +185,9 @@ export function DataTable<T>({
   const desktop = breakpoint !== 'phone';
   const canSelect = !!selectable && !!onSelectionChange;
   const hasSub = !!subRows;
-  const extrasWidth = 8 + (canSelect ? SELECT_WIDTH : 0) + (rowActions ? ACTIONS_WIDTH : 0) + (hasSub ? TOGGLE_WIDTH : 0);
+  // Inline, the column holds an icon button for each action (up to three).
+  const actionsWidth = inlineActions ? INLINE_ACTION_WIDTH * 3 + 8 : ACTIONS_WIDTH;
+  const extrasWidth = 8 + (canSelect ? SELECT_WIDTH : 0) + (rowActions ? actionsWidth : 0) + (hasSub ? TOGGLE_WIDTH : 0);
   // The table's own width, not the window's: a sidebar, Lixi's panel or a side
   // column can leave it far narrower than the window suggests.
   const [boxWidth, setBoxWidth] = useState(0);
@@ -372,7 +379,7 @@ export function DataTable<T>({
         );
       })}
       {hasActionsColumn ? (
-        <View style={{ width: ACTIONS_WIDTH }} role="columnheader" aria-label={tr('common:table.actions')} />
+        <View style={{ width: actionsWidth }} role="columnheader" aria-label={tr('common:table.actions')} />
       ) : null}
     </View>
   );
@@ -398,7 +405,7 @@ export function DataTable<T>({
             <Skeleton height={12} width={`${55 + ((i * 7 + j * 13) % 35)}%`} radius={4} />
           </View>
         ))}
-        {hasActionsColumn ? <View style={{ width: ACTIONS_WIDTH }} /> : null}
+        {hasActionsColumn ? <View style={{ width: actionsWidth }} /> : null}
       </View>
     ));
 
@@ -448,8 +455,8 @@ export function DataTable<T>({
           </View>
         ))}
         {hasActionsColumn ? (
-          <View style={{ width: ACTIONS_WIDTH, alignItems: 'center' }} role="cell">
-            {sub ? null : <RowActionsButton actions={actionsFor(row)} label={tr('common:table.rowActions', { label })} />}
+          <View style={{ width: actionsWidth, alignItems: 'center' }} role="cell">
+            {sub ? null : inlineActions ? <InlineRowActions actions={actionsFor(row)} label={label} /> : <RowActionsButton actions={actionsFor(row)} label={tr('common:table.rowActions', { label })} />}
           </View>
         ) : null}
       </>
@@ -524,7 +531,7 @@ export function DataTable<T>({
           {footer[c.key] ?? null}
         </View>
       ))}
-      {hasActionsColumn ? <View style={{ width: ACTIONS_WIDTH }} role="cell" /> : null}
+      {hasActionsColumn ? <View style={{ width: actionsWidth }} role="cell" /> : null}
     </View>
   ) : null;
 
@@ -723,6 +730,43 @@ function ExpandToggle({ open, onPress, label }: { open: boolean; onPress: () => 
     >
       <Icon name={open ? 'chevron-down' : 'chevron-right'} size={16} color={t.c.text} />
     </Pressable>
+  );
+}
+
+/** A row's actions as icon buttons in the row itself, each named for the row it acts on. */
+function InlineRowActions({ actions, label }: { actions: RowAction[]; label: string }) {
+  const t = useTheme();
+  if (!actions.length) return null;
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+      {actions.map((a) => (
+        <Pressable
+          key={a.key}
+          onPress={a.onPress}
+          accessibilityRole="button"
+          accessibilityLabel={`${a.label}: ${label}`}
+          // The name shows on hover, as a tooltip.
+          {...(Platform.OS === 'web' ? ({ title: a.label } as object) : null)}
+          hitSlop={4}
+          style={(state) => {
+            const { hovered, focused } = state as WebPressState;
+            return [
+              {
+                width: 30,
+                height: 30,
+                borderRadius: t.radius.sm,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: hovered ? (a.destructive ? t.c.badSoft : t.c.card2) : 'transparent',
+              },
+              focusRing(t, focused),
+            ];
+          }}
+        >
+          <Icon name={a.icon ?? 'circle-outline'} size={18} color={a.destructive ? t.c.bad : t.c.muted} />
+        </Pressable>
+      ))}
+    </View>
   );
 }
 

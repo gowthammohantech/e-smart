@@ -36,7 +36,6 @@ import {
   isEwayBillRequired,
   validPincode,
   validVehicleNumber,
-  subSupplyTypeFor,
   validatePartA,
   validatePartB,
   validityDays,

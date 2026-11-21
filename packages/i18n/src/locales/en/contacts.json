@@ -217,7 +217,7 @@
     "title": "Import contacts",
     "action": "Import",
     "hint": "Paste or choose a CSV saved from Excel, Google Sheets, Tally or another app. Columns are found by their names (Name, GSTIN, Phone, Email, Address, City, State, PIN, Opening balance, Dr/Cr, Credit days, Type). Check it first; nothing is saved until you import.",
-    "defaultKind": "Type for rows that do not say",
+    "defaultKind": "Default type (used when a row has no Type)",
     "chooseFile": "Choose CSV file",
     "paste": "Or paste the CSV here",
     "noNameColumn": "No column called Name (or Party name, Customer name…) was found in the first row.",

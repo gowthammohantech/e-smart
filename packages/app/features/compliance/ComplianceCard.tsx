@@ -18,6 +18,8 @@ import { Skeleton, SkeletonGroup } from '@esmart/ui/components/Skeleton';
 import {
   useActiveCompany,
   useActiveEwayBill,
+  useEwayBill,
+  useEwayBillsForDocument,
   useComplianceSettings,
 } from '../../store/selectors';
 import { canCancelEInvoice, isEInvoiceApplicable } from '@esmart/core/domain/eInvoice';
@@ -52,9 +54,17 @@ export function ComplianceCard({
   const ewayGate = useEwayLoginGate();
   const parties = useAppStore((s) => s.parties);
   const items = useAppStore((s) => s.items);
-  const bill = useActiveEwayBill(doc.id);
+  const ownBill = useActiveEwayBill(doc.id);
   // A document that has a bill shows it once it's here, never "Pending" and a button to raise another meanwhile.
   const billQuery = useEwayBillRecord(doc.compliance?.ewayBillId);
+  // An invoice made from a delivery challan carries the challan's bill: raised on the challan, it is the
+  // one the goods moved under, so the invoice shows it as its own.
+  const recorded = useEwayBill(doc.compliance?.ewayBillId);
+  const linkedBill = recorded && recorded.documentId !== doc.id && recorded.status !== 'cancelled' ? recorded : undefined;
+  const bill = ownBill ?? linkedBill;
+  // With no live bill, whether the last one was cancelled: it says Cancelled, not Not raised.
+  const lastBill = useEwayBillsForDocument(doc.id)[0];
+  const cancelledBill = !bill && lastBill?.status === 'cancelled' ? lastBill : undefined;
   const billLoading = !bill && !!doc.compliance?.ewayBillId && billQuery.isLoading;
 
   const [sheet, setSheet] = useState<'generate' | 'cancel' | null>(null);
@@ -248,6 +258,8 @@ export function ComplianceCard({
               <Skeleton height={22} width={80} radius={11} />
             ) : billMeta ? (
               <Badge label={keyLabel(tr, billMeta.labelKey)} tone={expiringSoon ? 'warning' : billMeta.tone} icon={billMeta.icon} />
+            ) : cancelledBill ? (
+              <Badge label={tr('compliance:status.docEway.cancelled')} tone="neutral" icon="close-octagon-outline" />
             ) : (
               <Badge
                 label={requirement.required ? tr('compliance:status.docEway.pending') : tr('compliance:status.docEway.notRequired')}

@@ -130,7 +130,7 @@
     "noMovements": "No movements yet",
     "edit": "Edit",
     "actions": "Actions",
-    "deleteMessage": "Documents that already use this item keep their own copy of the details. This cannot be undone.",
+    "deleteMessage": "An item used in any document or stock movement can't be deleted; mark it inactive instead. This cannot be undone.",
     "delete": "Delete",
     "deleted": "Item deleted",
     "pricing": "Pricing",
@@ -309,7 +309,11 @@
     "noItems": "No items yet",
     "noItemsBody": "Add what you sell to put it on invoices in a tap.",
     "allCategories": "All categories",
-    "allBrands": "All brands"
+    "allBrands": "All brands",
+    "statusActive": "Active",
+    "statusInactive": "Inactive",
+    "noInactive": "No inactive items",
+    "noInactiveBody": "Items and services you deactivate show here, where you can reactivate them."
   },
   "type": {
     "goods": "Product",

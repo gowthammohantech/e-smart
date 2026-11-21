@@ -6,6 +6,7 @@ import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { Button } from '@esmart/ui/components/Button';
 import { Checkbox } from '@esmart/ui/components/Checkbox';
 import { Sheet } from '@esmart/ui/components/Sheet';
+import { SearchBar } from '@esmart/ui/components/SearchBar';
 import { Text } from '@esmart/ui/components/Text';
 import type { Money } from '@esmart/core/lib/money';
 import { formatMoney } from '@esmart/core/lib/format';
@@ -48,6 +49,9 @@ export function MergeSourcesSheet({
   const desktop = useIsDesktop();
   const { t: tr } = useTranslation(['sales', 'common']);
   const [picked, setPicked] = useState<string[]>([]);
+  const [query, setQuery] = useState('');
+  const q = query.trim().toLowerCase();
+  const shown = q ? candidates.filter((c) => `${c.number} ${formatDate(c.date)} ${c.detail ?? ''}`.toLowerCase().includes(q)) : candidates;
   const toggle = (id: string, on: boolean) => setPicked((cur) => (on ? [...cur, id] : cur.filter((x) => x !== id)));
   const count = picked.length + 1;
 
@@ -58,6 +62,11 @@ export function MergeSourcesSheet({
       title={tr(`sales:merge.title.${kind}`)}
       subtitle={tr(`sales:merge.hint.${kind}`, { party: partyName })}
       desktopAs="drawer"
+      header={
+        <View style={{ paddingHorizontal: t.spacing.lg, paddingBottom: t.spacing.sm }}>
+          <SearchBar value={query} onChangeText={setQuery} placeholder={tr('common:component.search')} />
+        </View>
+      }
       footer={
         <View style={desktop ? { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: t.spacing.md } : { gap: t.spacing.sm }}>
           <Text variant="caption" tone="muted" center={!desktop} accessibilityLiveRegion="polite">
@@ -74,7 +83,7 @@ export function MergeSourcesSheet({
       }
     >
       <Choice row={current} checked disabled note={tr('sales:merge.thisOne')} onChange={() => undefined} />
-      {candidates.map((c) => (
+      {shown.map((c) => (
         <Choice key={c.id} row={c} checked={picked.includes(c.id)} disabled={busy} onChange={(on) => toggle(c.id, on)} />
       ))}
     </Sheet>

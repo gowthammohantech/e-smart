@@ -36,6 +36,7 @@
     "fastify": "^5.12.5",
     "fastify-raw-body": "^6.0.1",
     "fflate": "^0.8.3",
+    "nodemailer": "^10.6.1",
     "playwright-core": "^1.63.0",
     "posthog-node": "5.57.2",
     "zod": "^4.6.5"
@@ -44,6 +45,7 @@
     "@esmart/eslint-config": "*",
     "@esmart/tsconfig": "*",
     "@types/node": "^22",
+    "@types/nodemailer": "^8.0.2",
     "ajv": "^8.20.0",
     "ajv-formats": "^3.0.1",
     "eslint": "^9.39.5",

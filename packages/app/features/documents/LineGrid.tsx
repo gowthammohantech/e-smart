@@ -57,7 +57,7 @@ export function LineGrid({
   onRemove: (id: string) => void;
   /** Opens the full editor for a line. */
   onEdit: (line: DocumentLine) => void;
-  /** Enter on the last line: add another (the item picker). */
+  /** Enter on the last line (outside its quantity): add another (the item picker). */
   onAddRequest: () => void;
   /** A return can't take back more than its source line carried. */
   maxQuantity?: (line: DocumentLine) => number | undefined;
@@ -120,7 +120,8 @@ export function LineGrid({
 
   const onEnter = (row: number, col: Col) => {
     if (row < lines.length - 1) focusCell(row + 1, col);
-    else onAddRequest();
+    // The last line's quantity is the end of typing quantities in: Enter there stays put, no item picker.
+    else if (col !== 'qty') onAddRequest();
   };
 
   const headerCell = (label: string, width?: number, align: 'left' | 'right' = 'left') => (
@@ -251,7 +252,8 @@ export function LineGrid({
                 })}
               </View>
               {/* The unit rides along with the quantity it counts, rather than taking a column. */}
-              <Text variant="micro" tone="muted" numberOfLines={1} style={{ maxWidth: 34 }}>
+              {/* A set width, so the arrows stand in one line down the column whatever the unit (Kg, Pcs, Nos). */}
+              <Text variant="micro" tone="muted" numberOfLines={1} style={{ width: 34 }}>
                 {unitShortName(line.unit)}
               </Text>
             </View>
@@ -483,6 +485,9 @@ function GridInput({
       }}
       blurOnSubmit={false}
       keyboardType={numeric ? 'decimal-pad' : 'default'}
+      // No browser suggestions of what was typed before (a past quantity, rate or name) over the grid.
+      autoComplete="off"
+      autoCorrect={false}
       accessibilityLabel={label}
       aria-invalid={invalid || undefined}
       placeholder={placeholder}

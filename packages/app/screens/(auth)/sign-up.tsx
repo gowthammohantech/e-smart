@@ -164,7 +164,11 @@ export default function SignUp() {
         <SwitchField
           label={tr('auth:signUp.acceptLabel')}
           value={accepted}
-          onValueChange={setAccepted}
+          onValueChange={(v) => {
+            setAccepted(v);
+            // Turned on, the "accept the terms" message goes at once.
+            if (v) setErrors((e) => ({ ...e, terms: undefined }));
+          }}
         />
         <Text variant="caption" tone="muted">
           <Text variant="caption" tone="primary" accessibilityRole="link" onPress={() => void Linking.openURL(LEGAL.terms)}>{tr('auth:signUp.readTerms')}</Text>
