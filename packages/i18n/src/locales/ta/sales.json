@@ -384,6 +384,7 @@
     "notesPlaceholder": "உள் குறிப்பு",
     "serviceAdvance": "சேவைகளுக்கான முன்பணம்",
     "includesGst": "GST {{amount}} உட்பட",
+    "gstIncluded": "GST உட்பட",
     "advanceService": "சேவை",
     "advanceServicePick": "சேவையைத் தேர்ந்தெடுக்கவும்",
     "advanceTaxMode": "வரி",

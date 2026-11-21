@@ -384,6 +384,7 @@
     "notesPlaceholder": "Internal note",
     "serviceAdvance": "Advance for services",
     "includesGst": "Includes GST {{amount}}",
+    "gstIncluded": "GST included",
     "advanceService": "Service",
     "advanceServicePick": "Pick a service",
     "advanceTaxMode": "Tax",
