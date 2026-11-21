@@ -1,5 +1,6 @@
 import { SESv2Client, SendEmailCommand } from '@aws-sdk/client-sesv2';
 import { EmailClient } from '@azure/communication-email';
+import nodemailer, { type Transporter } from 'nodemailer';
 import type { Config } from '../config';
 import { LOGO_CID, LOGO_PNG_BASE64 } from '../lib/emailLogo';
 import { trackedFetch, trackOperation } from '../lib/outbound';
@@ -112,6 +113,7 @@ export function createMessaging(config: Config, outbox: Outbox, log: (msg: strin
 
   let ses: SESv2Client | null = null;
   let acs: EmailClient | null = null;
+  let smtp: Transporter | null = null;
   // Add a provider by adding a branch here and a value to EMAIL_PROVIDER; callers only see EmailProvider.
   const email: EmailProvider =
     config.EMAIL_PROVIDER === 'resend'
@@ -148,6 +150,38 @@ export function createMessaging(config: Config, outbox: Outbox, log: (msg: strin
             return done;
             });
             return { providerMessageId: out.id };
+          },
+        }
+      : config.EMAIL_PROVIDER === 'smtp'
+      ? {
+          async send(msg) {
+            smtp ??= nodemailer.createTransport({
+              host: config.SMTP_HOST,
+              port: config.SMTP_PORT,
+              secure: config.SMTP_SECURE,
+              auth: { user: config.SMTP_USER, pass: config.SMTP_PASS },
+              // Fail fast instead of hanging a request on an unreachable mail server.
+              connectionTimeout: 10_000,
+              greetingTimeout: 10_000,
+              socketTimeout: 20_000,
+            });
+            const client = smtp;
+            const images = inlineImages(msg);
+            const out = await trackOperation({ service: 'smtp', operation: 'Send email', host: config.SMTP_HOST ?? 'smtp', path: `:${config.SMTP_PORT}` }, () =>
+              client.sendMail({
+                from: config.EMAIL_FROM,
+                to: msg.to,
+                subject: msg.subject,
+                text: msg.text,
+                ...(msg.html ? { html: msg.html } : {}),
+                ...(config.EMAIL_REPLY_TO ? { replyTo: config.EMAIL_REPLY_TO } : {}),
+                ...(images.length ? { attachments: images.map((i) => ({ filename: i.name, content: i.base64, encoding: 'base64', contentType: i.contentType, cid: i.cid })) } : {}),
+              }),
+            );
+            // A refused recipient is a failed send, not a quiet success.
+            const rejected = out.rejected ?? [];
+            if (rejected.length) throw new Error(`SMTP rejected ${rejected.join(', ')}`);
+            return { providerMessageId: out.messageId ?? localId('smtp') };
           },
         }
       : config.EMAIL_PROVIDER === 'ses'
