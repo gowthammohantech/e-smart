@@ -436,7 +436,6 @@ export function productionProblems(config: Config, env: Record<string, string | 
   need(config.STORAGE_PROVIDER === 'azure' && !config.AZURE_STORAGE_CONNECTION_STRING, 'AZURE_STORAGE_CONNECTION_STRING must be set for STORAGE_PROVIDER=azure.');
   need(
     config.STORAGE_PROVIDER === 's3' && !((env.AWS_ACCESS_KEY_ID && env.AWS_SECRET_ACCESS_KEY) || env.AWS_WEB_IDENTITY_TOKEN_FILE || env.AWS_PROFILE),
-  need(config.EMAIL_PROVIDER === 'smtp' && (!config.SMTP_HOST || !config.SMTP_USER || !config.SMTP_PASS), 'SMTP_HOST, SMTP_USER and SMTP_PASS must be set for EMAIL_PROVIDER=smtp.');
     'AWS credentials (AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, or a role) must be set for STORAGE_PROVIDER=s3.',
   );
   problems.push(...gspProblems(config));
