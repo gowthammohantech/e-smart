@@ -73,6 +73,8 @@ export default function BusinessStep() {
       city: required(draft.address.city, tr('onboarding:business.city')),
       state: required(draft.address.state, tr('onboarding:business.state')),
       ...live,
+      // In India the PIN is asked for, as for a party: it prints on invoices and e-way bills need it.
+      postalCode: (draft.address.country === 'IN' ? required(draft.address.postalCode, tr('onboarding:business.pinCode')) : undefined) ?? live.postalCode,
     };
     setErrors(nextErrors);
     if (hasErrors(nextErrors)) {
@@ -231,6 +233,7 @@ export default function BusinessStep() {
           maxLength={draft.address.country === 'IN' ? 6 : undefined}
           error={shownError(draft.address.postalCode, live.postalCode, errors.postalCode)}
           containerStyle={{ flex: 1 }}
+          required={draft.address.country === 'IN'}
         />
       </View>
       </FieldRow>
