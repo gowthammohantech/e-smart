@@ -383,7 +383,6 @@
     "notes": "Notes",
     "notesPlaceholder": "Internal note",
     "serviceAdvance": "Advance for services",
-    "includesGst": "Includes GST {{amount}}",
     "advanceService": "Service",
     "advanceServicePick": "Pick a service",
     "advanceTaxMode": "Tax",

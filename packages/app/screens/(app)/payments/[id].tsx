@@ -25,7 +25,7 @@ import { paymentMethodLabel } from '@esmart/core/labels';
 import { formatMoney } from '@esmart/core/lib/format';
 import { INDIAN_STATES } from '@esmart/core/data/masters';
 import { formatDate, formatDateTime } from '@esmart/core/lib/date';
-import { inclusiveTax, money } from '@esmart/core/lib/money';
+import { money } from '@esmart/core/lib/money';
 import { SHOW_SCROLLBAR } from '@esmart/ui/theme/breakpoints';
 import { useGoBack } from '../../../navigation/useGoBack';
 
@@ -197,12 +197,6 @@ export default function PaymentDetail() {
                         {`${tr(`sales:payment.adjustment.${k}`)}: ${formatMoney(a[k]!)}`}
                       </Text>
                     ))}
-                  {/* A with-tax advance: the GST inside what was applied here. */}
-                  {payment.advanceTax && !payment.advanceTax.reverseCharge && payment.advanceTax.rate > 0 ? (
-                    <Text variant="caption" tone="muted">
-                      {tr('sales:payment.includesGst', { amount: formatMoney(inclusiveTax(a.amount, payment.advanceTax.rate + (payment.advanceTax.cessRate ?? 0))) })}
-                    </Text>
-                  ) : null}
                 </View>
                 <Text variant="body" weight="700">
                   {formatMoney(a.amount)}
