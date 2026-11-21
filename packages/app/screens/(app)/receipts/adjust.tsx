@@ -247,8 +247,8 @@ export default function AdjustAdvances() {
                           key,
                           c.number,
                           `${tr(c.sourceType === 'note' ? 'books:adjust.note' : side === 'customer' ? 'books:adjust.advance' : 'books:adjust.advancePaid')} · ${formatDate(c.date)}`,
-                          // A service advance with GST: what is left to adjust (GST included), and
-                          // under it what the customer paid and the GST in that, taken back in the return (11B).
+                          // A service advance with GST: what is left to adjust (its value without the GST), and
+                          // under it what the customer paid and the GST in that, which is not adjusted.
                           <View style={{ alignItems: 'flex-end', gap: 2 }}>
                             <Text variant="small" weight="700">{formatMoney(c.left as Money)}</Text>
                             {c.gst && c.total ? (
