@@ -73,10 +73,12 @@ export default function ReportsTab() {
     description: tr(`reports:report.${r.id}.description`),
   });
   const open = REPORTS.filter((r) => canOpen(`/reports/${r.key}`));
-  // TDS and TCS together, under their own heading, so they're found in one place.
+  // TDS and TCS together, under their own heading, so they're found in one place. Where TCS's reports
+  // don't open (Free), the heading is TDS alone.
+  const hasTcs = open.some((r) => r.id.startsWith('tcs'));
   const groups = [
     { title: tr('reports:hub.allReports'), reports: open.filter((r) => !r.tax).map(linkOf) },
-    { title: tr('reports:hub.tdsTcs'), reports: open.filter((r) => r.tax).map(linkOf) },
+    { title: tr(hasTcs ? 'reports:hub.tdsTcs' : 'reports:hub.tds'), reports: open.filter((r) => r.tax).map(linkOf) },
   ].filter((g) => g.reports.length);
   const range = resolveRange('thisFY', undefined, useActiveCompany()?.fiscalYearStartMonth);
   // Always 'phone' in the native apps, so the desktop layouts below only ever reach a browser.
