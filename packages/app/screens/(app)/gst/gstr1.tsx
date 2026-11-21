@@ -78,11 +78,11 @@ export default function Gstr1Report() {
   /** The summary as a file: a line per section, as on the screen. Each section's page exports its own rows. */
   const exportRows = () =>
     reportTable(
-      ['Particulars', 'Section', 'Table', 'Taxable value', 'IGST', 'CGST', 'SGST', 'Cess', 'Total tax'],
+      ['Particulars', 'Section', 'Table', 'Records', 'Taxable value', 'IGST', 'CGST', 'SGST', 'Cess', 'Total tax'],
       lines.map((r) => {
         const meta = GSTR1_SECTIONS.find((x) => x.value === r.section);
         const major = (minor: number | null) => (minor === null ? '' : minor / 100);
-        return [lineName(r), meta?.label ?? '', meta?.tables ?? '', major(r.taxable), major(r.igst), major(r.cgst), major(r.sgst), major(r.cess), major(taxOf(r))];
+        return [lineName(r), meta?.label ?? '', meta?.tables ?? '', r.records ?? '', major(r.taxable), major(r.igst), major(r.cgst), major(r.sgst), major(r.cess), major(taxOf(r))];
       }),
     );
 
@@ -95,8 +95,7 @@ export default function Gstr1Report() {
     return x ? `${x.label} · ${tr('compliance:gstr1.col.tables')} ${x.tables}` : s;
   };
   // Named as the books name them, the return's short name and table numbers under each.
-  // No count of records: each section's page lists them.
-  const summaryRows = lines.map((r) => [lineName(r), m(r.taxable), m(r.igst), m(r.cgst), m(r.sgst), m(r.cess), taxOf(r) === null ? '—' : m(taxOf(r))]);
+  const summaryRows = lines.map((r) => [lineName(r), r.section ? String(r.records) : '', m(r.taxable), m(r.igst), m(r.cgst), m(r.sgst), m(r.cess), taxOf(r) === null ? '—' : m(taxOf(r))]);
 
   // The portal's file is one registration's return for one month. It is offered only when it holds what
   // the screen shows: the range is a whole month, and the branch picked (or, with none, every branch)
@@ -157,13 +156,13 @@ export default function Gstr1Report() {
         {/* The return section by section, as the books lay it out: each line opens what it holds. */}
         <ReportSection title={tr('compliance:gstr1.summary')}>
           <DataTable
-            headers={[tr('compliance:gstr1.col.section'), tr('compliance:gstr1.col.taxable'), ...taxHeads, tr('compliance:gstr1.col.totalTax')]}
+            headers={[tr('compliance:gstr1.col.section'), tr('compliance:gstr1.col.records'), tr('compliance:gstr1.col.taxable'), ...taxHeads, tr('compliance:gstr1.col.totalTax')]}
             rows={summaryRows}
             subtitles={lines.map((r) => (r.section ? sectionTables(r.section) : undefined))}
             strong={[liabilityRow]}
             firstWidth={260}
-            widths={[2.4, 1.1, 1, 1, 1, 0.7, 1]}
-            kinds={['text', 'num', 'num', 'num', 'num', 'num', 'num']}
+            widths={[2.4, 0.6, 1.1, 1, 1, 1, 0.7, 1]}
+            kinds={['text', 'num', 'num', 'num', 'num', 'num', 'num', 'num']}
             minWidth={980}
             onRowPress={(i) => {
               const section = lines[i].section;
