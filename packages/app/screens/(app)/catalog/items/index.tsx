@@ -125,7 +125,9 @@ export default function ItemList() {
 
   // Delete from the row: asked first, as on the item's own screen.
   const removeItem = useAppStore((s) => s.removeItem);
+  // The item stays set while the dialog closes, so its name doesn't vanish from the title mid-fade.
   const [deleting, setDeleting] = useState<Item | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const remove = async (item: Item) => {
     // Read from the server first: a delete goes up only for an item the device holds.
     try {
@@ -272,7 +274,7 @@ export default function ItemList() {
             inlineActions
             rowActions={(i) => [
               { key: 'edit', label: tr('common:action.edit'), icon: 'pencil-outline', onPress: () => router.push(`/(app)/catalog/items/${i.id}/edit`) },
-              { key: 'delete', label: tr('inventory:detail.deleteItem'), icon: 'trash-can-outline', destructive: true, onPress: () => setDeleting(i) },
+              { key: 'delete', label: tr('inventory:detail.deleteItem'), icon: 'trash-can-outline', destructive: true, onPress: () => { setDeleting(i); setDeleteOpen(true); } },
             ]}
             empty={<EmptyState illustration="no-items" title={emptyTitle} message={emptyMessage} compact />}
           />
@@ -342,16 +344,15 @@ export default function ItemList() {
       <Fab icon="plus" onPress={() => router.push(`/(app)/catalog/items/new?type=${tab}`)} />
       {/* The same question the item's own screen asks before it deletes. */}
       <ConfirmDialog
-        visible={!!deleting}
+        visible={deleteOpen}
         title={tr('inventory:detail.deleteTitle', { name: deleting?.name ?? '' })}
         message={tr('inventory:detail.deleteMessage')}
         confirmLabel={tr('inventory:detail.delete')}
         destructive
-        onCancel={() => setDeleting(null)}
+        onCancel={() => setDeleteOpen(false)}
         onConfirm={() => {
-          const item = deleting;
-          setDeleting(null);
-          if (item) void remove(item);
+          setDeleteOpen(false);
+          if (deleting) void remove(deleting);
         }}
       />
     </View>

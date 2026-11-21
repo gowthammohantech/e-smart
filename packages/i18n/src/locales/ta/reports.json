@@ -12,6 +12,7 @@
     "subtitle": "நிதியாண்டில் இதுவரை · {{currency}}",
     "open": "திற",
     "margin": "{{percent}} லாப விகிதம்",
+    "tds": "TDS",
     "tdsTcs": "TDS மற்றும் TCS"
   },
   "home": {

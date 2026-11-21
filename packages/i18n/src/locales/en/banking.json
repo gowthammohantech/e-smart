@@ -165,6 +165,8 @@
     },
     "kinds": "Takes {{kinds}} files.",
     "choose": "Choose a file",
+    "sampleTitle": "Your file should look like this",
+    "sampleHint": "The first row holds the column names, and each row under it is one record. Only Name is required; leave out the columns you don't need.",
     "reading": "Reading {{name}}…",
     "wrongType": "That kind of file can't be imported here. Use {{kinds}}.",
     "tooBig": "The file is too large. It can be at most {{mb}} MB.",

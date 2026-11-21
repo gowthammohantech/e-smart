@@ -33,6 +33,20 @@ export function validPhone(value: string | undefined): string | undefined {
 }
 
 /** Shape, state code and check digit — a typo is caught here, not at the portal. */
+/** A PAN: five letters, four digits, a letter (AABCV1234F). Blank is fine; required is the caller's. */
+export const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
+export function validPan(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  return PAN_RE.test(value.trim().toUpperCase()) ? undefined : i18n.t('errors:validation.panShape');
+}
+
+/** An MSME's Udyam registration number: UDYAM, the state's letters, two digits, seven digits (UDYAM-TN-02-0012345). */
+export const UDYAM_RE = /^UDYAM-[A-Z]{2}-[0-9]{2}-[0-9]{7}$/;
+export function validUdyam(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  return UDYAM_RE.test(value.trim().toUpperCase()) ? undefined : i18n.t('errors:validation.udyamShape');
+}
+
 export function validGstin(value: string | undefined): string | undefined {
   if (!value) return undefined;
   // isValidGstin is the one rule: a real GSTIN (shape, state, check digit) or, where sandboxes are on, a NIC test one.

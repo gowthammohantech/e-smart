@@ -6,6 +6,8 @@
     "invalidDialCode": "Enter a country code, e.g. +91",
     "phoneDigits": "Enter a {{count}}-digit number",
     "gstinShape": "GSTIN should look like 27AABCV1234F1ZO",
+    "panShape": "PAN should look like AABCV1234F",
+    "udyamShape": "Udyam number should look like UDYAM-TN-02-0012345",
     "gstinCheckDigit": "This GSTIN fails its check digit — look for a typo",
     "mustBeNumber": "{{field}} must be a number",
     "mustBePositive": "{{field}} must be greater than zero",

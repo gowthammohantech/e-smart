@@ -12,6 +12,7 @@
     "subtitle": "Financial year to date · {{currency}}",
     "open": "Open",
     "margin": "{{percent}} margin",
+    "tds": "TDS",
     "tdsTcs": "TDS & TCS"
   },
   "home": {
