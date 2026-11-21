@@ -33,6 +33,13 @@ export function validPhone(value: string | undefined): string | undefined {
 }
 
 /** Shape, state code and check digit — a typo is caught here, not at the portal. */
+/** A PAN: five letters, four digits, a letter (AABCV1234F). Blank is fine; required is the caller's. */
+export const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
+export function validPan(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  return PAN_RE.test(value.trim().toUpperCase()) ? undefined : i18n.t('errors:validation.panShape');
+}
+
 export function validGstin(value: string | undefined): string | undefined {
   if (!value) return undefined;
   // isValidGstin is the one rule: a real GSTIN (shape, state, check digit) or, where sandboxes are on, a NIC test one.

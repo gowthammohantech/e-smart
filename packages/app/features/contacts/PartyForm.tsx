@@ -25,7 +25,7 @@ import { CURRENCIES } from '@esmart/core/lib/currencies';
 import { fromMajor, toMajor, zero } from '@esmart/core/lib/money';
 import { uid } from '@esmart/core/lib/id';
 import { nowISO, today } from '@esmart/core/lib/date';
-import { Errors, gstinRequiredFor, hasErrors, partyGstinError, required, shownError, validEmail, validGstin, validPostalCode } from '@esmart/core/lib/validators';
+import { Errors, gstinRequiredFor, hasErrors, partyGstinError, required, shownError, validEmail, validGstin, validPan, validPostalCode } from '@esmart/core/lib/validators';
 import { useAppStore } from '../../store/appStore';
 import { useBaseCurrency, useHasModule, useParties, usePlan } from '../../store/selectors';
 import { tcsOnPlan } from '@esmart/core/domain/plan';
@@ -134,7 +134,7 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
   const [stateOpen, setStateOpen] = useState(false);
   const [currencyOpen, setCurrencyOpen] = useState(false);
   const [termsOpen, setTermsOpen] = useState(false);
-  const [errors, setErrors] = useState<Errors<'name' | 'email' | 'phone' | 'taxId' | 'country' | 'stateCode' | 'postalCode' | 'tcsSection'>>({});
+  const [errors, setErrors] = useState<Errors<'name' | 'email' | 'phone' | 'taxId' | 'pan' | 'country' | 'stateCode' | 'postalCode' | 'tcsSection'>>({});
 
   // Both cities hang off the one state, so a city left over from the old state goes.
   const changeState = (code: string) => {
@@ -207,13 +207,14 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
     email: validEmail(email),
     phone: phone.error(),
     taxId: gstinRequiredFor(registration) ? validGstin(taxId) : undefined,
+    pan: overseas ? undefined : validPan(pan),
     postalCode: overseas ? undefined : validPostalCode(postalCode, 'IN', stateCode),
   };
   const invalid = hasErrors(live);
 
   const save = async (another = false) => {
     const gstin = needsGstin ? taxId.trim().toUpperCase() : '';
-    const next: Errors<'name' | 'email' | 'phone' | 'taxId' | 'country' | 'stateCode' | 'postalCode' | 'tcsSection'> = {
+    const next: Errors<'name' | 'email' | 'phone' | 'taxId' | 'pan' | 'country' | 'stateCode' | 'postalCode' | 'tcsSection'> = {
       name: required(name, nameLabel),
       email: validEmail(email),
       phone: phone.error(),
@@ -222,6 +223,7 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
         (gstin && stateCode && gstin.slice(0, 2) !== stateCode
           ? tr('contacts:form.gstinStateMismatch', { state: stateNameOf(gstin.slice(0, 2)) })
           : undefined),
+      pan: overseas ? undefined : validPan(pan),
       country: overseas && !country ? tr('contacts:form.countryRequired') : undefined,
       // In India the state is the place of supply, and the PIN is checked against it: both are asked for.
       stateCode: overseas ? undefined : required(stateCode, tr('contacts:form.state')),
@@ -364,10 +366,15 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
     <TextField
       label="PAN"
       value={pan}
-      onChangeText={(v) => setPan(v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10))}
+      onChangeText={(v) => {
+        setPan(v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10));
+        if (errors.pan) setErrors((e) => ({ ...e, pan: undefined }));
+      }}
       placeholder={/^\d{2}[A-Z]{5}\d{4}[A-Z]/.test(taxId) ? taxId.slice(2, 12) : 'AABCV1234F'}
       autoCapitalize="characters"
       icon="card-text-outline"
+      // Checked as typed, as the GSTIN is: red until it is five letters, four digits and a letter.
+      error={shownError(pan, live.pan, errors.pan)}
       hint={tr('contacts:form.panHint')}
     />
   );
