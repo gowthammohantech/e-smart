@@ -34,7 +34,7 @@ import { outstandingOf } from '@esmart/core/domain/receivables';
 import { OUTBOUND_KINDS, shortfallsAgainst } from '@esmart/core/domain/stockLedger';
 import { formatMoney, formatPercent, formatQty } from '@esmart/core/lib/format';
 import { creditNoteDeadline, daysBetween, formatDate, today } from '@esmart/core/lib/date';
-import { fromMajor, money, subtract, type Money } from '@esmart/core/lib/money';
+import { fromMajor, inclusiveTax, money, subtract, type Money } from '@esmart/core/lib/money';
 import { INDIAN_STATES, unitShortName } from '@esmart/core/data/masters';
 import { buildDocumentHtml, buildEInvoiceHtml } from '@esmart/core/render/documentHtml';
 
@@ -1012,6 +1012,12 @@ ${url}`;
                       {formatDate(p.date)} · {paymentMethodLabel(tr, p.method)}
                       {p.reference ? ` · ${p.reference}` : ''}
                     </Text>
+                    {/* A with-tax advance applied here: the GST it carries. */}
+                    {p.advanceTax && !p.advanceTax.reverseCharge && p.advanceTax.rate > 0 ? (
+                      <Text variant="caption" tone="muted">
+                        {tr('sales:payment.includesGst', { amount: formatMoney(inclusiveTax(alloc?.amount ?? p.amount, p.advanceTax.rate + (p.advanceTax.cessRate ?? 0))) })}
+                      </Text>
+                    ) : null}
                   </View>
                   <Text variant="body" weight="700" tone="good">
                     {formatMoney(alloc?.amount ?? p.amount)}
