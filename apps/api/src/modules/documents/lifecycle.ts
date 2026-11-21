@@ -479,6 +479,12 @@ export async function assertPeriodOpenNow(tx: DbOrTx, company: CompanyRow, ...da
   for (const date of dates) if (date) assertPeriodOpen({ ...company, lockedThroughDate: row?.lockedThroughDate ?? null }, date);
 }
 
+/** The Free plan's monthly invoices: FREE_PLAN_INVOICE_LIMIT, set once at boot (the plan table's value until then). */
+let freeInvoiceLimit: number | null = INVOICE_LIMITS.free;
+export function setFreeInvoiceLimit(limit: number) {
+  freeInvoiceLimit = limit;
+}
+
 /** How long a queued invoice may have waited for it to count as already issued on the device. */
 const OFFLINE_GRACE_MS = 10 * 60_000;
 /** How many invoices queued offline may go over the month's limit. */
@@ -490,7 +496,7 @@ const OFFLINE_GRACE_COUNT = 5;
  * queue goes through; it's only the next one made online that is refused.
  */
 async function checkInvoiceLimit(tx: DbOrTx, company: CompanyRow, now: Date) {
-  const limit = INVOICE_LIMITS[company.plan];
+  const limit = company.plan === 'free' ? freeInvoiceLimit : INVOICE_LIMITS[company.plan];
   if (limit === null) return;
   // The device sends when it queued the change, so that time is the client's word: a queued invoice
   // gets some grace over the limit, never an unlimited pass (money audit C1).

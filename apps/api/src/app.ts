@@ -23,6 +23,7 @@ import { configureOutbound, outboundContext } from './lib/outbound';
 import { registerMcp } from './lixi/mcp';
 import { sandboxTargetAvailable } from './providers/gsp/availability';
 import { registerSharePages } from './modules/documents/share';
+import { setFreeInvoiceLimit } from './modules/documents/lifecycle';
 
 export type BuildOptions = {
   logger?: boolean | object;
@@ -43,6 +44,7 @@ export async function buildApp(deps: Deps, opts: BuildOptions = {}): Promise<Fas
   // NIC's sandbox test GSTINs (`29AAGCB1286Q000`, `27AMBPG7773M016`) are admitted when this deployment can file through
   // a sandbox target at all. The check is the deployment's, not a company's: the validator is shared with the apps.
   setSandboxGstinsAllowed(sandboxTargetAvailable(deps.config));
+  setFreeInvoiceLimit(deps.config.FREE_PLAN_INVOICE_LIMIT);
 
   const app = Fastify({
     logger: opts.logger ?? {

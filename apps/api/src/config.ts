@@ -84,6 +84,11 @@ const Env = z.object({
   OUTBOUND_LOG: z.enum(['failures', 'all', 'off']).default('failures'),
   /** Days a recorded third-party call is kept. */
   OUTBOUND_LOG_RETENTION_DAYS: z.coerce.number().int().min(1).max(365).default(30),
+  /**
+   * Invoices a business on the Free plan may issue per calendar month. Raise it while people are testing,
+   * lower it in production. Paid plans stay unlimited.
+   */
+  FREE_PLAN_INVOICE_LIMIT: z.coerce.number().int().min(0).default(20),
   /** Sign-in, sign-up, OTP and password-reset calls per IP per minute, on top of the per-account limits. */
   AUTH_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().default(10),
   /**
@@ -413,6 +418,7 @@ export function productionProblems(config: Config, env: Record<string, string | 
     config.EMAIL_PROVIDER === 'ses' && !((env.AWS_ACCESS_KEY_ID && env.AWS_SECRET_ACCESS_KEY) || env.AWS_WEB_IDENTITY_TOKEN_FILE || env.AWS_PROFILE),
     'AWS credentials (AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, or a role) must be set for EMAIL_PROVIDER=ses.',
   );
+  need(config.EMAIL_PROVIDER === 'smtp' && (!config.SMTP_HOST || !config.SMTP_USER || !config.SMTP_PASS), 'SMTP_HOST, SMTP_USER and SMTP_PASS must be set for EMAIL_PROVIDER=smtp.');
   need(config.EMAIL_PROVIDER !== 'log' && config.EMAIL_FROM === EXAMPLE_EMAIL_FROM, 'EMAIL_FROM must be a verified sender in production, not the example address.');
   need(config.WHATSAPP_PROVIDER === 'meta' && (!config.WHATSAPP_TOKEN || !config.WHATSAPP_PHONE_NUMBER_ID), 'WHATSAPP_TOKEN and WHATSAPP_PHONE_NUMBER_ID must be set for WHATSAPP_PROVIDER=meta.');
   need(config.STORAGE_PROVIDER === 'azure' && !config.AZURE_STORAGE_CONNECTION_STRING, 'AZURE_STORAGE_CONNECTION_STRING must be set for STORAGE_PROVIDER=azure.');
