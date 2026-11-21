@@ -130,7 +130,7 @@
     "noMovements": "No movements yet",
     "edit": "Edit",
     "actions": "Actions",
-    "deleteMessage": "Documents that already use this item keep their own copy of the details. This cannot be undone.",
+    "deleteMessage": "An item used in any document or stock movement can't be deleted; mark it inactive instead. This cannot be undone.",
     "delete": "Delete",
     "deleted": "Item deleted",
     "pricing": "Pricing",
