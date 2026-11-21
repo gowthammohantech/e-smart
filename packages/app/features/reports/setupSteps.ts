@@ -1,6 +1,6 @@
 import type { IconName } from '@esmart/ui/components/Icon';
 import type { Company } from '@esmart/core/types';
-import { useActiveCompany, useCanOpen, useListsReady } from '../../store/selectors';
+import { useActiveCompany, useCanOpen, useListsReady, usePlan } from '../../store/selectors';
 import { useAppStore } from '../../store/appStore';
 import { useCompanyUsage } from '../../remote/queries';
 
@@ -23,6 +23,8 @@ export type SetupStep = {
  */
 export function useSetupSteps(): { steps: SetupStep[]; doneCount: number; complete: boolean; loading: boolean } {
   const canOpen = useCanOpen();
+  // Free is one user: there is no team to invite.
+  const free = usePlan() === 'free';
   // Briefly undefined while signing out, before the router leaves the screen.
   const company = useActiveCompany() as Company | undefined;
   const usage = useCompanyUsage();
@@ -62,7 +64,7 @@ export function useSetupSteps(): { steps: SetupStep[]; doneCount: number; comple
     { key: 'invoice', icon: 'file-document-edit-outline', route: '/(app)/sales/invoices/new', done: (counts?.invoices ?? 0) > 0 },
     { key: 'team', icon: 'account-group-outline', route: '/(app)/settings/users', done: teammates > 1 },
   ];
-  const steps = all.filter((s) => canOpen(s.route));
+  const steps = all.filter((s) => canOpen(s.route) && !(free && s.key === 'team'));
   const doneCount = steps.filter((s) => s.done).length;
   const loading = usage.isLoading || (!teamReady && steps.some((s) => s.key === 'team'));
   return { steps, doneCount, complete: doneCount === steps.length, loading };
