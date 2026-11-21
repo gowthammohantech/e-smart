@@ -67,25 +67,14 @@ export function advanceTaxEvents(p: Payment, homeState: string | undefined, docu
     const d = documentDate(a.documentId);
     return !!d && d > p.date;
   });
-  const cessRate = at.cessRate ?? 0;
-  // An advance with GST is adjusted by its value alone (₹847.46 of ₹1,000 at 18%; the invoice still owes
-  // its own GST). Each adjustment uses up that value and the GST paid on it, so table 11 takes back all the
-  // tax paid on the advance and none of it is paid twice. Never more than the advance.
-  let room = base(p.amount.minor + (p.advanceTds?.minor ?? 0));
-  const used = new Map(
-    p.allocations.map((a) => {
-      const g = Math.min(Math.round((base(a.amount.minor) * (100 + at.rate + cessRate)) / 100), room);
-      room -= g;
-      return [a, g] as const;
-    }),
-  );
-  const settled = p.allocations.filter((a) => !later.includes(a)).reduce((s, a) => s + used.get(a)!, 0);
-  const gross = base(p.amount.minor + (p.advanceTds?.minor ?? 0)) - settled;
+  const settled = p.allocations.filter((a) => !later.includes(a)).reduce((s, a) => s + a.amount.minor, 0);
+  const gross = base(p.amount.minor + (p.advanceTds?.minor ?? 0) - settled);
   if (gross <= 0) return [];
   const interState = advanceInterState(homeState, at.placeOfSupplyStateCode);
+  const cessRate = at.cessRate ?? 0;
   const tax = inclusiveTax(money(gross, 'INR'), at.rate + cessRate);
   // The tax shared out over each adjustment, each refund and what is still unadjusted, so the parts add up exactly.
-  const adjustedGross = later.map((a) => used.get(a)!);
+  const adjustedGross = later.map((a) => base(a.amount.minor));
   const refunds = (p.refunds ?? []).filter((r) => r.date >= p.date);
   const refundedGross = refunds.map((r) => base(r.amount.minor));
   const rest = Math.max(0, gross - [...adjustedGross, ...refundedGross].reduce((s, x) => s + x, 0));
