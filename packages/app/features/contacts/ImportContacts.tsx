@@ -127,13 +127,16 @@ function ImportContactsFlow() {
       columns={columns}
       maxRecords={1000}
       sample={SAMPLE}
+      // One type to choose from (Free: customers only) is no choice: not asked, every row is that type.
       options={
-        <View style={{ gap: t.spacing.xs }}>
-          <Text variant="caption" tone="muted" weight="600">
-            {tr('contacts:import.defaultKind')}
-          </Text>
-          <Segmented options={kinds.map((k) => ({ value: k, label: tr(`contacts:kind.${k}`) }))} value={kind} onChange={(v) => setKind(v as ImportKind)} />
-        </View>
+        kinds.length > 1 ? (
+          <View style={{ gap: t.spacing.xs }}>
+            <Text variant="caption" tone="muted" weight="600">
+              {tr('contacts:import.defaultKind')}
+            </Text>
+            <Segmented options={kinds.map((k) => ({ value: k, label: tr(`contacts:kind.${k}`) }))} value={kind} onChange={(v) => setKind(v as ImportKind)} />
+          </View>
+        ) : undefined
       }
       onDryRun={async (records) => {
         const res = await send(records, true);
@@ -217,12 +220,14 @@ function ImportContactsPaste() {
         <Text variant="small" tone="muted">
           {tr('contacts:import.hint')}
         </Text>
-        <View style={{ gap: t.spacing.xs }}>
-          <Text variant="caption" tone="muted" weight="600">
-            {tr('contacts:import.defaultKind')}
-          </Text>
-          <Segmented options={kinds.map((k) => ({ value: k, label: tr(`contacts:kind.${k}`) }))} value={kind} onChange={(v) => { setKind(v as ImportKind); setOutcomes(null); }} />
-        </View>
+        {kinds.length > 1 ? (
+          <View style={{ gap: t.spacing.xs }}>
+            <Text variant="caption" tone="muted" weight="600">
+              {tr('contacts:import.defaultKind')}
+            </Text>
+            <Segmented options={kinds.map((k) => ({ value: k, label: tr(`contacts:kind.${k}`) }))} value={kind} onChange={(v) => { setKind(v as ImportKind); setOutcomes(null); }} />
+          </View>
+        ) : null}
         <SampleSheet sample={SAMPLE} />
         {CAN_PICK_FILES ? (
           <Button
