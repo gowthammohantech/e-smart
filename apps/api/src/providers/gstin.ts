@@ -344,7 +344,7 @@ class GspGstinProvider implements GstinProvider {
       throw err;
     }
     // A register record the app cannot read as a taxpayer (no legal name) is no answer at all.
-    return record ? toGstinRecord(record, gstin) : null;
+    return record ? toGstinRecord(record, gstin, { sandbox: this.gateway.lookupIsSandbox?.() === true }) : null;
   }
 
   pincode(): Promise<PincodeRecord | null> {
