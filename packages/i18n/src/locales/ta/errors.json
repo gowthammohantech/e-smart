@@ -7,6 +7,7 @@
     "phoneDigits": "{{count}} இலக்க எண்ணை உள்ளிடுங்கள்",
     "gstinShape": "GSTIN இப்படி இருக்க வேண்டும்: 27AABCV1234F1ZO",
     "panShape": "PAN இப்படி இருக்க வேண்டும்: AABCV1234F",
+    "udyamShape": "Udyam எண் இப்படி இருக்க வேண்டும்: UDYAM-TN-02-0012345",
     "gstinCheckDigit": "இந்த GSTIN-இன் சரிபார்ப்பு இலக்கம் பொருந்தவில்லை — எழுத்துப் பிழையைப் பாருங்கள்",
     "mustBeNumber": "{{field}} ஒரு எண்ணாக இருக்க வேண்டும்",
     "mustBePositive": "{{field}} பூஜ்ஜியத்தை விட அதிகமாக இருக்க வேண்டும்",
