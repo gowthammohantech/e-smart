@@ -57,6 +57,7 @@ import { useToast } from '@esmart/ui/components/Toast';
 import { parseCsv } from '@esmart/core/lib/csv';
 import { describeError } from '../../remote/errors';
 import { CAN_PICK_FILES, pickFile } from './pickFile';
+import { SampleSheet, type ImportSample } from './SampleSheet';
 import { accepts, assignColumn, fileColumns, initialMapping, missingRequired, readsOnDevice, trimRows, type ColumnMapping, type ImportField, type RowIssue } from './importMapping';
 
 export type { ColumnMapping, ImportField, RowIssue } from './importMapping';
@@ -87,6 +88,8 @@ export type ImportFlowProps<T> = {
   maxRecords?: number;
   maxBytes?: number;
   options?: React.ReactNode;
+  /** The file's shape, shown before one is chosen: its column names and a record under them. */
+  sample?: ImportSample;
 };
 
 /** How many preview rows and problems are drawn; the counts cover them all. */
@@ -108,6 +111,7 @@ export function ImportFlow<T>({
   maxRecords = 10_000,
   maxBytes = 5 * 1024 * 1024,
   options,
+  sample,
 }: ImportFlowProps<T>) {
   const t = useTheme();
   const desktop = useIsDesktop();
@@ -282,6 +286,7 @@ export function ImportFlow<T>({
         {step === 0 ? (
           <Card style={[{ gap: t.spacing.md }, narrow]}>
             {options}
+            {sample ? <SampleSheet sample={sample} /> : null}
             <Text variant="small" tone="muted">
               {tr('banking:importFlow.kinds', { kinds })}
             </Text>

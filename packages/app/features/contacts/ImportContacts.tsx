@@ -23,6 +23,7 @@ import { useAppStore } from '../../store/appStore';
 import { useCustomFields } from '../customFields/CustomFieldsSection';
 import { CAN_PICK_FILES, pickFile } from '../import/pickFile';
 import { ImportFlow, type ColumnMapping, type ImportColumn } from '../import/ImportFlow';
+import { SampleSheet, type ImportSample } from '../import/SampleSheet';
 
 type Outcome = { index: number; status: 'created' | 'duplicate' | 'invalid'; issues?: { message?: string }[] };
 const KINDS: ImportKind[] = ['customer', 'supplier', 'both', 'general'];
@@ -53,8 +54,12 @@ function useImportKinds() {
   );
   return { kinds, check };
 }
-/** A sample of the sheet: column names as spreadsheets have them, in English in every language. */
-const SAMPLE_CSV = ['Name,GSTIN,Phone,State,Opening Balance', 'Murugan Traders,33AAACM1234A1ZF,9840012345,Tamil Nadu,12500'].join('\n');
+/** A sample of the sheet: every column it reads, named as spreadsheets have them (in English in every language), and one record. */
+const SAMPLE: ImportSample = {
+  columns: ['Name', 'Display Name', 'Code', 'Type', 'GSTIN', 'PAN', 'Email', 'Phone', 'Address', 'Address 2', 'City', 'State', 'PIN Code', 'Country', 'Opening Balance', 'Dr/Cr', 'Credit Limit', 'Credit Days', 'Notes'],
+  row: ['Murugan Traders', 'Murugan', 'CUS-001', 'Customer', '33AAACM1234A1ZF', 'AAACM1234A', 'accounts@murugan.in', '9840012345', '12 Anna Salai', 'Teynampet', 'Chennai', 'Tamil Nadu', '600018', 'India', '12500', 'Dr', '50000', '30', 'Pays by cheque'],
+};
+const SAMPLE_CSV = [SAMPLE.columns.join(','), SAMPLE.row.join(',')].join('\n');
 
 const PARTY_FIELDS: ImportField[] = ['name', 'displayName', 'code', 'kind', 'taxId', 'pan', 'email', 'phone', 'line1', 'line2', 'city', 'state', 'postalCode', 'country', 'openingBalance', 'openingSide', 'creditLimit', 'paymentTermsDays', 'notes'];
 type PartyRecord = ImportedParty & { row: number };
@@ -121,6 +126,7 @@ function ImportContactsFlow() {
       toRecords={toRecords}
       columns={columns}
       maxRecords={1000}
+      sample={SAMPLE}
       options={
         <View style={{ gap: t.spacing.xs }}>
           <Text variant="caption" tone="muted" weight="600">
@@ -217,6 +223,7 @@ function ImportContactsPaste() {
           </Text>
           <Segmented options={kinds.map((k) => ({ value: k, label: tr(`contacts:kind.${k}`) }))} value={kind} onChange={(v) => { setKind(v as ImportKind); setOutcomes(null); }} />
         </View>
+        <SampleSheet sample={SAMPLE} />
         {CAN_PICK_FILES ? (
           <Button
             title={tr('contacts:import.chooseFile')}
