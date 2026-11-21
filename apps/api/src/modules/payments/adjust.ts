@@ -29,14 +29,14 @@ type Credit = Schema<'Adjustable'>['credits'][number];
 type Open = Schema<'Adjustable'>['open'][number];
 
 /**
- * What of an advance can be adjusted: all of what is left of it, GST included. Of ₹1,000 with ₹150 GST
- * in it, the whole ₹1,000 goes on the invoice; the GST already paid on it is taken back in the return
- * (GSTR-1 table 11B), so it is paid once. `gst` is the tax inside the advance, shown for information.
+ * What of an advance can be adjusted. A service advance taxed when received adjusts only its value
+ * without the GST: of ₹1,000 with ₹150 GST in it, ₹850, and the invoice it settles still owes ₹150.
  */
 function adjustableLeft(p: typeof PAY.$inferSelect, base: string): { left: number; gst?: number } {
   const rate = Number(p.advanceTaxRate ?? 0) + Number(p.advanceCessRate ?? 0);
   if (!p.advanceTaxCategoryId || p.advanceReverseCharge || !(rate > 0)) return { left: p.unallocatedMinor };
-  return { left: p.unallocatedMinor, gst: inclusiveTax({ minor: p.amountMinor + p.tdsMinor, currency: base }, rate).minor };
+  const gst = inclusiveTax({ minor: p.amountMinor + p.tdsMinor, currency: base }, rate).minor;
+  return { left: Math.max(p.unallocatedMinor - gst, 0), gst };
 }
 
 /** A service advance: GST was taken on it when received, so it goes only on an invoice whose every line is a service. */
