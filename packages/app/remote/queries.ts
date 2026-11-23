@@ -1324,6 +1324,10 @@ export function watchStoreForQueries(): () => void {
       void queryClient.invalidateQueries({ queryKey: [...partyKeys.all(companyId), 'pages'] });
       void queryClient.invalidateQueries({ queryKey: [...partyKeys.all(companyId), 'summary'] });
     }
+    if (stale.has('items')) {
+      // An item saved here (edited, set inactive or active again) leaves one tab and shows in the other at once.
+      void queryClient.invalidateQueries({ queryKey: [...itemKeys.all(companyId), 'pages'] });
+    }
     if (stale.has('documents') || stale.has('eway')) void queryClient.invalidateQueries({ queryKey: ['compliance', companyId] });
     stale.clear();
   };
@@ -1342,6 +1346,7 @@ export function watchStoreForQueries(): () => void {
     if (s.stockMovements !== prev.stockMovements || s.documents !== prev.documents) mark('stock');
     if (s.vouchers !== prev.vouchers) mark('vouchers');
     if (s.parties !== prev.parties) mark('parties');
+    if (s.items !== prev.items) mark('items');
     if (s.ewayBills !== prev.ewayBills) mark('eway');
   });
   return () => {
