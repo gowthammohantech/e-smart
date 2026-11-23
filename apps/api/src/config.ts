@@ -84,6 +84,11 @@ const Env = z.object({
   OUTBOUND_LOG: z.enum(['failures', 'all', 'off']).default('failures'),
   /** Days a recorded third-party call is kept. */
   OUTBOUND_LOG_RETENTION_DAYS: z.coerce.number().int().min(1).max(365).default(30),
+  /**
+   * Invoices a business on the Free plan may issue per calendar month. Raise it while people are testing,
+   * lower it in production. Paid plans stay unlimited.
+   */
+  FREE_PLAN_INVOICE_LIMIT: z.coerce.number().int().min(0).default(20),
   /** Sign-in, sign-up, OTP and password-reset calls per IP per minute, on top of the per-account limits. */
   AUTH_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().default(10),
   /**
@@ -112,7 +117,19 @@ const Env = z.object({
   MSG91_TEMPLATE_ID: z.string().optional(),
   /** The only Pay4SMS secret; sender, template and URL are fixed in providers/pay4sms.ts. */
   PAY4SMS_TOKEN: z.string().optional(),
-  EMAIL_PROVIDER: z.enum(['log', 'resend', 'ses', 'acs']).default('log'),
+  EMAIL_PROVIDER: z.enum(['log', 'resend', 'ses', 'acs', 'smtp']).default('log'),
+  /**
+   * SMTP (e.g. Office 365: smtp.office365.com, 587, SMTP_SECURE=false, which upgrades with STARTTLS).
+   * Use SMTP_SECURE=true with port 465. EMAIL_FROM must be the authenticated mailbox (or one it may send as).
+   */
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(587),
+  SMTP_SECURE: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
   /** Resend: an API key from resend.com/api-keys. EMAIL_FROM must be on a domain verified there. */
   RESEND_API_KEY: z.string().optional(),
   /** Azure Communication Services: `endpoint=https://…;accesskey=…`. */
@@ -413,6 +430,7 @@ export function productionProblems(config: Config, env: Record<string, string | 
     config.EMAIL_PROVIDER === 'ses' && !((env.AWS_ACCESS_KEY_ID && env.AWS_SECRET_ACCESS_KEY) || env.AWS_WEB_IDENTITY_TOKEN_FILE || env.AWS_PROFILE),
     'AWS credentials (AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY, or a role) must be set for EMAIL_PROVIDER=ses.',
   );
+  need(config.EMAIL_PROVIDER === 'smtp' && (!config.SMTP_HOST || !config.SMTP_USER || !config.SMTP_PASS), 'SMTP_HOST, SMTP_USER and SMTP_PASS must be set for EMAIL_PROVIDER=smtp.');
   need(config.EMAIL_PROVIDER !== 'log' && config.EMAIL_FROM === EXAMPLE_EMAIL_FROM, 'EMAIL_FROM must be a verified sender in production, not the example address.');
   need(config.WHATSAPP_PROVIDER === 'meta' && (!config.WHATSAPP_TOKEN || !config.WHATSAPP_PHONE_NUMBER_ID), 'WHATSAPP_TOKEN and WHATSAPP_PHONE_NUMBER_ID must be set for WHATSAPP_PROVIDER=meta.');
   need(config.STORAGE_PROVIDER === 'azure' && !config.AZURE_STORAGE_CONNECTION_STRING, 'AZURE_STORAGE_CONNECTION_STRING must be set for STORAGE_PROVIDER=azure.');

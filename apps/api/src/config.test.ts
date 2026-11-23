@@ -129,6 +129,15 @@ describe('production config guards', () => {
     expect(loadConfig({ ...ses, AWS_ACCESS_KEY_ID: 'a', AWS_SECRET_ACCESS_KEY: 'b' }).EMAIL_PROVIDER).toBe('ses');
   });
 
+  it('requires the host and login for SMTP', () => {
+    const smtp = { ...ready, EMAIL_PROVIDER: 'smtp', ACS_CONNECTION_STRING: undefined, SMTP_HOST: 'smtp.office365.com', SMTP_USER: 'no-reply@example.com', SMTP_PASS: 'x' };
+    const config = loadConfig(smtp);
+    expect(config.EMAIL_PROVIDER).toBe('smtp');
+    expect([config.SMTP_PORT, config.SMTP_SECURE]).toEqual([587, false]);
+    for (const key of ['SMTP_HOST', 'SMTP_USER', 'SMTP_PASS']) expect(() => loadConfig({ ...smtp, [key]: undefined })).toThrow(/SMTP_HOST, SMTP_USER and SMTP_PASS/);
+    expect(loadConfig({ ...smtp, SMTP_PORT: '465', SMTP_SECURE: 'true' })).toMatchObject({ SMTP_PORT: 465, SMTP_SECURE: true });
+  });
+
   it('refuses the development webhook secrets', () => {
     expect(() => loadConfig({ ...ready, RAZORPAY_WEBHOOK_SECRET: undefined })).toThrow(/RAZORPAY_WEBHOOK_SECRET/);
     expect(() => loadConfig({ ...ready, WHATSAPP_WEBHOOK_SECRET: 'dev-whatsapp-secret' })).toThrow(/WHATSAPP_WEBHOOK_SECRET/);

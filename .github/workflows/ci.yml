@@ -2,7 +2,8 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    # claude/monorepo is what gets deployed, so a direct push or a merge into it is checked too, not only PRs.
+    branches: [main, claude/monorepo]
   pull_request:
 
 concurrency:
