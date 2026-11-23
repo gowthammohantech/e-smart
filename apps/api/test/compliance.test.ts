@@ -208,15 +208,16 @@ describe('compliance: e-invoice', () => {
     expect(needsRemark.status).toBe(422);
     const ok = await t.post(`${m.c}/documents/${a.id}/e-invoice/cancel`, { reasonCode: '2', remark: 'Wrong rate' }, { token: m.token });
     expect(ok.status).toBe(200);
-    expect(ok.body).toEqual({ ok: true, issues: [] });
+    // The document's new compliance block comes back too, so the page shows Cancelled at once.
+    expect(ok.body).toMatchObject({ ok: true, issues: [], compliance: { eInvoiceStatus: 'cancelled' } });
     const info = await t.get(`${m.c}/documents/${a.id}/e-invoice`, { token: m.token });
     expect(info.body).toMatchObject({ eInvoiceStatus: 'cancelled', irnCancelReasonCode: '2', irnCancelRemark: 'Wrong rate', irnCancelledAt: hours(23.9), lastMessage: 'IRN cancelled on the portal: data entry mistake' });
-    const twice = await t.post(`${m.c}/documents/${a.id}/e-invoice/cancel`, { reasonCode: '2' }, { token: m.token });
+    const twice = await t.post(`${m.c}/documents/${a.id}/e-invoice/cancel`, { reasonCode: '2', remark: 'Wrong rate' }, { token: m.token });
     expect(twice.status).toBe(409);
     expect((await t.post(`${m.c}/documents/${a.id}/status`, { status: 'cancelled' }, { token: m.token })).status).toBe(200);
 
     t.setNow(hours(24));
-    const late = await t.post(`${m.c}/documents/${b.id}/e-invoice/cancel`, { reasonCode: '1' }, { token: m.token });
+    const late = await t.post(`${m.c}/documents/${b.id}/e-invoice/cancel`, { reasonCode: '1', remark: 'Raised twice' }, { token: m.token });
     expect(late.status).toBe(409);
     expect(late.body.code).toBe('EINVOICE_CANCEL_WINDOW_CLOSED');
     expect((await t.get(`${m.c}/documents/${b.id}/e-invoice`, { token: m.token })).body.eInvoiceStatus).toBe('generated');
@@ -370,7 +371,7 @@ describe('compliance: e-way bills', () => {
     const bill = (await t.post(`${m.c}/eway-bills`, ewayInput(inv.id), { token: m.token })).body.ewayBill;
     const other = (await t.post(`${m.c}/eway-bills`, ewayInput((await goodsInvoice(m)).id), { token: m.token })).body.ewayBill;
 
-    const irnFirst = await t.post(`${m.c}/documents/${inv.id}/e-invoice/cancel`, { reasonCode: '3' }, { token: m.token });
+    const irnFirst = await t.post(`${m.c}/documents/${inv.id}/e-invoice/cancel`, { reasonCode: '3', remark: 'Order cancelled' }, { token: m.token });
     expect(irnFirst.status).toBe(409);
     expect(irnFirst.body.code).toBe('EWAY_BILL_ACTIVE');
 
@@ -384,7 +385,7 @@ describe('compliance: e-way bills', () => {
     expect((await t.post(`${m.c}/eway-bills/${bill.id}/part-b`, { mode: 'road', vehicleNumber: 'MH12XY9876', vehicleType: 'regular', fromPlace: 'Pune', fromStateCode: '27', reasonCode: '4' }, { token: m.token })).status).toBe(409);
 
     // With the bill gone, the IRN can go too.
-    expect((await t.post(`${m.c}/documents/${inv.id}/e-invoice/cancel`, { reasonCode: '3' }, { token: m.token })).status).toBe(200);
+    expect((await t.post(`${m.c}/documents/${inv.id}/e-invoice/cancel`, { reasonCode: '3', remark: 'Order cancelled' }, { token: m.token })).status).toBe(200);
 
     t.setNow(hours(24));
     const late = await t.post(`${m.c}/eway-bills/${other.id}/cancel`, { reasonCode: '1' }, { token: m.token });

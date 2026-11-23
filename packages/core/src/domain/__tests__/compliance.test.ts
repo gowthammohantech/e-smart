@@ -848,9 +848,8 @@ describe('e-invoice cancellation (FRD 16)', () => {
     expect(Object.keys(E_INVOICE_CANCEL_REASONS)).toEqual(['1', '2', '3', '4']);
   });
 
-  it('asks for a remark only on "other"', () => {
-    expect(requiresCancelRemark('4')).toBe(true);
-    (['1', '2', '3'] as const).forEach((code) => expect(requiresCancelRemark(code)).toBe(false));
+  it('asks for a remark on every reason, as the IRP refuses a cancellation without one', () => {
+    (['1', '2', '3', '4'] as const).forEach((code) => expect(requiresCancelRemark(code)).toBe(true));
   });
 });
 
