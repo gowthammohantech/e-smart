@@ -514,7 +514,6 @@
     }
   },
   "filter": {
-    "pending": "Pending",
     "needsBill": "Needs e-way bill",
     "all": "All",
     "reported": "Reported",

@@ -46,17 +46,17 @@ const E_INVOICE_STAGE_OF: Record<EInvoiceFilter, EInvoiceStage> = {
   cancelled: 'reported',
 };
 
-/** Filter keys, in order. Names resolve from `compliance:filter.*` at render. */
+/** Filter keys, in order. Each chip reads as the status badge on its rows. */
 const E_INVOICE_FILTERS: Record<EInvoiceStage, { key: EInvoiceFilter; labelKey: string }[]> = {
   toReport: [
     { key: 'open', labelKey: 'compliance:filter.all' },
-    { key: 'pending', labelKey: 'compliance:filter.pending' },
-    { key: 'failed', labelKey: 'compliance:filter.rejected' },
+    { key: 'pending', labelKey: 'compliance:status.eInvoice.pending' },
+    { key: 'failed', labelKey: 'compliance:status.eInvoice.failed' },
   ],
   reported: [
     { key: 'done', labelKey: 'compliance:filter.all' },
-    { key: 'generated', labelKey: 'compliance:filter.active' },
-    { key: 'cancelled', labelKey: 'compliance:filter.cancelled' },
+    { key: 'generated', labelKey: 'compliance:status.eInvoice.generated' },
+    { key: 'cancelled', labelKey: 'compliance:status.eInvoice.cancelled' },
   ],
 };
 
