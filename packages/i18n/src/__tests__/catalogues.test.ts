@@ -50,6 +50,8 @@ const TA_LATIN_ALLOWLIST = new RegExp(
     'Profile|Manage|API|Access|Returns|Download',
     // A word typed to confirm, exactly as the app checks it.
     'DELETE',
+    // The Udyam (MSME) registration, by its own name, and its number's sample UDYAM-TN-02-0012345.
+    'Udyam|UDYAM-TN',
     // GSTR-1 table codes, as the portal names them.
     'EXP|CDNR|CDNUR|AT|ATADJ|B2BA|B2CLA|B2CSA|EXPA|CDNRA|CDNURA|B2CL|B2CS|NIL|DOCS|AMEND|A|UIN',
     // E-invoice supply types, as the IRP schema names them.

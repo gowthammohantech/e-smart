@@ -1185,7 +1185,7 @@ export function useAuditPages(q: string) {
 }
 
 /** The compliance register's documents: by e-invoice status, or those still needing an e-way bill. */
-export function useComplianceDocuments(f: { need: 'eInvoice' | 'ewayBill'; status?: EInvoiceStatus; q?: string }, enabled = true) {
+export function useComplianceDocuments(f: { need: 'eInvoice' | 'ewayBill'; status?: EInvoiceStatus; stage?: 'toReport' | 'reported'; q?: string }, enabled = true) {
   const companyId = useAppStore((s) => s.activeCompanyId);
   const branchId = useAppStore((s) => s.activeBranchId) || undefined;
   const query = useQuery({

@@ -38,12 +38,12 @@ describe('payments', () => {
     expect(doc.body.payments.map((p: { id: string }) => p.id)).toEqual([first.body.id]);
     expect((await t.get(`${m.c}/parties/${m.mumbai.id}`, { token: m.token })).body.outstanding).toEqual({ minor: 136000, currency: 'INR' });
 
-    const second = await t.post(`${m.c}/payments`, payment(m, { amount: { minor: 150000, currency: 'INR' }, allocations: [alloc(inv.id, 136000)] }), { token: m.token });
-    expect(second.body).toMatchObject({ number: 'PAY/26-27/0002', unallocated: { minor: 14000 } });
+    const second = await t.post(`${m.c}/payments`, payment(m, { amount: { minor: 136000, currency: 'INR' }, allocations: [alloc(inv.id, 136000)] }), { token: m.token });
+    expect(second.body).toMatchObject({ number: 'PAY/26-27/0002', unallocated: { minor: 0 } });
     doc = await t.get(`${m.c}/documents/${inv.id}`, { token: m.token });
     expect(doc.body).toMatchObject({ status: 'paid', outstanding: { minor: 0 } });
     const party = await t.get(`${m.c}/parties/${m.mumbai.id}`, { token: m.token });
-    expect(party.body).toMatchObject({ outstanding: { minor: 0 }, advance: { minor: 14000 } });
+    expect(party.body).toMatchObject({ outstanding: { minor: 0 } });
 
     const notes = await t.deps.db.select().from(schema.notifications).where(eq(schema.notifications.companyId, m.companyId));
     expect(notes.filter((n) => n.kind === 'paymentReceived')).toHaveLength(2);
@@ -57,17 +57,17 @@ describe('payments', () => {
     const draft = await t.post(`${m.c}/documents`, invoiceBody(m), { token: m.token });
     const quote = await t.post(`${m.c}/documents`, invoiceBody(m, { kind: 'quote', status: 'sent' }), { token: m.token });
 
-    const over = await t.post(`${m.c}/payments`, payment(m, { amount: { minor: 300000, currency: 'INR' }, allocations: [alloc(inv.id, 236001)] }), { token: m.token });
+    const over = await t.post(`${m.c}/payments`, payment(m, { amount: { minor: 236001, currency: 'INR' }, allocations: [alloc(inv.id, 236001)] }), { token: m.token });
     expect(over.status).toBe(422);
     expect(over.body.code).toBe('ALLOCATION_EXCEEDS_OUTSTANDING');
     const sum = await t.post(`${m.c}/payments`, payment(m, { allocations: [alloc(inv.id, 100001)] }), { token: m.token });
     expect(sum.status).toBe(422);
     expect(sum.body.issues[0].field).toBe('allocations');
-    const wrongParty = await t.post(`${m.c}/payments`, payment(m, { allocations: [alloc(other.id, 1000)] }), { token: m.token });
+    const wrongParty = await t.post(`${m.c}/payments`, payment(m, { amount: { minor: 1000, currency: 'INR' }, allocations: [alloc(other.id, 1000)] }), { token: m.token });
     expect(wrongParty.body.issues[0]).toMatchObject({ field: 'allocations[0].documentId', message: expect.stringContaining('another party') });
-    const notInvoice = await t.post(`${m.c}/payments`, payment(m, { allocations: [alloc(quote.body.id, 1000)] }), { token: m.token });
+    const notInvoice = await t.post(`${m.c}/payments`, payment(m, { amount: { minor: 1000, currency: 'INR' }, allocations: [alloc(quote.body.id, 1000)] }), { token: m.token });
     expect(notInvoice.status).toBe(422);
-    const notFinal = await t.post(`${m.c}/payments`, payment(m, { allocations: [alloc(draft.body.id, 1000)] }), { token: m.token });
+    const notFinal = await t.post(`${m.c}/payments`, payment(m, { amount: { minor: 1000, currency: 'INR' }, allocations: [alloc(draft.body.id, 1000)] }), { token: m.token });
     expect(notFinal.status).toBe(422);
     const upiThroughCash = await t.post(`${m.c}/payments`, payment(m, { method: 'bank' }), { token: m.token });
     expect(upiThroughCash.body.issues[0].field).toBe('accountId');
@@ -86,10 +86,10 @@ describe('payments', () => {
     expect((await documentRow(t, a.id)).status).toBe('paid');
     expect((await documentRow(t, b.id)).status).toBe('partiallyPaid');
 
-    // Move the money from A to B.
-    const saved = await t.put(url, payment(m, { amount: { minor: 300000, currency: 'INR' }, allocations: [alloc(b.id, 236000)] }), { token: m.token, headers: { 'if-match': '"v1"' } });
+    // Move the money from A to B (all of it goes to B: a receipt against invoices goes in full to them).
+    const saved = await t.put(url, payment(m, { amount: { minor: 236000, currency: 'INR' }, allocations: [alloc(b.id, 236000)] }), { token: m.token, headers: { 'if-match': '"v1"' } });
     expect(saved.status).toBe(200);
-    expect(saved.body).toMatchObject({ version: 2, number: created.body.number, unallocated: { minor: 64000 } });
+    expect(saved.body).toMatchObject({ version: 2, number: created.body.number, unallocated: { minor: 0 } });
     expect(await documentRow(t, a.id)).toMatchObject({ status: 'issued', amountPaidMinor: 0 });
     expect(await documentRow(t, b.id)).toMatchObject({ status: 'paid', amountPaidMinor: 236000 });
 
@@ -113,7 +113,7 @@ describe('payments', () => {
     const inv = await issueInvoice(t, m, { dueDate: '2026-10-10' });
     t.setNow('2026-10-15T10:00:00Z');
     expect((await t.get(`${m.c}/documents/${inv.id}`, { token: m.token })).body.status).toBe('overdue');
-    await t.post(`${m.c}/payments`, payment(m, { date: '2026-10-15', allocations: [alloc(inv.id, 36000)] }), { token: m.token });
+    await t.post(`${m.c}/payments`, payment(m, { date: '2026-10-15', amount: { minor: 36000, currency: 'INR' }, allocations: [alloc(inv.id, 36000)] }), { token: m.token });
     // Still past due with money owing: core's statusForOutstanding keeps it overdue.
     expect((await t.get(`${m.c}/documents/${inv.id}`, { token: m.token })).body.status).toBe('overdue');
     await t.post(`${m.c}/payments`, payment(m, { date: '2026-10-15', amount: { minor: 200000, currency: 'INR' }, allocations: [alloc(inv.id, 200000)] }), { token: m.token });

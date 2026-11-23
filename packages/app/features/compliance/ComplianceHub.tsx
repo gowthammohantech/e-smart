@@ -14,7 +14,7 @@ import { ListRow } from '@esmart/ui/components/ListRow';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { Button } from '@esmart/ui/components/Button';
 import { Segmented } from '@esmart/ui/components/Field';
-import { EInvoiceStatus, EwayBillStatus } from '@esmart/core/types';
+import { EwayBillStatus } from '@esmart/core/types';
 import { useComplianceSettings, useComplianceSummary } from '../../store/selectors';
 import { useComplianceDocuments, useEwayBillPages } from '../../remote/queries';
 import { useDebounced } from '../../components/useDebounced';
@@ -24,27 +24,48 @@ import { formatDate, nowISO } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
 import { EWAY_STATUS_META, E_INVOICE_STATUS_META, expiryPhrase } from './complianceMeta';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
-import { Cell, DataTable } from '@esmart/ui/components/DataTable';
+import { Cell, DataTable, TABLE_PAGE_SIZES } from '@esmart/ui/components/DataTable';
+import { pagedTableProps } from '../../components/pagedTable';
 import { useQueryParams } from '../../navigation/queryParams';
 import { ListSkeleton, MoreRowsSkeleton } from '../../components/ScreenSkeleton';
 
 type Tab = 'eInvoice' | 'eway';
 
-/** Filter keys, in order. Names resolve from `compliance:filter.*` at render. */
-const E_INVOICE_FILTERS: { key: EInvoiceStatus | 'all'; labelKey: string }[] = [
-  { key: 'all', labelKey: 'compliance:filter.all' },
-  { key: 'generated', labelKey: 'compliance:filter.reported' },
-  { key: 'pending', labelKey: 'compliance:filter.notReported' },
-  { key: 'failed', labelKey: 'compliance:filter.rejected' },
-  { key: 'cancelled', labelKey: 'compliance:filter.cancelled' },
-];
+/**
+ * Each register is split in two, as parties are into Active and Inactive: what still has to go to the
+ * portal, and what has. The URL keeps one filter key and the tab is read from it; `open` and `done`
+ * (`raised` for bills) are each tab's All.
+ */
+type EInvoiceFilter = 'open' | 'pending' | 'failed' | 'done' | 'generated' | 'cancelled';
+type EInvoiceStage = 'toReport' | 'reported';
+const E_INVOICE_STAGE_OF: Record<EInvoiceFilter, EInvoiceStage> = {
+  open: 'toReport',
+  pending: 'toReport',
+  failed: 'toReport',
+  done: 'reported',
+  generated: 'reported',
+  cancelled: 'reported',
+};
 
-/** `pending` lists the consignments that still need a bill, rather than bills. */
-type EwayFilter = EwayBillStatus | 'all' | 'pending';
+/** Filter keys, in order. Each chip reads as the status badge on its rows. */
+const E_INVOICE_FILTERS: Record<EInvoiceStage, { key: EInvoiceFilter; labelKey: string }[]> = {
+  toReport: [
+    { key: 'open', labelKey: 'compliance:filter.all' },
+    { key: 'pending', labelKey: 'compliance:status.eInvoice.pending' },
+    { key: 'failed', labelKey: 'compliance:status.eInvoice.failed' },
+  ],
+  reported: [
+    { key: 'done', labelKey: 'compliance:filter.all' },
+    { key: 'generated', labelKey: 'compliance:status.eInvoice.generated' },
+    { key: 'cancelled', labelKey: 'compliance:status.eInvoice.cancelled' },
+  ],
+};
+
+/** `pending` lists the consignments that still need a bill, rather than bills; `raised` is every bill. */
+type EwayFilter = EwayBillStatus | 'raised' | 'pending';
 
 const EWAY_FILTERS: { key: EwayFilter; labelKey: string }[] = [
-  { key: 'all', labelKey: 'compliance:filter.all' },
-  { key: 'pending', labelKey: 'compliance:filter.needsBill' },
+  { key: 'raised', labelKey: 'compliance:filter.all' },
   { key: 'active', labelKey: 'compliance:filter.active' },
   { key: 'expired', labelKey: 'compliance:filter.expired' },
   { key: 'cancelled', labelKey: 'compliance:filter.cancelled' },
@@ -64,20 +85,26 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
   // Tab and status filters live in the URL (`?tab=eway&eway=active`); search stays local.
   const [params, setParams] = useQueryParams();
   const tab: Tab = params.tab === 'eway' ? 'eway' : 'eInvoice';
-  const eInvoiceFilter = (params.einvoice ?? 'all') as EInvoiceStatus | 'all';
-  const ewayFilter = (params.eway ?? 'all') as EwayFilter;
+  const eInvoiceFilter: EInvoiceFilter = params.einvoice && params.einvoice in E_INVOICE_STAGE_OF ? (params.einvoice as EInvoiceFilter) : 'done';
+  const eInvoiceStage = E_INVOICE_STAGE_OF[eInvoiceFilter];
+  // Raised opens first; an old link's `eway=all` (or anything unknown) lands there too.
+  const ewayFilter: EwayFilter = params.eway === 'pending' || EWAY_FILTERS.some((f) => f.key === params.eway) ? (params.eway as EwayFilter) : 'raised';
+  const ewayRaised = ewayFilter !== 'pending';
   const setTab = (v: Tab) => setParams({ tab: v === 'eInvoice' ? undefined : v });
-  const setEInvoiceFilter = (v: EInvoiceStatus | 'all') => setParams({ einvoice: v === 'all' ? undefined : v });
-  const setEwayFilter = (v: EwayFilter) => setParams({ eway: v === 'all' ? undefined : v });
+  const setEInvoiceFilter = (v: EInvoiceFilter) => setParams({ einvoice: v === 'done' ? undefined : v });
+  const setEwayFilter = (v: EwayFilter) => setParams({ eway: v === 'raised' ? undefined : v });
   const [query, setQuery] = useState('');
 
   const settings = useComplianceSettings();
   const summary = useComplianceSummary();
   // Each list is read from the server, filtered and searched there, and only while it is on screen.
   const search = useDebounced(query);
-  const eInvoices = useComplianceDocuments({ need: 'eInvoice', status: eInvoiceFilter === 'all' ? undefined : eInvoiceFilter, q: search || undefined }, tab === 'eInvoice');
-  const unbilled = useComplianceDocuments({ need: 'ewayBill', q: search || undefined }, tab === 'eway' && ewayFilter === 'pending');
-  const bills = useEwayBillPages({ status: ewayFilter === 'all' || ewayFilter === 'pending' ? undefined : ewayFilter, q: search || undefined }, tab === 'eway' && ewayFilter !== 'pending');
+  const eInvoices = useComplianceDocuments(
+    { need: 'eInvoice', ...(eInvoiceFilter === 'open' || eInvoiceFilter === 'done' ? { stage: eInvoiceStage } : { status: eInvoiceFilter }), q: search || undefined },
+    tab === 'eInvoice',
+  );
+  const unbilled = useComplianceDocuments({ need: 'ewayBill', q: search || undefined }, tab === 'eway' && !ewayRaised);
+  const bills = useEwayBillPages({ status: ewayFilter === 'raised' || ewayFilter === 'pending' ? undefined : ewayFilter, q: search || undefined }, tab === 'eway' && ewayRaised);
 
   const nameOf = (d: { partyName?: string }) => d.partyName ?? tr('common:placeholder.unknown');
   const now = nowISO();
@@ -89,9 +116,132 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
   const loading = shownList.isLoading || shownList.isPlaceholderData;
   // Until the counts arrive the tiles shimmer rather than read "0".
   const countsLoading = !summary.loaded;
+  /** Each chip's count, from the register's summary; a tab's All is its chips added up. */
+  const chipCount = (key: EInvoiceFilter | EwayFilter): number => {
+    const e = summary.eInvoice;
+    const w = summary.eway;
+    if (tab === 'eInvoice') {
+      if (key === 'open') return e.pending + e.failed;
+      if (key === 'done') return e.generated + e.cancelled;
+      return e[key as 'pending' | 'failed' | 'generated' | 'cancelled'];
+    }
+    if (key === 'raised') return w.active + w.expired + w.cancelled;
+    return w[key as 'active' | 'expired' | 'cancelled'];
+  };
   const statusCell = (label: string, tone: React.ComponentProps<typeof Badge>['tone']) => (
     <Badge label={label} tone={tone} size="sm" />
   );
+
+  /** Documents that still need an e-way bill. */
+  const unbilledList = () =>
+    desktop ? (
+      <DataTable
+        scroll={false}
+        // A page at a time, as every other list; the server sends up to 200, paged here.
+        pageSizeOptions={TABLE_PAGE_SIZES}
+        tableKey="compliance-unbilled"
+        rows={unbilledRows}
+        rowKey={(d) => d.id}
+        rowLabel={(d) => d.number}
+        // The document's own page raises the bill.
+        onRowPress={(d) => router.push(detailRouteFor(d.kind!, d.id) as never)}
+        columns={[
+          { key: 'number', header: tr('common:table.number'), width: 170, render: (d) => <Cell weight="600">{d.number}</Cell> },
+          { key: 'party', header: tr('common:table.party'), flex: 1.5, render: (d) => <Cell>{nameOf(d)}</Cell> },
+          { key: 'date', header: tr('common:table.date'), width: 130, render: (d) => <Cell tone="muted">{formatDate(d.date)}</Cell> },
+          { key: 'amount', header: tr('common:table.amount'), width: 150, align: 'right', render: (d) => <Cell mono>{formatMoney(d.grandTotal)}</Cell> },
+          { key: 'status', header: tr('common:table.status'), width: 160, render: () => statusCell(tr('compliance:hub.needsBill'), 'warning') },
+        ]}
+      />
+    ) : (
+      <Card padded={false}>
+        {unbilledRows.map((d, i) => (
+          <ListRow
+            key={d.id}
+            title={d.number}
+            subtitle={`${nameOf(d)} · ${formatDate(d.date)}`}
+            meta={formatMoney(d.grandTotal)}
+            right={<Badge label={tr('compliance:hub.needsBill')} tone="warning" size="sm" />}
+            divider={i < unbilledRows.length - 1}
+            // The document's own page raises the bill.
+            onPress={() => router.push(detailRouteFor(d.kind!, d.id) as never)}
+          />
+        ))}
+      </Card>
+    );
+
+  /** The e-way bills themselves. */
+  const billList = () =>
+    desktop ? (
+      <DataTable
+        scroll={false}
+        // The pager fetches the next 50 bills from the server when it runs past what is loaded.
+        {...pagedTableProps(bills, tr('common:table.loadFailed'), 'compliance-eway')}
+        totalCount={query ? undefined : chipCount(ewayFilter)}
+        rows={ewayRows}
+        rowKey={(b) => b.id}
+        rowLabel={(b) => b.ewayBillNumber}
+        onRowPress={(b) => router.push(`/(app)/compliance/eway/${b.id}`)}
+        columns={[
+          { key: 'number', header: tr('compliance:ewb.number'), width: 170, render: (b) => <Cell weight="600" mono>{b.ewayBillNumber}</Cell> },
+          { key: 'document', header: tr('compliance:ewb.document'), width: 160, render: (b) => <Cell>{b.documentNumber}</Cell> },
+          { key: 'party', header: tr('common:table.party'), flex: 1.5, render: (b) => <Cell>{b.to.legalName}</Cell> },
+          {
+            key: 'valid',
+            header: tr('compliance:ewb.validUntil'),
+            flex: 1,
+            render: (b) => {
+              const status = ewayBillStatusAt(b, now);
+              if (status === 'cancelled') {
+                return (
+                  <Cell tone="muted">
+                    {b.cancelledAt ? tr('compliance:ewb.cancelledOn', { date: formatDate(b.cancelledAt.slice(0, 10)) }) : tr('compliance:status.eway.cancelled')}
+                  </Cell>
+                );
+              }
+              return <Cell tone="muted">{`${formatDate(b.validUpto.slice(0, 10))} · ${expiryPhrase(tr, hoursUntilExpiry(b, now))}`}</Cell>;
+            },
+          },
+          {
+            key: 'status',
+            header: tr('common:table.status'),
+            width: 150,
+            render: (b) => {
+              const status = ewayBillStatusAt(b, now);
+              const meta = EWAY_STATUS_META[status];
+              const soon = status === 'active' && hoursUntilExpiry(b, now) <= 24;
+              return statusCell(keyLabel(tr, meta.labelKey), soon ? 'warning' : meta.tone);
+            },
+          },
+        ]}
+      />
+    ) : (
+      <Card padded={false}>
+        {ewayRows.map((b, i) => {
+          const status = ewayBillStatusAt(b, now);
+          const meta = EWAY_STATUS_META[status];
+          const hours = hoursUntilExpiry(b, now);
+          const soon = status === 'active' && hours <= 24;
+          return (
+            <ListRow
+              key={b.id}
+              title={b.ewayBillNumber}
+              subtitle={`${b.documentNumber} · ${b.to.legalName}`}
+              meta={
+                status === 'cancelled'
+                  ? b.cancelledAt
+                    ? tr('compliance:ewb.cancelledOn', { date: formatDate(b.cancelledAt.slice(0, 10)) })
+                    : tr('compliance:status.eway.cancelled')
+                  : `${formatDate(b.validUpto.slice(0, 10))} · ${expiryPhrase(tr, hours)}`
+              }
+              right={<Badge label={keyLabel(tr, meta.labelKey)} tone={soon ? 'warning' : meta.tone} size="sm" />}
+              divider={i < ewayRows.length - 1}
+              onPress={() => router.push(`/(app)/compliance/eway/${b.id}`)}
+            />
+          );
+        })}
+      </Card>
+    );
 
   return (
     <ScrollView
@@ -192,48 +342,73 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
         </Card>
       ) : null}
 
-      <View style={{ height: t.spacing.md }} />
-      <SearchBar
-        compact
-        value={query}
-        onChangeText={setQuery}
-        placeholder={tab === 'eInvoice' ? tr('compliance:hub.searchEInvoice') : tr('compliance:hub.searchEway')}
-      />
+      <View style={{ marginTop: t.spacing.md }}>
+        <SearchBar
+          compact
+          value={query}
+          onChangeText={setQuery}
+          placeholder={tab === 'eInvoice' ? tr('compliance:hub.searchEInvoice') : tr('compliance:hub.searchEway')}
+        />
+      </View>
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ gap: t.spacing.sm, paddingVertical: t.spacing.md }}
-      >
-        {(tab === 'eInvoice' ? E_INVOICE_FILTERS : EWAY_FILTERS).map((f) => {
-          const active = tab === 'eInvoice' ? eInvoiceFilter === f.key : ewayFilter === f.key;
-          return (
-            <Pressable
-              key={f.key}
-              onPress={() =>
-                tab === 'eInvoice'
-                  ? setEInvoiceFilter(f.key as EInvoiceStatus | 'all')
-                  : setEwayFilter(f.key as EwayFilter)
-              }
-              accessibilityRole="button"
-              accessibilityState={{ selected: active }}
-              style={{
-                // A full 40pt target, as the report filters are.
-                minHeight: 40,
-                justifyContent: 'center',
-                paddingHorizontal: t.spacing.md,
-                paddingVertical: 7,
-                borderRadius: 999,
-                backgroundColor: active ? t.c.primary : t.c.card2,
-              }}
-            >
-              <Text variant="caption" weight="600" tone={active ? 'onPrimary' : 'muted'}>
-                {keyLabel(tr, f.labelKey)}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
+      {/* The tabs on the left and their chips on the right, on one line; a narrow phone puts the chips on the next, still to the right. */}
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: t.spacing.sm, paddingVertical: t.spacing.md }}>
+        {/* Still to go to the portal, or already there: two tabs, as parties have Active and Inactive. */}
+        <View style={{ width: 280, maxWidth: '100%' }}>
+          {tab === 'eInvoice' ? (
+            <Segmented
+              options={[
+                { value: 'reported', label: tr('compliance:hub.stage.reported') },
+                { value: 'toReport', label: tr('compliance:hub.stage.toReport') },
+              ]}
+              value={eInvoiceStage}
+              onChange={(v) => setEInvoiceFilter(v === 'reported' ? 'done' : 'open')}
+            />
+          ) : (
+            <Segmented
+              options={[
+                { value: 'raised', label: tr('compliance:hub.stage.raised') },
+                { value: 'toRaise', label: tr('compliance:hub.stage.toRaise') },
+              ]}
+              value={ewayRaised ? 'raised' : 'toRaise'}
+              onChange={(v) => setEwayFilter(v === 'raised' ? 'raised' : 'pending')}
+            />
+          )}
+        </View>
+        <View style={{ marginLeft: 'auto', flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', gap: t.spacing.sm }}>
+          {/* Not raised is one list (the documents needing a bill), so it has no chips. */}
+          {(tab === 'eInvoice' ? E_INVOICE_FILTERS[eInvoiceStage] : ewayRaised ? EWAY_FILTERS : []).map((f) => {
+            const active = tab === 'eInvoice' ? eInvoiceFilter === f.key : ewayFilter === f.key;
+            return (
+              <Pressable
+                key={f.key}
+                onPress={() =>
+                  tab === 'eInvoice'
+                    ? setEInvoiceFilter(f.key as EInvoiceFilter)
+                    : setEwayFilter(f.key as EwayFilter)
+                }
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
+                // The documents list's chip: outlined, and filled with a primary border when chosen.
+                style={{
+                  height: 36,
+                  justifyContent: 'center',
+                  paddingHorizontal: t.spacing.md,
+                  borderRadius: t.radius.pill,
+                  backgroundColor: active ? t.c.chip : t.c.paper,
+                  borderWidth: 1,
+                  borderColor: active ? t.c.primary : t.c.line,
+                }}
+              >
+                <Text variant="caption" weight="600" tone={active ? 'primary' : 'muted'}>
+                  {keyLabel(tr, f.labelKey)}
+                  {countsLoading ? '' : ` · ${chipCount(f.key)}`}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
 
       {loading ? (
         <ListSkeleton kind="list" />
@@ -241,6 +416,8 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
         // A desktop reads the register as a table: number, party, date, IRN, amount and status in columns.
         <DataTable
           scroll={false}
+          pageSizeOptions={TABLE_PAGE_SIZES}
+          tableKey="compliance-einvoice"
           rows={eInvoiceRows}
           rowKey={(d) => d.id}
           rowLabel={(d) => d.number}
@@ -258,62 +435,6 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
               render: (d) => {
                 const meta = E_INVOICE_STATUS_META[d.eInvoiceStatus ?? 'pending'];
                 return statusCell(keyLabel(tr, meta.labelKey), meta.tone);
-              },
-            },
-          ]}
-        />
-      ) : desktop && tab === 'eway' && ewayFilter === 'pending' && unbilledRows.length ? (
-        <DataTable
-          scroll={false}
-          rows={unbilledRows}
-          rowKey={(d) => d.id}
-          rowLabel={(d) => d.number}
-          // The document's own page raises the bill.
-          onRowPress={(d) => router.push(detailRouteFor(d.kind!, d.id) as never)}
-          columns={[
-            { key: 'number', header: tr('common:table.number'), width: 170, render: (d) => <Cell weight="600">{d.number}</Cell> },
-            { key: 'party', header: tr('common:table.party'), flex: 1.5, render: (d) => <Cell>{nameOf(d)}</Cell> },
-            { key: 'date', header: tr('common:table.date'), width: 130, render: (d) => <Cell tone="muted">{formatDate(d.date)}</Cell> },
-            { key: 'amount', header: tr('common:table.amount'), width: 150, align: 'right', render: (d) => <Cell mono>{formatMoney(d.grandTotal)}</Cell> },
-            { key: 'status', header: tr('common:table.status'), width: 160, render: () => statusCell(tr('compliance:hub.needsBill'), 'warning') },
-          ]}
-        />
-      ) : desktop && tab === 'eway' && ewayFilter !== 'pending' && ewayRows.length ? (
-        <DataTable
-          scroll={false}
-          rows={ewayRows}
-          rowKey={(b) => b.id}
-          rowLabel={(b) => b.ewayBillNumber}
-          onRowPress={(b) => router.push(`/(app)/compliance/eway/${b.id}`)}
-          columns={[
-            { key: 'number', header: tr('compliance:ewb.number'), width: 170, render: (b) => <Cell weight="600" mono>{b.ewayBillNumber}</Cell> },
-            { key: 'document', header: tr('compliance:ewb.document'), width: 160, render: (b) => <Cell>{b.documentNumber}</Cell> },
-            { key: 'party', header: tr('common:table.party'), flex: 1.5, render: (b) => <Cell>{b.to.legalName}</Cell> },
-            {
-              key: 'valid',
-              header: tr('compliance:ewb.validUntil'),
-              flex: 1,
-              render: (b) => {
-                const status = ewayBillStatusAt(b, now);
-                if (status === 'cancelled') {
-                  return (
-                    <Cell tone="muted">
-                      {b.cancelledAt ? tr('compliance:ewb.cancelledOn', { date: formatDate(b.cancelledAt.slice(0, 10)) }) : tr('compliance:status.eway.cancelled')}
-                    </Cell>
-                  );
-                }
-                return <Cell tone="muted">{`${formatDate(b.validUpto.slice(0, 10))} · ${expiryPhrase(tr, hoursUntilExpiry(b, now))}`}</Cell>;
-              },
-            },
-            {
-              key: 'status',
-              header: tr('common:table.status'),
-              width: 150,
-              render: (b) => {
-                const status = ewayBillStatusAt(b, now);
-                const meta = EWAY_STATUS_META[status];
-                const soon = status === 'active' && hoursUntilExpiry(b, now) <= 24;
-                return statusCell(keyLabel(tr, meta.labelKey), soon ? 'warning' : meta.tone);
               },
             },
           ]}
@@ -350,20 +471,7 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
         )
       ) : ewayFilter === 'pending' ? (
         unbilledRows.length ? (
-          <Card padded={false}>
-            {unbilledRows.map((d, i) => (
-              <ListRow
-                key={d.id}
-                title={d.number}
-                subtitle={`${nameOf(d)} · ${formatDate(d.date)}`}
-                meta={formatMoney(d.grandTotal)}
-                right={<Badge label={tr('compliance:hub.needsBill')} tone="warning" size="sm" />}
-                divider={i < unbilledRows.length - 1}
-                // The document's own page raises the bill.
-                onPress={() => router.push(detailRouteFor(d.kind!, d.id) as never)}
-              />
-            ))}
-          </Card>
+          unbilledList()
         ) : (
           <EmptyState
             illustration="all-settled"
@@ -372,31 +480,7 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
           />
         )
       ) : ewayRows.length ? (
-        <Card padded={false}>
-          {ewayRows.map((b, i) => {
-            const status = ewayBillStatusAt(b, now);
-            const meta = EWAY_STATUS_META[status];
-            const hours = hoursUntilExpiry(b, now);
-            const soon = status === 'active' && hours <= 24;
-            return (
-              <ListRow
-                key={b.id}
-                title={b.ewayBillNumber}
-                subtitle={`${b.documentNumber} · ${b.to.legalName}`}
-                meta={
-                  status === 'cancelled'
-                    ? b.cancelledAt
-                      ? tr('compliance:ewb.cancelledOn', { date: formatDate(b.cancelledAt.slice(0, 10)) })
-                      : tr('compliance:status.eway.cancelled')
-                    : `${formatDate(b.validUpto.slice(0, 10))} · ${expiryPhrase(tr, hours)}`
-                }
-                right={<Badge label={keyLabel(tr, meta.labelKey)} tone={soon ? 'warning' : meta.tone} size="sm" />}
-                divider={i < ewayRows.length - 1}
-                onPress={() => router.push(`/(app)/compliance/eway/${b.id}`)}
-              />
-            );
-          })}
-        </Card>
+        billList()
       ) : (
         <EmptyState
           illustration="no-documents"
@@ -410,7 +494,7 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
           }
         />
       )}
-      {tab === 'eway' && ewayFilter !== 'pending' && bills.hasNextPage ? (
+      {!desktop && tab === 'eway' && ewayFilter !== 'pending' && bills.hasNextPage ? (
         <View style={{ alignItems: 'center', paddingVertical: t.spacing.md }}>
           {bills.isFetchingNextPage ? <MoreRowsSkeleton kind="list" /> : <Button title={tr('common:documentList.loadMore')} variant="ghost" size="sm" onPress={() => void bills.fetchNextPage()} />}
         </View>
