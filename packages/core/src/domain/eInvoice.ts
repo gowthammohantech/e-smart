@@ -800,7 +800,7 @@ export function canCancelEInvoice(
   return { allowed: true, deadline };
 }
 
-/** Only "Other" obliges the user to say more. */
-export function requiresCancelRemark(code: CancelReasonCode): boolean {
-  return code === '4';
+/** The IRP refuses a cancellation without a remark (CnlRem), whatever the reason, so it is always asked for. */
+export function requiresCancelRemark(_code: CancelReasonCode): boolean {
+  return true;
 }
