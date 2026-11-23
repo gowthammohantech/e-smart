@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Platform } from 'react-native';
 import { useNavigation } from 'expo-router';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
+import { isBusy } from '../remote/busy';
 
 /** The form on screen with unsaved changes, if any, asking before `proceed` runs. */
 let asking: ((proceed: () => void) => void) | null = null;
@@ -13,6 +14,8 @@ let asking: ((proceed: () => void) => void) | null = null;
  * first, and goes straight on when nothing is unsaved.
  */
 export function leaveGuarded(proceed: () => void) {
+  // A save still waiting on the server: nowhere to go until it answers.
+  if (isBusy()) return;
   if (asking) asking(proceed);
   else proceed();
 }
@@ -85,6 +88,11 @@ export function useLeaveGuard(dirty: boolean): { dialog: React.ReactNode; releas
   useEffect(
     () =>
       navigation.addListener('beforeRemove', (e) => {
+        // Its own back link or a phone's Back while a save is on its way: stay until the answer is back.
+        if (isBusy()) {
+          e.preventDefault();
+          return;
+        }
         if (!guarding.current) return;
         e.preventDefault();
         setPending({ go: () => navigation.dispatch(e.data.action) });
@@ -124,6 +132,11 @@ export function useLeaveGuard(dirty: boolean): { dialog: React.ReactNode; releas
       if (!history.current.armed) return;
       // Back from the form: the extra entry is spent, and the form is still on screen.
       history.current.armed = false;
+      // The browser's Back while a save is on its way: put the entry back and stay.
+      if (isBusy()) {
+        arm();
+        return;
+      }
       if (guarding.current) setPending({ go: () => window.history.back(), fromBack: true });
       else window.history.back();
     };

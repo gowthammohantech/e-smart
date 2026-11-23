@@ -239,8 +239,8 @@
       "inDays_other": "in {{count}} days",
       "overdue_one": "{{count}} day late",
       "overdue_other": "{{count}} days late",
-      "more_one": "{{count}} more filing due · View all",
-      "more_other": "{{count}} more filings due · View all",
+      "more_one": "{{count}} more filing due · Open GST returns",
+      "more_other": "{{count}} more filings due · Open GST returns",
       "allFiled": "All filings up to date",
       "allFiledHint": "Nothing left to file in the next 60 days.",
       "a11y": "Next filing: {{title}} for {{period}}, {{when}}. Open GST returns."

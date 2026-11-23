@@ -645,7 +645,7 @@ export default function Home() {
           ]}
         />
         {/* Filings, GST credit and TDS due: several cards of their own, across the page under the rest. */}
-        <FilingCards branchId={scope.branchId} limit={LIST_ROWS} />
+        <FilingCards branchId={scope.branchId} />
       </Screen>
 
       {fab}

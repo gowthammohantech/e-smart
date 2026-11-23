@@ -2813,10 +2813,14 @@ paths:
             schema: { $ref: '#/components/schemas/CancelRequest' }
       responses:
         '200':
-          description: Cancelled
+          description: Cancelled, with the document's compliance block as it now stands
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/ComplianceResult' }
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ComplianceResult'
+                  - properties:
+                      compliance: { $ref: '#/components/schemas/ComplianceInfo' }
         '409': { description: 'Outside the 24-hour window, or an active e-way bill must be cancelled first' }
         '502': { $ref: '#/components/responses/UpstreamError' }
 

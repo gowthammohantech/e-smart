@@ -492,6 +492,7 @@
     },
     "filings": {
       "title": "Filing calendar",
+      "openReturns": "Open GST returns",
       "none": "Nothing falls due in the next 60 days",
       "kind": {
         "gstr1": "GSTR-1",

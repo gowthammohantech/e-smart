@@ -22,7 +22,7 @@ const TONE = { filed: 'success', pending: 'warning', overdue: 'danger' } as cons
  * against the purchase register, and TDS still to deposit. Each card shows only when the server
  * sends it (a plan or role without it gets none). Informational: nothing here files anything.
  */
-export function FilingCards({ branchId, limit = 5 }: { branchId?: string; limit?: number }) {
+export function FilingCards({ branchId }: { branchId?: string }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['reports', 'common']);
   const router = useRouter();
@@ -49,14 +49,15 @@ export function FilingCards({ branchId, limit = 5 }: { branchId?: string; limit?
 
   // Overdue first, then what's next; filed ones drop off once their date has passed.
   const upcoming = data.calendar.filter((d) => d.status !== 'filed' || d.due >= businessDate()).sort((a, b) => (a.status === 'overdue' ? 0 : 1) - (b.status === 'overdue' ? 0 : 1) || a.due.localeCompare(b.due));
-  const shown = upcoming.slice(0, limit);
+  // The whole calendar, not the first few: the sidebar's "N more filings due" is read here in full.
+  const shown = upcoming;
   const period = (d: (typeof upcoming)[number]) => (d.kind === 'tds' ? formatDate(`${d.period}-01`, 'MMM yyyy') : gstPeriodLabel(d.period));
   const itc = data.itc;
   const tds = data.tdsDue;
 
   return (
     <>
-      <SectionHeader title={tr('reports:dash.filings.title')} action={canOpen('/(app)/gst/returns') ? tr('common:action.seeAll') : undefined} onAction={() => router.push('/(app)/gst/returns')} />
+      <SectionHeader title={tr('reports:dash.filings.title')} action={canOpen('/(app)/gst/returns') ? tr('reports:dash.filings.openReturns') : undefined} onAction={() => router.push('/(app)/gst/returns')} />
       <Card padded={false}>
         {shown.length === 0 ? (
           <Text variant="small" tone="muted" style={{ padding: t.spacing.lg }}>
