@@ -84,14 +84,14 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
   // Tab and status filters live in the URL (`?tab=eway&eway=active`); search stays local.
   const [params, setParams] = useQueryParams();
   const tab: Tab = params.tab === 'eway' ? 'eway' : 'eInvoice';
-  const eInvoiceFilter: EInvoiceFilter = params.einvoice && params.einvoice in E_INVOICE_STAGE_OF ? (params.einvoice as EInvoiceFilter) : 'open';
+  const eInvoiceFilter: EInvoiceFilter = params.einvoice && params.einvoice in E_INVOICE_STAGE_OF ? (params.einvoice as EInvoiceFilter) : 'done';
   const eInvoiceStage = E_INVOICE_STAGE_OF[eInvoiceFilter];
-  // An old link's `eway=all` (or anything unknown) opens on Not raised.
-  const ewayFilter: EwayFilter = EWAY_FILTERS.some((f) => f.key === params.eway) ? (params.eway as EwayFilter) : 'pending';
+  // Raised opens first; an old link's `eway=all` (or anything unknown) lands there too.
+  const ewayFilter: EwayFilter = params.eway === 'pending' || EWAY_FILTERS.some((f) => f.key === params.eway) ? (params.eway as EwayFilter) : 'raised';
   const ewayRaised = ewayFilter !== 'pending';
   const setTab = (v: Tab) => setParams({ tab: v === 'eInvoice' ? undefined : v });
-  const setEInvoiceFilter = (v: EInvoiceFilter) => setParams({ einvoice: v === 'open' ? undefined : v });
-  const setEwayFilter = (v: EwayFilter) => setParams({ eway: v === 'pending' ? undefined : v });
+  const setEInvoiceFilter = (v: EInvoiceFilter) => setParams({ einvoice: v === 'done' ? undefined : v });
+  const setEwayFilter = (v: EwayFilter) => setParams({ eway: v === 'raised' ? undefined : v });
   const [query, setQuery] = useState('');
 
   const settings = useComplianceSettings();
@@ -115,6 +115,18 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
   const loading = shownList.isLoading || shownList.isPlaceholderData;
   // Until the counts arrive the tiles shimmer rather than read "0".
   const countsLoading = !summary.loaded;
+  /** Each chip's count, from the register's summary; a tab's All is its chips added up. */
+  const chipCount = (key: EInvoiceFilter | EwayFilter): number => {
+    const e = summary.eInvoice;
+    const w = summary.eway;
+    if (tab === 'eInvoice') {
+      if (key === 'open') return e.pending + e.failed;
+      if (key === 'done') return e.generated + e.cancelled;
+      return e[key as 'pending' | 'failed' | 'generated' | 'cancelled'];
+    }
+    if (key === 'raised') return w.active + w.expired + w.cancelled;
+    return w[key as 'active' | 'expired' | 'cancelled'];
+  };
   const statusCell = (label: string, tone: React.ComponentProps<typeof Badge>['tone']) => (
     <Badge label={label} tone={tone} size="sm" />
   );
@@ -339,8 +351,8 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
           {tab === 'eInvoice' ? (
             <Segmented
               options={[
-                { value: 'toReport', label: tr('compliance:hub.stage.toReport') },
                 { value: 'reported', label: tr('compliance:hub.stage.reported') },
+                { value: 'toReport', label: tr('compliance:hub.stage.toReport') },
               ]}
               value={eInvoiceStage}
               onChange={(v) => setEInvoiceFilter(v === 'reported' ? 'done' : 'open')}
@@ -348,8 +360,8 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
           ) : (
             <Segmented
               options={[
-                { value: 'toRaise', label: tr('compliance:hub.stage.toRaise') },
                 { value: 'raised', label: tr('compliance:hub.stage.raised') },
+                { value: 'toRaise', label: tr('compliance:hub.stage.toRaise') },
               ]}
               value={ewayRaised ? 'raised' : 'toRaise'}
               onChange={(v) => setEwayFilter(v === 'raised' ? 'raised' : 'pending')}
@@ -370,18 +382,20 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
                 }
                 accessibilityRole="button"
                 accessibilityState={{ selected: active }}
+                // The documents list's chip: outlined, and filled with a primary border when chosen.
                 style={{
-                  // A full 40pt target, as the report filters are.
-                  minHeight: 40,
+                  height: 36,
                   justifyContent: 'center',
                   paddingHorizontal: t.spacing.md,
-                  paddingVertical: 7,
-                  borderRadius: 999,
-                  backgroundColor: active ? t.c.primary : t.c.card2,
+                  borderRadius: t.radius.pill,
+                  backgroundColor: active ? t.c.chip : t.c.paper,
+                  borderWidth: 1,
+                  borderColor: active ? t.c.primary : t.c.line,
                 }}
               >
-                <Text variant="caption" weight="600" tone={active ? 'onPrimary' : 'muted'}>
+                <Text variant="caption" weight="600" tone={active ? 'primary' : 'muted'}>
                   {keyLabel(tr, f.labelKey)}
+                  {countsLoading ? '' : ` · ${chipCount(f.key)}`}
                 </Text>
               </Pressable>
             );
