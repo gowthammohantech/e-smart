@@ -54,11 +54,11 @@ const MENU_PAGES = MENU.flatMap((s) => s.pages);
  * so each lights its own row, not Receipts or none. The one asking for the most wins.
  */
 /**
- * The query of the page on screen, as the router has it. Set by the Sidebar as it renders, before
- * its rows: the browser's address bar takes the new query only after that render, so it can't be read.
+ * The query is the page's own, as the router has it (useGlobalSearchParams): the browser's address bar
+ * takes the new query only after the render, so it can't be read there.
  */
-let query: Record<string, string | string[] | undefined> = {};
-function creatingFrom(pathname: string): string | undefined {
+type Query = Record<string, string | string[] | undefined>;
+function creatingFrom(pathname: string, query: Query): string | undefined {
   const value = (k: string) => {
     const v = query[k];
     return Array.isArray(v) ? v[0] : v;
@@ -76,8 +76,8 @@ function creatingFrom(pathname: string): string | undefined {
 }
 
 /** The row to light: the page whose + opened the form on screen, else the list page the path is under. */
-const isOn = (pathname: string, route: string) => {
-  const creating = creatingFrom(pathname);
+const isOn = (pathname: string, query: Query, route: string) => {
+  const creating = creatingFrom(pathname, query);
   return creating ? creating === route : onList(pathname, route);
 };
 
@@ -402,6 +402,8 @@ function sectionLayout(tab: TabName, plan: ReturnType<typeof usePlan>, disabled:
  */
 function SectionDropdown({ tab, pathname }: { tab: TabName; pathname: string }) {
   const t = useTheme();
+  // A + that differs from another by its query alone (New receipt, and with advance=1) lights its own row.
+  const query = useGlobalSearchParams();
   const { t: tr } = useTranslation(['nav', 'reports']);
   const sectionLabel = useSectionLabel();
   const plan = usePlan();
@@ -447,7 +449,7 @@ function SectionDropdown({ tab, pathname }: { tab: TabName; pathname: string }) 
               key={p.key}
               page={p}
               label={tr(p.labelKey as 'nav:title.invoices')}
-              active={isOn(pathname, p.route)}
+              active={isOn(pathname, query, p.route)}
               badge={p.badge ? badges[p.badge] : undefined}
             />
           ))}
@@ -455,7 +457,7 @@ function SectionDropdown({ tab, pathname }: { tab: TabName; pathname: string }) 
       ))}
       {actions.length ? <View style={{ height: t.spacing.xs }} /> : null}
       {actions.map((a) => (
-        <PanelItem key={a.key} page={a} label={tr(a.labelKey as 'nav:title.invoices')} active={isOn(pathname, a.route)} badge={undefined} />
+        <PanelItem key={a.key} page={a} label={tr(a.labelKey as 'nav:title.invoices')} active={isOn(pathname, query, a.route)} badge={undefined} />
       ))}
     </View>
   );
@@ -481,6 +483,7 @@ function SectionPanel({
   onClose: (restoreFocus: boolean) => void;
 }) {
   const t = useTheme();
+  const query = useGlobalSearchParams();
   const { t: tr } = useTranslation(['nav', 'reports']);
   const sectionLabel = useSectionLabel();
   const router = useRouter();
@@ -644,7 +647,7 @@ function SectionPanel({
                   key={p.key}
                   page={p}
                   label={tr(p.labelKey as 'nav:title.invoices')}
-                  active={isOn(pathname, p.route)}
+                  active={isOn(pathname, query, p.route)}
                   badge={p.badge ? badges[p.badge] : undefined}
                   onNavigate={done}
                 />
@@ -680,9 +683,6 @@ export function Sidebar() {
   const sectionLabel = useSectionLabel();
   const router = useRouter();
   const pathname = usePathname();
-  // The page's query, for the rows to read as they render: a + that differs from another by its query
-  // alone (New receipt, and New receipt with advance=1) lights its own row.
-  query = useGlobalSearchParams();
   const plan = usePlan();
   const disabled = useDisabledModules();
   const badges = useMenuBadges();
