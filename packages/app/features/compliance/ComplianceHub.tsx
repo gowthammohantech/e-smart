@@ -323,15 +323,19 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
         </Card>
       ) : null}
 
-      <View
-        style={
-          desktop
-            ? { marginTop: t.spacing.md, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: t.spacing.md }
-            : { marginTop: t.spacing.md, gap: t.spacing.md }
-        }
-      >
+      <View style={{ marginTop: t.spacing.md }}>
+        <SearchBar
+          compact
+          value={query}
+          onChangeText={setQuery}
+          placeholder={tab === 'eInvoice' ? tr('compliance:hub.searchEInvoice') : tr('compliance:hub.searchEway')}
+        />
+      </View>
+
+      {/* The tabs on the left and their chips on the right, on one line; a narrow phone puts the chips on the next, still to the right. */}
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: t.spacing.sm, paddingVertical: t.spacing.md }}>
         {/* Still to go to the portal, or already there: two tabs, as parties have Active and Inactive. */}
-        <View style={desktop ? { flexBasis: 280, flexShrink: 0 } : undefined}>
+        <View style={{ width: 280, maxWidth: '100%' }}>
           {tab === 'eInvoice' ? (
             <Segmented
               options={[
@@ -352,51 +356,38 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
             />
           )}
         </View>
-        <View style={desktop ? { flexBasis: 380, flexShrink: 1, minWidth: 220 } : undefined}>
-          <SearchBar
-            compact
-            value={query}
-            onChangeText={setQuery}
-            placeholder={tab === 'eInvoice' ? tr('compliance:hub.searchEInvoice') : tr('compliance:hub.searchEway')}
-          />
+        <View style={{ marginLeft: 'auto', flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', gap: t.spacing.sm }}>
+          {/* Not raised is one list (the documents needing a bill), so it has no chips. */}
+          {(tab === 'eInvoice' ? E_INVOICE_FILTERS[eInvoiceStage] : ewayRaised ? EWAY_FILTERS : []).map((f) => {
+            const active = tab === 'eInvoice' ? eInvoiceFilter === f.key : ewayFilter === f.key;
+            return (
+              <Pressable
+                key={f.key}
+                onPress={() =>
+                  tab === 'eInvoice'
+                    ? setEInvoiceFilter(f.key as EInvoiceFilter)
+                    : setEwayFilter(f.key as EwayFilter)
+                }
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
+                style={{
+                  // A full 40pt target, as the report filters are.
+                  minHeight: 40,
+                  justifyContent: 'center',
+                  paddingHorizontal: t.spacing.md,
+                  paddingVertical: 7,
+                  borderRadius: 999,
+                  backgroundColor: active ? t.c.primary : t.c.card2,
+                }}
+              >
+                <Text variant="caption" weight="600" tone={active ? 'onPrimary' : 'muted'}>
+                  {keyLabel(tr, f.labelKey)}
+                </Text>
+              </Pressable>
+            );
+          })}
         </View>
       </View>
-
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ gap: t.spacing.sm, paddingVertical: t.spacing.md }}
-      >
-        {/* Not raised is one list (the documents needing a bill), so it has no chips. */}
-        {(tab === 'eInvoice' ? E_INVOICE_FILTERS[eInvoiceStage] : ewayRaised ? EWAY_FILTERS : []).map((f) => {
-          const active = tab === 'eInvoice' ? eInvoiceFilter === f.key : ewayFilter === f.key;
-          return (
-            <Pressable
-              key={f.key}
-              onPress={() =>
-                tab === 'eInvoice'
-                  ? setEInvoiceFilter(f.key as EInvoiceFilter)
-                  : setEwayFilter(f.key as EwayFilter)
-              }
-              accessibilityRole="button"
-              accessibilityState={{ selected: active }}
-              style={{
-                // A full 40pt target, as the report filters are.
-                minHeight: 40,
-                justifyContent: 'center',
-                paddingHorizontal: t.spacing.md,
-                paddingVertical: 7,
-                borderRadius: 999,
-                backgroundColor: active ? t.c.primary : t.c.card2,
-              }}
-            >
-              <Text variant="caption" weight="600" tone={active ? 'onPrimary' : 'muted'}>
-                {keyLabel(tr, f.labelKey)}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
 
       {loading ? (
         <ListSkeleton kind="list" />
