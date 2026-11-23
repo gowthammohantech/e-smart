@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 import { useAppStore, type AppState } from '../store/appStore';
+import { whileBusy } from './busy';
 import { COLLECTIONS } from './collections';
 import { canWrite } from './connectivity';
 import { resolveId, useRemoteMeta } from './meta';
@@ -109,7 +110,8 @@ export async function saveOnline<T>(run: () => T): Promise<SaveResult<T>> {
   }
   const after = useAppStore.getState();
   const fresh = outbox.entries().filter((e) => !known.has(e.id));
-  return confirm(result, before, after, fresh);
+  // Until the server answers, the app stays on this screen.
+  return whileBusy(() => confirm(result, before, after, fresh));
 }
 
 /**

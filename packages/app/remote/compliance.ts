@@ -4,6 +4,7 @@ import type { CancelReasonCode, ComplianceIssue, EwayBillPartBUpdate } from '@es
 import { useAppStore, type ComplianceResult, type ExtendEwayBillInput, type NewEwayBillInput } from '../store/appStore';
 import { api, isNetworkError } from './api';
 import { applyEntity } from './apply';
+import { whileBusy } from './busy';
 import * as outbox from './outbox';
 import { refreshNow } from './refresh';
 
@@ -20,7 +21,8 @@ const offline = (): ComplianceResult => ({
 
 async function call<T>(run: () => Promise<{ data?: T }>, after?: (data: T) => void): Promise<ComplianceResult & { data?: T }> {
   try {
-    const { data } = await run();
+    // A portal call is a save too: the app stays on its screen until the answer is back.
+    const { data } = await whileBusy(run);
     if (data) after?.(data);
     // The document's compliance fields changed on the server; bring them in.
     void refreshNow();

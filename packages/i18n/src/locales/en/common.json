@@ -381,7 +381,8 @@
     "title": "Leave without saving?",
     "message": "You have changes that aren't saved. If you leave now, they'll be lost.",
     "leave": "Leave",
-    "stay": "Stay"
+    "stay": "Stay",
+    "saving": "Still saving. Wait a moment before going anywhere else."
   },
   "crash": {
     "title": "Something went wrong",

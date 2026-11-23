@@ -20,6 +20,7 @@ import { queryClient, useQueryStoreWatch } from '../remote/queries';
 import { i18nInstance as i18n } from '@esmart/i18n';
 import { ErrorFallback, FallbackArt } from '../components/ErrorFallback';
 import { SaveToasts } from '../components/SaveToasts';
+import { NavigationLock } from '../components/NavigationLock';
 import { installGlobalErrorHandlers } from '../lib/reporter';
 import { installAnalytics, screen as trackScreen, track } from '../lib/analytics';
 import { routePattern } from '@esmart/core/analytics/events';
@@ -174,6 +175,8 @@ export default function RootLayout() {
               <ToastProvider>
                 <RootNavigator />
                 <SaveToasts />
+                {/* While a save waits on the server, nothing navigates away from it. */}
+                <NavigationLock />
               </ToastProvider>
             </AppThemeProvider>
           </I18nProvider>
