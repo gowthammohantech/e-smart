@@ -343,6 +343,8 @@ export const eInvoiceHandlers = defineHandlers({
       throw portalRejected(response.errors, 'IRP_REJECTED');
     }
     await recordIrnCancelled(ctx.db, ctx.deps, ctx.company, ctx.user, ctx.params.id, { reasonCode, remark, reason: response.reason, irn: checked.irn, now: ctx.now, attemptId });
-    return { ok: true, issues: [] };
+    // The new status goes back with the answer, as generating's does, so the app shows Cancelled at once.
+    const [fresh] = await ctx.db.select().from(D).where(eq(D.id, ctx.params.id));
+    return { ok: true, issues: [], compliance: await complianceOf(ctx.db, ctx.company, fresh, ctx.now) };
   },
 });

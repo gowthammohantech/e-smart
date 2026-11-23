@@ -83,8 +83,10 @@ export async function generateEInvoice(documentId: string): Promise<ComplianceRe
 export async function cancelEInvoice(documentId: string, reasonCode: CancelReasonCode, remark?: string): Promise<ComplianceResult> {
   const unsynced = await settle(documentId);
   if (unsynced) return unsynced;
-  return call(() =>
-    api.POST('/companies/{companyId}/documents/{id}/e-invoice/cancel', { params: { path: { ...p(docCompany(documentId)), id: documentId } }, body: { reasonCode, remark } as never }),
+  // As with generating: the cancelled status goes on the stored document at once, not only after the refresh.
+  return call(
+    () => api.POST('/companies/{companyId}/documents/{id}/e-invoice/cancel', { params: { path: { ...p(docCompany(documentId)), id: documentId } }, body: { reasonCode, remark } as never }),
+    (data) => applyCompliance(documentId, data),
   );
 }
 

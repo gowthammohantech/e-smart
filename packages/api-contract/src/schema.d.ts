@@ -11935,13 +11935,15 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Cancelled */
+            /** @description Cancelled, with the document's compliance block as it now stands */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ComplianceResult"];
+                    "application/json": components["schemas"]["ComplianceResult"] & {
+                        compliance?: components["schemas"]["ComplianceInfo"];
+                    };
                 };
             };
             /** @description Outside the 24-hour window, or an active e-way bill must be cancelled first */
