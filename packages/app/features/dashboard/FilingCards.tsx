@@ -56,7 +56,7 @@ export function FilingCards({ branchId, limit = 5 }: { branchId?: string; limit?
 
   return (
     <>
-      <SectionHeader title={tr('reports:dash.filings.title')} action={canOpen('/(app)/gst/returns') ? tr('common:action.seeAll') : undefined} onAction={() => router.push('/(app)/gst/returns')} />
+      <SectionHeader title={tr('reports:dash.filings.title')} action={canOpen('/(app)/gst/returns') ? tr('reports:dash.filings.openReturns') : undefined} onAction={() => router.push('/(app)/gst/returns')} />
       <Card padded={false}>
         {shown.length === 0 ? (
           <Text variant="small" tone="muted" style={{ padding: t.spacing.lg }}>
