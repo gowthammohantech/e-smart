@@ -53,15 +53,23 @@ const MENU_PAGES = MENU.flatMap((s) => s.pages);
  * Payments made's + is /payments/new?direction=paid, Advance receipts' is New receipt with advance=1,
  * so each lights its own row, not Receipts or none. The one asking for the most wins.
  */
+/**
+ * The query of the page on screen, as the router has it. Set by the Sidebar as it renders, before
+ * its rows: the browser's address bar takes the new query only after that render, so it can't be read.
+ */
+let query: Record<string, string | string[] | undefined> = {};
 function creatingFrom(pathname: string): string | undefined {
-  const search = new URLSearchParams(WEB && typeof window !== 'undefined' ? window.location.search : '');
+  const value = (k: string) => {
+    const v = query[k];
+    return Array.isArray(v) ? v[0] : v;
+  };
   let best: { route: string; asks: number } | undefined;
   for (const p of MENU_PAGES) {
     if (!p.createRoute) continue;
-    const [path, query = ''] = p.createRoute.split('?');
+    const [path, wants = ''] = p.createRoute.split('?');
     if (path !== pathname) continue;
-    const asks = [...new URLSearchParams(query)];
-    if (!asks.every(([k, v]) => search.get(k) === v)) continue;
+    const asks = [...new URLSearchParams(wants)];
+    if (!asks.every(([k, v]) => value(k) === v)) continue;
     if (!best || asks.length > best.asks) best = { route: p.route, asks: asks.length };
   }
   return best?.route;
@@ -672,9 +680,9 @@ export function Sidebar() {
   const sectionLabel = useSectionLabel();
   const router = useRouter();
   const pathname = usePathname();
-  // Read for its re-render only: a + that differs from another by its query alone (New receipt, and
-  // New receipt with advance=1) lights its own row once the query changes.
-  useGlobalSearchParams();
+  // The page's query, for the rows to read as they render: a + that differs from another by its query
+  // alone (New receipt, and New receipt with advance=1) lights its own row.
+  query = useGlobalSearchParams();
   const plan = usePlan();
   const disabled = useDisabledModules();
   const badges = useMenuBadges();
