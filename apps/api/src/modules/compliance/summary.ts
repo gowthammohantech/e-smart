@@ -150,15 +150,18 @@ export const summaryHandlers = defineHandlers({
             .limit(limit)) as SummaryRow[])
         : [];
     } else {
+      // Not reported yet (waiting, or refused by the IRP) or reported (live, or cancelled since); without either, all of them.
+      const statuses: EInvoiceStatus[] =
+        q.stage === 'toReport' ? ['pending', 'failed'] : q.stage === 'reported' ? ['generated', 'cancelled'] : ['pending', 'failed', 'generated', 'cancelled'];
       const attempted = (await ctx.db
         .select(columns)
         .from(D)
         .innerJoin(P, eq(P.id, D.partyId))
         .innerJoin(E, eq(E.documentId, D.id))
-        .where(and(docsInScope(s), inArray(D.kind, [...E_INVOICE_KINDS]), q.status ? eq(E.status, q.status) : ne(E.status, 'notApplicable'), search(q.q)))
+        .where(and(docsInScope(s), inArray(D.kind, [...E_INVOICE_KINDS]), q.status ? eq(E.status, q.status) : inArray(E.status, statuses), search(q.q)))
         .orderBy(desc(D.date), desc(D.createdAt), desc(D.id))
         .limit(limit)) as SummaryRow[];
-      const pending = q.status === undefined || q.status === 'pending' ? await unattempted(s, settings, search(q.q)) : [];
+      const pending = (q.status ?? 'pending') === 'pending' && statuses.includes('pending') ? await unattempted(s, settings, search(q.q)) : [];
       rows = [...attempted, ...pending].sort(newestFirst).slice(0, limit);
     }
     return { data: await summariesToWire(ctx.db, rows, ctx.now) };

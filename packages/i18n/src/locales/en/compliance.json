@@ -1,5 +1,11 @@
 {
   "hub": {
+    "stage": {
+      "toReport": "Not reported",
+      "reported": "Reported",
+      "toRaise": "Not raised",
+      "raised": "Raised"
+    },
     "needsBill": "Needs bill",
     "unbilledBanner_one": "{{count}} invoice above the threshold still needs an e-way bill. Tap to see it.",
     "unbilledBanner_other": "{{count}} invoices above the threshold still need an e-way bill. Tap to see them.",
@@ -508,6 +514,7 @@
     }
   },
   "filter": {
+    "pending": "Pending",
     "needsBill": "Needs e-way bill",
     "all": "All",
     "reported": "Reported",

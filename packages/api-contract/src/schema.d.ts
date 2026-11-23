@@ -12001,6 +12001,8 @@ export interface operations {
                 need: "eInvoice" | "ewayBill";
                 /** @description For `eInvoice` only */
                 status?: components["schemas"]["EInvoiceStatus"];
+                /** @description For `eInvoice` only, when no `status` is given: not reported yet (pending, rejected) or reported (generated, cancelled) */
+                stage?: "toReport" | "reported";
                 /** @description Number, party or IRN */
                 q?: string;
                 limit?: number;

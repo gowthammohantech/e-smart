@@ -2875,6 +2875,7 @@ paths:
       parameters:
         - { name: need, in: query, required: true, schema: { type: string, enum: [eInvoice, ewayBill] } }
         - { name: status, in: query, schema: { $ref: '#/components/schemas/EInvoiceStatus' }, description: For `eInvoice` only }
+        - { name: stage, in: query, schema: { type: string, enum: [toReport, reported] }, description: "For `eInvoice` only, when no `status` is given: not reported yet (pending, rejected) or reported (generated, cancelled)" }
         - { name: q, in: query, schema: { type: string }, description: "Number, party or IRN" }
         - { name: limit, in: query, schema: { type: integer, default: 100, minimum: 1, maximum: 500 } }
         - { $ref: '#/components/parameters/BranchIdQuery' }
