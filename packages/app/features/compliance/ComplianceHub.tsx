@@ -24,7 +24,8 @@ import { formatDate, nowISO } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
 import { EWAY_STATUS_META, E_INVOICE_STATUS_META, expiryPhrase } from './complianceMeta';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
-import { Cell, DataTable } from '@esmart/ui/components/DataTable';
+import { Cell, DataTable, TABLE_PAGE_SIZES } from '@esmart/ui/components/DataTable';
+import { pagedTableProps } from '../../components/pagedTable';
 import { useQueryParams } from '../../navigation/queryParams';
 import { ListSkeleton, MoreRowsSkeleton } from '../../components/ScreenSkeleton';
 
@@ -136,6 +137,9 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
     desktop ? (
       <DataTable
         scroll={false}
+        // A page at a time, as every other list; the server sends up to 200, paged here.
+        pageSizeOptions={TABLE_PAGE_SIZES}
+        tableKey="compliance-unbilled"
         rows={unbilledRows}
         rowKey={(d) => d.id}
         rowLabel={(d) => d.number}
@@ -171,6 +175,9 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
     desktop ? (
       <DataTable
         scroll={false}
+        // The pager fetches the next 50 bills from the server when it runs past what is loaded.
+        {...pagedTableProps(bills, tr('common:table.loadFailed'), 'compliance-eway')}
+        totalCount={query ? undefined : chipCount(ewayFilter)}
         rows={ewayRows}
         rowKey={(b) => b.id}
         rowLabel={(b) => b.ewayBillNumber}
@@ -409,6 +416,8 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
         // A desktop reads the register as a table: number, party, date, IRN, amount and status in columns.
         <DataTable
           scroll={false}
+          pageSizeOptions={TABLE_PAGE_SIZES}
+          tableKey="compliance-einvoice"
           rows={eInvoiceRows}
           rowKey={(d) => d.id}
           rowLabel={(d) => d.number}
@@ -485,7 +494,7 @@ export function ComplianceHub({ header, bottomInset = 60 }: { header?: React.Rea
           }
         />
       )}
-      {tab === 'eway' && ewayFilter !== 'pending' && bills.hasNextPage ? (
+      {!desktop && tab === 'eway' && ewayFilter !== 'pending' && bills.hasNextPage ? (
         <View style={{ alignItems: 'center', paddingVertical: t.spacing.md }}>
           {bills.isFetchingNextPage ? <MoreRowsSkeleton kind="list" /> : <Button title={tr('common:documentList.loadMore')} variant="ghost" size="sm" onPress={() => void bills.fetchNextPage()} />}
         </View>
