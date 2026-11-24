@@ -5495,6 +5495,15 @@ export interface components {
                 entityType?: "document" | "payment" | "voucher" | "opening";
                 entityId?: string;
                 number?: string;
+                /** @description What the line is: a document's kind (invoice, debitNote, creditNote…), its TDS line (tds), a receipt, an advance receipt, a payment, a refund, or a journal */
+                kind?: string;
+                /** @description A document's taxable value */
+                taxable?: components["schemas"]["Money"];
+                /** @description A document's GST */
+                tax?: components["schemas"]["Money"];
+                method?: components["schemas"]["PaymentMethod"];
+                /** @description A payment's reference (UTR, cheque number) */
+                reference?: string;
                 debit?: components["schemas"]["Money"];
                 credit?: components["schemas"]["Money"];
                 balance?: components["schemas"]["Money"];
