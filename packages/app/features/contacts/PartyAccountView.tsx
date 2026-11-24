@@ -259,6 +259,7 @@ export function PartyAccountView({ party, owed }: { party: Party; owed?: Money }
             scroll={false}
             pageSize={TABLE_PAGE_SIZE}
             pageSizeOptions={TABLE_PAGE_SIZES}
+            alwaysPaged
             tableKey={`party-account-${g}`}
             rows={rows}
             rowKey={(e) => `${e.entityType}-${e.entityId}-${e.number}`}

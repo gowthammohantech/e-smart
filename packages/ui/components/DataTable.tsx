@@ -105,6 +105,7 @@ export function DataTable<T>({
   error,
   onRetry,
   pageSizeOptions,
+  alwaysPaged,
   tableKey,
   totalCount,
   hasMore,
@@ -153,6 +154,8 @@ export function DataTable<T>({
   onRetry?: () => void;
   /** Lets the user pick rows per page from these; implies paging. */
   pageSizeOptions?: number[];
+  /** The pager shows however few the rows, rather than only once there are more than a page. */
+  alwaysPaged?: boolean;
   /** Remembers the rows-per-page choice under this name. */
   tableKey?: string;
   /** How many rows the server has in all, when only some are loaded. */
@@ -566,7 +569,7 @@ export function DataTable<T>({
 
   const smallestChoice = pageSizeOptions ? Math.min(...pageSizeOptions) : Infinity;
   const pager =
-    size && (known > size || known > smallestChoice) ? (
+    size && (alwaysPaged || known > size || known > smallestChoice) ? (
       <View
         style={{
           flexDirection: 'row',
