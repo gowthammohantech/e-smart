@@ -825,7 +825,7 @@ ${url}`;
                 { key: 'outstanding', label: tr('sales:detail.outstanding'), total: outstanding, color: overdueDays > 0 ? t.c.bad : t.c.warn },
                 { key: 'payments', label: tr(receivable ? 'sales:detail.settlement.customerPayments' : 'sales:detail.settlement.supplierPayments'), count: settlement.paymentCount, total: settlement.payments, color: t.c.good },
                 { key: 'credit', label: tr('sales:detail.settlement.creditNotes'), count: settlement.creditCount, total: settlement.credited, color: seriesColor(t.scheme, 0) },
-                { key: 'debit', label: tr('sales:detail.settlement.debitNotes'), count: settlement.debitCount, total: settlement.debited, color: seriesColor(t.scheme, 2) },
+                { key: 'debit', label: tr('sales:detail.settlement.debitNotes'), count: settlement.debitCount, total: settlement.debited, color: seriesColor(t.scheme, 4) },
               ].filter((s) => s.total.minor > 0)}
             />
           )}
