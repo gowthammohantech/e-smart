@@ -47,7 +47,8 @@
     "inAdvance": "முன்பணமாக",
     "newCustomer": "புதிய வாடிக்கையாளர்",
     "newSupplier": "புதிய சப்ளையர்",
-    "newContact": "புதிய தொடர்பு"
+    "newContact": "புதிய தொடர்பு",
+    "newBoth": "புதிய வாடிக்கையாளர் மற்றும் சப்ளையர்"
   },
   "form": {
     "businessName": "வணிகப் பெயர்",

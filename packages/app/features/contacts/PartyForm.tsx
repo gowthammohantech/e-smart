@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, ScrollView, View, ViewStyle } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { FieldGrid, FieldRow, FormContainer, FormSection, SplitPane } from '@esmart/ui/components/Layout';
 import { Text } from '@esmart/ui/components/Text';
@@ -58,7 +58,26 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
   // One saved as Other before keeps its own type.
   const allowedKinds = kindOptions.filter((k) => hasPurchases || k === 'customer' || (k === party?.kind && !buysFrom(k)));
   // A saved party keeps its type whatever the plan; a new one starts as the route says, if the plan has it.
-  const [kind, setKind] = useState<PartyKind>(party?.kind ?? (allowedKinds.includes(routeKind) ? routeKind : 'customer'));
+  // Worked out each time, not fixed when the form opens: the plan may still be loading then, and a
+  // supplier's form would start (and stay) on Customer. A type picked in the tabs wins.
+  const [picked, setPicked] = useState<PartyKind | undefined>(party?.kind);
+  const kind: PartyKind = picked && allowedKinds.includes(picked) ? picked : party?.kind ?? (allowedKinds.includes(routeKind) ? routeKind : 'customer');
+  /**
+   * A new contact's type picked in the tabs: the title follows, and in a browser the address too
+   * (suppliers/new for a supplier, customers/new for a customer, ?kind=both or general for the others),
+   * swapped in place so what was typed stays and Back still returns where it came from.
+   */
+  const setKind = (next: PartyKind) => {
+    setPicked(next);
+    if (party || Platform.OS !== 'web' || typeof window === 'undefined') return;
+    const query = new URLSearchParams(window.location.search);
+    if (next === 'both' || next === 'general') query.set('kind', next);
+    else query.delete('kind');
+    const path = next === 'supplier' ? '/parties/suppliers/new' : '/parties/customers/new';
+    window.history.replaceState(window.history.state, '', `${path}${query.toString() ? `?${query}` : ''}`);
+  };
+  const newTitle =
+    kind === 'supplier' ? tr('nav:title.newSupplier') : kind === 'both' ? tr('contacts:hub.newBoth') : kind === 'general' ? tr('contacts:hub.newContact') : tr('nav:title.newCustomer');
   const backTo = party ? `/(app)/parties/${party.kind === 'supplier' ? 'suppliers' : 'customers'}/${party.id}` : '/(app)/(tabs)/parties';
   const { run: serverSave, saving, blocked } = useServerSave();
   // Always 'phone' in the native apps, so the desktop layout only ever reaches a browser.
@@ -581,6 +600,8 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
   const kindField =
     allowedKinds.length > 1 ? (
       <View style={{ gap: t.spacing.xs }}>
+        {/* A new contact's title says what it is being added as. */}
+        {party ? null : <Stack.Screen options={{ title: newTitle }} />}
         <Segmented options={allowedKinds.map((k) => ({ value: k, label: tr(`contacts:kind.${k}`) }))} value={kind} onChange={(v) => setKind(v as PartyKind)} />
         <Text variant="caption" tone="muted">
           {tr(`contacts:kindHint.${kind}`)}
