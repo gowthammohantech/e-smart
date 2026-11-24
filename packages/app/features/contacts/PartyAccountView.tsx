@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Button } from '@esmart/ui/components/Button';
 import { Card } from '@esmart/ui/components/Card';
@@ -60,6 +60,16 @@ export function PartyAccountView({ party, owed }: { party: Party; owed?: Money }
   const { t: tr } = useTranslation(['contacts', 'common', 'books']);
   const statement = usePartyStatement(party.id, ALL_TIME);
   const [picked, setPicked] = useState<Group | undefined>();
+  // Back on the page after adjusting an advance, recording a receipt or raising a note: read it again.
+  // The first focus is the page opening, which reads it already.
+  const refetchStatement = statement.refetch;
+  const focusedOnce = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      if (focusedOnce.current) void refetchStatement();
+      focusedOnce.current = true;
+    }, [refetchStatement]),
+  );
   // A supplier's account reads the other way: positive is what we owe them.
   const supplier = party.kind === 'supplier';
 

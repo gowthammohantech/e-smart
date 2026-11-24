@@ -769,7 +769,7 @@ export type AdjustmentAllocation = Schema<'AdjustmentAllocation'>;
 export async function adjustOnServer(partyId: string, side: 'customer' | 'supplier', allocations?: AdjustmentAllocation[]) {
   const companyId = useAppStore.getState().activeCompanyId;
   const { data } = await api.POST('/companies/{companyId}/payments/adjust', { params: { path: { companyId } }, body: { partyId, side, allocations } });
-  for (const key of [['adjustable', companyId], documentKeys.all(companyId), paymentKeys.all(companyId), partyKeys.all(companyId), ['reports', companyId], ['books', companyId]]) {
+  for (const key of [['adjustable', companyId], documentKeys.all(companyId), paymentKeys.all(companyId), partyKeys.all(companyId), ['partyStatement', companyId], ['reports', companyId], ['books', companyId]]) {
     void queryClient.invalidateQueries({ queryKey: key });
   }
   // The payments it rewrote and the documents it settled, into the device's book now: a payment or
