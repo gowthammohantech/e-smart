@@ -310,7 +310,7 @@ export function PartyAccountView({ party, owed }: { party: Party; owed?: Money }
           <View style={{ alignSelf: desktop ? 'flex-start' : 'stretch', maxWidth: '100%' }}>
             <Segmented
               size="sm"
-              options={tabs.map((g) => ({ value: g, label: `${groupInfo[g].title} (${rowsOf(g).length})` }))}
+              options={tabs.map((g) => ({ value: g, label: `${groupInfo[g].title} (${rowsOf(g).length})`, color: groupInfo[g].color }))}
               value={tab}
               onChange={(v) => setPicked(v as Group)}
             />
