@@ -523,7 +523,7 @@
   "eInvoicing": {
     "daysSuffix": "days",
     "noTransporter": "None",
-    "transporterHint": "Filled into Part-B of new e-way bills; change it on any bill.",
+    "transporterHint": "Filled into Part-B of new E-way bills; change it on any bill.",
     "noTransportersHint": "Add your transporters under Settings › Transporters to pick a default."
   },
   "deleteAccount": {
