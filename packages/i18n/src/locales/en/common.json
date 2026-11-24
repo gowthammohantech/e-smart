@@ -431,6 +431,7 @@
     "keepExploring": "Keep exploring"
   },
   "accountStatus": {
+    "active": "Active",
     "inactive": "Inactive",
     "inactiveHint": "{{name}} is inactive. Make it active in Payment accounts to record money in it."
   }

@@ -156,7 +156,11 @@ export default function AccountSettings() {
       editing.id ? tr('settings:accounts.updated') : tr('settings:accounts.added'),
       { icon: 'bank-check' },
     );
-    if (res) setEditing(null);
+    if (res) {
+      setEditing(null);
+      // The balances are the server's: read them again, so an opening balance changed here shows at once.
+      void usageQuery.refetch();
+    }
   };
 
   // Ctrl+S (⌘+S) does what Save does, while the form is open.
@@ -219,12 +223,13 @@ export default function AccountSettings() {
               {
                 key: 'default',
                 header: tr('common:table.status'),
-                width: 180,
+                // Default, On invoices, and Active or Inactive: room for all three, wrapping if not.
+                width: 260,
                 render: (a) => (
-                  <View style={{ flexDirection: 'row', gap: 6 }}>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
                     {a.isDefault ? <Badge label={tr('settings:accounts.default')} tone="info" size="sm" /> : null}
                     {a.id === invoiceAccountId ? <Badge label={tr('settings:accounts.onInvoices')} tone="success" size="sm" /> : null}
-                    {a.status === 'inactive' ? <Badge label={tr('common:accountStatus.inactive')} tone="neutral" size="sm" /> : null}
+                    {a.status === 'inactive' ? <Badge label={tr('common:accountStatus.inactive')} tone="neutral" size="sm" /> : <Badge label={tr('common:accountStatus.active')} tone="success" size="sm" />}
                   </View>
                 ),
               },
@@ -269,7 +274,7 @@ export default function AccountSettings() {
                     )}
                     {a.isDefault ? <Badge label={tr('settings:accounts.default')} tone="info" size="sm" /> : null}
                     {a.id === invoiceAccountId ? <Badge label={tr('settings:accounts.onInvoices')} tone="success" size="sm" /> : null}
-                    {a.status === 'inactive' ? <Badge label={tr('common:accountStatus.inactive')} tone="neutral" size="sm" /> : null}
+                    {a.status === 'inactive' ? <Badge label={tr('common:accountStatus.inactive')} tone="neutral" size="sm" /> : <Badge label={tr('common:accountStatus.active')} tone="success" size="sm" />}
                   </View>
                 }
                 onPress={() => open(a)}
@@ -426,7 +431,7 @@ export default function AccountSettings() {
         onConfirm={() => {
           const a = confirmDelete;
           setConfirmDelete(null);
-          if (a) void serverSave(() => removePaymentAccount(a.id), tr('settings:accounts.deleted'), { icon: 'bank-remove' });
+          if (a) void serverSave(() => removePaymentAccount(a.id), tr('settings:accounts.deleted'), { icon: 'bank-remove' }).then(() => usageQuery.refetch());
         }}
       />
     </View>
