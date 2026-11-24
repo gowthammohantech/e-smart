@@ -265,7 +265,7 @@
     "crossBorderWithoutTax": "Without tax",
     "referenceBadge": "Ref {{reference}}",
     "theirNumber": "Their no. {{number}}",
-    "paid": "Paid",
+    "paid": "Settled",
     "settlement": {
       "customerPayments": "Customer payments",
       "supplierPayments": "Supplier payments",
