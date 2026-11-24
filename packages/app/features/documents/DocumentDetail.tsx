@@ -260,6 +260,13 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
       creditCount: credits.length + applied.length,
     };
   }, [record, allDocuments, doc.id, doc.totals.grandTotal.minor, doc.currency, outstanding.minor, relatedPayments]);
+  // Debit notes raised on this invoice: what they still owe adds to the outstanding shown here, broken
+  // up below it, and Record payment takes them along, ticked in full beside the invoice.
+  const debitDue = (record?.linkedDocuments ?? [])
+    .filter((d) => doc.kind === 'invoice' && d.kind === 'debitNote' && !!d.id && !!d.number && !!d.status && !['draft', 'requested', 'cancelled', 'rejected'].includes(d.status) && ((d.outstanding as Money | undefined)?.minor ?? 0) > 0)
+    .map((d) => ({ id: d.id!, number: d.number!, outstanding: d.outstanding as Money }));
+  const totalDue = money(outstanding.minor + debitDue.reduce((a, d) => a + d.outstanding.minor, 0), doc.currency);
+  const payRoute = debitDue.length ? `${paymentRoute}&with=${debitDue.map((d) => d.id).join(',')}` : paymentRoute;
   // Late only while something is still owed: a paid invoice past its date isn't overdue.
   const owing = isPayable && isFinalized(doc.status) && doc.status !== 'cancelled' && doc.status !== 'paid' && outstanding.minor > 0;
   const overdueDays = doc.dueDate && owing ? daysBetween(doc.dueDate, today()) : 0;
@@ -762,13 +769,13 @@ ${url}`;
     </>
   );
   const payButtons =
-    (!recordPending && outstanding.minor > 0) || (canAdjust && !recordPending) ? (
+    (!recordPending && totalDue.minor > 0) || (canAdjust && !recordPending) ? (
       <>
-        {!recordPending && outstanding.minor > 0 ? (
+        {!recordPending && totalDue.minor > 0 ? (
           <Button
             title={receivable ? tr('common:action.recordPayment') : tr('sales:detail.paySupplier')}
             icon={receivable ? 'cash-plus' : 'cash-minus'}
-            onPress={() => router.push(paymentRoute as never)}
+            onPress={() => router.push(payRoute as never)}
             fullWidth
           />
         ) : null}
@@ -795,8 +802,8 @@ ${url}`;
               {recordPending ? (
                 <Skeleton height={22} width={110} radius={4} />
               ) : (
-                <Text variant="h3" weight="700" tone={outstanding.minor > 0 ? (overdueDays > 0 ? 'bad' : 'warn') : 'good'}>
-                  {formatMoney(outstanding)}
+                <Text variant="h3" weight="700" tone={totalDue.minor > 0 ? (overdueDays > 0 ? 'bad' : 'warn') : 'good'}>
+                  {formatMoney(totalDue)}
                 </Text>
               )}
             </View>
@@ -822,12 +829,41 @@ ${url}`;
             <StatusBar
               emptyLabel={tr('sales:detail.nothingLeft')}
               segments={[
-                { key: 'outstanding', label: tr('sales:detail.outstanding'), total: outstanding, color: overdueDays > 0 ? t.c.bad : t.c.warn },
+                { key: 'outstanding', label: tr('sales:detail.outstanding'), total: totalDue, color: overdueDays > 0 ? t.c.bad : t.c.warn },
                 { key: 'payments', label: tr(receivable ? 'sales:detail.settlement.customerPayments' : 'sales:detail.settlement.supplierPayments'), count: settlement.paymentCount, total: settlement.payments, color: t.c.good },
                 { key: 'credit', label: tr('sales:detail.settlement.creditNotes'), count: settlement.creditCount, total: settlement.credited, color: seriesColor(t.scheme, 0) },
               ].filter((s) => s.total.minor > 0)}
             />
           )}
+
+          {/* What the outstanding is made of when debit notes add to it: the invoice, then each note (tap to open). */}
+          {!recordPending && debitDue.length ? (
+            <View style={{ gap: 2, borderTopWidth: 0.5, borderTopColor: t.c.line, paddingTop: t.spacing.sm }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm, paddingVertical: 5 }}>
+                <Text variant="small" style={{ flex: 1 }} numberOfLines={1}>
+                  {tr('sales:detail.related.invoiceDue')}
+                </Text>
+                <Text variant="small" weight="600" style={{ fontVariant: ['tabular-nums'] }}>
+                  {formatMoney(outstanding)}
+                </Text>
+              </View>
+              {debitDue.map((d) => (
+                <Pressable
+                  key={d.id}
+                  onPress={() => router.push(detailRouteFor('debitNote', d.id) as never)}
+                  accessibilityRole="button"
+                  style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm, paddingVertical: 5, opacity: pressed ? 0.7 : 1 })}
+                >
+                  <Text variant="small" tone="primary" style={{ flex: 1 }} numberOfLines={1}>
+                    {tr('sales:detail.related.debitNoteDue', { number: d.number })}
+                  </Text>
+                  <Text variant="small" weight="600" style={{ fontVariant: ['tabular-nums'] }}>
+                    {formatMoney(d.outstanding)}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
 
           {/* Full width in the narrow side column, one above the other, as on a phone. */}
           {payButtons}
@@ -1354,8 +1390,8 @@ ${url}`;
             icon: (receivable ? 'cash-plus' : 'cash-minus') as IconName,
             onPress: () => {
               if (!isFinalized(doc.status)) return toast.show(tr('common:documentDetail.issueFirst'), 'warning');
-              if (outstanding.minor <= 0) return toast.show(tr('common:documentDetail.nothingDue'), 'info', { icon: 'check-decagram-outline', detail: doc.number });
-              router.push(paymentRoute as never);
+              if (totalDue.minor <= 0) return toast.show(tr('common:documentDetail.nothingDue'), 'info', { icon: 'check-decagram-outline', detail: doc.number });
+              router.push(payRoute as never);
             },
           },
         ]
