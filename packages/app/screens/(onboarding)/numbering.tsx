@@ -54,7 +54,7 @@ export default function NumberingStep() {
           value={draft.invoicePrefix}
           onChangeText={(v) => set({ invoicePrefix: sanitizePrefix(v) })}
           placeholder="INV"
-          autoCapitalize="characters"
+          autoCapitalize="none"
           containerStyle={short}
         />
         <TextField

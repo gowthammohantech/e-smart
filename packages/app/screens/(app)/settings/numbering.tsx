@@ -186,7 +186,7 @@ export default function NumberingSettings() {
               onChangeText={(v) => setPrefix(sanitizePrefix(v))}
               error={prefixError}
               hint={tooLong && !eInvoicing ? tr('settings:numbering.tooLongForEInvoice', { count: E_INVOICE_DOC_NUMBER_MAX }) : undefined}
-              autoCapitalize="characters"
+              autoCapitalize="none"
               containerStyle={{ flex: 1 }}
             />
             <TextField
