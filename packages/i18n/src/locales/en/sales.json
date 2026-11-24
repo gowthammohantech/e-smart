@@ -268,8 +268,6 @@
     "paid": "Settled",
     "related": {
       "debitNotes": "Debit notes",
-      "invoiceDue": "This invoice",
-      "debitNoteDue": "Debit note {{number}}",
       "applied": "Applied",
       "noCreditNotes": "No credit notes or returns against this yet",
       "noDebitNotes": "No debit notes against this yet",
