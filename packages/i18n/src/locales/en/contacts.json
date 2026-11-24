@@ -275,7 +275,6 @@
     "paid": "Paid",
     "other": "TDS & journals",
     "balance": "Balance",
-    "total": "Total",
     "particulars": "Particulars",
     "taxableGst": "Taxable {{taxable}} · GST {{tax}}",
     "advanceHeld": "{{amount}} of this was received in advance and is not yet applied to an invoice.",
@@ -287,6 +286,20 @@
       "payment": "Payment",
       "refund": "Refund",
       "journal": "Journal"
-    }
+    },
+    "sections": {
+      "invoices": "Invoices",
+      "bills": "Bills",
+      "receipts": "Receipts",
+      "payments": "Payments"
+    },
+    "words": {
+      "settled": "All settled",
+      "theyOwe": "They owe you",
+      "youOwe": "You owe them",
+      "paidAheadByThem": "They have paid ahead: you hold this for them",
+      "paidAheadToThem": "You have paid ahead: they hold this for you"
+    },
+    "empty": "Nothing on this account yet"
   }
 }
