@@ -300,6 +300,7 @@
       "paidAheadByThem": "They have paid ahead: you hold this for them",
       "paidAheadToThem": "You have paid ahead: they hold this for you"
     },
-    "empty": "Nothing on this account yet"
+    "empty": "Nothing on this account yet",
+    "tabTotal": "Total"
   }
 }

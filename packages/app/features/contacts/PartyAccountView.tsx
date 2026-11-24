@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -8,6 +8,7 @@ import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { ListRow } from '@esmart/ui/components/ListRow';
 import { Text } from '@esmart/ui/components/Text';
 import { Cell, DataTable, TABLE_PAGE_SIZE, TABLE_PAGE_SIZES } from '@esmart/ui/components/DataTable';
+import { Segmented } from '@esmart/ui/components/Field';
 import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { seriesColor } from '@esmart/ui/theme/chartColors';
 import { documentKindLabel, paymentMethodLabel } from '@esmart/core/labels';
@@ -46,9 +47,9 @@ const ALL_TIME = { from: '2000-01-01' };
 
 /**
  * A party's whole account on their page: the opening balance, what was invoiced, the debit notes, the
- * credit notes and returns, and what was received, adding up to the balance; then a table for each of
- * those, line by line with its particulars (taxable value and GST, or how it was paid). The figures
- * are the server's statement's.
+ * credit notes and returns, and what was received, adding up to the balance; then a tab for each of
+ * those, its table line by line with its particulars (taxable value and GST, or how it was paid). The
+ * figures are the server's statement's.
  */
 export function PartyAccountView({ party, advance }: { party: Party; advance?: Money }) {
   const t = useTheme();
@@ -56,6 +57,7 @@ export function PartyAccountView({ party, advance }: { party: Party; advance?: M
   const router = useRouter();
   const { t: tr } = useTranslation(['contacts', 'common', 'books']);
   const statement = usePartyStatement(party.id, ALL_TIME);
+  const [picked, setPicked] = useState<Group | undefined>();
   // A supplier's account reads the other way: positive is what we owe them.
   const supplier = party.kind === 'supplier';
 
@@ -201,10 +203,11 @@ export function PartyAccountView({ party, advance }: { party: Party; advance?: M
     const total = totalOf(g);
     return (
       <View key={g} style={{ gap: t.spacing.sm }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
+        {/* What the tab's lines come to, beside its colour in the summary. */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: t.spacing.sm }}>
           <View style={{ width: 10, height: 10, borderRadius: 3, backgroundColor: groupInfo[g].color }} />
-          <Text variant="caption" tone="muted" weight="600" style={{ flex: 1, textTransform: 'uppercase', letterSpacing: 0.8 }}>
-            {`${groupInfo[g].title} (${rows.length})`}
+          <Text variant="small" tone="muted">
+            {tr('contacts:account.tabTotal')}
           </Text>
           <Text variant="small" weight="700" style={{ fontVariant: ['tabular-nums'] }}>
             {formatMoney({ minor: Math.abs(total), currency })}
@@ -255,11 +258,24 @@ export function PartyAccountView({ party, advance }: { party: Party; advance?: M
   if (statement.isError) {
     return <EmptyState icon="alert-circle-outline" title={tr('contacts:statement.loadFailed')} message={describeError(statement.error, tr)} actionLabel={tr('common:action.retry')} onAction={() => void statement.refetch()} />;
   }
+  // A tab for each kind that has lines, with how many; the first until one is picked.
+  const tabs = GROUPS.filter((g) => rowsOf(g).length);
+  const tab = picked && tabs.includes(picked) ? picked : tabs[0];
   return (
     <View style={{ gap: t.spacing.xl }}>
       {summary}
-      {lines.length ? (
-        GROUPS.filter((g) => rowsOf(g).length).map(table)
+      {tab ? (
+        <View style={{ gap: t.spacing.md }}>
+          <View style={{ alignSelf: desktop ? 'flex-start' : 'stretch', maxWidth: '100%' }}>
+            <Segmented
+              size="sm"
+              options={tabs.map((g) => ({ value: g, label: `${groupInfo[g].title} (${rowsOf(g).length})` }))}
+              value={tab}
+              onChange={(v) => setPicked(v as Group)}
+            />
+          </View>
+          {table(tab)}
+        </View>
       ) : (
         <EmptyState icon="book-open-outline" title={tr('contacts:account.empty')} compact />
       )}
