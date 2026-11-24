@@ -262,5 +262,31 @@
       "details": "Details",
       "balance": "Opening balance"
     }
+  },
+  "account": {
+    "tab": "Account",
+    "summary": "Account summary",
+    "opening": "Opening balance",
+    "invoiced": "Invoiced",
+    "billed": "Billed",
+    "debitNotes": "Debit notes",
+    "creditNotes": "Credit notes & returns",
+    "received": "Received",
+    "paid": "Paid",
+    "other": "TDS & journals",
+    "balance": "Balance",
+    "total": "Total",
+    "particulars": "Particulars",
+    "taxableGst": "Taxable {{taxable}} · GST {{tax}}",
+    "advanceHeld": "{{amount}} of this was received in advance and is not yet applied to an invoice.",
+    "advancePaid": "{{amount}} of this was paid in advance and is not yet applied to a bill.",
+    "kind": {
+      "tds": "TDS",
+      "receipt": "Receipt",
+      "advanceReceipt": "Advance receipt",
+      "payment": "Payment",
+      "refund": "Refund",
+      "journal": "Journal"
+    }
   }
 }
