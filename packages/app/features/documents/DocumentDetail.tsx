@@ -769,6 +769,25 @@ ${url}`;
       </Card>
     </>
   );
+  // Each heading's sum in the bar's colours: Outstanding is the orange and purple parts, Settled the green and blue.
+  const outstandingColor = overdueDays > 0 ? t.c.bad : t.c.warn;
+  const partsOf = (colors: (string | false)[]) => {
+    const shown = colors.filter((c): c is string => !!c);
+    return shown.length ? (
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+        {shown.map((c, i) => (
+          <React.Fragment key={c}>
+            {i ? (
+              <Text variant="caption" tone="muted">
+                {'+'}
+              </Text>
+            ) : null}
+            <View style={{ width: 9, height: 9, borderRadius: 3, backgroundColor: c }} />
+          </React.Fragment>
+        ))}
+      </View>
+    ) : null;
+  };
   const payButtons =
     (!recordPending && totalDue.minor > 0) || (canAdjust && !recordPending) ? (
       <>
@@ -799,7 +818,10 @@ ${url}`;
         <Card style={{ marginTop: desktop ? 0 : t.spacing.md, gap: t.spacing.md }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
             <View style={{ gap: 3 }}>
-              <Text variant="caption" tone="muted">{tr('sales:detail.outstanding')}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
+                <Text variant="caption" tone="muted">{tr('sales:detail.outstanding')}</Text>
+                {recordPending ? null : partsOf([outstanding.minor > 0 && outstandingColor, debitDueTotal.minor > 0 && seriesColor(t.scheme, 4)])}
+              </View>
               {recordPending ? (
                 <Skeleton height={22} width={110} radius={4} />
               ) : (
@@ -809,9 +831,12 @@ ${url}`;
               )}
             </View>
             <View style={{ alignItems: 'flex-end', gap: 3 }}>
-              <Text variant="caption" tone="muted">
-                {tr('sales:detail.paid')}
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
+                {recordPending ? null : partsOf([settlement.payments.minor > 0 && t.c.good, settlement.credited.minor > 0 && seriesColor(t.scheme, 0)])}
+                <Text variant="caption" tone="muted">
+                  {tr('sales:detail.paid')}
+                </Text>
+              </View>
               {recordPending ? (
                 <Skeleton height={18} width={90} radius={4} />
               ) : (
@@ -830,7 +855,7 @@ ${url}`;
             <StatusBar
               emptyLabel={tr('sales:detail.nothingLeft')}
               segments={[
-                { key: 'outstanding', label: tr('sales:detail.outstanding'), total: outstanding, color: overdueDays > 0 ? t.c.bad : t.c.warn },
+                { key: 'outstanding', label: tr('sales:detail.outstanding'), total: outstanding, color: outstandingColor },
                 // What its debit notes still owe, part of the outstanding in the heading.
                 { key: 'debit', label: tr('sales:detail.related.debitNotes'), count: debitDue.length, total: debitDueTotal, color: seriesColor(t.scheme, 4) },
                 { key: 'payments', label: tr(receivable ? 'sales:detail.settlement.customerPayments' : 'sales:detail.settlement.supplierPayments'), count: settlement.paymentCount, total: settlement.payments, color: t.c.good },
