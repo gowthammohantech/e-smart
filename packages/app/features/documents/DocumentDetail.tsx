@@ -855,7 +855,8 @@ ${url}`;
             <StatusBar
               emptyLabel={tr('sales:detail.nothingLeft')}
               segments={[
-                { key: 'outstanding', label: tr('sales:detail.outstanding'), total: outstanding, color: outstandingColor },
+                // "Invoice due", not Outstanding: the heading's Outstanding has the debit notes in it too.
+                { key: 'outstanding', label: tr('sales:detail.related.kindDue', { kind: kindName }), total: outstanding, color: outstandingColor },
                 // What its debit notes still owe, part of the outstanding in the heading.
                 { key: 'debit', label: tr('sales:detail.related.debitNotes'), count: debitDue.length, total: debitDueTotal, color: seriesColor(t.scheme, 4) },
                 { key: 'payments', label: tr(receivable ? 'sales:detail.settlement.customerPayments' : 'sales:detail.settlement.supplierPayments'), count: settlement.paymentCount, total: settlement.payments, color: t.c.good },
