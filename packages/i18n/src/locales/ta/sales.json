@@ -265,7 +265,12 @@
     "crossBorderWithoutTax": "வரி இல்லாமல்",
     "referenceBadge": "குறிப்பு: {{reference}}",
     "theirNumber": "அவர்களின் எண்: {{number}}",
-    "paid": "செலுத்தப்பட்ட தொகை",
+    "paid": "தீர்க்கப்பட்ட தொகை",
+    "settlement": {
+      "customerPayments": "வாடிக்கையாளர் கட்டணங்கள்",
+      "supplierPayments": "சப்ளையர் கட்டணங்கள்",
+      "creditNotes": "வரவுக் குறிப்புகள்"
+    },
     "paySupplier": "சப்ளையருக்குச் செலுத்து",
     "paymentNumber": "கட்டணம் {{number}}",
     "sendEmail": "மின்னஞ்சலில் அனுப்பு",
@@ -383,6 +388,8 @@
     "notes": "குறிப்புகள்",
     "notesPlaceholder": "உள் குறிப்பு",
     "serviceAdvance": "சேவைகளுக்கான முன்பணம்",
+    "includesGst": "GST {{amount}} உட்பட",
+    "gstIncluded": "GST உட்பட",
     "advanceService": "சேவை",
     "advanceServicePick": "சேவையைத் தேர்ந்தெடுக்கவும்",
     "advanceTaxMode": "வரி",

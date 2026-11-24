@@ -215,8 +215,9 @@ export default function ItemList() {
               <SearchBar compact value={query} onChangeText={setQuery} placeholder={tr('inventory:catalog.search')} />
             </View>
             {filters}
+            {/* Pushes Import to the right; on a narrow desktop Import wraps to the next line whole. */}
             <View style={{ flex: 1 }} />
-            <Button title={tr('inventory:import.action')} icon="upload" variant="ghost" size="sm" onPress={() => router.push('/(app)/catalog/items/import' as never)} />
+            <Button title={tr('inventory:import.action')} icon="upload" variant="ghost" size="sm" style={{ flexShrink: 0 }} onPress={() => router.push('/(app)/catalog/items/import' as never)} />
           </View>
           <DataTable
             columns={([
@@ -297,7 +298,7 @@ export default function ItemList() {
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: t.spacing.sm }}>
           {showFilters ? filters : null}
           <View style={{ flex: 1 }} />
-          <Button title={tr('inventory:import.action')} icon="upload" variant="ghost" size="sm" onPress={() => router.push('/(app)/catalog/items/import' as never)} />
+          <Button title={tr('inventory:import.action')} icon="upload" variant="ghost" size="sm" style={{ flexShrink: 0 }} onPress={() => router.push('/(app)/catalog/items/import' as never)} />
         </View>
         {pages.isError && !filtered.length ? (
           <Card padded={false}>

@@ -265,7 +265,12 @@
     "crossBorderWithoutTax": "Without tax",
     "referenceBadge": "Ref {{reference}}",
     "theirNumber": "Their no. {{number}}",
-    "paid": "Paid",
+    "paid": "Settled",
+    "settlement": {
+      "customerPayments": "Customer payments",
+      "supplierPayments": "Supplier payments",
+      "creditNotes": "Credit notes"
+    },
     "paySupplier": "Pay supplier",
     "paymentNumber": "Payment {{number}}",
     "sendEmail": "Send by email",
@@ -383,6 +388,8 @@
     "notes": "Notes",
     "notesPlaceholder": "Internal note",
     "serviceAdvance": "Advance for services",
+    "includesGst": "Includes GST {{amount}}",
+    "gstIncluded": "GST included",
     "advanceService": "Service",
     "advanceServicePick": "Pick a service",
     "advanceTaxMode": "Tax",

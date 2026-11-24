@@ -203,8 +203,10 @@ export default function ContactsTab() {
             placeholder={general ? tr('contacts:hub.searchOther') : asCustomer ? tr('contacts:hub.searchCustomers') : tr('contacts:hub.searchSuppliers')}
           />
         </View>
-        {/* Count and balance read together; Import sits apart on the right, all on one centred line. */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md, ...(desktop ? { flex: 1, justifyContent: 'flex-end' } : null) }}>
+        {/* Count and balance read together; Import sits apart on the right, all on one centred line. On a
+            narrow desktop (a tablet, or a small laptop with the sidebar open) it drops to a line of its own
+            rather than squeezing Import down to its icon. */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md, ...(desktop ? { flexGrow: 1, flexShrink: 0, justifyContent: 'flex-end' } : null) }}>
           {/* No "0 customers" before the count is in. */}
           {!summary && !summaryQuery.isError ? (
             <View style={desktop ? { width: 200 } : { flex: 1 }}>
@@ -223,7 +225,7 @@ export default function ContactsTab() {
             ) : null}
           </Text>
           )}
-          <Button title={tr('contacts:import.action')} icon="upload" variant="ghost" size="sm" onPress={() => router.push('/(app)/parties/import' as never)} />
+          <Button title={tr('contacts:import.action')} icon="upload" variant="ghost" size="sm" style={{ flexShrink: 0 }} onPress={() => router.push('/(app)/parties/import' as never)} />
         </View>
       </View>
 

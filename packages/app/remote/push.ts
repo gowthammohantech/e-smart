@@ -1,20 +1,20 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
-import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import { reportError } from '../lib/reporter';
 import { useAppStore } from '../store/appStore';
 import { api } from './api';
+import { Notifications } from './notifications';
 
 /** The token this device registered, so signing out can take it back. */
 const KEY = 'ebs.push.token';
 
 /** Android channels, matching the server's `channelId` per kind (apps/api/src/lib/notify.ts). */
-const CHANNELS: { id: string; name: string; importance: Notifications.AndroidImportance }[] = [
-  { id: 'payments', name: 'Payments and overdue invoices', importance: Notifications.AndroidImportance.HIGH },
-  { id: 'compliance', name: 'E-invoices and e-way bills', importance: Notifications.AndroidImportance.HIGH },
-  { id: 'stock', name: 'Low stock', importance: Notifications.AndroidImportance.DEFAULT },
-  { id: 'general', name: 'Everything else', importance: Notifications.AndroidImportance.DEFAULT },
+const CHANNELS: { id: string; name: string; importance: 'HIGH' | 'DEFAULT' }[] = [
+  { id: 'payments', name: 'Payments and overdue invoices', importance: 'HIGH' },
+  { id: 'compliance', name: 'E-invoices and e-way bills', importance: 'HIGH' },
+  { id: 'stock', name: 'Low stock', importance: 'DEFAULT' },
+  { id: 'general', name: 'Everything else', importance: 'DEFAULT' },
 ];
 
 /** Expo's push service issues tokens per Expo project; without one there's nothing to register. */
@@ -24,7 +24,7 @@ function projectId(): string | undefined {
 }
 
 /** Shown while the app is open too, as a banner. Phones only: the web app gets no push. */
-if (Platform.OS !== 'web') {
+if (Notifications) {
   Notifications.setNotificationHandler({
     handleNotification: async () => ({ shouldShowBanner: true, shouldShowList: true, shouldPlaySound: false, shouldSetBadge: false }),
   });
@@ -33,7 +33,7 @@ if (Platform.OS !== 'web') {
 export type PushPermission = 'granted' | 'denied' | 'undetermined' | 'unavailable';
 
 export async function pushPermission(): Promise<PushPermission> {
-  if (Platform.OS === 'web' || !projectId()) return 'unavailable';
+  if (!Notifications || !projectId()) return 'unavailable';
   const { status } = await Notifications.getPermissionsAsync();
   return status as PushPermission;
 }
@@ -47,12 +47,12 @@ export async function ensurePushRegistered(opts: { ask: boolean }): Promise<bool
   try {
     const id = projectId();
     // The demo is shared by everyone trying it: nobody's phone gets its notifications.
-    if (Platform.OS === 'web' || !id || useAppStore.getState().session.demo) return false;
+    if (!Notifications || !id || useAppStore.getState().session.demo) return false;
     let { status, canAskAgain } = await Notifications.getPermissionsAsync();
     if (status !== 'granted' && opts.ask && canAskAgain) ({ status } = await Notifications.requestPermissionsAsync());
     if (status !== 'granted') return false;
     if (Platform.OS === 'android') {
-      for (const c of CHANNELS) await Notifications.setNotificationChannelAsync(c.id, { name: c.name, importance: c.importance });
+      for (const c of CHANNELS) await Notifications.setNotificationChannelAsync(c.id, { name: c.name, importance: Notifications.AndroidImportance[c.importance] });
     }
     const token = (await Notifications.getExpoPushTokenAsync({ projectId: id })).data;
     // The server moves a token to whoever registers it last (a handed-over phone).

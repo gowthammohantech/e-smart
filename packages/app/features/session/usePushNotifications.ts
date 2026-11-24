@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
-import { Platform } from 'react-native';
-import * as Notifications from 'expo-notifications';
+import type { NotificationResponse } from 'expo-notifications';
 import { useRouter } from 'expo-router';
+import { Notifications } from '../../remote/notifications';
 import { ensurePushRegistered, routeForNotification } from '../../remote/push';
 
 /** The notification that opened the app is handled once, not on every later sign-in. */
@@ -14,9 +14,9 @@ let launchHandled = false;
 export function usePushNotifications(signedIn: boolean) {
   const router = useRouter();
   useEffect(() => {
-    if (!signedIn || Platform.OS === 'web') return;
+    if (!signedIn || !Notifications) return;
     void ensurePushRegistered({ ask: false });
-    const open = (response: Notifications.NotificationResponse | null) => {
+    const open = (response: NotificationResponse | null) => {
       const route = routeForNotification(response?.notification.request.content.data as Record<string, unknown> | undefined);
       if (route) router.push(route as never);
     };

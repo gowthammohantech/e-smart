@@ -26,7 +26,7 @@ import type { DocumentKind } from '@esmart/core/types';
 import { INDIAN_STATES } from '@esmart/core/data/masters';
 import { paymentMethodLabel } from '@esmart/core/labels';
 import { formatMoney } from '@esmart/core/lib/format';
-import { money } from '@esmart/core/lib/money';
+import { inclusiveTax, money } from '@esmart/core/lib/money';
 import { formatDate, formatDateTime } from '@esmart/core/lib/date';
 import { useGoBack } from '@esmart/app/navigation/useGoBack';
 
@@ -107,6 +107,8 @@ export function PaymentDetailDesktop() {
   // Money paid out is the business doing what it meant to, not an error: neutral, not red.
   const tone = isIn ? t.c.good : t.c.text;
   const allocated = money(payment.amount.minor - payment.unallocated.minor, payment.amount.currency);
+  // GST + cess rate on a with-tax advance (0 when it carries none), for the GST inside each applied amount.
+  const advanceGstRate = payment.advanceTax && !payment.advanceTax.reverseCharge ? payment.advanceTax.rate + (payment.advanceTax.cessRate ?? 0) : 0;
 
   // Date, method, account and reference are along the top already; this card has the rest.
   const details = [
@@ -217,6 +219,22 @@ export function PaymentDetailDesktop() {
                       </View>
                     ),
                   },
+                  // A with-tax advance: the GST inside what was applied to each document.
+                  ...(advanceGstRate
+                    ? [
+                        {
+                          key: 'gst',
+                          header: tr('sales:payment.gstIncluded'),
+                          flex: 1,
+                          align: 'right' as const,
+                          render: (a: Allocation) => (
+                            <Cell mono tone="muted">
+                              {formatMoney(inclusiveTax(a.amount, advanceGstRate))}
+                            </Cell>
+                          ),
+                        },
+                      ]
+                    : []),
                   {
                     key: 'amount',
                     header: tr('common:table.applied'),
