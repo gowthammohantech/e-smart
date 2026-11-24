@@ -4,6 +4,7 @@ import { DEFAULT_PREFIXES, defaultSeries, formatNumber, type SeriesKind } from '
 import type { VoucherKind } from '@esmart/core/types';
 import { schema } from '@esmart/db';
 import { conflict, unprocessable } from '../http/errors';
+import { kindName } from './names';
 import type { DbOrTx } from './audit';
 import { newId } from './ids';
 
@@ -63,7 +64,7 @@ export async function assignNumber(
       .onConflictDoNothing();
     [series] = await tx.select().from(S).where(and(eq(S.companyId, opts.companyId), eq(S.kind, opts.kind))).for('update');
   }
-  if (!series) throw conflict('NUMBERING_SERIES_MISSING', `The company has no numbering series for ${opts.kind}`);
+  if (!series) throw conflict('NUMBERING_SERIES_MISSING', `There is no numbering series set up for ${kindName(opts.kind)}. Add one in Settings → Numbering.`);
 
   const [company] = await tx.select({ fy: schema.companies.fiscalYearStartMonth }).from(schema.companies).where(eq(schema.companies.id, opts.companyId));
   let branchCode: string | undefined;

@@ -103,7 +103,7 @@ export async function prepare(ctx: AnyCtx, db: DbOrTx, body: Schema<'Expense'>, 
   if (body.amount.currency !== body.currency) blocking('amount.currency', `Must match the expense currency (${body.currency})`);
   if (!(body.amount.minor > 0)) blocking('amount.minor', 'Must be more than zero');
   const [cur] = await db.select({ code: schema.currencies.code }).from(schema.currencies).where(eq(schema.currencies.code, body.currency));
-  if (!cur) blocking('currency', `Unknown currency ${body.currency}`);
+  if (!cur) blocking('currency', 'Choose a currency from the list');
 
   let rate = 0;
   if (body.taxCategoryId) {

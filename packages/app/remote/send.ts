@@ -1,5 +1,7 @@
 import { ApiError } from '@esmart/api-client';
+import i18n from '@esmart/i18n';
 import { api, isNetworkError } from './api';
+import { describeError } from './errors';
 import { applyEntity, remapIds, unwrap } from './apply';
 import { useRemoteMeta } from './meta';
 import { reportError } from '../lib/reporter';
@@ -55,10 +57,11 @@ async function rebaseAllocatedDocuments(entry: outbox.Entry, entity: Row | undef
   }
 }
 
+const say = (key: any, options?: any) => i18n.t(key, options) as string;
+
 /** What the server said, as a refusal a person can read. */
 function refusal(err: ApiError): Outcome {
-  const detail = err.problem.detail ?? err.problem.title ?? err.message;
-  return { kind: 'rejected', error: detail, ...(err.code && { code: err.code }) };
+  return { kind: 'rejected', error: describeError(err, say), ...(err.code && { code: err.code }) };
 }
 
 /** Sends one change straight to its route and applies the server's answer to the store. */
@@ -73,13 +76,13 @@ async function sendOne(entry: outbox.Entry): Promise<Outcome> {
     ({ data } = await call(entry.method, entry.path, { body, headers }));
   } catch (err) {
     if (isNetworkError(err)) return { kind: 'unreachable' };
-    if (!(err instanceof ApiError)) return { kind: 'rejected', error: err instanceof Error ? err.message : String(err) };
+    if (!(err instanceof ApiError)) return { kind: 'rejected', error: say('auth:remote.failed') };
     if (err.status === 412) {
       // Changed elsewhere since it was read: show the server's copy, and say so.
       const current = entry.method === 'POST' ? undefined : await call('GET', entry.path).catch(() => undefined);
       const entity = unwrap(current?.data);
       if (entity) applyEntity(entry.entityType, entity);
-      return { kind: 'conflict', error: err.problem.detail ?? 'Changed on another device since you edited it', code: err.code };
+      return { kind: 'conflict', error: describeError(err, say), code: err.code };
     }
     return refusal(err);
   }
@@ -145,7 +148,7 @@ async function sendInOrder(ids: string[]): Promise<Map<string, Outcome>> {
     const outcome = await sendOne(entry);
     out.set(id, outcome);
     if (outcome.kind !== 'applied') {
-      for (const rest of ids) if (!out.has(rest)) out.set(rest, outcome.kind === 'unreachable' ? outcome : { kind: 'rejected', error: 'Not sent: an earlier change was refused' });
+      for (const rest of ids) if (!out.has(rest)) out.set(rest, outcome.kind === 'unreachable' ? outcome : { kind: 'rejected', error: say('errors:remote.earlierFailed') });
       break;
     }
   }

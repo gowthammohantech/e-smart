@@ -207,7 +207,7 @@ export const syncHandlers = defineHandlers({
         // A plain seq, from an app that last pulled before cursors had a transaction.
         const [row] = await ctx.db.select({ tx: sql<string>`${CL.txId}::text` }).from(CL).where(eq(CL.seq, Number(since)));
         after = { tx: row?.tx ?? '0', seq: Number(since) };
-      } else throw badRequest('INVALID_CURSOR', 'The cursor is not one this API issued');
+      } else throw badRequest('INVALID_CURSOR', 'This list is out of date. Refresh it and try again.');
     }
     const cursorOf = (at: { tx: string; seq: number }) => `${at.tx}.${at.seq}`;
     if (!companies.length) return { changes: [], cursor: cursorOf(after), hasMore: false };

@@ -24,12 +24,12 @@ import { branchToWire, companyColumns, companyToWire, invoiceBankColumns } from 
 async function validateCompany(db: DbOrTx, body: { country: string; baseCurrency: string; taxRegistration?: { regime: string; identifier?: string } }) {
   const issues: Issue[] = [];
   const [country] = await db.select().from(schema.countries).where(eq(schema.countries.code, body.country));
-  if (!country) issues.push({ field: 'country', message: `Unknown country ${body.country}`, severity: 'blocking' });
+  if (!country) issues.push({ field: 'country', message: 'Choose a country from the list', severity: 'blocking' });
   const [currency] = await db.select().from(schema.currencies).where(eq(schema.currencies.code, body.baseCurrency));
-  if (!currency) issues.push({ field: 'baseCurrency', message: `Unknown currency ${body.baseCurrency}`, severity: 'blocking' });
+  if (!currency) issues.push({ field: 'baseCurrency', message: 'Choose a currency from the list', severity: 'blocking' });
   const tax = body.taxRegistration;
   if (tax?.regime === 'GST' && body.country === 'IN' && tax.identifier && !isValidGstin(normalizeGstin(tax.identifier))) {
-    issues.push({ field: 'taxRegistration.identifier', message: 'This GSTIN is not valid (check digit mismatch)', severity: 'blocking' });
+    issues.push({ field: 'taxRegistration.identifier', message: 'This GSTIN doesn’t look right. Check each character for a typing mistake.', severity: 'blocking' });
   }
   if (issues.length) throw unprocessable(issues);
 }

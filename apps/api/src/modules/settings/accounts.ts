@@ -88,7 +88,7 @@ async function validate(db: DbOrTx, body: Schema<'PaymentAccount'>, today: strin
     issues.push({ field: 'openingBalanceDate', message: 'Opening balance date cannot be in the future', severity: 'blocking' });
   }
   const [cur] = await db.select().from(schema.currencies).where(eq(schema.currencies.code, body.currency));
-  if (!cur) issues.push({ field: 'currency', message: `Unknown currency ${body.currency}`, severity: 'blocking' });
+  if (!cur) issues.push({ field: 'currency', message: 'Choose a currency from the list', severity: 'blocking' });
   // The same shapes the business profile checked when these were typed there.
   if (body.type === 'bank' && body.ifsc?.trim() && !/^[A-Za-z]{4}0[A-Za-z0-9]{6}$/.test(body.ifsc.trim())) {
     issues.push({ field: 'ifsc', message: 'An IFSC is 4 letters, a 0, then 6 letters or digits', severity: 'blocking' });

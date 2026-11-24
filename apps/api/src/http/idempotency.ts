@@ -35,7 +35,7 @@ export function registerIdempotency(app: FastifyInstance, deps: Deps) {
     const key = req.headers['idempotency-key'];
     const user = req.authUser;
     if (!key || !user) return;
-    if (typeof key !== 'string' || !UUID.test(key)) throw badRequest('INVALID_IDEMPOTENCY_KEY', 'Idempotency-Key must be a UUID');
+    if (typeof key !== 'string' || !UUID.test(key)) throw badRequest('INVALID_IDEMPOTENCY_KEY', 'That change could not be saved. Please try again.');
 
     const requestHash = sha256(`${req.method} ${req.url}\n${JSON.stringify(req.body ?? null)}`);
     const now = deps.now();
@@ -61,7 +61,7 @@ export function registerIdempotency(app: FastifyInstance, deps: Deps) {
       return;
     }
     if (prior.requestHash !== requestHash) {
-      throw new ApiError(422, 'IDEMPOTENCY_KEY_REUSED', 'This Idempotency-Key was used for a different request');
+      throw new ApiError(422, 'IDEMPOTENCY_KEY_REUSED', 'That change could not be saved. Please try again.');
     }
     if (prior.responseStatus === null) {
       // Taken over in one statement, so two retries can't both take it.

@@ -28,7 +28,7 @@ async function validate(db: DbOrTx, companyId: string, body: Schema<'ExchangeRat
   if (!(body.rate > 0)) issues.push({ field: 'rate', message: 'Rate must be greater than zero', severity: 'blocking' });
   const known = await db.select({ code: schema.currencies.code }).from(schema.currencies).where(inArray(schema.currencies.code, [body.from, body.to]));
   const codes = new Set(known.map((c) => c.code.trim()));
-  for (const f of ['from', 'to'] as const) if (!codes.has(body[f])) issues.push({ field: f, message: `Unknown currency ${body[f]}`, severity: 'blocking' });
+  for (const f of ['from', 'to'] as const) if (!codes.has(body[f])) issues.push({ field: f, message: 'Choose a currency from the list', severity: 'blocking' });
   if (issues.length) throw unprocessable(issues);
   const filters = [eq(R.companyId, companyId), eq(R.fromCurrency, body.from), eq(R.toCurrency, body.to), eq(R.effectiveFrom, body.effectiveFrom)];
   if (exceptId) filters.push(ne(R.id, exceptId));

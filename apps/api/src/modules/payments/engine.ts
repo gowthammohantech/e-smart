@@ -276,7 +276,7 @@ export async function writePayment(
     blocking('allocations', 'Only an owner, admin or accountant can settle an invoice with a discount');
   }
   const [cur] = await tx.select().from(schema.currencies).where(eq(schema.currencies.code, input.currency));
-  if (!cur) blocking('currency', `Unknown currency ${input.currency}`);
+  if (!cur) blocking('currency', 'Choose a currency from the list');
 
   if (input.branchId && actor.branchIds.length && !actor.branchIds.includes(input.branchId)) blocking('branchId', 'You cannot record payments in this branch');
   let branchId = input.branchId ?? existing?.branchId ?? null;

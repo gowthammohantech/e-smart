@@ -40,14 +40,14 @@ import {
 export type IrpErrorCode = '2150' | '2172' | '2176' | '2182' | '2211' | '3028' | '3029' | 'SIM001';
 
 export const IRP_ERRORS: Record<IrpErrorCode, string> = {
-  '2150': 'Duplicate IRN: this document has already been reported for the financial year',
-  '2172': 'For an intra-state supply, CGST and SGST are applicable, not IGST',
-  '2176': 'HSN code is mandatory on every line',
-  '2182': 'The taxable value does not reconcile with the line values',
-  '2211': 'The supplier GSTIN is not active on the portal',
-  '3028': 'The supplier GSTIN is invalid',
-  '3029': 'The buyer GSTIN is invalid',
-  SIM001: 'The portal is not reachable. Try again in a moment.',
+  '2150': 'This invoice was already registered on the GST e-invoice portal this financial year. Use a new invoice number.',
+  '2172': 'For a sale within one state, charge CGST and SGST instead of IGST',
+  '2176': 'Add an HSN/SAC code to every item',
+  '2182': "The taxable value doesn't match the items. Save the document again, then retry.",
+  '2211': "Your GSTIN isn't active on the GST portal. Check its status with the GST department.",
+  '3028': "Your business GSTIN isn't valid. Check it in Settings.",
+  '3029': "The customer's GSTIN isn't valid. Check it on their profile.",
+  SIM001: "The GST portal can't be reached right now. Try again in a moment.",
 };
 
 /** A fault injected from the sandbox, so the rejection path stays reachable. */

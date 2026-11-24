@@ -1,6 +1,8 @@
 import { ApiError, type Schema } from '@esmart/api-client';
 import type { DocumentKind } from '@esmart/core/types';
+import i18n from '@esmart/i18n';
 import { api, isNetworkError } from '../../remote/api';
+import { describeError } from '../../remote/errors';
 import { useAppStore } from '../../store/appStore';
 import type { LixiAction, LixiReply } from './brain';
 
@@ -74,7 +76,7 @@ export async function confirmRemote(action: PendingLixiAction): Promise<ConfirmO
     if (!data) return { ok: false, expired: false, reason: '' };
     return { ok: true, reply: toReply(data.reply) };
   } catch (err) {
-    if (err instanceof ApiError) return { ok: false, expired: err.code === 'LIXI_ACTION_EXPIRED', reason: err.message };
+    if (err instanceof ApiError) return { ok: false, expired: err.code === 'LIXI_ACTION_EXPIRED', reason: describeError(err, i18n.t.bind(i18n) as (key: any, options?: any) => string) };
     if (isNetworkError(err)) return { ok: false, expired: false, offline: true, reason: '' };
     throw err;
   }

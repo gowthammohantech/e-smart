@@ -116,7 +116,7 @@ export const attachmentsHandlers = defineHandlers({
     if (current.status === 'ready') return attachmentToWire(ctx.deps, current);
     const storage = ctx.deps.providers.storage;
     const stored = await storage.head(current.storageKey);
-    if (!stored) throw invalid('file', 'Nothing was uploaded to the upload URL yet', 'UPLOAD_MISSING');
+    if (!stored) throw invalid('file', 'The file hasn’t finished uploading. Wait a moment and try again.', 'UPLOAD_MISSING');
     if (stored.size > MAX_ATTACHMENT_BYTES) {
       await storage.delete(current.storageKey);
       throw invalid('file', 'Attachments are up to 10 MB', 'UPLOAD_TOO_LARGE');

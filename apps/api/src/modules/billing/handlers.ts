@@ -60,7 +60,7 @@ export const billingHandlers = defineHandlers({
     const { plan, cycle } = ctx.body;
     if (plan === 'free') throw invalid('plan', 'Free needs no checkout; cancel the subscription instead');
     const [info] = await ctx.db.select().from(schema.plans).where(eq(schema.plans.key, plan));
-    if (!info) throw invalid('plan', `Unknown plan ${plan}`);
+    if (!info) throw invalid('plan', 'Choose one of the available plans');
     const [current] = await ctx.db.select().from(S).where(eq(S.companyId, ctx.company.id));
     if (current?.status === 'active' && current.plan === plan && current.cycle === cycle && !current.cancelAtPeriodEnd) {
       throw conflict('ALREADY_SUBSCRIBED', `The company is already on ${info.name} (${cycle})`);

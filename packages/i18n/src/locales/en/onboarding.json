@@ -58,7 +58,7 @@
     "currencyHint": "Every report is presented in this currency. Individual documents can still be raised in another currency.",
     "fyStarts": "Financial year starts",
     "whatYouGet": "What you get with {{country}}",
-    "gstPack": "{{taxIdLabel}} validation, CGST/SGST/IGST split by place of supply, HSN/SAC codes, e-invoice and e-way bill hooks, and {{country}} invoice formatting.",
+    "gstPack": "{{taxIdLabel}} validation, CGST/SGST/IGST split by place of supply, HSN/SAC codes, e-invoice and e-way bill support, and {{country}} invoice formatting.",
     "vatPack": "{{taxIdLabel}} capture, VAT-compliant invoice layout and local date/number formatting.",
     "nonePack": "A tax-neutral setup you can configure manually under Settings."
   },

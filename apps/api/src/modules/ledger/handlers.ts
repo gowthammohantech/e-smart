@@ -142,7 +142,7 @@ export const ledgerHandlers = defineHandlers({
     if (body.documentIds?.length) filters.push(inArray(D.id, body.documentIds));
     const docs = (await ctx.db.select().from(D).where(and(...filters)).orderBy(D.dueDate, D.date)).filter((d) => d.grandTotalMinor > d.amountPaidMinor);
     const missing = (body.documentIds ?? []).filter((id) => !docs.some((d) => d.id === id));
-    if (missing.length) throw invalid('documentIds', `Not open invoices of ${party.name}: ${missing.join(', ')}`);
+    if (missing.length) throw invalid('documentIds', `Some of the chosen invoices are no longer open for ${party.name}. Reload and choose again.`);
     if (!docs.length) throw invalid('partyId', `${party.name} has nothing outstanding`, 'NOTHING_OUTSTANDING');
 
     await ctx.db.transaction(async (tx) => {

@@ -106,7 +106,7 @@ export async function generateEInvoiceFor(
     // again would register it twice. The reconcile job settles it once the answer is overdue.
     if (!dryRun && !opts.reconciling && existing?.status === 'pending' && existing.lastAttemptAt && existing.lastAttemptAt > new Date(now.getTime() - RECONCILE_AFTER_MS)) {
       if (opts.onlyIfApplicable) return { kind: 'skipped' as const };
-      throw conflict('EINVOICE_IN_PROGRESS', 'This invoice is already with the e-invoice portal; its IRN will show here once the portal answers');
+      throw conflict('EINVOICE_IN_PROGRESS', 'This invoice has already been sent to the GST e-invoice portal. Its e-invoice number (IRN) will show here once the portal answers.');
     }
 
     const ctx = await eInvoiceContext(tx, company, row, now);
@@ -151,7 +151,7 @@ export async function generateEInvoiceFor(
     const clash = response.ok ? (await tx.select({ id: E.documentId }).from(E).where(and(eq(E.irn, response.irn), ne(E.documentId, row.id))))[0] : undefined;
     if (!response.ok || clash) {
       const errors: ComplianceIssue[] = response.ok
-        ? [{ code: '2150', field: 'document', message: 'Duplicate IRN: this document has already been reported for the financial year', severity: 'blocking' }]
+        ? [{ code: '2150', field: 'document', message: 'This invoice was already registered on the GST e-invoice portal this financial year. Use a new invoice number.', severity: 'blocking' }]
         : response.errors;
       await failed(tx, row, errors, payload, false);
       return { kind: 'rejected' as const, issues: errors, payload };
@@ -306,7 +306,7 @@ export const eInvoiceHandlers = defineHandlers({
   /** Inside 24 hours of generation, and only once any live e-way bill on the document is cancelled. */
   async cancelEInvoice(ctx) {
     const { reasonCode, remark } = ctx.body;
-    if (requiresCancelRemark(reasonCode) && !remark?.trim()) throw invalid('remark', 'Say why the IRN is being cancelled');
+    if (requiresCancelRemark(reasonCode) && !remark?.trim()) throw invalid('remark', 'Say why this e-invoice is being cancelled');
     const now = ctx.now.toISOString();
     const [open] = await ctx.db.select({ id: CA.id }).from(CA).where(and(eq(CA.documentId, ctx.params.id), eq(CA.operation, 'irn.cancel'), eq(CA.status, 'pending')));
     if (open) throw cancelStillChecking();
@@ -321,7 +321,7 @@ export const eInvoiceHandlers = defineHandlers({
       if (row.currentEwayBillId) {
         const [bill] = await tx.select().from(schema.ewayBills).where(eq(schema.ewayBills.id, row.currentEwayBillId));
         if (bill && bill.status === 'active' && bill.validUpto >= ctx.now) {
-          throw conflict('EWAY_BILL_ACTIVE', `Cancel e-way bill ${bill.ewayBillNumber.trim()} before cancelling the IRN`);
+          throw conflict('EWAY_BILL_ACTIVE', `Cancel e-way bill ${bill.ewayBillNumber.trim()} before cancelling the e-invoice`);
         }
       }
 

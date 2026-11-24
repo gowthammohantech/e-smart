@@ -16761,7 +16761,10 @@ export interface operations {
     };
     lookupGstin: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The company the lookup is for. When a platform operator chose a GSP for it, that GSP answers; otherwise the deployment default does. Ignored when the caller has no access to it. */
+                companyId?: string;
+            };
             header?: never;
             path: {
                 gstin: string;

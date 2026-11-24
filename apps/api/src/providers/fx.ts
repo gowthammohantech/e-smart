@@ -80,10 +80,10 @@ class OpenExchangeRatesProvider implements FxProvider {
     let res: Response;
     try {
       res = await trackedFetch({ service: 'openexchangerates', operation: date >= today ? 'Latest exchange rates' : 'Historical exchange rates', redact: ['app_id'] }, url);
-    } catch (err) {
-      throw upstream('FX_PROVIDER_UNAVAILABLE', `Could not reach Open Exchange Rates: ${(err as Error).message}`);
+    } catch {
+      throw upstream('FX_PROVIDER_UNAVAILABLE', 'Exchange rates couldn’t be fetched right now. Try again in a few minutes, or enter the rate yourself.');
     }
-    if (!res.ok) throw upstream('FX_PROVIDER_ERROR', `Open Exchange Rates answered ${res.status}`);
+    if (!res.ok) throw upstream('FX_PROVIDER_ERROR', 'Exchange rates couldn’t be fetched right now. Try again in a few minutes, or enter the rate yourself.');
     const body = (await res.json()) as { rates?: Record<string, number> };
     return crossRates(base, currencies, body.rates ?? {});
   }

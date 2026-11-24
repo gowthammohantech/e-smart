@@ -98,7 +98,7 @@
     "numberLabel": "{{kind}} number",
     "finaliseTitle": "Finalise this {{kind, lowercase}}?",
     "finaliseMessage": "A permanent number will be assigned and the {{kind, lowercase}} can no longer be edited freely.",
-    "prefillMissingParty": "That customer is gone. Pick another to continue.",
+    "prefillMissingParty": "That customer was deleted. Pick another to continue.",
     "updatedIssued": "{{kind}} updated"
   },
   "documentDetail": {
@@ -132,7 +132,7 @@
     "regards": "Regards,"
   },
   "save": {
-    "refused": "The server refused this: {{reason}}",
+    "refused": "This couldn’t be saved: {{reason}}",
     "unreachable": "Not saved: can't reach the server. Try again when online.",
     "paymentHeld": "Sent for approval. It's recorded once an owner or admin approves."
   },
@@ -329,7 +329,7 @@
     "rowActions": "Actions for {{label}}",
     "actions": "Actions",
     "loading": "Loading",
-    "loadFailed": "This list couldn’t load.",
+    "loadFailed": "This list couldn’t load. Check your connection and try again.",
     "open": "Open",
     "exportCsv": "Export CSV",
     "exportCancelled": "Export cancelled",
@@ -350,7 +350,7 @@
     "deleteDraftsBody": "Drafts have no number yet, so none is lost. This can’t be undone. Selected documents that aren’t drafts are left alone.",
     "deletedDrafts_one": "{{count}} draft deleted",
     "deletedDrafts_other": "{{count}} drafts deleted",
-    "someFailed": "{{count}} couldn’t be changed: {{reason}}",
+    "someFailed": "{{count}} couldn’t be updated: {{reason}}",
     "expandAll": "Show the rows under each",
     "collapseAll": "Hide the rows under each",
     "expandRow_one": "Show the {{count}} row under {{label}}",

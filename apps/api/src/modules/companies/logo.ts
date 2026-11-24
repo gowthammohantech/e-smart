@@ -115,7 +115,7 @@ function uploadImage(slot: Slot) {
   const { column, folder, label } = SLOTS[slot];
   return async (ctx: Ctx<'uploadCompanyLogo'> | Ctx<'uploadCompanySignature'>) => {
     const file = await ctx.req.file().catch(() => undefined);
-    if (!file) throw invalid('file', `Attach the ${label} as the \`file\` part of a multipart form`);
+    if (!file) throw invalid('file', `Choose the ${label} image to upload`);
     let bytes: Buffer;
     try {
       bytes = await file.toBuffer();

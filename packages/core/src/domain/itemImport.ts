@@ -155,7 +155,7 @@ export function itemsFromCsv(
 
     const unitRaw = get('unit');
     const unitCode = unitRaw ? unitCodeOf(unitRaw) : type === 'service' ? 'NOS' : 'PCS';
-    if (!unitCode) problems.push(`Unit "${unitRaw}" is not one of ${UNITS.map((u) => u.code).join(', ')}`);
+    if (!unitCode) problems.push(`Unit "${unitRaw}" isn’t recognised. Use a unit like NOS, KGS, LTR or MTR`);
     // A service bills in Nos whatever the sheet says.
     const unit = type === 'service' && unitCode && !SERVICE_UNIT_CODES.includes(unitCode) ? 'NOS' : unitCode;
 
@@ -173,7 +173,7 @@ export function itemsFromCsv(
     const taxRaw = get('taxRate');
     const rate = taxRaw ? Number(taxRaw.replace(/[^0-9.]/g, '')) : undefined;
     const tax = rate === undefined ? fallbackTax : defaults.taxCategories.find((c) => c.rate === rate);
-    if (!tax) problems.push(`No ${taxRaw} tax category: ${defaults.taxCategories.map((c) => `${c.rate}%`).join(', ')}`);
+    if (!tax) problems.push(`GST rate "${taxRaw}" isn’t set up. Use one of: ${defaults.taxCategories.map((c) => `${c.rate}%`).join(', ')}`);
 
     const hsnCode = get('hsnCode').replace(/\s/g, '');
     if (hsnCode && !/^\d{4}(\d{2}){0,2}$/.test(hsnCode)) problems.push(`HSN/SAC "${hsnCode}" should be 4, 6 or 8 digits`);

@@ -40,14 +40,14 @@ export const settingsHandlers = defineHandlers({
       ['eInvoiceTurnoverThreshold', b.eInvoiceTurnoverThreshold],
       ['ewayBillThreshold', b.ewayBillThreshold],
     ] as const) {
-      if (m && m.currency !== currency) issues.push({ field: `${field}.currency`, message: `Must be in ${currency}`, severity: 'blocking' });
-      if (m && m.minor < 0) issues.push({ field, message: 'Cannot be negative', severity: 'blocking' });
+      if (m && m.currency !== currency) issues.push({ field: `${field}.currency`, message: `Enter this amount in ${currency}`, severity: 'blocking' });
+      if (m && m.minor < 0) issues.push({ field, message: 'This amount can’t be negative', severity: 'blocking' });
     }
     if (b.reportingWindowDays !== undefined && !(b.reportingWindowDays >= 1 && b.reportingWindowDays <= 365)) {
-      issues.push({ field: 'reportingWindowDays', message: 'Between 1 and 365 days', severity: 'blocking' });
+      issues.push({ field: 'reportingWindowDays', message: 'Enter a number of days from 1 to 365', severity: 'blocking' });
     }
     if (b.defaultDistanceKm !== undefined && !(b.defaultDistanceKm >= 0 && b.defaultDistanceKm <= EWAY_MAX_DISTANCE_KM)) {
-      issues.push({ field: 'defaultDistanceKm', message: `Between 0 and ${EWAY_MAX_DISTANCE_KM} km`, severity: 'blocking' });
+      issues.push({ field: 'defaultDistanceKm', message: `Enter a distance from 0 to ${EWAY_MAX_DISTANCE_KM} km`, severity: 'blocking' });
     }
     if (issues.length) throw unprocessable(issues);
 
