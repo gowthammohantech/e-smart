@@ -33,6 +33,7 @@ import { LogoSection } from '../../../features/company/LogoSection';
 import { SignatureSection } from '../../../features/company/SignatureSection';
 import { ArchiveSection } from '../../../features/company/ArchiveSection';
 import { SkeletonGroup, SkeletonText } from '@esmart/ui/components/Skeleton';
+import { inactiveChoice } from '../../../features/payments/accountChoice';
 
 
 /** A sample UPI ID for the field's placeholder: an address, the same in every language. */
@@ -258,7 +259,8 @@ function CompanySettingsForm() {
     <View key="bookAccount" style={{ gap: t.spacing.xs }}>
       <PickerField
         label={tr('settings:company.bookAccount')}
-        value={bookAccount ? `${bookAccount.name}${bookAccount.accountNumber ? ` · •••• ${bookAccount.accountNumber.slice(-4)}` : ''}` : tr('settings:company.bookAccountNone')}
+        value={bookAccount ? `${bookAccount.name}${bookAccount.accountNumber ? ` · •••• ${bookAccount.accountNumber.slice(-4)}` : ''}` : undefined}
+        placeholder={tr('settings:company.bookAccountPick')}
         onPress={() => setBookAccountOpen(true)}
         icon="bank-transfer-in"
         hint={bankAccounts.length ? tr('settings:company.bookAccountHint') : tr('settings:company.bookAccountEmpty')}
@@ -568,7 +570,8 @@ function CompanySettingsForm() {
         visible={bookAccountOpen}
         onClose={() => setBookAccountOpen(false)}
         title={tr('settings:company.bookAccount')}
-        options={[{ value: '', label: tr('settings:company.bookAccountNone') }, ...bankAccounts.map((a) => ({ value: a.id, label: a.name, trailing: a.accountNumber ? `•••• ${a.accountNumber.slice(-4)}` : undefined }))]}
+        // Only an account from the list: no "Not linked". An inactive one is listed but can't be picked.
+        options={bankAccounts.map((a) => ({ value: a.id, label: a.name, trailing: a.accountNumber ? `•••• ${a.accountNumber.slice(-4)}` : undefined, ...inactiveChoice(tr, a, bank?.paymentAccountId) }))}
         value={bookAccountId}
         onSelect={setBookAccountId}
         searchable={false}
