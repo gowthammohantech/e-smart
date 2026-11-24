@@ -269,8 +269,7 @@
     "settlement": {
       "customerPayments": "Customer payments",
       "supplierPayments": "Supplier payments",
-      "creditNotes": "Credit notes",
-      "debitNotes": "Debit notes"
+      "creditNotes": "Credit notes"
     },
     "paySupplier": "Pay supplier",
     "paymentNumber": "Payment {{number}}",

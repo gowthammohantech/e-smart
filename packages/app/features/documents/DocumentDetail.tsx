@@ -241,13 +241,13 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
   );
   const paid = money(doc.totals.grandTotal.minor - outstanding.minor, doc.currency);
   // What settled it, part by part, for the bar: the notes raised against it (live ones), direct notes
-  // applied to it, and payments as the rest of what is no longer owed. A debit note adds to the bill.
+  // applied to it, and payments as the rest of what is no longer owed. A debit note is owed on its own, so
+  // it has no part here.
   const settlement = useMemo(() => {
     const live = (status?: string) => !!status && !['draft', 'requested', 'cancelled', 'rejected'].includes(status);
     const madeFrom = record?.linkedDocuments ?? allDocuments.filter((d) => d.sourceDocumentId === doc.id).map((d) => ({ kind: d.kind, status: d.status, grandTotal: d.totals.grandTotal }));
     const notes = madeFrom.filter((d) => live(d.status) && d.grandTotal);
     const credits = notes.filter((d) => d.kind && CREDIT_KINDS.includes(d.kind));
-    const debits = notes.filter((d) => d.kind === 'debitNote' || d.kind === 'supplierDebitNote');
     const applied = record?.creditApplications ?? [];
     const settled = Math.max(0, doc.totals.grandTotal.minor - outstanding.minor);
     const credited = Math.min(settled, credits.reduce((a, d) => a + (d.grandTotal as Money).minor, 0) + applied.reduce((a, c) => a + (c.amount as Money).minor, 0));
@@ -256,8 +256,6 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
       paymentCount: (record?.payments ?? relatedPayments).length,
       credited: money(credited, doc.currency),
       creditCount: credits.length + applied.length,
-      debited: money(debits.reduce((a, d) => a + (d.grandTotal as Money).minor, 0), doc.currency),
-      debitCount: debits.length,
     };
   }, [record, allDocuments, doc.id, doc.totals.grandTotal.minor, doc.currency, outstanding.minor, relatedPayments]);
   // Late only while something is still owed: a paid invoice past its date isn't overdue.
@@ -825,7 +823,6 @@ ${url}`;
                 { key: 'outstanding', label: tr('sales:detail.outstanding'), total: outstanding, color: overdueDays > 0 ? t.c.bad : t.c.warn },
                 { key: 'payments', label: tr(receivable ? 'sales:detail.settlement.customerPayments' : 'sales:detail.settlement.supplierPayments'), count: settlement.paymentCount, total: settlement.payments, color: t.c.good },
                 { key: 'credit', label: tr('sales:detail.settlement.creditNotes'), count: settlement.creditCount, total: settlement.credited, color: seriesColor(t.scheme, 0) },
-                { key: 'debit', label: tr('sales:detail.settlement.debitNotes'), count: settlement.debitCount, total: settlement.debited, color: seriesColor(t.scheme, 4) },
               ].filter((s) => s.total.minor > 0)}
             />
           )}

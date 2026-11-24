@@ -269,8 +269,7 @@
     "settlement": {
       "customerPayments": "வாடிக்கையாளர் கட்டணங்கள்",
       "supplierPayments": "சப்ளையர் கட்டணங்கள்",
-      "creditNotes": "வரவுக் குறிப்புகள்",
-      "debitNotes": "பற்றுக் குறிப்புகள்"
+      "creditNotes": "வரவுக் குறிப்புகள்"
     },
     "paySupplier": "சப்ளையருக்குச் செலுத்து",
     "paymentNumber": "கட்டணம் {{number}}",
