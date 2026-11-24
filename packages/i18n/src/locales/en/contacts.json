@@ -274,11 +274,9 @@
     "received": "Received",
     "paid": "Paid",
     "other": "TDS & journals",
-    "balance": "Balance",
+    "balance": "Net balance",
     "particulars": "Particulars",
     "taxableGst": "Taxable {{taxable}} · GST {{tax}}",
-    "advanceHeld": "{{amount}} of this was received in advance and is not yet applied to an invoice.",
-    "advancePaid": "{{amount}} of this was paid in advance and is not yet applied to a bill.",
     "kind": {
       "tds": "TDS",
       "receipt": "Receipt",
@@ -293,16 +291,30 @@
       "receipts": "Receipts",
       "payments": "Payments"
     },
-    "words": {
-      "settled": "All settled",
-      "theyOwe": "They owe you",
-      "youOwe": "You owe them",
-      "paidAheadByThem": "They have paid ahead: you hold this for them",
-      "paidAheadToThem": "You have paid ahead: they hold this for you"
-    },
     "empty": "Nothing on this account yet",
     "tabTotal": "Total",
     "salesReturns": "Sales returns",
-    "purchaseReturns": "Purchase returns"
+    "purchaseReturns": "Purchase returns",
+    "side": {
+      "due": "due",
+      "toPay": "to pay",
+      "ahead": "paid ahead"
+    },
+    "standing": {
+      "title": "Where things stand",
+      "unpaidInvoices": "Still unpaid on invoices",
+      "unpaidBills": "Still unpaid on bills",
+      "theirMoney": "Their money with you",
+      "theirMoneyHint": "Advances and credits not used on an invoice yet",
+      "yourMoney": "Your money with them",
+      "yourMoneyHint": "Advances and credits not used on a bill yet",
+      "theyOwe": "Overall, they owe you",
+      "youOwe": "Overall, you owe them",
+      "youHold": "Overall, you hold this for them",
+      "theyHold": "Overall, they hold this for you",
+      "settled": "All settled: nobody owes anything",
+      "adjustHint": "Use their money to clear what is unpaid.",
+      "adjust": "Adjust advance"
+    }
   }
 }

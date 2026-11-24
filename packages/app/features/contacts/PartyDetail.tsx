@@ -269,9 +269,11 @@ export function PartyDetail({ party }: { party: Party }) {
   );
   const tabPanels = (
     <>
-    {shownTab === 'account' && canTransact ? <PartyAccountView party={party} advance={(record as { advance?: Money } | undefined)?.advance} /> : null}
+    {shownTab === 'account' && canTransact ? <PartyAccountView party={party} owed={totalOutstanding} /> : null}
 
     {shownTab === 'activity' ? (
+      <View style={{ gap: t.spacing.md }}>
+      {statTiles}
       <Card padded={false}>
         {!aging && agingQ.isError ? (
           <LoadFailed onRetry={agingQ.refetch} compact />
@@ -296,6 +298,7 @@ export function PartyDetail({ party }: { party: Party }) {
           ))
         )}
       </Card>
+      </View>
     ) : null}
 
     {shownTab === 'documents' ? (
@@ -498,7 +501,6 @@ export function PartyDetail({ party }: { party: Party }) {
             }
             main={
               <View style={{ gap: t.spacing.md }}>
-                {statTiles}
                 <Segmented
                   options={[
                     ...(canTransact ? [{ value: 'account', label: tr('contacts:account.tab') }] : []),
@@ -518,8 +520,6 @@ export function PartyDetail({ party }: { party: Party }) {
           <>
             {headerCard}
             <View style={{ height: t.spacing.md }} />
-            {statTiles}
-            <View style={{ height: t.spacing.lg }} />
             <Segmented
               options={[
                 ...(canTransact ? [{ value: 'account', label: tr('contacts:account.tab') }] : []),

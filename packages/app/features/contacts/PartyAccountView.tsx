@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
+import { Button } from '@esmart/ui/components/Button';
 import { Card } from '@esmart/ui/components/Card';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { ListRow } from '@esmart/ui/components/ListRow';
@@ -51,7 +52,8 @@ const ALL_TIME = { from: '2000-01-01' };
  * those, its table line by line with its particulars (taxable value and GST, or how it was paid). The
  * figures are the server's statement's.
  */
-export function PartyAccountView({ party, advance }: { party: Party; advance?: Money }) {
+/** `owed`: what is still unpaid on their open documents (the party record's outstanding). */
+export function PartyAccountView({ party, owed }: { party: Party; owed?: Money }) {
   const t = useTheme();
   const desktop = useIsDesktop();
   const router = useRouter();
@@ -102,20 +104,23 @@ export function PartyAccountView({ party, advance }: { party: Party; advance?: M
 
   const opening = data?.openingBalance ?? { minor: 0, currency };
   const closing = data?.closingBalance ?? { minor: 0, currency };
-  /** A balance with its side, as a ledger writes it: ₹3,73,737.20 Dr. */
+  /** A balance in words rather than Dr and Cr: ₹1,280.00 due, or ₹85,025.00 paid ahead. */
   const sided = (m: Money) => {
     if (m.minor === 0) return formatMoney(m);
-    const dr = supplier ? m.minor < 0 : m.minor > 0;
-    return `${formatMoney({ ...m, minor: Math.abs(m.minor) })} ${tr(dr ? 'contacts:statement.dr' : 'contacts:statement.cr')}`;
+    const word = m.minor > 0 ? (supplier ? 'contacts:account.side.toPay' : 'contacts:account.side.due') : 'contacts:account.side.ahead';
+    return `${formatMoney({ ...m, minor: Math.abs(m.minor) })} ${tr(word)}`;
   };
-  // The balance in words, so Dr and Cr needn't be known: who owes whom.
-  const balanceWords =
+  // Where things stand, in two plain parts that add up to the balance: what is unpaid on their open
+  // documents, and their money with us not used on one yet (advances, and credits over what was owed).
+  const unpaid = Math.max(0, owed?.minor ?? 0);
+  const held = Math.max(0, unpaid - closing.minor);
+  const netWords =
     closing.minor === 0
-      ? tr('contacts:account.words.settled')
+      ? tr('contacts:account.standing.settled')
       : closing.minor > 0
-        ? tr(supplier ? 'contacts:account.words.youOwe' : 'contacts:account.words.theyOwe')
-        : tr(supplier ? 'contacts:account.words.paidAheadToThem' : 'contacts:account.words.paidAheadByThem');
-  const balanceTone = closing.minor > 0 ? (supplier ? 'bad' : 'warn') : 'good';
+        ? tr(supplier ? 'contacts:account.standing.youOwe' : 'contacts:account.standing.theyOwe')
+        : tr(supplier ? 'contacts:account.standing.theyHold' : 'contacts:account.standing.youHold');
+  const netTone = closing.minor > 0 ? (supplier ? 'bad' : 'warn') : 'good';
 
   const breakdownRow = (key: string, color: string, label: string, sign: string, value: Money, count?: number) => (
     <View key={key} style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm, paddingVertical: 6 }}>
@@ -169,31 +174,55 @@ export function PartyAccountView({ party, advance }: { party: Party; advance?: M
             </Text>
           </View>
         </View>
-        {/* The answer, large: how much, and who owes whom. */}
+        {/* The answer in plain words: what is unpaid, their money with us, and so who owes whom overall. */}
         <View
           style={{
-            width: desktop ? 280 : undefined,
-            justifyContent: 'center',
-            gap: 6,
+            width: desktop ? 320 : undefined,
+            gap: t.spacing.sm,
             padding: t.spacing.lg,
             borderRadius: t.radius.md,
             backgroundColor: t.c.card2,
           }}
         >
-          <Text variant="caption" tone="muted">
-            {tr('contacts:account.balance')}
+          <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>
+            {tr('contacts:account.standing.title')}
           </Text>
-          <Text variant="h2" weight="700" tone={balanceTone} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={{ fontVariant: ['tabular-nums'] }}>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: t.spacing.sm }}>
+            <Text variant="small" style={{ flex: 1 }}>
+              {tr(supplier ? 'contacts:account.standing.unpaidBills' : 'contacts:account.standing.unpaidInvoices')}
+            </Text>
+            <Text variant="small" weight="700" tone={unpaid > 0 ? (supplier ? 'bad' : 'warn') : undefined} style={{ fontVariant: ['tabular-nums'] }}>
+              {formatMoney({ minor: unpaid, currency })}
+            </Text>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: t.spacing.sm }}>
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text variant="small">
+                {tr(supplier ? 'contacts:account.standing.yourMoney' : 'contacts:account.standing.theirMoney')}
+              </Text>
+              <Text variant="caption" tone="muted">
+                {tr(supplier ? 'contacts:account.standing.yourMoneyHint' : 'contacts:account.standing.theirMoneyHint')}
+              </Text>
+            </View>
+            <Text variant="small" weight="700" tone={held > 0 ? 'good' : undefined} style={{ fontVariant: ['tabular-nums'] }}>
+              {formatMoney({ minor: held, currency })}
+            </Text>
+          </View>
+          <View style={{ height: 1, backgroundColor: t.c.line, marginVertical: t.spacing.xs }} />
+          <Text variant="small" weight="600">
+            {netWords}
+          </Text>
+          <Text variant="h2" weight="700" tone={netTone} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={{ fontVariant: ['tabular-nums'] }}>
             {formatMoney({ ...closing, minor: Math.abs(closing.minor) })}
           </Text>
-          <Text variant="small" weight="600">
-            {balanceWords}
-          </Text>
-          {/* Money held ahead of any invoice, said in words so the balance isn't misread. */}
-          {advance && advance.minor > 0 ? (
-            <Text variant="caption" tone="muted">
-              {tr(supplier ? 'contacts:account.advancePaid' : 'contacts:account.advanceHeld', { amount: formatMoney(advance) })}
-            </Text>
+          {/* Both at once: their money could clear what is unpaid, one tap away. */}
+          {!supplier && unpaid > 0 && held > 0 ? (
+            <View style={{ gap: t.spacing.sm, marginTop: t.spacing.xs }}>
+              <Text variant="caption" tone="muted">
+                {tr('contacts:account.standing.adjustHint')}
+              </Text>
+              <Button title={tr('contacts:account.standing.adjust')} icon="swap-horizontal" variant="secondary" size="sm" onPress={() => router.push(`/(app)/receipts/adjust?partyId=${party.id}` as never)} />
+            </View>
           ) : null}
         </View>
       </View>
