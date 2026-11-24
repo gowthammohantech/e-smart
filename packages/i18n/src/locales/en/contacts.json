@@ -315,6 +315,8 @@
       "settled": "All settled: nobody owes anything",
       "adjustHint": "Use their money to clear what is unpaid.",
       "adjust": "Adjust advance"
-    }
+    },
+    "all": "All",
+    "runningBalance": "Balance after"
   }
 }

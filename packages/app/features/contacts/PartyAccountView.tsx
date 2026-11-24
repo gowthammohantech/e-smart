@@ -23,6 +23,8 @@ import { ReportSkeleton } from '../../components/ScreenSkeleton';
 
 type Entry = NonNullable<ReturnType<typeof usePartyStatement>['data']>['entries'] extends (infer E)[] | undefined ? E : never;
 type Group = 'billed' | 'debit' | 'credit' | 'returns' | 'payments' | 'other';
+/** All: every line in order, with the balance after each; then a tab per kind. */
+type TabKey = 'all' | Group;
 
 /** Which table each line goes in. */
 const GROUP_OF: Record<string, Group> = {
@@ -59,7 +61,7 @@ export function PartyAccountView({ party, owed }: { party: Party; owed?: Money }
   const router = useRouter();
   const { t: tr } = useTranslation(['contacts', 'common', 'books']);
   const statement = usePartyStatement(party.id, ALL_TIME);
-  const [picked, setPicked] = useState<Group | undefined>();
+  const [picked, setPicked] = useState<TabKey | undefined>();
   // Back on the page after adjusting an advance, recording a receipt or raising a note: read it again.
   // The first focus is the page opening, which reads it already.
   const refetchStatement = statement.refetch;
@@ -296,13 +298,95 @@ export function PartyAccountView({ party, owed }: { party: Party; owed?: Money }
     );
   };
 
+  // All: the statement as it runs, the opening first, each line with its type (in its colour), debit,
+  // credit and the balance after it; the last row the totals and the net balance.
+  const entries = data?.entries ?? [];
+  const totalDebit = lines.reduce((a, e) => a + (e.debit?.minor ?? 0), 0);
+  const totalCredit = lines.reduce((a, e) => a + (e.credit?.minor ?? 0), 0);
+  const colorOf = (e: Entry) => (e.entityType === 'opening' ? t.c.muted : groupInfo[groupOf(e)].color);
+  const typeCell = (e: Entry) => (e.entityType === 'opening' ? tr('contacts:account.opening') : typeOf(e));
+  const allTable = (
+    <View style={{ gap: t.spacing.sm }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: t.spacing.sm }}>
+        <Text variant="small" tone="muted">
+          {tr('contacts:account.balance')}
+        </Text>
+        <Text variant="small" weight="700" style={{ fontVariant: ['tabular-nums'] }}>
+          {sided(closing)}
+        </Text>
+      </View>
+      {desktop ? (
+        <DataTable
+          scroll={false}
+          pageSize={TABLE_PAGE_SIZE}
+          pageSizeOptions={TABLE_PAGE_SIZES}
+          alwaysPaged
+          tableKey="party-account-all"
+          rows={entries}
+          rowKey={(e) => `${e.entityType}-${e.entityId}-${e.number}-${entries.indexOf(e)}`}
+          rowLabel={(e) => e.number ?? tr('contacts:account.opening')}
+          canPress={(e) => e.entityType !== 'opening'}
+          onRowPress={open}
+          columns={[
+            { key: 'date', header: tr('common:table.date'), width: 120, render: (e) => <Cell tone="muted">{e.date ? formatDate(e.date) : ''}</Cell> },
+            {
+              key: 'type',
+              header: tr('common:table.type'),
+              width: 170,
+              render: (e) => (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <View style={{ width: 9, height: 9, borderRadius: 2, backgroundColor: colorOf(e) }} />
+                  <Cell weight={e.entityType === 'opening' ? '600' : '400'}>{typeCell(e)}</Cell>
+                </View>
+              ),
+            },
+            { key: 'number', header: tr('common:table.number'), width: 160, render: (e) => <Cell weight="600">{e.entityType === 'opening' ? '' : (e.number ?? '')}</Cell> },
+            { key: 'particulars', header: tr('contacts:account.particulars'), flex: 1, render: (e) => <Cell tone="muted">{particulars(e)}</Cell> },
+            { key: 'debit', header: tr('books:accounts.debitSide'), width: 130, align: 'right', render: (e) => <Cell mono>{e.debit?.minor ? formatMoney(e.debit) : ''}</Cell> },
+            { key: 'credit', header: tr('books:accounts.creditSide'), width: 130, align: 'right', render: (e) => <Cell mono>{e.credit?.minor ? formatMoney(e.credit) : ''}</Cell> },
+            { key: 'balance', header: tr('contacts:account.runningBalance'), width: 190, align: 'right', render: (e) => <Cell weight="600" mono>{e.balance ? sided(e.balance) : ''}</Cell> },
+          ]}
+          footer={{
+            particulars: <Cell weight="700">{tr('contacts:account.balance')}</Cell>,
+            debit: <Cell weight="700" mono>{formatMoney({ minor: totalDebit, currency })}</Cell>,
+            credit: <Cell weight="700" mono>{formatMoney({ minor: totalCredit, currency })}</Cell>,
+            balance: <Cell weight="700" mono>{sided(closing)}</Cell>,
+          }}
+        />
+      ) : (
+        <Card padded={false}>
+          {entries.map((e, i) => (
+            <ListRow
+              key={`${e.entityType}-${e.entityId}-${e.number}-${i}`}
+              title={e.entityType === 'opening' ? typeCell(e) : `${typeCell(e)} · ${e.number ?? ''}`}
+              subtitle={[e.date ? formatDate(e.date) : '', particulars(e)].filter(Boolean).join(' · ')}
+              right={
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text variant="small" weight="600" style={{ fontVariant: ['tabular-nums'] }}>
+                    {e.debit?.minor ? `+ ${formatMoney(e.debit)}` : e.credit?.minor ? `− ${formatMoney(e.credit)}` : ''}
+                  </Text>
+                  <Text variant="caption" tone="muted" style={{ fontVariant: ['tabular-nums'] }}>
+                    {e.balance ? sided(e.balance) : ''}
+                  </Text>
+                </View>
+              }
+              chevron={e.entityType !== 'opening'}
+              divider={i < entries.length - 1}
+              onPress={e.entityType === 'opening' ? undefined : () => open(e)}
+            />
+          ))}
+        </Card>
+      )}
+    </View>
+  );
+
   if (statement.isLoading || statement.isPlaceholderData) return <ReportSkeleton />;
   if (statement.isError) {
     return <EmptyState icon="alert-circle-outline" title={tr('contacts:statement.loadFailed')} message={describeError(statement.error, tr)} actionLabel={tr('common:action.retry')} onAction={() => void statement.refetch()} />;
   }
-  // A tab for each kind that has lines, with how many; the first until one is picked.
-  const tabs = GROUPS.filter((g) => rowsOf(g).length);
-  const tab = picked && tabs.includes(picked) ? picked : tabs[0];
+  // All first, then a tab for each kind that has lines, with how many; All until one is picked.
+  const kinds = GROUPS.filter((g) => rowsOf(g).length);
+  const tab: TabKey | undefined = lines.length ? (picked && (picked === 'all' || kinds.includes(picked)) ? picked : 'all') : undefined;
   return (
     <View style={{ gap: t.spacing.xl }}>
       {summary}
@@ -311,12 +395,15 @@ export function PartyAccountView({ party, owed }: { party: Party; owed?: Money }
           <View style={{ alignSelf: desktop ? 'flex-start' : 'stretch', maxWidth: '100%' }}>
             <Segmented
               size="sm"
-              options={tabs.map((g) => ({ value: g, label: `${groupInfo[g].title} (${rowsOf(g).length})`, color: groupInfo[g].color }))}
+              options={[
+                { value: 'all' as TabKey, label: `${tr('contacts:account.all')} (${lines.length})` },
+                ...kinds.map((g) => ({ value: g as TabKey, label: `${groupInfo[g].title} (${rowsOf(g).length})`, color: groupInfo[g].color })),
+              ]}
               value={tab}
-              onChange={(v) => setPicked(v as Group)}
+              onChange={(v) => setPicked(v)}
             />
           </View>
-          {table(tab)}
+          {tab === 'all' ? allTable : table(tab)}
         </View>
       ) : (
         <EmptyState icon="book-open-outline" title={tr('contacts:account.empty')} compact />
