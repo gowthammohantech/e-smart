@@ -44,6 +44,7 @@ export function ReceivedForSheet({
   onPick,
   onCreateIncome,
   customers = true,
+  footer,
 }: {
   visible: boolean;
   onClose: () => void;
@@ -52,6 +53,8 @@ export function ReceivedForSheet({
   onPick: (picked: ReceivedFor) => void;
   onCreateIncome?: (name: string) => void;
   customers?: boolean;
+  /** Under the list: "Add new customer". */
+  footer?: React.ReactNode;
 }) {
   const { t: tr } = useTranslation(['books']);
   const books = useHasModule('books');
@@ -143,6 +146,7 @@ export function ReceivedForSheet({
       }}
       onCreate={canCreate ? (name) => onCreateIncome?.(name) : undefined}
       createLabel={(name) => tr('books:receipts.newIncome', { name })}
+      footer={footer}
     />
   );
 }

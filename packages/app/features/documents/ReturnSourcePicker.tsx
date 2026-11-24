@@ -27,6 +27,7 @@ import { DocumentEditor, detailRouteFor } from './DocumentEditor';
 import { ListSkeleton, MoreRowsSkeleton } from '../../components/ScreenSkeleton';
 import { LoadingView } from '../../components/LoadingView';
 import { Skeleton } from '@esmart/ui/components/Skeleton';
+import { AddPartyButton, useAddParty } from '../contacts/AddPartyButton';
 
 /** Raised against one invoice or bill: returns, and credit and debit notes. */
 type AgainstSource = 'salesReturn' | 'purchaseReturn' | 'creditNote' | 'debitNote' | 'supplierCreditNote' | 'supplierDebitNote';
@@ -69,6 +70,7 @@ function SourceList({ kind }: { kind: AgainstSource }) {
   const [partyOpen, setPartyOpen] = useState(false);
   const [partyQuery, setPartyQuery] = useState('');
   const partySearch = usePartySearch(purchase ? 'supplier' : 'customer', useDebounced(partyQuery), partyOpen);
+  const addParty = useAddParty(purchase ? 'supplier' : 'customer', (p) => setPartyId(p.id));
   const partyRecord = usePartyRecord(partyId);
   const partyName = partyRecord.data?.name;
 
@@ -264,6 +266,7 @@ function SourceList({ kind }: { kind: AgainstSource }) {
         onSelect={setPartyId}
         onQueryChange={setPartyQuery}
         loading={partySearch.isFetching}
+        footer={<AddPartyButton kind={purchase ? 'supplier' : 'customer'} onPress={() => addParty(() => setPartyOpen(false))} />}
       />
 
       <Sheet

@@ -36,6 +36,7 @@ import { useAccountName, useGroupName } from '../books/names';
 import { CostCentreField } from '../books/CostCentreField';
 import { useCostCentres } from '../../store/books';
 import { ReceivedForSheet, type ReceiptCarry } from './ReceivedForSheet';
+import { AddPartyButton, useAddParty } from '../contacts/AddPartyButton';
 
 const CASH: LedgerGroup[] = ['cashInHand', 'bankAccounts'];
 
@@ -125,6 +126,7 @@ export function ReceiptForm({
   // Handed over from the payment form with an amount typed there: that is a change to lose too.
   const leaveGuard = useLeaveGuard(entered !== untouched || !!seed?.amount);
   /** Hands over to the payment form for a customer, with what was typed here. */
+  const addCustomer = useAddParty('customer', (p) => void pickCustomer(p.id));
   const pickCustomer = async (id: string) => {
     if (!onPickCustomer) return;
     await leaveGuard.release();
@@ -322,6 +324,7 @@ export function ReceiptForm({
           if (picked.key.startsWith('party:')) setPartyId(undefined);
         }}
         onCreateIncome={(name) => void addIncome(name)}
+        footer={onPickCustomer ? <AddPartyButton kind="customer" onPress={() => addCustomer(() => setPicking(null))} /> : undefined}
       />
       <SelectSheet visible={picking === 'into'} onClose={() => setPicking(null)} title={tr('books:receipts.pickInto')} options={options(cash)} value={into} onSelect={setInto} />
       <SelectSheet

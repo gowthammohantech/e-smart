@@ -61,6 +61,7 @@ import { useDebounced } from '../../components/useDebounced';
 import { SHOW_SCROLLBAR, useBreakpoint } from '@esmart/ui/theme/breakpoints';
 import { useGoBack } from '../../navigation/useGoBack';
 import { inactiveChoice } from './accountChoice';
+import { AddPartyButton, useAddParty } from '../contacts/AddPartyButton';
 
 
 /** What settles a document besides cash. */
@@ -199,6 +200,8 @@ export function PaymentForm({
   // The services an advance receipt can be for: active items of type service, searched by name, SKU or SAC.
   const serviceSearch = useItemSearch(useDebounced(serviceQuery), advanceSheet === 'service');
   const services = (serviceSearch.data ?? []).filter((i): i is typeof i & { id: string } => i.type === 'service' && !!i.id);
+  // "Add new customer" (or supplier) under the picker: the contact saved there is the one this is for.
+  const addParty = useAddParty(direction === 'received' ? 'customer' : 'supplier', (p) => pickParty(p.id));
   const pickParty = (id: string) => {
     setPartyId(id);
     setAllocations({});
@@ -1292,6 +1295,7 @@ export function PaymentForm({
               }
               pickParty(picked.partyId);
             }}
+            footer={<AddPartyButton kind="customer" onPress={() => addParty(() => setPartyOpen(false))} />}
           />
         ) : (
           <SelectSheet
@@ -1303,6 +1307,7 @@ export function PaymentForm({
             loading={partySearch.isFetching}
             value={partyId}
             onSelect={pickParty}
+            footer={<AddPartyButton kind={direction === 'received' ? 'customer' : 'supplier'} onPress={() => addParty(() => setPartyOpen(false))} />}
           />
         )}
         <SelectSheet
