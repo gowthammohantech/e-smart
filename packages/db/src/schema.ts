@@ -355,6 +355,8 @@ export const paymentAccounts = pgTable("payment_accounts", {
 	// A foreign-currency account: its opening balance's rate to base on that day, so totals in base agree everywhere.
 	openingRate: numeric("opening_rate", { precision: 18, scale:  8 }).default('1').notNull(),
 	isDefault: boolean("is_default").default(false).notNull(),
+	// Inactive: kept with its history and shown, but no new money is recorded in it.
+	status: activeStatus().default('active').notNull(),
 	version: integer().default(1).notNull(),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),

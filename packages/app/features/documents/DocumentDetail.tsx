@@ -64,7 +64,7 @@ import { ComplianceNextSteps } from '../compliance/ComplianceNextSteps';
 import { canCancelEInvoice, isEInvoiceApplicable } from '@esmart/core/domain/eInvoice';
 import { ewayBillStatusAt, isEwayBillRequired } from '@esmart/core/domain/ewayBill';
 import { DIALOG_WIDTH, SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
-import { Cell, DataTable, TABLE_PAGE_SIZE } from '@esmart/ui/components/DataTable';
+import { Cell, DataTable, TABLE_PAGE_SIZE, TABLE_PAGE_SIZES } from '@esmart/ui/components/DataTable';
 import { SplitPane } from '@esmart/ui/components/Layout';
 import { Menu, MenuDivider, MenuItem, MenuSection, useMenuAnchor } from '@esmart/ui/components/Menu';
 import { Segmented } from '@esmart/ui/components/Field';
@@ -180,6 +180,8 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
   const { run: oneAtATime, busy } = useSingleFlight();
   const desktop = useIsDesktop();
   const [desktopTab, setDesktopTab] = useState<'details' | 'preview'>('details');
+  // On a desktop invoice or bill: its lines, or what stands against it (notes, payments).
+  const [relatedTab, setRelatedTab] = useState<'items' | 'credit' | 'debit' | 'payments'>('items');
   // A desktop drops the actions, and then the statuses, down from the header's Actions button.
   const { setAnchor: setActionsAnchor, rect: actionsRect, open: openActionsMenu, close: closeActionsMenu } = useMenuAnchor();
   const [menuKind, setMenuKind] = useState<'actions' | 'status'>('actions');
@@ -258,6 +260,14 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
       creditCount: credits.length + applied.length,
     };
   }, [record, allDocuments, doc.id, doc.totals.grandTotal.minor, doc.currency, outstanding.minor, relatedPayments]);
+  // Debit notes raised on this invoice: what they still owe adds to the outstanding shown here, a part
+  // of its own in the bar, and Record payment takes them along, ticked in full beside the invoice.
+  const debitDue = (record?.linkedDocuments ?? [])
+    .filter((d) => doc.kind === 'invoice' && d.kind === 'debitNote' && !!d.id && !!d.number && !!d.status && !['draft', 'requested', 'cancelled', 'rejected'].includes(d.status) && ((d.outstanding as Money | undefined)?.minor ?? 0) > 0)
+    .map((d) => ({ id: d.id!, number: d.number!, outstanding: d.outstanding as Money }));
+  const debitDueTotal = money(debitDue.reduce((a, d) => a + d.outstanding.minor, 0), doc.currency);
+  const totalDue = money(outstanding.minor + debitDueTotal.minor, doc.currency);
+  const payRoute = debitDue.length ? `${paymentRoute}&with=${debitDue.map((d) => d.id).join(',')}` : paymentRoute;
   // Late only while something is still owed: a paid invoice past its date isn't overdue.
   const owing = isPayable && isFinalized(doc.status) && doc.status !== 'cancelled' && doc.status !== 'paid' && outstanding.minor > 0;
   const overdueDays = doc.dueDate && owing ? daysBetween(doc.dueDate, today()) : 0;
@@ -759,14 +769,16 @@ ${url}`;
       </Card>
     </>
   );
+  // The invoice's own part of the outstanding, red once overdue.
+  const outstandingColor = overdueDays > 0 ? t.c.bad : t.c.warn;
   const payButtons =
-    (!recordPending && outstanding.minor > 0) || (canAdjust && !recordPending) ? (
+    (!recordPending && totalDue.minor > 0) || (canAdjust && !recordPending) ? (
       <>
-        {!recordPending && outstanding.minor > 0 ? (
+        {!recordPending && totalDue.minor > 0 ? (
           <Button
             title={receivable ? tr('common:action.recordPayment') : tr('sales:detail.paySupplier')}
             icon={receivable ? 'cash-plus' : 'cash-minus'}
-            onPress={() => router.push(paymentRoute as never)}
+            onPress={() => router.push(payRoute as never)}
             fullWidth
           />
         ) : null}
@@ -793,8 +805,8 @@ ${url}`;
               {recordPending ? (
                 <Skeleton height={22} width={110} radius={4} />
               ) : (
-                <Text variant="h3" weight="700" tone={outstanding.minor > 0 ? (overdueDays > 0 ? 'bad' : 'warn') : 'good'}>
-                  {formatMoney(outstanding)}
+                <Text variant="h3" weight="700" tone={totalDue.minor > 0 ? (overdueDays > 0 ? 'bad' : 'warn') : 'good'}>
+                  {formatMoney(totalDue)}
                 </Text>
               )}
             </View>
@@ -820,7 +832,10 @@ ${url}`;
             <StatusBar
               emptyLabel={tr('sales:detail.nothingLeft')}
               segments={[
-                { key: 'outstanding', label: tr('sales:detail.outstanding'), total: outstanding, color: overdueDays > 0 ? t.c.bad : t.c.warn },
+                // "Invoice due", not Outstanding: the heading's Outstanding has the debit notes in it too.
+                { key: 'outstanding', label: tr('sales:detail.related.kindDue', { kind: kindName }), total: outstanding, color: outstandingColor },
+                // What its debit notes still owe, part of the outstanding in the heading.
+                { key: 'debit', label: tr('sales:detail.related.debitNotes'), count: debitDue.length, total: debitDueTotal, color: seriesColor(t.scheme, 4) },
                 { key: 'payments', label: tr(receivable ? 'sales:detail.settlement.customerPayments' : 'sales:detail.settlement.supplierPayments'), count: settlement.paymentCount, total: settlement.payments, color: t.c.good },
                 { key: 'credit', label: tr('sales:detail.settlement.creditNotes'), count: settlement.creditCount, total: settlement.credited, color: seriesColor(t.scheme, 0) },
               ].filter((s) => s.total.minor > 0)}
@@ -1112,55 +1127,187 @@ ${url}`;
 
   // A desktop lays the lines out as a table, with the actions in the page
   // header instead of a sticky footer.
+  const itemsTable = (
+    <DataTable
+      pageSize={TABLE_PAGE_SIZE}
+      pageSizeOptions={TABLE_PAGE_SIZES}
+      tableKey="document-items"
+      scroll={false}
+      columns={[
+        {
+          key: 'item',
+          header: tr('sales:detail.lineItem'),
+          flex: 3,
+          render: (line) => (
+            <View style={{ gap: 2, maxWidth: '100%' }}>
+              <Cell weight="600">{line.name}</Cell>
+              {line.hsnCode ? <Cell tone="muted">{`HSN ${line.hsnCode}`}</Cell> : null}
+            </View>
+          ),
+        },
+        { key: 'qty', header: tr('sales:detail.qty'), width: 100, align: 'right', render: (line) => <Cell mono>{`${formatQty(line.quantity)} ${unitShortName(line.unit)}`}</Cell> },
+        { key: 'rate', header: tr('sales:detail.rate'), width: 130, align: 'right', render: (line) => <Cell mono>{formatMoney(line.unitPrice)}</Cell> },
+        {
+          key: 'discount',
+          header: tr('sales:detail.discount'),
+          width: 110,
+          align: 'right',
+          render: (line) => (
+            <Cell tone="muted" mono>
+              {line.discountValue > 0 ? discountText(line) : '—'}
+            </Cell>
+          ),
+        },
+        { key: 'tax', header: tr('sales:detail.taxRate'), width: 80, align: 'right', render: (line) => <Cell tone="muted">{lineRateLabel(line)}</Cell> },
+        {
+          key: 'amount',
+          header: tr('sales:detail.lineAmount'),
+          width: 140,
+          align: 'right',
+          render: (line) => (
+            <Cell weight="700" mono>
+              {formatMoney(lineAmount(line))}
+            </Cell>
+          ),
+        },
+      ]}
+      rows={doc.lines}
+      rowKey={(line) => line.id}
+    />
+  );
+
+  // What stands against an invoice or bill, a table each beside its lines: the returns and credit notes
+  // made from it and the direct notes applied to it, the debit notes made from it, and the payments on it.
+  type RelatedRow = { id: string; kind?: DocumentKind; number: string; date?: string; status?: DocStatus; total?: Money; outstanding?: Money; applicationId?: string };
+  const madeFromThis: RelatedRow[] = (record?.linkedDocuments ?? allDocuments.filter((d) => d.sourceDocumentId === doc.id).map((d) => ({ id: d.id, kind: d.kind, number: d.number, date: d.date, status: d.status, grandTotal: d.totals.grandTotal })))
+    .filter((d) => d.id && d.number)
+    .map((d) => ({ id: d.id!, kind: d.kind as DocumentKind | undefined, number: d.number!, date: d.date, status: d.status as DocStatus | undefined, total: d.grandTotal as Money | undefined, outstanding: (d as { outstanding?: Money }).outstanding }));
+  const creditRows: RelatedRow[] = [
+    ...madeFromThis.filter((d) => d.kind && CREDIT_KINDS.includes(d.kind)),
+    ...applications
+      .filter((a) => a.documentId === doc.id)
+      .map((a) => ({ id: a.noteId, kind: (receivable ? 'creditNote' : 'supplierCreditNote') as DocumentKind, number: a.noteNumber, date: a.date, total: a.amount as Money, applicationId: a.id })),
+  ];
+  const debitRows = madeFromThis.filter((d) => d.kind === 'debitNote' || d.kind === 'supplierDebitNote');
+  const anyAdvanceGst = relatedPayments.some((p) => p.advanceTax && !p.advanceTax.reverseCharge && p.advanceTax.rate > 0);
+  const counted = (label: string, n: number) => (n > 0 ? `${label} (${n})` : label);
+  const emptyText = (text: string) => (
+    <Text variant="small" tone="muted" style={{ padding: t.spacing.lg }}>
+      {text}
+    </Text>
+  );
+  const noteColumns = (withOutstanding: boolean) => [
+    { key: 'number', header: tr('common:table.number'), flex: 2, render: (r: RelatedRow) => <Cell weight="600">{r.number}</Cell> },
+    { key: 'type', header: tr('common:table.type'), flex: 2, render: (r: RelatedRow) => <Cell tone="muted">{r.kind ? documentKindLabel(tr, r.kind, 1) : ''}</Cell> },
+    { key: 'date', header: tr('common:table.date'), width: 130, render: (r: RelatedRow) => <Cell tone="muted">{r.date ? formatDate(r.date) : ''}</Cell> },
+    {
+      key: 'status',
+      header: tr('common:table.status'),
+      width: 140,
+      // A direct note applied here has no status of its own on this invoice: it was applied.
+      render: (r: RelatedRow) => (r.applicationId ? <Badge label={tr('sales:detail.related.applied')} tone="neutral" size="sm" /> : r.status ? <StatusBadge status={r.status} /> : null),
+    },
+    ...(withOutstanding ? [{ key: 'outstanding', header: tr('common:table.outstanding'), width: 140, align: 'right' as const, render: (r: RelatedRow) => <Cell mono tone="muted">{r.outstanding ? formatMoney(r.outstanding) : '—'}</Cell> }] : []),
+    { key: 'amount', header: tr('common:table.amount'), width: 150, align: 'right' as const, render: (r: RelatedRow) => <Cell weight="700" mono>{r.total ? formatMoney(r.total) : ''}</Cell> },
+  ];
+  const creditTable = (
+    <DataTable
+      pageSize={TABLE_PAGE_SIZE}
+      pageSizeOptions={TABLE_PAGE_SIZES}
+      tableKey="document-credit-notes"
+      scroll={false}
+      columns={noteColumns(false)}
+      rows={creditRows}
+      rowKey={(r) => r.applicationId ?? r.id}
+      onRowPress={(r) => router.push(detailRouteFor(r.kind ?? 'creditNote', r.id) as never)}
+      // A direct note applied here can be taken off again.
+      rowActions={(r) => (r.applicationId ? [{ key: 'undo', label: tr('sales:detail.creditApplications.undo'), icon: 'undo-variant', onPress: () => undoApplication(r.applicationId!, r.number) }] : [])}
+      empty={emptyText(tr('sales:detail.related.noCreditNotes'))}
+    />
+  );
+  const debitTable = (
+    <DataTable
+      pageSize={TABLE_PAGE_SIZE}
+      pageSizeOptions={TABLE_PAGE_SIZES}
+      tableKey="document-debit-notes"
+      scroll={false}
+      columns={noteColumns(true)}
+      rows={debitRows}
+      rowKey={(r) => r.id}
+      onRowPress={(r) => router.push(detailRouteFor(r.kind ?? 'debitNote', r.id) as never)}
+      empty={emptyText(tr('sales:detail.related.noDebitNotes'))}
+    />
+  );
+  const paymentsTable = (
+    <DataTable
+      pageSize={TABLE_PAGE_SIZE}
+      pageSizeOptions={TABLE_PAGE_SIZES}
+      tableKey="document-payments"
+      scroll={false}
+      columns={[
+        { key: 'number', header: tr('common:table.number'), flex: 2, render: (p) => <Cell weight="600">{p.number}</Cell> },
+        { key: 'date', header: tr('common:table.date'), width: 130, render: (p) => <Cell tone="muted">{formatDate(p.date)}</Cell> },
+        { key: 'method', header: tr('common:table.method'), width: 130, render: (p) => <Cell tone="muted">{paymentMethodLabel(tr, p.method)}</Cell> },
+        { key: 'reference', header: tr('common:table.reference'), flex: 2, render: (p) => <Cell tone="muted">{p.reference || '—'}</Cell> },
+        // A with-tax advance applied here: the GST it carries.
+        ...(anyAdvanceGst
+          ? [
+              {
+                key: 'gst',
+                header: tr('sales:payment.gstIncluded'),
+                width: 140,
+                align: 'right' as const,
+                render: (p: (typeof relatedPayments)[number]) => {
+                  const alloc = p.allocations.find((a) => a.documentId === doc.id);
+                  return (
+                    <Cell mono tone="muted">
+                      {p.advanceTax && !p.advanceTax.reverseCharge && p.advanceTax.rate > 0 ? formatMoney(inclusiveTax(alloc?.amount ?? p.amount, p.advanceTax.rate + (p.advanceTax.cessRate ?? 0))) : '—'}
+                    </Cell>
+                  );
+                },
+              },
+            ]
+          : []),
+        {
+          key: 'amount',
+          header: tr('common:table.amount'),
+          width: 150,
+          align: 'right',
+          render: (p) => (
+            <Cell weight="700" mono tone="good">
+              {formatMoney(p.allocations.find((a) => a.documentId === doc.id)?.amount ?? p.amount)}
+            </Cell>
+          ),
+        },
+      ]}
+      rows={relatedPayments}
+      rowKey={(p) => p.id}
+      onRowPress={(p) => router.push(`/(app)/payments/${p.id}` as never)}
+      empty={emptyText(tr('sales:detail.related.noPayments'))}
+    />
+  );
   const desktopLines = (
     <View style={{ gap: t.spacing.sm, marginTop: t.spacing.md }}>
-      <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.8 }}>
-        {tr('sales:detail.items')}
-      </Text>
-      <DataTable
-        pageSize={TABLE_PAGE_SIZE}
-        scroll={false}
-        columns={[
-          {
-            key: 'item',
-            header: tr('sales:detail.lineItem'),
-            flex: 3,
-            render: (line) => (
-              <View style={{ gap: 2, maxWidth: '100%' }}>
-                <Cell weight="600">{line.name}</Cell>
-                {line.hsnCode ? <Cell tone="muted">{`HSN ${line.hsnCode}`}</Cell> : null}
-              </View>
-            ),
-          },
-          { key: 'qty', header: tr('sales:detail.qty'), width: 100, align: 'right', render: (line) => <Cell mono>{`${formatQty(line.quantity)} ${unitShortName(line.unit)}`}</Cell> },
-          { key: 'rate', header: tr('sales:detail.rate'), width: 130, align: 'right', render: (line) => <Cell mono>{formatMoney(line.unitPrice)}</Cell> },
-          {
-            key: 'discount',
-            header: tr('sales:detail.discount'),
-            width: 110,
-            align: 'right',
-            render: (line) => (
-              <Cell tone="muted" mono>
-                {line.discountValue > 0 ? discountText(line) : '—'}
-              </Cell>
-            ),
-          },
-          { key: 'tax', header: tr('sales:detail.taxRate'), width: 80, align: 'right', render: (line) => <Cell tone="muted">{lineRateLabel(line)}</Cell> },
-          {
-            key: 'amount',
-            header: tr('sales:detail.lineAmount'),
-            width: 140,
-            align: 'right',
-            render: (line) => (
-              <Cell weight="700" mono>
-                {formatMoney(lineAmount(line))}
-              </Cell>
-            ),
-          },
-        ]}
-        rows={doc.lines}
-        rowKey={(line) => line.id}
-      />
+      {isPayable ? (
+        <View style={{ alignSelf: 'flex-start', maxWidth: '100%' }}>
+          <Segmented
+            size="sm"
+            options={[
+              { value: 'items', label: counted(tr('sales:detail.items'), doc.lines.length) },
+              { value: 'credit', label: counted(tr('sales:detail.settlement.creditNotes'), creditRows.length) },
+              { value: 'debit', label: counted(tr('sales:detail.related.debitNotes'), debitRows.length) },
+              { value: 'payments', label: counted(tr('sales:detail.payments'), relatedPayments.length) },
+            ]}
+            value={relatedTab}
+            onChange={(v) => setRelatedTab(v as typeof relatedTab)}
+          />
+        </View>
+      ) : (
+        <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.8 }}>
+          {tr('sales:detail.items')}
+        </Text>
+      )}
+      {!isPayable || relatedTab === 'items' ? itemsTable : relatedTab === 'credit' ? creditTable : relatedTab === 'debit' ? debitTable : paymentsTable}
     </View>
   );
 
@@ -1220,8 +1367,8 @@ ${url}`;
             icon: (receivable ? 'cash-plus' : 'cash-minus') as IconName,
             onPress: () => {
               if (!isFinalized(doc.status)) return toast.show(tr('common:documentDetail.issueFirst'), 'warning');
-              if (outstanding.minor <= 0) return toast.show(tr('common:documentDetail.nothingDue'), 'info', { icon: 'check-decagram-outline', detail: doc.number });
-              router.push(paymentRoute as never);
+              if (totalDue.minor <= 0) return toast.show(tr('common:documentDetail.nothingDue'), 'info', { icon: 'check-decagram-outline', detail: doc.number });
+              router.push(payRoute as never);
             },
           },
         ]
@@ -1333,7 +1480,8 @@ ${url}`;
                     {paymentCard}
                     {/* The totals beside the lines, as the editor shows them, rather than a wide card half empty. */}
                     {totalsCard}
-                    {paymentsSection}
+                    {/* An invoice's or bill's payments and notes are tabs beside its lines; a note keeps where it was applied here. */}
+                    {isPayable ? null : paymentsSection}
                     {complianceSection}
                   </>
                 }

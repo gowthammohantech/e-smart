@@ -266,6 +266,14 @@
     "referenceBadge": "Ref {{reference}}",
     "theirNumber": "Their no. {{number}}",
     "paid": "Settled",
+    "related": {
+      "debitNotes": "Debit notes",
+      "kindDue": "{{kind}} due",
+      "applied": "Applied",
+      "noCreditNotes": "No credit notes or returns against this yet",
+      "noDebitNotes": "No debit notes against this yet",
+      "noPayments": "No payments recorded on this yet"
+    },
     "settlement": {
       "customerPayments": "Customer payments",
       "supplierPayments": "Supplier payments",

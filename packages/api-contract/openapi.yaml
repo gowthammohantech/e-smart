@@ -1523,6 +1523,7 @@ paths:
       parameters:
         - { name: kind, in: query, schema: { $ref: '#/components/schemas/PartyKind' } }
         - { name: status, in: query, schema: { type: string, enum: [active, inactive] } }
+        - { name: holding, in: query, schema: { type: string, enum: [credit] }, description: 'Only parties that may hold something to adjust: a receipt or payment with money not yet allocated, or a credit note. `advance` on each row says how much is left' }
         - { $ref: '#/components/parameters/Q' }
         - { $ref: '#/components/parameters/Limit' }
         - { $ref: '#/components/parameters/Cursor' }
@@ -7417,6 +7418,7 @@ components:
             openingRate: { type: number, readOnly: true, description: "A foreign-currency account: the opening balance's rate to base on its date, from the company's exchange rates" }
             currentBalance: { allOf: [{ $ref: '#/components/schemas/Money' }], readOnly: true, description: 'In base currency' }
             isDefault: { type: boolean }
+            status: { type: string, enum: [active, inactive], description: 'Inactive: kept with its history and listed, but no new payment, expense or voucher line goes into it. The default account and the one printed on invoices stay active' }
     ExchangeRate:
       allOf:
         - $ref: '#/components/schemas/Versioned'
@@ -7572,6 +7574,11 @@ components:
               entityType: { type: string, enum: [document, payment, voucher, opening] }
               entityId: { type: string }
               number: { type: string }
+              kind: { type: string, description: "What the line is: a document's kind (invoice, debitNote, creditNote…), its TDS line (tds), a receipt, an advance receipt, a payment, a refund, or a journal" }
+              taxable: { allOf: [{ $ref: '#/components/schemas/Money' }], description: "A document's taxable value" }
+              tax: { allOf: [{ $ref: '#/components/schemas/Money' }], description: "A document's GST" }
+              method: { $ref: '#/components/schemas/PaymentMethod' }
+              reference: { type: string, description: "A payment's reference (UTR, cheque number)" }
               debit: { $ref: '#/components/schemas/Money' }
               credit: { $ref: '#/components/schemas/Money' }
               balance: { $ref: '#/components/schemas/Money' }

@@ -6,7 +6,8 @@ import { api } from './api';
 import { RemoteError } from './errors';
 
 export type PartyStatement = Schema<'PartyStatement'>;
-export type StatementRange = { from: string; to: string };
+/** Either end left out: from the first line, or to the last. */
+export type StatementRange = { from?: string; to?: string };
 
 const params = (companyId: string, id: string, range: StatementRange) => ({ path: { companyId, id }, query: range });
 

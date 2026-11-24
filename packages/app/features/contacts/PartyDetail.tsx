@@ -39,8 +39,9 @@ import { useGoBack } from '../../navigation/useGoBack';
 import { PaymentReminderSheet } from '../ledger/PaymentReminderSheet';
 import { CardRowsSkeleton, ListSkeleton } from '../../components/ScreenSkeleton';
 import { LoadFailed } from '../company/LoadFailed';
+import { PartyAccountView } from './PartyAccountView';
 
-type Tab = 'activity' | 'documents' | 'payments' | 'details';
+type Tab = 'account' | 'activity' | 'documents' | 'payments' | 'details';
 
 export function PartyDetail({ party }: { party: Party }) {
   useRefreshOnFocus();
@@ -74,7 +75,9 @@ export function PartyDetail({ party }: { party: Party }) {
     );
   };
 
-  const [tab, setTab] = useState<Tab>('activity');
+  // A customer's or supplier's page opens on their account (opening balance to balance, line by line);
+  // a general contact has none.
+  const [tab, setTab] = useState<Tab>(() => (party.kind !== 'general' ? 'account' : 'activity'));
   const desktop = useIsDesktop();
   // Details sit in the side column on a desktop, so that tab falls back.
   const shownTab: Tab = desktop && tab === 'details' ? 'activity' : tab;
@@ -266,7 +269,11 @@ export function PartyDetail({ party }: { party: Party }) {
   );
   const tabPanels = (
     <>
+    {shownTab === 'account' && canTransact ? <PartyAccountView party={party} owed={totalOutstanding} /> : null}
+
     {shownTab === 'activity' ? (
+      <View style={{ gap: t.spacing.md }}>
+      {statTiles}
       <Card padded={false}>
         {!aging && agingQ.isError ? (
           <LoadFailed onRetry={agingQ.refetch} compact />
@@ -291,6 +298,7 @@ export function PartyDetail({ party }: { party: Party }) {
           ))
         )}
       </Card>
+      </View>
     ) : null}
 
     {shownTab === 'documents' ? (
@@ -493,9 +501,9 @@ export function PartyDetail({ party }: { party: Party }) {
             }
             main={
               <View style={{ gap: t.spacing.md }}>
-                {statTiles}
                 <Segmented
                   options={[
+                    ...(canTransact ? [{ value: 'account', label: tr('contacts:account.tab') }] : []),
                     { value: 'activity', label: tr('contacts:detail.tabOpen') },
                     { value: 'documents', label: tr('contacts:detail.tabDocuments') },
                     { value: 'payments', label: tr('contacts:detail.tabPayments') },
@@ -512,10 +520,9 @@ export function PartyDetail({ party }: { party: Party }) {
           <>
             {headerCard}
             <View style={{ height: t.spacing.md }} />
-            {statTiles}
-            <View style={{ height: t.spacing.lg }} />
             <Segmented
               options={[
+                ...(canTransact ? [{ value: 'account', label: tr('contacts:account.tab') }] : []),
                 { value: 'activity', label: tr('contacts:detail.tabOpen') },
                 { value: 'documents', label: tr('contacts:detail.tabDocuments') },
                 { value: 'payments', label: tr('contacts:detail.tabPayments') },

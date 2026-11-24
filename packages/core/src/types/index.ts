@@ -936,6 +936,8 @@ export type PaymentAccount = {
   /** A foreign-currency account: the opening balance's rate to base on that day (1 in base currency). */
   openingRate?: number;
   isDefault: boolean;
+  /** Inactive: kept and listed, but no new money is recorded in it. Absent reads as active. */
+  status?: 'active' | 'inactive';
 };
 
 /* ------------------------------------------------------------------ */

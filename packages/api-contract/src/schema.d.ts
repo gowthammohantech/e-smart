@@ -5315,6 +5315,11 @@ export interface components {
             /** @description In base currency */
             readonly currentBalance?: components["schemas"]["Money"];
             isDefault?: boolean;
+            /**
+             * @description Inactive: kept with its history and listed, but no new payment, expense or voucher line goes into it. The default account and the one printed on invoices stay active
+             * @enum {string}
+             */
+            status?: "active" | "inactive";
         };
         ExchangeRate: components["schemas"]["Versioned"] & {
             readonly id?: string;
@@ -5495,6 +5500,15 @@ export interface components {
                 entityType?: "document" | "payment" | "voucher" | "opening";
                 entityId?: string;
                 number?: string;
+                /** @description What the line is: a document's kind (invoice, debitNote, creditNote…), its TDS line (tds), a receipt, an advance receipt, a payment, a refund, or a journal */
+                kind?: string;
+                /** @description A document's taxable value */
+                taxable?: components["schemas"]["Money"];
+                /** @description A document's GST */
+                tax?: components["schemas"]["Money"];
+                method?: components["schemas"]["PaymentMethod"];
+                /** @description A payment's reference (UTR, cheque number) */
+                reference?: string;
                 debit?: components["schemas"]["Money"];
                 credit?: components["schemas"]["Money"];
                 balance?: components["schemas"]["Money"];
@@ -10177,6 +10191,8 @@ export interface operations {
             query?: {
                 kind?: components["schemas"]["PartyKind"];
                 status?: "active" | "inactive";
+                /** @description Only parties that may hold something to adjust: a receipt or payment with money not yet allocated, or a credit note. `advance` on each row says how much is left */
+                holding?: "credit";
                 /** @description Free-text search */
                 q?: components["parameters"]["Q"];
                 limit?: components["parameters"]["Limit"];

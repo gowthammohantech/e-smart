@@ -56,7 +56,6 @@
     "bankAndSignature": "Bank & signature",
     "bankHint": "Printed on invoices, quotes and orders so customers know where to pay. With a UPI ID, the invoice carries a QR code for the amount.",
     "bookAccount": "Account in your books",
-    "bookAccountNone": "Not linked",
     "bookAccountHint": "Money customers pay against your invoices goes into this account by default.",
     "bookAccountEmpty": "Add a bank account under Cash and bank accounts to link it here.",
     "bookAccountPrints": "Your invoices print these details from {{name}}. Change them in Payment accounts and every invoice after that follows.",
@@ -89,7 +88,8 @@
     "logoRemoveTitle": "Remove the logo?",
     "logoRemoveBody": "It comes off your invoices and other documents straight away. You can add one again any time.",
     "signatureRemoveTitle": "Remove the signature?",
-    "signatureRemoveBody": "Documents print without it from now on. You can add one again any time."
+    "signatureRemoveBody": "Documents print without it from now on. You can add one again any time.",
+    "bookAccountPick": "Pick an account"
   },
   "gstPortal": {
     "howTitle": "Before you connect",
@@ -145,7 +145,11 @@
     "currencyHint": "The opening balance is in this currency and is converted at the rate on file for its date (Currencies & rates).",
     "openingOnDate": "Balance as on a date",
     "openingOnDateHint": "Off: the balance stands at the start of the books. On: it stands on the day you pick.",
-    "balance": "Balance"
+    "balance": "Balance",
+    "active": "Active",
+    "activeHint": "Off: the account and its history stay, but no new receipts, payments, expenses or transfers go into it.",
+    "activeLockedDefault": "The default account stays active. Make another account the default first.",
+    "activeLockedInvoices": "Your invoices print this account, so it stays active. Pick another in Business profile first."
   },
   "branches": {
     "none": "No branches yet",

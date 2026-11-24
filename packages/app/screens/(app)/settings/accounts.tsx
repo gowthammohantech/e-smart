@@ -72,6 +72,8 @@ export default function AccountSettings() {
   // Blank: the balance stands at the start of the books. A date: it stands on that day.
   const [openingBalanceDate, setOpeningBalanceDate] = useState<string | undefined>(undefined);
   const [isDefault, setIsDefault] = useState(false);
+  // Inactive: kept with its history, but no new money goes into it.
+  const [active, setActive] = useState(true);
   const typeLabels: Record<PaymentAccount['type'], string> = {
     bank: tr('settings:accounts.typeBank'),
     cash: tr('settings:accounts.typeCash'),
@@ -121,6 +123,7 @@ export default function AccountSettings() {
     setOpeningBalance(a ? String(toMajor(a.openingBalance)) : '');
     setOpeningBalanceDate(a?.openingBalanceDate);
     setIsDefault(a?.isDefault ?? false);
+    setActive(a?.status !== 'inactive');
   };
 
   // The same shapes the server checks, said here in words, as they are typed: red at once, and Save waits.
@@ -145,6 +148,7 @@ export default function AccountSettings() {
       branchName: type === 'bank' ? text(branchName) : undefined,
       ifsc: type === 'bank' ? text(ifsc)?.toUpperCase() : undefined,
       upiId: type === 'bank' ? text(upiId)?.toLowerCase() : undefined,
+      status: active ? ('active' as const) : ('inactive' as const),
     };
     // The sheet stays open until the server has it, so a refusal can be fixed here.
     const res = await serverSave(
@@ -209,7 +213,7 @@ export default function AccountSettings() {
             rowLabel={(a) => a.name}
             onRowPress={open}
             columns={[
-              { key: 'name', header: tr('settings:accounts.name'), flex: 2, sortValue: (a) => a.name, render: (a) => <Cell weight="600">{a.name}</Cell> },
+              { key: 'name', header: tr('settings:accounts.name'), flex: 2, sortValue: (a) => a.name, render: (a) => <Cell weight="600" tone={a.status === 'inactive' ? 'muted' : 'default'}>{a.name}</Cell> },
               { key: 'type', header: tr('common:table.type'), width: 120, sortValue: (a) => typeLabels[a.type], render: (a) => <Cell tone="muted">{typeLabels[a.type]}</Cell> },
               { key: 'number', header: tr('settings:accounts.number'), width: 180, secondary: true, render: (a) => <Cell tone="muted" mono>{a.accountNumber || '—'}</Cell> },
               {
@@ -220,6 +224,7 @@ export default function AccountSettings() {
                   <View style={{ flexDirection: 'row', gap: 6 }}>
                     {a.isDefault ? <Badge label={tr('settings:accounts.default')} tone="info" size="sm" /> : null}
                     {a.id === invoiceAccountId ? <Badge label={tr('settings:accounts.onInvoices')} tone="success" size="sm" /> : null}
+                    {a.status === 'inactive' ? <Badge label={tr('common:accountStatus.inactive')} tone="neutral" size="sm" /> : null}
                   </View>
                 ),
               },
@@ -264,6 +269,7 @@ export default function AccountSettings() {
                     )}
                     {a.isDefault ? <Badge label={tr('settings:accounts.default')} tone="info" size="sm" /> : null}
                     {a.id === invoiceAccountId ? <Badge label={tr('settings:accounts.onInvoices')} tone="success" size="sm" /> : null}
+                    {a.status === 'inactive' ? <Badge label={tr('common:accountStatus.inactive')} tone="neutral" size="sm" /> : null}
                   </View>
                 }
                 onPress={() => open(a)}
@@ -388,6 +394,15 @@ export default function AccountSettings() {
             <Text variant="caption" tone="muted">
               {tr('settings:accounts.defaultNotDeletable')}
             </Text>
+          ) : null}
+          {editing?.id ? (
+            <SwitchField
+              label={tr('settings:accounts.active')}
+              description={isDefault ? tr('settings:accounts.activeLockedDefault') : onInvoices ? tr('settings:accounts.activeLockedInvoices') : tr('settings:accounts.activeHint')}
+              value={active || isDefault || onInvoices}
+              onValueChange={setActive}
+              disabled={isDefault || onInvoices}
+            />
           ) : null}
         </View>
       </Sheet>

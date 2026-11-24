@@ -694,7 +694,8 @@ export function Segmented<T extends string>({
   size = 'md',
   disabled,
 }: {
-  options: { value: T; label: string }[];
+  /** `color`: a small square before the label, matching a chart or summary the tabs belong to. */
+  options: { value: T; label: string; color?: string }[];
   value: T;
   onChange: (v: T) => void;
   style?: StyleProp<ViewStyle>;
@@ -738,6 +739,8 @@ export function Segmented<T extends string>({
               ...(fit ? { paddingHorizontal: size === 'sm' ? t.spacing.md : t.spacing.lg } : { flex: 1 }),
               height: size === 'sm' ? 30 : desktop ? 34 : 38,
               borderRadius: t.radius.sm,
+              flexDirection: 'row',
+              gap: 6,
               alignItems: 'center',
               justifyContent: 'center',
               // The deeper brand blue: small white text on the bright one is only 4:1.
@@ -746,6 +749,7 @@ export function Segmented<T extends string>({
               opacity: disabled && !active ? 0.4 : 1,
             }}
           >
+            {o.color ? <View style={{ width: 9, height: 9, borderRadius: 2, backgroundColor: o.color }} /> : null}
             <Text
               variant={size === 'sm' ? 'caption' : 'small'}
               weight="600"

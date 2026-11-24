@@ -51,6 +51,7 @@ export function paymentAccountToWire(row: AccountRow, balance: number, baseCurre
     openingRate: Number(row.openingRate) === 1 ? undefined : Number(row.openingRate),
     currentBalance: money(balance, baseCurrency ?? currency),
     isDefault: row.isDefault,
+    status: row.status,
     // Without it the app takes the account for one the server hasn't seen, and an edit creates a new one.
     ...versioned(row),
   });

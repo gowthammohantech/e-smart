@@ -257,7 +257,9 @@ export async function writePayment(
     .where(and(eq(schema.paymentAccounts.companyId, company.id), eq(schema.paymentAccounts.id, input.accountId)))
     .for('update');
   if (!account) blocking('accountId', 'No such payment account in this company');
-  else if (!accountFitsMethod(input.method, account)) {
+  else if (account.status === 'inactive' && existing?.accountId !== account.id) {
+    blocking('accountId', `${account.name} is inactive; make it active in Payment accounts to record money in it`);
+  } else if (!accountFitsMethod(input.method, account)) {
     blocking('accountId', `A ${input.method} payment cannot go through a ${account.type} account`);
   }
   if (input.amountCurrency && input.amountCurrency !== input.currency) blocking('amount.currency', `Must match the payment currency (${input.currency})`);

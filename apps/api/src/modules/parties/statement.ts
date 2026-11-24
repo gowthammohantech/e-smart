@@ -13,7 +13,21 @@ import { partyToWire } from './wire';
 
 type PartyRow = typeof schema.parties.$inferSelect;
 type Statement = Schema<'PartyStatement'>;
-type Entry = { date: string; at: string; entityType: 'document' | 'payment' | 'voucher'; entityId: string; number: string; debit: number; credit: number };
+type Entry = {
+  date: string;
+  at: string;
+  entityType: 'document' | 'payment' | 'voucher';
+  entityId: string;
+  number: string;
+  debit: number;
+  credit: number;
+  /** What the line is, for the statement's type column and summary: a document's kind, tds, receipt, advanceReceipt, payment, refund, journal. */
+  kind: string;
+  taxable?: number;
+  tax?: number;
+  method?: string;
+  reference?: string;
+};
 
 /**
  * A party's running ledger, in the party's currency.
@@ -72,24 +86,28 @@ export async function partyStatement(db: DbOrTx, company: CompanyRow, party: Par
       const raises = isPayableDocument(d.kind);
       const debit = SALES_KINDS.includes(d.kind) ? raises : PURCHASE_KINDS.includes(d.kind) ? !raises : raises;
       const at = iso(d.finalizedAt ?? d.createdAt)!;
-      const entry = { date: d.date, at, entityType: 'document' as const, entityId: d.id, number: d.number, debit: debit ? amount : 0, credit: debit ? 0 : amount };
+      const rate = Number(d.exchangeRate) || 1;
+      const taxable = inPartyCurrency(d.taxableAmountMinor, d.currency, Math.round(d.taxableAmountMinor * rate));
+      const tax = inPartyCurrency(d.totalTaxMinor, d.currency, Math.round(d.totalTaxMinor * rate));
+      const entry = { date: d.date, at, entityType: 'document' as const, entityId: d.id, number: d.number, debit: debit ? amount : 0, credit: debit ? 0 : amount, kind: d.kind as string, taxable, tax };
       // An invoice's TDS is only what the customer is expected to deduct: the receipt records it.
       if (!d.tdsAmountMinor || d.kind === 'invoice') return [entry];
       // TDS kept back goes to the government: it lowers what the supplier is owed (or a credit note gives it back).
       const tds = inPartyCurrency(d.tdsAmountMinor, d.currency, Math.round(d.tdsAmountMinor * Number(d.exchangeRate)));
-      return [entry, { date: d.date, at, entityType: 'document' as const, entityId: d.id, number: `${d.number} TDS`, debit: debit ? 0 : tds, credit: debit ? tds : 0 }];
+      return [entry, { date: d.date, at, entityType: 'document' as const, entityId: d.id, number: `${d.number} TDS`, debit: debit ? 0 : tds, credit: debit ? tds : 0, kind: 'tds' }];
     }),
     ...pays.map((p) => {
       const settled = p.amountMinor + (adjustedOf.get(p.id) ?? 0);
       const amount = inPartyCurrency(settled, p.currency, Math.round(settled * Number(p.exchangeRate)));
       const debit = p.direction === 'paid';
-      return { date: p.date, at: iso(p.createdAt)!, entityType: 'payment' as const, entityId: p.id, number: p.number, debit: debit ? amount : 0, credit: debit ? 0 : amount };
+      const kind = p.refundOfPaymentId ? 'refund' : p.advanceTaxCategoryId ? 'advanceReceipt' : p.direction === 'received' ? 'receipt' : 'payment';
+      return { date: p.date, at: iso(p.createdAt)!, entityType: 'payment' as const, entityId: p.id, number: p.number, debit: debit ? amount : 0, credit: debit ? 0 : amount, kind, method: p.method as string, reference: p.reference ?? undefined };
     }),
     // A journal on the party: a refund paid out, a balance written off, a transfer between ledgers.
     ...vouchers.flatMap((v) =>
       (v.lines as { account: string; debitMinor: number; creditMinor: number }[])
         .filter((l) => l.account === `party:${party.id}`)
-        .map((l) => ({ date: v.date, at: iso(v.createdAt)!, entityType: 'voucher' as const, entityId: v.id, number: v.number, debit: l.debitMinor, credit: l.creditMinor })),
+        .map((l) => ({ date: v.date, at: iso(v.createdAt)!, entityType: 'voucher' as const, entityId: v.id, number: v.number, debit: l.debitMinor, credit: l.creditMinor, kind: 'journal' })),
     ),
   ].sort((a, b) => a.date.localeCompare(b.date) || a.at.localeCompare(b.at));
 
@@ -113,7 +131,20 @@ export async function partyStatement(db: DbOrTx, company: CompanyRow, party: Par
   for (const e of entries) {
     if ((range.from && e.date < range.from) || (range.to && e.date > range.to)) continue;
     balance += net(e);
-    rows.push({ date: e.date, entityType: e.entityType, entityId: e.entityId, number: e.number, debit: money(e.debit, currency), credit: money(e.credit, currency), balance: money(balance, currency) });
+    rows.push({
+      date: e.date,
+      entityType: e.entityType,
+      entityId: e.entityId,
+      number: e.number,
+      kind: e.kind,
+      ...(e.taxable !== undefined && { taxable: money(e.taxable, currency) }),
+      ...(e.tax !== undefined && { tax: money(e.tax, currency) }),
+      ...(e.method && { method: e.method as Schema<'PaymentMethod'> }),
+      ...(e.reference && { reference: e.reference }),
+      debit: money(e.debit, currency),
+      credit: money(e.credit, currency),
+      balance: money(balance, currency),
+    });
   }
   return { party: partyToWire(party), openingBalance: money(opening, currency), closingBalance: money(balance, currency), entries: rows };
 }

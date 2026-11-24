@@ -429,5 +429,9 @@
     "body": "Eight sample businesses, one of each type, with six months of sales, purchases, payments, stock, books and GST. Look around as much as you like: changes aren't saved, and the demo is refreshed every week.",
     "createAccount": "Create your free account",
     "keepExploring": "Keep exploring"
+  },
+  "accountStatus": {
+    "inactive": "Inactive",
+    "inactiveHint": "{{name}} is inactive. Make it active in Payment accounts to record money in it."
   }
 }

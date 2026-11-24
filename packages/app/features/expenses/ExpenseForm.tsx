@@ -48,6 +48,7 @@ import {
 import { SHOW_SCROLLBAR, useBreakpoint } from '@esmart/ui/theme/breakpoints';
 import { useGoBack } from '../../navigation/useGoBack';
 import { validGstin } from '@esmart/core/lib/validators';
+import { inactiveChoice } from '../payments/accountChoice';
 
 /** The desktop side column (summary, receipt). */
 const SIDE_WIDTH = 360;
@@ -708,7 +709,7 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
           visible={accountOpen}
           onClose={() => setAccountOpen(false)}
           title={tr('purchases:form.paidFrom')}
-          options={methodAccounts.map((a) => ({ value: a.id, label: a.name, description: a.accountNumber ?? a.type }))}
+          options={methodAccounts.map((a) => ({ value: a.id, label: a.name, description: a.accountNumber ?? a.type, ...inactiveChoice(tr, a, expense?.accountId) }))}
           value={accountId}
           onSelect={(id) => {
             setAccountId(id);

@@ -23,6 +23,7 @@ import { useServerSave } from '../../../components/useServerSave';
 import { useVoucherPages } from '../../../remote/queries';
 import { useAppStore } from '../../../store/appStore';
 import { useActiveCompany, useBaseCurrency, useDefaultBranchId, usePaymentAccounts } from '../../../store/selectors';
+import { inactiveChoice } from '../../../features/payments/accountChoice';
 
 /**
  * The transfer entry: money from one cash or bank account to another (a deposit, a withdrawal, a
@@ -88,7 +89,7 @@ function TransferForm() {
     }
   };
 
-  const options = accounts.map((a) => ({ value: a.id, label: a.name, description: tr(a.type === 'cash' ? 'books:group.cashInHand' : 'books:group.bankAccounts') }));
+  const options = accounts.map((a) => ({ value: a.id, label: a.name, description: tr(a.type === 'cash' ? 'books:group.cashInHand' : 'books:group.bankAccounts'), ...inactiveChoice(tr, a) }));
   const rows = recent.rows.slice(0, 10);
 
   return (

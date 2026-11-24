@@ -23,6 +23,7 @@ import { useLeaveGuard } from '../../components/useLeaveGuard';
 import { useAppStore } from '../../store/appStore';
 import { useParty, usePaymentAccounts } from '../../store/selectors';
 import { useGoBack } from '../../navigation/useGoBack';
+import { inactiveChoice } from './accountChoice';
 
 /**
  * Corrects a recorded payment's details: its date, how it was paid, the account, the reference and
@@ -142,7 +143,7 @@ export function PaymentEditForm({ payment }: { payment: Payment }) {
         visible={accountOpen}
         onClose={() => setAccountOpen(false)}
         title={isIn ? tr('sales:payment.depositInto') : tr('sales:payment.payFrom')}
-        options={methodAccounts.map((a) => ({ value: a.id, label: a.name, description: a.accountNumber ?? a.type }))}
+        options={methodAccounts.map((a) => ({ value: a.id, label: a.name, description: a.accountNumber ?? a.type, ...inactiveChoice(tr, a, payment.accountId) }))}
         value={accountId}
         onSelect={setAccountId}
         searchable={false}

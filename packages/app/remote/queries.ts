@@ -130,13 +130,13 @@ export function keep(entityType: keyof typeof COLLECTIONS, companyId: string, ro
 }
 
 /** Customers or suppliers matching what's typed (name, code, GSTIN, phone, email), 50 at most; `status` keeps only active (or inactive) ones. */
-export function usePartySearch(kind: 'customer' | 'supplier' | undefined, q: string, enabled = true, status?: 'active' | 'inactive') {
+export function usePartySearch(kind: 'customer' | 'supplier' | undefined, q: string, enabled = true, status?: 'active' | 'inactive', holding?: 'credit') {
   const companyId = useAppStore((s) => s.activeCompanyId);
   return useQuery({
-    queryKey: ['parties', companyId, 'search', kind ?? '', q.trim(), status ?? ''],
+    queryKey: ['parties', companyId, 'search', kind ?? '', q.trim(), status ?? '', holding ?? ''],
     enabled: enabled && !!companyId,
     queryFn: async ({ signal }) => {
-      const { data } = await api.GET('/companies/{companyId}/parties', { params: { path: { companyId }, query: { kind, status, q: q.trim() || undefined, limit: PAGE } }, signal });
+      const { data } = await api.GET('/companies/{companyId}/parties', { params: { path: { companyId }, query: { kind, status, holding, q: q.trim() || undefined, limit: PAGE } }, signal });
       const rows = data?.data ?? [];
       keep('party', companyId, rows);
       return rows;
@@ -769,7 +769,7 @@ export type AdjustmentAllocation = Schema<'AdjustmentAllocation'>;
 export async function adjustOnServer(partyId: string, side: 'customer' | 'supplier', allocations?: AdjustmentAllocation[]) {
   const companyId = useAppStore.getState().activeCompanyId;
   const { data } = await api.POST('/companies/{companyId}/payments/adjust', { params: { path: { companyId } }, body: { partyId, side, allocations } });
-  for (const key of [['adjustable', companyId], documentKeys.all(companyId), paymentKeys.all(companyId), partyKeys.all(companyId), ['reports', companyId], ['books', companyId]]) {
+  for (const key of [['adjustable', companyId], documentKeys.all(companyId), paymentKeys.all(companyId), partyKeys.all(companyId), ['partyStatement', companyId], ['reports', companyId], ['books', companyId]]) {
     void queryClient.invalidateQueries({ queryKey: key });
   }
   // The payments it rewrote and the documents it settled, into the device's book now: a payment or

@@ -23,6 +23,7 @@ import { CardRowsSkeleton } from '../../../components/ScreenSkeleton';
 import { useVoucherPages } from '../../../remote/queries';
 import { useAppStore } from '../../../store/appStore';
 import { useActiveCompany, useBaseCurrency, useDefaultBranchId, usePaymentAccounts } from '../../../store/selectors';
+import { inactiveChoice, isInactiveAccount } from '../../../features/payments/accountChoice';
 
 const HEADS = ['igst', 'cgst', 'sgst', 'cess'] as const;
 const PARTS = ['tax', 'interest', 'penalty', 'fee', 'others'] as const;
@@ -54,7 +55,7 @@ function ChallanForm() {
   const { run: serverSave, saving, blocked } = useServerSave();
   const recent = useVoucherPages({ kind: 'gstChallan', status: 'posted' });
 
-  const [bank, setBank] = useState<string | undefined>(accounts.find((a) => a.type === 'bank')?.id);
+  const [bank, setBank] = useState<string | undefined>(accounts.find((a) => a.type === 'bank' && !isInactiveAccount(a))?.id);
   const [picking, setPicking] = useState(false);
   const [cpin, setCpin] = useState('');
   const [cin, setCin] = useState('');
@@ -199,7 +200,7 @@ function ChallanForm() {
         visible={picking}
         onClose={() => setPicking(false)}
         title={tr('books:transfer.pickAccount')}
-        options={accounts.map((a) => ({ value: a.id, label: a.name, description: tr(a.type === 'cash' ? 'books:group.cashInHand' : 'books:group.bankAccounts') }))}
+        options={accounts.map((a) => ({ value: a.id, label: a.name, description: tr(a.type === 'cash' ? 'books:group.cashInHand' : 'books:group.bankAccounts'), ...inactiveChoice(tr, a) }))}
         value={bank}
         onSelect={setBank}
       />
