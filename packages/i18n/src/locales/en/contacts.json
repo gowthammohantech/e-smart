@@ -270,7 +270,7 @@
     "invoiced": "Invoiced",
     "billed": "Billed",
     "debitNotes": "Debit notes",
-    "creditNotes": "Credit notes & returns",
+    "creditNotes": "Credit notes",
     "received": "Received",
     "paid": "Paid",
     "other": "TDS & journals",
@@ -301,6 +301,8 @@
       "paidAheadToThem": "You have paid ahead: they hold this for you"
     },
     "empty": "Nothing on this account yet",
-    "tabTotal": "Total"
+    "tabTotal": "Total",
+    "salesReturns": "Sales returns",
+    "purchaseReturns": "Purchase returns"
   }
 }

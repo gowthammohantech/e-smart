@@ -21,7 +21,7 @@ import { describeError } from '../../remote/errors';
 import { ReportSkeleton } from '../../components/ScreenSkeleton';
 
 type Entry = NonNullable<ReturnType<typeof usePartyStatement>['data']>['entries'] extends (infer E)[] | undefined ? E : never;
-type Group = 'billed' | 'debit' | 'credit' | 'payments' | 'other';
+type Group = 'billed' | 'debit' | 'credit' | 'returns' | 'payments' | 'other';
 
 /** Which table each line goes in. */
 const GROUP_OF: Record<string, Group> = {
@@ -32,22 +32,22 @@ const GROUP_OF: Record<string, Group> = {
   debitNote: 'debit',
   supplierDebitNote: 'debit',
   creditNote: 'credit',
-  salesReturn: 'credit',
   supplierCreditNote: 'credit',
-  purchaseReturn: 'credit',
+  salesReturn: 'returns',
+  purchaseReturn: 'returns',
   receipt: 'payments',
   advanceReceipt: 'payments',
   payment: 'payments',
   refund: 'payments',
 };
-const GROUPS: Group[] = ['billed', 'debit', 'credit', 'payments', 'other'];
+const GROUPS: Group[] = ['billed', 'debit', 'credit', 'returns', 'payments', 'other'];
 const OWN_KINDS = ['tds', 'receipt', 'advanceReceipt', 'payment', 'refund', 'journal'];
 /** Every date: the account from its first line, the opening balance at its start. */
 const ALL_TIME = { from: '2000-01-01' };
 
 /**
  * A party's whole account on their page: the opening balance, what was invoiced, the debit notes, the
- * credit notes and returns, and what was received, adding up to the balance; then a tab for each of
+ * credit notes, the returns, and what was received, adding up to the balance; then a tab for each of
  * those, its table line by line with its particulars (taxable value and GST, or how it was paid). The
  * figures are the server's statement's.
  */
@@ -94,6 +94,8 @@ export function PartyAccountView({ party, advance }: { party: Party; advance?: M
     billed: { title: tr(supplier ? 'contacts:account.sections.bills' : 'contacts:account.sections.invoices'), label: tr(supplier ? 'contacts:account.billed' : 'contacts:account.invoiced'), color: seriesColor(t.scheme, 2) },
     debit: { title: tr('contacts:account.debitNotes'), label: tr('contacts:account.debitNotes'), color: seriesColor(t.scheme, 4) },
     credit: { title: tr('contacts:account.creditNotes'), label: tr('contacts:account.creditNotes'), color: seriesColor(t.scheme, 0) },
+    // Goods sent back, apart from credit notes (a price cut, no goods).
+    returns: { title: tr(supplier ? 'contacts:account.purchaseReturns' : 'contacts:account.salesReturns'), label: tr(supplier ? 'contacts:account.purchaseReturns' : 'contacts:account.salesReturns'), color: seriesColor(t.scheme, 1) },
     payments: { title: tr(supplier ? 'contacts:account.sections.payments' : 'contacts:account.sections.receipts'), label: tr(supplier ? 'contacts:account.paid' : 'contacts:account.received'), color: t.c.good },
     other: { title: tr('contacts:account.other'), label: tr('contacts:account.other'), color: seriesColor(t.scheme, 3) },
   };
