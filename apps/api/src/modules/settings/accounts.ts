@@ -215,12 +215,18 @@ export const accountHandlers = defineHandlers({
       throw unprocessable([{ field: 'isDefault', message: 'Make another account the default instead', severity: 'blocking' }]);
     }
     const isDefault = ctx.body.isDefault ?? current.isDefault;
+    // Made inactive: no new money goes into it. The default and the invoice account must stay where money can go.
+    const status = ctx.body.status ?? current.status;
+    if (status === 'inactive') {
+      if (isDefault) throw unprocessable([{ field: 'status', message: 'This is the default account; make another account the default before making it inactive', severity: 'blocking' }]);
+      if (ctx.company.bankPaymentAccountId === current.id) throw unprocessable([{ field: 'status', message: 'Your invoices print this account; pick another under Business profile, bank details first', severity: 'blocking' }]);
+    }
     const row = await ctx.db.transaction(async (tx) => {
       if (isDefault && !current.isDefault) await clearOtherDefaults(tx, ctx.user, ctx.company.id, current.id, ctx.now);
       const [updated] = await tx
         .update(A)
         // The opening's rate is taken once: re-reading it on a rename would move the opening balance.
-        .set({ ...columns(ctx.body), openingRate: openingChanged ? await openingRateFor(tx, ctx.company, ctx.body, businessDate(ctx.now)) : current.openingRate, isDefault, version: current.version + 1, updatedAt: ctx.now })
+        .set({ ...columns(ctx.body), openingRate: openingChanged ? await openingRateFor(tx, ctx.company, ctx.body, businessDate(ctx.now)) : current.openingRate, isDefault, status, version: current.version + 1, updatedAt: ctx.now })
         .where(and(eq(A.id, current.id), eq(A.version, current.version)))
         .returning();
       if (!updated) throw preconditionFailed();

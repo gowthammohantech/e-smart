@@ -5315,6 +5315,11 @@ export interface components {
             /** @description In base currency */
             readonly currentBalance?: components["schemas"]["Money"];
             isDefault?: boolean;
+            /**
+             * @description Inactive: kept with its history and listed, but no new payment, expense or voucher line goes into it. The default account and the one printed on invoices stay active
+             * @enum {string}
+             */
+            status?: "active" | "inactive";
         };
         ExchangeRate: components["schemas"]["Versioned"] & {
             readonly id?: string;

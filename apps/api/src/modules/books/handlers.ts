@@ -233,6 +233,10 @@ export async function voucherColumns(ctx: AnyCtx, db: DbOrTx, body: Schema<'Vouc
     const P = schema.parties;
     for (const r of await db.select({ id: P.id }).from(P).where(and(eq(P.companyId, ctx.company.id), inArray(P.id, fresh('party')), eq(P.status, 'inactive')))) inactive.add(`party:${r.id}`);
   }
+  if (fresh('pay').length) {
+    const PA = schema.paymentAccounts;
+    for (const r of await db.select({ id: PA.id }).from(PA).where(and(eq(PA.companyId, ctx.company.id), inArray(PA.id, fresh('pay')), eq(PA.status, 'inactive')))) inactive.add(`pay:${r.id}`);
+  }
   lines.forEach((l, i) => {
     if (inactive.has(l.account)) block(`lines[${i}].account`, `${accountFor(l.account, book)?.name ?? l.account} is inactive; make it active to post to it`);
   });

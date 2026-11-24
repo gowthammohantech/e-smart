@@ -7417,6 +7417,7 @@ components:
             openingRate: { type: number, readOnly: true, description: "A foreign-currency account: the opening balance's rate to base on its date, from the company's exchange rates" }
             currentBalance: { allOf: [{ $ref: '#/components/schemas/Money' }], readOnly: true, description: 'In base currency' }
             isDefault: { type: boolean }
+            status: { type: string, enum: [active, inactive], description: 'Inactive: kept with its history and listed, but no new payment, expense or voucher line goes into it. The default account and the one printed on invoices stay active' }
     ExchangeRate:
       allOf:
         - $ref: '#/components/schemas/Versioned'

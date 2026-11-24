@@ -94,7 +94,9 @@ export async function prepare(ctx: AnyCtx, db: DbOrTx, body: Schema<'Expense'>, 
 
   const [account] = await db.select().from(schema.paymentAccounts).where(and(eq(schema.paymentAccounts.companyId, companyId), eq(schema.paymentAccounts.id, body.accountId)));
   if (!account) blocking('accountId', 'No such payment account in this company');
-  else if (!accountFitsMethod(body.method, account)) {
+  else if (account.status === 'inactive' && current?.accountId !== account.id) {
+    blocking('accountId', `${account.name} is inactive; make it active in Payment accounts to pay from it`);
+  } else if (!accountFitsMethod(body.method, account)) {
     blocking('accountId', `A ${body.method} expense cannot be paid from a ${account.type} account`);
   }
 
