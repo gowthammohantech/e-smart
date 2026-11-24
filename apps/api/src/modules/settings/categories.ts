@@ -53,7 +53,7 @@ const COLOR_RE = /^#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$/;
 function expenseCategoryColumns(body: Schema<'ExpenseCategory'>, current?: { icon: string; color: string }) {
   const name = body.name.trim();
   if (!name) throw invalid('name', 'Name is required');
-  if (body.color && !COLOR_RE.test(body.color)) throw invalid('color', 'Colour must be a hex value like #4DA3FF');
+  if (body.color && !COLOR_RE.test(body.color)) throw invalid('color', 'Pick a colour from the colour picker');
   return { name, icon: body.icon ?? current?.icon ?? 'tag-outline', color: body.color ?? current?.color ?? '#8E98AC' };
 }
 

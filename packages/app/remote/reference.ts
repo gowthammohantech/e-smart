@@ -1,4 +1,5 @@
 import { ApiError } from '@esmart/api-client';
+import { useAppStore } from '../store/appStore';
 import { api } from './api';
 
 /**
@@ -8,7 +9,9 @@ import { api } from './api';
  */
 export async function lookupGstin(gstin: string) {
   try {
-    const { data } = await api.GET('/reference/gstin/{gstin}', { params: { path: { gstin } } });
+    // The active company, so a company set up with its own GSP is answered by it. Signup has none.
+    const companyId = useAppStore.getState().activeCompanyId || undefined;
+    const { data } = await api.GET('/reference/gstin/{gstin}', { params: { path: { gstin }, query: { companyId } } });
     return data ?? null;
   } catch (err) {
     if (err instanceof ApiError && err.status === 404) return null;

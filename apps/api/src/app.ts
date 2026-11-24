@@ -104,7 +104,7 @@ export async function buildApp(deps: Deps, opts: BuildOptions = {}): Promise<Fas
     errorResponseBuilder: (_req, ctx) => ({
       statusCode: 429,
       code: 'RATE_LIMITED',
-      message: `Too many requests; retry in ${Math.ceil(ctx.ttl / 1000)}s`,
+      message: `Too many attempts. Please wait ${Math.ceil(ctx.ttl / 1000)} seconds and try again.`,
     }),
   });
   await app.register(jwt, { secret: deps.config.JWT_SECRET });

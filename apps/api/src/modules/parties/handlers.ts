@@ -47,7 +47,7 @@ function dropTcsOnFree(ctx: { company: { plan: Schema<'PlanTier'> } }, body: Sch
 async function validate(db: DbOrTx, body: Schema<'Party'>, today: string) {
   const issues: Issue[] = [];
   if (body.taxId && body.billingAddress.country === 'IN' && !isValidGstin(body.taxId)) {
-    issues.push({ field: 'taxId', message: 'This GSTIN is not valid (check digit mismatch)', severity: 'blocking' });
+    issues.push({ field: 'taxId', message: 'This GSTIN doesn’t look right. Check each character for a typing mistake.', severity: 'blocking' });
   }
   if (body.taxId && body.billingAddress.stateCode && body.billingAddress.country === 'IN' && body.taxId.slice(0, 2) !== body.billingAddress.stateCode) {
     issues.push({ field: 'billingAddress.stateCode', message: "The billing state doesn't match the GSTIN's state code", severity: 'blocking' });
@@ -70,7 +70,7 @@ async function validate(db: DbOrTx, body: Schema<'Party'>, today: string) {
   }
   if (body.tcsSection && !tcsSection(body.tcsSection)) issues.push({ field: 'tcsSection', message: `Unknown TCS section ${body.tcsSection}`, severity: 'blocking' });
   const [cur] = await db.select().from(schema.currencies).where(eq(schema.currencies.code, body.currency));
-  if (!cur) issues.push({ field: 'currency', message: `Unknown currency ${body.currency}`, severity: 'blocking' });
+  if (!cur) issues.push({ field: 'currency', message: 'Choose a currency from the list', severity: 'blocking' });
   if (issues.length) throw unprocessable(issues);
 }
 
@@ -210,7 +210,7 @@ export const partiesHandlers = defineHandlers({
         await validate(ctx.db, body, day);
         customFields = await cleanCustomValues(ctx.db, ctx.company.id, 'party', body.customFields as CustomValues | undefined);
       } catch (err) {
-        const issues = err instanceof ApiError ? ((err.extra.issues as Issue[] | undefined) ?? [{ field: 'kind', message: err.message, severity: 'blocking' as const }]) : [{ field: '', message: String(err), severity: 'blocking' as const }];
+        const issues = err instanceof ApiError ? ((err.extra.issues as Issue[] | undefined) ?? [{ field: 'kind', message: err.message, severity: 'blocking' as const }]) : [{ field: '', message: 'This row couldn’t be read. Check its values and try again.', severity: 'blocking' as const }];
         results.push({ index, status: 'invalid', issues });
         continue;
       }

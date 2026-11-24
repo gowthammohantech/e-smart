@@ -21,7 +21,7 @@ const D = schema.documents;
 /** `092026` → September 2026, first to last day. */
 export function periodRange(period: string): { from: string; to: string } {
   const m = /^(0[1-9]|1[0-2])([0-9]{4})$/.exec(period);
-  if (!m) throw invalid('period', 'Use MMYYYY, e.g. 092026');
+  if (!m) throw invalid('period', 'Choose a return month, like September 2026');
   const [month, year] = [Number(m[1]), Number(m[2])];
   const last = new Date(Date.UTC(year, month, 0)).getUTCDate();
   return { from: `${m[2]}-${m[1]}-01`, to: `${m[2]}-${m[1]}-${String(last).padStart(2, '0')}` };

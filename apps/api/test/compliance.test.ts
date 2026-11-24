@@ -1,4 +1,4 @@
-import { reconcileEInvoices } from '../src/modules/compliance/einvoice';
+﻿import { reconcileEInvoices } from '../src/modules/compliance/einvoice';
 import { recoverComplianceAttempts } from '../src/modules/compliance/recovery';
 import { createHash } from 'node:crypto';
 import { eq } from 'drizzle-orm';
@@ -155,10 +155,10 @@ describe('compliance: e-invoice', () => {
     const res = await t.post(`${m.c}/documents/${inv.id}/e-invoice`, {}, { token: m.token });
     expect(res.status).toBe(422);
     expect(res.body.code).toBe('EINVOICE_VALIDATION_FAILED');
-    expect(res.body.issues).toEqual(expect.arrayContaining([{ code: '2176', field: 'lines[0].hsnCode', message: '"Steel rod" has no HSN or SAC code', severity: 'blocking' }]));
+    expect(res.body.issues).toEqual(expect.arrayContaining([{ code: '2176', field: 'lines[0].hsnCode', message: 'Add an HSN (goods) or SAC (services) code for "Steel rod"', severity: 'blocking' }]));
 
     const info = await t.get(`${m.c}/documents/${inv.id}/e-invoice`, { token: m.token });
-    expect(info.body).toMatchObject({ eInvoiceStatus: 'failed', lastMessage: '"Steel rod" has no HSN or SAC code', lastAttemptAt: T0 });
+    expect(info.body).toMatchObject({ eInvoiceStatus: 'failed', lastMessage: 'Add an HSN (goods) or SAC (services) code for "Steel rod"', lastAttemptAt: T0 });
     expect(info.body.eInvoiceIssues[0].code).toBe('2176');
 
     // A sale to a consumer is outside e-invoicing altogether.
@@ -177,7 +177,7 @@ describe('compliance: e-invoice', () => {
     expect(res.body).toMatchObject({ code: 'IRP_REJECTED', issues: [{ code: '2211', severity: 'blocking' }] });
 
     const info = await t.get(`${m.c}/documents/${inv.id}/e-invoice`, { token: m.token });
-    expect(info.body).toMatchObject({ eInvoiceStatus: 'failed', lastMessage: 'The supplier GSTIN is not active on the portal', eInvoiceIssues: [{ code: '2211' }] });
+    expect(info.body).toMatchObject({ eInvoiceStatus: 'failed', lastMessage: "Your GSTIN isn't active on the GST portal. Check its status with the GST department.", eInvoiceIssues: [{ code: '2211' }] });
     const [row] = await t.deps.db.select().from(schema.eInvoices).where(eq(schema.eInvoices.documentId, inv.id));
     expect(row).toMatchObject({ status: 'failed', attempts: 1, irn: null });
     expect(row.requestPayload).toMatchObject({ Version: '1.1' });

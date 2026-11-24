@@ -7,6 +7,7 @@ import { schema } from '@esmart/db';
 import type { Schema } from '@esmart/api-contract';
 import { RawBody, defineHandlers, type AuthUser, type Ctx } from '../../context';
 import { checkIfMatch, setEtag } from '../../http/etag';
+import { kindName, statusName } from '../../lib/names';
 import { conflict, forbidden, invalid, notFound, preconditionFailed, unprocessable, upstream } from '../../http/errors';
 import { keyset } from '../../http/pagination';
 import { track } from '../../analytics/track';
@@ -198,7 +199,7 @@ async function editLatestInvoice(ctx: AnyCtx, tx: DbOrTx, current: DocRow, body:
   if (block) {
     throw conflict('DOCUMENT_FINALIZED', `A finalised document only takes notes, terms, reference and attachments (changed: ${changed.join(', ')}). ${EDIT_BLOCK_MESSAGES[block]}, so it can't be edited`);
   }
-  if (body.kind !== current.kind) throw invalid('kind', 'A document cannot change kind; convert it instead');
+  if (body.kind !== current.kind) throw invalid('kind', 'A document’s type can’t be changed here. Use Convert to create a different type of document.');
   const f = fieldsFromWire(body, current);
   if (f.branchId !== current.branchId) throw invalid('branchId', `${current.number} keeps its branch: its number was drawn there`);
   const dateIssue = (message: string, code: string) => unprocessable([{ field: 'date', message, severity: 'blocking' }], code);
@@ -258,7 +259,7 @@ async function linkAttachments(tx: DbOrTx, companyId: string, documentId: string
 /** A finalised status in the body must be the one the kind finalises to. */
 function checkRequestedStatus(kind: DocumentKind, status: string): DocStatus {
   const s = requestedStatus(kind, status) as DocStatus;
-  if (isFinalized(s) && s !== FINAL_STATUS[kind]) throw invalid('status', `A ${kind} is created as a draft or as ${FINAL_STATUS[kind]}`);
+  if (isFinalized(s) && s !== FINAL_STATUS[kind]) throw invalid('status', `A new ${kindName(kind)} can only be saved as a draft or as ${statusName(FINAL_STATUS[kind])}`);
   return s;
 }
 
@@ -368,7 +369,7 @@ async function changeStatus(ctx: AnyCtx, id: string, target: DocStatus, reason?:
     const from = statusBefore(locked, target, ctx.now);
     // Before the transition: a fully credited invoice reads as paid, which would hide the reason.
     if (target === 'cancelled') await assertNoLiveReturns(tx, locked);
-    if (!(target === 'cancelled' ? canCancel(locked.kind, from) : canTransition(locked.kind, from, target))) throw conflict('INVALID_TRANSITION', `A ${locked.kind} cannot go from ${from} to ${target}`);
+    if (!(target === 'cancelled' ? canCancel(locked.kind, from) : canTransition(locked.kind, from, target))) throw conflict('INVALID_TRANSITION', `A ${kindName(locked.kind)} that is ${statusName(from)} can’t be changed to ${statusName(target)}`);
     if (target === 'cancelled') {
       // Cancelling an issued invoice, bill, note or return takes revenue, a receivable or stock out of
       // the books: that is for the books' keepers, not everyone who may raise one.
@@ -885,13 +886,13 @@ export const documentsHandlers = defineHandlers({
   async setDocumentStatus(ctx) {
     const target = ctx.body.status;
     if (DERIVED.includes(target)) {
-      throw invalid('status', `${target} is derived from payments and the due date; record a payment instead`, 'STATUS_DERIVED');
+      throw invalid('status', `The “${statusName(target)}” status is set automatically from payments and the due date. Record a payment instead.`, 'STATUS_DERIVED');
     }
     const current = await findDocument(ctx, ctx.db, ctx.params.id);
     const from = statusBefore(current, target, ctx.now);
     // Before the transition: a fully credited invoice reads as paid, which would hide the reason.
     if (target === 'cancelled') await assertNoLiveReturns(ctx.db, current);
-    if (!(target === 'cancelled' ? canCancel(current.kind, from) : canTransition(current.kind, from, target))) throw conflict('INVALID_TRANSITION', `A ${current.kind} cannot go from ${from} to ${target}`);
+    if (!(target === 'cancelled' ? canCancel(current.kind, from) : canTransition(current.kind, from, target))) throw conflict('INVALID_TRANSITION', `A ${kindName(current.kind)} that is ${statusName(from)} can’t be changed to ${statusName(target)}`);
 
     const row = !isFinalized(current.status) && isFinalized(target) && target !== 'cancelled' ? await finalizeDraft(ctx, current.id, target, { overrideCreditLimit: ctx.body.overrideCreditLimit }) : await changeStatus(ctx, current.id, target, ctx.body.reason);
     setEtag(ctx.reply, row.version);
@@ -924,7 +925,7 @@ export const documentsHandlers = defineHandlers({
     let lines = stored;
     if (ctx.body.lineIds?.length) {
       const unknown = ctx.body.lineIds.filter((id) => !stored.some((l) => l.id === id));
-      if (unknown.length) throw unprocessable(unknown.map((id) => ({ field: 'lineIds', message: `${id} is not a line of ${numbers}`, severity: 'blocking' as const })));
+      if (unknown.length) throw unprocessable(unknown.map((id) => ({ field: 'lineIds', message: `One of the chosen items is not on ${numbers}. Reload the document and choose again.`, severity: 'blocking' as const })));
       lines = stored.filter((l) => ctx.body.lineIds!.includes(l.id!));
     }
     // A new document takes the supplier's TDS section, not the one its source was finalised with.
@@ -975,7 +976,7 @@ export const documentsHandlers = defineHandlers({
     let row = await findDocument(ctx, ctx.db, ctx.params.id);
     const [party] = await ctx.db.select().from(P).where(eq(P.id, row.partyId));
     const recipients = body.to?.length ? body.to : [body.channel === 'email' ? party.email : party.phone].filter((x): x is string => !!x);
-    if (!recipients.length) throw invalid('to', `${party.name} has no ${body.channel === 'email' ? 'email address' : 'phone number'}; send one in "to"`);
+    if (!recipients.length) throw invalid('to', `${party.name} has no ${body.channel === 'email' ? 'email address' : 'phone number'}. Add one to their profile, or enter one to send to.`);
 
     // Sending a draft quote issues it (it takes its number); an invoice keeps its status.
     if (canTransition(row.kind, effectiveStatus(row, today(ctx.now)), 'sent')) {
@@ -1092,7 +1093,7 @@ export const documentsHandlers = defineHandlers({
     // Nobody got it: say so, rather than "sent" for a message the provider refused
     // (Resend's test sender, for one, only delivers to its own account's address).
     if (queued.length && failures.length === queued.length) {
-      throw upstream('SEND_FAILED', `The ${body.channel} could not be sent: ${failures[0]}`);
+      throw upstream('SEND_FAILED', `The ${body.channel === 'email' ? 'email' : body.channel === 'whatsapp' ? 'WhatsApp message' : 'SMS'} couldn’t be sent: ${failures[0]}`);
     }
     if (queued.length) {
       await notify(ctx.db, ctx.deps, {

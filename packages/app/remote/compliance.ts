@@ -51,8 +51,8 @@ async function settle(documentId: string): Promise<ComplianceResult | null> {
   if (!left.length) return null;
   const failed = left.find((e) => e.status === 'failed');
   const message = failed
-    ? `This document has not been saved to the server yet: ${failed.lastError ?? 'the change was refused'}`
-    : 'This document is still being saved to the server. Try again in a moment.';
+    ? i18n.t('errors:remote.notSavedYet', { reason: failed.lastError ?? i18n.t('errors:remote.checkDetails') })
+    : i18n.t('errors:remote.stillSaving');
   return { ok: false, issues: [{ code: 'NOT_SYNCED', message, severity: 'blocking' } as ComplianceIssue] };
 }
 

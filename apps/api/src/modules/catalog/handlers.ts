@@ -249,7 +249,7 @@ export const catalogHandlers = defineHandlers({
           customFields = values;
         }
       } catch (err) {
-        const issues = err instanceof ApiError ? ((err.extra.issues as Issue[] | undefined) ?? [{ field: '', message: err.message, severity: 'blocking' as const }]) : [{ field: '', message: String(err), severity: 'blocking' as const }];
+        const issues = err instanceof ApiError ? ((err.extra.issues as Issue[] | undefined) ?? [{ field: '', message: err.message, severity: 'blocking' as const }]) : [{ field: '', message: 'This row couldn’t be read. Check its values and try again.', severity: 'blocking' as const }];
         results.push({ index, status: 'invalid', issues });
         continue;
       }
@@ -370,8 +370,8 @@ export const catalogHandlers = defineHandlers({
     const current = await findItem(ctx.db, ctx.company.id, ctx.params.id);
     checkIfMatch(ctx.req, current.version);
     const file = await ctx.req.file();
-    if (!file) throw invalid('file', 'Send the image as the multipart field `file`');
-    if (!IMAGE_TYPES.includes(file.mimetype)) throw invalid('file', `Images only (${IMAGE_TYPES.join(', ')})`, 'UNSUPPORTED_FILE_TYPE');
+    if (!file) throw invalid('file', 'Choose an image to upload');
+    if (!IMAGE_TYPES.includes(file.mimetype)) throw invalid('file', 'Use a PNG or JPEG image', 'UNSUPPORTED_FILE_TYPE');
     const body = await file.toBuffer();
     if (!body.length) throw invalid('file', 'The file is empty');
 

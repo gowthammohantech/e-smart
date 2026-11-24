@@ -449,7 +449,7 @@ export async function prepareDocument(
   }
 
   const [cur] = await db.select().from(schema.currencies).where(eq(schema.currencies.code, f.currency));
-  if (!cur) blocking('currency', `Unknown currency ${f.currency}`);
+  if (!cur) blocking('currency', 'Choose a currency from the list');
   if (f.chargesCurrency && f.chargesCurrency !== f.currency) blocking('charges.currency', `Must be in the document's currency (${f.currency})`);
 
   // A document falls due, or a quote lapses, on or after the day it is dated.

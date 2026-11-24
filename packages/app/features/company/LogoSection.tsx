@@ -9,6 +9,7 @@ import { Text } from '@esmart/ui/components/Text';
 import { useToast } from '@esmart/ui/components/Toast';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
 import { isNetworkError } from '../../remote/api';
+import { describeError } from '../../remote/errors';
 import { LogoError, removeLogo, setLocalLogo, uploadLogo } from '../../remote/logo';
 import { useActiveCompany, useCurrentUser } from '../../store/selectors';
 import { pickLogo } from './pickLogo';
@@ -65,7 +66,7 @@ export function LogoSection() {
         {
           loading: tr('settings:company.logoRemoving'),
           success: { text: tr('settings:company.logoRemoved'), detail: company.name },
-          error: (err) => (isNetworkError(err) ? tr('settings:company.logoOffline') : err instanceof LogoError ? err.message : String(err)),
+          error: (err) => (isNetworkError(err) ? tr('settings:company.logoOffline') : err instanceof LogoError ? err.message : describeError(err, tr)),
           icon: 'image-remove',
         },
       );

@@ -20,7 +20,7 @@ import { linesWithCharges } from './lineCalc';
 import { isValidGstin } from './gstin';
 import { financialYearOf, parseDate } from '../lib/date';
 import { base64UrlDecode, base64UrlEncode, sha256Hex } from '../lib/hash';
-import { isValidStateCode } from './stateCodes';
+import { isValidStateCode, stateNameOf } from './stateCodes';
 
 /**
  * GST e-invoicing (FRD 16).
@@ -242,29 +242,29 @@ export function validateEInvoice(ctx: EInvoiceContext): ComplianceIssue[] {
   /* --- parties --- */
   const sellerGstin = company.taxRegistration?.identifier?.trim().toUpperCase();
   if (!sellerGstin || !isValidGstin(sellerGstin)) {
-    out.push(issue('3028', 'company.taxRegistration.identifier', 'The seller GSTIN is missing or malformed'));
+    out.push(issue('3028', 'company.taxRegistration.identifier', "Add a valid 15-character GSTIN for your business in Settings. It's missing or isn't valid."));
   }
 
   const buyerGstin = buyer?.taxId?.trim().toUpperCase();
   if (needsBuyerGstin && (!buyerGstin || !isValidGstin(buyerGstin))) {
-    out.push(issue('3029', 'party.taxId', 'The buyer GSTIN is missing or malformed'));
+    out.push(issue('3029', 'party.taxId', "Add a valid 15-character GSTIN for the customer. It's missing or isn't valid."));
   } else if (needsBuyerGstin && buyerGstin) {
     // The portal checks the GSTIN's state against the buyer's own state, not
     // the place of supply: goods billed to Mumbai and shipped to Pune are fine.
     const buyerState = buyer?.billingAddress?.stateCode;
     if (buyerState && buyerGstin.slice(0, 2) !== buyerState) {
       out.push(
-        issue('2265', 'party.billingAddress.stateCode', `The buyer GSTIN is registered in state ${buyerGstin.slice(0, 2)}, but their address is in ${buyerState}`),
+        issue('2265', 'party.billingAddress.stateCode', `The customer's GSTIN is registered in ${stateNameOf(buyerGstin.slice(0, 2))}, but their address is in ${stateNameOf(buyerState)}. Correct the address state or the GSTIN.`),
       );
     }
   }
 
   /* --- addresses: the portal refuses a blank line 1, a blank location or a PIN that is not six digits --- */
   const checkAddress = (who: string, field: string, a?: { line1?: string; city?: string; postalCode?: string }) => {
-    if (!a?.line1?.trim()) out.push(issue('5002', `${field}.line1`, `The ${who} address line 1 is missing`));
-    if (!a?.city?.trim()) out.push(issue('5002', `${field}.city`, `The ${who} city is missing`));
+    if (!a?.line1?.trim()) out.push(issue('5002', `${field}.line1`, `Add the ${who}'s street address`));
+    if (!a?.city?.trim()) out.push(issue('5002', `${field}.city`, `Add the ${who}'s city`));
     if (!/^[1-9]\d{5}$/.test(a?.postalCode?.trim() ?? '')) {
-      out.push(issue('5002', `${field}.postalCode`, `The ${who} PIN code must be six digits`));
+      out.push(issue('5002', `${field}.postalCode`, `Enter a six-digit PIN code for the ${who}'s address`));
     }
   };
   checkAddress('seller', 'company.address', company.address);
@@ -273,42 +273,42 @@ export function validateEInvoice(ctx: EInvoiceContext): ComplianceIssue[] {
   /* --- place of supply --- */
   const pos = doc.placeOfSupplyStateCode;
   if (!pos) {
-    out.push(issue('2227', 'placeOfSupplyStateCode', 'The place of supply is not set'));
+    out.push(issue('2227', 'placeOfSupplyStateCode', 'Choose the place of supply (the state the goods or services go to)'));
   } else if (!isValidStateCode(pos)) {
-    out.push(issue('2228', 'placeOfSupplyStateCode', `${pos} is not a known state code`));
+    out.push(issue('2228', 'placeOfSupplyStateCode', 'Choose the place of supply from the list of states'));
   }
 
   /* --- lines --- */
   if (doc.lines.length === 0) {
-    out.push(issue('2236', 'lines', 'The document has no lines'));
+    out.push(issue('2236', 'lines', 'Add at least one item to this document'));
   }
 
   doc.lines.forEach((line, i) => {
     // A pure-agent reimbursement is not sent as an item (see buildIrpPayload), so it needs no HSN or unit.
     if (line.gst?.reimbursement) return;
     if (!line.hsnCode) {
-      out.push(issue('2176', `lines[${i}].hsnCode`, `"${line.name}" has no HSN or SAC code`));
+      out.push(issue('2176', `lines[${i}].hsnCode`, `Add an HSN (goods) or SAC (services) code for "${line.name}"`));
     } else if (!/^\d{4}(\d{2})?(\d{2})?$/.test(line.hsnCode)) {
       out.push(
-        issue('2176', `lines[${i}].hsnCode`, `"${line.name}" has an HSN that is not 4, 6 or 8 digits`),
+        issue('2176', `lines[${i}].hsnCode`, `The HSN/SAC code for "${line.name}" must be 4, 6 or 8 digits`),
       );
     } else if (line.hsnCode.length < 6 && settings.annualTurnover.minor >= HSN_SIX_DIGIT_TURNOVER_MINOR) {
       out.push(
-        issue('2311', `lines[${i}].hsnCode`, `"${line.name}" needs a 6-digit HSN: it is mandatory for businesses with turnover of 5 crore or more`),
+        issue('2311', `lines[${i}].hsnCode`, `"${line.name}" needs a 6-digit HSN code. It is required for businesses with a yearly turnover of 5 crore or more.`),
       );
     }
     if (!(line.quantity > 0)) {
-      out.push(issue('2237', `lines[${i}].quantity`, `"${line.name}" has no quantity`));
+      out.push(issue('2237', `lines[${i}].quantity`, `Enter a quantity for "${line.name}"`));
     }
     if (line.unitPrice.minor < 0) {
-      out.push(issue('2237', `lines[${i}].unitPrice`, `"${line.name}" has a negative price`));
+      out.push(issue('2237', `lines[${i}].unitPrice`, `The price of "${line.name}" can't be negative`));
     }
     if (!UQC_MAP[line.unit?.toUpperCase()]) {
       out.push(
         issue(
           'W001',
           `lines[${i}].unit`,
-          `Unit "${line.unit}" has no portal equivalent and will be reported as OTH`,
+          `The GST portal doesn't recognise the unit "${line.unit}", so it will be sent as "Others"`,
           'warning',
         ),
       );
@@ -324,10 +324,10 @@ export function validateEInvoice(ctx: EInvoiceContext): ComplianceIssue[] {
       (c) => (c.type === 'CGST' || c.type === 'SGST') && c.amount.minor > 0,
     );
     if (homeState === pos && hasIgst) {
-      out.push(issue('2172', 'totals.taxLines', 'IGST is charged on a supply within the state'));
+      out.push(issue('2172', 'totals.taxLines', 'This sale is within your state, so charge CGST and SGST instead of IGST'));
     }
     if (homeState !== pos && hasIntra) {
-      out.push(issue('2173', 'totals.taxLines', 'CGST and SGST are charged on a supply across states'));
+      out.push(issue('2173', 'totals.taxLines', 'This sale is to another state, so charge IGST instead of CGST and SGST'));
     }
   }
 
@@ -335,7 +335,7 @@ export function validateEInvoice(ctx: EInvoiceContext): ComplianceIssue[] {
   const recomputed = recomputeTotal(doc);
   if (Math.abs(recomputed - doc.totals.grandTotal.minor) > TOTAL_TOLERANCE_MINOR) {
     out.push(
-      issue('2182', 'totals.grandTotal', 'The document total does not reconcile with its lines'),
+      issue('2182', 'totals.grandTotal', "The total doesn't match the sum of the lines. Save the document again, then retry."),
     );
   }
 
@@ -346,20 +346,20 @@ export function validateEInvoice(ctx: EInvoiceContext): ComplianceIssue[] {
       issue(
         '2233',
         'number',
-        'The document number must be at most 16 characters of letters, digits, / and -, and must not start with 0, / or -',
+        "The invoice number can have at most 16 characters (letters, digits, / and -) and can't start with 0, / or -",
       ),
     );
   }
 
   const nowDate = now.slice(0, 10);
   if (doc.date > nowDate) {
-    out.push(issue('2234', 'date', 'The document is dated in the future'));
+    out.push(issue('2234', 'date', "The invoice date can't be in the future"));
   } else if (daysBetweenDates(doc.date, nowDate) > settings.reportingWindowDays) {
     out.push(
       issue(
         '2235',
         'date',
-        `The document is older than the ${settings.reportingWindowDays}-day reporting window`,
+        `This invoice is too old to register: the GST portal accepts only invoices from the last ${settings.reportingWindowDays} days`,
       ),
     );
   }
@@ -371,7 +371,7 @@ export function validateEInvoice(ctx: EInvoiceContext): ComplianceIssue[] {
       const candidate = computeIrn(sellerGstin, docType, number, fiscalYearCode(doc.date));
       if ((ctx.existingIrns ?? []).includes(candidate)) {
         out.push(
-          issue('2150', 'number', 'An IRN already exists for this document number in this financial year'),
+          issue('2150', 'number', 'This invoice number was already registered on the GST e-invoice portal this financial year. Use a new number.'),
         );
       }
     }
@@ -380,7 +380,7 @@ export function validateEInvoice(ctx: EInvoiceContext): ComplianceIssue[] {
   /* --- advisory --- */
   if (buyer && !buyer.email && !buyer.phone) {
     out.push(
-      issue('W002', 'party.email', 'The buyer has no email or phone, so the portal cannot notify them', 'warning'),
+      issue('W002', 'party.email', "The customer has no email or phone, so the portal can't notify them", 'warning'),
     );
   }
 

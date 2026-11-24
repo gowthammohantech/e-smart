@@ -6,16 +6,16 @@ import { whitebooksSettings, type Config } from '../../config';
 import type { ComplianceProvider, PartBUpdateRequest, PortalCredentials } from '../compliance';
 import { asCode, nicErrorsOf, parsePortalDateAny, toPortalDateTime } from './envelope';
 import { nicErrorText } from './nicErrorText';
-import type { GspGatewayName } from './provider-name';
+import type { GspGatewayName, GspTarget } from './provider-name';
 import { GspAuthError, GspConfigError, GspRequestError } from './transport';
 
 /** A GSP-backed `ComplianceProvider`, which can also answer the GST public search. */
 export interface GspGateway extends ComplianceProvider {
   readonly gateway: GspGatewayName;
   /** The register's record for a GSTIN as received, or null when it holds no such registration. */
-  lookupTaxpayer(gstin: string): Promise<Record<string, unknown> | null>;
+  lookupTaxpayer(gstin: string, target?: GspTarget): Promise<Record<string, unknown> | null>;
   /** True when the register that answers `lookupTaxpayer` is a gateway sandbox, whose sample data can't be trusted for the state. */
-  lookupIsSandbox?(): boolean;
+  lookupIsSandbox?(target?: GspTarget): boolean;
 }
 
 export type Failure = { ok: false; errors: ComplianceIssue[] };

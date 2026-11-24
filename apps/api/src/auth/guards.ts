@@ -1,6 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { schema } from '@esmart/db';
+import { moduleName } from '../lib/names';
 import { FULL_PLAN, hasModule, moduleEnabled, type Module } from '@esmart/core/domain/plan';
 import type { AuthUser, CompanyRow, Deps } from '../context';
 import { ApiError, forbidden, planUpgradeRequired, unauthorized } from '../http/errors';
@@ -48,7 +49,7 @@ async function loadUser(deps: Deps, claims: AccessClaims): Promise<AuthUser | nu
 export async function authenticate(app: FastifyInstance, deps: Deps, req: FastifyRequest, required: boolean) {
   const header = req.headers.authorization;
   if (!header?.startsWith('Bearer ')) {
-    if (required) throw unauthorized('UNAUTHORIZED', 'Missing bearer token');
+    if (required) throw unauthorized('UNAUTHORIZED', 'Please sign in to continue');
     return;
   }
   let claims: AccessClaims;
@@ -57,14 +58,14 @@ export async function authenticate(app: FastifyInstance, deps: Deps, req: Fastif
   } catch (err) {
     if (!required) return;
     const expired = (err as { code?: string }).code === 'FAST_JWT_EXPIRED';
-    throw unauthorized(expired ? 'TOKEN_EXPIRED' : 'TOKEN_INVALID');
+    throw unauthorized(expired ? 'TOKEN_EXPIRED' : 'TOKEN_INVALID', expired ? 'Your session has ended. Please sign in again.' : "We couldn't verify your sign-in. Please sign in again.");
   }
   const user = await loadUser(deps, claims);
   if (!user) {
-    if (required) throw unauthorized('SESSION_REVOKED', 'This session was signed out');
+    if (required) throw unauthorized('SESSION_REVOKED', 'You were signed out of this device. Please sign in again.');
     return;
   }
-  if (user.status === 'disabled') throw forbidden('USER_DISABLED', 'This user has been disabled');
+  if (user.status === 'disabled') throw forbidden('USER_DISABLED', 'This account has been turned off. Contact your business owner or support.');
   req.authUser = user;
 }
 
@@ -110,7 +111,7 @@ export function registerGuards(app: FastifyInstance, deps: Deps) {
 
     if (op.platformRoles) {
       if (!user.platformRole || !op.platformRoles.includes(user.platformRole)) {
-        throw forbidden('PLATFORM_FORBIDDEN', `This needs platform role: ${op.platformRoles.join(', ')}`);
+        throw forbidden('PLATFORM_FORBIDDEN', 'This area is only for Elixir staff.');
       }
       // A password (or an SMS code) alone never opens another tenant's data.
       if (!op.mfaExempt && !user.mfaEnrolled) throw forbidden('MFA_ENROLLMENT_REQUIRED', 'Set up an authenticator app to continue');
@@ -150,7 +151,7 @@ export function registerGuards(app: FastifyInstance, deps: Deps) {
     }
     // In the plan but switched off by the owner (or something it needs is).
     if (op.planModule && req.company && !moduleEnabled(req.company.plan, req.company.disabledModules as Module[], op.planModule)) {
-      throw forbidden('MODULE_OFF', `${op.planModule} is switched off for this business; an owner can switch it on in Settings`);
+      throw forbidden('MODULE_OFF', `${moduleName(op.planModule)} is switched off for this business. An owner can switch it on in Settings.`);
     }
   });
 }

@@ -17,7 +17,7 @@ export function decode(cursor: string): CursorValue[] {
   } catch {
     // fall through
   }
-  throw badRequest('INVALID_CURSOR', 'The cursor is not one this API issued');
+  throw badRequest('INVALID_CURSOR', 'This list is out of date. Refresh it and try again.');
 }
 
 const jsKey = (c: PgColumn) => c.name.replace(/_([a-z])/g, (_, ch: string) => ch.toUpperCase());

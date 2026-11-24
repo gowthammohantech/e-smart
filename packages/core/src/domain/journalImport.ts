@@ -83,7 +83,7 @@ export function journalsFromCsv(rows: string[][], columns: Partial<Record<Journa
     const dr = j.lines.reduce((a, l) => a + l.debitMinor, 0);
     const cr = j.lines.reduce((a, l) => a + l.creditMinor, 0);
     if (j.lines.length < 2) j.problems.push('A journal needs at least two lines');
-    if (dr !== cr) j.problems.push(`Debits (${(dr / 100).toFixed(2)}) and credits (${(cr / 100).toFixed(2)}) differ`);
+    if (dr !== cr) j.problems.push(`Debits (${(dr / 100).toFixed(2)}) and credits (${(cr / 100).toFixed(2)}) must be equal`);
   }
   return [...groups.values()];
 }

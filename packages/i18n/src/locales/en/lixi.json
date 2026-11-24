@@ -82,8 +82,8 @@
   "gst": {
     "clear_one": "All clear. {{count}} IRN registered and nothing waiting on the portal. You've charged {{tax}} GST this month.",
     "clear_other": "All clear. {{count}} IRNs registered and nothing waiting on the portal. You've charged {{tax}} GST this month.",
-    "rejected_one": "The IRP rejected {{count}} invoice — fix and resubmit before filing.",
-    "rejected_other": "The IRP rejected {{count}} invoices — fix and resubmit before filing.",
+    "rejected_one": "The GST e-invoice portal rejected {{count}} invoice. Fix and resubmit it before filing.",
+    "rejected_other": "The GST e-invoice portal rejected {{count}} invoices. Fix and resubmit them before filing.",
     "expiring_one": "{{count}} e-way bill runs out within a day; extend if the goods are still moving.",
     "expiring_other": "{{count}} e-way bills run out within a day; extend if the goods are still moving.",
     "missing_one": "{{count}} document needs an e-way bill and doesn't have one.",

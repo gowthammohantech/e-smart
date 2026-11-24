@@ -18,10 +18,10 @@ export function newestFirst(opts: { cursor?: string | null; limit?: number | nul
     try {
       [at, id] = JSON.parse(Buffer.from(opts.cursor, 'base64url').toString('utf8')) as [string, string];
     } catch {
-      throw badRequest('INVALID_CURSOR', 'The cursor is not one this API issued');
+      throw badRequest('INVALID_CURSOR', 'This list is out of date. Refresh it and try again.');
     }
     if (typeof at !== 'string' || typeof id !== 'string' || Number.isNaN(Date.parse(at))) {
-      throw badRequest('INVALID_CURSOR', 'The cursor is not one this API issued');
+      throw badRequest('INVALID_CURSOR', 'This list is out of date. Refresh it and try again.');
     }
     const ts = sql`${at}::timestamptz`;
     where = or(lt(opts.at, ts), and(eq(opts.at, ts), lt(opts.id, id)));

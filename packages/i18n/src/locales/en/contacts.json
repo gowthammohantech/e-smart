@@ -194,12 +194,12 @@
     },
     "empty": "Nothing in this period",
     "emptyBody": "No documents, payments or vouchers between these dates.",
-    "loadFailed": "Could not load the statement",
+    "loadFailed": "Couldn’t load the statement. Check your connection and try again.",
     "download": "Download PDF",
     "preparing": "Preparing the statement…",
     "downloaded": "Statement downloaded",
     "ready": "Statement ready",
-    "failed": "Could not make the PDF."
+    "failed": "Couldn’t create the PDF. Try again."
   },
   "kind": {
     "customer": "Customer",

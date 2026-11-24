@@ -259,14 +259,14 @@ export function canExtendEwayBill(
 ): { allowed: boolean; reason?: string; opensAt: string; closesAt: string } {
   const window = extensionWindow(bill);
   if (bill.status === 'cancelled') {
-    return { ...window, allowed: false, reason: 'The bill has been cancelled' };
+    return { ...window, allowed: false, reason: 'This e-way bill has been cancelled' };
   }
   const t = new Date(now).getTime();
   if (t < new Date(window.opensAt).getTime()) {
-    return { ...window, allowed: false, reason: 'Extension opens eight hours before expiry' };
+    return { ...window, allowed: false, reason: 'An e-way bill can be extended only in the last 8 hours before it expires' };
   }
   if (t > new Date(window.closesAt).getTime()) {
-    return { ...window, allowed: false, reason: 'Extension closed eight hours after expiry' };
+    return { ...window, allowed: false, reason: 'The time to extend this e-way bill (up to 8 hours after it expired) has passed' };
   }
   return { ...window, allowed: true };
 }
@@ -290,12 +290,12 @@ export function canCancelEwayBill(
 ): { allowed: boolean; reason?: string; deadline: string } {
   const deadline = cancelDeadlineFor(bill.generatedAt);
   if (bill.status === 'cancelled') {
-    return { allowed: false, reason: 'The bill has already been cancelled', deadline };
+    return { allowed: false, reason: 'This e-way bill has already been cancelled', deadline };
   }
   if (new Date(now).getTime() >= new Date(deadline).getTime()) {
     return {
       allowed: false,
-      reason: 'The 24-hour cancellation window has closed',
+      reason: 'An e-way bill can be cancelled only within 24 hours of creating it, and that time has passed',
       deadline,
     };
   }
@@ -304,8 +304,8 @@ export function canCancelEwayBill(
 
 export function canUpdatePartB(bill: EwayBill, now: string): { allowed: boolean; reason?: string } {
   const status = ewayBillStatusAt(bill, now);
-  if (status === 'cancelled') return { allowed: false, reason: 'The bill has been cancelled' };
-  if (status === 'expired') return { allowed: false, reason: 'The bill has expired' };
+  if (status === 'cancelled') return { allowed: false, reason: 'This e-way bill has been cancelled' };
+  if (status === 'expired') return { allowed: false, reason: 'This e-way bill has expired' };
   return { allowed: true };
 }
 
@@ -451,7 +451,7 @@ export function validatePartB(input: EwayPartBInput): ComplianceIssue[] {
 
   if (input.transporterId?.trim() && !isValidGstin(input.transporterId)) {
     // A TRANSIN has the GSTIN's shape and check digit, so one test covers both.
-    out.push(issue('EWB206', 'transporterId', 'The transporter ID is not a valid GSTIN or TRANSIN'));
+    out.push(issue('EWB206', 'transporterId', 'Enter the transporter’s 15-character GSTIN or transporter ID'));
   }
 
   if (!Number.isFinite(input.distanceKm) || input.distanceKm < 1) {

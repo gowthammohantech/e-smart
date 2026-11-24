@@ -93,11 +93,11 @@ function contextFor(ctx: Ctx<'lixiChat'>, locale: string): string {
 export const lixiHandlers = defineHandlers({
   async lixiChat(ctx) {
     const history = ctx.body.messages;
-    if (history.at(-1)?.role !== 'user') throw badRequest('LAST_MESSAGE_NOT_USER', 'The conversation must end with a question');
+    if (history.at(-1)?.role !== 'user') throw badRequest('LAST_MESSAGE_NOT_USER', 'Ask a question to continue');
     // The simulator is for development; in production without a model the
     // app answers from its local brain instead.
     if (ctx.deps.config.NODE_ENV === 'production' && ctx.deps.providers.assistant.name === 'simulator') {
-      throw upstream('LIXI_UNAVAILABLE', 'Lixi is not configured on this server');
+      throw upstream('LIXI_UNAVAILABLE', 'Lixi isn’t available right now. Try again later.');
     }
     limit(ctx.user.id, ctx.now.getTime(), ctx.deps.config.LIXI_RATE_LIMIT_PER_MINUTE);
     // One message from the business's monthly AI allowance, given back if the model can't answer.

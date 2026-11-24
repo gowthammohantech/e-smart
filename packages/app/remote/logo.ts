@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import i18n from '@esmart/i18n';
 import type { Company } from '@esmart/core/types';
 import { useAppStore } from '../store/appStore';
 import { api } from './api';
@@ -19,6 +20,16 @@ export class LogoError extends Error {
   }
 }
 
+/** What an upload the server refused tells the person: its own sentence when it wrote one, else the kind of problem. */
+export function uploadMessage(status: number, problem: { detail?: string; title?: string; code?: string }): string {
+  if (status === 413) return i18n.t('errors:remote.tooLarge') as string;
+  if (status === 401) return i18n.t('errors:remote.sessionEnded') as string;
+  if (status === 403) return i18n.t('errors:remote.noPermission') as string;
+  const text = problem.detail?.trim();
+  if (text && text !== problem.code && text !== problem.title && !/^[A-Z0-9_]+$/.test(text) && !/^HTTP \d{3}/.test(text)) return text;
+  return i18n.t('errors:remote.imageUploadFailed') as string;
+}
+
 /** After this many failed attempts with the server reachable, the picked file is given up on. */
 
 async function formFor(uri: string): Promise<FormData> {
@@ -28,7 +39,7 @@ async function formFor(uri: string): Promise<FormData> {
     try {
       blob = await fileBlob(uri);
     } catch {
-      throw new LogoError('The picked image is no longer available. Please choose it again.', 0, 'FILE_GONE');
+      throw new LogoError(i18n.t('errors:remote.imageGone') as string, 0, 'FILE_GONE');
     }
     form.append('file', blob, 'logo');
   } else {
@@ -56,7 +67,7 @@ async function putLogo(companyId: string, uri: string): Promise<Company> {
   }
   if (!res.ok) {
     const problem = (await res.json().catch(() => ({}))) as { detail?: string; title?: string; code?: string };
-    throw new LogoError(problem.detail ?? problem.title ?? `Upload failed (${res.status})`, res.status, problem.code);
+    throw new LogoError(uploadMessage(res.status, problem), res.status, problem.code);
   }
   return (await res.json()) as Company;
 }
