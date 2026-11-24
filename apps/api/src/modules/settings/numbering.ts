@@ -11,6 +11,7 @@ import { audit } from './shared';
 import { seriesToWire } from './wire';
 
 const S = schema.numberingSeries;
+const NP = schema.numberingPrefixes;
 
 async function findSeries(db: DbOrTx, companyId: string, id: string) {
   const [row] = await db.select().from(S).where(and(eq(S.companyId, companyId), eq(S.id, id)));
@@ -37,6 +38,11 @@ export const numberingHandlers = defineHandlers({
     if (body.kind !== current.kind) throw invalid('kind', `This is the ${current.kind} series; its kind can't change`);
     const prefix = body.prefix.trim();
     if (!prefix || prefix.length > 20) throw invalid('prefix', 'The prefix needs 1 to 20 characters');
+    // Kept as typed (Gk/Alpha). One this kind has had may come back exactly; one that differs from it only in
+    // case may not (GK/ALPHA): GST reads document numbers without case, so their numbers would be the same.
+    const used = [current.prefix, ...(await ctx.db.select({ prefix: NP.prefix }).from(NP).where(and(eq(NP.companyId, ctx.company.id), eq(NP.kind, current.kind)))).map((r) => r.prefix)];
+    const clash = used.find((p) => p !== prefix && p.toLowerCase() === prefix.toLowerCase());
+    if (clash) throw invalid('prefix', `This series has used ${clash}; a prefix differing from it only in capitals would repeat its numbers. Use ${clash} as it is, or another prefix`, 'PREFIX_CASE');
     if (body.nextNumber < current.nextNumber) {
       throw invalid('nextNumber', `Numbers up to ${current.nextNumber - 1} may already be used; the next number can't go below ${current.nextNumber}`, 'NUMBER_REUSE');
     }
@@ -63,6 +69,11 @@ export const numberingHandlers = defineHandlers({
         .where(and(eq(S.id, current.id), eq(S.version, current.version), lte(S.nextNumber, body.nextNumber)))
         .returning();
       if (!updated) throw preconditionFailed();
+      // Every prefix the series has had, as typed: the old one and the new.
+      await tx
+        .insert(NP)
+        .values([current.prefix, prefix].map((p) => ({ companyId: ctx.company.id, kind: current.kind, prefix: p })))
+        .onConflictDoNothing();
       await audit(tx, ctx.user, ctx.company.id, 'numbering_series', 'updated', updated, `${updated.kind} series`, { before: seriesToWire(current), after: seriesToWire(updated) });
       return updated;
     });

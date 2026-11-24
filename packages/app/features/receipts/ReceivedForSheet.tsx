@@ -9,6 +9,7 @@ import { useDebounced } from '../../components/useDebounced';
 import { useAppStore } from '../../store/appStore';
 import { useCurrentUser, useHasModule } from '../../store/selectors';
 import { useAccountName, useGroupName } from '../books/names';
+import { AddPartyButton } from '../contacts/AddPartyButton';
 
 const CASH: LedgerGroup[] = ['cashInHand', 'bankAccounts'];
 const INCOME: LedgerGroup[] = ['indirectIncomes', 'directIncomes'];
@@ -44,6 +45,7 @@ export function ReceivedForSheet({
   onPick,
   onCreateIncome,
   customers = true,
+  onAdd,
 }: {
   visible: boolean;
   onClose: () => void;
@@ -52,6 +54,8 @@ export function ReceivedForSheet({
   onPick: (picked: ReceivedFor) => void;
   onCreateIncome?: (name: string) => void;
   customers?: boolean;
+  /** "Add new customer" under the Customers tab, "Add new supplier" under Suppliers (without the books, the customer list). */
+  onAdd?: (kind: 'customer' | 'supplier') => void;
 }) {
   const { t: tr } = useTranslation(['books']);
   const books = useHasModule('books');
@@ -121,6 +125,8 @@ export function ReceivedForSheet({
             : [...income, ...customerOptions, ...supplierOptions, ...other];
   const loading = (wantCustomers && customerSearch.isFetching) || (wantSuppliers && supplierSearch.isFetching);
   const canCreate = vouchers && !!onCreateIncome && (shown === 'all' || shown === 'income');
+  // Only where it names who is added: Customers, Suppliers, or the plain customer list without the books.
+  const addKind: 'customer' | 'supplier' | undefined = !onAdd ? undefined : !vouchers ? (customers ? 'customer' : undefined) : shown === 'customers' ? 'customer' : shown === 'suppliers' ? 'supplier' : undefined;
 
   return (
     <SelectSheet
@@ -143,6 +149,7 @@ export function ReceivedForSheet({
       }}
       onCreate={canCreate ? (name) => onCreateIncome?.(name) : undefined}
       createLabel={(name) => tr('books:receipts.newIncome', { name })}
+      footer={addKind ? <AddPartyButton kind={addKind} onPress={() => onAdd?.(addKind)} /> : undefined}
     />
   );
 }

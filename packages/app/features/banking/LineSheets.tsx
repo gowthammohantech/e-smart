@@ -23,6 +23,7 @@ import { useOpenDocuments, usePartySearch, useServerBook, type BankLine } from '
 import { useAccountName, useGroupName } from '../books/names';
 import { useExpenseCategories, useHasModule } from '../../store/selectors';
 import { SignedAmount, signedMoney, useBankAction, useRecordLabel } from './parts';
+import { AddPartyButton, useAddParty } from '../contacts/AddPartyButton';
 
 /*
  * Each sheet is mounted for one line (BankLinesView keys it by the line), so it opens empty every time.
@@ -98,6 +99,11 @@ export function RecordPaymentSheet({ line, onClose }: { line: BankLine | null; o
   // What the money settles: the party's open invoices (or bills), oldest first, ticked until the line's amount runs out.
   const open = useOpenDocuments(partyId, into ? ['invoice', 'debitNote', 'openingInvoice'] : ['purchaseBill', 'supplierDebitNote', 'openingBill']);
   const [unticked, setUnticked] = useState<Set<string>>(new Set());
+  const addParty = useAddParty(into ? 'customer' : 'supplier', (p) => {
+    setPartyId(p.id);
+    setPartyName(p.name);
+    setUnticked(new Set());
+  });
   const { run, busy } = useBankAction();
   const lineCurrency = line?.amount.currency;
   const docs = useMemo(
@@ -198,6 +204,7 @@ export function RecordPaymentSheet({ line, onClose }: { line: BankLine | null; o
           setUnticked(new Set());
           setPartyOpen(false);
         }}
+        footer={<AddPartyButton kind={into ? 'customer' : 'supplier'} onPress={() => addParty(() => setPartyOpen(false))} />}
       />
       <SelectSheet
         visible={methodOpen}
@@ -230,6 +237,10 @@ export function RecordExpenseSheet({ line, onClose }: { line: BankLine | null; o
   const [supplierOpen, setSupplierOpen] = useState(false);
   const [supplierQuery, setSupplierQuery] = useState('');
   const suppliers = usePartySearch('supplier', useDebounced(supplierQuery), supplierOpen);
+  const addSupplier = useAddParty('supplier', (p) => {
+    setSupplierId(p.id);
+    setSupplierName(p.name);
+  });
   const { run, busy } = useBankAction();
   if (!line) return null;
   const allowed = (suppliers.data ?? []).filter((p) => p.kind && buysFrom(p.kind));
@@ -299,6 +310,7 @@ export function RecordExpenseSheet({ line, onClose }: { line: BankLine | null; o
           setSupplierName(allowed.find((p) => p.id === v)?.name);
           setSupplierOpen(false);
         }}
+        footer={<AddPartyButton kind="supplier" onPress={() => addSupplier(() => setSupplierOpen(false))} />}
       />
     </>
   );

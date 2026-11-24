@@ -583,7 +583,8 @@
       "debit": "Debit",
       "credit": "Credit",
       "closingBalance": "Closing",
-      "booksAllBranches": "The books cover every branch. Ask an owner or admin to see the balance sheet and accounts."
+      "booksAllBranches": "The books cover every branch. Ask an owner or admin to see the balance sheet and accounts.",
+      "pages": "Accounts pages"
     }
   },
   "tcs": {

@@ -479,6 +479,22 @@ export const chargeNames = pgTable("charge_names", {
 		}),
 ]);
 
+// Every prefix a document kind's series has had, as typed: a new prefix may repeat one exactly, never
+// differ from one only in case (Gk/Alpha, then GK/ALPHA), as GST reads document numbers without case.
+export const numberingPrefixes = pgTable("numbering_prefixes", {
+	companyId: varchar("company_id", { length: 40 }).notNull(),
+	kind: numberingKind().notNull(),
+	prefix: varchar({ length: 20 }).notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
+}, (table): PgTableExtraConfigValue[] => [
+	primaryKey({ columns: [table.companyId, table.kind, table.prefix], name: "numbering_prefixes_pkey" }),
+	foreignKey({
+			columns: [table.companyId],
+			foreignColumns: [companies.id],
+			name: "numbering_prefixes_company_id_fkey"
+		}),
+]);
+
 export const numberingSeries = pgTable("numbering_series", {
 	id: varchar({ length: 40 }).primaryKey().notNull(),
 	companyId: varchar("company_id", { length: 40 }).notNull(),
@@ -750,6 +766,8 @@ export const documents = pgTable("documents", {
 	index("documents_company_id_kind_number_idx").using("btree", table.companyId.asc().nullsLast(), table.kind.asc().nullsLast(), table.number.asc().nullsLast()),
 	// Drafts, and drafts cancelled before numbering, all carry `KIND-DRAFT`.
 	uniqueIndex("documents_company_id_kind_number_issued_key").using("btree", table.companyId.asc().nullsLast(), table.kind.asc().nullsLast(), table.number.asc().nullsLast()).where(sql`${table.number} NOT LIKE '%-DRAFT'`),
+	// The same number in another case is the same number: GST reads them without case.
+	uniqueIndex("documents_company_id_kind_number_ci_key").using("btree", table.companyId.asc().nullsLast(), table.kind.asc().nullsLast(), sql`lower(${table.number})`).where(sql`${table.number} NOT LIKE '%-DRAFT'`),
 	index("documents_company_id_kind_status_date_idx").using("btree", table.companyId.asc().nullsLast(), table.kind.asc().nullsLast(), table.status.asc().nullsLast(), table.date.asc().nullsLast()),
 	index("documents_company_id_party_id_date_idx").using("btree", table.companyId.asc().nullsLast(), table.partyId.asc().nullsLast(), table.date.asc().nullsLast()),
 	index("documents_source_document_id_idx").using("btree", table.sourceDocumentId.asc().nullsLast()),

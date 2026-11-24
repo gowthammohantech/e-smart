@@ -162,8 +162,8 @@ export function minLength(value: string | undefined, len: number, label: string)
  */
 export function sanitizePrefix(raw: string): string {
   return raw
-    .toUpperCase()
-    .replace(/[^A-Z0-9/-]/g, '')
+    // Upper and lower case both, kept as typed (Gk/Alpha); the server refuses a case-only change of a used one.
+    .replace(/[^A-Za-z0-9/-]/g, '')
     .replace(/\/{2,}/g, '/')
     .replace(/^[/-]+/, '');
 }

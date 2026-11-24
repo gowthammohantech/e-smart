@@ -61,6 +61,7 @@ import { useDebounced } from '../../components/useDebounced';
 import { SHOW_SCROLLBAR, useBreakpoint } from '@esmart/ui/theme/breakpoints';
 import { useGoBack } from '../../navigation/useGoBack';
 import { inactiveChoice } from './accountChoice';
+import { AddPartyButton, useAddParty } from '../contacts/AddPartyButton';
 
 
 /** What settles a document besides cash. */
@@ -199,6 +200,10 @@ export function PaymentForm({
   // The services an advance receipt can be for: active items of type service, searched by name, SKU or SAC.
   const serviceSearch = useItemSearch(useDebounced(serviceQuery), advanceSheet === 'service');
   const services = (serviceSearch.data ?? []).filter((i): i is typeof i & { id: string } => i.type === 'service' && !!i.id);
+  // "Add new customer" (or supplier) under the picker: the contact saved there is the one this is for.
+  const addParty = useAddParty(direction === 'received' ? 'customer' : 'supplier', (p) => pickParty(p.id));
+  // Under Suppliers on a receipt: money from a supplier's ledger, as picking one there does.
+  const addSupplierSource = useAddParty('supplier', (p) => void pickAccount({ key: `party:${p.id}`, label: p.name }));
   const pickParty = (id: string) => {
     setPartyId(id);
     setAllocations({});
@@ -217,13 +222,15 @@ export function PaymentForm({
   // A receipt goes in full to the invoices ticked: no advance is kept (that is an advance receipt's).
   const noAdvance = direction === 'received' && !advanceReceipt;
   // Record payment on an invoice: the amount goes to that invoice alone, so there is no Apply to list.
-  // With debit notes raised on it, the list shows, the invoice and its notes ticked, the rest there to tick.
+  // With debit notes raised on it, the list shows that invoice and those notes only, each ticked in full.
   const fromInvoice = direction === 'received' && !advanceReceipt && !!params.documentId && !withIds.length;
+  const invoiceAndNotes = params.documentId && withIds.length ? [params.documentId, ...withIds] : undefined;
   const open = useOpenDocuments(partyId, direction === 'received' ? ['invoice', 'debitNote', 'openingInvoice'] : ['purchaseBill', 'supplierDebitNote', 'openingBill'], { servicesOnly: advanceReceipt });
   // Plain values: the React compiler memoizes them (a hand-written useMemo here it can't keep, lint fails).
   const asOf = today();
   const outstanding = (open.data ?? [])
     .filter((d) => d.grandTotal.currency === currency && (d.outstanding?.minor ?? 0) > 0)
+    .filter((d) => !invoiceAndNotes || invoiceAndNotes.includes(d.id))
     .map((d) => ({
       document: { id: d.id, kind: d.kind, number: d.number, supplierDocNumber: d.supplierDocNumber, date: d.date, dueDate: d.dueDate, exchangeRate: d.exchangeRate ?? 1, tdsExpected: d.tdsExpected },
       outstanding: d.outstanding as Money,
@@ -1290,6 +1297,7 @@ export function PaymentForm({
               }
               pickParty(picked.partyId);
             }}
+            onAdd={(kind) => (kind === 'supplier' ? addSupplierSource : addParty)(() => setPartyOpen(false))}
           />
         ) : (
           <SelectSheet
@@ -1301,6 +1309,7 @@ export function PaymentForm({
             loading={partySearch.isFetching}
             value={partyId}
             onSelect={pickParty}
+            footer={<AddPartyButton kind={direction === 'received' ? 'customer' : 'supplier'} onPress={() => addParty(() => setPartyOpen(false))} />}
           />
         )}
         <SelectSheet

@@ -74,6 +74,9 @@ export default function AccountSettings() {
   const [isDefault, setIsDefault] = useState(false);
   // Inactive: kept with its history, but no new money goes into it.
   const [active, setActive] = useState(true);
+  // The list shows the active accounts or the inactive ones, as Parties does.
+  const [statusTab, setStatusTab] = useState<'active' | 'inactive'>('active');
+  const shown = accounts.filter((a) => (a.status ?? 'active') === statusTab);
   const typeLabels: Record<PaymentAccount['type'], string> = {
     bank: tr('settings:accounts.typeBank'),
     cash: tr('settings:accounts.typeCash'),
@@ -156,7 +159,11 @@ export default function AccountSettings() {
       editing.id ? tr('settings:accounts.updated') : tr('settings:accounts.added'),
       { icon: 'bank-check' },
     );
-    if (res) setEditing(null);
+    if (res) {
+      setEditing(null);
+      // The balances are the server's: read them again, so an opening balance changed here shows at once.
+      void usageQuery.refetch();
+    }
   };
 
   // Ctrl+S (⌘+S) does what Save does, while the form is open.
@@ -202,13 +209,27 @@ export default function AccountSettings() {
             : null}
         </Card>
 
-        <View style={{ height: t.spacing.lg }} />
+        {/* Active or inactive accounts, as the tabs on Parties. */}
+        <View style={{ marginTop: t.spacing.lg, marginBottom: t.spacing.md, alignSelf: desktop ? 'flex-start' : 'stretch', width: desktop ? 220 : undefined }}>
+          <Segmented
+            options={[
+              { value: 'active', label: tr('common:accountStatus.active') },
+              { value: 'inactive', label: tr('common:accountStatus.inactive') },
+            ]}
+            value={statusTab}
+            onChange={(v) => setStatusTab(v as 'active' | 'inactive')}
+          />
+        </View>
 
-        {desktop ? (
+        {!shown.length ? (
+          <Card>
+            <Text variant="small" tone="muted">{tr(statusTab === 'inactive' ? 'settings:accounts.noInactive' : 'settings:accounts.noActive')}</Text>
+          </Card>
+        ) : desktop ? (
           // A desktop lists the accounts as a table: kind, number and running balance.
           <DataTable
             scroll={false}
-            rows={accounts}
+            rows={shown}
             rowKey={(a) => a.id}
             rowLabel={(a) => a.name}
             onRowPress={open}
@@ -221,10 +242,9 @@ export default function AccountSettings() {
                 header: tr('common:table.status'),
                 width: 180,
                 render: (a) => (
-                  <View style={{ flexDirection: 'row', gap: 6 }}>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
                     {a.isDefault ? <Badge label={tr('settings:accounts.default')} tone="info" size="sm" /> : null}
                     {a.id === invoiceAccountId ? <Badge label={tr('settings:accounts.onInvoices')} tone="success" size="sm" /> : null}
-                    {a.status === 'inactive' ? <Badge label={tr('common:accountStatus.inactive')} tone="neutral" size="sm" /> : null}
                   </View>
                 ),
               },
@@ -249,13 +269,13 @@ export default function AccountSettings() {
           />
         ) : (
           <Card padded={false}>
-            {accounts.map((a, i) => (
+            {shown.map((a, i) => (
               <ListRow
                 key={a.id}
                 title={a.name}
                 subtitle={a.accountNumber ?? typeLabels[a.type]}
                 icon={a.type === 'cash' ? 'cash' : a.type === 'wallet' ? 'wallet-outline' : 'bank-outline'}
-                divider={i < accounts.length - 1}
+                divider={i < shown.length - 1}
                 right={
                   <View style={{ alignItems: 'flex-end', gap: 4 }}>
                     {balancesPending ? (
@@ -269,7 +289,6 @@ export default function AccountSettings() {
                     )}
                     {a.isDefault ? <Badge label={tr('settings:accounts.default')} tone="info" size="sm" /> : null}
                     {a.id === invoiceAccountId ? <Badge label={tr('settings:accounts.onInvoices')} tone="success" size="sm" /> : null}
-                    {a.status === 'inactive' ? <Badge label={tr('common:accountStatus.inactive')} tone="neutral" size="sm" /> : null}
                   </View>
                 }
                 onPress={() => open(a)}
@@ -426,7 +445,7 @@ export default function AccountSettings() {
         onConfirm={() => {
           const a = confirmDelete;
           setConfirmDelete(null);
-          if (a) void serverSave(() => removePaymentAccount(a.id), tr('settings:accounts.deleted'), { icon: 'bank-remove' });
+          if (a) void serverSave(() => removePaymentAccount(a.id), tr('settings:accounts.deleted'), { icon: 'bank-remove' }).then(() => usageQuery.refetch());
         }}
       />
     </View>

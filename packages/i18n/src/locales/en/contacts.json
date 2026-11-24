@@ -47,7 +47,8 @@
     "inAdvance": "in advance",
     "newCustomer": "New customer",
     "newSupplier": "New supplier",
-    "newContact": "New contact"
+    "newContact": "New contact",
+    "newBoth": "New customer and supplier"
   },
   "form": {
     "businessName": "Business name",

@@ -149,7 +149,9 @@
     "active": "Active",
     "activeHint": "Off: the account and its history stay, but no new receipts, payments, expenses or transfers go into it.",
     "activeLockedDefault": "The default account stays active. Make another account the default first.",
-    "activeLockedInvoices": "Your invoices print this account, so it stays active. Pick another in Business profile first."
+    "activeLockedInvoices": "Your invoices print this account, so it stays active. Pick another in Business profile first.",
+    "noActive": "No active accounts.",
+    "noInactive": "No inactive accounts. An account made inactive in its settings shows here."
   },
   "branches": {
     "none": "No branches yet",
@@ -521,7 +523,7 @@
   "eInvoicing": {
     "daysSuffix": "days",
     "noTransporter": "None",
-    "transporterHint": "Filled into Part-B of new e-way bills; change it on any bill.",
+    "transporterHint": "Filled into Part-B of new E-way bills; change it on any bill.",
     "noTransportersHint": "Add your transporters under Settings › Transporters to pick a default."
   },
   "deleteAccount": {

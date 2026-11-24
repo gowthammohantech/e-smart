@@ -49,6 +49,7 @@ import { SHOW_SCROLLBAR, useBreakpoint } from '@esmart/ui/theme/breakpoints';
 import { useGoBack } from '../../navigation/useGoBack';
 import { validGstin } from '@esmart/core/lib/validators';
 import { inactiveChoice } from '../payments/accountChoice';
+import { AddPartyButton, useAddParty } from '../contacts/AddPartyButton';
 
 /** The desktop side column (summary, receipt). */
 const SIDE_WIDTH = 360;
@@ -143,6 +144,11 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
   const [supplierQuery, setSupplierQuery] = useState('');
   const [customerQuery, setCustomerQuery] = useState('');
   const supplierSearch = usePartySearch('supplier', useDebounced(supplierQuery), supplierOpen);
+  const addSupplier = useAddParty('supplier', (p) => {
+    setSupplierId(p.id);
+    setReverseCharge(!!p.reverseCharge);
+  });
+  const addCustomer = useAddParty('customer', (p) => setCustomerId(p.id));
   const customerSearch = usePartySearch('customer', useDebounced(customerQuery), customerOpen);
   const supplierRecord = usePartyRecord(supplierId ?? undefined);
   const customerRecord = usePartyRecord(customerId);
@@ -645,6 +651,7 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
           loading={customerSearch.isFetching}
           value={customerId ?? ''}
           onSelect={(v) => setCustomerId(v || undefined)}
+          footer={<AddPartyButton kind="customer" onPress={() => addCustomer(() => setCustomerOpen(false))} />}
         />
         <SelectSheet
           visible={itcOpen}
@@ -730,6 +737,7 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
             // A supplier under reverse charge puts their bills under it.
             setReverseCharge(!!supplierSearch.data?.find((x) => x.id === id)?.reverseCharge);
           }}
+          footer={<AddPartyButton kind="supplier" onPress={() => addSupplier(() => setSupplierOpen(false))} />}
         />
         <SelectSheet
           visible={taxOpen}
