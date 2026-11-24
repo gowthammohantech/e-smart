@@ -103,7 +103,9 @@ export function PaymentForm({
   const breakpoint = useBreakpoint();
   const desktop = breakpoint !== 'phone';
 
-  const params = useLocalSearchParams<{ partyId?: string; documentId?: string; advance?: string }>();
+  // `with`: debit notes raised on the invoice it was opened from, paid along with it.
+  const params = useLocalSearchParams<{ partyId?: string; documentId?: string; advance?: string; with?: string }>();
+  const withIds = (params.with ?? '').split(',').filter(Boolean);
   // Without the books (Free, Basic) a receipt is only ever a customer's: there is nothing else to pick.
   const books = useHasModule('books');
 
@@ -214,7 +216,8 @@ export function PaymentForm({
   // A receipt goes in full to the invoices ticked: no advance is kept (that is an advance receipt's).
   const noAdvance = direction === 'received' && !advanceReceipt;
   // Record payment on an invoice: the amount goes to that invoice alone, so there is no Apply to list.
-  const fromInvoice = direction === 'received' && !advanceReceipt && !!params.documentId;
+  // With debit notes raised on it, the list shows, the invoice and its notes ticked, the rest there to tick.
+  const fromInvoice = direction === 'received' && !advanceReceipt && !!params.documentId && !withIds.length;
   const open = useOpenDocuments(partyId, direction === 'received' ? ['invoice', 'debitNote', 'openingInvoice'] : ['purchaseBill', 'supplierDebitNote', 'openingBill'], { servicesOnly: advanceReceipt });
   // Plain values: the React compiler memoizes them (a hand-written useMemo here it can't keep, lint fails).
   const asOf = today();
@@ -243,11 +246,21 @@ export function PaymentForm({
   };
   if (prefill && !seeded) {
     setSeeded(true);
-    const tds = expectedTdsOf(prefill.document.id);
-    const cash = money(prefill.outstanding.minor - tds, currency);
-    setAllocations({ [prefill.document.id]: toAmountInput(cash) });
-    if (tds) setAdjustments({ [prefill.document.id]: { tdsDeducted: toAmountInput(money(tds, currency)) } });
-    setAmountText(toAmountInput(cash));
+    // The invoice, and its debit notes when it came with them: each ticked at what it still owes.
+    const ids = [prefill.document.id, ...withIds];
+    const next: Record<string, string> = {};
+    const tdsOf: Record<string, { tdsDeducted: string }> = {};
+    let total = 0;
+    for (const o of outstanding.filter((x) => ids.includes(x.document.id))) {
+      const tds = expectedTdsOf(o.document.id);
+      const cash = o.outstanding.minor - tds;
+      next[o.document.id] = toAmountInput(money(cash, currency));
+      if (tds) tdsOf[o.document.id] = { tdsDeducted: toAmountInput(money(tds, currency)) };
+      total += cash;
+    }
+    setAllocations(next);
+    if (Object.keys(tdsOf).length) setAdjustments(tdsOf);
+    setAmountText(toAmountInput(money(total, currency)));
   }
 
   // Advances held against this party: what its earlier payments left unallocated, the only advance
