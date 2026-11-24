@@ -28,7 +28,7 @@ import { useCessRows } from './cessRows';
 
 import { BusinessDocument, DocStatus, DocumentKind } from '@esmart/core/types';
 import { tdsSection } from '@esmart/core/data/tdsSections';
-import { NOTE_SOURCE, RECEIVABLE_KINDS, STATUS_TONE, canCancelDocument, canMerge, conversionBlock, isAwaitingApproval, isFinalized, isPayableDocument, nextStatuses } from '@esmart/core/domain/documentStates';
+import { CREDIT_KINDS, NOTE_SOURCE, RECEIVABLE_KINDS, STATUS_TONE, canCancelDocument, canMerge, conversionBlock, isAwaitingApproval, isFinalized, isPayableDocument, nextStatuses } from '@esmart/core/domain/documentStates';
 import { documentKindLabel, paymentMethodLabel, statusLabel } from '@esmart/core/labels';
 import { outstandingOf } from '@esmart/core/domain/receivables';
 import { OUTBOUND_KINDS, shortfallsAgainst } from '@esmart/core/domain/stockLedger';
@@ -68,6 +68,8 @@ import { Cell, DataTable, TABLE_PAGE_SIZE } from '@esmart/ui/components/DataTabl
 import { SplitPane } from '@esmart/ui/components/Layout';
 import { Menu, MenuDivider, MenuItem, MenuSection, useMenuAnchor } from '@esmart/ui/components/Menu';
 import { Segmented } from '@esmart/ui/components/Field';
+import { StatusBar } from '@esmart/ui/components/charts/StatusBar';
+import { seriesColor } from '@esmart/ui/theme/chartColors';
 import { HtmlPreview } from './HtmlPreview';
 import { deliverFile, deliverPdf, isUserCancel } from '../reports/exportFiles';
 import { documentPdf, paymentLink, pdfFileName, pdfLink, removeCreditApplication, sendDocument, shareLink, shareLinks, type SendChannel } from '../../remote/documents';
@@ -238,6 +240,26 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
     [record?.outstanding, doc, allPayments, allDocuments],
   );
   const paid = money(doc.totals.grandTotal.minor - outstanding.minor, doc.currency);
+  // What settled it, part by part, for the bar: the notes raised against it (live ones), direct notes
+  // applied to it, and payments as the rest of what is no longer owed. A debit note adds to the bill.
+  const settlement = useMemo(() => {
+    const live = (status?: string) => !!status && !['draft', 'requested', 'cancelled', 'rejected'].includes(status);
+    const madeFrom = record?.linkedDocuments ?? allDocuments.filter((d) => d.sourceDocumentId === doc.id).map((d) => ({ kind: d.kind, status: d.status, grandTotal: d.totals.grandTotal }));
+    const notes = madeFrom.filter((d) => live(d.status) && d.grandTotal);
+    const credits = notes.filter((d) => d.kind && CREDIT_KINDS.includes(d.kind));
+    const debits = notes.filter((d) => d.kind === 'debitNote' || d.kind === 'supplierDebitNote');
+    const applied = record?.creditApplications ?? [];
+    const settled = Math.max(0, doc.totals.grandTotal.minor - outstanding.minor);
+    const credited = Math.min(settled, credits.reduce((a, d) => a + (d.grandTotal as Money).minor, 0) + applied.reduce((a, c) => a + (c.amount as Money).minor, 0));
+    return {
+      payments: money(settled - credited, doc.currency),
+      paymentCount: (record?.payments ?? relatedPayments).length,
+      credited: money(credited, doc.currency),
+      creditCount: credits.length + applied.length,
+      debited: money(debits.reduce((a, d) => a + (d.grandTotal as Money).minor, 0), doc.currency),
+      debitCount: debits.length,
+    };
+  }, [record, allDocuments, doc.id, doc.totals.grandTotal.minor, doc.currency, outstanding.minor, relatedPayments]);
   // Late only while something is still owed: a paid invoice past its date isn't overdue.
   const owing = isPayable && isFinalized(doc.status) && doc.status !== 'cancelled' && doc.status !== 'paid' && outstanding.minor > 0;
   const overdueDays = doc.dueDate && owing ? daysBetween(doc.dueDate, today()) : 0;
@@ -795,15 +817,16 @@ ${url}`;
           {recordPending ? (
             <Skeleton height={8} radius={4} />
           ) : (
-          <View style={{ height: 8, borderRadius: 4, backgroundColor: t.c.card2, overflow: 'hidden' }}>
-            <View
-              style={{
-                width: `${Math.min(100, (paid.minor / Math.max(1, doc.totals.grandTotal.minor)) * 100)}%`,
-                height: '100%',
-                backgroundColor: t.c.good,
-              }}
+            // As Home's invoice status: one bar in parts, each named with its amount under it.
+            <StatusBar
+              emptyLabel={tr('sales:detail.nothingLeft')}
+              segments={[
+                { key: 'payments', label: tr(receivable ? 'sales:detail.settlement.customerPayments' : 'sales:detail.settlement.supplierPayments'), count: settlement.paymentCount, total: settlement.payments, color: t.c.good },
+                { key: 'credit', label: tr('sales:detail.settlement.creditNotes'), count: settlement.creditCount, total: settlement.credited, color: seriesColor(t.scheme, 0) },
+                { key: 'debit', label: tr('sales:detail.settlement.debitNotes'), count: settlement.debitCount, total: settlement.debited, color: seriesColor(t.scheme, 2) },
+                { key: 'outstanding', label: tr('sales:detail.outstanding'), total: outstanding, color: overdueDays > 0 ? t.c.bad : t.c.warn },
+              ].filter((s) => s.total.minor > 0)}
             />
-          </View>
           )}
 
           {/* Full width in the narrow side column, one above the other, as on a phone. */}

@@ -266,6 +266,12 @@
     "referenceBadge": "Ref {{reference}}",
     "theirNumber": "Their no. {{number}}",
     "paid": "Paid",
+    "settlement": {
+      "customerPayments": "Customer payments",
+      "supplierPayments": "Supplier payments",
+      "creditNotes": "Credit notes",
+      "debitNotes": "Debit notes"
+    },
     "paySupplier": "Pay supplier",
     "paymentNumber": "Payment {{number}}",
     "sendEmail": "Send by email",
