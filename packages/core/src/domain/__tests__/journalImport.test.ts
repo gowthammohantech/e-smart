@@ -27,7 +27,7 @@ describe('journals from a CSV', () => {
       { account: 'sys:rent', debitMinor: 1_200_000, creditMinor: 0, narration: 'March rent' },
       { account: 'pay:cash', debitMinor: 0, creditMinor: 1_200_000 },
     ]);
-    expect(out[1].problems).toEqual(['Debits (5000.00) and credits (4000.00) differ']);
+    expect(out[1].problems).toEqual(['Debits (5000.00) and credits (4000.00) must be equal']);
     expect(out[2].problems).toContain('Line 6: "31/02/2026" is not a date');
     expect(out[2].problems).toContain('Line 6: no account called "Nowhere"');
   });

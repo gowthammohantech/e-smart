@@ -682,7 +682,7 @@ describe('the invoice registration portal (FRD 16)', () => {
     });
     expect(res.ok).toBe(false);
     if (res.ok) return;
-    expect(res.errors[0].message).toMatch(/not active/i);
+    expect(res.errors[0].message).toMatch(/isn't active/i);
   });
 
   it('never returns an IRN on a rejection', () => {
@@ -1027,7 +1027,7 @@ describe('e-way bill extension (FRD 16)', () => {
   it('is shut a second before the window opens', () => {
     const result = canExtendEwayBill(bill, '2026-09-19T15:59:58.000Z');
     expect(result.allowed).toBe(false);
-    expect(result.reason).toMatch(/eight hours before/i);
+    expect(result.reason).toMatch(/last 8 hours before it expires/i);
   });
 
   it('is still open exactly eight hours after expiry', () => {

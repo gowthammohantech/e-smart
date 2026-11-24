@@ -130,16 +130,17 @@ export class GspRouter implements GspGateway {
   }
 
   /**
-   * The register is the deployment's, not a company's: there is no login to route by, so the register's own target
-   * answers. That is the default target unless `TAXATION_GSTIN_LOOKUP_TARGET` names another (see `lookupTarget`), so
-   * a sandbox default does not answer a real signup with a sandbox register's four test taxpayers.
+   * A company's own target (the one a platform operator chose for it) answers first, exactly as it does for filing.
+   * With none, and for lookups that belong to no company (signup), the register's own target answers: the default
+   * target unless `TAXATION_GSTIN_LOOKUP_TARGET` names another (see `lookupTarget`), so a sandbox default does not
+   * answer a real signup with a sandbox register's four test taxpayers.
    */
-  lookupTaxpayer(gstin: string) {
-    return this.gatewayFor(lookupTarget(this.config, this.target)).lookupTaxpayer(gstin);
+  lookupTaxpayer(gstin: string, target?: GspTarget) {
+    return this.gatewayFor(target ?? lookupTarget(this.config, this.target)).lookupTaxpayer(gstin);
   }
 
-  lookupIsSandbox() {
-    return lookupTarget(this.config, this.target).environment === 'sandbox';
+  lookupIsSandbox(target?: GspTarget) {
+    return (target ?? lookupTarget(this.config, this.target)).environment === 'sandbox';
   }
 }
 

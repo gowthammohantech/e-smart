@@ -89,7 +89,7 @@ export async function resolveTransporter(
     .from(TR)
     .where(and(eq(TR.companyId, companyId), or(eq(TR.id, ref), eq(TR.transporterId, gstin))));
   if (found) return found;
-  if (!isValidTransporterId(gstin)) throw invalid(field, 'Not a saved transporter, nor a valid GSTIN or TRANSIN');
+  if (!isValidTransporterId(gstin)) throw invalid(field, 'Pick a saved transporter, or enter a valid 15-character GSTIN or transporter ID');
   const [created] = await db
     .insert(TR)
     .values({ id: newId('trn'), companyId, name: (name?.trim() || gstin).slice(0, 200), transporterId: gstin })
@@ -166,9 +166,15 @@ export async function portalCredentials(db: DbOrTx, config: Config, company: Com
   };
 }
 
+/** The portal's own sentence without its trailing error number ("Duplicate IRN (2150)"), led by who said it. */
+function portalText(message: string | undefined): string {
+  const text = (message ?? '').replace(/\s*\((?:[A-Z]{0,4}\d{1,5})\)\s*$/, '').replace(/^\d{3,5}\s*[:\-]\s*/, '').trim();
+  return text ? `The GST portal rejected this: ${text}` : 'The GST portal rejected this request. Check the details and try again.';
+}
+
 /** A portal rejection: 502 with the portal's codes in `issues[]`. */
 export function portalRejected(errors: ComplianceIssue[], code = 'PORTAL_REJECTED') {
-  return upstream(code, errors[0]?.message ?? 'The portal rejected the request', errors as Schema<'ComplianceIssue'>[]);
+  return upstream(code, portalText(errors[0]?.message), errors as Schema<'ComplianceIssue'>[]);
 }
 
 /**

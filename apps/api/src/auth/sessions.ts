@@ -72,9 +72,9 @@ export async function rotateSession(app: FastifyInstance, deps: Deps, refreshTok
     .innerJoin(schema.accounts, eq(schema.accounts.id, schema.users.accountId))
     .where(eq(schema.deviceSessions.refreshTokenHash, hash));
   if (!session || session.s.revokedAt || session.s.refreshExpiresAt < deps.now()) {
-    throw unauthorized('REFRESH_TOKEN_INVALID', 'Sign in again');
+    throw unauthorized('REFRESH_TOKEN_INVALID', 'Your session has ended. Please sign in again.');
   }
-  if (session.status === 'disabled') throw unauthorized('USER_DISABLED');
+  if (session.status === 'disabled') throw unauthorized('USER_DISABLED', 'This account has been turned off. Contact your business owner or support.');
   if (session.suspendedAt) throw accountSuspended();
   const next = randomToken();
   const updated = await deps.db
@@ -83,7 +83,7 @@ export async function rotateSession(app: FastifyInstance, deps: Deps, refreshTok
     .where(and(eq(schema.deviceSessions.id, session.s.id), eq(schema.deviceSessions.refreshTokenHash, hash), isNull(schema.deviceSessions.revokedAt)))
     .returning({ id: schema.deviceSessions.id });
   // Lost the race to a concurrent refresh with the same token: treat as reuse.
-  if (!updated.length) throw unauthorized('REFRESH_TOKEN_INVALID', 'Sign in again');
+  if (!updated.length) throw unauthorized('REFRESH_TOKEN_INVALID', 'Your session has ended. Please sign in again.');
   return {
     userId: session.s.userId,
     refreshToken: next,

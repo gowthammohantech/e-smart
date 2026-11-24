@@ -418,9 +418,6 @@ export function IssueList({
               <Text variant="small" style={{ lineHeight: 18 }}>
                 {issue.message}
               </Text>
-              <Text variant="micro" tone="muted">
-                {issue.code} · {issue.field}
-              </Text>
             </View>
           </View>
         ))

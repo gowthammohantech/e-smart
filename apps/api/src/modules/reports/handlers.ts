@@ -1,5 +1,6 @@
 import { inArray } from 'drizzle-orm';
 import { track } from '../../analytics/track';
+import { moduleName } from '../../lib/names';
 import type { Schema } from '@esmart/api-contract';
 import { PAYMENT_METHODS } from '@esmart/core/data/masters';
 import { PAYABLE_KINDS, RECEIVABLE_KINDS, isCancelled } from '@esmart/core/domain/documentStates';
@@ -160,7 +161,7 @@ function assertReportAvailable(company: CompanyRow, key: string) {
   if (!module) return;
   if (!hasModule(company.plan, module)) throw planUpgradeRequired(FULL_PLAN, module);
   if (!moduleEnabled(company.plan, company.disabledModules as Module[], module)) {
-    throw forbidden('MODULE_OFF', `${module} is switched off for this business; an owner can switch it on in Settings`);
+    throw forbidden('MODULE_OFF', `${moduleName(module)} is switched off for this business. An owner can switch it on in Settings.`);
   }
 }
 

@@ -6,6 +6,8 @@ import type { Schema } from '@esmart/api-contract';
 import { schema } from '@esmart/db';
 import { defineHandlers } from '../../context';
 import { invalid, notFound, unprocessable } from '../../http/errors';
+import { parseGspTarget } from '../../providers/gsp';
+import type { GspTarget } from '../../providers/gsp/provider-name';
 import type { GstinRecord } from '../../providers/gstin';
 import { compact } from '../../lib/wire';
 
@@ -134,14 +136,40 @@ export const referenceHandlers = defineHandlers({
   async lookupGstin(ctx) {
     const gstin = normalizeGstin(ctx.params.gstin);
     if (!isValidGstin(gstin)) {
-      throw unprocessable([{ field: 'gstin', message: 'This GSTIN is not valid (check digit mismatch)', severity: 'blocking' }], 'INVALID_GSTIN');
+      throw unprocessable([{ field: 'gstin', message: 'This GSTIN doesn’t look right. Check each character for a typing mistake.', severity: 'blocking' }], 'INVALID_GSTIN');
     }
-    const G = schema.gstinLookups;
-    const [cached] = await ctx.db.select().from(G).where(eq(G.gstin, gstin));
-    if (cached && ctx.now.getTime() - cached.fetchedAt.getTime() < GSTIN_CACHE_MS) return gstinToWire(cached);
+    // A company a platform operator set up with its own GSP is answered by that GSP, as its filings are; any other
+    // lookup (no company, or one with no choice) is answered by the deployment's own register.
+    let target: GspTarget | undefined;
+    const companyId = ctx.query.companyId;
+    if (companyId && ctx.maybeUser?.companyIds.includes(companyId)) {
+      const C = schema.companies;
+      const [company] = await ctx.deps.systemDb.select({ provider: C.gspProvider, environment: C.gspEnvironment }).from(C).where(eq(C.id, companyId)).limit(1);
+      target = company ? parseGspTarget(company.provider, company.environment) : undefined;
+    }
 
-    const found = await ctx.deps.providers.gstin.lookup(gstin);
+    // The cache is shared by every company and keyed by GSTIN alone, so it only holds the deployment's register.
+    // A company with its own GSP neither reads from it nor writes to it, or one GSP's answer would stand in for another's.
+    const G = schema.gstinLookups;
+    if (!target) {
+      const [cached] = await ctx.db.select().from(G).where(eq(G.gstin, gstin));
+      if (cached && ctx.now.getTime() - cached.fetchedAt.getTime() < GSTIN_CACHE_MS) return gstinToWire(cached);
+    }
+
+    const found = await ctx.deps.providers.gstin.lookup(gstin, target);
     if (!found) throw notFound('GSTIN');
+    if (target) {
+      return gstinToWire({
+        gstin,
+        legalName: found.legalName.slice(0, 200),
+        tradeName: found.tradeName?.slice(0, 200) ?? null,
+        status: found.status,
+        registrationType: found.registrationType,
+        stateCode: gstin.slice(0, 2),
+        address: { ...found.address, registeredOn: found.registeredOn } satisfies CachedAddress,
+        fetchedAt: ctx.now,
+      });
+    }
     const values = {
       legalName: found.legalName.slice(0, 200),
       tradeName: found.tradeName?.slice(0, 200) ?? null,

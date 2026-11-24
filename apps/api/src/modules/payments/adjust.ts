@@ -174,8 +174,8 @@ export async function applyAdjustments(ctx: AnyCtx, tx: DbOrTx, partyId: string,
   plan.forEach((a, i) => {
     const field = `allocations[${i}]`;
     const key = `${a.sourceType}:${a.sourceId}`;
-    if (!leftOf.has(key)) return block(`${field}.sourceId`, `No unadjusted ${a.sourceType === 'note' ? 'credit note' : 'advance'} ${a.sourceId} for this party`);
-    if (!owedOf.has(a.documentId)) return block(`${field}.documentId`, `${a.documentId} is not an open document of this party`);
+    if (!leftOf.has(key)) return block(`${field}.sourceId`, `The chosen ${a.sourceType === 'note' ? 'credit note' : 'advance'} has no balance left to adjust for this party. Reload and choose again.`);
+    if (!owedOf.has(a.documentId)) return block(`${field}.documentId`, 'The chosen invoice is no longer open for this party. Reload and choose again.');
     if (a.amount.currency !== base) return block(`${field}.amount.currency`, `Adjustments are in ${base}`);
     if (serviceAdvances.has(key) && !servicesOnly.has(a.documentId)) return block(`${field}.documentId`, 'A service advance is adjusted only against an invoice whose every line is a service');
     if (!(a.amount.minor > 0)) return block(`${field}.amount.minor`, 'Must be more than zero');

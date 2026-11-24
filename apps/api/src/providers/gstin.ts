@@ -8,6 +8,7 @@ import type { Config } from '../config';
 import { featureUnavailable, upstream } from '../http/errors';
 import { createGspRouter, GspConfigError, type GspGateway } from './gsp';
 import { toGstinRecord } from './gsp/taxpayer';
+import type { GspTarget } from './gsp/provider-name';
 import { GspAuthError, GspRequestError } from './gsp/transport';
 
 /** What the GST public search returns for a GSTIN. */
@@ -31,8 +32,11 @@ export type RoadDistance = { distanceKm: number; source: 'ewb-portal' | 'maps' }
  */
 export interface GstinProvider {
   readonly name: string;
-  /** The registration, or null when the portal has no such GSTIN. Throws on an upstream failure. */
-  lookup(gstin: string): Promise<GstinRecord | null>;
+  /**
+   * The registration, or null when the portal has no such GSTIN. Throws on an upstream failure.
+   * `target` is the GSP a company was set up with; without it the deployment's own register answers.
+   */
+  lookup(gstin: string, target?: GspTarget): Promise<GstinRecord | null>;
   /** City and state for a PIN code the local directory doesn't have yet. */
   pincode(pincode: string): Promise<PincodeRecord | null>;
   /** Approximate road distance between two PIN codes, capped at the e-way bill maximum. */
@@ -328,23 +332,23 @@ class GspGstinProvider implements GstinProvider {
 
   constructor(private readonly gateway: GspGateway) {}
 
-  async lookup(raw: string): Promise<GstinRecord | null> {
+  async lookup(raw: string, target?: GspTarget): Promise<GstinRecord | null> {
     const gstin = normalizeGstin(raw);
     if (!isValidGstin(gstin)) return null;
     let record: Record<string, unknown> | null;
     try {
-      record = await this.gateway.lookupTaxpayer(gstin);
+      record = await this.gateway.lookupTaxpayer(gstin, target);
     } catch (err) {
       if (err instanceof GspRequestError) {
         // A register that could not be asked is an upstream problem (502), not "no such GSTIN" (404).
-        throw upstream('GST_LOOKUP_FAILED', err.isUnavailable ? `The GST gateway is unavailable: ${err.message}` : err.message);
+        throw upstream('GST_LOOKUP_FAILED', 'GST details couldn’t be fetched right now. Try again in a moment, or enter the details yourself.');
       }
       if (err instanceof GspAuthError) throw featureUnavailable('GSTIN lookup is not available right now. Enter the details by hand.');
-      if (err instanceof GspConfigError) throw featureUnavailable(err.message);
+      if (err instanceof GspConfigError) throw featureUnavailable('GSTIN lookup is not available right now. Enter the details yourself.');
       throw err;
     }
     // A register record the app cannot read as a taxpayer (no legal name) is no answer at all.
-    return record ? toGstinRecord(record, gstin, { sandbox: this.gateway.lookupIsSandbox?.() === true }) : null;
+    return record ? toGstinRecord(record, gstin, { sandbox: this.gateway.lookupIsSandbox?.(target) === true }) : null;
   }
 
   pincode(): Promise<PincodeRecord | null> {

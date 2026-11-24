@@ -21,7 +21,7 @@ async function findTransporter(db: DbOrTx, companyId: string, id: string) {
 /** Validates the GSTIN or TRANSIN and that no other transporter in the company has it. */
 async function columns(db: DbOrTx, companyId: string, body: Schema<'Transporter'>, exceptId?: string) {
   const transporterId = normalizeGstin(body.transporterId);
-  if (!isValidTransporterId(transporterId)) throw invalid('transporterId', 'Not a valid GSTIN or TRANSIN (check digit mismatch)');
+  if (!isValidTransporterId(transporterId)) throw invalid('transporterId', 'That isn’t a valid transporter GSTIN or transporter ID. Check for typing mistakes.');
   if (!body.name.trim()) throw invalid('name', 'Name is required');
   const filters = [eq(TR.companyId, companyId), eq(TR.transporterId, transporterId)];
   if (exceptId) filters.push(ne(TR.id, exceptId));

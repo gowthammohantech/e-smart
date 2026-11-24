@@ -27,7 +27,7 @@ function branchColumns(body: Schema<'Branch'>) {
   if (!/^[A-Z0-9]{1,6}$/.test(code)) throw invalid('code', 'Use 1 to 6 letters or digits');
   const gstin = body.gstin?.trim().toUpperCase() || null;
   if (gstin && body.address.country === 'IN') {
-    if (!isValidGstin(gstin)) throw invalid('gstin', 'This GSTIN is not valid (check digit mismatch)');
+    if (!isValidGstin(gstin)) throw invalid('gstin', 'This GSTIN doesn’t look right. Check each character for a typing mistake.');
     if (body.address.stateCode && gstin.slice(0, 2) !== body.address.stateCode) {
       throw invalid('address.stateCode', "The branch's state doesn't match its GSTIN's state code");
     }

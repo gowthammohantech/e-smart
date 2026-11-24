@@ -12,6 +12,7 @@ import { conflict, invoiceLimitReached, preconditionFailed, unprocessable } from
 import { recordChange, type DbOrTx } from '../../lib/audit';
 import { partyBalances } from '../../lib/balances';
 import { newId } from '../../lib/ids';
+import { kindName, monthName } from '../../lib/names';
 import { assignNumber, sameNumberingPeriod } from '../../lib/numbering';
 import { replayQueuedAt } from '../../lib/replay';
 import { gstFlagsFrom } from '../../lib/wire';
@@ -297,7 +298,7 @@ export async function reverseStock(tx: DbOrTx, company: CompanyRow, row: DocRow,
       const available = stockMapOn(ledger.map((m) => ({ ...m, quantity: Number(m.quantity) }) as StockMovement), row.date, r.branchId)[r.itemId] ?? 0;
       if (available >= Number(r.net)) return [];
       const item = items.find((i) => i.id === r.itemId);
-      return [{ field: 'status', message: `${item?.name ?? r.itemId}: ${available} in stock, and reversing ${row.number} takes back ${Number(r.net)}`, severity: 'blocking' as const }];
+      return [{ field: 'status', message: `${item?.name ?? 'An item'}: only ${available} in stock, and reversing ${row.number} takes back ${Number(r.net)}`, severity: 'blocking' as const }];
     });
     if (issues.length) throw unprocessable(issues, 'INSUFFICIENT_STOCK');
   }
@@ -400,7 +401,7 @@ export async function finalizeInTx(
   }
   // A sale dated into a month whose GSTR-1 is filed would never be reported: it goes in an open month.
   if (GSTR1_KINDS.includes(row.kind) && (await gstr1Closed(tx, company.id, row.date))) {
-    throw conflict('RETURN_FILED', `GSTR-1 for ${row.date.slice(0, 7)} is filed; a ${row.kind} dated ${row.date} would never be reported. Date it in a month whose GSTR-1 is still open`);
+    throw conflict('RETURN_FILED', `The GSTR-1 return for ${monthName(row.date)} is already filed, so a ${kindName(row.kind)} dated in that month would never be reported. Choose a date in a month whose GSTR-1 is still open.`);
   }
   if (row.kind === 'invoice') {
     await checkInvoiceLimit(tx, company, now);
@@ -717,7 +718,7 @@ export async function gstr3bFiled(tx: DbOrTx, companyId: string, period: string)
  */
 export async function assertCancellable(tx: DbOrTx, row: DocRow): Promise<void> {
   if (GSTR1_KINDS.includes(row.kind) && (await gstr1Closed(tx, row.companyId, row.date))) {
-    throw conflict('RETURN_FILED', `${row.number} is in the filed GSTR-1 for ${row.date.slice(0, 7)}; issue a credit note dated today instead of cancelling it`);
+    throw conflict('RETURN_FILED', `${row.number} is already in the filed GSTR-1 return for ${monthName(row.date)}. Issue a credit note dated today instead of cancelling it.`);
   }
   // A bill whose assets are in the register: the register would keep depreciating what the books no longer hold.
   if (row.kind === 'purchaseBill') {

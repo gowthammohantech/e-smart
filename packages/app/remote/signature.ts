@@ -5,7 +5,8 @@ import { applyEntity } from './apply';
 import { API_BASE_URL } from './config';
 import { getTokens } from './tokens';
 import { fileBlob } from './keptFiles';
-import { LogoError } from './logo';
+import i18n from '@esmart/i18n';
+import { LogoError, uploadMessage } from './logo';
 
 /**
  * The authorised signatory's signature, uploaded straight away. Unlike the logo
@@ -20,7 +21,7 @@ async function send(companyId: string, uri: string): Promise<Response> {
     try {
       blob = await fileBlob(uri);
     } catch {
-      throw new LogoError('The picked image is no longer available. Please choose it again.', 0, 'FILE_GONE');
+      throw new LogoError(i18n.t('errors:remote.imageGone') as string, 0, 'FILE_GONE');
     }
     form.append('file', blob, 'signature');
   } else {
@@ -43,7 +44,7 @@ export async function uploadSignature(companyId: string, uri: string): Promise<v
   }
   if (!res.ok) {
     const problem = (await res.json().catch(() => ({}))) as { detail?: string; title?: string; code?: string };
-    throw new LogoError(problem.detail ?? problem.title ?? `Upload failed (${res.status})`, res.status, problem.code);
+    throw new LogoError(uploadMessage(res.status, problem), res.status, problem.code);
   }
   const company = (await res.json()) as Company;
   applyEntity('company', { ...company, signatureUri: company.signatureUri });

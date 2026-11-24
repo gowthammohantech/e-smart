@@ -134,11 +134,11 @@ export function partiesFromCsv(
 
     const kindRaw = get('kind');
     const kind = kindRaw ? kindOf(kindRaw) : defaults.kind;
-    if (!kind) problems.push(`Type "${kindRaw}" is not customer, supplier, both or general`);
+    if (!kind) problems.push(`Type "${kindRaw}" isn’t recognised. Use Customer, Supplier, Both or General`);
 
     const gstinRaw = get('taxId');
     const taxId = gstinRaw ? normalizeGstin(gstinRaw) : undefined;
-    if (taxId && !isValidGstin(taxId)) problems.push(`GSTIN ${gstinRaw} is not valid`);
+    if (taxId && !isValidGstin(taxId)) problems.push(`GSTIN ${gstinRaw} isn’t valid. It should be 15 characters, like 27AABCV1234F1ZO`);
     const validGstin = taxId && isValidGstin(taxId) ? taxId : undefined;
 
     const stateRaw = get('state');

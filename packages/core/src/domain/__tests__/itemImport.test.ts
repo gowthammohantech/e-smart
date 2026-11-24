@@ -45,7 +45,7 @@ describe('items from a CSV', () => {
       'No name',
       expect.stringContaining('Unit "bags"'),
       'Sale price "abc" is not an amount',
-      expect.stringContaining('No 7 tax category'),
+      expect.stringContaining('GST rate "7" isn’t set up'),
       'HSN/SAC "12" should be 4, 6 or 8 digits',
     ]);
     expect(bad.line).toBe(2);

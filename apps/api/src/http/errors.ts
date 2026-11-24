@@ -1,6 +1,8 @@
 import type { FastifyError, FastifyInstance } from 'fastify';
 import type { Schema } from '@esmart/api-contract';
 import { reportError } from '../lib/reporter';
+import { moduleName } from '../lib/names';
+import { friendlyDetail, friendlyIssues } from './friendlyValidation';
 
 export type Issue = Schema<'ComplianceIssue'>;
 type PlanTier = Schema<'PlanTier'>;
@@ -42,9 +44,10 @@ export class ApiError extends Error {
 export const badRequest = (code: string, detail?: string) => new ApiError(400, code, detail);
 export const unauthorized = (code = 'UNAUTHORIZED', detail?: string) => new ApiError(401, code, detail);
 export const forbidden = (code = 'FORBIDDEN', detail?: string) => new ApiError(403, code, detail);
-export const notFound = (what = 'Resource') => new ApiError(404, 'NOT_FOUND', `${what} not found`);
+export const notFound = (what?: string) =>
+  new ApiError(404, 'NOT_FOUND', what ? `We couldn't find that ${what.toLowerCase()}. It may have been deleted.` : "We couldn't find that. It may have been deleted.");
 export const conflict = (code: string, detail?: string) => new ApiError(409, code, detail);
-export const preconditionFailed = (detail = 'The resource changed since you read it') =>
+export const preconditionFailed = (detail = 'Someone else changed this just now. Reload to see the latest, then try again.') =>
   new ApiError(412, 'VERSION_MISMATCH', detail);
 export const unprocessable = (issues: Issue[], code = 'VALIDATION_FAILED', detail?: string) =>
   new ApiError(422, code, detail ?? issues[0]?.message ?? 'Validation failed', { issues });
@@ -54,7 +57,7 @@ export const upstream = (code: string, detail?: string, issues?: Issue[]) =>
 /** A feature this server has no provider for (GSTIN_PROVIDER or OCR_PROVIDER=disabled). */
 export const featureUnavailable = (detail?: string) => new ApiError(503, 'FEATURE_UNAVAILABLE', detail);
 export const planUpgradeRequired = (requiredPlan: PlanTier, module: string) =>
-  new ApiError(403, 'PLAN_UPGRADE_REQUIRED', `The ${module} module needs the ${requiredPlan} plan`, { requiredPlan });
+  new ApiError(403, 'PLAN_UPGRADE_REQUIRED', `${moduleName(module)} is available on the ${requiredPlan} plan. Upgrade your plan to use it.`, { requiredPlan });
 
 /** The plan's monthly invoices are used up. */
 export const invoiceLimitReached = (plan: PlanTier, limit: number, requiredPlan: PlanTier | null) =>
@@ -79,6 +82,14 @@ export function uniqueViolation(err: unknown): boolean {
   return e?.code === '23505' || e?.cause?.code === '23505';
 }
 
+/** Fastify's own 4xx messages ("Body is not valid JSON") mean nothing to a user. */
+function plainFrameworkMessage(status: number, message: string): string {
+  if (status === 413) return 'That file or request is too large. Use a smaller one and try again.';
+  if (status === 415) return "That kind of file isn't accepted. Choose a different file and try again.";
+  if (status === 429) return message;
+  return "We couldn't read that request. Please try again.";
+}
+
 export function problemHandler(app: FastifyInstance) {
   app.setErrorHandler((err: FastifyError | ApiError, req, reply) => {
     let status: number;
@@ -89,13 +100,9 @@ export function problemHandler(app: FastifyInstance) {
     } else if (err.validation) {
       // Request didn't match the contract's schema.
       status = 422;
-      const issues: Issue[] = err.validation.map((v) => ({
-        field: [err.validationContext, v.instancePath.replace(/^\//, '').replace(/\//g, '.')].filter(Boolean).join('.') ||
-          String((v.params as { missingProperty?: string }).missingProperty ?? ''),
-        message: v.message ?? 'Invalid',
-        severity: 'blocking',
-      }));
-      body = { code: 'VALIDATION_FAILED', detail: err.message, issues };
+      const found = friendlyIssues(err.validation, err.validationContext);
+      const issues: Issue[] = found.map((i) => ({ ...i, severity: 'blocking' as const }));
+      body = { code: 'VALIDATION_FAILED', detail: friendlyDetail(found), issues };
     } else if (uniqueViolation(err)) {
       // Two requests raced for the same unique record (a double submit, two devices): the
       // second is a conflict, not a fault. 4xx also keeps its Idempotency-Key's answer.
@@ -103,7 +110,7 @@ export function problemHandler(app: FastifyInstance) {
       body = { code: 'ALREADY_EXISTS', detail: 'This was already saved; refresh to see it' };
     } else if (err.statusCode && err.statusCode < 500) {
       status = err.statusCode;
-      body = { code: err.code ?? 'BAD_REQUEST', detail: err.message };
+      body = { code: err.code ?? 'BAD_REQUEST', detail: plainFrameworkMessage(err.statusCode, err.message) };
     } else {
       status = 500;
       reportError(req.log, err, {
@@ -112,7 +119,7 @@ export function problemHandler(app: FastifyInstance) {
         companyId: req.company?.id,
         route: req.routeOptions?.url,
       });
-      body = { code: 'INTERNAL', detail: 'Something went wrong on our side' };
+      body = { code: 'INTERNAL', detail: 'Something went wrong on our side. Please try again in a few minutes. If it keeps happening, contact support.' };
     }
     void reply
       .status(status)
@@ -124,6 +131,6 @@ export function problemHandler(app: FastifyInstance) {
     void reply
       .status(404)
       .type('application/problem+json')
-      .send({ type: 'about:blank', title: 'Not Found', status: 404, code: 'ROUTE_NOT_FOUND', detail: `${req.method} ${req.url}`, traceId: req.id });
+      .send({ type: 'about:blank', title: 'Not Found', status: 404, code: 'ROUTE_NOT_FOUND', detail: "That page or action isn't available. Update the app and try again.", traceId: req.id });
   });
 }

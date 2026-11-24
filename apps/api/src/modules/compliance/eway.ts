@@ -397,7 +397,7 @@ export async function generateEway(ctx: GenerateCtx, input: GenerateInput, opts:
   const result = await ctx.db.transaction(async (tx) => {
     const doc = await findDocument(tx, ctx.company, ctx.user, input.documentId, { lock: true });
     const [taken] = await tx.select({ id: W.id }).from(W).where(eq(W.ewayBillNumber, response.ewayBillNumber));
-    if (taken) throw portalRejected([{ code: 'EWB_DUPLICATE', field: 'document', message: 'The portal returned an e-way bill number already on record', severity: 'blocking' }], 'EWB_REJECTED');
+    if (taken) throw portalRejected([{ code: 'EWB_DUPLICATE', field: 'document', message: 'This e-way bill was already generated. Open the document to see it.', severity: 'blocking' }], 'EWB_REJECTED');
 
     const [bill] = await tx
       .insert(W)
@@ -590,7 +590,7 @@ export const ewayHandlers = defineHandlers({
       const bill = await findBill(ctx, tx, ctx.params.id, { lock: true });
       const core = coreBill(bill);
       const window = canExtendEwayBill(core, now);
-      if (!window.allowed) throw conflict('EWAY_EXTENSION_WINDOW', `${window.reason} (${window.opensAt} to ${window.closesAt})`);
+      if (!window.allowed) throw conflict('EWAY_EXTENSION_WINDOW', window.reason ?? 'This e-way bill can’t be extended right now');
 
       const creds = await portalCredentials(tx, ctx.deps.config, ctx.company, 'ewaybill');
       const response = await ctx.deps.providers.compliance.extend(creds, { bill: core, ...x, now });

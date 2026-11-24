@@ -112,7 +112,7 @@
     "itcHint": "Whether the GST you pay when buying this can be claimed back.",
     "itcOption": {
       "eligible": "Can be claimed",
-      "blocked": "Blocked, section 17(5)",
+      "blocked": "Not claimable (section 17(5) of the GST law)",
       "ineligible": "Not claimable"
     },
     "itcOptionHint": {

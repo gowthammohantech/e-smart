@@ -60,6 +60,7 @@ import { hasVehicles, saleTdsOnPlan, tcsOnPlan } from '@esmart/core/domain/plan'
 import { PartyPickerBox } from '../contacts/PartyPickerBox';
 import { useCostCentres } from '../../store/books';
 import { addChargeName, useChargeNames } from '../../remote/chargeNames';
+import { describeError } from '../../remote/errors';
 import {
   DraftState,
   blankLine,
@@ -504,7 +505,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
     try {
       pickChargeName((await addChargeName(name)).name);
     } catch (e) {
-      toast.show(e instanceof Error ? e.message : String(e), 'error');
+      toast.show(describeError(e, tr), 'error');
     }
   };
   const [discountText, setDiscountText] = useState(String(draft.documentDiscountValue || ''));

@@ -6701,7 +6701,7 @@ export interface components {
                 advanceTax?: boolean;
                 /** @description On a service advance taxed on receipt: the GST and cess inside what is left of it (left less this is its value without GST) */
                 leftTax?: components["schemas"]["Money"];
-                /** @description On a service advance taxed on receipt: the GST and cess in what was received (`total`), which is not adjusted; `left` is the value without it */
+                /** @description On a service advance taxed on receipt: the GST and cess in what was received (`total`), shown for information; `left` includes it, as the whole advance is adjusted */
                 gst?: components["schemas"]["Money"];
             }[];
             /** @description Documents still owed, oldest first */
@@ -16745,7 +16745,10 @@ export interface operations {
     };
     lookupGstin: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The company the lookup is for. When a platform operator chose a GSP for it, that GSP answers; otherwise the deployment default does. Ignored when the caller has no access to it. */
+                companyId?: string;
+            };
             header?: never;
             path: {
                 gstin: string;

@@ -566,7 +566,7 @@ export const booksHandlers = defineHandlers({
       try {
         good.push({ index, cols: await voucherColumns(ctx, ctx.db, body, undefined, !!asDrafts, pending) });
       } catch (err) {
-        const issues = err instanceof ApiError ? ((err.extra.issues as Issue[] | undefined) ?? [{ field: '', message: err.message, severity: 'blocking' as const }]) : [{ field: '', message: String(err), severity: 'blocking' as const }];
+        const issues = err instanceof ApiError ? ((err.extra.issues as Issue[] | undefined) ?? [{ field: '', message: err.message, severity: 'blocking' as const }]) : [{ field: '', message: 'This row couldn’t be read. Check its values and try again.', severity: 'blocking' as const }];
         results.push({ index, status: 'invalid', issues });
       }
     }

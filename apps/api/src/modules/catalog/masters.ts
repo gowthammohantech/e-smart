@@ -35,7 +35,7 @@ function nameOf(body: { name: string }) {
 }
 
 function categoryColumns(body: Schema<'ItemCategory'>, current?: { color: string }) {
-  if (body.color && !COLOR_RE.test(body.color)) throw invalid('color', 'Colour must be a hex value like #4DA3FF');
+  if (body.color && !COLOR_RE.test(body.color)) throw invalid('color', 'Pick a colour from the colour picker');
   return { name: nameOf(body), color: body.color ?? current?.color ?? DEFAULT_COLOR };
 }
 

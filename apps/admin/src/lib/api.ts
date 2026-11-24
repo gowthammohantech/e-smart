@@ -48,9 +48,14 @@ export const api = createApiClient({
 
 /** The message to show for a failed call. */
 export function errorMessage(err: unknown): string {
-  if (err instanceof ApiError) return err.message;
-  if (err instanceof Error) return err.message;
-  return 'Something went wrong';
+  // The server's sentences are written for people; a bare code or an HTTP title is not.
+  if (err instanceof ApiError) {
+    const text = err.message.trim();
+    const bare = !text || text === err.code || text === err.problem.title || /^[A-Z0-9_]+$/.test(text) || /^HTTP \d{3}/.test(text);
+    return bare ? 'That didn’t work. Check the details and try again.' : text;
+  }
+  if (err instanceof Error && err.message) return err.message;
+  return 'Something went wrong. Check your connection and try again.';
 }
 
 /** openapi-fetch's `data`, which the client's middleware guarantees on success. */
