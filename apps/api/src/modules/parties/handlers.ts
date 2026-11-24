@@ -121,12 +121,20 @@ async function hasOpeningDocuments(db: DbOrTx, companyId: string, partyId: strin
  * getPartyStatement.
  */
 /** The WHERE of a party list, shared by the list and its summary. */
-function partyFilters(companyId: string, q: { kind?: Schema<'PartyKind'>; status?: 'active' | 'inactive'; q?: string }): SQL[] {
+function partyFilters(companyId: string, q: { kind?: Schema<'PartyKind'>; status?: 'active' | 'inactive'; q?: string; holding?: 'credit' }): SQL[] {
   const filters: SQL[] = [eq(P.companyId, companyId)];
   // A party that is both is among the customers and among the suppliers.
   if (q.kind === 'customer' || q.kind === 'supplier') filters.push(inArray(P.kind, [q.kind, 'both']));
   else if (q.kind) filters.push(eq(P.kind, q.kind));
   if (q.status) filters.push(eq(P.status, q.status));
+  // Who may hold something to adjust (Receipt adjustment's picker): money received or paid not yet put on a
+  // document, or a credit note. In SQL, so a party far down the name order is found, not only the first page.
+  if (q.holding === 'credit') {
+    filters.push(
+      sql`(exists (select 1 from payments pay where pay.party_id = "parties"."id" and pay.unallocated_minor > 0 and pay.refund_of_payment_id is null)
+        or exists (select 1 from documents nd where nd.party_id = "parties"."id" and nd.kind in ('creditNote', 'supplierCreditNote') and nd.status not in ('draft', 'requested', 'cancelled', 'rejected')))`,
+    );
+  }
   if (q.q) {
     const like = `%${q.q.trim()}%`;
     filters.push(or(ilike(P.name, like), ilike(P.code, like), ilike(P.displayName, like), ilike(P.email, like), ilike(P.phone, like), ilike(P.taxId, like))!);

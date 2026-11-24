@@ -1523,6 +1523,7 @@ paths:
       parameters:
         - { name: kind, in: query, schema: { $ref: '#/components/schemas/PartyKind' } }
         - { name: status, in: query, schema: { type: string, enum: [active, inactive] } }
+        - { name: holding, in: query, schema: { type: string, enum: [credit] }, description: 'Only parties that may hold something to adjust: a receipt or payment with money not yet allocated, or a credit note. `advance` on each row says how much is left' }
         - { $ref: '#/components/parameters/Q' }
         - { $ref: '#/components/parameters/Limit' }
         - { $ref: '#/components/parameters/Cursor' }

@@ -6701,7 +6701,7 @@ export interface components {
                 advanceTax?: boolean;
                 /** @description On a service advance taxed on receipt: the GST and cess inside what is left of it (left less this is its value without GST) */
                 leftTax?: components["schemas"]["Money"];
-                /** @description On a service advance taxed on receipt: the GST and cess in what was received (`total`), which is not adjusted; `left` is the value without it */
+                /** @description On a service advance taxed on receipt: the GST and cess in what was received (`total`), shown for information; `left` includes it, as the whole advance is adjusted */
                 gst?: components["schemas"]["Money"];
             }[];
             /** @description Documents still owed, oldest first */
@@ -10177,6 +10177,8 @@ export interface operations {
             query?: {
                 kind?: components["schemas"]["PartyKind"];
                 status?: "active" | "inactive";
+                /** @description Only parties that may hold something to adjust: a receipt or payment with money not yet allocated, or a credit note. `advance` on each row says how much is left */
+                holding?: "credit";
                 /** @description Free-text search */
                 q?: components["parameters"]["Q"];
                 limit?: components["parameters"]["Limit"];

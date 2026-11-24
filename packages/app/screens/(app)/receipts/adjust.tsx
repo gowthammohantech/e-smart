@@ -48,7 +48,8 @@ export default function AdjustAdvances() {
   const [sideChoice, setSide] = useState<Side>(params.side === 'supplier' ? 'supplier' : 'customer');
   const [picking, setPicking] = useState(false);
   const [query, setQuery] = useState('');
-  const search = usePartySearch(undefined, useDebounced(query), picking);
+  // Only parties that may hold an advance or a credit note, found by the server: not the first page of everyone.
+  const search = usePartySearch(undefined, useDebounced(query), picking, undefined, 'credit');
   const partyQuery = usePartyRecord(partyId);
   const party = useParties().find((p) => p.id === partyId);
   // The side follows the party's kind: until it's in, a supplier would be read as a customer.

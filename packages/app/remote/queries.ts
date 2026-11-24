@@ -130,13 +130,13 @@ export function keep(entityType: keyof typeof COLLECTIONS, companyId: string, ro
 }
 
 /** Customers or suppliers matching what's typed (name, code, GSTIN, phone, email), 50 at most; `status` keeps only active (or inactive) ones. */
-export function usePartySearch(kind: 'customer' | 'supplier' | undefined, q: string, enabled = true, status?: 'active' | 'inactive') {
+export function usePartySearch(kind: 'customer' | 'supplier' | undefined, q: string, enabled = true, status?: 'active' | 'inactive', holding?: 'credit') {
   const companyId = useAppStore((s) => s.activeCompanyId);
   return useQuery({
-    queryKey: ['parties', companyId, 'search', kind ?? '', q.trim(), status ?? ''],
+    queryKey: ['parties', companyId, 'search', kind ?? '', q.trim(), status ?? '', holding ?? ''],
     enabled: enabled && !!companyId,
     queryFn: async ({ signal }) => {
-      const { data } = await api.GET('/companies/{companyId}/parties', { params: { path: { companyId }, query: { kind, status, q: q.trim() || undefined, limit: PAGE } }, signal });
+      const { data } = await api.GET('/companies/{companyId}/parties', { params: { path: { companyId }, query: { kind, status, holding, q: q.trim() || undefined, limit: PAGE } }, signal });
       const rows = data?.data ?? [];
       keep('party', companyId, rows);
       return rows;
