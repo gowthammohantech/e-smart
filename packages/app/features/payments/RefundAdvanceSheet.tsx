@@ -17,6 +17,7 @@ import { useServerSave } from '../../components/useServerSave';
 import { useAppStore } from '../../store/appStore';
 import { useBaseCurrency, usePaymentAccounts } from '../../store/selectors';
 import { useServerAccountBalances } from '../../remote/queries';
+import { isInactiveAccount } from './accountChoice';
 
 const METHOD_FOR: Record<'cash' | 'bank' | 'wallet', PaymentMethod> = { cash: 'cash', bank: 'bank', wallet: 'wallet' };
 
@@ -36,7 +37,8 @@ export function RefundAdvanceSheet({ receipt, visible, onClose, onSaved }: { rec
   const left = receipt.unallocated;
   const [amountText, setAmountText] = useState(() => toAmountInput(left));
   const [date, setDate] = useState(today());
-  const [accountId, setAccountId] = useState(() => accounts.find((a) => a.id === receipt.accountId)?.id ?? accounts[0]?.id ?? '');
+  // The receipt's own account, else the first active one: an inactive account takes no refund.
+  const [accountId, setAccountId] = useState(() => accounts.find((a) => a.id === receipt.accountId && !isInactiveAccount(a))?.id ?? accounts.find((a) => !isInactiveAccount(a))?.id ?? '');
 
   const amount = fromMajor(amountText || '0', receipt.currency);
   const tooMuch = amount.minor > left.minor;
@@ -106,12 +108,15 @@ export function RefundAdvanceSheet({ receipt, visible, onClose, onSaved }: { rec
         ) : null}
         {accounts.map((a) => {
           const selected = a.id === accountId;
+          // Listed but greyed out: an inactive account takes no new money.
+          const inactive = isInactiveAccount(a);
           return (
             <Pressable
               key={a.id}
               onPress={() => setAccountId(a.id)}
+              disabled={inactive}
               accessibilityRole="radio"
-              accessibilityState={{ selected }}
+              accessibilityState={{ selected, disabled: inactive }}
               style={{
                 flexDirection: 'row',
                 alignItems: 'center',
@@ -121,12 +126,18 @@ export function RefundAdvanceSheet({ receipt, visible, onClose, onSaved }: { rec
                 borderWidth: 1,
                 borderColor: selected ? t.c.primary : t.c.line,
                 backgroundColor: selected ? t.c.chip : 'transparent',
+                opacity: inactive ? 0.5 : 1,
               }}
             >
               <Icon name={a.type === 'cash' ? 'cash' : a.type === 'bank' ? 'bank-outline' : 'wallet-outline'} size={20} color={selected ? t.c.primary : t.c.muted} />
               <Text variant="body" weight={selected ? '600' : '400'} style={{ flex: 1 }}>
                 {a.name}
               </Text>
+              {inactive ? (
+                <Text variant="caption" tone="muted">
+                  {tr('common:accountStatus.inactive')}
+                </Text>
+              ) : null}
               {selected ? <Icon name="check" size={18} color={t.c.primary} /> : null}
             </Pressable>
           );

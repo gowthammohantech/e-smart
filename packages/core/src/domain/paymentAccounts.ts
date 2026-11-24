@@ -55,7 +55,8 @@ export function accountsForMethod(method: PaymentMethod, accounts: PaymentAccoun
  * print), else the company default when it fits, else the first account that does.
  */
 export function defaultAccountFor(method: PaymentMethod, accounts: PaymentAccount[], preferredId?: string): PaymentAccount | undefined {
-  const fitting = accountsForMethod(method, accounts);
+  // An inactive account takes no new money: never the one a new entry starts on.
+  const fitting = accountsForMethod(method, accounts).filter((a) => a.status !== 'inactive');
   return (preferredId ? fitting.find((a) => a.id === preferredId) : undefined) ?? fitting.find((a) => a.isDefault) ?? fitting[0];
 }
 
