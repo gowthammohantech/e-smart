@@ -645,9 +645,10 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   const showBillOfEntry = kind === 'purchaseBill' && imported && !withTax;
   // The shipping bill goes on an invoice to a buyer abroad (an export), with or without tax.
   const showShippingBill = kind === 'invoice' && imported;
-  const shippingBillFields = (
-    <>
+  // Three fields, not one fragment: a desktop row (FieldRow) gives each its own column, side by side.
+  const shippingBillFields = [
       <TextField
+        key="port"
         label={tr('sales:shippingBill.port')}
         value={sb.portCode}
         onChangeText={(portCode) => patchSb({ portCode: portCode.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6) })}
@@ -656,11 +657,10 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
         placeholder="INMAA1"
         icon="ferry"
         error={portCodeError}
-      />
-      <TextField label={tr('sales:shippingBill.number')} value={sb.number ?? ''} onChangeText={(number) => patchSb({ number })} maxLength={20} icon="file-certificate-outline" />
-      <DateField label={tr('sales:shippingBill.date')} value={sb.date ?? ''} onChange={(date) => patchSb({ date })} minimumDate={parseDate(draft.date)} />
-    </>
-  );
+      />,
+      <TextField key="number" label={tr('sales:shippingBill.number')} value={sb.number ?? ''} onChangeText={(number) => patchSb({ number })} maxLength={20} icon="file-certificate-outline" />,
+      <DateField key="date" label={tr('sales:shippingBill.date')} value={sb.date ?? ''} onChange={(date) => patchSb({ date })} minimumDate={parseDate(draft.date)} />,
+  ];
   const inclusive = inclusiveState(draft.lines);
   const interState =
     taxContext.regime === 'GST' &&
