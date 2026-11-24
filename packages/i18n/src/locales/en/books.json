@@ -689,7 +689,7 @@
     "gst": "GST",
     "withGst": "Excl. GST · {{amount}} with GST",
     "paidWithGst": "Paid {{paid}} · GST {{gst}}",
-    "toAdjust": "Adjusting {{amount}}, without GST",
+    "toAdjust": "Adjusting {{amount}}, GST included",
     "amount": "Apply",
     "autoNotService": "A service advance is adjusted only against invoices whose every line is a service; invoices with goods on them are left for other advances and credit notes.",
     "over": "More than the advances picked have left ({{amount}})",

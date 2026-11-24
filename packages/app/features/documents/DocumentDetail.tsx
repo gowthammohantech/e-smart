@@ -267,8 +267,8 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
   // The contact may still be on its way: a bar, not "Unknown".
   const partyPending = !!doc.partyId && !party && partyQuery.isLoading;
   // On an invoice or debit note, Adjust advance only where Receipt adjustment could do it: this one is all
-  // services and still owed, and the customer has an advance with something left to adjust (its value
-  // without GST). Read from the same list that screen uses. A bill offers it for any supplier advance.
+  // services and still owed, and the customer has an advance with something left to adjust (all of it,
+  // GST included). Read from the same list that screen uses. A bill offers it for any supplier advance.
   const customerSide = doc.kind === 'invoice' || doc.kind === 'debitNote';
   const owedHere = outstanding.minor > 0 && isFinalized(doc.status);
   const adjustable = useAdjustable(customerSide && owedHere && (partyAdvance?.minor ?? 0) > 0 ? doc.partyId : undefined, 'customer');
