@@ -202,6 +202,8 @@ export function PaymentForm({
   const services = (serviceSearch.data ?? []).filter((i): i is typeof i & { id: string } => i.type === 'service' && !!i.id);
   // "Add new customer" (or supplier) under the picker: the contact saved there is the one this is for.
   const addParty = useAddParty(direction === 'received' ? 'customer' : 'supplier', (p) => pickParty(p.id));
+  // Under Suppliers on a receipt: money from a supplier's ledger, as picking one there does.
+  const addSupplierSource = useAddParty('supplier', (p) => void pickAccount({ key: `party:${p.id}`, label: p.name }));
   const pickParty = (id: string) => {
     setPartyId(id);
     setAllocations({});
@@ -1295,7 +1297,7 @@ export function PaymentForm({
               }
               pickParty(picked.partyId);
             }}
-            footer={<AddPartyButton kind="customer" onPress={() => addParty(() => setPartyOpen(false))} />}
+            onAdd={(kind) => (kind === 'supplier' ? addSupplierSource : addParty)(() => setPartyOpen(false))}
           />
         ) : (
           <SelectSheet

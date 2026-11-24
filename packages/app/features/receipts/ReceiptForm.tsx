@@ -36,7 +36,7 @@ import { useAccountName, useGroupName } from '../books/names';
 import { CostCentreField } from '../books/CostCentreField';
 import { useCostCentres } from '../../store/books';
 import { ReceivedForSheet, type ReceiptCarry } from './ReceivedForSheet';
-import { AddPartyButton, useAddParty } from '../contacts/AddPartyButton';
+import { useAddParty } from '../contacts/AddPartyButton';
 
 const CASH: LedgerGroup[] = ['cashInHand', 'bankAccounts'];
 
@@ -127,6 +127,12 @@ export function ReceiptForm({
   const leaveGuard = useLeaveGuard(entered !== untouched || !!seed?.amount);
   /** Hands over to the payment form for a customer, with what was typed here. */
   const addCustomer = useAddParty('customer', (p) => void pickCustomer(p.id));
+  // Under Suppliers: money from that supplier's ledger, as picking one there does.
+  const addSupplier = useAddParty('supplier', (p) => {
+    setSource(`party:${p.id}`);
+    setSourceName(p.name);
+    setPartyId(undefined);
+  });
   const pickCustomer = async (id: string) => {
     if (!onPickCustomer) return;
     await leaveGuard.release();
@@ -324,7 +330,7 @@ export function ReceiptForm({
           if (picked.key.startsWith('party:')) setPartyId(undefined);
         }}
         onCreateIncome={(name) => void addIncome(name)}
-        footer={onPickCustomer ? <AddPartyButton kind="customer" onPress={() => addCustomer(() => setPicking(null))} /> : undefined}
+        onAdd={(kind) => (kind === 'supplier' ? addSupplier : onPickCustomer ? addCustomer : undefined)?.(() => setPicking(null))}
       />
       <SelectSheet visible={picking === 'into'} onClose={() => setPicking(null)} title={tr('books:receipts.pickInto')} options={options(cash)} value={into} onSelect={setInto} />
       <SelectSheet
