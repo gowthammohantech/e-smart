@@ -217,13 +217,15 @@ export function PaymentForm({
   // A receipt goes in full to the invoices ticked: no advance is kept (that is an advance receipt's).
   const noAdvance = direction === 'received' && !advanceReceipt;
   // Record payment on an invoice: the amount goes to that invoice alone, so there is no Apply to list.
-  // With debit notes raised on it, the list shows, the invoice and its notes ticked, the rest there to tick.
+  // With debit notes raised on it, the list shows that invoice and those notes only, each ticked in full.
   const fromInvoice = direction === 'received' && !advanceReceipt && !!params.documentId && !withIds.length;
+  const invoiceAndNotes = params.documentId && withIds.length ? [params.documentId, ...withIds] : undefined;
   const open = useOpenDocuments(partyId, direction === 'received' ? ['invoice', 'debitNote', 'openingInvoice'] : ['purchaseBill', 'supplierDebitNote', 'openingBill'], { servicesOnly: advanceReceipt });
   // Plain values: the React compiler memoizes them (a hand-written useMemo here it can't keep, lint fails).
   const asOf = today();
   const outstanding = (open.data ?? [])
     .filter((d) => d.grandTotal.currency === currency && (d.outstanding?.minor ?? 0) > 0)
+    .filter((d) => !invoiceAndNotes || invoiceAndNotes.includes(d.id))
     .map((d) => ({
       document: { id: d.id, kind: d.kind, number: d.number, supplierDocNumber: d.supplierDocNumber, date: d.date, dueDate: d.dueDate, exchangeRate: d.exchangeRate ?? 1, tdsExpected: d.tdsExpected },
       outstanding: d.outstanding as Money,
