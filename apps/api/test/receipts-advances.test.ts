@@ -93,11 +93,11 @@ describe('the adjustments list', () => {
     expect(list.status).toBe(200);
     expect(list.body.data).toEqual([
       expect.objectContaining({ kind: 'creditNote', date: '2026-10-20', sourceType: 'note', sourceId: cn.body.id, documentId: inv.body.id, amount: inr(11_800), partyName: expect.any(String) }),
-      expect.objectContaining({ kind: 'advanceReceived', date: '2026-10-10', sourceType: 'payment', sourceId: adv.body.id, documentId: inv.body.id, amount: inr(100_000), gst: inr(15_254) }),
+      expect.objectContaining({ kind: 'advanceReceived', date: '2026-10-10', sourceType: 'payment', sourceId: adv.body.id, documentId: inv.body.id, amount: inr(118_000), gst: inr(18_000) }),
     ]);
     expect(list.body.data[0].gst).toBeUndefined();
     const summary = await t.get(`${m.c}/payments/adjustments/summary`, { token: m.token });
-    expect(summary.body).toEqual({ count: 2, total: inr(111_800) });
+    expect(summary.body).toEqual({ count: 2, total: inr(129_800) });
     // By the advance's number, and a page at a time.
     const found = await t.get(`${m.c}/payments/adjustments`, { token: m.token, query: { q: adv.body.number } });
     expect(found.body.data.map((r: { sourceId: string }) => r.sourceId)).toEqual([adv.body.id]);
@@ -198,21 +198,20 @@ describe('the adjustment entry', () => {
 
     const list = await t.get(`${m.c}/payments/adjust`, { token: m.token, query: { partyId: m.mumbai.id } });
     expect(list.status).toBe(200);
-    // What can be adjusted is its value without GST, ₹10,000; the ₹1,800 of GST stays on it.
-    expect(list.body.credits).toEqual([expect.objectContaining({ sourceType: 'payment', id: adv.body.id, total: inr(1_180_000), left: inr(1_000_000), gst: inr(180_000), advanceTax: true })]);
+    // What is left of it, and the 18% GST inside that: ₹10,000 without GST.
+    expect(list.body.credits).toEqual([expect.objectContaining({ sourceType: 'payment', id: adv.body.id, left: inr(1_180_000), leftTax: inr(180_000), advanceTax: true })]);
     expect(list.body.open).toEqual([expect.objectContaining({ documentId: inv.body.id, outstanding: inr(1_180_000), hasServiceLines: true })]);
 
     const done = await t.post(`${m.c}/payments/adjust`, { partyId: m.mumbai.id }, { token: m.token });
     expect(done.status).toBe(200);
-    expect(done.body.applied).toEqual([{ sourceType: 'payment', sourceId: adv.body.id, documentId: inv.body.id, amount: inr(1_000_000) }]);
+    expect(done.body.applied).toEqual([{ sourceType: 'payment', sourceId: adv.body.id, documentId: inv.body.id, amount: inr(1_180_000) }]);
     expect(done.body.credits).toEqual([]);
-    expect(done.body.open).toEqual([expect.objectContaining({ documentId: inv.body.id, outstanding: inr(180_000) })]);
+    expect(done.body.open).toEqual([]);
     const paid = await t.get(`${m.c}/documents/${inv.body.id}`, { token: m.token });
-    expect(paid.body.status).toBe('partiallyPaid');
+    expect(paid.body.status).toBe('paid');
     const oct = await t.get(`${m.c}/gst/gstr1`, { token: m.token, query: { period: '102026' } });
-    expect(oct.body.advances.adjusted).toEqual([{ placeOfSupply: '27', rate: 18, interState: false, taxable: inr(847_457), igst: inr(0), cgst: inr(76_272), sgst: inr(76_271), cess: inr(0) }]);
-    // The GST inside the ₹10,000 adjusted comes back (₹1,525.43); the rest stays on the advance.
-    expect(await tb(m, 'sys:gstOnAdvances')).toEqual(inr(27_457));
+    expect(oct.body.advances.adjusted).toEqual([{ placeOfSupply: '27', rate: 18, interState: false, taxable: inr(1_000_000), igst: inr(0), cgst: inr(90_000), sgst: inr(90_000), cess: inr(0) }]);
+    expect(await tb(m, 'sys:gstOnAdvances')).toEqual(inr(0));
   });
 
   it('adjusts a service advance only against an invoice whose every line is a service', async () => {
@@ -244,7 +243,7 @@ describe('the adjustment entry', () => {
     // An invoice of services alone takes it.
     const services = await make([consulting(m, 100_000)]);
     const done = await t.post(`${m.c}/payments/adjust`, { partyId: m.mumbai.id }, { token: m.token });
-    expect(done.body.applied).toEqual([{ sourceType: 'payment', sourceId: adv.body.id, documentId: services, amount: inr(100_000) }]);
+    expect(done.body.applied).toEqual([{ sourceType: 'payment', sourceId: adv.body.id, documentId: services, amount: inr(118_000) }]);
   });
 
   it('applies a direct credit note without any GST on advance, and settles a debit note', async () => {
