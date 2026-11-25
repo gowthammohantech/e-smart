@@ -42,7 +42,7 @@ const MSME_OPTIONS = ['none', 'micro', 'small', 'medium'] as const;
 
 export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?: Party }) {
   const t = useTheme();
-  const { t: tr } = useTranslation(['contacts', 'common', 'settings', 'domain', 'purchases', 'books']);
+  const { t: tr } = useTranslation(['contacts', 'common', 'settings', 'domain', 'purchases', 'books', 'nav']);
   const router = useRouter();
   const goBack = useGoBack();
   // Added from a document's party picker: back to the document, which picks the new party.
