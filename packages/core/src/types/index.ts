@@ -300,6 +300,10 @@ export type TaxCategory = {
   description?: string;
   /** The rates it had before `effectiveFrom`, each from its own day: see `taxRateOn`. */
   history?: { effectiveFrom: string; rate: number }[];
+  /** The last day it can be charged; unset runs on. */
+  effectiveTo?: string;
+  /** Inactive: kept on what already has it, never charged again. Absent reads as active. */
+  status?: 'active' | 'inactive';
 };
 
 export type TaxComponent = {

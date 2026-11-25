@@ -34,6 +34,7 @@ function validateTax(body: Schema<'TaxCategory'>) {
   if (!(body.rate >= 0 && body.rate <= max)) issues.push({ field: 'rate', message: `Rate must be between 0 and ${max}`, severity: 'blocking' });
   if (Math.round(body.rate * 1000) !== body.rate * 1000) issues.push({ field: 'rate', message: 'Rate allows at most three decimals', severity: 'blocking' });
   if (!body.name.trim()) issues.push({ field: 'name', message: 'Name is required', severity: 'blocking' });
+  if (body.effectiveTo && body.effectiveTo < body.effectiveFrom) issues.push({ field: 'effectiveTo', message: `It can't end before it starts (${body.effectiveFrom})`, severity: 'blocking' });
   if (issues.length) throw unprocessable(issues);
 }
 
@@ -44,6 +45,9 @@ async function taxColumns(tx: DbOrTx, body: Schema<'TaxCategory'>) {
     type: body.type,
     hsnCode: body.hsnCode ? await ensureHsn(tx, body.hsnCode) : null,
     effectiveFrom: body.effectiveFrom,
+    effectiveTo: body.effectiveTo ?? null,
+    // Left out of the body, the status stays as it is (a new one starts active).
+    ...(body.status && { status: body.status }),
     description: body.description ?? null,
   };
 }

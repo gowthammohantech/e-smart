@@ -110,7 +110,7 @@ export async function prepare(ctx: AnyCtx, db: DbOrTx, body: Schema<'Expense'>, 
     // The rate in force on the expense's date: a rate changed later doesn't reach back to it.
     const onDate = await categoryOn(db, companyId, body.taxCategoryId, body.date);
     if (!onDate) blocking('taxCategoryId', 'No such tax category in this company');
-    else if (!onDate.available) blocking('taxCategoryId', `${onDate.name} applies from ${onDate.effectiveFrom}; the expense is dated ${body.date}`);
+    else if (!onDate.available) blocking('taxCategoryId', onDate.why ?? `${onDate.name} can't be charged on ${body.date}`);
     else rate = onDate.rate;
   }
 

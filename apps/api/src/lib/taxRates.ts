@@ -1,5 +1,5 @@
 import { and, eq, inArray } from 'drizzle-orm';
-import { taxAvailableOn, taxRateOn } from '@esmart/core/domain/taxEngine';
+import { taxUnavailableOn, taxRateOn } from '@esmart/core/domain/taxEngine';
 import { schema } from '@esmart/db';
 import type { DbOrTx } from './audit';
 
@@ -31,11 +31,21 @@ export async function categoryOn(
   companyId: string,
   categoryId: string,
   date: string,
-): Promise<{ name: string; rate: number; available: boolean; effectiveFrom: string } | undefined> {
+): Promise<{ name: string; rate: number; available: boolean; effectiveFrom: string; why?: string } | undefined> {
   const T = schema.taxCategories;
-  const [c] = await db.select({ name: T.name, rate: T.rate, effectiveFrom: T.effectiveFrom }).from(T).where(and(eq(T.companyId, companyId), eq(T.id, categoryId)));
+  const [c] = await db.select({ name: T.name, rate: T.rate, effectiveFrom: T.effectiveFrom, effectiveTo: T.effectiveTo, status: T.status }).from(T).where(and(eq(T.companyId, companyId), eq(T.id, categoryId)));
   if (!c) return undefined;
   const history = c.effectiveFrom > date ? (await taxHistories(db, [categoryId])).get(categoryId) : undefined;
-  const dated = { rate: Number(c.rate), effectiveFrom: c.effectiveFrom, history };
-  return { name: c.name, rate: taxRateOn(dated, date), available: taxAvailableOn(dated, date), effectiveFrom: c.effectiveFrom };
+  const dated = { rate: Number(c.rate), effectiveFrom: c.effectiveFrom, history, effectiveTo: c.effectiveTo ?? undefined, status: c.status };
+  const why = taxUnavailableWhy({ ...dated, name: c.name }, date);
+  return { name: c.name, rate: taxRateOn(dated, date), available: !why, effectiveFrom: c.effectiveFrom, why };
+}
+
+/** Why a tax can't be charged on `date`, in words for a refusal; undefined when it can. */
+export function taxUnavailableWhy(c: { name: string; effectiveFrom: string; effectiveTo?: string; status?: 'active' | 'inactive'; history?: { effectiveFrom: string; rate: number }[] }, date: string): string | undefined {
+  const why = taxUnavailableOn(c, date);
+  if (why === 'inactive') return `${c.name} is inactive; pick another tax rate`;
+  if (why === 'ended') return `${c.name} ended on ${c.effectiveTo}; it can't be charged on ${date}`;
+  if (why === 'notYet') return `${c.name} applies from ${c.effectiveFrom}; it can't be charged on ${date}`;
+  return undefined;
 }

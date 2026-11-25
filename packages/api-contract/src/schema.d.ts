@@ -5218,6 +5218,16 @@ export interface components {
              * @description The day `rate` applies from. A document or expense dated before it is charged the rate in force then (history).
              */
             effectiveFrom: string;
+            /**
+             * Format: date
+             * @description The last day it can be charged; null runs on. A document, expense or advance dated after it is refused
+             */
+            effectiveTo?: string | null;
+            /**
+             * @description Inactive: never charged again; what already carries it keeps it
+             * @enum {string}
+             */
+            status?: "active" | "inactive";
             description?: string;
             /** @description The rates it had before effectiveFrom, oldest first, each from its own day */
             readonly history?: {

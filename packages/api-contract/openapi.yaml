@@ -7305,6 +7305,8 @@ components:
             type: { type: string, enum: [GST, CGST, SGST, IGST, VAT, CESS, NONE] }
             hsnCode: { type: string }
             effectiveFrom: { type: string, format: date, description: 'The day `rate` applies from. A document or expense dated before it is charged the rate in force then (history).' }
+            effectiveTo: { type: [string, 'null'], format: date, description: 'The last day it can be charged; null runs on. A document, expense or advance dated after it is refused' }
+            status: { type: string, enum: [active, inactive], description: 'Inactive: never charged again; what already carries it keeps it' }
             description: { type: string }
             history:
               type: array

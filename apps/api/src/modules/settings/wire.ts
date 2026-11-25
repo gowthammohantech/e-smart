@@ -20,6 +20,8 @@ export function taxCategoryToWire(row: TaxRow, history?: { effectiveFrom: string
     type: row.type,
     hsnCode: row.hsnCode,
     effectiveFrom: row.effectiveFrom,
+    effectiveTo: row.effectiveTo,
+    status: row.status,
     description: row.description,
     history: history?.length ? history : undefined,
     ...versioned(row),

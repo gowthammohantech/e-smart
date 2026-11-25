@@ -417,7 +417,7 @@ export async function writePayment(
     // The category's rate on the day the advance came in, not one it takes later.
     const onDate = await categoryOn(tx, company.id, advance.taxCategoryId, input.date);
     if (!onDate) blocking('advanceTax.taxCategoryId', 'No such tax category in this company');
-    else if (!onDate.available) blocking('advanceTax.taxCategoryId', `${onDate.name} applies from ${onDate.effectiveFrom}; the receipt is dated ${input.date}`);
+    else if (!onDate.available) blocking('advanceTax.taxCategoryId', onDate.why ?? `${onDate.name} can't be charged on ${input.date}`);
     else if (!(onDate.rate > 0)) blocking('advanceTax.taxCategoryId', 'An advance taxed at 0% carries no tax; leave it off');
     else advanceTaxRate = existing?.advanceTaxCategoryId === advance.taxCategoryId && existing.advanceTaxRate && existing.date === input.date ? existing.advanceTaxRate : String(onDate.rate);
     const hsn = advance.hsn?.trim();

@@ -12,7 +12,7 @@ import { resolveRate } from '@esmart/core/domain/fx';
 import { calculateDocument, calculateLine } from '@esmart/core/domain/lineCalc';
 import { FULL_PLAN, hasModule, saleTdsOnPlan, tcsOnPlan } from '@esmart/core/domain/plan';
 import { OTHER_COUNTRY_CODE } from '@esmart/core/domain/stateCodes';
-import { buildTaxContext, taxAvailableOn, taxRateOn, type CrossBorderTax } from '@esmart/core/domain/taxEngine';
+import { buildTaxContext, taxRateOn, type CrossBorderTax } from '@esmart/core/domain/taxEngine';
 import { addDaysISO } from '@esmart/core/lib/date';
 import type { Branch, ChargesKind, Company, ShipTo, DocumentKind, DocumentLine, DocumentTotals, GstFlags, Party, TaxCategory } from '@esmart/core/types';
 import { factorOf } from '@esmart/core/lib/money';
@@ -22,7 +22,7 @@ import type { CompanyRow } from '../../context';
 import { conflict, planUpgradeRequired, unprocessable, type Issue } from '../../http/errors';
 import type { DbOrTx } from '../../lib/audit';
 import { newId } from '../../lib/ids';
-import { taxHistories } from '../../lib/taxRates';
+import { taxHistories, taxUnavailableWhy } from '../../lib/taxRates';
 import { gstColumns, gstFlagsFrom, iso, requiredAddressFrom } from '../../lib/wire';
 import { tdsOn, tdsSectionFor } from '../../lib/tds';
 import { expectedSaleTds } from '@esmart/core/domain/tds';
@@ -551,9 +551,10 @@ export async function prepareDocument(
   const coreLines: DocumentLine[] = lines.map((l, i) => {
     const category = categories.find((c) => c.id === l.taxCategoryId);
     if (!category) blocking(`lines[${i}].taxCategoryId`, 'No such tax category in this company');
-    // A tax that starts later can't be charged on a document dated before it.
-    else if (!taxAvailableOn({ ...category, history: histories.get(category.id) }, f.date)) {
-      blocking(`lines[${i}].taxCategoryId`, `${category.name} applies from ${category.effectiveFrom}; the document is dated ${f.date}`);
+    // A tax that starts later, has ended, or was made inactive can't be charged on it.
+    else {
+      const why = taxUnavailableWhy({ ...category, effectiveTo: category.effectiveTo ?? undefined, history: histories.get(category.id) }, f.date);
+      if (why) blocking(`lines[${i}].taxCategoryId`, why);
     }
     const item = l.itemId ? items.find((it) => it.id === l.itemId) : undefined;
     if (l.itemId && !item) blocking(`lines[${i}].itemId`, 'No such item in this company');
