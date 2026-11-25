@@ -708,7 +708,7 @@
     "payments": "Payments made"
   },
   "invoiceDesign": {
-    "title": "Invoice design",
+    "title": "Invoice Design",
     "hint": "How your invoices, quotes and other documents look. GSTIN, HSN, tax, place of supply and the e-invoice always print.",
     "accent": "Accent colour",
     "discountColumn": "Discount column",
