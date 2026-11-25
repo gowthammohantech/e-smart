@@ -641,7 +641,22 @@
     "terms": "Terms and conditions",
     "declaration": "Declaration",
     "customerSeal": "Customer's seal and signature",
-    "computerGenerated": "This is a computer-generated invoice"
+    "computerGenerated": "This is a computer-generated invoice",
+    "taxInvoice": "Tax Invoice",
+    "invoiceNo": "Invoice No.",
+    "referenceNo": "Reference No.",
+    "referenceDate": "Reference Date",
+    "soDcNo": "SO / DC No.",
+    "soDcDate": "SO / DC Date",
+    "irnAcknowledgement": "IRN Acknowledgement",
+    "date": "Date",
+    "ewayBillNoDate": "e-Way Bill No. & Date",
+    "companyBankDetails": "Company Bank Details",
+    "bankName": "Bank Name",
+    "accountNo": "A/c No.",
+    "ifscCode": "IFSC Code",
+    "customerSealSignature": "Customer's Seal and Signature",
+    "poweredBy": "Powered by"
   },
   "merge": {
     "title": {

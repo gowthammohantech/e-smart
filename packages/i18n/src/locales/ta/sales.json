@@ -641,7 +641,22 @@
     "terms": "விதிமுறைகள் மற்றும் நிபந்தனைகள்",
     "declaration": "உறுதிமொழி",
     "customerSeal": "வாடிக்கையாளர் முத்திரை மற்றும் கையொப்பம்",
-    "computerGenerated": "இது கணினியால் உருவாக்கப்பட்ட விலைப்பட்டியல்"
+    "computerGenerated": "இது கணினியால் உருவாக்கப்பட்ட விலைப்பட்டியல்",
+    "taxInvoice": "வரி விலைப்பட்டியல்",
+    "invoiceNo": "விலைப்பட்டியல் எண்",
+    "referenceNo": "குறிப்பு எண்",
+    "referenceDate": "குறிப்புத் தேதி",
+    "soDcNo": "விற்பனை ஆணை / சலான் எண்",
+    "soDcDate": "விற்பனை ஆணை / சலான் தேதி",
+    "irnAcknowledgement": "IRN ஒப்புகை",
+    "date": "தேதி",
+    "ewayBillNoDate": "இ-வே பில் எண் & தேதி",
+    "companyBankDetails": "நிறுவன வங்கி விவரங்கள்",
+    "bankName": "வங்கியின் பெயர்",
+    "accountNo": "கணக்கு எண்",
+    "ifscCode": "IFSC குறியீடு",
+    "customerSealSignature": "வாடிக்கையாளர் முத்திரை மற்றும் கையொப்பம்",
+    "poweredBy": "இயக்குவது"
   },
   "merge": {
     "title": {
