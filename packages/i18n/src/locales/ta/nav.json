@@ -1,6 +1,6 @@
 {
   "tabBar": {
-    "parties": "தரப்புகள்"
+    "parties": "வாடிக்கையாளர்கள் / சப்ளையர்கள்"
   },
   "overviewOf": {
     "money": "வருமான மேலோட்டம்"
@@ -11,7 +11,8 @@
     "purchases": "கொள்முதல்",
     "inventory": "இருப்பு",
     "gst": "GST",
-    "parties": "தரப்புகள்",
+    "parties": "வாடிக்கையாளர்கள் / சப்ளையர்கள்",
+    "partiesCustomersOnly": "வாடிக்கையாளர்கள்",
     "reports": "அறிக்கை",
     "more": "மேலும்",
     "money": "கணக்குகள்"
