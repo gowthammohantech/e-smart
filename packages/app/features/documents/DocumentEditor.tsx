@@ -1012,6 +1012,38 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
 
   /* ---------------------------------------------------------------- */
 
+  // An export's (or SEZ, or import) tax treatment: with or without tax, or the LUT that settles it. Shown
+  // below the notes, with an export invoice's shipping bill.
+  const crossBorderBlock = crossBorder ? (
+    <View style={{ gap: t.spacing.sm }}>
+      <Text variant="small" tone="muted" weight="500">
+        {tr(crossBorder === 'export' ? 'sales:editor.crossBorder.labelExport' : crossBorder === 'import' ? 'sales:editor.crossBorder.labelImport' : 'sales:editor.crossBorder.labelSez')}
+      </Text>
+      {lutExport ? (
+        // Under the LUT: no choice to make, said plainly with the LUT and the day it runs to.
+        <Text variant="small">
+          {company?.taxRegistration?.lutValidTill
+            ? tr('sales:editor.crossBorder.lutUntil', { lut: company.taxRegistration.lutNumber, date: formatDate(company.taxRegistration.lutValidTill) })
+            : tr('sales:editor.crossBorder.lutOpen', { lut: company?.taxRegistration?.lutNumber })}
+        </Text>
+      ) : (
+        <>
+          <Segmented
+            options={[
+              { value: 'withTax', label: tr('sales:editor.crossBorder.withTax') },
+              { value: 'withoutTax', label: tr('sales:editor.crossBorder.withoutTax') },
+            ]}
+            value={crossBorderTax}
+            onChange={(v) => patch({ crossBorderTax: v as CrossBorderTax })}
+            disabled={crossBorderLocked}
+          />
+          <Text variant="caption" tone="muted">
+            {tr(crossBorderHint)}
+          </Text>
+        </>
+      )}
+    </View>
+  ) : null;
   const renderParty = () => {
     const partyA11y = party
       ? tr(isPurchase ? 'sales:editor.changeSupplier' : 'sales:editor.changeCustomer')
@@ -1200,36 +1232,6 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       kind === 'purchaseBill' && !imported && party?.taxId ? (
         <SwitchField label={tr('purchases:isd.label')} description={tr('purchases:isd.hint')} value={!!draft.isdInvoice} onValueChange={(isdInvoice) => patch({ isdInvoice })} />
       ) : null;
-    const crossBorderBlock = crossBorder ? (
-      <View style={{ gap: t.spacing.sm }}>
-        <Text variant="small" tone="muted" weight="500">
-          {tr(crossBorder === 'export' ? 'sales:editor.crossBorder.labelExport' : crossBorder === 'import' ? 'sales:editor.crossBorder.labelImport' : 'sales:editor.crossBorder.labelSez')}
-        </Text>
-        {lutExport ? (
-          // Under the LUT: no choice to make, said plainly with the LUT and the day it runs to.
-          <Text variant="small">
-            {company?.taxRegistration?.lutValidTill
-              ? tr('sales:editor.crossBorder.lutUntil', { lut: company.taxRegistration.lutNumber, date: formatDate(company.taxRegistration.lutValidTill) })
-              : tr('sales:editor.crossBorder.lutOpen', { lut: company?.taxRegistration?.lutNumber })}
-          </Text>
-        ) : (
-          <>
-            <Segmented
-              options={[
-                { value: 'withTax', label: tr('sales:editor.crossBorder.withTax') },
-                { value: 'withoutTax', label: tr('sales:editor.crossBorder.withoutTax') },
-              ]}
-              value={crossBorderTax}
-              onChange={(v) => patch({ crossBorderTax: v as CrossBorderTax })}
-              disabled={crossBorderLocked}
-            />
-            <Text variant="caption" tone="muted">
-              {tr(crossBorderHint)}
-            </Text>
-          </>
-        )}
-      </View>
-    ) : null;
     // Ship to: off ships to the buyer (their shipping address, else billing); on names a consignee.
     const shipTo = draft.shipTo;
     const patchShip = (over: Partial<ShipTo['address']> & { name?: string; gstin?: string }) => {
@@ -1336,14 +1338,6 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           {noteReasonField}
           {directNoteBlock}
           {fxField}
-          {/* An export's shipping bill and tax treatment close the section, below the rest. */}
-          {showShippingBill ? (
-            <View style={{ gap: t.spacing.sm }}>
-              <Text variant="caption" tone="muted">{tr('sales:shippingBill.hint')}</Text>
-              {shippingBillFields}
-            </View>
-          ) : null}
-          {crossBorderBlock}
         </View>
       );
     }
@@ -1384,14 +1378,6 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
         {shipBlock}
         {isdField}
         {directNoteBlock}
-        {/* An export's shipping bill and tax treatment close the section, below the rest. */}
-        {showShippingBill ? (
-          <View style={{ gap: t.spacing.sm }}>
-            <Text variant="caption" tone="muted">{tr('sales:shippingBill.hint')}</Text>
-            <FieldRow>{shippingBillFields}</FieldRow>
-          </View>
-        ) : null}
-        {crossBorderBlock}
       </View>
     );
   };
@@ -1787,6 +1773,15 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
         multiline
       />
       </FieldRow>
+
+      {/* Below the notes: an export invoice's shipping bill, then how the document is taxed abroad. */}
+      {showShippingBill ? (
+        <View style={{ gap: t.spacing.sm }}>
+          <Text variant="caption" tone="muted">{tr('sales:shippingBill.hint')}</Text>
+          {desktop ? <FieldRow>{shippingBillFields}</FieldRow> : shippingBillFields}
+        </View>
+      ) : null}
+      {crossBorderBlock}
 
       {/* A desktop keeps the totals in the summary beside the form; shown here too, they'd be there twice. */}
       {desktop ? null : (
