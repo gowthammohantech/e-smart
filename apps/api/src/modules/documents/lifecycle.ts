@@ -406,6 +406,7 @@ export async function finalizeInTx(
   if (row.kind === 'invoice') {
     await checkInvoiceLimit(tx, company, now);
     await checkNotBeforeIssued(tx, row);
+    await checkExportPortCode(tx, row);
   }
   await checkSupplierNumberUnique(tx, row);
   if (isReturn(row) && row.sourceDocumentId) await checkReturnWithinSource(tx, row);
@@ -745,6 +746,28 @@ export async function gstr1Closed(tx: DbOrTx, companyId: string, date: string): 
     .where(and(eq(R.companyId, companyId), eq(R.returnType, 'gstr1'), eq(R.period, period), inArray(R.status, ['submitted', 'filed'])))
     .limit(1);
   return !!r;
+}
+
+/**
+ * An export invoice with goods on it names the port they leave from (the shipping bill's port code,
+ * reported in GSTR-1). One of services only has no port, so it needs none.
+ */
+async function checkExportPortCode(tx: DbOrTx, row: DocRow): Promise<void> {
+  const [party] = await tx.select({ type: schema.parties.gstRegistrationType }).from(schema.parties).where(eq(schema.parties.id, row.partyId));
+  const abroad = party?.type === 'overseas' || row.placeOfSupplyStateCode === '96';
+  if (!abroad || (row.shippingBill as { portCode?: string } | null)?.portCode) return;
+  const L = schema.documentLines;
+  const I = schema.items;
+  // A goods line: an item that is goods, or a free line whose HSN is not a service code (99…).
+  const [goods] = await tx
+    .select({ id: L.id })
+    .from(L)
+    .leftJoin(I, eq(I.id, L.itemId))
+    .where(and(eq(L.documentId, row.id), sql`coalesce(${I.type}::text, case when coalesce(trim(${L.hsnCode}), '') like '99%' then 'service' else 'goods' end) <> 'service'`))
+    .limit(1);
+  if (goods) {
+    throw unprocessable([{ field: 'shippingBill.portCode', message: 'An export invoice with goods needs the port code they leave from (shipping bill). Only an invoice of services alone goes without one', severity: 'blocking' }], 'EXPORT_PORT_REQUIRED');
+  }
 }
 
 /**
