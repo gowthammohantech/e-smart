@@ -52,7 +52,7 @@ describe('foreign currency', () => {
     const m = await moneySetup(t);
     const acme = await usdCustomer(m);
     // $100 at 80 = ₹8,000.
-    const inv = await t.post(`${m.c}/documents`, { kind: 'invoice', partyId: acme, date: '2026-09-10', currency: 'USD', exchangeRate: 80, lines: [line(m.gst(0), { quantity: 1, unitPrice: usd(10_000) })], status: 'issued' }, { token: m.token });
+    const inv = await t.post(`${m.c}/documents`, { kind: 'invoice', partyId: acme, date: '2026-09-10', currency: 'USD', exchangeRate: 80, lines: [line(m.gst(0), { hsnCode: '998311', quantity: 1, unitPrice: usd(10_000) })], status: 'issued' }, { token: m.token });
     expect(inv.status, inv.raw).toBe(201);
     // $90 cash and $10 discount at 85.
     const rec = await t.post(

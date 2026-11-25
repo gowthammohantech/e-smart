@@ -69,12 +69,12 @@ describe('tax effective date: a new tax can be charged only from the day it star
 
     const early = await t.post(`${m.c}/documents`, { kind: 'invoice', partyId: m.mumbai.id, date: '2026-09-29', currency: 'INR', lines: [line] }, { token: m.token });
     expect(early.status).toBe(422);
-    expect(early.body.issues).toEqual([expect.objectContaining({ field: 'lines[0].taxCategoryId', message: 'GST 40% applies from 2026-10-01; the document is dated 2026-09-29' })]);
+    expect(early.body.issues).toEqual([expect.objectContaining({ field: 'lines[0].taxCategoryId', message: "GST 40% applies from 2026-10-01; it can't be charged on 2026-09-29" })]);
 
     const [cat] = await t.deps.db.select().from(schema.expenseCategories).where(eq(schema.expenseCategories.companyId, m.companyId));
     const expense = await t.post(`${m.c}/expenses`, { categoryId: cat.id, date: '2026-09-20', amount: inr(10000), currency: 'INR', accountId: m.cash.id, method: 'cash', taxCategoryId: tax }, { token: m.token });
     expect(expense.status).toBe(422);
-    expect(expense.body.issues[0]).toMatchObject({ field: 'taxCategoryId', message: 'GST 40% applies from 2026-10-01; the expense is dated 2026-09-20' });
+    expect(expense.body.issues[0]).toMatchObject({ field: 'taxCategoryId', message: "GST 40% applies from 2026-10-01; it can't be charged on 2026-09-20" });
 
     const advance = await t.post(
       `${m.c}/payments`,
