@@ -396,7 +396,11 @@ export const taxCategories = pgTable("tax_categories", {
 	type: taxType().notNull(),
 	hsnCode: varchar("hsn_code", { length: 8 }),
 	effectiveFrom: date("effective_from").notNull(),
+	// The last day it can be charged; null runs on.
+	effectiveTo: date("effective_to"),
 	description: text(),
+	// Inactive: kept on what already has it, never charged again.
+	status: activeStatus().default('active').notNull(),
 	version: integer().default(1).notNull(),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'date' }).defaultNow().notNull(),

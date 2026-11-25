@@ -582,6 +582,13 @@
       "when": 1795093831104,
       "tag": "0082_numbering_prefixes",
       "breakpoints": true
+    },
+    {
+      "idx": 83,
+      "version": "7",
+      "when": 1795093891104,
+      "tag": "0083_tax_rate_validity",
+      "breakpoints": true
     }
   ]
 }
