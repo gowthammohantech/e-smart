@@ -28,6 +28,7 @@ import type { CustomValues } from '@esmart/core/domain/customFields';
 import { GstTreatmentFields } from '@esmart/app/features/catalog/GstTreatmentFields';
 import { HsnSearchSheet } from '@esmart/app/features/catalog/HsnSearchSheet';
 import type { HsnMatch } from '@esmart/app/remote/reference';
+import { taxChoice } from '@esmart/app/features/settings/taxChoice';
 
 /**
  * Add an item, laid out for a desktop: the item's identity and prices in the
@@ -402,7 +403,7 @@ function ItemFormDesktopFields({ item }: { item?: Item }) {
         visible={taxOpen}
         onClose={() => setTaxOpen(false)}
         title={tr('inventory:form.taxRate')}
-        options={taxCategories.map((c) => ({ value: c.id, label: c.name, description: c.description, trailing: formatPercent(c.rate) }))}
+        options={taxCategories.map((c) => ({ value: c.id, label: c.name, description: c.description, trailing: formatPercent(c.rate), ...taxChoice(tr, c, undefined, { keepId: item?.taxCategoryId, forItem: true }) }))}
         value={taxCategoryId}
         onSelect={setTaxCategoryId}
         searchable={false}

@@ -21,7 +21,7 @@ import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { Avatar } from '@esmart/ui/components/Avatar';
 
-import { CHARGES_KINDS, ChargesKind, ShipTo, DocStatus, DocumentKind, DocumentLine, NoteReason, Party, ShippingBill } from '@esmart/core/types';
+import { CHARGES_KINDS, ChargesKind, ShipTo, DocStatus, DocumentKind, DocumentLine, NoteReason, Party, ShippingBill, TaxCategory } from '@esmart/core/types';
 import { NOTE_KINDS, PURCHASE_KINDS, isAwaitingApproval, isFinalized } from '@esmart/core/domain/documentStates';
 import { TDS_SECTIONS, tdsSection } from '@esmart/core/data/tdsSections';
 import { TCS_SECTIONS, partyTcsSection, tcsAskedOn, tcsRateFor, tcsSection } from '@esmart/core/data/tcsSections';
@@ -94,6 +94,7 @@ import { CostCentreField } from '../books/CostCentreField';
 import { BillableExpenses } from './BillableExpenses';
 import { CustomFieldsSection, customFieldErrors, useCustomFields } from '../customFields/CustomFieldsSection';
 import { VehicleField } from '../vehicles/VehicleField';
+import { taxChoice, taxProblem } from '../settings/taxChoice';
 
 /** What finalising moves a draft of this kind to. */
 
@@ -367,6 +368,9 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
 
   // Each category in force on the draft's date, at its rate then: a tax that starts later isn't offered.
   const taxCategories = useMemo(() => taxCategoriesOn(allTaxCategories, draft.date).filter((c) => taxAvailableOn(c, draft.date)), [allTaxCategories, draft.date]);
+  // For the line pickers: every rate, the ones that can't be charged on the date greyed with the reason.
+  const taxChoices = useMemo(() => taxCategoriesOn(allTaxCategories, draft.date), [allTaxCategories, draft.date]);
+  const taxBlock = (c: TaxCategory) => taxChoice(tr, c, draft.date);
 
   // A service that follows the highest GST rate: its lines take the highest rate among the document's
   // (counting each such service at its own rate), again whenever a line is added, removed or re-rated.
@@ -574,7 +578,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   const validBeforeDate = (kind === 'quote' || kind === 'proforma') && draft.validUntil && draft.validUntil < draft.date ? beforeDocDate : undefined;
   // A tax that starts later can't be charged on a document dated before it (the server refuses it too).
   const lateTax = draft.lines.map((l) => allTaxCategories.find((c) => c.id === l.taxCategoryId)).find((c) => c && !taxAvailableOn(c, draft.date));
-  const taxBeforeStart = lateTax ? tr('sales:editor.taxBeforeStart', { name: lateTax.name, date: formatDate(lateTax.effectiveFrom) }) : undefined;
+  const taxBeforeStart = taxProblem(tr, lateTax, draft.date);
   // What the server refuses on any save, a draft too.
   // A draft can't be dated before what it was made from either; the server refuses it.
   const dateProblem = dateBeforeSource ?? dateBeforeOpeningStock ?? taxBeforeStart ?? dueBeforeDate ?? validBeforeDate;
@@ -1434,7 +1438,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           lines={draft.lines}
           currency={draft.currency}
           taxContext={docTaxContext}
-          taxCategories={taxCategories}
+          taxCategories={taxChoices}
+          taxBlock={taxBlock}
           onUpdate={updateLine}
           onRemove={removeLine}
           onEdit={setEditingLine}
@@ -2284,7 +2289,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           visible={!!editingLine}
           line={editingLine}
           currency={draft.currency}
-          taxCategories={taxCategories}
+          taxCategories={taxChoices}
+          taxBlock={taxBlock}
           taxContext={docTaxContext}
           onClose={() => setEditingLine(null)}
           onSave={(p) => {

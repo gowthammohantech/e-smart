@@ -29,6 +29,7 @@ import { FROM_DOCUMENT, handBack } from '../../navigation/handBack';
 import { GstTreatmentFields } from './GstTreatmentFields';
 import { CustomFieldsSection, customFieldErrors, useCustomFields } from '../customFields/CustomFieldsSection';
 import type { CustomValues } from '@esmart/core/domain/customFields';
+import { taxChoice } from '../settings/taxChoice';
 
 export function ItemForm({ item }: { item?: Item }) {
   // The page can stay mounted across a business switch; the tax default copied into state must start again.
@@ -338,7 +339,7 @@ function ItemFormFields({ item }: { item?: Item }) {
           visible={taxOpen}
           onClose={() => setTaxOpen(false)}
           title={tr('inventory:form.taxRate')}
-          options={taxCategories.map((c) => ({ value: c.id, label: c.name, description: c.description, trailing: formatPercent(c.rate) }))}
+          options={taxCategories.map((c) => ({ value: c.id, label: c.name, description: c.description, trailing: formatPercent(c.rate), ...taxChoice(tr, c, undefined, { keepId: item?.taxCategoryId, forItem: true }) }))}
           value={taxCategoryId}
           onSelect={setTaxCategoryId}
           searchable={false}

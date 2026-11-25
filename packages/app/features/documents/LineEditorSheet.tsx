@@ -27,6 +27,8 @@ type EditorProps = {
   line: DocumentLine | null;
   currency: string;
   taxCategories: TaxCategory[];
+  /** Why a rate can't be picked here (greyed, with the reason); unset offers every one. */
+  taxBlock?: (c: TaxCategory) => { note?: { text: string; tone: 'muted' }; blocked?: string };
   taxContext: TaxContext;
   onClose: () => void;
   onSave: (patch: Partial<DocumentLine>) => void;
@@ -57,6 +59,7 @@ function LineEditorForm({
   line,
   currency,
   taxCategories,
+  taxBlock,
   taxContext,
   onClose,
   onSave,
@@ -384,6 +387,7 @@ function LineEditorForm({
           label: c.name,
           description: c.description,
           trailing: formatPercent(c.rate),
+          ...(c.id === line?.taxCategoryId ? {} : taxBlock?.(c)),
         }))}
         value={taxCategoryId}
         onSelect={setTaxCategoryId}

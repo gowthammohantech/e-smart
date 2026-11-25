@@ -62,6 +62,7 @@ import { SHOW_SCROLLBAR, useBreakpoint } from '@esmart/ui/theme/breakpoints';
 import { useGoBack } from '../../navigation/useGoBack';
 import { inactiveChoice } from './accountChoice';
 import { AddPartyButton, useAddParty } from '../contacts/AddPartyButton';
+import { taxChoice } from '../settings/taxChoice';
 
 
 /** What settles a document besides cash. */
@@ -1131,7 +1132,7 @@ export function PaymentForm({
               </FieldRow>
             </>
           ) : null}
-          <SelectSheet visible={advanceSheet === 'tax'} onClose={() => setAdvanceSheet(null)} title={tr('sales:payment.advanceRate')} options={taxed.map((c) => ({ value: c.id, label: c.name }))} value={advanceTaxCategory?.id} onSelect={setAdvanceTaxId} searchable={false} />
+          <SelectSheet visible={advanceSheet === 'tax'} onClose={() => setAdvanceSheet(null)} title={tr('sales:payment.advanceRate')} options={taxCategoriesOn(taxCategories, date).filter((c) => c.rate > 0).map((c) => ({ value: c.id, label: c.name, ...taxChoice(tr, c, date) }))} value={advanceTaxCategory?.id} onSelect={setAdvanceTaxId} searchable={false} />
           <SelectSheet visible={advanceSheet === 'pos'} onClose={() => setAdvanceSheet(null)} title={tr('sales:editor.placeOfSupply')} options={INDIAN_STATES.map((st) => ({ value: st.code, label: st.name }))} value={pos} onSelect={setAdvancePos} />
         </>
       ) : null}
