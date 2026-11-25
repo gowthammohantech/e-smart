@@ -201,8 +201,6 @@ export function PaymentForm({
   // The services an advance receipt can be for: active items of type service, searched by name, SKU or SAC.
   const serviceSearch = useItemSearch(useDebounced(serviceQuery), advanceSheet === 'service');
   const services = (serviceSearch.data ?? []).filter((i): i is typeof i & { id: string } => i.type === 'service' && !!i.id);
-  // "Add new customer" (or supplier) under the picker: the contact saved there is the one this is for.
-  const addParty = useAddParty(direction === 'received' ? 'customer' : 'supplier', (p) => pickParty(p.id));
   // Under Suppliers on a receipt: money from a supplier's ledger, as picking one there does.
   const addSupplierSource = useAddParty('supplier', (p) => void pickAccount({ key: `party:${p.id}`, label: p.name }));
   const pickParty = (id: string) => {
@@ -211,6 +209,8 @@ export function PaymentForm({
     setRateOverride(null);
     setCurrencyChoice(null);
   };
+  // "Add new customer" (or supplier) under the picker: the contact saved there is the one this is for.
+  const addParty = useAddParty(direction === 'received' ? 'customer' : 'supplier', (p) => pickParty(p.id));
 
   // A payment settles in the party's currency unless the user picks another, at
   // the rate effective on the payment date unless the user says otherwise.
