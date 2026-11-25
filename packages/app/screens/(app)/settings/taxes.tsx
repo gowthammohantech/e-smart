@@ -293,9 +293,7 @@ export default function TaxSettings() {
           <DateField label={tr('settings:taxes.effectiveFrom')} value={effectiveFrom} onChange={setEffectiveFrom} hint={tr('settings:taxes.effectiveHint')} />
           </FieldRow>
           {/* Inactive takes effect at once, so it has no end date to set; an active rate may end on a day. */}
-          {editing?.id ? (
-            <SwitchField label={tr('settings:taxes.active')} description={tr('settings:taxes.activeHint')} value={active} onValueChange={setActive} />
-          ) : null}
+          <SwitchField label={tr('settings:taxes.active')} description={tr('settings:taxes.activeHint')} value={active} onValueChange={setActive} />
           {active ? (
             <>
               <SwitchField
