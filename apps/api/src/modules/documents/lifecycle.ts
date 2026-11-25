@@ -1,4 +1,4 @@
-import { and, arrayOverlaps, desc, eq, gt, gte, inArray, ne, notInArray, or, sql, type SQL } from 'drizzle-orm';
+import { and, arrayOverlaps, eq, gt, gte, inArray, ne, notInArray, or, sql, type SQL } from 'drizzle-orm';
 import { businessDate, creditNoteDeadline, financialYearOf } from '@esmart/core/lib/date';
 import { INVOICE_LIMITS, hasModule, nextInvoicePlan } from '@esmart/core/domain/plan';
 import { CREDIT_KINDS, NOTE_KINDS, NOTE_SOURCE, PAYABLE_KINDS, isFinalized, isPayableDocument } from '@esmart/core/domain/documentStates';
@@ -13,7 +13,7 @@ import { recordChange, type DbOrTx } from '../../lib/audit';
 import { partyBalances } from '../../lib/balances';
 import { newId } from '../../lib/ids';
 import { kindName, monthName } from '../../lib/names';
-import { assignNumber, sameNumberingPeriod } from '../../lib/numbering';
+import { assignNumber } from '../../lib/numbering';
 import { replayQueuedAt } from '../../lib/replay';
 import { gstFlagsFrom } from '../../lib/wire';
 import type { DocRow } from './engine';
@@ -405,7 +405,6 @@ export async function finalizeInTx(
   }
   if (row.kind === 'invoice') {
     await checkInvoiceLimit(tx, company, now);
-    await checkNotBeforeIssued(tx, row);
     await checkExportPortCode(tx, row);
   }
   await checkSupplierNumberUnique(tx, row);
@@ -767,40 +766,6 @@ async function checkExportPortCode(tx: DbOrTx, row: DocRow): Promise<void> {
     .limit(1);
   if (goods) {
     throw unprocessable([{ field: 'shippingBill.portCode', message: 'An export invoice with goods needs the port code they leave from (shipping bill). Only an invoice of services alone goes without one', severity: 'blocking' }], 'EXPORT_PORT_REQUIRED');
-  }
-}
-
-/**
- * An invoice is not issued dated before one already issued in its series and numbering period, so
- * its numbers run in date order: a back-dated entry after a later one is refused. A series that
- * carries the branch code is each branch's own; an earlier numbering period (last financial year)
- * keeps its own numbers, so a late entry there is still taken.
- */
-async function checkNotBeforeIssued(tx: DbOrTx, row: DocRow): Promise<void> {
-  const [series] = await tx
-    .select({ includeBranchCode: schema.numberingSeries.includeBranchCode })
-    .from(schema.numberingSeries)
-    .where(and(eq(schema.numberingSeries.companyId, row.companyId), eq(schema.numberingSeries.kind, 'invoice')));
-  const [later] = await tx
-    .select({ number: D.number, date: D.date })
-    .from(D)
-    .where(
-      and(
-        eq(D.companyId, row.companyId),
-        eq(D.kind, row.kind),
-        ne(D.id, row.id),
-        sql`${D.number} not like '%-DRAFT'`,
-        gt(D.date, row.date),
-        ...(series?.includeBranchCode && row.branchId ? [eq(D.branchId, row.branchId)] : []),
-      ),
-    )
-    .orderBy(desc(D.date))
-    .limit(1);
-  if (later && (await sameNumberingPeriod(tx, row.companyId, 'invoice', row.date, later.date))) {
-    throw unprocessable(
-      [{ field: 'date', message: `${later.number.trim()} is already issued on ${later.date}: an invoice can't be dated before it (${row.date}). Date it ${later.date} or later`, severity: 'blocking' }],
-      'DATE_BEFORE_PREVIOUS',
-    );
   }
 }
 
