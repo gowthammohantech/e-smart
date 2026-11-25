@@ -1327,22 +1327,23 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
               <AmountField label={tr('purchases:boe.cess')} value={boeAmount(boe.cess)} onChangeValue={(v) => patchBoe({ cess: fromMajor(v || '0', baseCurrency) })} currency={baseCurrency} />
             </View>
           ) : null}
+          {isdField}
+          {referenceField}
+          {branchField}
+          {posField}
+          {shipBlock}
+          {currencyField}
+          {noteReasonField}
+          {directNoteBlock}
+          {fxField}
+          {/* An export's shipping bill and tax treatment close the section, below the rest. */}
           {showShippingBill ? (
             <View style={{ gap: t.spacing.sm }}>
               <Text variant="caption" tone="muted">{tr('sales:shippingBill.hint')}</Text>
               {shippingBillFields}
             </View>
           ) : null}
-          {isdField}
-          {referenceField}
-          {branchField}
-          {posField}
           {crossBorderBlock}
-          {shipBlock}
-          {currencyField}
-          {noteReasonField}
-          {directNoteBlock}
-          {fxField}
         </View>
       );
     }
@@ -1380,6 +1381,10 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
             </FieldRow>
           </View>
         ) : null}
+        {shipBlock}
+        {isdField}
+        {directNoteBlock}
+        {/* An export's shipping bill and tax treatment close the section, below the rest. */}
         {showShippingBill ? (
           <View style={{ gap: t.spacing.sm }}>
             <Text variant="caption" tone="muted">{tr('sales:shippingBill.hint')}</Text>
@@ -1387,9 +1392,6 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           </View>
         ) : null}
         {crossBorderBlock}
-        {shipBlock}
-        {isdField}
-        {directNoteBlock}
       </View>
     );
   };
