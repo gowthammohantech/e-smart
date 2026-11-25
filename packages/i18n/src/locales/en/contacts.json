@@ -175,7 +175,8 @@
     "deleteContact": "Delete contact",
     "deleteTitle": "Delete {{name}}?",
     "statement": "Statement of account",
-    "payable": "You owe them"
+    "payable": "You owe them",
+    "tabReceipts": "Receipts"
   },
   "statement": {
     "title": "Statement · {{name}}",

@@ -506,7 +506,7 @@ export function PartyDetail({ party }: { party: Party }) {
                     ...(canTransact ? [{ value: 'account', label: tr('contacts:account.tab') }] : []),
                     { value: 'activity', label: tr('contacts:detail.tabOpen') },
                     { value: 'documents', label: tr('contacts:detail.tabDocuments') },
-                    { value: 'payments', label: tr('contacts:detail.tabPayments') },
+                    { value: 'payments', label: tr(isCustomer ? 'contacts:detail.tabReceipts' : 'contacts:detail.tabPayments') },
                   ]}
                   value={tab}
                   onChange={(v) => setTab(v as Tab)}
@@ -525,7 +525,7 @@ export function PartyDetail({ party }: { party: Party }) {
                 ...(canTransact ? [{ value: 'account', label: tr('contacts:account.tab') }] : []),
                 { value: 'activity', label: tr('contacts:detail.tabOpen') },
                 { value: 'documents', label: tr('contacts:detail.tabDocuments') },
-                { value: 'payments', label: tr('contacts:detail.tabPayments') },
+                { value: 'payments', label: tr(isCustomer ? 'contacts:detail.tabReceipts' : 'contacts:detail.tabPayments') },
                 { value: 'details', label: tr('contacts:detail.tabDetails') },
               ]}
               value={tab}
