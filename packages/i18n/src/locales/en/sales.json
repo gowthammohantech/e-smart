@@ -200,7 +200,10 @@
       "handling": "Handling charges",
       "loading": "Loading and unloading",
       "other": "Other charges"
-    }
+    },
+    "dateBooksClosed": "The books are closed through {{date}}: choose a later date",
+    "dateGstr1Filed": "GSTR-1 is filed through {{date}}: choose a date in a month still open",
+    "dateInFuture": "Can't be after today"
   },
   "reimburse": {
     "title": "{{count}} billable expenses to recover",

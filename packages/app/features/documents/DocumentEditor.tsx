@@ -32,7 +32,8 @@ import { buildTaxContext, defaultCrossBorderTax, lutActive, taxAvailableOn, taxC
 import { OTHER_COUNTRY_CODE } from '@esmart/core/domain/stateCodes';
 import { CURRENCIES } from '@esmart/core/lib/currencies';
 import { formatMoney, formatPercent, formatQty } from '@esmart/core/lib/format';
-import { addDaysISO, daysBetween, formatDate, parseDate } from '@esmart/core/lib/date';
+import { addDaysISO, daysBetween, formatDate, parseDate, today } from '@esmart/core/lib/date';
+import { GSTR1_KINDS } from '@esmart/core/domain/gstr1';
 import { uid } from '@esmart/core/lib/id';
 import { factorOf, fromMajor, money, subtract, toMajor, zero, type Money } from '@esmart/core/lib/money';
 import { INDIAN_STATES, unitDecimals, unitShortName } from '@esmart/core/data/masters';
@@ -580,6 +581,27 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   // A tax that starts later can't be charged on a document dated before it (the server refuses it too).
   const lateTax = draft.lines.map((l) => allTaxCategories.find((c) => c.id === l.taxCategoryId)).find((c) => c && !taxAvailableOn(c, draft.date));
   const taxBeforeStart = taxProblem(tr, lateTax, draft.date);
+  // The days it can be dated, so issuing never fails on the date: the calendar greys the rest.
+  // After the closed books, and after the latest filed GSTR-1 month for a sale; not after today for
+  // a tax document; not before what it was made from, a line's opening stock or tax start, nor after
+  // a line's tax ends.
+  const noFutureDate = isNote || ['invoice', 'salesReturn', 'purchaseBill', 'purchaseReturn'].includes(kind);
+  const booksOpenFrom = company?.lockedThroughDate ? addDaysISO(company.lockedThroughDate, 1) : undefined;
+  const gstr1OpenFrom = GSTR1_KINDS.includes(kind as never) && company?.gstr1FiledThrough ? addDaysISO(company.gstr1FiledThrough, 1) : undefined;
+  const lineTaxes = draft.lines.map((l) => allTaxCategories.find((c) => c.id === l.taxCategoryId));
+  const lineStockFrom = draft.lines.map((l) => allItems.find((i) => i.id === l.itemId)).map((i) => (i?.trackInventory ? i.openingStockDate : undefined));
+  const days = (d: (string | null | undefined)[]) => d.filter((x): x is string => !!x).sort();
+  const dateMin = days([booksOpenFrom, gstr1OpenFrom, madeFrom?.date, ...lineStockFrom, ...lineTaxes.map((c) => c?.effectiveFrom)]).pop();
+  const dateMax = days([noFutureDate ? today() : undefined, ...lineTaxes.map((c) => c?.effectiveTo)])[0];
+  // A date already outside them (a draft from before the books closed, say): said on the field, and issuing waits.
+  const dateClosed =
+    booksOpenFrom && draft.date < booksOpenFrom
+      ? tr('sales:editor.dateBooksClosed', { date: formatDate(company!.lockedThroughDate!) })
+      : gstr1OpenFrom && draft.date < gstr1OpenFrom
+        ? tr('sales:editor.dateGstr1Filed', { date: formatDate(company!.gstr1FiledThrough!) })
+        : noFutureDate && draft.date > today()
+          ? tr('sales:editor.dateInFuture')
+          : undefined;
   // What the server refuses on any save, a draft too.
   // A draft can't be dated before what it was made from either; the server refuses it.
   const dateProblem = dateBeforeSource ?? dateBeforeOpeningStock ?? taxBeforeStart ?? dueBeforeDate ?? validBeforeDate;
@@ -750,6 +772,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   const lineProblem = (): string | undefined => {
     if (dateBeforeSource) return dateBeforeSource;
     if (dateProblem) return dateProblem;
+    if (dateClosed) return dateClosed;
     if (fieldProblem) {
       setShowFieldErrors(true);
       return fieldProblem;
@@ -1141,7 +1164,9 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           })
         }
         required
-        error={dateBeforeSource ?? dateBeforeOpeningStock}
+        minimumDate={dateMin ? parseDate(dateMin) : undefined}
+        maximumDate={dateMax ? parseDate(dateMax) : undefined}
+        error={dateBeforeSource ?? dateBeforeOpeningStock ?? taxBeforeStart ?? dateClosed}
       />
     );
     const dueField =
