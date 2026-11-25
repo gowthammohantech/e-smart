@@ -33,6 +33,7 @@ import {
   validUptoFor,
   validityDays,
   normalizeVehicleNumber,
+  validVehicleNumber,
 } from '@esmart/core/domain/ewayBill';
 import { mainHsnCodeOf } from '@esmart/core/domain/eInvoice';
 import { INDIAN_STATES, stateName } from '@esmart/core/data/masters';
@@ -105,7 +106,10 @@ export function useEwayBillForm(doc: BusinessDocument) {
 
   const [busy, setBusy] = useState(false);
   const [savedErrors, setErrors] = useState<Record<string, string>>({});
-  // Checked as typed: a GSTIN (URP aside) or PIN filled in wrong is red at once, and Generate waits.
+  // What each field held when Generate was pressed: an error it brought back holds only until that field changes.
+  const [submitted, setSubmitted] = useState<Record<string, string>>({});
+  const byRoad = transportMode === 'road';
+  // Checked as typed: a GSTIN (URP aside), PIN or vehicle number filled in wrong is red at once, and Generate waits.
   const liveOf = (prefix: 'from' | 'to', p: EwayPlace): Record<string, string | undefined> => ({
     [`${prefix}.gstin`]: /^URP$/.test(p.gstin.trim()) ? undefined : validGstin(p.gstin),
     [`${prefix}.pincode`]: validPostalCode(p.pincode, 'IN', p.stateCode),
@@ -115,13 +119,34 @@ export function useEwayBillForm(doc: BusinessDocument) {
     ...liveOf('from', from),
     ...liveOf('to', to),
     transporterId: typedTransporter && !isValidTransporterId(typedTransporter) ? tr('settings:transporters.idInvalid') : undefined,
+    vehicleNumber: byRoad && vehicleNumber.trim() ? validVehicleNumber(vehicleNumber) : undefined,
   };
   const invalid = hasErrors(live);
-  // What each field shows: filled in, its check as typed; empty, what the portal said on Generate.
-  const valueOf: Record<string, string> = { 'from.gstin': from.gstin, 'from.pincode': from.pincode, 'to.gstin': to.gstin, 'to.pincode': to.pincode, transporterId };
-  const errors: Record<string, string> = { ...savedErrors };
+  // Every field Generate can send back an error for, as it stands now.
+  const placeValues = (prefix: 'from' | 'to', p: EwayPlace) => ({
+    [`${prefix}.legalName`]: p.legalName ?? '',
+    [`${prefix}.gstin`]: p.gstin,
+    [`${prefix}.address1`]: p.address1 ?? '',
+    [`${prefix}.place`]: p.place ?? '',
+    [`${prefix}.pincode`]: p.pincode,
+    [`${prefix}.stateCode`]: p.stateCode ?? '',
+  });
+  const valueOf: Record<string, string> = {
+    ...placeValues('from', from),
+    ...placeValues('to', to),
+    subSupplyType,
+    subSupplyDescription: subSupplyDescription ?? '',
+    transporterId,
+    transporterName,
+    vehicleNumber,
+    transportDocNumber,
+    transportDocDate: transportDocDate ?? '',
+    distanceKm,
+  };
+  // What each field shows: the portal's error from Generate until the field is changed, and the check as typed.
+  const errors: Record<string, string> = Object.fromEntries(Object.entries(savedErrors).filter(([k]) => !(k in valueOf) || valueOf[k] === submitted[k]));
   for (const [k, v] of Object.entries(live)) {
-    const shown = shownError(valueOf[k], v, savedErrors[k]);
+    const shown = shownError(valueOf[k], v, errors[k]);
     if (shown) errors[k] = shown;
     else delete errors[k];
   }
@@ -131,8 +156,6 @@ export function useEwayBillForm(doc: BusinessDocument) {
     const days = validityDays(distance, vehicleType);
     return { days, validUpto: validUptoFor(nowISO(), distance, vehicleType) };
   }, [distance, vehicleType]);
-
-  const byRoad = transportMode === 'road';
 
   const submit = async () => {
     if (invalid) return;
@@ -172,6 +195,7 @@ export function useEwayBillForm(doc: BusinessDocument) {
         next[i.field] = i.message;
       });
     setErrors(next);
+    setSubmitted(valueOf);
   };
 
   // Ctrl+S (⌘+S) generates the bill, as the button does.
