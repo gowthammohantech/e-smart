@@ -54,7 +54,6 @@ import {
   useDefaultBranchId,
   useDocument,
   useTaxCategories,
-  useTransporters,
   usePlan,
 } from '../../store/selectors';
 import { hasVehicles, saleTdsOnPlan, tcsOnPlan } from '@esmart/core/domain/plan';
@@ -484,10 +483,6 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   const [shipStateOpen, setShipStateOpen] = useState(false);
   /** The line whose quantity takes the cursor once the grid has it: the first of the items just picked. */
   const [focusLine, setFocusLine] = useState<{ id: string; at: number } | null>(null);
-  // Goods go by the business's own vehicle or with one of its transporters.
-  const [transportBy, setTransportBy] = useState<'own' | 'transporter'>(draft.transporterId ? 'transporter' : 'own');
-  const [transporterOpen, setTransporterOpen] = useState(false);
-  const transporters = useTransporters({ activeOnly: true });
   // Goods that go out: where they go when not to the buyer's own address (the consignee).
   const shipsTo = SHIP_TO_KINDS.includes(kind);
   // The consignee's GSTIN and PIN are checked as typed: red at once if wrong, and saving waits until they are right.
@@ -877,8 +872,6 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       costCentreId: draft.costCentreId,
       customFields: draft.customFields,
       vehicleId: draft.vehicleId,
-      // Null clears a transporter picked before, when it goes by the business's own vehicle again.
-      transporterId: VEHICLE_KINDS.includes(kind) ? (draft.transporterId ?? null) : undefined,
       branchId,
       attachmentIds: draft.attachmentIds,
       sourceDocumentId: draft.sourceDocumentId,
@@ -1541,38 +1534,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
     </View>
   );
 
-  // Goods on the move go by the business's own vehicle or with one of its transporters (the e-way bill starts from it).
-  const pickedTransporter = transporters.find((x) => x.id === draft.transporterId);
-  const transportField = VEHICLE_KINDS.includes(kind) ? (
-    <View style={{ gap: t.spacing.sm }}>
-      <Text variant="small" tone="muted" weight="500">
-        {tr('sales:editor.transport.label')}
-      </Text>
-      <Segmented
-        options={[
-          { value: 'own', label: tr('sales:editor.transport.own') },
-          { value: 'transporter', label: tr('sales:editor.transport.transporter') },
-        ]}
-        value={transportBy}
-        onChange={(v) => {
-          setTransportBy(v as 'own' | 'transporter');
-          patch(v === 'own' ? { transporterId: null } : { vehicleId: undefined });
-        }}
-      />
-      {transportBy === 'own' ? (
-        // Free has no vehicles to pick: own transport is said, not which vehicle.
-        hasVehicles(plan) ? <VehicleField value={draft.vehicleId} onChange={(vehicleId) => patch({ vehicleId })} /> : null
-      ) : (
-        <PickerField
-          label={tr('sales:editor.transport.transporter')}
-          value={pickedTransporter ? `${pickedTransporter.name} · ${pickedTransporter.transporterId}` : undefined}
-          placeholder={tr(transporters.length ? 'sales:editor.transport.pick' : 'sales:editor.transport.none')}
-          onPress={() => setTransporterOpen(true)}
-          icon="truck-outline"
-        />
-      )}
-    </View>
-  ) : null;
+  // A vehicle goes with goods on the move; Free keeps no vehicles.
+  const transportField = VEHICLE_KINDS.includes(kind) && hasVehicles(plan) ? <VehicleField value={draft.vehicleId} onChange={(vehicleId) => patch({ vehicleId })} /> : null;
 
   const renderExtras = () => (
     <View style={{ gap: t.spacing.lg }}>
@@ -2304,16 +2267,6 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           onCreate={(typed) => void addCharge(typed)}
           createLabel={(typed) => tr('sales:editor.chargesAdd', { name: typed.trim() })}
           createPrompt={tr('sales:editor.chargesAddPrompt')}
-        />
-
-        <SelectSheet
-          visible={transporterOpen}
-          onClose={() => setTransporterOpen(false)}
-          title={tr('sales:editor.transport.transporter')}
-          options={transporters.map((x) => ({ value: x.id, label: x.name, description: x.transporterId }))}
-          value={draft.transporterId ?? null}
-          onSelect={(transporterId) => patch({ transporterId })}
-          emptyMessage={tr('sales:editor.transport.none')}
         />
 
         <LineEditorSheet
