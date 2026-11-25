@@ -292,18 +292,22 @@ export default function TaxSettings() {
           />
           <DateField label={tr('settings:taxes.effectiveFrom')} value={effectiveFrom} onChange={setEffectiveFrom} hint={tr('settings:taxes.effectiveHint')} />
           </FieldRow>
-          {/* A rate that stops on a day: after it, it can't be charged on anything. */}
-          <SwitchField
-            label={tr('settings:taxes.hasEnd')}
-            description={tr('settings:taxes.hasEndHint')}
-            value={!!effectiveTo}
-            onValueChange={(on) => setEffectiveTo(on ? (effectiveFrom > today() ? effectiveFrom : today()) : undefined)}
-          />
-          {effectiveTo ? (
-            <DateField label={tr('settings:taxes.validTill')} value={effectiveTo} onChange={setEffectiveTo} minimumDate={new Date(`${effectiveFrom}T00:00:00`)} hint={tr('settings:taxes.validTillHint')} />
-          ) : null}
+          {/* Inactive takes effect at once, so it has no end date to set; an active rate may end on a day. */}
           {editing?.id ? (
             <SwitchField label={tr('settings:taxes.active')} description={tr('settings:taxes.activeHint')} value={active} onValueChange={setActive} />
+          ) : null}
+          {active ? (
+            <>
+              <SwitchField
+                label={tr('settings:taxes.hasEnd')}
+                description={tr('settings:taxes.hasEndHint')}
+                value={!!effectiveTo}
+                onValueChange={(on) => setEffectiveTo(on ? (effectiveFrom > today() ? effectiveFrom : today()) : undefined)}
+              />
+              {effectiveTo ? (
+                <DateField label={tr('settings:taxes.validTill')} value={effectiveTo} onChange={setEffectiveTo} minimumDate={new Date(`${effectiveFrom}T00:00:00`)} hint={tr('settings:taxes.validTillHint')} />
+              ) : null}
+            </>
           ) : null}
           <TextField label={tr('settings:taxes.description')} value={description} onChangeText={setDescription} placeholder={tr('settings:taxes.descriptionPlaceholder')} multiline />
         </View>
