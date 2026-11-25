@@ -1,4 +1,5 @@
 import type { Schema } from '@esmart/api-contract';
+import { dayFirst } from '@esmart/core/lib/date';
 import { toMajor } from '@esmart/core/lib/money';
 import type { CompanyRow } from '../../context';
 import { toCsv } from '../exports/build';
@@ -141,11 +142,12 @@ export function tableOf(key: ReportKey, body: ReportBody, names: { category: Rec
 }
 
 export function tableCsv(t: Table): string {
-  return toCsv(t.columns, t.rows.map((r) => Object.fromEntries(t.columns.map((c, i) => [c, r[i]]))));
+  return toCsv(t.columns, t.rows.map((r) => Object.fromEntries(t.columns.map((c, i) => [c, typeof r[i] === 'string' ? dayFirst(r[i] as string) : r[i]]))));
 }
 
+// A date in figures reads day first (2026-11-25 → 25-11-2026).
 const esc = (v: Cell) =>
-  String(v ?? '')
+  dayFirst(String(v ?? ''))
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
