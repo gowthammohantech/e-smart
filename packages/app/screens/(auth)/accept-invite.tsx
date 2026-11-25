@@ -18,6 +18,7 @@ import { describeError } from '../../remote/errors';
 import { onMobileBrowser, openInApp as openAppAt } from '../../navigation/openInApp';
 import { LEGAL } from '../../lib/legal';
 import { FormSkeleton } from '../../components/ScreenSkeleton';
+import { useSavedErrors } from '../../components/useSavedErrors';
 
 type Invite = Schema<'InviteDetails'>;
 
@@ -49,7 +50,8 @@ export default function AcceptInvite() {
   const [step, setStep] = useState<'confirm' | 'password'>('confirm');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
-  const [errors, setErrors] = useState<Errors<'password' | 'confirm'>>({});
+  // Errors from the last save, each gone as soon as its field is changed.
+  const [errors, setErrors] = useSavedErrors<'password' | 'confirm'>({ password, confirm });
   const [busy, setBusy] = useState(false);
   const confirmRef = useRef<TextInput>(null);
 

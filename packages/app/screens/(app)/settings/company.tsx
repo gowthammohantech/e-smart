@@ -34,6 +34,7 @@ import { SignatureSection } from '../../../features/company/SignatureSection';
 import { ArchiveSection } from '../../../features/company/ArchiveSection';
 import { SkeletonGroup, SkeletonText } from '@esmart/ui/components/Skeleton';
 import { inactiveChoice } from '../../../features/payments/accountChoice';
+import { useSavedErrors } from '../../../components/useSavedErrors';
 
 
 /** A sample UPI ID for the field's placeholder: an address, the same in every language. */
@@ -125,7 +126,18 @@ function CompanySettingsForm() {
   const [typeOpen, setTypeOpen] = useState(false);
   const [stateOpen, setStateOpen] = useState(false);
   const [fyOpen, setFyOpen] = useState(false);
-  const [errors, setErrors] = useState<Errors<'name' | 'email' | 'phone' | 'taxId' | 'postalCode' | 'tan' | 'ifsc' | 'accountNumber' | 'upiId'>>({});
+  // Errors from the last save, each gone as soon as its field is changed.
+  const [errors, setErrors] = useSavedErrors<'name' | 'email' | 'phone' | 'taxId' | 'postalCode' | 'tan' | 'ifsc' | 'accountNumber' | 'upiId'>({
+    name,
+    email,
+    phone: phone.value,
+    taxId,
+    postalCode,
+    tan,
+    ifsc,
+    accountNumber,
+    upiId,
+  });
 
   const country = COUNTRIES.find((c) => c.code === company?.country);
   const currency = CURRENCIES.find((c) => c.code === company?.baseCurrency);

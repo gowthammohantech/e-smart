@@ -12,6 +12,7 @@ import { remoteSession } from '../../remote';
 import { describeError } from '../../remote/errors';
 import { ApiError } from '@esmart/api-client';
 import { onMobileBrowser, openInApp } from '../../navigation/openInApp';
+import { useSavedErrors } from '../../components/useSavedErrors';
 
 /**
  * Opened from the password-reset email: `/reset-password?token=…`. After the
@@ -25,7 +26,8 @@ export default function ResetPassword() {
   const { token } = useLocalSearchParams<{ token?: string }>();
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
-  const [errors, setErrors] = useState<Errors<'password' | 'confirm'>>({});
+  // Errors from the last save, each gone as soon as its field is changed.
+  const [errors, setErrors] = useSavedErrors<'password' | 'confirm'>({ password, confirm });
   const [busy, setBusy] = useState(false);
   // A missing, used or expired token: the only way on is a fresh email.
   const [expired, setExpired] = useState(!token);

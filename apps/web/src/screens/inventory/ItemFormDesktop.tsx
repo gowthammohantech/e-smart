@@ -29,6 +29,7 @@ import { GstTreatmentFields } from '@esmart/app/features/catalog/GstTreatmentFie
 import { HsnSearchSheet } from '@esmart/app/features/catalog/HsnSearchSheet';
 import type { HsnMatch } from '@esmart/app/remote/reference';
 import { taxChoice } from '@esmart/app/features/settings/taxChoice';
+import { useSavedErrors } from '@esmart/app/components/useSavedErrors';
 
 /**
  * Add an item, laid out for a desktop: the item's identity and prices in the
@@ -103,7 +104,8 @@ function ItemFormDesktopFields({ item }: { item?: Item }) {
   };
   const [categoryOpen, setCategoryOpen] = useState(false);
   const [brandOpen, setBrandOpen] = useState(false);
-  const [errors, setErrors] = useState<Errors<'name' | 'sku' | 'hsn' | 'openingStockDate'>>({});
+  // Errors from the last save, each gone as soon as its field is changed.
+  const [errors, setErrors] = useSavedErrors<'name' | 'sku' | 'hsn' | 'openingStockDate'>({ name, sku, hsn: hsnCode, openingStockDate });
   // Only a new tracked item takes an opening stock, and so its date.
   const takesOpeningStock = !item && type === 'goods' && trackInventory && hasInventory;
 

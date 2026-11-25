@@ -5,15 +5,17 @@ import { AuthShell } from '@esmart/ui/components/AuthShell';
 import { TextField } from '@esmart/ui/components/Field';
 import { Button } from '@esmart/ui/components/Button';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
-import { Errors, hasErrors, required, shownError, validEmail } from '@esmart/core/lib/validators';
+import { hasErrors, required, shownError, validEmail } from '@esmart/core/lib/validators';
 import { remoteSession } from '../../remote';
 import { describeError } from '../../remote/errors';
+import { useSavedErrors } from '../../components/useSavedErrors';
 
 export default function ForgotPassword() {
   const { t: tr } = useTranslation(['auth', 'errors']);
   const router = useRouter();
   const [email, setEmail] = useState('');
-  const [errors, setErrors] = useState<Errors<'email'>>({});
+  // Errors from the last save, each gone as soon as its field is changed.
+  const [errors, setErrors] = useSavedErrors<'email'>({ email });
   const [sent, setSent] = useState(false);
   const [busy, setBusy] = useState(false);
   // Read at once: a second tap or Enter can land before `busy` re-renders, and would send a second email.

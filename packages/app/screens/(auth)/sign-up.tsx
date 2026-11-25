@@ -14,6 +14,7 @@ import { toE164 } from '../../remote/phone';
 import { LEGAL } from '../../lib/legal';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { Errors, hasErrors, minLength, required, shownError, validEmail } from '@esmart/core/lib/validators';
+import { useSavedErrors } from '../../components/useSavedErrors';
 
 export default function SignUp() {
   const t = useTheme();
@@ -30,7 +31,8 @@ export default function SignUp() {
   const phone = usePhoneInput(verified ? verifiedPhone : undefined);
   const [password, setPassword] = useState('');
   const [accepted, setAccepted] = useState(false);
-  const [errors, setErrors] = useState<Errors<'name' | 'business' | 'email' | 'phone' | 'password' | 'terms' | 'form'>>({});
+  // Errors from the last save, each gone as soon as its field is changed.
+  const [errors, setErrors] = useSavedErrors<'name' | 'business' | 'email' | 'phone' | 'password' | 'terms' | 'form'>({ name, business: businessName, email, phone: phone.value, password, terms: accepted });
   const emailRef = useRef<TextInput>(null);
   const passwordRef = useRef<TextInput>(null);
   const [busy, setBusy] = useState(false);

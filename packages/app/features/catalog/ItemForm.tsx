@@ -30,6 +30,7 @@ import { GstTreatmentFields } from './GstTreatmentFields';
 import { CustomFieldsSection, customFieldErrors, useCustomFields } from '../customFields/CustomFieldsSection';
 import type { CustomValues } from '@esmart/core/domain/customFields';
 import { taxChoice } from '../settings/taxChoice';
+import { useSavedErrors } from '../../components/useSavedErrors';
 
 export function ItemForm({ item }: { item?: Item }) {
   // The page can stay mounted across a business switch; the tax default copied into state must start again.
@@ -101,7 +102,8 @@ function ItemFormFields({ item }: { item?: Item }) {
   };
   const [categoryOpen, setCategoryOpen] = useState(false);
   const [brandOpen, setBrandOpen] = useState(false);
-  const [errors, setErrors] = useState<Errors<'name' | 'sku' | 'hsn' | 'openingStockDate'>>({});
+  // Errors from the last save, each gone as soon as its field is changed.
+  const [errors, setErrors] = useSavedErrors<'name' | 'sku' | 'hsn' | 'openingStockDate'>({ name, sku, hsn: hsnCode, openingStockDate });
   // Only a new tracked item takes an opening stock, and so its date.
   const takesOpeningStock = !item && type === 'goods' && trackInventory && hasInventory;
 
