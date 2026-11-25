@@ -26,7 +26,6 @@ import { joinPhone } from '@esmart/core/lib/phone';
 const NEXT_STEPS: { icon: IconName; labelKey: string; bodyKey: string; route: string }[] = [
   { icon: 'file-document-outline', labelKey: 'invoiceLabel', bodyKey: 'invoiceBody', route: '/(app)/sales/invoices/new' },
 ];
-const INVOICE_ROUTE = NEXT_STEPS[0].route;
 const DASHBOARD_ROUTE = '/(app)/(tabs)';
 
 export default function Done() {
@@ -218,17 +217,8 @@ export default function Done() {
             : { gap: t.spacing.md }
         }
       >
-        {desktop ? (
-          <>
-            <Button title={tr('onboarding:done.goToDashboard')} variant="ghost" onPress={() => finish(DASHBOARD_ROUTE)} disabled={busy} />
-            <Button title={tr('onboarding:done.createInvoice')} onPress={() => finish(INVOICE_ROUTE)} loading={busy} iconRight="arrow-right" />
-          </>
-        ) : (
-          <>
-            <Button title={tr('onboarding:done.createInvoice')} onPress={() => finish(INVOICE_ROUTE)} loading={busy} fullWidth />
-            <Button title={tr('onboarding:done.goToDashboard')} variant="ghost" onPress={() => finish(DASHBOARD_ROUTE)} disabled={busy} fullWidth />
-          </>
-        )}
+        {/* One way on: to the dashboard, in the app's primary blue. The first invoice is the card above. */}
+        <Button title={tr('onboarding:done.goToDashboard')} onPress={() => finish(DASHBOARD_ROUTE)} loading={busy} iconRight="arrow-right" fullWidth={!desktop} />
       </View>
     </ScrollView>
   );

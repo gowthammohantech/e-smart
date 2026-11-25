@@ -129,8 +129,8 @@ describe('the e-invoice print', () => {
   it('puts the IRN under the title, the QR beside it and the acknowledgement with the number and date', () => {
     const html = buildEInvoiceHtml(input);
     const page = text(html);
-    expect(html).toContain('class="titlebar einv-head"');
-    expect(page).toMatch(new RegExp(`TAX INVOICE IRN : ${'a'.repeat(64)}`));
+    expect(html).toContain('class="irn"');
+    expect(page).toMatch(new RegExp(`Tax Invoice IRN NO\\. : ${'a'.repeat(64)}`));
     expect(page).toContain('112410000000001');
     expect(page).toContain('381000123456');
     // Once, at the head: not again in a block under the totals.
@@ -139,11 +139,11 @@ describe('the e-invoice print', () => {
     expect(html.split('class="upi-qr"')[0].match(/<svg/g)).toHaveLength(1);
   });
 
-  it('keeps a detailed layout detailed, prints any other ruled, and leaves the invoice print as it was', () => {
-    expect(buildEInvoiceHtml({ ...input, layout: 'detailed' })).toContain('Taxable');
-    expect(buildEInvoiceHtml({ ...input, layout: 'modern' })).toContain('class="titlebar einv-head"');
+  it('prints the tax invoice format whatever the chosen layout, and leaves the invoice print as it was', () => {
+    expect(buildEInvoiceHtml({ ...input, layout: 'detailed' })).toContain('class="irn"');
+    expect(buildEInvoiceHtml({ ...input, layout: 'modern' })).toContain('class="irn"');
     expect(buildDocumentHtml({ ...input, layout: 'classic' })).toContain('class="einv"');
     // Not reported: an ordinary invoice.
-    expect(buildEInvoiceHtml({ ...input, document: doc() })).not.toContain('class="titlebar einv-head"');
+    expect(buildEInvoiceHtml({ ...input, document: doc() })).not.toContain('class="irn"');
   });
 });

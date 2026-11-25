@@ -339,7 +339,7 @@ export function PartyDetail({ party }: { party: Party }) {
         {partyPayments.length === 0 && docGroupLoading(payments) ? (
           <CardRowsSkeleton kind="list" rows={4} />
         ) : partyPayments.length === 0 ? (
-          <EmptyState illustration="no-payments" icon="cash-remove" title={tr('contacts:detail.noPayments')} compact />
+          <EmptyState illustration="no-payments" icon="cash-remove" title={tr(isCustomer ? 'contacts:detail.noReceipts' : 'contacts:detail.noPayments')} compact />
         ) : (
           partyPayments.map((p, i) => (
             <Pressable
@@ -506,7 +506,7 @@ export function PartyDetail({ party }: { party: Party }) {
                     ...(canTransact ? [{ value: 'account', label: tr('contacts:account.tab') }] : []),
                     { value: 'activity', label: tr('contacts:detail.tabOpen') },
                     { value: 'documents', label: tr('contacts:detail.tabDocuments') },
-                    { value: 'payments', label: tr('contacts:detail.tabPayments') },
+                    { value: 'payments', label: tr(isCustomer ? 'contacts:detail.tabReceipts' : 'contacts:detail.tabPayments') },
                   ]}
                   value={tab}
                   onChange={(v) => setTab(v as Tab)}
@@ -525,7 +525,7 @@ export function PartyDetail({ party }: { party: Party }) {
                 ...(canTransact ? [{ value: 'account', label: tr('contacts:account.tab') }] : []),
                 { value: 'activity', label: tr('contacts:detail.tabOpen') },
                 { value: 'documents', label: tr('contacts:detail.tabDocuments') },
-                { value: 'payments', label: tr('contacts:detail.tabPayments') },
+                { value: 'payments', label: tr(isCustomer ? 'contacts:detail.tabReceipts' : 'contacts:detail.tabPayments') },
                 { value: 'details', label: tr('contacts:detail.tabDetails') },
               ]}
               value={tab}

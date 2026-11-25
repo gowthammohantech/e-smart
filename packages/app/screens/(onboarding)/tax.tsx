@@ -139,16 +139,7 @@ export default function TaxStep() {
             suffix={gstinLookup.suffix}
           />
 
-          {isGst && draft.country === 'IN' ? (
-            <SwitchField
-              label={tr('onboarding:tax.composition')}
-              description={tr('onboarding:tax.compositionHint')}
-              value={draft.compositionScheme}
-              onValueChange={(v) => set({ compositionScheme: v })}
-              // Not available yet: shown, but it can't be turned on.
-              disabled
-            />
-          ) : null}
+          {/* The composition scheme is not available yet: its switch is hidden until it is. */}
 
           {/* The rates the business starts with: tap one to leave it out or bring it back, or add another. */}
           <Card variant="flat" style={{ gap: t.spacing.md }}>

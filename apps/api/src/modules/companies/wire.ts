@@ -1,5 +1,6 @@
 import type { Schema } from '@esmart/api-contract';
-import type { schema } from '@esmart/db';
+import { schema } from '@esmart/db';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import type { Deps } from '../../context';
 import { addressTo, compact, requiredAddressFrom, versioned } from '../../lib/wire';
 
@@ -37,6 +38,22 @@ export function bankDetailsOf(row: CompanyRow): Schema<'BankDetails'> | undefine
   return Object.keys(b).length ? b : undefined;
 }
 
+/** The last day of the latest month whose GSTR-1 is submitted or filed (periods are MMYYYY), or undefined. */
+async function gstr1FiledThrough(deps: Deps, companyId: string): Promise<string | undefined> {
+  const R = schema.gstReturns;
+  const [r] = await deps.db
+    .select({ period: R.period })
+    .from(R)
+    .where(and(eq(R.companyId, companyId), eq(R.returnType, 'gstr1'), inArray(R.status, ['submitted', 'filed'])))
+    .orderBy(desc(sql`substring(${R.period}, 3, 4) || substring(${R.period}, 1, 2)`))
+    .limit(1);
+  if (!r) return undefined;
+  const year = Number(r.period.slice(2, 6));
+  const month = Number(r.period.slice(0, 2));
+  // Day 0 of the next month is the last day of this one.
+  return new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
+}
+
 export async function companyToWire(deps: Deps, row: CompanyRow, logoKey?: string | null, signatureKey?: string | null): Promise<Schema<'Company'>> {
   const link = async (key?: string | null) => (key ? (await deps.providers.storage.downloadUrl(key, { ttlSeconds: 3600 })).url : undefined);
   return compact({
@@ -69,6 +86,7 @@ export async function companyToWire(deps: Deps, row: CompanyRow, logoKey?: strin
     },
     fiscalYearStartMonth: row.fiscalYearStartMonth,
     lockedThroughDate: row.lockedThroughDate,
+    gstr1FiledThrough: await gstr1FiledThrough(deps, row.id),
     disabledModules: (row.disabledModules as Schema<'Company'>['disabledModules']) ?? [],
     approvalRules: (row.approvalRules as Schema<'Company'>['approvalRules']) ?? [],
     perpetualStockFrom: row.perpetualStockFrom,

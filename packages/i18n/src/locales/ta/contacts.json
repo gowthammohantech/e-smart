@@ -175,7 +175,9 @@
     "deleteContact": "தொடர்பை நீக்கு",
     "deleteTitle": "{{name}}-ஐ நீக்கவா?",
     "statement": "கணக்கு அறிக்கை",
-    "payable": "நீங்கள் தர வேண்டியது"
+    "payable": "நீங்கள் தர வேண்டியது",
+    "tabReceipts": "வரவுகள்",
+    "noReceipts": "இதுவரை வரவுகள் இல்லை"
   },
   "statement": {
     "title": "கணக்கு அறிக்கை · {{name}}",

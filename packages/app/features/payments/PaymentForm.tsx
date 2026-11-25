@@ -62,6 +62,7 @@ import { SHOW_SCROLLBAR, useBreakpoint } from '@esmart/ui/theme/breakpoints';
 import { useGoBack } from '../../navigation/useGoBack';
 import { inactiveChoice } from './accountChoice';
 import { AddPartyButton, useAddParty } from '../contacts/AddPartyButton';
+import { taxChoice } from '../settings/taxChoice';
 
 
 /** What settles a document besides cash. */
@@ -200,8 +201,6 @@ export function PaymentForm({
   // The services an advance receipt can be for: active items of type service, searched by name, SKU or SAC.
   const serviceSearch = useItemSearch(useDebounced(serviceQuery), advanceSheet === 'service');
   const services = (serviceSearch.data ?? []).filter((i): i is typeof i & { id: string } => i.type === 'service' && !!i.id);
-  // "Add new customer" (or supplier) under the picker: the contact saved there is the one this is for.
-  const addParty = useAddParty(direction === 'received' ? 'customer' : 'supplier', (p) => pickParty(p.id));
   // Under Suppliers on a receipt: money from a supplier's ledger, as picking one there does.
   const addSupplierSource = useAddParty('supplier', (p) => void pickAccount({ key: `party:${p.id}`, label: p.name }));
   const pickParty = (id: string) => {
@@ -210,6 +209,8 @@ export function PaymentForm({
     setRateOverride(null);
     setCurrencyChoice(null);
   };
+  // "Add new customer" (or supplier) under the picker: the contact saved there is the one this is for.
+  const addParty = useAddParty(direction === 'received' ? 'customer' : 'supplier', (p) => pickParty(p.id));
 
   // A payment settles in the party's currency unless the user picks another, at
   // the rate effective on the payment date unless the user says otherwise.
@@ -1131,7 +1132,7 @@ export function PaymentForm({
               </FieldRow>
             </>
           ) : null}
-          <SelectSheet visible={advanceSheet === 'tax'} onClose={() => setAdvanceSheet(null)} title={tr('sales:payment.advanceRate')} options={taxed.map((c) => ({ value: c.id, label: c.name }))} value={advanceTaxCategory?.id} onSelect={setAdvanceTaxId} searchable={false} />
+          <SelectSheet visible={advanceSheet === 'tax'} onClose={() => setAdvanceSheet(null)} title={tr('sales:payment.advanceRate')} options={taxCategoriesOn(taxCategories, date).filter((c) => c.rate > 0).map((c) => ({ value: c.id, label: c.name, ...taxChoice(tr, c, date) }))} value={advanceTaxCategory?.id} onSelect={setAdvanceTaxId} searchable={false} />
           <SelectSheet visible={advanceSheet === 'pos'} onClose={() => setAdvanceSheet(null)} title={tr('sales:editor.placeOfSupply')} options={INDIAN_STATES.map((st) => ({ value: st.code, label: st.name }))} value={pos} onSelect={setAdvancePos} />
         </>
       ) : null}

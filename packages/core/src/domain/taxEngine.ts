@@ -196,10 +196,19 @@ export function taxRateOn(category: Pick<TaxCategory, 'rate' | 'effectiveFrom' |
  * effective date, or the earliest of its earlier rates). A tax that starts later can't be picked
  * on a document or expense dated before it.
  */
-export function taxAvailableOn(category: Pick<TaxCategory, 'effectiveFrom' | 'history'>, date: string | undefined): boolean {
-  if (!date || !category.effectiveFrom) return true;
+/** Why a tax can't be charged on `date`: made inactive, past its last day, or not started yet. */
+export type TaxUnavailable = 'inactive' | 'ended' | 'notYet';
+export function taxUnavailableOn(category: Pick<TaxCategory, 'effectiveFrom' | 'history'> & Partial<Pick<TaxCategory, 'effectiveTo' | 'status'>>, date: string | undefined): TaxUnavailable | undefined {
+  if (category.status === 'inactive') return 'inactive';
+  if (!date) return undefined;
+  if (category.effectiveTo && date > category.effectiveTo) return 'ended';
+  if (!category.effectiveFrom) return undefined;
   const start = (category.history ?? []).reduce((a, h) => (h.effectiveFrom < a ? h.effectiveFrom : a), category.effectiveFrom);
-  return start <= date;
+  return start <= date ? undefined : 'notYet';
+}
+
+export function taxAvailableOn(category: Pick<TaxCategory, 'effectiveFrom' | 'history'> & Partial<Pick<TaxCategory, 'effectiveTo' | 'status'>>, date: string | undefined): boolean {
+  return !taxUnavailableOn(category, date);
 }
 
 /** Every category at its rate on `date`, for a form that charges as of that day. */

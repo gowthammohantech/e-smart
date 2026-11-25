@@ -125,19 +125,19 @@ export function ReceiptForm({
   const [untouched] = useState(entered);
   // Handed over from the payment form with an amount typed there: that is a change to lose too.
   const leaveGuard = useLeaveGuard(entered !== untouched || !!seed?.amount);
-  /** Hands over to the payment form for a customer, with what was typed here. */
-  const addCustomer = useAddParty('customer', (p) => void pickCustomer(p.id));
   // Under Suppliers: money from that supplier's ledger, as picking one there does.
   const addSupplier = useAddParty('supplier', (p) => {
     setSource(`party:${p.id}`);
     setSourceName(p.name);
     setPartyId(undefined);
   });
+  /** Hands over to the payment form for a customer, with what was typed here. */
   const pickCustomer = async (id: string) => {
     if (!onPickCustomer) return;
     await leaveGuard.release();
     onPickCustomer(id, { amount, date, reference, notes: narration });
   };
+  const addCustomer = useAddParty('customer', (p) => void pickCustomer(p.id));
 
   const addIncome = async (name: string) => {
     const id = uid('lac');

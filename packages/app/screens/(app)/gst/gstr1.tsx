@@ -92,6 +92,8 @@ export default function Gstr1Report() {
   const sectionName = (s: Gstr1Section) => `${GSTR1_SECTIONS.find((x) => x.value === s)?.label ?? s} — ${tr(`compliance:gstr1.section.${s}`)}`;
   const sectionTables = (s: Gstr1Section) => {
     const x = GSTR1_SECTIONS.find((y) => y.value === s);
+    // 11A and 11B are their own table numbers: said once, not "11A · Table 11A".
+    if (x && x.label === x.tables) return x.label;
     return x ? `${x.label} · ${tr('compliance:gstr1.col.tables')} ${x.tables}` : s;
   };
   // Named as the books name them, the return's short name and table numbers under each.

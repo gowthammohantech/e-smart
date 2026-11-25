@@ -53,6 +53,8 @@ export type Company = {
   fiscalYearStartMonth: number;
   /** Books are closed up to and including this date. */
   lockedThroughDate?: string | null;
+  /** The last day of the latest month whose GSTR-1 is filed: a sale can't be issued dated on or before it. */
+  gstr1FiledThrough?: string;
   /** Modules the owner switched off within the plan (domain/plan moduleEnabled). */
   disabledModules?: Module[];
   /** How its documents look (render/invoiceTemplate). */
@@ -300,6 +302,10 @@ export type TaxCategory = {
   description?: string;
   /** The rates it had before `effectiveFrom`, each from its own day: see `taxRateOn`. */
   history?: { effectiveFrom: string; rate: number }[];
+  /** The last day it can be charged; unset runs on. */
+  effectiveTo?: string;
+  /** Inactive: kept on what already has it, never charged again. Absent reads as active. */
+  status?: 'active' | 'inactive';
 };
 
 export type TaxComponent = {

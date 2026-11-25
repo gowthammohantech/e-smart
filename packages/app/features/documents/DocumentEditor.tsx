@@ -21,7 +21,7 @@ import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { Avatar } from '@esmart/ui/components/Avatar';
 
-import { CHARGES_KINDS, ChargesKind, ShipTo, DocStatus, DocumentKind, DocumentLine, NoteReason, Party, ShippingBill } from '@esmart/core/types';
+import { CHARGES_KINDS, ChargesKind, ShipTo, DocStatus, DocumentKind, DocumentLine, NoteReason, Party, ShippingBill, TaxCategory } from '@esmart/core/types';
 import { NOTE_KINDS, PURCHASE_KINDS, isAwaitingApproval, isFinalized } from '@esmart/core/domain/documentStates';
 import { TDS_SECTIONS, tdsSection } from '@esmart/core/data/tdsSections';
 import { TCS_SECTIONS, partyTcsSection, tcsAskedOn, tcsRateFor, tcsSection } from '@esmart/core/data/tcsSections';
@@ -32,7 +32,8 @@ import { buildTaxContext, defaultCrossBorderTax, lutActive, taxAvailableOn, taxC
 import { OTHER_COUNTRY_CODE } from '@esmart/core/domain/stateCodes';
 import { CURRENCIES } from '@esmart/core/lib/currencies';
 import { formatMoney, formatPercent, formatQty } from '@esmart/core/lib/format';
-import { addDaysISO, daysBetween, formatDate, parseDate } from '@esmart/core/lib/date';
+import { addDaysISO, daysBetween, formatDate, parseDate, today } from '@esmart/core/lib/date';
+import { GSTR1_KINDS } from '@esmart/core/domain/gstr1';
 import { uid } from '@esmart/core/lib/id';
 import { factorOf, fromMajor, money, subtract, toMajor, zero, type Money } from '@esmart/core/lib/money';
 import { INDIAN_STATES, unitDecimals, unitShortName } from '@esmart/core/data/masters';
@@ -54,7 +55,6 @@ import {
   useDefaultBranchId,
   useDocument,
   useTaxCategories,
-  useTransporters,
   usePlan,
 } from '../../store/selectors';
 import { hasVehicles, saleTdsOnPlan, tcsOnPlan } from '@esmart/core/domain/plan';
@@ -95,6 +95,7 @@ import { CostCentreField } from '../books/CostCentreField';
 import { BillableExpenses } from './BillableExpenses';
 import { CustomFieldsSection, customFieldErrors, useCustomFields } from '../customFields/CustomFieldsSection';
 import { VehicleField } from '../vehicles/VehicleField';
+import { taxChoice, taxProblem } from '../settings/taxChoice';
 
 /** What finalising moves a draft of this kind to. */
 
@@ -368,6 +369,9 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
 
   // Each category in force on the draft's date, at its rate then: a tax that starts later isn't offered.
   const taxCategories = useMemo(() => taxCategoriesOn(allTaxCategories, draft.date).filter((c) => taxAvailableOn(c, draft.date)), [allTaxCategories, draft.date]);
+  // For the line pickers: every rate, the ones that can't be charged on the date greyed with the reason.
+  const taxChoices = useMemo(() => taxCategoriesOn(allTaxCategories, draft.date), [allTaxCategories, draft.date]);
+  const taxBlock = (c: TaxCategory) => taxChoice(tr, c, draft.date);
 
   // A service that follows the highest GST rate: its lines take the highest rate among the document's
   // (counting each such service at its own rate), again whenever a line is added, removed or re-rated.
@@ -451,7 +455,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   // The pickers search the server, so a long customer or item list needn't be on the device.
   const [partyQuery, setPartyQuery] = useState('');
   const [itemQuery, setItemQuery] = useState('');
-  const partySearch = usePartySearch(isPurchase ? 'supplier' : 'customer', useDebounced(partyQuery), partyOpen);
+  // A new document picks from active parties only; an existing one keeps showing them all.
+  const partySearch = usePartySearch(isPurchase ? 'supplier' : 'customer', useDebounced(partyQuery), partyOpen, existing ? undefined : 'active');
   const itemSearch = useItemSearch(useDebounced(itemQuery), itemOpen && !(isReturn && draft.sourceDocumentId));
   const partyOptions = partySearch.data ?? [];
   // Looked up in the store, where the search keeps what it found, for stock and opening-date checks.
@@ -484,10 +489,6 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   const [shipStateOpen, setShipStateOpen] = useState(false);
   /** The line whose quantity takes the cursor once the grid has it: the first of the items just picked. */
   const [focusLine, setFocusLine] = useState<{ id: string; at: number } | null>(null);
-  // Goods go by the business's own vehicle or with one of its transporters.
-  const [transportBy, setTransportBy] = useState<'own' | 'transporter'>(draft.transporterId ? 'transporter' : 'own');
-  const [transporterOpen, setTransporterOpen] = useState(false);
-  const transporters = useTransporters({ activeOnly: true });
   // Goods that go out: where they go when not to the buyer's own address (the consignee).
   const shipsTo = SHIP_TO_KINDS.includes(kind);
   // The consignee's GSTIN and PIN are checked as typed: red at once if wrong, and saving waits until they are right.
@@ -579,7 +580,28 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   const validBeforeDate = (kind === 'quote' || kind === 'proforma') && draft.validUntil && draft.validUntil < draft.date ? beforeDocDate : undefined;
   // A tax that starts later can't be charged on a document dated before it (the server refuses it too).
   const lateTax = draft.lines.map((l) => allTaxCategories.find((c) => c.id === l.taxCategoryId)).find((c) => c && !taxAvailableOn(c, draft.date));
-  const taxBeforeStart = lateTax ? tr('sales:editor.taxBeforeStart', { name: lateTax.name, date: formatDate(lateTax.effectiveFrom) }) : undefined;
+  const taxBeforeStart = taxProblem(tr, lateTax, draft.date);
+  // The days it can be dated, so issuing never fails on the date: the calendar greys the rest.
+  // After the closed books, and after the latest filed GSTR-1 month for a sale; not after today for
+  // a tax document; not before what it was made from, a line's opening stock or tax start, nor after
+  // a line's tax ends.
+  const noFutureDate = isNote || ['invoice', 'salesReturn', 'purchaseBill', 'purchaseReturn'].includes(kind);
+  const booksOpenFrom = company?.lockedThroughDate ? addDaysISO(company.lockedThroughDate, 1) : undefined;
+  const gstr1OpenFrom = GSTR1_KINDS.includes(kind as never) && company?.gstr1FiledThrough ? addDaysISO(company.gstr1FiledThrough, 1) : undefined;
+  const lineTaxes = draft.lines.map((l) => allTaxCategories.find((c) => c.id === l.taxCategoryId));
+  const lineStockFrom = draft.lines.map((l) => allItems.find((i) => i.id === l.itemId)).map((i) => (i?.trackInventory ? i.openingStockDate : undefined));
+  const days = (d: (string | null | undefined)[]) => d.filter((x): x is string => !!x).sort();
+  const dateMin = days([booksOpenFrom, gstr1OpenFrom, madeFrom?.date, ...lineStockFrom, ...lineTaxes.map((c) => c?.effectiveFrom)]).pop();
+  const dateMax = days([noFutureDate ? today() : undefined, ...lineTaxes.map((c) => c?.effectiveTo)])[0];
+  // A date already outside them (a draft from before the books closed, say): said on the field, and issuing waits.
+  const dateClosed =
+    booksOpenFrom && draft.date < booksOpenFrom
+      ? tr('sales:editor.dateBooksClosed', { date: formatDate(company!.lockedThroughDate!) })
+      : gstr1OpenFrom && draft.date < gstr1OpenFrom
+        ? tr('sales:editor.dateGstr1Filed', { date: formatDate(company!.gstr1FiledThrough!) })
+        : noFutureDate && draft.date > today()
+          ? tr('sales:editor.dateInFuture')
+          : undefined;
   // What the server refuses on any save, a draft too.
   // A draft can't be dated before what it was made from either; the server refuses it.
   const dateProblem = dateBeforeSource ?? dateBeforeOpeningStock ?? taxBeforeStart ?? dueBeforeDate ?? validBeforeDate;
@@ -625,7 +647,12 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   // source (the server too).
   const crossBorder = docTaxContext.crossBorder;
   const crossBorderLocked = !!crossBorder && !!draft.sourceDocumentId && (kind === 'salesReturn' || kind === 'purchaseReturn' || isNote);
-  const crossBorderTax: CrossBorderTax = draft.crossBorderTax ?? (crossBorder ? defaultCrossBorderTax(company, draft.date, isPurchase, crossBorder) : 'withTax');
+  // An export sale while the business's LUT is in force goes without tax, zero-rated: the With tax choice
+  // isn't offered, and the LUT and its date are named instead. Exports only; a document made from another keeps its own.
+  const lutExport = crossBorder === 'export' && !isPurchase && !crossBorderLocked && lutActive(company, draft.date);
+  const crossBorderTax: CrossBorderTax = lutExport ? 'withoutTax' : (draft.crossBorderTax ?? (crossBorder ? defaultCrossBorderTax(company, draft.date, isPurchase, crossBorder) : 'withTax'));
+  // One saved With tax before the LUT (or picked before its date moved inside it) goes without, so its lines and totals do too.
+  if (lutExport && draft.crossBorderTax === 'withTax') patch({ crossBorderTax: 'withoutTax' });
   const withTax = crossBorderTax === 'withTax';
   const crossBorderHint = crossBorderLocked
     ? 'sales:editor.crossBorder.fromSource'
@@ -649,7 +676,17 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   // IGST paid at customs goes on the bill of entry: only on an import bill that charges none itself.
   const showBillOfEntry = kind === 'purchaseBill' && imported && !withTax;
   // The shipping bill goes on an invoice to a buyer abroad (an export), with or without tax.
+  // Fields marked wrong only once a save is tried (custom fields, the export port code).
+  const [showFieldErrors, setShowFieldErrors] = useState(false);
   const showShippingBill = kind === 'invoice' && imported;
+  // Goods on an export invoice leave through a port: its code is then required. Services alone need none.
+  const exportGoods =
+    showShippingBill &&
+    draft.lines.some((l) => {
+      const item = l.itemId ? items.find((i) => i.id === l.itemId) : undefined;
+      return item ? item.type !== 'service' : !(l.hsnCode ?? '').trim().startsWith('99');
+    });
+  const portMissing = exportGoods && !sb.portCode;
   // Three fields, not one fragment: a desktop row (FieldRow) gives each its own column, side by side.
   const shippingBillFields = [
       <TextField
@@ -661,7 +698,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
         autoCapitalize="characters"
         placeholder="INMAA1"
         icon="ferry"
-        error={portCodeError}
+        required={exportGoods}
+        error={portCodeError ?? (showFieldErrors && portMissing ? tr('sales:shippingBill.portRequired') : undefined)}
       />,
       <TextField key="number" label={tr('sales:shippingBill.number')} value={sb.number ?? ''} onChangeText={(number) => patchSb({ number })} maxLength={20} icon="file-certificate-outline" />,
       <DateField key="date" label={tr('sales:shippingBill.date')} value={sb.date ?? ''} onChange={(date) => patchSb({ date })} minimumDate={parseDate(draft.date)} />,
@@ -728,16 +766,20 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   // The company's own fields on a document, checked as the server will; shown once a save is tried.
   const documentFields = useCustomFields('document');
   const fieldErrors = customFieldErrors(documentFields, 'document', draft.customFields, tr);
-  const [showFieldErrors, setShowFieldErrors] = useState(false);
   const fieldProblem = Object.values(fieldErrors)[0];
 
   /** Lines that cannot go on a finalised tax document yet. */
   const lineProblem = (): string | undefined => {
     if (dateBeforeSource) return dateBeforeSource;
     if (dateProblem) return dateProblem;
+    if (dateClosed) return dateClosed;
     if (fieldProblem) {
       setShowFieldErrors(true);
       return fieldProblem;
+    }
+    if (portMissing) {
+      setShowFieldErrors(true);
+      return tr('sales:shippingBill.portRequired');
     }
     const unnamed = draft.lines.find((l) => !l.name.trim());
     if (unnamed) return tr('sales:line.nameRequired');
@@ -872,8 +914,6 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       costCentreId: draft.costCentreId,
       customFields: draft.customFields,
       vehicleId: draft.vehicleId,
-      // Null clears a transporter picked before, when it goes by the business's own vehicle again.
-      transporterId: VEHICLE_KINDS.includes(kind) ? (draft.transporterId ?? null) : undefined,
       branchId,
       attachmentIds: draft.attachmentIds,
       sourceDocumentId: draft.sourceDocumentId,
@@ -1000,6 +1040,38 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
 
   /* ---------------------------------------------------------------- */
 
+  // An export's (or SEZ, or import) tax treatment: with or without tax, or the LUT that settles it. Shown
+  // below the notes, with an export invoice's shipping bill.
+  const crossBorderBlock = crossBorder ? (
+    <View style={{ gap: t.spacing.sm }}>
+      <Text variant="small" tone="muted" weight="500">
+        {tr(crossBorder === 'export' ? 'sales:editor.crossBorder.labelExport' : crossBorder === 'import' ? 'sales:editor.crossBorder.labelImport' : 'sales:editor.crossBorder.labelSez')}
+      </Text>
+      {lutExport ? (
+        // Under the LUT: no choice to make, said plainly with the LUT and the day it runs to.
+        <Text variant="small">
+          {company?.taxRegistration?.lutValidTill
+            ? tr('sales:editor.crossBorder.lutUntil', { lut: company.taxRegistration.lutNumber, date: formatDate(company.taxRegistration.lutValidTill) })
+            : tr('sales:editor.crossBorder.lutOpen', { lut: company?.taxRegistration?.lutNumber })}
+        </Text>
+      ) : (
+        <>
+          <Segmented
+            options={[
+              { value: 'withTax', label: tr('sales:editor.crossBorder.withTax') },
+              { value: 'withoutTax', label: tr('sales:editor.crossBorder.withoutTax') },
+            ]}
+            value={crossBorderTax}
+            onChange={(v) => patch({ crossBorderTax: v as CrossBorderTax })}
+            disabled={crossBorderLocked}
+          />
+          <Text variant="caption" tone="muted">
+            {tr(crossBorderHint)}
+          </Text>
+        </>
+      )}
+    </View>
+  ) : null;
   const renderParty = () => {
     const partyA11y = party
       ? tr(isPurchase ? 'sales:editor.changeSupplier' : 'sales:editor.changeCustomer')
@@ -1092,7 +1164,9 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           })
         }
         required
-        error={dateBeforeSource ?? dateBeforeOpeningStock}
+        minimumDate={dateMin ? parseDate(dateMin) : undefined}
+        maximumDate={dateMax ? parseDate(dateMax) : undefined}
+        error={dateBeforeSource ?? dateBeforeOpeningStock ?? taxBeforeStart ?? dateClosed}
       />
     );
     const dueField =
@@ -1188,25 +1262,6 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       kind === 'purchaseBill' && !imported && party?.taxId ? (
         <SwitchField label={tr('purchases:isd.label')} description={tr('purchases:isd.hint')} value={!!draft.isdInvoice} onValueChange={(isdInvoice) => patch({ isdInvoice })} />
       ) : null;
-    const crossBorderBlock = crossBorder ? (
-      <View style={{ gap: t.spacing.sm }}>
-        <Text variant="small" tone="muted" weight="500">
-          {tr(crossBorder === 'export' ? 'sales:editor.crossBorder.labelExport' : crossBorder === 'import' ? 'sales:editor.crossBorder.labelImport' : 'sales:editor.crossBorder.labelSez')}
-        </Text>
-        <Segmented
-          options={[
-            { value: 'withTax', label: tr('sales:editor.crossBorder.withTax') },
-            { value: 'withoutTax', label: tr('sales:editor.crossBorder.withoutTax') },
-          ]}
-          value={crossBorderTax}
-          onChange={(v) => patch({ crossBorderTax: v as CrossBorderTax })}
-          disabled={crossBorderLocked}
-        />
-        <Text variant="caption" tone="muted">
-          {tr(crossBorderHint)}
-        </Text>
-      </View>
-    ) : null;
     // Ship to: off ships to the buyer (their shipping address, else billing); on names a consignee.
     const shipTo = draft.shipTo;
     const patchShip = (over: Partial<ShipTo['address']> & { name?: string; gstin?: string }) => {
@@ -1304,17 +1359,10 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
               <AmountField label={tr('purchases:boe.cess')} value={boeAmount(boe.cess)} onChangeValue={(v) => patchBoe({ cess: fromMajor(v || '0', baseCurrency) })} currency={baseCurrency} />
             </View>
           ) : null}
-          {showShippingBill ? (
-            <View style={{ gap: t.spacing.sm }}>
-              <Text variant="caption" tone="muted">{tr('sales:shippingBill.hint')}</Text>
-              {shippingBillFields}
-            </View>
-          ) : null}
           {isdField}
           {referenceField}
           {branchField}
           {posField}
-          {crossBorderBlock}
           {shipBlock}
           {currencyField}
           {noteReasonField}
@@ -1357,13 +1405,6 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
             </FieldRow>
           </View>
         ) : null}
-        {showShippingBill ? (
-          <View style={{ gap: t.spacing.sm }}>
-            <Text variant="caption" tone="muted">{tr('sales:shippingBill.hint')}</Text>
-            <FieldRow>{shippingBillFields}</FieldRow>
-          </View>
-        ) : null}
-        {crossBorderBlock}
         {shipBlock}
         {isdField}
         {directNoteBlock}
@@ -1423,7 +1464,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           lines={draft.lines}
           currency={draft.currency}
           taxContext={docTaxContext}
-          taxCategories={taxCategories}
+          taxCategories={taxChoices}
+          taxBlock={taxBlock}
           onUpdate={updateLine}
           onRemove={removeLine}
           onEdit={setEditingLine}
@@ -1525,38 +1567,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
     </View>
   );
 
-  // Goods on the move go by the business's own vehicle or with one of its transporters (the e-way bill starts from it).
-  const pickedTransporter = transporters.find((x) => x.id === draft.transporterId);
-  const transportField = VEHICLE_KINDS.includes(kind) ? (
-    <View style={{ gap: t.spacing.sm }}>
-      <Text variant="small" tone="muted" weight="500">
-        {tr('sales:editor.transport.label')}
-      </Text>
-      <Segmented
-        options={[
-          { value: 'own', label: tr('sales:editor.transport.own') },
-          { value: 'transporter', label: tr('sales:editor.transport.transporter') },
-        ]}
-        value={transportBy}
-        onChange={(v) => {
-          setTransportBy(v as 'own' | 'transporter');
-          patch(v === 'own' ? { transporterId: null } : { vehicleId: undefined });
-        }}
-      />
-      {transportBy === 'own' ? (
-        // Free has no vehicles to pick: own transport is said, not which vehicle.
-        hasVehicles(plan) ? <VehicleField value={draft.vehicleId} onChange={(vehicleId) => patch({ vehicleId })} /> : null
-      ) : (
-        <PickerField
-          label={tr('sales:editor.transport.transporter')}
-          value={pickedTransporter ? `${pickedTransporter.name} · ${pickedTransporter.transporterId}` : undefined}
-          placeholder={tr(transporters.length ? 'sales:editor.transport.pick' : 'sales:editor.transport.none')}
-          onPress={() => setTransporterOpen(true)}
-          icon="truck-outline"
-        />
-      )}
-    </View>
-  ) : null;
+  // A vehicle goes with goods on the move; Free keeps no vehicles.
+  const transportField = VEHICLE_KINDS.includes(kind) && hasVehicles(plan) ? <VehicleField value={draft.vehicleId} onChange={(vehicleId) => patch({ vehicleId })} /> : null;
 
   const renderExtras = () => (
     <View style={{ gap: t.spacing.lg }}>
@@ -1792,6 +1804,15 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
         multiline
       />
       </FieldRow>
+
+      {/* Below the notes: an export invoice's shipping bill, then how the document is taxed abroad. */}
+      {showShippingBill ? (
+        <View style={{ gap: t.spacing.sm }}>
+          <Text variant="caption" tone="muted">{tr('sales:shippingBill.hint')}</Text>
+          {desktop ? <FieldRow>{shippingBillFields}</FieldRow> : shippingBillFields}
+        </View>
+      ) : null}
+      {crossBorderBlock}
 
       {/* A desktop keeps the totals in the summary beside the form; shown here too, they'd be there twice. */}
       {desktop ? null : (
@@ -2290,21 +2311,12 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           createPrompt={tr('sales:editor.chargesAddPrompt')}
         />
 
-        <SelectSheet
-          visible={transporterOpen}
-          onClose={() => setTransporterOpen(false)}
-          title={tr('sales:editor.transport.transporter')}
-          options={transporters.map((x) => ({ value: x.id, label: x.name, description: x.transporterId }))}
-          value={draft.transporterId ?? null}
-          onSelect={(transporterId) => patch({ transporterId })}
-          emptyMessage={tr('sales:editor.transport.none')}
-        />
-
         <LineEditorSheet
           visible={!!editingLine}
           line={editingLine}
           currency={draft.currency}
-          taxCategories={taxCategories}
+          taxCategories={taxChoices}
+          taxBlock={taxBlock}
           taxContext={docTaxContext}
           onClose={() => setEditingLine(null)}
           onSave={(p) => {

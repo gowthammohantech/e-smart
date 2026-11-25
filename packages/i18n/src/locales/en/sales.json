@@ -43,7 +43,11 @@
     "currency": "Currency",
     "rateStored": "The rate is stored on the document so it stays reproducible.",
     "addItem": "Add item",
-    "itemTab": { "all": "All", "products": "Products", "services": "Services" },
+    "itemTab": {
+      "all": "All",
+      "products": "Products",
+      "services": "Services"
+    },
     "addItems_one": "Add {{count}} item",
     "addItems_other": "Add {{count}} items",
     "noLines": "No lines yet",
@@ -161,7 +165,9 @@
       "billWithoutTaxHint": "The SEZ supplier charged no tax on this bill.",
       "importWithTaxHint": "IGST is charged on this bill's lines, as for imported services. Nothing goes on a bill of entry.",
       "importWithoutTaxHint": "No GST on the supplier's bill: IGST on imported goods is paid at customs — record it on the bill of entry below.",
-      "fromSource": "Follows the document it was made from, so it reverses exactly what was charged."
+      "fromSource": "Follows the document it was made from, so it reverses exactly what was charged.",
+      "lutUntil": "Exported under your LUT {{lut}}: no tax on any line until {{date}} (zero-rated, no IGST). The e-invoice goes as EXPWOP.",
+      "lutOpen": "Exported under your LUT {{lut}}: no tax on any line (zero-rated, no IGST). The e-invoice goes as EXPWOP."
     },
     "saveChanges": "Save changes",
     "finaliseAction": {
@@ -195,13 +201,9 @@
       "loading": "Loading and unloading",
       "other": "Other charges"
     },
-    "transport": {
-      "label": "Transport by",
-      "own": "Own vehicle",
-      "transporter": "Transporter",
-      "pick": "Pick a transporter",
-      "none": "No transporters yet: add them in Settings → Transporters."
-    }
+    "dateBooksClosed": "The books are closed through {{date}}: choose a later date",
+    "dateGstr1Filed": "GSTR-1 is filed through {{date}}: choose a date in a month still open",
+    "dateInFuture": "Can't be after today"
   },
   "reimburse": {
     "title": "{{count}} billable expenses to recover",
@@ -279,10 +281,11 @@
       "applied": "Applied",
       "noCreditNotes": "No credit notes or returns against this yet",
       "noDebitNotes": "No debit notes against this yet",
-      "noPayments": "No payments recorded on this yet"
+      "noPayments": "No payments recorded on this yet",
+      "noReceipts": "No receipts recorded on this yet"
     },
     "settlement": {
-      "customerPayments": "Customer payments",
+      "customerPayments": "Customer receipts",
       "supplierPayments": "Supplier payments",
       "creditNotes": "Credit notes"
     },
@@ -325,7 +328,8 @@
       "consignee": "Consignee named on this document",
       "shipping": "The customer’s shipping address",
       "billing": "The customer’s billing address (no shipping address on file)"
-    }
+    },
+    "receipts": "Receipts"
   },
   "line": {
     "editLine": "Edit line",
@@ -475,7 +479,7 @@
     "tdsSection": "TDS section",
     "tdsSectionPick": "Pick the section",
     "tdsSectionHint": "The TDS kept back here is reported under this section in 26Q and TDS payable.",
-    "received": "Payment received",
+    "received": "Receipt",
     "totalApplied": "Total applied",
     "advanceReceipt": "Advance receipt",
     "advanceTds": "TDS deducted by the customer",
@@ -550,7 +554,9 @@
     "gst": "GST",
     "toAdjustHeader": "To adjust",
     "toAdjust": "{{amount}} to adjust",
-    "adjusted": "Adjusted"
+    "adjusted": "Adjusted",
+    "searchReceipts": "Search receipts",
+    "noneReceipts": "No receipts"
   },
   "print": {
     "print": "Print",
@@ -638,7 +644,22 @@
     "terms": "Terms and conditions",
     "declaration": "Declaration",
     "customerSeal": "Customer's seal and signature",
-    "computerGenerated": "This is a computer-generated invoice"
+    "computerGenerated": "This is a computer-generated invoice",
+    "taxInvoice": "Tax Invoice",
+    "invoiceNo": "Invoice No.",
+    "referenceNo": "Reference No.",
+    "referenceDate": "Reference Date",
+    "soDcNo": "SO / DC No.",
+    "soDcDate": "SO / DC Date",
+    "irnAcknowledgement": "IRN Acknowledgement",
+    "date": "Date",
+    "ewayBillNoDate": "e-Way Bill No. & Date",
+    "companyBankDetails": "Company Bank Details",
+    "bankName": "Bank Name",
+    "accountNo": "A/c No.",
+    "ifscCode": "IFSC Code",
+    "customerSealSignature": "Customer's Seal and Signature",
+    "poweredBy": "Powered by"
   },
   "merge": {
     "title": {
@@ -797,6 +818,7 @@
     "port": "Port code",
     "number": "Shipping bill no.",
     "date": "Shipping bill date",
-    "portInvalid": "A port code is 6 letters or digits, like INMAA1"
+    "portInvalid": "A port code is 6 letters or digits, like INMAA1",
+    "portRequired": "Port code is required on an export invoice with goods. An invoice of services alone needs none."
   }
 }

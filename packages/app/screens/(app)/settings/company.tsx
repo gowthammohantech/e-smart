@@ -92,7 +92,8 @@ function CompanySettingsForm() {
   const [postalCode, setPostalCode] = useState(company?.address?.postalCode ?? '');
   const [taxRegistered, setTaxRegistered] = useState(!!company?.taxRegistration?.registered);
   const [taxId, setTaxId] = useState(company?.taxRegistration?.identifier ?? '');
-  const [composition, setComposition] = useState(!!company?.taxRegistration?.compositionScheme);
+  // Kept as it is: the switch is hidden while the scheme is not available.
+  const [composition] = useState(!!company?.taxRegistration?.compositionScheme);
   const [returnFrequency, setReturnFrequency] = useState(company?.taxRegistration?.returnFrequency ?? 'monthly');
   const [fyMonth, setFyMonth] = useState(company?.fiscalYearStartMonth ?? 4);
   const [allowNegativeStock, setAllowNegativeStock] = useState(!!company?.allowNegativeStock);
@@ -223,7 +224,7 @@ function CompanySettingsForm() {
   const pinField = (
     <TextField label="PIN" value={postalCode} onChangeText={setPostalCode} keyboardType="number-pad" maxLength={company?.country === 'IN' ? 6 : undefined} error={shownError(postalCode, live.postalCode, errors.postalCode)} containerStyle={half} />
   );
-  const accountNameField = <TextField key="accName" label={tr('settings:company.accountName')} value={accountName} onChangeText={setAccountName} icon="account-outline" placeholder={name} />;
+  const accountNameField = <TextField key="accName" label={tr('settings:company.accountName')} value={accountName} onChangeText={setAccountName} icon="account-outline" placeholder="Elixir Books" />;
   const bankNameField = <TextField key="bank" label={tr('settings:company.bankName')} value={bankName} onChangeText={setBankName} icon="bank-outline" containerStyle={half} />;
   const branchField = <TextField key="branch" label={tr('settings:company.branchName')} value={bankBranch} onChangeText={setBankBranch} containerStyle={half} />;
   const accountNumberField = (
@@ -398,14 +399,7 @@ function CompanySettingsForm() {
         error={shownError(taxId, live.taxId, errors.taxId)}
         editable={!locks.taxIdentity}
       />
-      <SwitchField
-        label={tr('settings:company.composition')}
-        description={tr('settings:company.compositionHint')}
-        value={composition}
-        onValueChange={setComposition}
-        // Not available yet: shown, but it can't be changed.
-        disabled
-      />
+      {/* The composition scheme is not available yet: its switch is hidden until it is. */}
       {country?.regime === 'GST' ? (
         <>
           <View style={{ gap: t.spacing.xs }}>

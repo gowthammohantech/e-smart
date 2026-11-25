@@ -1,10 +1,10 @@
 {
   "hub": {
     "stage": {
-      "toReport": "Not reported",
-      "reported": "Reported",
-      "toRaise": "Not raised",
-      "raised": "Raised"
+      "toReport": "Not generated",
+      "reported": "Generated",
+      "toRaise": "Not generated",
+      "raised": "Generated"
     },
     "needsBill": "Needs bill",
     "unbilledBanner_one": "{{count}} invoice above the threshold still needs an e-way bill. Tap to see it.",

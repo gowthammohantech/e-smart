@@ -21,8 +21,9 @@ describe('amount input', () => {
 
 describe('document number prefix', () => {
   it('accepts a slash but not a leading separator or doubled slashes', () => {
-    expect(sanitizePrefix('inv/a')).toBe('INV/A');
-    expect(sanitizePrefix('/inv')).toBe('INV');
+    // The case typed is kept.
+    expect(sanitizePrefix('inv/a')).toBe('inv/a');
+    expect(sanitizePrefix('/inv')).toBe('inv');
     expect(sanitizePrefix('INV//A')).toBe('INV/A');
     expect(sanitizePrefix('IN V#1')).toBe('INV1');
   });

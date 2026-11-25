@@ -4,11 +4,15 @@
  * the native file and print modules; `exportFiles` delivers the result.
  */
 import { strToU8, zipSync } from 'fflate';
+import { dayFirst } from '@esmart/core/lib/date';
 
 /** What a report hands over for export: one header row and its data rows. */
 export type ReportTable = { headers: string[]; rows: (string | number)[][] };
 
 export const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
+/** A cell's text: a date in figures reads day first (2026-11-25 → 25-11-2026). */
+const text = (v: string | number) => (typeof v === 'string' ? dayFirst(v) : String(v ?? ''));
 
 const xml = (s: string) =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -28,7 +32,7 @@ export function xlsxBytes(sheetName: string, table: ReportTable): Uint8Array {
   const cell = (v: string | number, ref: string, header: boolean) =>
     typeof v === 'number' && Number.isFinite(v)
       ? `<c r="${ref}"${header ? ' s="1"' : ''}><v>${v}</v></c>`
-      : `<c r="${ref}" t="inlineStr"${header ? ' s="1"' : ''}><is><t xml:space="preserve">${xml(String(v ?? ''))}</t></is></c>`;
+      : `<c r="${ref}" t="inlineStr"${header ? ' s="1"' : ''}><is><t xml:space="preserve">${xml(text(v))}</t></is></c>`;
   const rows = [table.headers, ...table.rows]
     .map((r, i) => `<row r="${i + 1}">${r.map((v, j) => cell(v, `${column(j)}${i + 1}`, i === 0)).join('')}</row>`)
     .join('');
@@ -84,7 +88,7 @@ export function xlsxBytes(sheetName: string, table: ReportTable): Uint8Array {
 
 export function toCsv(table: ReportTable): string {
   const escape = (v: string | number) => {
-    const s = String(v);
+    const s = text(v);
     return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
   return [table.headers.map(escape).join(','), ...table.rows.map((r) => r.map(escape).join(','))].join('\n');
@@ -110,9 +114,9 @@ export function tableHtml(title: string, basis: string, table: ReportTable, lang
     th { background: #f5f5f5; font-weight: 600; }
     td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
   </style></head><body>
-    <h1>${xml(title)}</h1><p>${xml(basis)}</p>
+    <h1>${xml(title)}</h1><p>${xml(dayFirst(basis))}</p>
     <table><thead><tr>${table.headers.map((h, j) => `<th${numericColumn[j] ? ' class="n"' : ''}>${xml(h)}</th>`).join('')}</tr></thead>
-    <tbody>${table.rows.map((r) => `<tr>${r.map((v) => `<td${num(v) ? ' class="n"' : ''}>${xml(String(v ?? ''))}</td>`).join('')}</tr>`).join('')}</tbody></table>
+    <tbody>${table.rows.map((r) => `<tr>${r.map((v) => `<td${num(v) ? ' class="n"' : ''}>${xml(text(v))}</td>`).join('')}</tr>`).join('')}</tbody></table>
   </body></html>`;
 }
 

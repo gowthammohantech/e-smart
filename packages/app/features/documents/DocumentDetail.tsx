@@ -1019,7 +1019,7 @@ ${url}`;
       {/* Payments */}
       {relatedPayments.length > 0 ? (
         <>
-          <Text variant="caption" tone="muted" weight="600" style={{ marginTop: t.spacing.xl, marginBottom: t.spacing.sm, textTransform: 'uppercase', letterSpacing: 0.8 }}>{tr('sales:detail.payments')}</Text>
+          <Text variant="caption" tone="muted" weight="600" style={{ marginTop: t.spacing.xl, marginBottom: t.spacing.sm, textTransform: 'uppercase', letterSpacing: 0.8 }}>{tr(receivable ? 'sales:detail.receipts' : 'sales:detail.payments')}</Text>
           <Card padded={false}>
             {relatedPayments.map((p, i) => {
               const alloc = p.allocations.find((a) => a.documentId === doc.id);
@@ -1283,7 +1283,7 @@ ${url}`;
       rows={relatedPayments}
       rowKey={(p) => p.id}
       onRowPress={(p) => router.push(`/(app)/payments/${p.id}` as never)}
-      empty={emptyText(tr('sales:detail.related.noPayments'))}
+      empty={emptyText(tr(receivable ? 'sales:detail.related.noReceipts' : 'sales:detail.related.noPayments'))}
     />
   );
   const desktopLines = (
@@ -1296,7 +1296,7 @@ ${url}`;
               { value: 'items', label: counted(tr('sales:detail.items'), doc.lines.length) },
               { value: 'credit', label: counted(tr('sales:detail.settlement.creditNotes'), creditRows.length) },
               { value: 'debit', label: counted(tr('sales:detail.related.debitNotes'), debitRows.length) },
-              { value: 'payments', label: counted(tr('sales:detail.payments'), relatedPayments.length) },
+              { value: 'payments', label: counted(tr(receivable ? 'sales:detail.receipts' : 'sales:detail.payments'), relatedPayments.length) },
             ]}
             value={relatedTab}
             onChange={(v) => setRelatedTab(v as typeof relatedTab)}

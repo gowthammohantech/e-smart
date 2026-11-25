@@ -351,7 +351,7 @@ export default function AccountSettings() {
                   {onInvoices ? tr('settings:accounts.payDetailsOnInvoices') : tr('settings:accounts.payDetailsHint')}
                 </Text>
               </View>
-              <TextField label={tr('settings:company.accountName')} value={holderName} onChangeText={setHolderName} icon="account-outline" placeholder={company.legalName || company.name} />
+              <TextField label={tr('settings:company.accountName')} value={holderName} onChangeText={setHolderName} icon="account-outline" placeholder="Elixir Books" />
               <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
                 <TextField label={tr('settings:company.bankName')} value={bankName} onChangeText={setBankName} icon="bank-outline" containerStyle={{ flex: 1 }} />
                 <TextField label={tr('settings:company.branchName')} value={branchName} onChangeText={setBranchName} containerStyle={{ flex: 1 }} />

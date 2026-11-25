@@ -1,5 +1,6 @@
 import type { FastifyError, FastifyInstance } from 'fastify';
 import type { Schema } from '@esmart/api-contract';
+import { dayFirst } from '@esmart/core/lib/date';
 import { reportError } from '../lib/reporter';
 import { moduleName } from '../lib/names';
 import { friendlyDetail, friendlyIssues } from './friendlyValidation';
@@ -121,6 +122,9 @@ export function problemHandler(app: FastifyInstance) {
       });
       body = { code: 'INTERNAL', detail: 'Something went wrong on our side. Please try again in a few minutes. If it keeps happening, contact support.' };
     }
+    // What the user reads: a date in figures day first (2026-09-29 → 29-09-2026). Fields and codes stay as they are.
+    if (typeof body.detail === 'string') body.detail = dayFirst(body.detail);
+    if (Array.isArray(body.issues)) body.issues = (body.issues as Issue[]).map((i) => ({ ...i, message: i.message && dayFirst(i.message) }));
     void reply
       .status(status)
       .type('application/problem+json')

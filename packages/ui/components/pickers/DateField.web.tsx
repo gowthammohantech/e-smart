@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleProp, View, ViewStyle } from 'react-native';
 import { Icon } from '../Icon';
@@ -7,25 +7,25 @@ import { useIsDesktop } from '../../theme/breakpoints';
 import { FieldShell, useFieldA11y, webFocusHalo } from '../Field';
 import { toISODate } from '@esmart/core/lib/date';
 
-// The browser draws its own calendar button inside a date input, beside ours:
-// two calendar icons, and in dark mode Chrome's is near invisible. Ours is the
-// one shown (and opens the browser's calendar); the browser's is kept in place
-// but clear, so a click at the field's end still opens the calendar while the
-// date's parts stay clickable for typing.
-const DATE_CLASS = 'esmart-date-input';
-if (typeof document !== 'undefined' && !document.getElementById(DATE_CLASS)) {
-  const style = document.createElement('style');
-  style.id = DATE_CLASS;
-  style.textContent = `
-    .${DATE_CLASS}::-webkit-calendar-picker-indicator { opacity: 0; cursor: pointer; }
-  `;
-  document.head.appendChild(style);
+/** `2026-11-25` → `25/11/2026`, as the field shows it. */
+const shown = (iso: string) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '');
+
+/** Digits typed, with the slashes put in: `2511` → `25/11`. */
+const masked = (digits: string) => [digits.slice(0, 2), digits.slice(2, 4), digits.slice(4, 8)].filter(Boolean).join('/');
+
+/** `25112026` → `2026-11-25` when it is a real day (no 31/02), else undefined. */
+function isoOf(digits: string): string | undefined {
+  if (digits.length !== 8) return undefined;
+  const iso = `${digits.slice(4, 8)}-${digits.slice(2, 4)}-${digits.slice(0, 2)}`;
+  const d = new Date(`${iso}T00:00:00`);
+  return !Number.isNaN(d.getTime()) && toISODate(d) === iso ? iso : undefined;
 }
 
 /**
- * The browser's own date input. The native picker has no web build, and a
- * desktop user expects to type a date or use the browser's calendar anyway.
- * Same props as DateField.tsx, so screens don't know which one they got.
+ * A date typed as DD/MM/YYYY, whatever the computer's region (the browser's own date box
+ * follows it, and shows 11/25/2026 on a US system). The calendar button opens the browser's
+ * calendar on a hidden date input. Same props as DateField.tsx, so screens don't know which
+ * one they got.
  */
 export function DateField({
   label,
@@ -53,26 +53,43 @@ export function DateField({
   const { t: tr } = useTranslation(['common']);
   const desktop = useIsDesktop();
   const [focused, setFocused] = useState(false);
-  // The calendar greys out days past min and max, but a typed date isn't held
-  // to them. One outside them shows while it is being typed (a year goes in a
-  // digit at a time) and is never passed on; leaving the field puts the last
-  // allowed date back.
-  const [stray, setStray] = useState<string | null>(null);
+  const day = value ? value.slice(0, 10) : '';
+  // What is in the box while typing; the date itself only changes once a whole, allowed day is in.
+  const [text, setText] = useState(shown(day));
+  // A whole date that isn't a real day, or is outside min and max: shown in red, never passed on;
+  // leaving the field puts the last good date back.
+  const [stray, setStray] = useState(false);
   const min = minimumDate ? toISODate(minimumDate) : undefined;
   const max = maximumDate ? toISODate(maximumDate) : undefined;
   const allowed = (iso: string) => (!min || iso >= min) && (!max || iso <= max);
 
+  // A date set from outside (a default, the calendar, a reset) shows when not mid-typing.
+  useEffect(() => {
+    if (!focused) setText(shown(day));
+  }, [day, focused]);
+
   const a11y = useFieldA11y({ error, hint, required });
-  const input = useRef<HTMLInputElement>(null);
+  const picker = useRef<HTMLInputElement>(null);
+  const box = useRef<HTMLInputElement>(null);
   const openCalendar = () => {
-    const el = input.current as (HTMLInputElement & { showPicker?: () => void }) | null;
-    if (!el) return;
-    el.focus();
+    const el = picker.current as (HTMLInputElement & { showPicker?: () => void }) | null;
     try {
-      el.showPicker?.();
+      el?.showPicker?.();
     } catch {
-      // Some browsers refuse outside a direct click; focus is enough to type.
+      // Some browsers refuse outside a direct click: the date can still be typed.
+      box.current?.focus();
     }
+  };
+
+  const typed = (raw: string) => {
+    const digits = raw.replace(/\D/g, '').slice(0, 8);
+    setText(masked(digits));
+    if (digits.length < 8) return setStray(false);
+    const iso = isoOf(digits);
+    if (iso && allowed(iso)) {
+      setStray(false);
+      onChange(iso);
+    } else setStray(true);
   };
 
   return (
@@ -89,38 +106,52 @@ export function DateField({
           borderColor: error || stray ? t.c.bad : focused ? t.c.primary : t.c.inputBorder,
           paddingHorizontal: t.spacing.md,
           height: desktop ? 40 : 48,
+          position: 'relative',
           ...webFocusHalo(t, focused && !error && !stray),
         }}
       >
-        <Pressable onPress={openCalendar} accessibilityElementsHidden importantForAccessibility="no" {...({ tabIndex: -1 } as object)}>
+        <Pressable onPress={openCalendar} accessibilityLabel={tr('common:component.selectDate')} {...({ tabIndex: -1 } as object)}>
           <Icon name="calendar-outline" size={18} color={t.c.muted} />
         </Pressable>
+        {/* The browser's calendar, opened from the button; the box beside it is what shows. */}
         <input
-          ref={input}
-          className={DATE_CLASS}
+          ref={picker}
           type="date"
-          aria-label={label ?? tr('common:component.date')}
-          required={required}
-          aria-invalid={error || stray ? true : undefined}
-          aria-describedby={a11y.inputProps['aria-describedby']}
-          value={stray ?? (value ? value.slice(0, 10) : '')}
+          tabIndex={-1}
+          aria-hidden
+          value={day}
           min={min}
           max={max}
           onChange={(e) => {
             const next = e.target.value;
-            if (!next) return;
-            if (allowed(next)) {
-              setStray(null);
-              onChange(next);
-            } else setStray(next);
+            if (!next || !allowed(next)) return;
+            setStray(false);
+            setText(shown(next));
+            onChange(next);
           }}
+          style={{ position: 'absolute', left: 0, bottom: 0, width: 1, height: 1, opacity: 0, border: 'none', padding: 0, pointerEvents: 'none' }}
+        />
+        <input
+          ref={box}
+          type="text"
+          inputMode="numeric"
+          autoComplete="off"
+          placeholder="DD/MM/YYYY"
+          aria-label={label ?? tr('common:component.date')}
+          required={required}
+          aria-invalid={error || stray ? true : undefined}
+          aria-describedby={a11y.inputProps['aria-describedby']}
+          value={text}
+          onChange={(e) => typed(e.target.value)}
           onFocus={() => setFocused(true)}
           onBlur={() => {
             setFocused(false);
-            setStray(null);
+            setStray(false);
+            setText(shown(day));
           }}
           style={{
             flex: 1,
+            minWidth: 0,
             border: 'none',
             // The box around it shows focus; the browser's own outline would double it.
             outline: 'none',
@@ -129,7 +160,7 @@ export function DateField({
             fontSize: t.fontSize.body,
             // RN Web sets the font on Text only, so a raw input needs it spelled out.
             fontFamily: t.fontFamily,
-            colorScheme: t.scheme,
+            fontVariantNumeric: 'tabular-nums',
           }}
         />
       </View>

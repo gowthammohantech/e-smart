@@ -2,6 +2,7 @@ import { resolveTemplate } from './invoiceTemplate';
 import { buildDocView, COPY_LABEL, type CopyKind, type DocumentHtmlInput, type DocView } from './docView';
 import { standardLayout } from './layouts/standard';
 import { boxedLayout } from './layouts/boxed';
+import { eInvoiceLayout } from './layouts/eInvoice';
 import { modernLayout } from './layouts/modern';
 
 import { esc } from './blocks';
@@ -24,6 +25,8 @@ export function copyLabel(view: Pick<DocView, 't' | 'language'>, copy: CopyKind)
 /** One copy of the page in the chosen layout. */
 function renderCopy(view: DocView, copy: CopyKind | undefined): string {
   const label = copy ? copyLabel(view, copy) : '';
+  // An invoice with an IRN: the e-invoice print, laid out as the accounting package's tax invoice.
+  if (view.eInvoiceHeader) return eInvoiceLayout(view, label);
   switch (view.tpl.layout) {
     case 'classic':
     case 'detailed':

@@ -223,7 +223,20 @@
     },
     "editTitle": "Edit tax rate",
     "deleteTitle": "Delete {{name}}?",
-    "timesUsed": "Times used"
+    "timesUsed": "Times used",
+    "validTill": "Valid till",
+    "validTillOn": "Valid till {{date}}",
+    "validTillHint": "The last day it can be charged. After it, documents, expenses and advances can't use it.",
+    "hasEnd": "Ends on a date",
+    "hasEndHint": "Off: it runs on with no end.",
+    "active": "Active",
+    "activeHint": "Off: it can't be charged on anything new. Documents that already have it keep it.",
+    "noInactive": "No inactive tax rates",
+    "inactive": "Inactive",
+    "inactiveBlocked": "{{name}} is inactive. Make it active in Settings → Taxes to charge it.",
+    "endedOn": "Ended {{date}}",
+    "endedBlocked": "{{name}} ended on {{date}}: it can't be charged after that day.",
+    "fromOn": "From {{date}}"
   },
   "about": {
     "build": "Version {{version}}",

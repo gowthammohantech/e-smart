@@ -40,6 +40,7 @@ export function LineGrid({
   currency,
   taxContext,
   taxCategories,
+  taxBlock,
   onUpdate,
   onRemove,
   onEdit,
@@ -53,6 +54,8 @@ export function LineGrid({
   currency: string;
   taxContext: TaxContext;
   taxCategories: TaxCategory[];
+  /** Why a rate can't be picked here (greyed, with the reason); unset offers every one. */
+  taxBlock?: (c: TaxCategory) => { note?: { text: string; tone: 'muted' }; blocked?: string };
   onUpdate: (id: string, patch: Partial<DocumentLine>) => void;
   onRemove: (id: string) => void;
   /** Opens the full editor for a line. */
@@ -390,7 +393,7 @@ export function LineGrid({
         visible={!!taxFor}
         onClose={() => setTaxFor(null)}
         title={tr('sales:line.tax')}
-        options={taxCategories.map((c) => ({ value: c.id, label: c.name, trailing: formatPercent(c.rate) }))}
+        options={taxCategories.map((c) => ({ value: c.id, label: c.name, trailing: formatPercent(c.rate), ...(c.id === taxFor?.taxCategoryId ? {} : taxBlock?.(c)) }))}
         value={taxFor?.taxCategoryId ?? ''}
         onSelect={(id) => {
           const cat = taxCategories.find((c) => c.id === id);

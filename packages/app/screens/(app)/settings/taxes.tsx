@@ -11,7 +11,7 @@ import { PrimaryActionBar } from '@esmart/ui/components/ActionBar';
 import { ListRow } from '@esmart/ui/components/ListRow';
 import { Cell, DataTable } from '@esmart/ui/components/DataTable';
 import { Sheet } from '@esmart/ui/components/Sheet';
-import { TextField } from '@esmart/ui/components/Field';
+import { Segmented, SwitchField, TextField } from '@esmart/ui/components/Field';
 import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { EmptyState } from '@esmart/ui/components/EmptyState';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
@@ -52,6 +52,12 @@ export default function TaxSettings() {
   const [rate, setRate] = useState('');
   const [effectiveFrom, setEffectiveFrom] = useState(today());
   const [description, setDescription] = useState('');
+  // The last day it can be charged; unset runs on.
+  const [effectiveTo, setEffectiveTo] = useState<string | undefined>();
+  // Inactive: never charged again; what already has it keeps it.
+  const [active, setActive] = useState(true);
+  const [statusTab, setStatusTab] = useState<'active' | 'inactive'>('active');
+  const shown = categories.filter((c) => (c.status ?? 'active') === statusTab);
   const [rateError, setRateError] = useState<string | undefined>();
   // An empty name says so on the field, not by a Save that does nothing.
   const [nameError, setNameError] = useState<string | undefined>();
@@ -64,6 +70,8 @@ export default function TaxSettings() {
     setRate(c ? String(c.rate) : '');
     setEffectiveFrom(c?.effectiveFrom ?? today());
     setDescription(c?.description ?? '');
+    setEffectiveTo(c?.effectiveTo);
+    setActive(c?.status !== 'inactive');
     setRateError(undefined);
     setNameError(undefined);
   };
@@ -86,6 +94,8 @@ export default function TaxSettings() {
       name: name.trim(),
       rate: Number(rate),
       effectiveFrom,
+      effectiveTo: effectiveTo || undefined,
+      status: active ? ('active' as const) : ('inactive' as const),
       description: description.trim() || undefined,
     };
     // The sheet stays open until the server has it, so a refusal can be fixed here.
@@ -120,11 +130,23 @@ export default function TaxSettings() {
           </Text>
         </Card>
 
-        {desktop && categories.length ? (
+        {/* Active or inactive rates, as Parties and Payment accounts show theirs. */}
+        <View style={{ marginBottom: t.spacing.md, alignSelf: desktop ? 'flex-start' : 'stretch', width: desktop ? 220 : undefined }}>
+          <Segmented
+            options={[
+              { value: 'active', label: tr('common:accountStatus.active') },
+              { value: 'inactive', label: tr('common:accountStatus.inactive') },
+            ]}
+            value={statusTab}
+            onChange={(v) => setStatusTab(v as 'active' | 'inactive')}
+          />
+        </View>
+
+        {desktop && shown.length ? (
           // A desktop lists the rates as a table: rate, the day it starts, and how often it's been used.
           <DataTable
             scroll={false}
-            rows={categories}
+            rows={shown}
             rowKey={(c) => c.id}
             rowLabel={(c) => `${c.name}, ${formatPercent(c.rate)}`}
             onRowPress={open}
@@ -133,6 +155,7 @@ export default function TaxSettings() {
               { key: 'description', header: tr('settings:taxes.description'), flex: 2, secondary: true, render: (c) => <Cell tone="muted">{c.description || '—'}</Cell> },
               { key: 'rate', header: tr('common:table.tax'), width: 110, sortValue: (c) => c.rate, render: (c) => <Badge label={formatPercent(c.rate)} tone={c.rate === 0 ? 'neutral' : 'info'} size="sm" /> },
               { key: 'from', header: tr('settings:taxes.effectiveFrom'), width: 150, sortValue: (c) => c.effectiveFrom, render: (c) => <Cell tone="muted">{formatDate(c.effectiveFrom)}</Cell> },
+              { key: 'to', header: tr('settings:taxes.validTill'), width: 150, sortValue: (c) => c.effectiveTo ?? '9999', render: (c) => <Cell tone={c.effectiveTo && c.effectiveTo < today() ? 'bad' : 'muted'}>{c.effectiveTo ? formatDate(c.effectiveTo) : '—'}</Cell> },
               {
                 key: 'used',
                 header: tr('settings:taxes.timesUsed'),
@@ -152,14 +175,14 @@ export default function TaxSettings() {
           />
         ) : (
           <Card padded={false}>
-            {categories.length === 0 ? (
-              <EmptyState icon="percent-outline" title={tr('settings:taxes.none')} compact />
+            {shown.length === 0 ? (
+              <EmptyState icon="percent-outline" title={tr(statusTab === 'inactive' ? 'settings:taxes.noInactive' : 'settings:taxes.none')} compact />
             ) : (
-              categories.map((c, i) => (
+              shown.map((c, i) => (
                 <ListRow
                   key={c.id}
                   title={c.name}
-                  subtitle={c.description}
+                  subtitle={[c.description, c.effectiveTo ? tr('settings:taxes.validTillOn', { date: formatDate(c.effectiveTo) }) : undefined].filter(Boolean).join(' · ') || undefined}
                   // The use count waits for the server; the date is known already.
                   meta={
                     usagePending
@@ -167,7 +190,7 @@ export default function TaxSettings() {
                       : tr('settings:taxes.rowMeta', { date: formatDate(c.effectiveFrom), count: usageOf(c.id) })
                   }
                   icon="percent-outline"
-                  divider={i < categories.length - 1}
+                  divider={i < shown.length - 1}
                   right={
                     <View style={{ alignItems: 'flex-end', gap: 4 }}>
                       <Badge label={formatPercent(c.rate)} tone={c.rate === 0 ? 'neutral' : 'info'} />
@@ -269,6 +292,21 @@ export default function TaxSettings() {
           />
           <DateField label={tr('settings:taxes.effectiveFrom')} value={effectiveFrom} onChange={setEffectiveFrom} hint={tr('settings:taxes.effectiveHint')} />
           </FieldRow>
+          {/* Inactive takes effect at once, so it has no end date to set; an active rate may end on a day. */}
+          <SwitchField label={tr('settings:taxes.active')} description={tr('settings:taxes.activeHint')} value={active} onValueChange={setActive} />
+          {active ? (
+            <>
+              <SwitchField
+                label={tr('settings:taxes.hasEnd')}
+                description={tr('settings:taxes.hasEndHint')}
+                value={!!effectiveTo}
+                onValueChange={(on) => setEffectiveTo(on ? (effectiveFrom > today() ? effectiveFrom : today()) : undefined)}
+              />
+              {effectiveTo ? (
+                <DateField label={tr('settings:taxes.validTill')} value={effectiveTo} onChange={setEffectiveTo} minimumDate={new Date(`${effectiveFrom}T00:00:00`)} hint={tr('settings:taxes.validTillHint')} />
+              ) : null}
+            </>
+          ) : null}
           <TextField label={tr('settings:taxes.description')} value={description} onChangeText={setDescription} placeholder={tr('settings:taxes.descriptionPlaceholder')} multiline />
         </View>
       </Sheet>

@@ -136,7 +136,7 @@ describe('payments', () => {
       { id: 'fx_1', companyId: m.companyId, fromCurrency: 'USD', toCurrency: 'INR', rate: '82.50000000', effectiveFrom: '2026-08-01' },
       { id: 'fx_2', companyId: m.companyId, fromCurrency: 'USD', toCurrency: 'INR', rate: '83.00000000', effectiveFrom: '2026-09-15' },
     ]);
-    const inv = await issueInvoice(t, m, { partyId: usd.body.id, currency: 'USD', lines: [{ name: 'Consulting', quantity: 1, unit: 'NOS', unitPrice: { minor: 10000, currency: 'USD' }, taxCategoryId: m.gst(18) }] });
+    const inv = await issueInvoice(t, m, { partyId: usd.body.id, currency: 'USD', lines: [{ name: 'Consulting', hsnCode: '998311', quantity: 1, unit: 'NOS', unitPrice: { minor: 10000, currency: 'USD' }, taxCategoryId: m.gst(18) }] });
     // An export: IGST (no LUT on file), no rounding for USD, and a base total at 83.
     expect(inv.totals).toMatchObject({ grandTotal: { minor: 11800, currency: 'USD' }, grandTotalBase: { minor: 979400, currency: 'INR' } });
 

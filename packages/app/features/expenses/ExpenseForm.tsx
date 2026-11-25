@@ -24,10 +24,10 @@ import { useLeaveGuard } from '../../components/useLeaveGuard';
 import { Expense, ItcEligibility, PaymentMethod, RecurrenceFrequency } from '@esmart/core/types';
 import { PAYMENT_METHODS } from '@esmart/core/data/masters';
 import { accountIdAfterMethodChange, accountsForMethod, defaultAccountFor } from '@esmart/core/domain/paymentAccounts';
-import { rateOf, taxAvailableOn, taxCategoriesOn } from '@esmart/core/domain/taxEngine';
+import { rateOf, taxCategoriesOn } from '@esmart/core/domain/taxEngine';
 import { paymentMethodLabel } from '@esmart/core/labels';
 import { formatMoney, formatPercent } from '@esmart/core/lib/format';
-import { addDaysISO, formatDate, today } from '@esmart/core/lib/date';
+import { addDaysISO, today } from '@esmart/core/lib/date';
 import { fromMajor, money, subtract, toMajor, zero , inclusiveTax, percent } from '@esmart/core/lib/money';
 import { uid } from '@esmart/core/lib/id';
 import { uploadAttachment } from '../../remote/attachments';
@@ -50,6 +50,7 @@ import { useGoBack } from '../../navigation/useGoBack';
 import { validGstin } from '@esmart/core/lib/validators';
 import { inactiveChoice } from '../payments/accountChoice';
 import { AddPartyButton, useAddParty } from '../contacts/AddPartyButton';
+import { taxChoice, taxProblem } from '../settings/taxChoice';
 
 /** The desktop side column (summary, receipt). */
 const SIDE_WIDTH = 360;
@@ -183,7 +184,7 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
   const taxRate = rateOf(taxCategories, taxCategoryId ?? undefined, date);
   // A tax that starts later can't be charged on an expense dated before it (the server refuses it too).
   const pickedTax = taxCategories.find((c) => c.id === taxCategoryId);
-  const taxBeforeStart = pickedTax && !taxAvailableOn(pickedTax, date) ? tr('sales:editor.taxBeforeStart', { name: pickedTax.name, date: formatDate(pickedTax.effectiveFrom) }) : undefined;
+  const taxBeforeStart = taxProblem(tr, pickedTax, date);
   // Under reverse charge the supplier's price has no GST in it: the business pays that tax to the government.
   const inclusive = taxInclusive && !reverseCharge;
   const taxAmount = taxRate > 0 ? (inclusive ? inclusiveTax(amount, taxRate) : percent(amount, taxRate)) : zero(baseCurrency);
@@ -743,10 +744,8 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
           visible={taxOpen}
           onClose={() => setTaxOpen(false)}
           title={tr('purchases:form.tax')}
-          // Only the taxes in force on the expense's date, each at its rate then.
-          options={taxCategoriesOn(taxCategories, date)
-            .filter((c) => taxAvailableOn(c, date))
-            .map((c) => ({ value: c.id, label: c.name, trailing: formatPercent(c.rate) }))}
+          // Every tax at its rate on the expense's date; one that can't be charged then is greyed, saying why.
+          options={taxCategoriesOn(taxCategories, date).map((c) => ({ value: c.id, label: c.name, trailing: formatPercent(c.rate), ...taxChoice(tr, c, date, { keepId: expense?.taxCategoryId }) }))}
           value={taxCategoryId}
           onSelect={setTaxCategoryId}
           searchable={false}
