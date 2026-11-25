@@ -29,7 +29,7 @@ import {
   requiresCancelRemark,
   validateEInvoice,
 } from '@esmart/core/domain/eInvoice';
-import { nowISO } from '@esmart/core/lib/date';
+import { dayFirst, nowISO } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
 import { E_INVOICE_STATUS_META } from './complianceMeta';
 import { portalToast } from './portalToast';
@@ -285,7 +285,7 @@ export function EInvoiceSheet({
               </View>
               <View style={{ gap: 3 }}>
                 <Text variant="caption" tone="muted">{tr('compliance:einv.ackDate')}</Text>
-                <Text variant="small">{doc.compliance?.ackDate}</Text>
+                <Text variant="small">{dayFirst(doc.compliance?.ackDate ?? '')}</Text>
               </View>
             </View>
             <Button
