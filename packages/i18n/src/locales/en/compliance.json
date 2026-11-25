@@ -1,8 +1,8 @@
 {
   "hub": {
     "stage": {
-      "toReport": "Not reported",
-      "reported": "Reported",
+      "toReport": "Not generated",
+      "reported": "Generated",
       "toRaise": "Not raised",
       "raised": "Raised"
     },
