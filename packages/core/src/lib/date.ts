@@ -66,6 +66,18 @@ export function today(): string {
   return toISODate(new Date());
 }
 
+// Year, month and day in figures, split by '-' or '/' the same both times; not inside a longer run of them.
+const FIGURES_DATE = /(^|[^\d/-])(\d{4})([-/])(\d{2})\3(\d{2})(?!\d)/g;
+
+/**
+ * Dates written in figures read day first, wherever they sit in the text:
+ * `2026-11-25` → `25-11-2026`, `2026/11/25` → `25/11/2026`. A time after one stays;
+ * dates with the month in words, and anything else, are left as they are.
+ */
+export function dayFirst(text: string): string {
+  return text.replace(FIGURES_DATE, (_, before: string, y: string, sep: string, m: string, d: string) => `${before}${d}${sep}${m}${sep}${y}`);
+}
+
 export function formatDate(iso: string, pattern = 'dd MMM yyyy'): string {
   if (!iso) return '—';
   try {
