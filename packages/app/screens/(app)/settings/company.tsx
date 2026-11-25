@@ -223,7 +223,7 @@ function CompanySettingsForm() {
   const pinField = (
     <TextField label="PIN" value={postalCode} onChangeText={setPostalCode} keyboardType="number-pad" maxLength={company?.country === 'IN' ? 6 : undefined} error={shownError(postalCode, live.postalCode, errors.postalCode)} containerStyle={half} />
   );
-  const accountNameField = <TextField key="accName" label={tr('settings:company.accountName')} value={accountName} onChangeText={setAccountName} icon="account-outline" placeholder={name} />;
+  const accountNameField = <TextField key="accName" label={tr('settings:company.accountName')} value={accountName} onChangeText={setAccountName} icon="account-outline" placeholder="Elixir Books" />;
   const bankNameField = <TextField key="bank" label={tr('settings:company.bankName')} value={bankName} onChangeText={setBankName} icon="bank-outline" containerStyle={half} />;
   const branchField = <TextField key="branch" label={tr('settings:company.branchName')} value={bankBranch} onChangeText={setBankBranch} containerStyle={half} />;
   const accountNumberField = (
