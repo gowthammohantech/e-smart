@@ -5095,6 +5095,11 @@ export interface components {
             lockedThroughDate?: string | null;
             /**
              * Format: date
+             * @description The last day of the latest month whose GSTR-1 is submitted or filed: a sale dated on or before it is refused on issue (409 RETURN_FILED), so the apps keep the date after it. Absent when none is.
+             */
+            readonly gstr1FiledThrough?: string;
+            /**
+             * Format: date
              * @description Perpetual stock from this day, which must start a financial year after any closed period: tracked goods post to Stock in hand at a moving weighted-average cost as they come in and go out, and the goods sold to Cost of goods sold. Null keeps the books periodic (closing stock valued from the stock ledger). Only an owner can change it; `422 PERPETUAL_NOT_YEAR_START`, `409 PERIOD_LOCKED`.
              */
             perpetualStockFrom?: string | null;
