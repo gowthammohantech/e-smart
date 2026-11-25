@@ -162,7 +162,7 @@ export function eInvoiceLayout(view: DocView, copyLabel: string): string {
     .join('<div class="gap"></div>');
 
   const page = `
-  <div class="copy-label">${esc(copyLabel || 'ORIGINAL')}</div>
+  ${copyLabel ? `<div class="copy-label">${esc(copyLabel)}</div>` : ''}
   ${cancelledStrip(doc)}
   <div class="sheet">
     <div class="titlebar">
