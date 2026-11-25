@@ -796,6 +796,7 @@
     "port": "Port code",
     "number": "Shipping bill no.",
     "date": "Shipping bill date",
-    "portInvalid": "A port code is 6 letters or digits, like INMAA1"
+    "portInvalid": "A port code is 6 letters or digits, like INMAA1",
+    "portRequired": "Port code is required on an export invoice with goods. An invoice of services alone needs none."
   }
 }

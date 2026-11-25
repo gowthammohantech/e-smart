@@ -649,7 +649,17 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   // IGST paid at customs goes on the bill of entry: only on an import bill that charges none itself.
   const showBillOfEntry = kind === 'purchaseBill' && imported && !withTax;
   // The shipping bill goes on an invoice to a buyer abroad (an export), with or without tax.
+  // Fields marked wrong only once a save is tried (custom fields, the export port code).
+  const [showFieldErrors, setShowFieldErrors] = useState(false);
   const showShippingBill = kind === 'invoice' && imported;
+  // Goods on an export invoice leave through a port: its code is then required. Services alone need none.
+  const exportGoods =
+    showShippingBill &&
+    draft.lines.some((l) => {
+      const item = l.itemId ? items.find((i) => i.id === l.itemId) : undefined;
+      return item ? item.type !== 'service' : !(l.hsnCode ?? '').trim().startsWith('99');
+    });
+  const portMissing = exportGoods && !sb.portCode;
   // Three fields, not one fragment: a desktop row (FieldRow) gives each its own column, side by side.
   const shippingBillFields = [
       <TextField
@@ -661,7 +671,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
         autoCapitalize="characters"
         placeholder="INMAA1"
         icon="ferry"
-        error={portCodeError}
+        required={exportGoods}
+        error={portCodeError ?? (showFieldErrors && portMissing ? tr('sales:shippingBill.portRequired') : undefined)}
       />,
       <TextField key="number" label={tr('sales:shippingBill.number')} value={sb.number ?? ''} onChangeText={(number) => patchSb({ number })} maxLength={20} icon="file-certificate-outline" />,
       <DateField key="date" label={tr('sales:shippingBill.date')} value={sb.date ?? ''} onChange={(date) => patchSb({ date })} minimumDate={parseDate(draft.date)} />,
@@ -728,7 +739,6 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   // The company's own fields on a document, checked as the server will; shown once a save is tried.
   const documentFields = useCustomFields('document');
   const fieldErrors = customFieldErrors(documentFields, 'document', draft.customFields, tr);
-  const [showFieldErrors, setShowFieldErrors] = useState(false);
   const fieldProblem = Object.values(fieldErrors)[0];
 
   /** Lines that cannot go on a finalised tax document yet. */
@@ -738,6 +748,10 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
     if (fieldProblem) {
       setShowFieldErrors(true);
       return fieldProblem;
+    }
+    if (portMissing) {
+      setShowFieldErrors(true);
+      return tr('sales:shippingBill.portRequired');
     }
     const unnamed = draft.lines.find((l) => !l.name.trim());
     if (unnamed) return tr('sales:line.nameRequired');
