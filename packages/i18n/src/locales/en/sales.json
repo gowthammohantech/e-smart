@@ -43,7 +43,11 @@
     "currency": "Currency",
     "rateStored": "The rate is stored on the document so it stays reproducible.",
     "addItem": "Add item",
-    "itemTab": { "all": "All", "products": "Products", "services": "Services" },
+    "itemTab": {
+      "all": "All",
+      "products": "Products",
+      "services": "Services"
+    },
     "addItems_one": "Add {{count}} item",
     "addItems_other": "Add {{count}} items",
     "noLines": "No lines yet",
@@ -161,7 +165,9 @@
       "billWithoutTaxHint": "The SEZ supplier charged no tax on this bill.",
       "importWithTaxHint": "IGST is charged on this bill's lines, as for imported services. Nothing goes on a bill of entry.",
       "importWithoutTaxHint": "No GST on the supplier's bill: IGST on imported goods is paid at customs — record it on the bill of entry below.",
-      "fromSource": "Follows the document it was made from, so it reverses exactly what was charged."
+      "fromSource": "Follows the document it was made from, so it reverses exactly what was charged.",
+      "lutUntil": "Exported under your LUT {{lut}}: no tax on any line until {{date}} (zero-rated, no IGST). The e-invoice goes as EXPWOP.",
+      "lutOpen": "Exported under your LUT {{lut}}: no tax on any line (zero-rated, no IGST). The e-invoice goes as EXPWOP."
     },
     "saveChanges": "Save changes",
     "finaliseAction": {

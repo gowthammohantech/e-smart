@@ -625,7 +625,12 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   // source (the server too).
   const crossBorder = docTaxContext.crossBorder;
   const crossBorderLocked = !!crossBorder && !!draft.sourceDocumentId && (kind === 'salesReturn' || kind === 'purchaseReturn' || isNote);
-  const crossBorderTax: CrossBorderTax = draft.crossBorderTax ?? (crossBorder ? defaultCrossBorderTax(company, draft.date, isPurchase, crossBorder) : 'withTax');
+  // An export sale while the business's LUT is in force goes without tax, zero-rated: the With tax choice
+  // isn't offered, and the LUT and its date are named instead. Exports only; a document made from another keeps its own.
+  const lutExport = crossBorder === 'export' && !isPurchase && !crossBorderLocked && lutActive(company, draft.date);
+  const crossBorderTax: CrossBorderTax = lutExport ? 'withoutTax' : (draft.crossBorderTax ?? (crossBorder ? defaultCrossBorderTax(company, draft.date, isPurchase, crossBorder) : 'withTax'));
+  // One saved With tax before the LUT (or picked before its date moved inside it) goes without, so its lines and totals do too.
+  if (lutExport && draft.crossBorderTax === 'withTax') patch({ crossBorderTax: 'withoutTax' });
   const withTax = crossBorderTax === 'withTax';
   const crossBorderHint = crossBorderLocked
     ? 'sales:editor.crossBorder.fromSource'
@@ -1193,18 +1198,29 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
         <Text variant="small" tone="muted" weight="500">
           {tr(crossBorder === 'export' ? 'sales:editor.crossBorder.labelExport' : crossBorder === 'import' ? 'sales:editor.crossBorder.labelImport' : 'sales:editor.crossBorder.labelSez')}
         </Text>
-        <Segmented
-          options={[
-            { value: 'withTax', label: tr('sales:editor.crossBorder.withTax') },
-            { value: 'withoutTax', label: tr('sales:editor.crossBorder.withoutTax') },
-          ]}
-          value={crossBorderTax}
-          onChange={(v) => patch({ crossBorderTax: v as CrossBorderTax })}
-          disabled={crossBorderLocked}
-        />
-        <Text variant="caption" tone="muted">
-          {tr(crossBorderHint)}
-        </Text>
+        {lutExport ? (
+          // Under the LUT: no choice to make, said plainly with the LUT and the day it runs to.
+          <Text variant="small">
+            {company?.taxRegistration?.lutValidTill
+              ? tr('sales:editor.crossBorder.lutUntil', { lut: company.taxRegistration.lutNumber, date: formatDate(company.taxRegistration.lutValidTill) })
+              : tr('sales:editor.crossBorder.lutOpen', { lut: company?.taxRegistration?.lutNumber })}
+          </Text>
+        ) : (
+          <>
+            <Segmented
+              options={[
+                { value: 'withTax', label: tr('sales:editor.crossBorder.withTax') },
+                { value: 'withoutTax', label: tr('sales:editor.crossBorder.withoutTax') },
+              ]}
+              value={crossBorderTax}
+              onChange={(v) => patch({ crossBorderTax: v as CrossBorderTax })}
+              disabled={crossBorderLocked}
+            />
+            <Text variant="caption" tone="muted">
+              {tr(crossBorderHint)}
+            </Text>
+          </>
+        )}
       </View>
     ) : null;
     // Ship to: off ships to the buyer (their shipping address, else billing); on names a consignee.
