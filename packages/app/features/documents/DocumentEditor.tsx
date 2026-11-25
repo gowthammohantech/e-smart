@@ -454,7 +454,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   // The pickers search the server, so a long customer or item list needn't be on the device.
   const [partyQuery, setPartyQuery] = useState('');
   const [itemQuery, setItemQuery] = useState('');
-  const partySearch = usePartySearch(isPurchase ? 'supplier' : 'customer', useDebounced(partyQuery), partyOpen);
+  // A new document picks from active parties only; an existing one keeps showing them all.
+  const partySearch = usePartySearch(isPurchase ? 'supplier' : 'customer', useDebounced(partyQuery), partyOpen, existing ? undefined : 'active');
   const itemSearch = useItemSearch(useDebounced(itemQuery), itemOpen && !(isReturn && draft.sourceDocumentId));
   const partyOptions = partySearch.data ?? [];
   // Looked up in the store, where the search keeps what it found, for stock and opening-date checks.
