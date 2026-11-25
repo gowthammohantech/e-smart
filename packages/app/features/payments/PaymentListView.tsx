@@ -137,7 +137,7 @@ export function PaymentListView({ direction, advance = false }: { direction: Pay
         }
       >
         <View style={desktop ? { width: 300 } : undefined}>
-          <SearchBar compact value={query} onChangeText={setQuery} placeholder={tr(advance ? 'sales:list.searchAdvances' : 'sales:list.search')} />
+          <SearchBar compact value={query} onChangeText={setQuery} placeholder={tr(advance ? 'sales:list.searchAdvances' : direction === 'received' ? 'sales:list.searchReceipts' : 'sales:list.search')} />
         </View>
         {desktop ? (
           <FilterMenu
@@ -274,7 +274,7 @@ export function PaymentListView({ direction, advance = false }: { direction: Pay
               <Button title={tr('common:table.exportCsv')} icon="file-export-outline" variant="ghost" size="sm" onPress={() => void exportChosen(keys)} />
             )}
             rowActions={(p) => [{ key: 'open', label: tr('common:table.open'), icon: 'eye-outline', onPress: () => router.push(`/(app)/payments/${p.id}`) }]}
-            empty={<EmptyState illustration="no-payments" icon="cash-remove" title={tr(advance ? 'sales:list.noneAdvances' : 'sales:list.none')} message={noneAtAll ? tr(advance ? 'sales:list.emptyBodyAdvances' : 'sales:list.emptyBody') : tr('common:filters.noMatch')} compact />}
+            empty={<EmptyState illustration="no-payments" icon="cash-remove" title={tr(advance ? 'sales:list.noneAdvances' : direction === 'received' ? 'sales:list.noneReceipts' : 'sales:list.none')} message={noneAtAll ? tr(advance ? 'sales:list.emptyBodyAdvances' : 'sales:list.emptyBody') : tr('common:filters.noMatch')} compact />}
           />
         </View>
       ) : (
@@ -303,7 +303,7 @@ export function PaymentListView({ direction, advance = false }: { direction: Pay
             <EmptyState
               illustration="no-payments"
               icon="cash-remove"
-              title={tr(advance ? 'sales:list.noneAdvances' : 'sales:list.none')}
+              title={tr(advance ? 'sales:list.noneAdvances' : direction === 'received' ? 'sales:list.noneReceipts' : 'sales:list.none')}
               message={noneAtAll ? tr(advance ? 'sales:list.emptyBodyAdvances' : 'sales:list.emptyBody') : tr('common:filters.noMatch')}
               actionLabel={noneAtAll ? tr(advance ? 'sales:list.recordAdvance' : 'common:action.recordPayment') : undefined}
               onAction={noneAtAll ? () => router.push(newRoute) : undefined}

@@ -15,7 +15,7 @@
     "apply": "Apply",
     "reset": "Reset",
     "confirm": "Confirm",
-    "recordPayment": "Record payment",
+    "recordPayment": "Record receipt",
     "seeAll": "See all",
     "saveAndAddAnother": "Save & add another",
     "saveAndAddAnotherShortcut": "Save, then start the next one ({{keys}})",
@@ -211,7 +211,7 @@
   "quickAction": {
     "newInvoice": "New invoice",
     "newQuote": "New quote",
-    "receivePayment": "Receive payment",
+    "receivePayment": "Record receipt",
     "addExpense": "Add expense",
     "addCustomer": "Add customer",
     "addItem": "Add item"

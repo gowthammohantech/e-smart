@@ -60,7 +60,7 @@
     "thisMonth": "This month",
     "sales": "Invoiced (with GST)",
     "collected": "Collected",
-    "paymentsReceived": "Payments received",
+    "paymentsReceived": "Receipts",
     "expenses": "Expenses",
     "net": "Net",
     "netCaption": "Sales less expenses",

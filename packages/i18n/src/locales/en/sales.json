@@ -278,10 +278,11 @@
       "applied": "Applied",
       "noCreditNotes": "No credit notes or returns against this yet",
       "noDebitNotes": "No debit notes against this yet",
-      "noPayments": "No payments recorded on this yet"
+      "noPayments": "No payments recorded on this yet",
+      "noReceipts": "No receipts recorded on this yet"
     },
     "settlement": {
-      "customerPayments": "Customer payments",
+      "customerPayments": "Customer receipts",
       "supplierPayments": "Supplier payments",
       "creditNotes": "Credit notes"
     },
@@ -324,7 +325,8 @@
       "consignee": "Consignee named on this document",
       "shipping": "The customer’s shipping address",
       "billing": "The customer’s billing address (no shipping address on file)"
-    }
+    },
+    "receipts": "Receipts"
   },
   "line": {
     "editLine": "Edit line",
@@ -474,7 +476,7 @@
     "tdsSection": "TDS section",
     "tdsSectionPick": "Pick the section",
     "tdsSectionHint": "The TDS kept back here is reported under this section in 26Q and TDS payable.",
-    "received": "Payment received",
+    "received": "Receipt",
     "totalApplied": "Total applied",
     "advanceReceipt": "Advance receipt",
     "advanceTds": "TDS deducted by the customer",
@@ -549,7 +551,9 @@
     "gst": "GST",
     "toAdjustHeader": "To adjust",
     "toAdjust": "{{amount}} to adjust",
-    "adjusted": "Adjusted"
+    "adjusted": "Adjusted",
+    "searchReceipts": "Search receipts",
+    "noneReceipts": "No receipts"
   },
   "print": {
     "print": "Print",

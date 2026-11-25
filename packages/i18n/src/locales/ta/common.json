@@ -15,7 +15,7 @@
     "apply": "பயன்படுத்து",
     "reset": "மீட்டமை",
     "confirm": "உறுதிப்படுத்து",
-    "recordPayment": "கட்டணத்தைப் பதிவு செய்",
+    "recordPayment": "வரவைப் பதிவு செய்",
     "seeAll": "அனைத்தையும் பார்",
     "saveAndAddAnother": "சேமித்து இன்னொன்றைச் சேர்",
     "saveAndAddAnotherShortcut": "சேமித்து, அடுத்ததைத் தொடங்கு ({{keys}})",
@@ -211,7 +211,7 @@
   "quickAction": {
     "newInvoice": "புதிய விலைப்பட்டியல்",
     "newQuote": "புதிய விலைப்புள்ளி",
-    "receivePayment": "கட்டணம் பெறு",
+    "receivePayment": "வரவைப் பதிவு செய்",
     "addExpense": "செலவு சேர்",
     "addCustomer": "வாடிக்கையாளர் சேர்",
     "addItem": "பொருள் சேர்"

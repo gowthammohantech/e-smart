@@ -339,7 +339,7 @@ export function PartyDetail({ party }: { party: Party }) {
         {partyPayments.length === 0 && docGroupLoading(payments) ? (
           <CardRowsSkeleton kind="list" rows={4} />
         ) : partyPayments.length === 0 ? (
-          <EmptyState illustration="no-payments" icon="cash-remove" title={tr('contacts:detail.noPayments')} compact />
+          <EmptyState illustration="no-payments" icon="cash-remove" title={tr(isCustomer ? 'contacts:detail.noReceipts' : 'contacts:detail.noPayments')} compact />
         ) : (
           partyPayments.map((p, i) => (
             <Pressable
