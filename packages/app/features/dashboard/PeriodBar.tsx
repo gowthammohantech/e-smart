@@ -24,7 +24,7 @@ const GRAINS: { value: DashboardPeriod['grain']; key: 'day' | 'weekGrain' | 'mon
  * bucketed, and whether to compare with the period before. One setting for every tab, kept between
  * visits.
  */
-export function PeriodBar({ showGrain = true }: { showGrain?: boolean }) {
+export function PeriodBar({ showGrain = true, showCompare = true }: { showGrain?: boolean; showCompare?: boolean }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['reports']);
   const period = useUiStore((s) => s.dashboardPeriod);
@@ -104,7 +104,9 @@ export function PeriodBar({ showGrain = true }: { showGrain?: boolean }) {
             })}
           </View>
         ) : null}
-        {chip('compare', period.compare ? tr('reports:dash.period.compareOn') : tr('reports:dash.period.compare'), period.compare, () => setPeriod({ ...period, compare: !period.compare }), 'swap-vertical')}
+        {showCompare
+          ? chip('compare', period.compare ? tr('reports:dash.period.compareOn') : tr('reports:dash.period.compare'), period.compare, () => setPeriod({ ...period, compare: !period.compare }), 'swap-vertical')
+          : null}
       </View>
 
       <Sheet

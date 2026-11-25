@@ -63,7 +63,9 @@ export default function Home() {
   const exportCsv = useCardExport();
   // Every figure comes from the server in one call, already in base currency, for the branch and
   // period the header and period bar name.
-  const scope = useDashboardScope();
+  // Home doesn't compare with the period before, whatever the other tabs have set.
+  const shared = useDashboardScope();
+  const scope = { ...shared, period: { ...shared.period, compare: false } };
   const query = useHomeHub(scope);
   const hub = query.data;
 
@@ -272,7 +274,7 @@ export default function Home() {
           </View>
         )}
 
-        <PeriodBar />
+        <PeriodBar showCompare={false} />
 
         <SectionHeader title={title} />
         <StatGrid>
