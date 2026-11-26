@@ -44,7 +44,7 @@ export function countryName(code?: string): string {
 }
 
 export function stateName(code?: string): string {
-  if (code === EWB_OTHER_COUNTRY_CODE) return 'Other Country';
+  if (code === EWB_OTHER_COUNTRY_CODE) return 'Other';
   return INDIAN_STATES.find((s) => s.code === code)?.name ?? '—';
 }
 
