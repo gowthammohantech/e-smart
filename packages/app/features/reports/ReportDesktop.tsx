@@ -129,7 +129,7 @@ export function ReportDesktop({ report, data }: { report: string; data: ReportDa
     const columns: Column<Doc>[] = [
       {
         key: 'number',
-        header: tr('common:table.number'),
+        header: isSales ? tr('reports:column.invoiceNo') : tr('common:table.number'),
         flex: 1.4,
         render: (r) => {
           const count = isNote(r) ? 0 : notesOf(r).length;

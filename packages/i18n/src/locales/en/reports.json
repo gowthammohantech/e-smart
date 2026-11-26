@@ -369,7 +369,8 @@
     "tds": "TDS",
     "tdsBase": "Amount taxed",
     "documents": "Bills",
-    "cess": "Cess"
+    "cess": "Cess",
+    "invoiceNo": "Invoice No"
   },
   "cell": {
     "days_one": "{{count}} day",

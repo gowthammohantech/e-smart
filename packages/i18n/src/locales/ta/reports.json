@@ -369,7 +369,8 @@
     "tds": "TDS",
     "tdsBase": "வரிக்குட்பட்ட தொகை",
     "documents": "பில்கள்",
-    "cess": "செஸ்"
+    "cess": "செஸ்",
+    "invoiceNo": "விலைப்பட்டியல் எண்"
   },
   "cell": {
     "days_one": "{{count}} நாள்",

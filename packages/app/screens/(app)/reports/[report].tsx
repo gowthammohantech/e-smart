@@ -233,7 +233,7 @@ export default function Report() {
     exportRows = () =>
       reportTable(
         [
-          tr('common:table.number'),
+          isSales ? tr('reports:column.invoiceNo') : tr('common:table.number'),
           tr('common:table.type'),
           tr('common:table.date'),
           isSales ? tr('common:table.customer') : tr('common:table.supplier'),
