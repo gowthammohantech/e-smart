@@ -337,11 +337,6 @@ export function LineGrid({
                     <Text variant="micro" tone="muted" numberOfLines={1} style={{ fontVariant: ['tabular-nums'] }}>
                       {tr('sales:line.plusCess', { cess: formatPercent(shownCessRate(line)) })}
                     </Text>
-                  ) : line.gst?.followsHighestRate ? (
-                    // Says why the rate can't be picked: it is the document's highest.
-                    <Text variant="micro" tone="muted" numberOfLines={1}>
-                      {tr('sales:line.highestShort')}
-                    </Text>
                   ) : null}
                 </View>
                 {line.taxInclusive && !zeroRated ? (
