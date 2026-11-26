@@ -29,6 +29,7 @@ import { useSaveShortcut } from '../../../components/useSaveShortcut';
 import { SheetActions } from '../../../features/company/SheetActions';
 import { useServerSave } from '../../../components/useServerSave';
 import { validTaxRate } from '@esmart/core/lib/validators';
+import { useDirty } from '../../../components/useDirty';
 
 export default function TaxSettings() {
   const t = useTheme();
@@ -64,6 +65,10 @@ export default function TaxSettings() {
 
   const regime = company?.taxRegistration?.regime ?? 'NONE';
 
+  // An existing rate is saved only once something on it has changed; a new one is checked on Save.
+  const changed = useDirty([name, rate, effectiveFrom, description, effectiveTo, active], editing);
+  const canSave = !editing?.id || changed;
+
   const open = (c?: TaxCategory) => {
     setEditing(c ?? ({ id: '', companyId: company.id, name: '', rate: 0, type: regime === 'VAT' ? 'VAT' : 'GST', effectiveFrom: today() } as TaxCategory));
     setName(c?.name ?? '');
@@ -79,7 +84,7 @@ export default function TaxSettings() {
   const usageOf = (id: string) => usage?.taxCategoryUse[id] ?? 0;
 
   const save = async () => {
-    if (!editing) return;
+    if (!editing || !canSave) return;
     if (!name.trim()) {
       setNameError(tr('errors:validation.required', { field: tr('settings:taxes.name') }));
       return;
@@ -108,7 +113,7 @@ export default function TaxSettings() {
   };
 
   // Ctrl+S (⌘+S) does what Save does, while the form is open.
-  useSaveShortcut(save, !!editing);
+  useSaveShortcut(save, !!editing && canSave);
 
   return (
     <View style={{ flex: 1 }}>
@@ -257,7 +262,8 @@ export default function TaxSettings() {
             saveLabel={tr('settings:taxes.save')}
             onSave={save}
             saving={saving}
-                        deleteLabel={tr('settings:taxes.delete')}
+            saveDisabled={!canSave}
+            deleteLabel={tr('settings:taxes.delete')}
             onDelete={
               editing?.id
                 ? () => {

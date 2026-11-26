@@ -50,13 +50,20 @@ function AiUsageScreenBody() {
   const badBudget =
     capped && (!Number.isFinite(budgetValue) || (budgetValue ?? 0) < 0);
   const desktop = useIsDesktop();
-  const save = () =>
-    serverSave(
+  // Saved only once the budget differs from the stored one (or from what this screen last saved, while sync brings it back).
+  const [lastSaved, setLastSaved] = useState<number | null | undefined>(undefined);
+  const changed = budgetValue !== (company.aiMonthlyLimit ?? null) && budgetValue !== lastSaved;
+  const save = async () => {
+    if (!changed) return;
+    const res = await serverSave(
       () => saveCompany({ ...company, aiMonthlyLimit: budgetValue }),
       tr("settings:aiUsage.saved"),
       { icon: "robot-outline" },
-    ).then(() => usage.refetch());
-  useSaveShortcut(() => void save(), owner && !badBudget && !saving);
+    );
+    if (res) setLastSaved(budgetValue);
+    await usage.refetch();
+  };
+  useSaveShortcut(() => void save(), owner && !badBudget && !saving && changed);
 
   return (
     <KeyboardAvoidingView
@@ -162,7 +169,7 @@ function AiUsageScreenBody() {
             shortcut="S"
             title={tr("settings:aiUsage.save")}
             loading={saving}
-            disabled={badBudget || saving}
+            disabled={badBudget || saving || !changed}
             onPress={() => void save()}
             fullWidth={!desktop}
           size={desktop ? undefined : 'lg'}

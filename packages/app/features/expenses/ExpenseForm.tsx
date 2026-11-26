@@ -224,8 +224,11 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
     setKeptIds([]);
   };
 
+  // A saved expense is saved again only once something on it has changed.
+  const canSave = amount.minor > 0 && (!expense || entered !== untouched);
+
   const save = async () => {
-    if (amount.minor <= 0) return;
+    if (!canSave) return;
     if (!categoryId || !categories.some((c) => c.id === categoryId)) {
       setCategoryError(tr('purchases:form.categoryRequired'));
       return;
@@ -323,7 +326,7 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
     if (expense) goBack(`/(app)/expenses/${expense.id}`);
     else router.replace(`/(app)/expenses/${id}`);
   };
-  useSaveShortcut(() => void save(), !saving && !uploading && amount.minor > 0);
+  useSaveShortcut(() => void save(), !saving && !uploading && canSave);
 
   // Every field is built once and placed twice: stacked in one column on a
   // phone, grouped into cards across two columns on a desktop browser.
@@ -635,11 +638,11 @@ export function ExpenseForm({ expense, initial }: { expense?: Expense; initial?:
         {desktop ? (
           <FormActions>
             <Button title={tr('common:action.cancel')} variant="ghost" onPress={() => goBack(expense ? `/(app)/expenses/${expense.id}` : '/(app)/expenses')} />
-            <Button shortcut="S" title={submitTitle} onPress={() => void save()} loading={saving || uploading} disabled={blocked || amount.minor <= 0 || !!liveGstin} />
+            <Button shortcut="S" title={submitTitle} onPress={() => void save()} loading={saving || uploading} disabled={blocked || !canSave || !!liveGstin} />
           </FormActions>
         ) : (
           <FormActions>
-            <Button shortcut="S" title={submitTitle} onPress={() => void save()} loading={saving || uploading} disabled={blocked || amount.minor <= 0 || !!liveGstin} fullWidth />
+            <Button shortcut="S" title={submitTitle} onPress={() => void save()} loading={saving || uploading} disabled={blocked || !canSave || !!liveGstin} fullWidth />
           </FormActions>
         )}
 

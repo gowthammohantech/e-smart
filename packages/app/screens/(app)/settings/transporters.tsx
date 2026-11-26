@@ -20,6 +20,7 @@ import { formatGstin, isValidTransporterId } from '@esmart/core/domain/gstin';
 import { shownError } from '@esmart/core/lib/validators';
 import { uid } from '@esmart/core/lib/id';
 import { useSaveShortcut } from '../../../components/useSaveShortcut';
+import { useDirty } from '../../../components/useDirty';
 import { useServerSave } from '../../../components/useServerSave';
 
 /** The transporter master, used for Part-B of an e-way bill. */
@@ -59,6 +60,9 @@ export default function TransportersSettings() {
   };
 
   const [sheetOpen, setSheetOpen] = useState(false);
+  // An existing transporter is saved only once something on it has changed; a new one is checked on Save.
+  const changed = useDirty([name, transporterId, phone.value], sheetOpen ? ownId : null);
+  const canSave = !editing || changed;
 
   // Checked as typed: the transporter ID and phone go red at once if wrong, and Save waits until they are right.
   const typedId = transporterId.trim().toUpperCase();
@@ -72,6 +76,7 @@ export default function TransportersSettings() {
   const livePhone = phone.error();
 
   const save = async () => {
+    if (!canSave) return;
     const id = transporterId.trim().toUpperCase();
     const badName = name.trim() ? undefined : tr('errors:validation.required', { field: tr('settings:transporters.name') });
     const badId = !isValidTransporterId(id)
@@ -102,7 +107,7 @@ export default function TransportersSettings() {
   };
 
   // Ctrl+S (⌘+S) does what Save does, while the form is open.
-  useSaveShortcut(save, sheetOpen);
+  useSaveShortcut(save, sheetOpen && canSave);
 
   return (
     <>
@@ -150,7 +155,7 @@ export default function TransportersSettings() {
             saveLabel={tr('settings:transporters.save')}
             onSave={save}
             saving={saving}
-            saveDisabled={!!liveId || !!livePhone}
+            saveDisabled={!!liveId || !!livePhone || !canSave}
             deleteLabel={tr('settings:transporters.delete')}
             onDelete={
               editing

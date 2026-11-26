@@ -30,6 +30,7 @@ import { useAppStore } from '../../../store/appStore';
 import { useActiveCompany, useBranches } from '../../../store/selectors';
 import { useDocumentPages, useDocumentRecord } from '../../../remote/queries';
 import { useSaveShortcut } from '../../../components/useSaveShortcut';
+import { canonicalJson } from '../../../components/useDirty';
 import { useLogoSrc } from '../../../remote/logoSrc';
 
 /** Colours that print well on white and read on a phone. */
@@ -94,8 +95,16 @@ function InvoiceDesignScreenBody() {
   const latest = record.data as unknown as (BusinessDocument & { party?: Party }) | undefined;
   const party = latest?.party;
   const previewLoading = latestPage.isLoading || (!!latestId && !latest && !record.isError);
-  const save = () => serverSave(() => saveCompany({ ...company, invoiceTemplate: tpl }), tr('settings:invoiceDesign.saved'), { icon: 'file-document-outline' });
-  useSaveShortcut(() => void save(), !saving);
+  // Saved only once the design differs from the one stored (or from what this screen last saved, while sync brings it back).
+  const tplKey = canonicalJson(tpl);
+  const [lastSaved, setLastSaved] = useState<string | null>(null);
+  const changed = tplKey !== canonicalJson(company.invoiceTemplate ?? {}) && tplKey !== lastSaved;
+  const save = async () => {
+    if (!changed) return;
+    const res = await serverSave(() => saveCompany({ ...company, invoiceTemplate: tpl }), tr('settings:invoiceDesign.saved'), { icon: 'file-document-outline' });
+    if (res) setLastSaved(tplKey);
+  };
+  useSaveShortcut(() => void save(), !saving && changed);
   const set = (p: Partial<InvoiceTemplate>) => setTpl((x) => ({ ...x, ...p }));
   const resolved = resolveTemplate(tpl);
   const layout = resolved.layout;
@@ -270,7 +279,7 @@ function InvoiceDesignScreenBody() {
       </ScrollView>
       {/* Saved from the bar under the form, as every settings screen with typed input is. */}
       <FormActions>
-        <Button shortcut="S" title={tr('settings:invoiceDesign.save')} onPress={() => void save()} loading={saving} disabled={saving} fullWidth={!desktop}
+        <Button shortcut="S" title={tr('settings:invoiceDesign.save')} onPress={() => void save()} loading={saving} disabled={saving || !changed} fullWidth={!desktop}
           size={desktop ? undefined : 'lg'} />
       </FormActions>
     </View>

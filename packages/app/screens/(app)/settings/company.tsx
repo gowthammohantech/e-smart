@@ -35,6 +35,7 @@ import { ArchiveSection } from '../../../features/company/ArchiveSection';
 import { SkeletonGroup, SkeletonText } from '@esmart/ui/components/Skeleton';
 import { inactiveChoice } from '../../../features/payments/accountChoice';
 import { useSavedErrors } from '../../../components/useSavedErrors';
+import { useDirty } from '../../../components/useDirty';
 
 
 /** A sample UPI ID for the field's placeholder: an address, the same in every language. */
@@ -173,7 +174,15 @@ function CompanySettingsForm() {
   };
   const invalid = hasErrors(live);
 
+  // Saved only once something on the profile has changed.
+  const changed = useDirty([
+    name, legalName, businessType, email, phone.value, website, line1, city, stateCode, postalCode, taxRegistered, taxId,
+    returnFrequency, fyMonth, allowNegativeStock, tan, bankName, accountName, accountNumber, ifsc, bankBranch, upiId, bookAccountId,
+    lutNumber, lutValidTill,
+  ]);
+
   const save = async () => {
+    if (!changed) return;
     const next: Errors<'name' | 'email' | 'phone' | 'taxId' | 'postalCode' | 'tan' | 'ifsc' | 'accountNumber' | 'upiId'> = {
       name: required(name, tr('errors:field.businessName')),
       ...live,
@@ -241,7 +250,7 @@ function CompanySettingsForm() {
     if (!res) return;
     goBack('/(app)/(tabs)/more');
   };
-  useSaveShortcut(() => void save(), !saving);
+  useSaveShortcut(() => void save(), !saving && changed);
 
   // Built once and placed per layout: desktop section cards or the phone's single column.
   const half = desktop ? undefined : { flex: 1 };
@@ -573,7 +582,7 @@ function CompanySettingsForm() {
       </ScrollView>
 
       <FormActions>
-        <Button shortcut="S" title={tr('settings:company.save')} onPress={() => void save()} loading={saving} disabled={blocked || invalid} fullWidth={!desktop} size={desktop ? undefined : 'lg'} />
+        <Button shortcut="S" title={tr('settings:company.save')} onPress={() => void save()} loading={saving} disabled={blocked || invalid || !changed} fullWidth={!desktop} size={desktop ? undefined : 'lg'} />
       </FormActions>
 
       <SelectSheet visible={typeOpen} onClose={() => setTypeOpen(false)} title={tr('settings:company.type')} options={BUSINESS_TYPES.map((b) => ({ value: b, label: tr(`onboarding:businessType.${b}` as 'onboarding:businessType.other') }))} value={businessType} onSelect={setBusinessType} />
