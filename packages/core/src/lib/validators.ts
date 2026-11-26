@@ -188,11 +188,12 @@ export function validIfsc(value: string | undefined): string | undefined {
 
 /**
  * What a field shows as it is typed. Filled in, what is wrong with it now (`live`), so the red goes
- * the moment it is put right; empty, what Save found (`saved`, e.g. that it is required), so a new
- * form does not open in red.
+ * the moment it is put right, and if it is well-formed, what the server refused it for (`saved`, e.g.
+ * "email already taken": `useSavedErrors` drops it as soon as the field changes); empty, what Save
+ * found (`saved`, e.g. that it is required), so a new form does not open in red.
  */
 export function shownError(value: string | undefined | null, live: string | undefined, saved: string | undefined): string | undefined {
-  return (value ?? '').trim() ? live : saved;
+  return (value ?? '').trim() ? (live ?? saved) : saved;
 }
 
 export function hasErrors<T extends string>(errors: Errors<T>): boolean {
