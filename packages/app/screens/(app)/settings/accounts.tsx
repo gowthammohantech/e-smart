@@ -27,6 +27,7 @@ import { uid } from '@esmart/core/lib/id';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { useSaveShortcut } from '../../../components/useSaveShortcut';
 import { SheetActions } from '../../../features/company/SheetActions';
+import { useDirty } from '../../../components/useDirty';
 import { paymentAccountFromForm } from '../../../features/settings/paymentAccountForm';
 import { useServerSave } from '../../../components/useServerSave';
 import { Skeleton, SkeletonGroup } from '@esmart/ui/components/Skeleton';
@@ -112,6 +113,13 @@ export default function AccountSettings() {
   // The business profile prints this account's details on invoices.
   const onInvoices = !!editing?.id && invoiceAccountId === editing.id;
 
+  // An existing account is saved only once something on it has changed; a new one is checked on Save.
+  const changed = useDirty(
+    [name, type, currency, accountNumber, holderName, bankName, branchName, ifsc, upiId, openingBalance, openingBalanceDate, isDefault, active],
+    editing,
+  );
+  const canSave = !editing?.id || changed;
+
   const open = (a?: PaymentAccount) => {
     setEditing(a ?? ({ id: '', companyId: company.id, name: '', type: 'bank', currency: baseCurrency, openingBalance: money(0, baseCurrency), isDefault: false } as PaymentAccount));
     setName(a?.name ?? '');
@@ -136,7 +144,7 @@ export default function AccountSettings() {
   };
 
   const save = async () => {
-    if (!editing || !name.trim()) return;
+    if (!editing || !name.trim() || !canSave) return;
     if (live.ifsc || live.upiId) return;
     const text = (v: string) => v.trim() || undefined;
     const account = {
@@ -167,7 +175,7 @@ export default function AccountSettings() {
   };
 
   // Ctrl+S (⌘+S) does what Save does, while the form is open.
-  useSaveShortcut(save, !!editing && !currencyOpen);
+  useSaveShortcut(save, !!editing && !currencyOpen && canSave);
 
   return (
     <View style={{ flex: 1 }}>
@@ -311,7 +319,7 @@ export default function AccountSettings() {
             saveLabel={tr('settings:accounts.save')}
             onSave={save}
             saving={saving}
-            saveDisabled={!name.trim() || !!live.ifsc || !!live.upiId}
+            saveDisabled={!name.trim() || !!live.ifsc || !!live.upiId || !canSave}
             deleteLabel={tr('settings:accounts.delete')}
             onDelete={
               // The default can't go until another account is made the default.

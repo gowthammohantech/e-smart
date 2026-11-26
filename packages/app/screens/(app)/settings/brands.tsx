@@ -18,6 +18,7 @@ import { DIALOG_WIDTH, SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/bre
 import { useAppStore } from '../../../store/appStore';
 import { useActiveCompany, useBrands } from '../../../store/selectors';
 import { SheetActions } from '../../../features/company/SheetActions';
+import { useDirty } from '../../../components/useDirty';
 import { useServerSave } from '../../../components/useServerSave';
 
 export default function BrandSettings() {
@@ -37,6 +38,10 @@ export default function BrandSettings() {
   const [name, setName] = useState('');
   // An empty name says so on the field, not by a Save that does nothing.
   const [nameError, setNameError] = useState<string | undefined>();
+
+  // An existing brand is saved only once its name has changed; a new one is checked on Save.
+  const changed = useDirty([name], editing);
+  const canSave = !editing?.id || changed;
 
   const open = (b?: Brand) => {
     setEditing(b ?? { id: '', companyId: company.id, name: '' });
@@ -83,7 +88,7 @@ export default function BrandSettings() {
           <SheetActions
             saveLabel={tr('settings:brands.save')}
             onSave={async () => {
-                if (!editing) return;
+                if (!editing || !canSave) return;
     if (!name.trim()) {
       setNameError(tr('errors:validation.required', { field: tr('settings:brands.name') }));
       return;
@@ -94,7 +99,8 @@ export default function BrandSettings() {
                 if (res) setEditing(null);
               }}
             saving={saving}
-                        deleteLabel={tr('settings:brands.delete')}
+            saveDisabled={!canSave}
+            deleteLabel={tr('settings:brands.delete')}
             onDelete={
               editing?.id
                 ? () => {

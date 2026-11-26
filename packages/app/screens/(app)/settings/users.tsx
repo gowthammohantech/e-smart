@@ -30,6 +30,7 @@ import { formatRelative } from '@esmart/core/lib/date';
 import { uid } from '@esmart/core/lib/id';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { useSaveShortcut } from '../../../components/useSaveShortcut';
+import { useDirty } from '../../../components/useDirty';
 import { useServerSave } from '../../../components/useServerSave';
 import { ApiError } from '@esmart/api-client';
 import { useSavedErrors } from '../../../components/useSavedErrors';
@@ -110,7 +111,12 @@ export default function UserSettings() {
   // The email is checked as typed: red at once if it is wrong, and the invite waits until it is right.
   const liveEmail = editing?.id ? undefined : validEmail(email);
 
+  // A member is saved only once their name or role has changed; a new invitation is checked on Save.
+  const changed = useDirty([name, role], editing);
+  const canSave = !editing?.id || changed;
+
   const save = async () => {
+    if (!canSave) return;
     const next: Errors<'name' | 'email'> = { name: required(name, tr('settings:users.name')), email: required(email, tr('settings:users.email')) ?? validEmail(email) };
     setErrors(next);
     if (hasErrors(next) || !editing) return;
@@ -170,7 +176,7 @@ export default function UserSettings() {
   }, [editing?.id]);
 
   // Ctrl+S (⌘+S) does what Save does, while the form is open.
-  useSaveShortcut(save, !!editing && !busy && !isGuest);
+  useSaveShortcut(save, !!editing && !busy && !isGuest && canSave);
 
   return (
     <View style={{ flex: 1 }}>
@@ -293,7 +299,7 @@ export default function UserSettings() {
                 style={desktop ? undefined : { flex: 2 }}
               />
             ) : null}
-            {isGuest ? null : <Button shortcut="S" title={editing?.id ? tr('common:action.save') : tr('settings:users.sendInvite')} onPress={save} loading={busy} disabled={!!liveEmail} style={desktop ? undefined : { flex: 2 }} />}
+            {isGuest ? null : <Button shortcut="S" title={editing?.id ? tr('common:action.save') : tr('settings:users.sendInvite')} onPress={save} loading={busy} disabled={!!liveEmail || !canSave} style={desktop ? undefined : { flex: 2 }} />}
           </View>
         }
       >

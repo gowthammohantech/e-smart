@@ -83,6 +83,7 @@ import { useDocumentRecord, useItemRecord, useItemSearch, useOpenDocuments, useP
 import { LoadingView } from '../../components/LoadingView';
 import { useDebounced } from '../../components/useDebounced';
 import { useSaveShortcut } from '../../components/useSaveShortcut';
+import { useDirty } from '../../components/useDirty';
 import { useLeaveGuard } from '../../components/useLeaveGuard';
 import { FROM_DOCUMENT, takeHandBack } from '../../navigation/handBack';
 import { tdsForDocument } from '../../store/tds';
@@ -366,6 +367,10 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
     initial: initialDraft ?? seed?.draft,
     tcsRate: kind === 'invoice' ? tcsRateOfDraft : kind === 'creditNote' || kind === 'salesReturn' ? tcsRateOfNote : undefined,
   });
+
+  // A saved document is saved again only once something on it has changed (the whole draft is compared, so no field is missed).
+  const draftChanged = useDirty([draft]);
+  const nothingToSave = !!documentId && !draftChanged;
 
   // Each category in force on the draft's date, at its rate then: a tax that starts later isn't offered.
   const taxCategories = useMemo(() => taxCategoriesOn(allTaxCategories, draft.date).filter((c) => taxAvailableOn(c, draft.date)), [allTaxCategories, draft.date]);
@@ -1012,7 +1017,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       if (!draft.partyId || draft.lines.length === 0 || confirmFinalize || creditWarning) return;
       // Not over another sheet (picking an item, editing a line…): finish that first.
       if (editingLine || itemOpen || partyOpen || currencyOpen || posOpen || branchOpen) return;
-      if (editingIssued) return void save(false);
+      if (editingIssued) return void (nothingToSave || save(false));
       setSendAfter(false);
       requestFinalize();
     };
@@ -1039,7 +1044,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   // Ctrl+S (⌘+S) saves the draft, as "Save draft" does; not over another sheet.
   useSaveShortcut(
     () => void save(false),
-    !saving && !!draft.partyId && !confirmFinalize && !creditWarning && !editingLine && !itemOpen && !partyOpen && !currencyOpen && !posOpen && !branchOpen,
+    !saving && !nothingToSave && !!draft.partyId && !confirmFinalize && !creditWarning && !editingLine && !itemOpen && !partyOpen && !currencyOpen && !posOpen && !branchOpen,
   );
 
   /* ---------------------------------------------------------------- */
@@ -1920,10 +1925,10 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
               options={{
                 headerRight: () => (
                   editingIssued ? (
-                    <Button shortcut="S" title={tr('sales:editor.saveChanges')} icon="content-save-outline" onPress={() => void save(false)} loading={saving} disabled={saveHeld || !draft.partyId || draft.lines.length === 0} />
+                    <Button shortcut="S" title={tr('sales:editor.saveChanges')} icon="content-save-outline" onPress={() => void save(false)} loading={saving} disabled={saveHeld || nothingToSave || !draft.partyId || draft.lines.length === 0} />
                   ) : (
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
-                    <Button shortcut="S" title={tr('sales:editor.saveDraft')} variant="ghost" onPress={() => void save(false)} loading={saving} disabled={saveHeld || !draft.partyId} />
+                    <Button shortcut="S" title={tr('sales:editor.saveDraft')} variant="ghost" onPress={() => void save(false)} loading={saving} disabled={saveHeld || nothingToSave || !draft.partyId} />
                     {canSend && !onSaved ? (
                       <Button
                         title={tr('sales:editor.saveAndSend')}
@@ -1992,7 +1997,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
             options={{
               headerRight:
                 step < STEPS.length - 1 && !editingIssued
-                  ? () => <Button title={tr('sales:editor.saveDraft')} variant="ghost" size="sm" onPress={() => void save(false)} loading={saving} disabled={saveHeld || !draft.partyId} />
+                  ? () => <Button title={tr('sales:editor.saveDraft')} variant="ghost" size="sm" onPress={() => void save(false)} loading={saving} disabled={saveHeld || nothingToSave || !draft.partyId} />
                   : undefined,
             }}
           />
@@ -2057,10 +2062,10 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
                 />
               ) : (
                 editingIssued ? (
-                  <Button shortcut="S" title={tr('sales:editor.saveChanges')} onPress={() => void save(false)} loading={saving} disabled={saveHeld} style={{ flex: 1 }} />
+                  <Button shortcut="S" title={tr('sales:editor.saveChanges')} onPress={() => void save(false)} loading={saving} disabled={saveHeld || nothingToSave} style={{ flex: 1 }} />
                 ) : (
                 <>
-                  <Button shortcut="S" title={tr('sales:editor.saveDraft')} variant="ghost" onPress={() => void save(false)} loading={saving} disabled={saveHeld} style={{ flex: 1 }} />
+                  <Button shortcut="S" title={tr('sales:editor.saveDraft')} variant="ghost" onPress={() => void save(false)} loading={saving} disabled={saveHeld || nothingToSave} style={{ flex: 1 }} />
                   <Button
                     title={finaliseLabel}
                     onPress={() => {

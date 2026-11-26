@@ -10,6 +10,7 @@ import { AmountField, FieldShell, focusFirstInvalid, PickerField, Segmented, Swi
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { useServerSave } from '../../components/useServerSave';
 import { useSaveShortcut } from '../../components/useSaveShortcut';
+import { useDirty } from '../../components/useDirty';
 import { useEnterToSave } from '../../components/useEnterToSave';
 import { Item, ItemType } from '@esmart/core/types';
 import { unitLabel, unitsFor } from '@esmart/core/data/masters';
@@ -107,6 +108,10 @@ function ItemFormFields({ item }: { item?: Item }) {
   // Only a new tracked item takes an opening stock, and so its date.
   const takesOpeningStock = !item && type === 'goods' && trackInventory && hasInventory;
 
+  // An existing item is saved only once something on it has changed; a new one is checked on Save.
+  const changed = useDirty([type, name, sku, description, unit, salePrice, purchasePrice, taxCategoryId, hsnCode, gst, barcode, trackInventory, openingStock, openingStockDate, reorderLevel, active, categoryId, brandId, customFields]);
+  const canSave = !item || changed;
+
   const category = taxCategories.find((c) => c.id === taxCategoryId);
 
   /**
@@ -130,6 +135,7 @@ function ItemFormFields({ item }: { item?: Item }) {
   };
 
   const save = async (another = false) => {
+    if (!canSave) return;
     const next: Errors<'name' | 'sku' | 'hsn' | 'openingStockDate'> = {
       name: required(name, tr('inventory:form.itemName')),
       hsn: validHsn(hsnCode, { required: hsnRequired }),
@@ -186,9 +192,9 @@ function ItemFormFields({ item }: { item?: Item }) {
       router.back();
     } else router.replace(`/(app)/catalog/items/${id}`);
   };
-  useSaveShortcut(() => void save(), !saving, item ? undefined : () => void save(true));
+  useSaveShortcut(() => void save(), !saving && canSave, item ? undefined : () => void save(true));
   // Enter in a field saves, as Save does; never a link left focused behind the form (the sidebar's list).
-  useEnterToSave(() => void save(), !saving);
+  useEnterToSave(() => void save(), !saving && canSave);
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -323,7 +329,7 @@ function ItemFormFields({ item }: { item?: Item }) {
         </ScrollView>
 
         <FormActions>
-          <Button shortcut="S" title={item ? tr('inventory:form.saveChanges') : tr('common:quickAction.addItem')} onPress={() => void save()} loading={saving} disabled={blocked || !!liveHsn} fullWidth />
+          <Button shortcut="S" title={item ? tr('inventory:form.saveChanges') : tr('common:quickAction.addItem')} onPress={() => void save()} loading={saving} disabled={blocked || !!liveHsn || !canSave} fullWidth />
           {item ? null : (
             <Button title={tr('common:action.saveAndAddAnother')} variant="ghost" onPress={() => void save(true)} loading={saving} disabled={blocked || !!liveHsn} fullWidth />
           )}

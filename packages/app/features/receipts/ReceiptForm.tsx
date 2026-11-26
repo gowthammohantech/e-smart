@@ -125,6 +125,8 @@ export function ReceiptForm({
   const [untouched] = useState(entered);
   // Handed over from the payment form with an amount typed there: that is a change to lose too.
   const leaveGuard = useLeaveGuard(entered !== untouched || !!seed?.amount);
+  // A saved receipt is saved again only once something on it has changed.
+  const canSave = ready && (!voucher || entered !== untouched);
   // Under Suppliers: money from that supplier's ledger, as picking one there does.
   const addSupplier = useAddParty('supplier', (p) => {
     setSource(`party:${p.id}`);
@@ -166,7 +168,7 @@ export function ReceiptForm({
   };
 
   const save = async () => {
-    if (!ready) return;
+    if (!canSave) return;
     // A photo picked here goes up first; a new voucher isn't on the server yet, so it links through attachmentIds.
     const attachmentIds = slipUri ? [] : [...keptIds];
     if (slipUri) {
@@ -207,7 +209,7 @@ export function ReceiptForm({
     await leaveGuard.release();
     onSaved(res.id ?? record.id);
   };
-  useSaveShortcut(() => void save(), !saving && !uploading && ready);
+  useSaveShortcut(() => void save(), !saving && !uploading && canSave);
 
   const options = (list: Account[]) => list.map((a) => ({ value: a.key, label: nameOf(a), description: groupName(a.group) }));
 
@@ -310,7 +312,7 @@ export function ReceiptForm({
         </ScrollView>
         <FormActions>
           {desktop ? <Button title={tr('common:action.cancel')} variant="ghost" onPress={() => goBack(voucher ? `/(app)/receipts/${voucher.id}` : '/(app)/receipts')} /> : null}
-          <Button title={tr('books:receipts.save')} onPress={() => void save()} loading={saving || uploading} disabled={blocked || uploading || !ready} fullWidth={!desktop} shortcut="S" />
+          <Button title={tr('books:receipts.save')} onPress={() => void save()} loading={saving || uploading} disabled={blocked || uploading || !canSave} fullWidth={!desktop} shortcut="S" />
         </FormActions>
       </FormContainer>
 

@@ -22,6 +22,7 @@ import { fromMajor, toMajor } from '@esmart/core/lib/money';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { Columns, FieldGrid } from '@esmart/ui/components/Layout';
 import { useSaveShortcut } from '../../../components/useSaveShortcut';
+import { canonicalJson as canonical } from '../../../components/useDirty';
 import { useServerSave } from '../../../components/useServerSave';
 
 /**
@@ -160,7 +161,22 @@ function EInvoicingForm() {
   // A login typed here is saved with everything else by the one Save: no separate "Save login".
   const loginEdited = !!login.password || (!!login.username.trim() && login.username.trim() !== savedUsername);
 
+  // What Save would store, less the logins (they have their own check above). Save waits until it differs
+  // from what is saved, or from what this screen last saved while sync is still bringing that back.
+  const candidate = {
+    ...draft,
+    irpUsername: stored.irpUsername,
+    ewbUsername: stored.ewbUsername,
+    annualTurnover: fromMajor(turnover || '0', currency),
+    eInvoiceTurnoverThreshold: fromMajor(threshold || '0', currency),
+    ewayBillThreshold: fromMajor(ewayThreshold || '0', currency),
+  };
+  const candidateKey = canonical(candidate);
+  const [lastSaved, setLastSaved] = useState<string | null>(null);
+  const changed = loginEdited || (candidateKey !== canonical(stored) && candidateKey !== lastSaved);
+
   const onSave = async () => {
+    if (!changed) return;
     if (loginEdited && !(await saveCredentials())) return;
     const settings = {
       ...draft,
@@ -171,11 +187,12 @@ function EInvoicingForm() {
       eInvoiceTurnoverThreshold: fromMajor(threshold || '0', currency),
       ewayBillThreshold: fromMajor(ewayThreshold || '0', currency),
     };
-    await serverSave(() => save(settings), tr('compliance:settings.saved'), { icon: 'shield-check-outline' });
+    const res = await serverSave(() => save(settings), tr('compliance:settings.saved'), { icon: 'shield-check-outline' });
+    if (res) setLastSaved(candidateKey);
   };
 
   // Ctrl+S (⌘+S) does what Save does.
-  useSaveShortcut(onSave);
+  useSaveShortcut(onSave, changed);
 
   // Each section built once: a desktop puts them two to a row, a phone stacks them in this order.
   const eInvoiceSection = (
@@ -446,7 +463,7 @@ function EInvoicingForm() {
           icon="check"
           onPress={onSave}
           loading={saving || credBusy === 'save'}
-          disabled={saving || credBusy !== null}
+          disabled={saving || credBusy !== null || !changed}
           fullWidth={!desktop}
           size={desktop ? undefined : 'lg'}
         />

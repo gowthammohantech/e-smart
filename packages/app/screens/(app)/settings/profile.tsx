@@ -26,6 +26,7 @@ import { DevicesSection } from '../../../features/account/DevicesSection';
 import { PrivacySection } from '../../../features/account/PrivacySection';
 import { SecuritySection } from '../../../features/account/SecuritySection';
 import { useSavedErrors } from '../../../components/useSavedErrors';
+import { useDirty } from '../../../components/useDirty';
 
 const ROLE_LABELS = {
   owner: 'auth:invite.roles.owner',
@@ -58,7 +59,11 @@ export default function Profile() {
   // The phone is checked as typed: red at once if wrong, and Save waits until it is right.
   const livePhone = phone.error();
 
+  // Saved only once the name or phone has changed.
+  const changed = useDirty([name, phone.value]);
+
   const save = async () => {
+    if (!changed) return;
     const next: Errors<'name' | 'email' | 'phone'> = {
       name: required(name, tr('settings:profile.name')),
       phone: phone.error(),
@@ -72,7 +77,7 @@ export default function Profile() {
   };
 
   // Ctrl+S (⌘+S) does what Save does.
-  useSaveShortcut(save);
+  useSaveShortcut(save, changed);
 
   const header = (
     <>
@@ -170,7 +175,7 @@ export default function Profile() {
       <DeleteAccountSheet visible={deleting} onClose={() => setDeleting(false)} />
 
       <FormActions>
-        <Button shortcut="S" title={tr('settings:profile.save')} onPress={save} loading={saving} disabled={saving || !!livePhone} fullWidth={!desktop} size={desktop ? undefined : 'lg'} />
+        <Button shortcut="S" title={tr('settings:profile.save')} onPress={save} loading={saving} disabled={saving || !!livePhone || !changed} fullWidth={!desktop} size={desktop ? undefined : 'lg'} />
       </FormActions>
     </KeyboardAvoidingView>
   );

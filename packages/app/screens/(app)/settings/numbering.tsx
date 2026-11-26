@@ -22,6 +22,7 @@ import { today, financialYearOf } from '@esmart/core/lib/date';
 import { E_INVOICE_DOC_NUMBER_MAX, sanitizePrefix } from '@esmart/core/lib/validators';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { useSaveShortcut } from '../../../components/useSaveShortcut';
+import { useDirty } from '../../../components/useDirty';
 import { useServerSave } from '../../../components/useServerSave';
 
 const RESET_LABELS = {
@@ -75,6 +76,9 @@ export default function NumberingSettings() {
 
   const branchCode = branches.find((b) => b.id === activeBranchId)?.code;
 
+  // A series is saved only once something on it has changed.
+  const changed = useDirty([prefix, nextNumber, padding, includeFy, includeBranch, resetPolicy], editing);
+
   const open = (s: NumberingSeries) => {
     setEditing(s);
     setPrefix(s.prefix);
@@ -106,7 +110,7 @@ export default function NumberingSettings() {
   const prefixError = tooLong && eInvoicing ? tr('settings:numbering.tooLongForEInvoice', { count: E_INVOICE_DOC_NUMBER_MAX }) : undefined;
 
   const save = async () => {
-    if (!draft || numberError || prefixError) return;
+    if (!draft || numberError || prefixError || !changed) return;
     // The sheet stays open until the server has it, so a refusal can be fixed here.
     const res = await serverSave(
       () => saveNumberingSeries(draft),
@@ -117,7 +121,7 @@ export default function NumberingSettings() {
   };
 
   // Ctrl+S (⌘+S) does what Save does, while the form is open.
-  useSaveShortcut(save, !!editing);
+  useSaveShortcut(save, !!editing && changed);
   const desktop = useIsDesktop();
 
   return (
@@ -169,7 +173,7 @@ export default function NumberingSettings() {
         visible={!!editing}
         onClose={() => setEditing(null)}
         title={editing ? seriesLabel(tr, editing.kind) : ''}
-        footer={<Button shortcut="S" title={tr('settings:numbering.save')} onPress={save} loading={saving} disabled={saving || !!numberError || !!prefixError} fullWidth={!desktop} />}
+        footer={<Button shortcut="S" title={tr('settings:numbering.save')} onPress={save} loading={saving} disabled={saving || !!numberError || !!prefixError || !changed} fullWidth={!desktop} />}
       >
         <View style={{ padding: t.spacing.lg, gap: t.spacing.lg }}>
           <Card style={{ alignItems: 'center', gap: 6, paddingVertical: t.spacing.xl }}>

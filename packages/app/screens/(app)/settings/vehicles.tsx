@@ -25,6 +25,7 @@ import { api } from '../../../remote/api';
 import { useAppStore } from '../../../store/appStore';
 import { useActiveCompany, useVehicles } from '../../../store/selectors';
 import { SheetActions } from '../../../features/company/SheetActions';
+import { useDirty } from '../../../components/useDirty';
 import { useServerSave } from '../../../components/useServerSave';
 
 type Spend = { vehicleId: string; expenses: Money; expenseCount: number; documentCount: number };
@@ -43,6 +44,10 @@ export default function VehicleSettings() {
   const [editing, setEditing] = useState<Vehicle | null>(null);
   const [regError, setRegError] = useState<string | undefined>();
   const [confirmDelete, setConfirmDelete] = useState<Vehicle | null>(null);
+  // The vehicle is edited in place, so its id (null while the sheet is closed) marks each opening.
+  // An existing vehicle is saved only once something on it has changed; a new one is checked on Save.
+  const changed = useDirty([editing?.registration, editing?.name ?? '', editing?.status], editing ? editing.id || 'new' : null);
+  const canSave = !editing?.id || changed;
   const fy = financialYearOf(today(), company.fiscalYearStartMonth);
   const spend = useQuery({
     queryKey: ['vehicleSpend', company.id, fy.start],
@@ -120,7 +125,7 @@ export default function VehicleSettings() {
           <SheetActions
             saveLabel={tr('settings:vehicles.save')}
             onSave={async () => {
-                if (!editing) return;
+                if (!editing || !canSave) return;
                 if (!editing.registration.trim()) {
                   setRegError(tr('errors:validation.required', { field: tr('settings:vehicles.registration') }));
                   return;
@@ -130,6 +135,7 @@ export default function VehicleSettings() {
                 if (res) setEditing(null);
               }}
             saving={saving}
+            saveDisabled={!canSave}
             deleteLabel={tr('settings:vehicles.delete')}
             onDelete={
               editing?.id

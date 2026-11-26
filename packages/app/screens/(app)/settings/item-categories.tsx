@@ -19,6 +19,7 @@ import { DIALOG_WIDTH, SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/bre
 import { useAppStore } from '../../../store/appStore';
 import { useActiveCompany, useItemCategories } from '../../../store/selectors';
 import { SheetActions } from '../../../features/company/SheetActions';
+import { useDirty } from '../../../components/useDirty';
 import { useServerSave } from '../../../components/useServerSave';
 
 /** The colours a category can take; the first is the neutral default. */
@@ -42,6 +43,10 @@ export default function ItemCategorySettings() {
   // An empty name says so on the field, not by a Save that does nothing.
   const [nameError, setNameError] = useState<string | undefined>();
   const [color, setColor] = useState(COLOURS[0]);
+
+  // An existing category is saved only once its name or colour has changed; a new one is checked on Save.
+  const changed = useDirty([name, color], editing);
+  const canSave = !editing?.id || changed;
 
   const open = (c?: ItemCategory) => {
     setEditing(c ?? { id: '', companyId: company.id, name: '', color: COLOURS[0] });
@@ -109,7 +114,7 @@ export default function ItemCategorySettings() {
           <SheetActions
             saveLabel={tr('settings:itemCategories.save')}
             onSave={async () => {
-                if (!editing) return;
+                if (!editing || !canSave) return;
     if (!name.trim()) {
       setNameError(tr('errors:validation.required', { field: tr('settings:itemCategories.name') }));
       return;
@@ -120,7 +125,8 @@ export default function ItemCategorySettings() {
                 if (res) setEditing(null);
               }}
             saving={saving}
-                        deleteLabel={tr('settings:itemCategories.delete')}
+            saveDisabled={!canSave}
+            deleteLabel={tr('settings:itemCategories.delete')}
             onDelete={
               editing?.id
                 ? () => {

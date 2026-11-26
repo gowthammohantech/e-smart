@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useDirty } from '../../components/useDirty';
 import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
@@ -146,8 +147,14 @@ export function VoucherForm({ voucher, onSaved, initialKind }: { voucher?: Vouch
       return next;
     });
 
+  // A saved voucher is saved again only once something on it has changed; a draft can still be posted as it is.
+  const changed = useDirty([kind, date, narration, reference, bsrCode, serial, depositedOn, lines.map((l) => [l.side, l.account, l.amount, l.narration, l.costCentreId])]);
+  const nothingToSave = !!voucher && !changed;
+  const draftSaveBlocked = !!draftProblem || nothingToSave;
+  const postBlocked = !!problem || (nothingToSave && !isDraft);
+
   const save = async (status: 'draft' | 'posted') => {
-    if (status === 'draft' ? draftProblem : problem) return;
+    if (status === 'draft' ? draftSaveBlocked : postBlocked) return;
     const record: Voucher = {
       id: voucher?.id ?? uid('vch'),
       companyId: voucher?.companyId ?? company.id,
@@ -246,9 +253,9 @@ export function VoucherForm({ voucher, onSaved, initialKind }: { voucher?: Vouch
         <FormActions>
           {/* A posted voucher stays posted; a new one or a draft can be kept as a draft. */}
           {!voucher || isDraft ? (
-            <Button title={tr('books:vouchers.saveDraft')} variant="ghost" onPress={() => void save('draft')} loading={saving} disabled={blocked || !!draftProblem} fullWidth />
+            <Button title={tr('books:vouchers.saveDraft')} variant="ghost" onPress={() => void save('draft')} loading={saving} disabled={blocked || draftSaveBlocked} fullWidth />
           ) : null}
-          <Button title={tr(isDraft ? 'books:vouchers.post' : 'books:vouchers.save')} onPress={() => void save('posted')} loading={saving} disabled={blocked || !!problem} fullWidth shortcut="S" />
+          <Button title={tr(isDraft ? 'books:vouchers.post' : 'books:vouchers.save')} onPress={() => void save('posted')} loading={saving} disabled={blocked || postBlocked} fullWidth shortcut="S" />
         </FormActions>
       </FormContainer>
 
