@@ -236,7 +236,7 @@ describe('documents: numbering and lifecycle', () => {
     const url = `${m.c}/documents/${order.body.id}`;
     const earlier = await t.patch(url, invoiceBody(m, { kind: 'salesOrder', date: '2026-09-28' }), { token: m.token });
     expect(earlier.status).toBe(422);
-    expect(earlier.body.issues).toEqual([expect.objectContaining({ field: 'date', message: expect.stringContaining('2026-09-29') })]);
+    expect(earlier.body.issues).toEqual([expect.objectContaining({ field: 'date', message: expect.stringContaining('29-09-2026') })]);
     const sameDay = await t.patch(url, invoiceBody(m, { kind: 'salesOrder', date: '2026-09-29' }), { token: m.token });
     expect(sameDay.status).toBe(200);
   });
