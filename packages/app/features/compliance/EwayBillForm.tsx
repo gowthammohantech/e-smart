@@ -37,6 +37,7 @@ import {
 } from '@esmart/core/domain/ewayBill';
 import { mainHsnCodeOf } from '@esmart/core/domain/eInvoice';
 import { INDIAN_STATES, stateName } from '@esmart/core/data/masters';
+import { EWB_EXPORT_PINCODE, EWB_OTHER_COUNTRY_CODE, OTHER_COUNTRY_CODE } from '@esmart/core/domain/stateCodes';
 import { citiesForState } from '@esmart/core/data/cities';
 import { formatDate, nowISO } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
@@ -65,6 +66,8 @@ export function useEwayBillForm(doc: BusinessDocument) {
   const branch = branches.find((b) => b.id === doc.branchId);
   // Where the goods go: the invoice's own ship-to, else the buyer's shipping (or billing) address.
   const shipTo = doc.shipTo?.address ?? buyer?.shippingAddress ?? buyer?.billingAddress;
+  // An export (a buyer abroad): the e-way bill names the consignee's state Other Country, PIN 999999.
+  const exported = buyer?.gstRegistrationType === 'overseas' || doc.placeOfSupplyStateCode === OTHER_COUNTRY_CODE;
   // How they go, as the invoice says: one of the business's transporters, or its own vehicle.
   const docTransporter = useAppStore((s) => (doc.transporterId ? s.transporters.find((x) => x.id === doc.transporterId) : undefined));
   const docVehicle = useAppStore((s) => (doc.vehicleId ? s.vehicles.find((v) => v.id === doc.vehicleId) : undefined));
@@ -88,8 +91,8 @@ export function useEwayBillForm(doc: BusinessDocument) {
     address1: shipTo?.line1 ?? '',
     address2: shipTo?.line2,
     place: shipTo?.city ?? '',
-    pincode: shipTo?.postalCode ?? '',
-    stateCode: shipTo?.stateCode ?? '',
+    pincode: exported ? EWB_EXPORT_PINCODE : (shipTo?.postalCode ?? ''),
+    stateCode: exported ? EWB_OTHER_COUNTRY_CODE : (shipTo?.stateCode ?? ''),
   });
   const [stateSheet, setStateSheet] = useState<'from' | 'to' | null>(null);
 
@@ -112,7 +115,8 @@ export function useEwayBillForm(doc: BusinessDocument) {
   // Checked as typed: a GSTIN (URP aside), PIN or vehicle number filled in wrong is red at once, and Generate waits.
   const liveOf = (prefix: 'from' | 'to', p: EwayPlace): Record<string, string | undefined> => ({
     [`${prefix}.gstin`]: /^URP$/.test(p.gstin.trim()) ? undefined : validGstin(p.gstin),
-    [`${prefix}.pincode`]: validPostalCode(p.pincode, 'IN', p.stateCode),
+    // Other Country has no PIN of its own to check against: 999999 is what it takes.
+    [`${prefix}.pincode`]: p.stateCode === EWB_OTHER_COUNTRY_CODE ? undefined : validPostalCode(p.pincode, 'IN', p.stateCode),
   });
   const typedTransporter = transporterId.trim().toUpperCase();
   const live = {
@@ -536,14 +540,20 @@ export function EwayBillFormSheets({ form }: { form: EwayBillFormState }) {
         visible={stateSheet !== null}
         onClose={() => setStateSheet(null)}
         title={stateSheet === 'from' ? tr('compliance:ewb.despatchState') : tr('compliance:ewb.deliveryState')}
-        options={INDIAN_STATES.map((s) => ({ value: s.code, label: s.name, trailing: s.code }))}
+        // Where the goods go can be Other Country (an export); where they leave from is always in India.
+        options={[
+          ...(stateSheet === 'to' ? [{ value: EWB_OTHER_COUNTRY_CODE, label: stateName(EWB_OTHER_COUNTRY_CODE), trailing: EWB_OTHER_COUNTRY_CODE }] : []),
+          ...INDIAN_STATES.map((s) => ({ value: s.code, label: s.name, trailing: s.code })),
+        ]}
         value={stateSheet === 'from' ? from.stateCode : to.stateCode}
         onSelect={(code) => {
           // A place picked for the previous state no longer belongs.
           const moved = (p: EwayPlace): EwayPlace => ({
             ...p,
             stateCode: code,
-            place: p.place && !citiesForState(code).includes(p.place) ? '' : p.place,
+            place: p.place && !citiesForState(code).includes(p.place) && code !== EWB_OTHER_COUNTRY_CODE ? '' : p.place,
+            // Other Country takes 999999; leaving it, the PIN is the new state's to fill in.
+            pincode: code === EWB_OTHER_COUNTRY_CODE ? EWB_EXPORT_PINCODE : p.pincode === EWB_EXPORT_PINCODE ? '' : p.pincode,
           });
           if (stateSheet === 'from') setFrom(moved(from));
           else setTo(moved(to));
@@ -600,13 +610,18 @@ function PlaceFields({
         icon="map-marker-outline"
         error={errors[`${prefix}.stateCode`]}
       />
-      <CityField
-        label={tr('compliance:ewb.place')}
-        value={place.place}
-        onChange={(v) => onChange({ ...place, place: v })}
-        stateCode={place.stateCode}
-        error={errors[`${prefix}.place`]}
-      />
+      {/* Abroad there's no city list: the place is typed. */}
+      {place.stateCode === EWB_OTHER_COUNTRY_CODE ? (
+        <TextField label={tr('compliance:ewb.place')} value={place.place ?? ''} onChangeText={(v) => onChange({ ...place, place: v })} error={errors[`${prefix}.place`]} />
+      ) : (
+        <CityField
+          label={tr('compliance:ewb.place')}
+          value={place.place}
+          onChange={(v) => onChange({ ...place, place: v })}
+          stateCode={place.stateCode}
+          error={errors[`${prefix}.place`]}
+        />
+      )}
       <TextField
         label={tr('compliance:ewb.pinCode')}
         value={place.pincode}

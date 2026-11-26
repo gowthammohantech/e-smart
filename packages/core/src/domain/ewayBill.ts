@@ -18,6 +18,7 @@ import {
 } from '../types';
 import { isValidGstin } from './gstin';
 import { INDIAN_STATES } from '../data/masters';
+import { EWB_OTHER_COUNTRY_CODE } from './stateCodes';
 import { PINCODE_RE } from '../lib/validators';
 
 /**
@@ -378,7 +379,8 @@ export function validatePartA(input: EwayPartAInput): ComplianceIssue[] {
 
     if (!place.place?.trim()) out.push(issue('EWB103', `${side}.place`, 'Enter the place'));
     if (!place.address1?.trim()) out.push(issue('EWB104', `${side}.address1`, 'Enter the address'));
-    if (!INDIAN_STATES.some((s) => s.code === place.stateCode)) {
+    // The consignee of an export is in Other Country (99); the goods leave from a state in India.
+    if (!INDIAN_STATES.some((s) => s.code === place.stateCode) && !(side === 'to' && place.stateCode === EWB_OTHER_COUNTRY_CODE)) {
       out.push(issue('EWB105', `${side}.stateCode`, 'Choose a state'));
     }
   });
