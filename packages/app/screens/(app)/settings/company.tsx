@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, ScrollView, View, type LayoutChangeEvent } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
@@ -140,6 +140,16 @@ function CompanySettingsForm() {
   });
 
   const country = COUNTRIES.find((c) => c.code === company?.country);
+  // A valid GSTIN already says which state the business is in (its first two digits), so the state follows it and can't be edited.
+  const gstinState =
+    company?.country === 'IN' && taxRegistered && taxId && !validGstin(taxId) ? INDIAN_STATES.find((s) => s.code === taxId.slice(0, 2)) : undefined;
+  useEffect(() => {
+    if (!gstinState || gstinState.code === stateCode) return;
+    // Entries posted: the state is frozen, so a GSTIN from another state is refused (below) rather than moving it.
+    if (locks.state && stateCode) return;
+    setStateCode(gstinState.code);
+    if (city && !citiesForState(gstinState.code).includes(city)) setCity('');
+  }, [gstinState, stateCode, locks.state, city]);
   const currency = CURRENCIES.find((c) => c.code === company?.baseCurrency);
 
   // Checked as typed: a field filled in wrong is red at once and Save waits until it is put right.
@@ -152,7 +162,13 @@ function CompanySettingsForm() {
     accountNumber: !bookAccount && accountNumber.trim() && !/^(?:[0-9A-Za-z] ?){6,34}$/.test(accountNumber.trim()) ? tr('settings:company.accountNumberInvalid') : undefined,
     ifsc: !bookAccount && ifsc.trim() && !/^[A-Za-z]{4}0[A-Za-z0-9]{6}$/.test(ifsc.trim()) ? tr('settings:company.ifscInvalid') : undefined,
     upiId: !bookAccount && upiId.trim() && !/^[A-Za-z0-9.\-_]{2,256}@[A-Za-z][A-Za-z0-9]{1,63}$/.test(upiId.trim()) ? tr('settings:company.upiInvalid') : undefined,
-    taxId: taxRegistered && company?.country === 'IN' ? validGstin(taxId) : undefined,
+    taxId:
+      taxRegistered && company?.country === 'IN'
+        ? validGstin(taxId) ??
+          (gstinState && locks.state && stateCode && gstinState.code !== stateCode
+            ? tr('settings:company.gstinStateLocked', { state: gstinState.name, current: INDIAN_STATES.find((s) => s.code === stateCode)?.name ?? stateCode })
+            : undefined)
+        : undefined,
     tan: taxRegistered ? validTan(tan) : undefined,
   };
   const invalid = hasErrors(live);
@@ -230,7 +246,7 @@ function CompanySettingsForm() {
   // Built once and placed per layout: desktop section cards or the phone's single column.
   const half = desktop ? undefined : { flex: 1 };
   const stateField = (
-    <PickerField label={tr('settings:company.state')} value={INDIAN_STATES.find((s) => s.code === stateCode)?.name} onPress={() => setStateOpen(true)} icon="map-outline" disabled={locks.state} />
+    <PickerField label={tr('settings:company.state')} value={INDIAN_STATES.find((s) => s.code === stateCode)?.name} onPress={() => setStateOpen(true)} icon="map-outline" disabled={locks.state || !!gstinState} hint={gstinState ? tr('settings:company.stateFromGstin') : undefined} />
   );
   const cityField = <CityField label={tr('settings:company.city')} value={city} onChange={setCity} stateCode={stateCode} containerStyle={half} />;
   const pinField = (
@@ -405,7 +421,7 @@ function CompanySettingsForm() {
       <TextField
         label={country?.taxIdLabel ?? tr('onboarding:tax.numberLabel')}
         value={taxId}
-        onChangeText={(v) => setTaxId(v.toUpperCase())}
+        onChangeText={(v) => setTaxId(company?.country === 'IN' ? v.toUpperCase().replace(/[^0-9A-Z]/g, '').slice(0, 15) : v.toUpperCase())}
         autoCapitalize="characters"
         icon="card-account-details-outline"
         error={shownError(taxId, live.taxId, errors.taxId)}

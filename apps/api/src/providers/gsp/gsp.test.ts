@@ -402,12 +402,31 @@ describe('Adaequare', () => {
     expect(t.calls[0].query).toEqual({ action: 'TP', gstin: '27AAGCB1286Q1Z4' });
   });
 
-  it('tests the connection without claiming to have checked the portal login', async () => {
-    const t = fakeTransport({});
-    const result = await new AdaequareGateway(adaequareConfig(), t.transport).testConnection({ einvoice: creds, ewaybill: null });
+  it('tests each portal login by fetching the taxpayer from that portal', async () => {
+    const t = fakeTransport({
+      '/enriched/ei/api/master/gstin': () => ({ success: true, result: { Gstin: '29AAGCB1286Q000', LegalName: 'Seller' } }),
+      '/enriched/ewb/master/GetGSTINDetails': () => ({ success: true, result: { gstin: '29AAGCB1286Q000', legalName: 'Seller' } }),
+    });
+    const result = await new AdaequareGateway(adaequareConfig(), t.transport).testConnection({ einvoice: creds, ewaybill: creds });
     expect(result.irp.ok).toBe(true);
-    expect(result.ewb).toEqual({ ok: false, message: 'No e-way bill credentials are stored yet' });
-    expect(result.irp.message).toMatch(/verified when the first document is filed/);
+    expect(result.ewb.ok).toBe(true);
+    const ewb = t.calls.find((c) => c.path === '/enriched/ewb/master/GetGSTINDetails');
+    expect(ewb?.query).toEqual({ GSTIN: '29AAGCB1286Q000' });
+    expect(ewb?.headers).toMatchObject({ username: 'api_user', password: 'hunter2', gstin: '29AAGCB1286Q000' });
+    expect((await new AdaequareGateway(adaequareConfig(), t.transport).testConnection({ einvoice: creds, ewaybill: null })).ewb).toEqual({ ok: false, message: 'No e-way bill credentials are stored yet' });
+    const call = t.calls.find((c) => c.path === '/enriched/ei/api/master/gstin');
+    expect(call?.query).toEqual({ gstin: '29AAGCB1286Q000' });
+    expect(call?.headers).toMatchObject({ user_name: 'api_user', password: 'hunter2', gstin: '29AAGCB1286Q000' });
+  });
+
+  it('reports a refused e-invoice login', async () => {
+    const t = fakeTransport({
+      '/enriched/ei/api/master/gstin': () => new GspRequestError('Invalid Login', 'envelope', 502, { success: false, message: 'Invalid Login' }),
+      '/enriched/ewb/master/GetGSTINDetails': () => ({ success: true, result: { gstin: '29AAGCB1286Q000' } }),
+    });
+    const result = await new AdaequareGateway(adaequareConfig(), t.transport).testConnection({ einvoice: creds, ewaybill: creds });
+    expect(result.irp.ok).toBe(false);
+    expect(result.ewb.ok).toBe(true);
   });
 });
 
