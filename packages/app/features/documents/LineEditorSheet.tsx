@@ -21,6 +21,7 @@ import { unitDecimals, unitShortName, unitsFor } from '@esmart/core/data/masters
 import { useItems } from '../../store/selectors';
 import { PurchaseLineGstFields } from '../catalog/GstTreatmentFields';
 import { CostCentreField } from '../books/CostCentreField';
+import { useSavedErrors } from '../../components/useSavedErrors';
 
 type EditorProps = {
   visible: boolean;
@@ -97,7 +98,8 @@ function LineEditorForm({
   const [unitOpen, setUnitOpen] = useState(false);
   const [taxOpen, setTaxOpen] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
-  const [errors, setErrors] = useState<{ name?: string; hsn?: string; quantity?: string; rate?: string; discount?: string }>({});
+  // Errors from the last save, each gone as soon as its field is changed.
+  const [errors, setErrors] = useSavedErrors<'name' | 'hsn' | 'quantity' | 'rate' | 'discount'>({ name, hsn: hsnCode, quantity, rate: price, discount: [discountMode, discountValue] });
   const item = useItems().find((i) => i.id === line?.itemId);
   // A purchase line that isn't stock may carry its own cost centre; stock takes the bill's (RULES 6.20).
   const [costCentreId, setCostCentreId] = useState<string | undefined>(line?.costCentreId);
@@ -288,9 +290,6 @@ function LineEditorForm({
           value={category ? `${category.name} (${formatPercent(category.rate)})` : keptRate !== undefined ? formatPercent(keptRate) : tr('common:totals.noTax')}
           onPress={() => setTaxOpen(true)}
           icon="percent-outline"
-          // A following service takes the highest rate in the document: a rule, not chosen by hand.
-          disabled={!!line?.gst?.followsHighestRate}
-          hint={line?.gst?.followsHighestRate ? tr('sales:line.followsHighestRate') : undefined}
         />
 
         {reimbursement ? null : (

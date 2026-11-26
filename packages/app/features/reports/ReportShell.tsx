@@ -89,6 +89,9 @@ export function ReportShell({
   // On a desktop, Export and the period drop down from their buttons instead of opening a sheet.
   const exportMenu = useMenuAnchor();
   const rangeMenu = useMenuAnchor();
+  // The report's basis: behind an ⓘ beside the title on a desktop, folded to a line on a phone.
+  const basisMenu = useMenuAnchor();
+  const [basisOpen, setBasisOpen] = useState(false);
   const partySearch = usePartySearch(undefined, useDebounced(partyQuery), partyOpen);
   const partyRecord = usePartyRecord(scope.filters.partyId ?? undefined);
 
@@ -230,10 +233,76 @@ export function ReportShell({
     </View>
   );
 
+  const filterChips = (
+    <>
+      {chip(rangeLabel, true, openRangeSheet, undefined, rangeMenu.setAnchor)}
+      {branches.length > 1
+        ? chip(branch?.name ?? tr('common:component.allBranches'), !!branch, () => setBranchOpen(true), () =>
+            changeScope({ ...scope, filters: { ...scope.filters, branchId: null } }),
+          )
+        : null}
+      {showPartyFilter && partyPending ? (
+        <SkeletonGroup>
+          <Skeleton height={40} width={120} radius={t.radius.pill} />
+        </SkeletonGroup>
+      ) : showPartyFilter
+        ? chip(
+            partyCount > 1 ? tr('reports:shell.contactsPicked', { count: partyCount }) : (party?.name ?? tr('reports:shell.allContacts')),
+            !!party || partyCount > 1,
+            () => setPartyOpen(true),
+            () => changeScope({ ...scope, filters: { ...scope.filters, partyId: null, partyIds: null } }),
+          )
+        : null}
+    </>
+  );
+  // What the report covers and how: the period, branch, currency basis and when it was made.
+  const basisText = (
+    <View style={{ gap: 4 }}>
+      <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('reports:shell.basis')}</Text>
+      <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
+        {tr('reports:shell.basisFull', basisParams)}
+      </Text>
+      <Text variant="caption" tone="muted" style={{ fontVariant: ['tabular-nums'] }}>
+        {generatedLine}
+      </Text>
+      {subtitle ? (
+        <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
+          {subtitle}
+        </Text>
+      ) : null}
+    </View>
+  );
+
   return (
     <View style={{ flex: 1 }}>
-      {(desktop || exportPlacement === 'header') && exportRows ? (
-        // A desktop puts Export with the page title, top right, instead of a bar at the bottom.
+      {desktop ? (
+        // A desktop keeps the page to its report: the filters, the basis (behind ⓘ) and Export share the title row.
+        <Stack.Screen
+          options={{
+            headerRight: () => (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm }}>
+                {filterChips}
+                <View ref={basisMenu.setAnchor} collapsable={false}>
+                  <Pressable
+                    onPress={basisMenu.open}
+                    accessibilityRole="button"
+                    accessibilityLabel={tr('reports:shell.basis')}
+                    style={{ width: 40, height: 40, borderRadius: t.radius.pill, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: t.c.line, backgroundColor: t.c.card }}
+                  >
+                    <Icon name="information-outline" size={18} color={t.c.muted} />
+                  </Pressable>
+                </View>
+                {exportRows ? (
+                  <View ref={exportMenu.setAnchor} collapsable={false}>
+                    <Button title={tr('reports:shell.export')} icon="file-export-outline" variant="secondary" onPress={exportMenu.open} />
+                  </View>
+                ) : null}
+              </View>
+            ),
+          }}
+        />
+      ) : exportPlacement === 'header' && exportRows ? (
+        // A phone screen whose bottom bar does something else: Export goes in the header.
         <Stack.Screen
           options={{
             headerRight: () => (
@@ -241,15 +310,16 @@ export function ReportShell({
                 <Button
                   title={tr('reports:shell.export')}
                   icon="file-export-outline"
-                  variant={desktop ? 'secondary' : 'ghost'}
-                  size={desktop ? undefined : 'sm'}
-                  onPress={desktop ? exportMenu.open : () => setExportOpen(true)}
+                  variant="ghost"
+                  size="sm"
+                  onPress={() => setExportOpen(true)}
                 />
               </View>
             ),
           }}
         />
       ) : null}
+      {desktop ? null : (
       <View
         style={
           Platform.OS === 'web'
@@ -259,47 +329,34 @@ export function ReportShell({
         }
       >
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: t.spacing.sm, paddingRight: t.spacing.lg }}>
-          {chip(rangeLabel, true, openRangeSheet, undefined, rangeMenu.setAnchor)}
-          {branches.length > 1
-            ? chip(branch?.name ?? tr('common:component.allBranches'), !!branch, () => setBranchOpen(true), () =>
-                changeScope({ ...scope, filters: { ...scope.filters, branchId: null } }),
-              )
-            : null}
-          {showPartyFilter && partyPending ? (
-            <SkeletonGroup>
-              <Skeleton height={40} width={120} radius={t.radius.pill} />
-            </SkeletonGroup>
-          ) : showPartyFilter
-            ? chip(
-                partyCount > 1 ? tr('reports:shell.contactsPicked', { count: partyCount }) : (party?.name ?? tr('reports:shell.allContacts')),
-                !!party || partyCount > 1,
-                () => setPartyOpen(true),
-                () => changeScope({ ...scope, filters: { ...scope.filters, partyId: null, partyIds: null } }),
-              )
-            : null}
+          {filterChips}
         </ScrollView>
       </View>
+      )}
 
       <ScrollView
         // Only a phone has the export bar to scroll clear of.
         contentContainerStyle={desktop ? { padding: t.spacing.lg, paddingBottom: t.spacing.xxxl } : { padding: t.spacing.lg, paddingBottom: 120 }}
         showsVerticalScrollIndicator={SHOW_SCROLLBAR}
       >
-        {/* The basis card spans the page like the tables under it. */}
-        <Card variant="flat" style={{ marginBottom: t.spacing.lg, gap: 4 }}>
-          <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6 }}>{tr('reports:shell.basis')}</Text>
-          <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
-            {tr('reports:shell.basisFull', basisParams)}
-          </Text>
-          <Text variant="caption" tone="muted" style={{ fontVariant: ['tabular-nums'] }}>
-            {generatedLine}
-          </Text>
-          {subtitle ? (
-            <Text variant="caption" tone="muted" style={{ lineHeight: 18 }}>
-              {subtitle}
-            </Text>
-          ) : null}
-        </Card>
+        {/* A phone: the basis folded to one line, opened on a tap. */}
+        {desktop ? null : (
+          <View style={{ marginBottom: t.spacing.lg }}>
+            <Pressable
+              onPress={() => setBasisOpen((o) => !o)}
+              accessibilityRole="button"
+              accessibilityState={{ expanded: basisOpen }}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', minHeight: 32 }}
+            >
+              <Icon name="information-outline" size={16} color={t.c.muted} />
+              <Text variant="caption" tone="muted" weight="600">
+                {tr('reports:shell.basis')}
+              </Text>
+              <Icon name={basisOpen ? 'chevron-up' : 'chevron-down'} size={14} color={t.c.muted} />
+            </Pressable>
+            {basisOpen ? <Card variant="flat" style={{ marginTop: t.spacing.xs }}>{basisText}</Card> : null}
+          </View>
+        )}
 
         {children}
       </ScrollView>
@@ -322,6 +379,9 @@ export function ReportShell({
         </View>
       ) : null}
 
+      <Menu anchor={basisMenu.rect} onClose={basisMenu.close} align="right" width={380}>
+        <View style={{ padding: t.spacing.md }}>{basisText}</View>
+      </Menu>
       <Menu anchor={exportMenu.rect} onClose={exportMenu.close} align="right" width={240}>
         {exportItems.map((e) => (
           <MenuItem key={e.key} icon={e.icon} label={e.label} onPress={() => void e.onPress()} />

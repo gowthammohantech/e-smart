@@ -13,6 +13,7 @@ import { describeError } from '../../remote/errors';
 import { trackAnonymous } from '../../lib/analytics';
 import { useWelcomeToast } from '../../features/session/useWelcomeToast';
 import { Errors, required, shownError, validEmail, hasErrors } from '@esmart/core/lib/validators';
+import { useSavedErrors } from '../../components/useSavedErrors';
 
 type Mode = 'email' | 'phone';
 
@@ -29,7 +30,8 @@ export default function SignIn() {
   const [password, setPassword] = useState(DEMO_LOGIN.password);
   const phone = usePhoneInput();
   const passwordRef = useRef<TextInput>(null);
-  const [errors, setErrors] = useState<Errors<'email' | 'password' | 'phone'>>({});
+  // Errors from the last save, each gone as soon as its field is changed.
+  const [errors, setErrors] = useSavedErrors<'email' | 'password' | 'phone'>({ email, password, phone: phone.value });
   const [busy, setBusy] = useState(false);
   // The public demo's sign-in, from the server; null while it's off or unreachable (the button hides).
   const [demo, setDemo] = useState<{ email: string; password: string } | null>(null);

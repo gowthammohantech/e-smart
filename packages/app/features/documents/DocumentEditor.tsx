@@ -39,7 +39,7 @@ import { factorOf, fromMajor, money, subtract, toMajor, zero, type Money } from 
 import { INDIAN_STATES, unitDecimals, unitShortName } from '@esmart/core/data/masters';
 import { OUTBOUND_KINDS, isLowStock, shortfallsAgainst } from '@esmart/core/domain/stockLedger';
 import { CHARGES_TAXED_FROM, calculateLine } from '@esmart/core/domain/lineCalc';
-import { applyHighestRate } from '@esmart/core/domain/highestRate';
+import { applyHighestRate, followsHighestRate, highestCategoryOf } from '@esmart/core/domain/highestRate';
 import { hasErrors, hsnMandatory, validGstin, validHsn, validPostalCode } from '@esmart/core/lib/validators';
 
 import { useAppStore } from '../../store/appStore';
@@ -373,22 +373,26 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   const taxChoices = useMemo(() => taxCategoriesOn(allTaxCategories, draft.date), [allTaxCategories, draft.date]);
   const taxBlock = (c: TaxCategory) => taxChoice(tr, c, draft.date);
 
-  // A service that follows the highest GST rate: its lines take the highest rate among the document's
-  // (counting each such service at its own rate), again whenever a line is added, removed or re-rated.
-  // A saved document opened to edit is brought in line once, and says so.
-  const highestRateAnnounced = useRef(false);
+  // A service that follows the highest GST rate: its line takes the highest rate among the lines that
+  // don't follow, when it is added and again whenever that highest rate moves (a product's rate changed,
+  // a line added or removed). Its rate can be changed by hand: that stays until the highest rate moves.
+  // What the draft opens with stands as it is, hand-picked rates too.
+  const followed = useRef<{ basis: string; following: Set<string>; lineCount: number } | null>(null);
   useEffect(() => {
     const rateOfCategory = (id: string) => taxCategories.find((c) => c.id === id)?.rate ?? allTaxCategories.find((c) => c.id === id)?.rate ?? 0;
     const ownCategoryOf = (l: DocumentLine) => allItems.find((i) => i.id === l.itemId)?.taxCategoryId ?? l.taxCategoryId;
-    const { changed } = applyHighestRate(draft.lines, ownCategoryOf, rateOfCategory);
-    if (!changed.length) return;
-    setDraft((d) => ({ ...d, lines: applyHighestRate(d.lines, ownCategoryOf, rateOfCategory).lines }));
-    if (documentId && !highestRateAnnounced.current) {
-      highestRateAnnounced.current = true;
-      const rate = Math.max(...changed.map((l) => l.taxRate ?? 0));
-      toast.show(tr('sales:line.highestRateApplied', { count: changed.length, names: changed.map((l) => l.name).join(', '), rate: formatPercent(rate) }), 'info');
-    }
-  }, [draft.lines, taxCategories, allTaxCategories, allItems, documentId, setDraft, toast, tr]);
+    const basis = highestCategoryOf(draft.lines, rateOfCategory)?.categoryId ?? '';
+    const following = new Set(draft.lines.filter(followsHighestRate).map((l) => l.id));
+    const before = followed.current;
+    followed.current = { basis, following, lineCount: draft.lines.length };
+    // The first look, or lines arriving all at once (a saved document loading): nothing moved.
+    if (!before || before.lineCount === 0) return;
+    const added = new Set([...following].filter((id) => !before.following.has(id)));
+    const only = basis !== before.basis ? undefined : added;
+    if (only && only.size === 0) return;
+    const { changed } = applyHighestRate(draft.lines, ownCategoryOf, rateOfCategory, only);
+    if (changed.length) setDraft((d) => ({ ...d, lines: applyHighestRate(d.lines, ownCategoryOf, rateOfCategory, only).lines }));
+  }, [draft.lines, taxCategories, allTaxCategories, allItems, setDraft]);
 
   // A note raised against no one invoice or bill (?direct=1): it chooses its GST treatment.
   const directNote = isNote && !draft.sourceDocumentId;

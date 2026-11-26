@@ -25,6 +25,7 @@ import { DeleteAccountSheet } from '../../../features/session/DeleteAccountSheet
 import { DevicesSection } from '../../../features/account/DevicesSection';
 import { PrivacySection } from '../../../features/account/PrivacySection';
 import { SecuritySection } from '../../../features/account/SecuritySection';
+import { useSavedErrors } from '../../../components/useSavedErrors';
 
 const ROLE_LABELS = {
   owner: 'auth:invite.roles.owner',
@@ -50,7 +51,8 @@ export default function Profile() {
   // The sign-in email is shown, not changed here.
   const email = user?.email ?? '';
   const phone = usePhoneInput(user?.phone);
-  const [errors, setErrors] = useState<Errors<'name' | 'email' | 'phone'>>({});
+  // Errors from the last save, each gone as soon as its field is changed.
+  const [errors, setErrors] = useSavedErrors<'name' | 'email' | 'phone'>({ name, email, phone: phone.value });
   const [deleting, setDeleting] = useState(false);
 
   // The phone is checked as typed: red at once if wrong, and Save waits until it is right.

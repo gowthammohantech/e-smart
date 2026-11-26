@@ -32,6 +32,7 @@ import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { useSaveShortcut } from '../../../components/useSaveShortcut';
 import { useServerSave } from '../../../components/useServerSave';
 import { ApiError } from '@esmart/api-client';
+import { useSavedErrors } from '../../../components/useSavedErrors';
 
 /** The server lets an invitation go out again a minute after the last one. */
 const RESEND_AFTER_MS = 60_000;
@@ -76,7 +77,8 @@ export default function UserSettings() {
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<UserRole>('sales');
   const [roleOpen, setRoleOpen] = useState(false);
-  const [errors, setErrors] = useState<Errors<'name' | 'email'>>({});
+  // Errors from the last save, each gone as soon as its field is changed.
+  const [errors, setErrors] = useSavedErrors<'name' | 'email'>({ name, email });
   const [busy, setBusy] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
 

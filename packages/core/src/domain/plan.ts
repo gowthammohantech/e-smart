@@ -157,7 +157,8 @@ export function hasVehicles(tier: PlanTier): boolean {
  * there are no modules on Free to switch on or off, and custom fields are for the paid plans.
  */
 // TCS (s.206C) is not on Free either: its register (and what is owed, which reads the books) does not open.
-const NOT_ON_FREE_PATHS = ['/sales/approvals', '/settings/approvals', '/settings/modules', '/settings/custom-fields', '/reports/tcs-register', '/reports/tcs-payable'];
+// Nor GST returns: Free has e-invoices and e-way bills; the returns come with the paid plans.
+const NOT_ON_FREE_PATHS = ['/sales/approvals', '/settings/approvals', '/settings/modules', '/settings/custom-fields', '/reports/tcs-register', '/reports/tcs-payable', '/gst/returns'];
 
 /** Pages a plan can't open that aren't a module's: vehicles, approvals, modules and custom fields on Free. */
 function planOpensPath(tier: PlanTier, pathname: string): boolean {

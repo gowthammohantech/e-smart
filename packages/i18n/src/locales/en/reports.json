@@ -174,7 +174,12 @@
     "notesCount_other": "{{count}} notes",
     "netAfterNotes": "Net {{amount}}",
     "otherNotes": "Notes against no invoice in this period",
-    "otherNotesHint": "Credit notes, debit notes and returns dated in the period whose invoice is outside it, or that are against no one invoice."
+    "otherNotesHint": "Credit notes, debit notes and returns dated in the period whose invoice is outside it, or that are against no one invoice.",
+    "activeTab": "Active",
+    "cancelledTab": "Cancelled ({{count}})",
+    "cancelledInvoices": "Cancelled invoices",
+    "cancelledBills": "Cancelled bills",
+    "cancelledHint": "Cancelled in this period: shown for reference, counted in no total."
   },
   "msme": {
     "owed": "Owed to micro and small suppliers",
@@ -369,7 +374,9 @@
     "tds": "TDS",
     "tdsBase": "Amount taxed",
     "documents": "Bills",
-    "cess": "Cess"
+    "cess": "Cess",
+    "invoiceNo": "Invoice No",
+    "netTotal": "Net total"
   },
   "cell": {
     "days_one": "{{count}} day",

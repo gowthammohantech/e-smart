@@ -119,19 +119,30 @@ export function HeroFigure({
   );
 }
 
-export function ReportSection({ title, children }: { title: string; children: React.ReactNode }) {
+/** `aside` sits to the right of the title: a table's own tabs, say. */
+export function ReportSection({ title, aside, children }: { title: string; aside?: React.ReactNode; children: React.ReactNode }) {
   const t = useTheme();
   const inRow = useContext(InRow);
+  const heading = (
+    <Text
+      variant="caption"
+      tone="muted"
+      weight="600"
+      style={{ textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: aside ? 0 : t.spacing.sm }}
+    >
+      {title}
+    </Text>
+  );
   return (
     <View style={{ marginTop: t.spacing.xl, flex: inRow ? 1 : undefined }}>
-      <Text
-        variant="caption"
-        tone="muted"
-        weight="600"
-        style={{ textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: t.spacing.sm }}
-      >
-        {title}
-      </Text>
+      {aside ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md, marginBottom: t.spacing.sm }}>
+          {heading}
+          {aside}
+        </View>
+      ) : (
+        heading
+      )}
       {children}
     </View>
   );

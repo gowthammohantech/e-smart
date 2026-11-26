@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Card } from '@esmart/ui/components/Card';
 import { Badge } from '@esmart/ui/components/Badge';
+import { Segmented } from '@esmart/ui/components/Field';
 import { Text } from '@esmart/ui/components/Text';
 import { StatTile } from '@esmart/ui/components/StatTile';
 import { Cell, Column, DataTable, TABLE_PAGE_SIZE } from '@esmart/ui/components/DataTable';
@@ -65,6 +66,8 @@ export function ReportDesktop({ report, data }: { report: string; data: ReportDa
   const t = useTheme();
   const { t: tr } = useTranslation(['domain', 'reports', 'common']);
   const router = useRouter();
+  // The summary's invoices (or bills): the period's live ones, or those cancelled in it.
+  const [docTab, setDocTab] = useState<'active' | 'cancelled'>('active');
   const partyName = (id?: string | null) => (id ? data.partyNames?.[id] : undefined) ?? data.parties.find((p) => p.id === id)?.name ?? '';
   const colorFor = (i: number) => seriesColor(t.scheme, i);
   const monthBars = (rows: { key: string; value: Money }[]) => rows.map((r) => ({ label: monthLabelNarrow(r.key), value: r.value }));
@@ -82,12 +85,37 @@ export function ReportDesktop({ report, data }: { report: string; data: ReportDa
     const notesOf = (r: Doc) => notes.filter((n) => n.sourceDocumentId === r.id).sort((a, b) => a.date.localeCompare(b.date));
     // The period's other notes: against an invoice outside it, or against no one invoice. A table of their own.
     const others = notes.filter((n) => !n.sourceDocumentId || !listed.has(n.sourceDocumentId));
+    const cancelled = d.cancelled ?? [];
+    // Active or cancelled, as Customers and Payment accounts tab theirs. Cancelled ones count in no total.
+    const docTabs = (
+      <View style={{ width: 240 }}>
+        <Segmented
+          options={[
+            { value: 'active', label: tr('reports:detail.activeTab') },
+            { value: 'cancelled', label: tr('reports:detail.cancelledTab', { count: cancelled.length }) },
+          ]}
+          value={docTab}
+          onChange={(v) => setDocTab(v as 'active' | 'cancelled')}
+        />
+      </View>
+    );
     const isNote = (r: Doc) => ADJUSTMENT_KINDS.includes(r.kind);
     const credit = (r: Doc) => CREDIT_KINDS.includes(r.kind);
     // A credit note or return takes away from the sale: shown less.
     const signed = (r: Doc, m: Money): Money => (credit(r) && m.minor ? { ...m, minor: -m.minor } : m);
     // What the invoice comes to after its notes, in its own currency.
     const netOf = (r: Doc, kids: Doc[]): Money => ({ ...r.totals.grandTotal, minor: kids.reduce((acc, n) => acc + signed(n, n.totals.grandTotal).minor, r.totals.grandTotal.minor) });
+    // Totals over a table: in the business's currency, a credit note or return taking away, as in the rows.
+    const base = d.total.currency;
+    const inBase = (r: Doc, m: Money) => (m.currency === base ? m.minor : Math.round(m.minor * (r.exchangeRate || 1)));
+    const sumOf = (rs: Doc[], pick: (r: Doc) => Money): Money => ({ minor: rs.reduce((acc, r) => acc + inBase(r, signed(r, pick(r))), 0), currency: base });
+    const footerOf = (rs: Doc[]) => ({
+      party: <Cell weight="700">{tr('reports:column.netTotal')}</Cell>,
+      taxable: <Cell weight="700" mono>{money(sumOf(rs, (r) => r.totals.taxableAmount))}</Cell>,
+      ...Object.fromEntries((['igst', 'cgst', 'sgst', 'cess'] as const).map((head) => [head, <Cell key={head} weight="700" mono>{money(sumOf(rs, (r) => taxByHead(r)[head]))}</Cell>])),
+      tax: <Cell weight="700" mono>{money(sumOf(rs, (r) => r.totals.totalTax))}</Cell>,
+      total: <Cell weight="700" mono>{money(sumOf(rs, (r) => r.totals.grandTotal))}</Cell>,
+    });
     const kindTag = (r: Doc) => <Badge label={documentKindLabel(tr, r.kind)} tone={credit(r) ? 'danger' : 'warning'} size="sm" />;
     const amountColumns: Column<Doc>[] = [
       { key: 'taxable', header: tr('reports:column.taxable'), flex: 1.2, align: 'right', secondary: true, render: (r) => <Cell mono tone={isNote(r) ? 'muted' : 'default'}>{money(signed(r, r.totals.taxableAmount))}</Cell>, sortValue: (r) => sortMoney(signed(r, r.totals.taxableAmount)) },
@@ -129,7 +157,7 @@ export function ReportDesktop({ report, data }: { report: string; data: ReportDa
     const columns: Column<Doc>[] = [
       {
         key: 'number',
-        header: tr('common:table.number'),
+        header: isSales ? tr('reports:column.invoiceNo') : tr('common:table.number'),
         flex: 1.4,
         render: (r) => {
           const count = isNote(r) ? 0 : notesOf(r).length;
@@ -198,11 +226,27 @@ export function ReportDesktop({ report, data }: { report: string; data: ReportDa
             </SectionCard>
           </ReportSection>
         </ReportRow>
+        {docTab === 'cancelled' ? (
+          <TableSection
+            title={tr('reports:detail.withCount', { title: isSales ? tr('reports:detail.cancelledInvoices') : tr('reports:detail.cancelledBills'), count: cancelled.length })}
+            subtitle={tr('reports:detail.cancelledHint')}
+            aside={docTabs}
+            columns={columns}
+            rows={cancelled}
+            rowKey={(r) => r.id}
+            onRowPress={(r) => router.push(detailRouteFor(r.kind, r.id) as never)}
+            initialSort={{ key: 'date', dir: 'desc' }}
+          />
+        ) : (
+          <>
         <TableSection
           title={tr('reports:detail.withCount', { title: isSales ? tr('reports:detail.invoices') : tr('reports:detail.bills'), count: d.documents.length })}
           columns={columns}
           rows={d.documents}
+          aside={docTabs}
           subRows={notesOf}
+          total={sumOf(d.documents.flatMap((r) => [r, ...notesOf(r)]), (r) => r.totals.grandTotal)}
+          footer={footerOf(d.documents.flatMap((r) => [r, ...notesOf(r)]))}
           rowKey={(r) => r.id}
           onRowPress={(r) => router.push(detailRouteFor(r.kind, r.id) as never)}
           initialSort={{ key: 'date', dir: 'desc' }}
@@ -213,12 +257,16 @@ export function ReportDesktop({ report, data }: { report: string; data: ReportDa
             title={tr('reports:detail.withCount', { title: tr('reports:detail.otherNotes'), count: others.length })}
             subtitle={tr('reports:detail.otherNotesHint')}
             columns={noteColumns}
+            total={sumOf(others, (r) => r.totals.grandTotal)}
+            footer={footerOf(others)}
             rows={others}
             rowKey={(r) => r.id}
             onRowPress={(r) => router.push(detailRouteFor(r.kind, r.id) as never)}
             initialSort={{ key: 'date', dir: 'desc' }}
           />
         ) : null}
+          </>
+        )}
       </>
     );
   }
@@ -541,8 +589,17 @@ function TableSection<T>({
   initialSort,
   subRows,
   subtitle,
+  total,
+  footer,
+  aside,
 }: {
   title: string;
+  /** Beside the title, on its right: the table's tabs. */
+  aside?: React.ReactNode;
+  /** What the table comes to, on the right above it (as on a customer's account). */
+  total?: Money;
+  /** A totals row at the foot, by column key. */
+  footer?: Partial<Record<string, React.ReactNode>>;
   /** A line under the title: what the table holds. */
   subtitle?: string;
   columns: Column<T>[];
@@ -554,13 +611,23 @@ function TableSection<T>({
   subRows?: (row: T) => T[];
 }) {
   const t = useTheme();
-  const { t: tr } = useTranslation(['reports']);
+  const { t: tr } = useTranslation(['reports', 'common']);
   return (
-    <ReportSection title={title}>
+    <ReportSection title={title} aside={aside}>
       {subtitle ? (
         <Text variant="caption" tone="muted" style={{ marginTop: -t.spacing.xs, marginBottom: t.spacing.sm }}>
           {subtitle}
         </Text>
+      ) : null}
+      {total && rows.length ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: t.spacing.sm, marginBottom: t.spacing.sm }}>
+          <Text variant="small" tone="muted">
+            {tr('common:table.total')}
+          </Text>
+          <Text variant="small" weight="700" style={{ fontVariant: ['tabular-nums'] }}>
+            {formatMoney(total)}
+          </Text>
+        </View>
       ) : null}
       <DataTable
         scroll={false}
@@ -570,6 +637,7 @@ function TableSection<T>({
         onRowPress={onRowPress}
         initialSort={initialSort}
         subRows={subRows}
+        footer={rows.length ? footer : undefined}
         pageSize={TABLE_PAGE_SIZE}
         empty={
           <View style={{ padding: t.spacing.lg }}>

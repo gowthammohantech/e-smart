@@ -1,6 +1,6 @@
 {
   "tabBar": {
-    "parties": "Parties"
+    "parties": "Customers / Suppliers"
   },
   "overviewOf": {
     "money": "Income overview"
@@ -11,7 +11,8 @@
     "purchases": "Purchases",
     "inventory": "Inventory",
     "gst": "GST",
-    "parties": "Parties",
+    "parties": "Customers / Suppliers",
+    "partiesCustomersOnly": "Customers",
     "reports": "Reports",
     "more": "More",
     "money": "Accounts"
@@ -180,7 +181,7 @@
       "customFields": "Custom fields",
       "approvalRules": "Approvals",
       "aiUsage": "AI usage",
-      "invoiceDesign": "Invoice design",
+      "invoiceDesign": "Invoice Design",
       "vehicles": "Vehicles",
       "privacy": "Privacy and usage data"
     },

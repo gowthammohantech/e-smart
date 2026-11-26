@@ -36,7 +36,6 @@ import { HubState } from '../../../features/dashboard/HubState';
 import { PeriodBar } from '../../../features/dashboard/PeriodBar';
 import { FilingCards } from '../../../features/dashboard/FilingCards';
 import { bucketLabel, delta, periodTitle } from '../../../features/dashboard/labels';
-import { major, useCardExport } from '../../../features/dashboard/exportCard';
 import { useUiStore } from '../../../store/uiStore';
 import { openLixi } from '../../../features/lixi/open';
 import { FirstRunDesktop } from '../../../features/reports/FirstRunDesktop';
@@ -60,10 +59,11 @@ export default function Home() {
   const canOpen = useCanOpen();
   const full = useModuleSet() === 'full';
   const withStock = useHasModule('inventory');
-  const exportCsv = useCardExport();
   // Every figure comes from the server in one call, already in base currency, for the branch and
   // period the header and period bar name.
-  const scope = useDashboardScope();
+  // Home doesn't compare with the period before, whatever the other tabs have set.
+  const shared = useDashboardScope();
+  const scope = { ...shared, period: { ...shared.period, compare: false } };
   const query = useHomeHub(scope);
   const hub = query.data;
 
@@ -272,7 +272,7 @@ export default function Home() {
           </View>
         )}
 
-        <PeriodBar />
+        <PeriodBar showCompare={false} />
 
         <SectionHeader title={title} />
         <StatGrid>
@@ -349,11 +349,7 @@ export default function Home() {
               key: 'salesTrend',
               node: (
                 <>
-                  <SectionHeader
-                    title={tr('reports:home.salesTrend')}
-                    action={tr('reports:dash.export.csv')}
-                    onAction={() => exportCsv(tr('reports:home.salesTrend'), hub.period, { headers: [tr('reports:dash.period.label'), tr('reports:home.sales')], rows: (hub.salesTrend ?? []).map((r) => [r.key!, major(r.value)]) })}
-                  />
+                  <SectionHeader title={tr('reports:home.salesTrend')} />
                   <Card style={fill}>
                     <BarChart data={salesTrend} caption={tr('reports:dash.sales.trendCaption')} />
                   </Card>
@@ -364,16 +360,7 @@ export default function Home() {
               key: 'cashFlow',
               node: (
                 <>
-                  <SectionHeader
-                    title={tr('reports:dash.home.cashFlow')}
-                    action={tr('reports:dash.export.csv')}
-                    onAction={() =>
-                      exportCsv(tr('reports:dash.home.cashFlow'), hub.period, {
-                        headers: [tr('reports:dash.period.label'), tr('reports:dash.home.moneyIn'), tr('reports:dash.home.moneyOut'), tr('reports:dash.home.net')],
-                        rows: hub.cashFlow.map((r) => [r.key, major(r.inflow), major(r.outflow), major(r.inflow) - major(r.outflow)]),
-                      })
-                    }
-                  />
+                  <SectionHeader title={tr('reports:dash.home.cashFlow')} />
                   <Card style={fill}>
                     <PairedBars data={cashFlow} caption={tr('reports:dash.home.cashFlowCaption')} inLabel={tr('reports:dash.home.moneyIn')} outLabel={tr('reports:dash.home.moneyOut')} netLabel={tr('reports:dash.home.net')} />
                   </Card>
@@ -384,16 +371,7 @@ export default function Home() {
               key: 'invoiceStatus',
               node: (
                 <>
-                  <SectionHeader
-                    title={tr('reports:dash.home.invoiceStatus')}
-                    action={tr('reports:dash.export.csv')}
-                    onAction={() =>
-                      exportCsv(tr('reports:dash.home.invoiceStatus'), hub.period, {
-                        headers: [tr('reports:dash.home.invoiceStatus'), tr('reports:dash.home.count'), tr('reports:home.sales')],
-                        rows: hub.invoiceStatus.map((r) => [statusLabel(tr, r.status as DocStatus), r.count, major(r.total)]),
-                      })
-                    }
-                  />
+                  <SectionHeader title={tr('reports:dash.home.invoiceStatus')} />
                   <Card style={fill}>
                     <StatusBar
                       emptyLabel={tr('reports:dash.home.noInvoices')}
@@ -608,18 +586,11 @@ export default function Home() {
               key: 'movement',
               node: (
                 <>
-                  {/* Export and View all: the CSV of the period, and every receipt. */}
+                  {/* View all: every receipt, when there are more than the card shows. */}
                   <SectionHeader
                     title={tr('reports:dash.home.movement')}
-                    action={hub.moneyMovement.length > LIST_ROWS ? tr('nav:shell.viewAll') : hub.moneyMovement.length ? tr('reports:dash.export.csv') : undefined}
-                    onAction={() =>
-                      hub.moneyMovement.length > LIST_ROWS
-                        ? router.push('/(app)/payments/received' as never)
-                        : exportCsv(tr('reports:dash.home.movement'), hub.period, {
-                            headers: [tr('reports:dash.home.date'), tr('reports:dash.home.movement'), tr('reports:dash.home.amount')],
-                            rows: hub.moneyMovement.map((r) => [r.date, movementLabel(r), (r.kind === 'received' ? 1 : -1) * major(r.amount)]),
-                          })
-                    }
+                    action={hub.moneyMovement.length > LIST_ROWS ? tr('nav:shell.viewAll') : undefined}
+                    onAction={() => router.push('/(app)/payments/received' as never)}
                   />
                   <Card padded={false} style={fill}>
                     {hub.moneyMovement.length === 0 ? (

@@ -33,6 +33,7 @@ import { useGstinLookup, type GstinDetails } from '../../../features/gstin/useGs
 import { useSaveShortcut } from '../../../components/useSaveShortcut';
 import { SheetActions } from '../../../features/company/SheetActions';
 import { useServerSave } from '../../../components/useServerSave';
+import { useSavedErrors } from '../../../components/useSavedErrors';
 
 export default function BranchSettings() {
   const t = useTheme();
@@ -66,7 +67,8 @@ export default function BranchSettings() {
   const [postalCode, setPostalCode] = useState('');
   const [gstin, setGstin] = useState('');
   const [isPrimary, setIsPrimary] = useState(false);
-  const [errors, setErrors] = useState<Errors<'name' | 'code' | 'line1' | 'gstin' | 'postalCode' | 'phone'>>({});
+  // Errors from the last save, each gone as soon as its field is changed.
+  const [errors, setErrors] = useSavedErrors<'name' | 'code' | 'line1' | 'gstin' | 'postalCode' | 'phone'>({ name, code, line1, gstin, postalCode, phone: phone.value });
 
   const open = (branch?: Branch) => {
     // A new branch starts with a blank address: copying head office's street

@@ -1,5 +1,5 @@
 import { ExpenseCategory, Integration, TaxCategory, Unit } from '../types';
-import { GST_STATE_CODES } from '../domain/stateCodes';
+import { EWB_OTHER_COUNTRY_CODE, GST_STATE_CODES } from '../domain/stateCodes';
 
 /** Every state and union territory that issues GSTINs, by name, for pickers. */
 export const INDIAN_STATES: { code: string; name: string }[] = GST_STATE_CODES.filter((s) => s.code !== '97')
@@ -44,6 +44,7 @@ export function countryName(code?: string): string {
 }
 
 export function stateName(code?: string): string {
+  if (code === EWB_OTHER_COUNTRY_CODE) return 'Other';
   return INDIAN_STATES.find((s) => s.code === code)?.name ?? '—';
 }
 

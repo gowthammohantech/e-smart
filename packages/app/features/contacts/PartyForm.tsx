@@ -34,6 +34,7 @@ import { useGoBack } from '../../navigation/useGoBack';
 import { useGstinLookup, type GstinDetails } from '../gstin/useGstinLookup';
 import { CustomFieldsSection, customFieldErrors, useCustomFields } from '../customFields/CustomFieldsSection';
 import type { CustomValues } from '@esmart/core/domain/customFields';
+import { useSavedErrors } from '../../components/useSavedErrors';
 
 const CODE_PREFIX: Record<PartyKind, string> = { customer: 'C', supplier: 'S', both: 'B', general: 'G' };
 
@@ -153,7 +154,19 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
   const [stateOpen, setStateOpen] = useState(false);
   const [currencyOpen, setCurrencyOpen] = useState(false);
   const [termsOpen, setTermsOpen] = useState(false);
-  const [errors, setErrors] = useState<Errors<'name' | 'email' | 'phone' | 'taxId' | 'pan' | 'udyam' | 'country' | 'stateCode' | 'postalCode' | 'tcsSection'>>({});
+  // Errors from the last save, each gone as soon as its field is changed.
+  const [errors, setErrors] = useSavedErrors<'name' | 'email' | 'phone' | 'taxId' | 'pan' | 'udyam' | 'country' | 'stateCode' | 'postalCode' | 'tcsSection'>({
+    name,
+    email,
+    phone: phone.value,
+    taxId,
+    pan,
+    udyam,
+    country,
+    stateCode,
+    postalCode,
+    tcsSection: [tcsApplicable, tcsSectionCode],
+  });
 
   // Both cities hang off the one state, so a city left over from the old state goes.
   const changeState = (code: string) => {
