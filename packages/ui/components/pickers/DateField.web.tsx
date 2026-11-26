@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleProp, View, ViewStyle } from 'react-native';
 import { Icon } from '../Icon';
@@ -64,9 +64,11 @@ export function DateField({
   const allowed = (iso: string) => (!min || iso >= min) && (!max || iso <= max);
 
   // A date set from outside (a default, the calendar, a reset) shows when not mid-typing.
-  useEffect(() => {
+  const [seen, setSeen] = useState({ day, focused });
+  if (seen.day !== day || seen.focused !== focused) {
+    setSeen({ day, focused });
     if (!focused) setText(shown(day));
-  }, [day, focused]);
+  }
 
   const a11y = useFieldA11y({ error, hint, required });
   const picker = useRef<HTMLInputElement>(null);
