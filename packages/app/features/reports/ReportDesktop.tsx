@@ -88,6 +88,17 @@ export function ReportDesktop({ report, data }: { report: string; data: ReportDa
     const signed = (r: Doc, m: Money): Money => (credit(r) && m.minor ? { ...m, minor: -m.minor } : m);
     // What the invoice comes to after its notes, in its own currency.
     const netOf = (r: Doc, kids: Doc[]): Money => ({ ...r.totals.grandTotal, minor: kids.reduce((acc, n) => acc + signed(n, n.totals.grandTotal).minor, r.totals.grandTotal.minor) });
+    // Totals over a table: in the business's currency, a credit note or return taking away, as in the rows.
+    const base = d.total.currency;
+    const inBase = (r: Doc, m: Money) => (m.currency === base ? m.minor : Math.round(m.minor * (r.exchangeRate || 1)));
+    const sumOf = (rs: Doc[], pick: (r: Doc) => Money): Money => ({ minor: rs.reduce((acc, r) => acc + inBase(r, signed(r, pick(r))), 0), currency: base });
+    const footerOf = (rs: Doc[]) => ({
+      party: <Cell weight="700">{tr('reports:column.netTotal')}</Cell>,
+      taxable: <Cell weight="700" mono>{money(sumOf(rs, (r) => r.totals.taxableAmount))}</Cell>,
+      ...Object.fromEntries((['igst', 'cgst', 'sgst', 'cess'] as const).map((head) => [head, <Cell key={head} weight="700" mono>{money(sumOf(rs, (r) => taxByHead(r)[head]))}</Cell>])),
+      tax: <Cell weight="700" mono>{money(sumOf(rs, (r) => r.totals.totalTax))}</Cell>,
+      total: <Cell weight="700" mono>{money(sumOf(rs, (r) => r.totals.grandTotal))}</Cell>,
+    });
     const kindTag = (r: Doc) => <Badge label={documentKindLabel(tr, r.kind)} tone={credit(r) ? 'danger' : 'warning'} size="sm" />;
     const amountColumns: Column<Doc>[] = [
       { key: 'taxable', header: tr('reports:column.taxable'), flex: 1.2, align: 'right', secondary: true, render: (r) => <Cell mono tone={isNote(r) ? 'muted' : 'default'}>{money(signed(r, r.totals.taxableAmount))}</Cell>, sortValue: (r) => sortMoney(signed(r, r.totals.taxableAmount)) },
@@ -203,6 +214,8 @@ export function ReportDesktop({ report, data }: { report: string; data: ReportDa
           columns={columns}
           rows={d.documents}
           subRows={notesOf}
+          total={sumOf(d.documents.flatMap((r) => [r, ...notesOf(r)]), (r) => r.totals.grandTotal)}
+          footer={footerOf(d.documents.flatMap((r) => [r, ...notesOf(r)]))}
           rowKey={(r) => r.id}
           onRowPress={(r) => router.push(detailRouteFor(r.kind, r.id) as never)}
           initialSort={{ key: 'date', dir: 'desc' }}
@@ -213,6 +226,8 @@ export function ReportDesktop({ report, data }: { report: string; data: ReportDa
             title={tr('reports:detail.withCount', { title: tr('reports:detail.otherNotes'), count: others.length })}
             subtitle={tr('reports:detail.otherNotesHint')}
             columns={noteColumns}
+            total={sumOf(others, (r) => r.totals.grandTotal)}
+            footer={footerOf(others)}
             rows={others}
             rowKey={(r) => r.id}
             onRowPress={(r) => router.push(detailRouteFor(r.kind, r.id) as never)}
@@ -541,8 +556,14 @@ function TableSection<T>({
   initialSort,
   subRows,
   subtitle,
+  total,
+  footer,
 }: {
   title: string;
+  /** What the table comes to, on the right above it (as on a customer's account). */
+  total?: Money;
+  /** A totals row at the foot, by column key. */
+  footer?: Partial<Record<string, React.ReactNode>>;
   /** A line under the title: what the table holds. */
   subtitle?: string;
   columns: Column<T>[];
@@ -554,13 +575,23 @@ function TableSection<T>({
   subRows?: (row: T) => T[];
 }) {
   const t = useTheme();
-  const { t: tr } = useTranslation(['reports']);
+  const { t: tr } = useTranslation(['reports', 'common']);
   return (
     <ReportSection title={title}>
       {subtitle ? (
         <Text variant="caption" tone="muted" style={{ marginTop: -t.spacing.xs, marginBottom: t.spacing.sm }}>
           {subtitle}
         </Text>
+      ) : null}
+      {total && rows.length ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: t.spacing.sm, marginBottom: t.spacing.sm }}>
+          <Text variant="small" tone="muted">
+            {tr('common:table.total')}
+          </Text>
+          <Text variant="small" weight="700" style={{ fontVariant: ['tabular-nums'] }}>
+            {formatMoney(total)}
+          </Text>
+        </View>
       ) : null}
       <DataTable
         scroll={false}
@@ -570,6 +601,7 @@ function TableSection<T>({
         onRowPress={onRowPress}
         initialSort={initialSort}
         subRows={subRows}
+        footer={rows.length ? footer : undefined}
         pageSize={TABLE_PAGE_SIZE}
         empty={
           <View style={{ padding: t.spacing.lg }}>
