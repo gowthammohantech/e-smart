@@ -90,7 +90,7 @@ describe('reports', () => {
     expect(csv.headers['content-disposition']).toContain('sales-summary-2026-08-01-2026-09-30.csv');
     const lines = csv.raw.trim().split('\r\n');
     expect(lines[0]).toBe('number,date,party,status,total,currency');
-    expect(lines).toContain(`${k.a.number},2026-09-10,Sunrise Retail,partiallyPaid,2360,INR`);
+    expect(lines).toContain(`${k.a.number},10-09-2026,Sunrise Retail,partiallyPaid,2360,INR`);
     expect(lines).toHaveLength(3);
 
     const pdf = await t.get(`${m.c}/reports/profit`, { token: m.token, query: range, headers: { accept: 'application/pdf' } });

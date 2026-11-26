@@ -4,7 +4,21 @@ import { useRouter } from 'expo-router';
 import { Button } from '@esmart/ui/components/Button';
 import { useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import type { Party } from '@esmart/core/types';
-import { useParties } from '../../store/selectors';
+
+/**
+ * Who is waiting for the contact the new-contact form saves: set when a picker opens the form with
+ * ?then=back, called by the form once the contact is saved, then cleared. The saved contact itself
+ * comes back, so the picker takes exactly that one, not a guess from the contacts loaded so far
+ * (which grow as pickers search, and could hand over someone else).
+ */
+let waiting: ((party: Party) => void) | null = null;
+
+/** Called by the new-contact form when a contact opened with ?then=back is saved. */
+export function partyAdded(party: Party) {
+  const take = waiting;
+  waiting = null;
+  take?.(party);
+}
 
 /**
  * "Add new customer" (or supplier) under a contact picker, as the invoice screen has it: the picker
@@ -12,23 +26,14 @@ import { useParties } from '../../store/selectors';
  */
 export function useAddParty(kind: 'customer' | 'supplier', onAdded: (party: Party) => void) {
   const router = useRouter();
-  const parties = useParties(kind);
-  // The contacts there were before the form opened: the one that wasn't is the one just added.
-  const before = useRef<Set<string> | null>(null);
+  // The latest handler: the form saves after this screen has rendered again.
   const added = useRef(onAdded);
   useEffect(() => {
     added.current = onAdded;
   });
-  useEffect(() => {
-    const was = before.current;
-    const party = was && parties.find((p) => !was.has(p.id));
-    if (!party) return;
-    before.current = null;
-    added.current(party);
-  }, [parties]);
   return (closePicker: () => void) => {
     closePicker();
-    before.current = new Set(parties.map((p) => p.id));
+    waiting = (party) => added.current(party);
     router.push(kind === 'supplier' ? '/(app)/parties/suppliers/new?then=back' : '/(app)/parties/customers/new?then=back');
   };
 }

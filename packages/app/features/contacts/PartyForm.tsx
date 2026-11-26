@@ -36,6 +36,7 @@ import { useGstinLookup, type GstinDetails } from '../gstin/useGstinLookup';
 import { CustomFieldsSection, customFieldErrors, useCustomFields } from '../customFields/CustomFieldsSection';
 import type { CustomValues } from '@esmart/core/domain/customFields';
 import { useSavedErrors } from '../../components/useSavedErrors';
+import { partyAdded } from './AddPartyButton';
 
 const CODE_PREFIX: Record<PartyKind, string> = { customer: 'C', supplier: 'S', both: 'B', general: 'G' };
 
@@ -371,7 +372,11 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
     const id = res.id ?? record.id;
     if (party) goBack(backTo);
     else if (another) resetForAnother();
-    else if (then === 'back' && router.canGoBack()) router.back();
+    else if (then === 'back' && router.canGoBack()) {
+      // The picker that opened the form takes this contact as its choice.
+      partyAdded({ ...record, id } as Party);
+      router.back();
+    }
     else router.replace(kind === 'supplier' ? `/(app)/parties/suppliers/${id}` : `/(app)/parties/customers/${id}`);
   };
   useSaveShortcut(() => void save(), !saving && canSave, offersAnother ? () => void save(true) : undefined);

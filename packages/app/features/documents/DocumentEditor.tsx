@@ -97,6 +97,7 @@ import { BillableExpenses } from './BillableExpenses';
 import { CustomFieldsSection, customFieldErrors, useCustomFields } from '../customFields/CustomFieldsSection';
 import { VehicleField } from '../vehicles/VehicleField';
 import { taxChoice, taxProblem } from '../settings/taxChoice';
+import { useAddParty } from '../contacts/AddPartyButton';
 
 /** What finalising moves a draft of this kind to. */
 
@@ -733,13 +734,15 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   const rateText = useDecimalText(draft.exchangeRate, (exchangeRate) => patch({ exchangeRate }));
 
   const [, setParams] = useQueryParams();
-  const pickParty = (id: string) => {
-    const p = parties.find((x) => x.id === id);
-    if (!p) return;
+  const takeParty = (p: Party) => {
     setDraft((d) => withParty(d, p));
     // A new document keeps its party in the URL (replaced, not pushed), so a
     // refresh or a shared link reopens it with the same party.
-    if (!documentId) setParams({ partyId: id });
+    if (!documentId) setParams({ partyId: p.id });
+  };
+  const pickParty = (id: string) => {
+    const p = parties.find((x) => x.id === id);
+    if (p) takeParty(p);
   };
 
   // Back from New item opened from this document: the item goes on as a line.
@@ -757,15 +760,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   useFocusEffect(useCallback(() => takeMade.current(), []));
 
   // "Add customer" from the picker: the party saved there is the one this document is for.
-  const partiesBeforeAdd = useRef<Set<string> | null>(null);
-  useEffect(() => {
-    const before = partiesBeforeAdd.current;
-    const added = before && parties.find((p) => !before.has(p.id));
-    if (!added) return;
-    partiesBeforeAdd.current = null;
-    pickParty(added.id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [parties]);
+  // Taken as the form hands it over: this screen's list doesn't hold them yet when the form saves.
+  const addParty = useAddParty(isPurchase ? 'supplier' : 'customer', takeParty);
 
   useEffect(() => {
     if (seed?.missingParty) toast.show(tr('common:documentEditor.prefillMissingParty'), 'warning', { icon: 'account-question-outline' });
@@ -2142,11 +2138,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
               variant="secondary"
               icon="plus"
               fullWidth={!desktop}
-              onPress={() => {
-                setPartyOpen(false);
-                partiesBeforeAdd.current = new Set(parties.map((p) => p.id));
-                router.push(isPurchase ? '/(app)/parties/suppliers/new?then=back' : '/(app)/parties/customers/new?then=back');
-              }}
+              onPress={() => addParty(() => setPartyOpen(false))}
             />
           }
         />

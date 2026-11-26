@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, ScrollView, View, type LayoutChangeEvent } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
@@ -144,13 +144,11 @@ function CompanySettingsForm() {
   // A valid GSTIN already says which state the business is in (its first two digits), so the state follows it and can't be edited.
   const gstinState =
     company?.country === 'IN' && taxRegistered && taxId && !validGstin(taxId) ? INDIAN_STATES.find((s) => s.code === taxId.slice(0, 2)) : undefined;
-  useEffect(() => {
-    if (!gstinState || gstinState.code === stateCode) return;
-    // Entries posted: the state is frozen, so a GSTIN from another state is refused (below) rather than moving it.
-    if (locks.state && stateCode) return;
+  // Entries posted: the state is frozen, so a GSTIN from another state is refused (below) rather than moving it.
+  if (gstinState && gstinState.code !== stateCode && !(locks.state && stateCode)) {
     setStateCode(gstinState.code);
     if (city && !citiesForState(gstinState.code).includes(city)) setCity('');
-  }, [gstinState, stateCode, locks.state, city]);
+  }
   const currency = CURRENCIES.find((c) => c.code === company?.baseCurrency);
 
   // Checked as typed: a field filled in wrong is red at once and Save waits until it is put right.

@@ -4,7 +4,7 @@ import { canonicalJson, useDirty } from '../components/useDirty';
 
 /** Renders a form with two fields and a record key; returns the latest "changed" answer and the setters. */
 function setup() {
-  const out: { dirty: boolean; setName: (v: string) => void; setKey: (k: string | null) => void; setPhone: (v: string) => void } = {
+  const out: { dirty: boolean; setName: (v: string) => void; setKey: (k: string | null) => void; setPhone: (v: string | undefined) => void } = {
     dirty: false,
     setName: () => undefined,
     setKey: () => undefined,
