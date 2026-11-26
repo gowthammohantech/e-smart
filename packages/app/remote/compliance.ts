@@ -7,6 +7,7 @@ import { applyEntity } from './apply';
 import { whileBusy } from './busy';
 import * as outbox from './outbox';
 import { refreshNow } from './refresh';
+import { queryClient } from './queries';
 
 /**
  * E-invoicing and e-way bills. The GST portals are only reachable online, so
@@ -19,17 +20,28 @@ const offline = (): ComplianceResult => ({
   issues: [{ code: 'OFFLINE', message: i18n.t('errors:remote.portalOffline'), severity: 'blocking' } as ComplianceIssue],
 });
 
-async function call<T>(run: () => Promise<{ data?: T }>, after?: (data: T) => void): Promise<ComplianceResult & { data?: T }> {
+/**
+ * After a portal call, the server's copies the pages read are read again: the invoice (whether it can
+ * still be edited, its IRN and e-way bills) and the e-way bill. Without this the invoice page kept
+ * offering Edit after an IRN until it was reloaded: generating one changes neither its status nor version.
+ */
+function reread(documentId?: string, ewayBillId?: string) {
+  void queryClient.invalidateQueries({ queryKey: ['document', useAppStore.getState().activeCompanyId, ...(documentId ? [documentId] : [])] });
+  void queryClient.invalidateQueries({ queryKey: ['ewayBill', useAppStore.getState().activeCompanyId, ...(ewayBillId ? [ewayBillId] : [])] });
+}
+
+async function call<T>(run: () => Promise<{ data?: T }>, after?: (data: T) => void, reads: { documentId?: string; ewayBillId?: string } = {}): Promise<ComplianceResult & { data?: T }> {
   try {
     // A portal call is a save too: the app stays on its screen until the answer is back.
     const { data } = await whileBusy(run);
     if (data) after?.(data);
     // The document's compliance fields changed on the server; bring them in.
-    void refreshNow();
+    void refreshNow().then(() => reread(reads.documentId, reads.ewayBillId));
     const r = (data ?? {}) as { ok?: boolean; issues?: ComplianceIssue[] };
     return { ok: r.ok ?? true, issues: r.issues ?? [], data };
   } catch (err) {
     if (isNetworkError(err)) return offline();
+    reread(reads.documentId, reads.ewayBillId);
     if (err instanceof ApiError) {
       return { ok: false, issues: (err.problem.issues as ComplianceIssue[] | undefined) ?? [{ code: err.code, message: err.message, severity: 'blocking' } as ComplianceIssue] };
     }
@@ -79,6 +91,7 @@ export async function generateEInvoice(documentId: string): Promise<ComplianceRe
   return call(
     () => api.POST('/companies/{companyId}/documents/{id}/e-invoice', { params: { path: { ...p(docCompany(documentId)), id: documentId } } }),
     (data) => applyCompliance(documentId, data),
+    { documentId },
   );
 }
 
@@ -89,6 +102,7 @@ export async function cancelEInvoice(documentId: string, reasonCode: CancelReaso
   return call(
     () => api.POST('/companies/{companyId}/documents/{id}/e-invoice/cancel', { params: { path: { ...p(docCompany(documentId)), id: documentId } }, body: { reasonCode, remark } as never }),
     (data) => applyCompliance(documentId, data),
+    { documentId },
   );
 }
 
@@ -98,6 +112,7 @@ export async function generateEwayBill(input: NewEwayBillInput): Promise<Complia
   const r = await call(
     () => api.POST('/companies/{companyId}/eway-bills', { params: { path: p(docCompany(input.documentId)) }, body: input as never }),
     (data) => applyEntity('eway_bill', (data as { ewayBill?: unknown }).ewayBill),
+    { documentId: input.documentId },
   );
   return { ok: r.ok, issues: r.issues, ewayBillId: (r.data as { ewayBill?: { id?: string } } | undefined)?.ewayBill?.id };
 }
@@ -106,6 +121,7 @@ export async function updateEwayBillPartB(id: string, update: Omit<EwayBillPartB
   return call(
     () => api.POST('/companies/{companyId}/eway-bills/{id}/part-b', { params: { path: { ...p(billCompany(id)), id } }, body: update as never }),
     (data) => applyEntity('eway_bill', (data as { ewayBill?: unknown }).ewayBill),
+    { ewayBillId: id, documentId: useAppStore.getState().ewayBills.find((b) => b.id === id)?.documentId },
   );
 }
 
@@ -113,6 +129,7 @@ export async function extendEwayBill(id: string, args: ExtendEwayBillInput): Pro
   return call(
     () => api.POST('/companies/{companyId}/eway-bills/{id}/extend', { params: { path: { ...p(billCompany(id)), id } }, body: args as never }),
     (data) => applyEntity('eway_bill', (data as { ewayBill?: unknown }).ewayBill),
+    { ewayBillId: id, documentId: useAppStore.getState().ewayBills.find((b) => b.id === id)?.documentId },
   );
 }
 
@@ -122,6 +139,7 @@ export async function cancelEwayBill(id: string, reasonCode: CancelReasonCode, r
     // The server answers only "ok", so the cancellation is written onto the stored bill from what was sent: the page
     // then shows "Cancelled" at once, and the refresh that follows brings the server's own copy.
     () => applyEntity('eway_bill', { id, status: 'cancelled', cancelledAt: new Date().toISOString(), cancelReasonCode: reasonCode, cancelRemark: remark }),
+    { ewayBillId: id, documentId: useAppStore.getState().ewayBills.find((b) => b.id === id)?.documentId },
   );
 }
 
