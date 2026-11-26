@@ -230,6 +230,27 @@ export default function Report() {
       ...data.documents.flatMap((d) => [d, ...notes.filter((n) => n.sourceDocumentId === d.id).sort((a, b) => a.date.localeCompare(b.date))]),
       ...notes.filter((n) => !n.sourceDocumentId || !listed.has(n.sourceDocumentId)),
     ];
+    // The rows, Total beside the customer; a Net total row at the foot adds up each amount column, notes off.
+    const docRows = exportDocs.map((d) => {
+      const heads = taxByHead(d);
+      // A credit note or return takes away from the sale: its amounts go in less.
+      const sign = CREDIT_KINDS.includes(d.kind) ? -1 : 1;
+      const amount = (m: Money) => sign * toMajor(m) || 0;
+      return [
+        d.number,
+        documentKindLabel(tr, d.kind),
+        d.date,
+        partyNameOf(d.partyId),
+        amount(d.totals.grandTotal),
+        amount(d.totals.taxableAmount),
+        amount(heads.igst),
+        amount(heads.cgst),
+        amount(heads.sgst),
+        amount(heads.cess),
+        amount(d.totals.totalTax),
+      ];
+    });
+    const net = (col: number) => Math.round(docRows.reduce((sum, r) => sum + (r[col] as number), 0) * 100) / 100;
     exportRows = () =>
       reportTable(
         [
@@ -237,33 +258,15 @@ export default function Report() {
           tr('common:table.type'),
           tr('common:table.date'),
           isSales ? tr('common:table.customer') : tr('common:table.supplier'),
+          tr('common:table.total'),
           tr('reports:column.taxable'),
           'IGST',
           'CGST',
           'SGST',
           tr('reports:column.cess'),
           tr('common:table.tax'),
-          tr('common:table.total'),
         ],
-        exportDocs.map((d) => {
-          const heads = taxByHead(d);
-          // A credit note or return takes away from the sale: its amounts go in less.
-          const sign = CREDIT_KINDS.includes(d.kind) ? -1 : 1;
-          const amount = (m: Money) => sign * toMajor(m) || 0;
-          return [
-            d.number,
-            documentKindLabel(tr, d.kind),
-            d.date,
-            partyNameOf(d.partyId),
-            amount(d.totals.taxableAmount),
-            amount(heads.igst),
-            amount(heads.cgst),
-            amount(heads.sgst),
-            amount(heads.cess),
-            amount(d.totals.totalTax),
-            amount(d.totals.grandTotal),
-          ];
-        }),
+        docRows.length ? [...docRows, [tr('reports:column.netTotal'), '', '', '', net(4), net(5), net(6), net(7), net(8), net(9), net(10)]] : docRows,
       );
   }
 
