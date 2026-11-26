@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useDirty } from '../../components/useDirty';
 import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -87,8 +88,12 @@ export function FixedAssetForm({ asset, prefill }: { asset?: FixedAsset; prefill
     : method === 'wdv' && !(Number(rate) > 0 && Number(rate) <= 100) ? tr('books:assets.needRate')
     : undefined;
 
+  // A saved asset is saved again only once something on it has changed.
+  const changed = useDirty([name, category, assetCode, account, acquiredOn, inUseFrom, cost, residual, method, lifeYears, rate, brought, openingDep, openingAsOf, notes, disposing, disposedOn, disposalNote]);
+  const canSave = !problem && (!asset?.id || changed);
+
   const save = async () => {
-    if (problem) return;
+    if (!canSave) return;
     setBusy(true);
     try {
       const body = {
@@ -221,7 +226,7 @@ export function FixedAssetForm({ asset, prefill }: { asset?: FixedAsset; prefill
               {problem}
             </Text>
           ) : null}
-          <Button title={tr(asset?.id ? 'books:assets.save' : 'books:assets.add')} onPress={() => void save()} loading={busy} disabled={!canWrite || busy || !!problem} fullWidth={!desktop} shortcut="S" />
+          <Button title={tr(asset?.id ? 'books:assets.save' : 'books:assets.add')} onPress={() => void save()} loading={busy} disabled={!canWrite || busy || !canSave} fullWidth={!desktop} shortcut="S" />
         </FormActions>
       </FormContainer>
 

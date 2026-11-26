@@ -28,6 +28,7 @@ import { uid } from '@esmart/core/lib/id';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { FieldRow } from '@esmart/ui/components/Layout';
 import { useSaveShortcut } from '../../../components/useSaveShortcut';
+import { useDirty } from '../../../components/useDirty';
 import { useServerSave } from '../../../components/useServerSave';
 
 /** Rates the history shows before Show all. */
@@ -70,6 +71,10 @@ export default function CurrencySettings() {
     });
   }, [rates]);
 
+  // An existing rate is saved only once something on it has changed.
+  const changed = useDirty([from, rate, effectiveFrom], editing);
+  const canSave = !!Number(rate) && (!editing?.id || changed);
+
   const open = (r?: ExchangeRate) => {
     setEditing(r ?? ({ id: '', companyId: company.id, from: 'USD', to: baseCurrency, rate: 0, effectiveFrom: today(), source: 'manual' } as ExchangeRate));
     setFrom(r?.from ?? 'USD');
@@ -78,7 +83,7 @@ export default function CurrencySettings() {
   };
 
   const save = async () => {
-    if (!editing || !Number(rate)) return;
+    if (!editing || !canSave) return;
     const exchangeRate: ExchangeRate = {
       ...editing,
       id: editing.id || uid('fx'),
@@ -95,7 +100,7 @@ export default function CurrencySettings() {
   };
 
   // Ctrl+S (⌘+S) does what Save does, while the form is open.
-  useSaveShortcut(save, !!editing && !!Number(rate));
+  useSaveShortcut(save, !!editing && canSave);
 
   return (
     <View style={{ flex: 1 }}>
@@ -212,7 +217,7 @@ export default function CurrencySettings() {
             saveLabel={tr('settings:currencies.save')}
             onSave={save}
             saving={saving}
-            saveDisabled={!Number(rate)}
+            saveDisabled={!canSave}
             deleteLabel={tr('settings:currencies.delete')}
             onDelete={
               editing?.id

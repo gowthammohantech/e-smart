@@ -34,6 +34,7 @@ import { useSaveShortcut } from '../../../components/useSaveShortcut';
 import { SheetActions } from '../../../features/company/SheetActions';
 import { useServerSave } from '../../../components/useServerSave';
 import { useSavedErrors } from '../../../components/useSavedErrors';
+import { useDirty } from '../../../components/useDirty';
 
 export default function BranchSettings() {
   const t = useTheme();
@@ -69,6 +70,10 @@ export default function BranchSettings() {
   const [isPrimary, setIsPrimary] = useState(false);
   // Errors from the last save, each gone as soon as its field is changed.
   const [errors, setErrors] = useSavedErrors<'name' | 'code' | 'line1' | 'gstin' | 'postalCode' | 'phone'>({ name, code, line1, gstin, postalCode, phone: phone.value });
+
+  // An existing branch is saved only once something on it has changed; a new one is checked on Save.
+  const changed = useDirty([name, code, city, stateCode, line1, postalCode, gstin, phone.value, isPrimary], editing);
+  const canSave = !editing?.id || changed;
 
   const open = (branch?: Branch) => {
     // A new branch starts with a blank address: copying head office's street
@@ -138,7 +143,7 @@ export default function BranchSettings() {
   const invalid = hasErrors(live);
 
   const save = async () => {
-    if (!editing) return;
+    if (!editing || !canSave) return;
     // An empty name says so on the field, rather than a Save that silently does nothing.
     if (!name.trim()) {
       setErrors({ name: tr('errors:validation.required', { field: tr('settings:branches.name') }) });
@@ -212,7 +217,7 @@ export default function BranchSettings() {
   const docCount = (branchId: string) => usage?.documentsByBranch[branchId] ?? 0;
 
   // Ctrl+S (⌘+S) does what Save does, while the form is open.
-  useSaveShortcut(save, !!editing);
+  useSaveShortcut(save, !!editing && canSave);
 
   return (
     <View style={{ flex: 1 }}>
@@ -316,7 +321,7 @@ export default function BranchSettings() {
             saveLabel={tr('settings:branches.save')}
             onSave={save}
             saving={saving}
-            saveDisabled={invalid}
+            saveDisabled={invalid || !canSave}
             deleteLabel={tr('settings:branches.delete')}
             onDelete={
               editing?.id && !editing.isPrimary && !locked

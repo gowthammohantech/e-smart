@@ -6,6 +6,7 @@ import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Button } from '@esmart/ui/components/Button';
 import { FormActions } from '@esmart/ui/components/ActionBar';
 import { useSaveShortcut } from '../../../components/useSaveShortcut';
+import { canonicalJson } from '../../../components/useDirty';
 import { Card } from '@esmart/ui/components/Card';
 import { AmountField, SwitchField } from '@esmart/ui/components/Field';
 import { Text } from '@esmart/ui/components/Text';
@@ -46,21 +47,22 @@ function ApprovalRulesScreenBody() {
   const current = company.approvalRules ?? [];
   const [rules, setRules] = useState<Record<string, string | null>>(() => Object.fromEntries(current.map((r) => [r.kind, String(toMajor({ minor: r.overMinor, currency }))])));
 
-  const save = () =>
-    serverSave(
-      () =>
-        saveCompany({
-          ...company,
-          approvalRules: Object.entries(rules)
-            .filter(([, v]) => v !== null)
-            .map(([kind, v]) => ({ kind: kind as DocumentKind | 'payment', overMinor: fromMajor(v || '0', currency).minor })),
-        }),
-      tr('settings:approvals.saved'),
-      { icon: 'clipboard-check-outline' },
-    );
+  const approvalRules = Object.entries(rules)
+    .filter(([, v]) => v !== null)
+    .map(([kind, v]) => ({ kind: kind as DocumentKind | 'payment', overMinor: fromMajor(v || '0', currency).minor }));
+  // Saved only once the rules differ from the stored ones (or from what this screen last saved, while sync brings them back).
+  const rulesKey = canonicalJson(Object.fromEntries(approvalRules.map((r) => [r.kind, r.overMinor])));
+  const [lastSaved, setLastSaved] = useState<string | null>(null);
+  const changed = rulesKey !== canonicalJson(Object.fromEntries(current.map((r) => [r.kind, r.overMinor]))) && rulesKey !== lastSaved;
+
+  const save = async () => {
+    if (!changed) return;
+    const res = await serverSave(() => saveCompany({ ...company, approvalRules }), tr('settings:approvals.saved'), { icon: 'clipboard-check-outline' });
+    if (res) setLastSaved(rulesKey);
+  };
 
   const desktop = useIsDesktop();
-  useSaveShortcut(() => void save(), owner && !saving);
+  useSaveShortcut(() => void save(), owner && !saving && changed);
 
   const rule = (k: DocumentKind | 'payment') => {
     const on = rules[k] !== undefined && rules[k] !== null;
@@ -102,7 +104,7 @@ function ApprovalRulesScreenBody() {
       {/* Saved from the bar under the form, as every settings screen with typed input is. */}
       {owner ? (
         <FormActions>
-          <Button shortcut="S" title={tr('settings:approvals.save')} onPress={() => void save()} loading={saving} disabled={saving} fullWidth={!desktop}
+          <Button shortcut="S" title={tr('settings:approvals.save')} onPress={() => void save()} loading={saving} disabled={saving || !changed} fullWidth={!desktop}
           size={desktop ? undefined : 'lg'} />
         </FormActions>
       ) : null}

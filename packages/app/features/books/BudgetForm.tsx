@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useDirty } from '../../components/useDirty';
 import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -60,7 +61,12 @@ export function BudgetForm({ budget }: { budget?: Budget }) {
   const patch = (i: number, p: Partial<Row>) => setRows((rs) => rs.map((r, k) => (k === i ? { ...r, ...p } : r)));
   const annual = (r: Row) => r.months.reduce((s, m) => s + minor(m), 0);
 
+  // A saved budget is saved again only once something on it has changed.
+  const changed = useDirty([name, yearFrom, rows.map((r) => [r.account, r.months])]);
+  const canSave = !!name.trim() && (!budget?.id || changed);
+
   const save = async () => {
+    if (!canSave) return;
     setBusy(true);
     try {
       const out = await saveBudget({
@@ -199,7 +205,7 @@ export function BudgetForm({ budget }: { budget?: Budget }) {
           </View>
         </ScrollView>
         <FormActions>
-          <Button title={tr('books:budgets.save')} onPress={() => void save()} loading={busy} disabled={!canWrite || busy || !name.trim()} fullWidth={!desktop} shortcut="S" />
+          <Button title={tr('books:budgets.save')} onPress={() => void save()} loading={busy} disabled={!canWrite || busy || !canSave} fullWidth={!desktop} shortcut="S" />
         </FormActions>
       </FormContainer>
       <SelectSheet

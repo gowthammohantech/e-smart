@@ -43,7 +43,13 @@ export function RecurrenceSheet({ doc, visible, onClose }: { doc: BusinessDocume
     }
   }
 
+  // Saved only once the schedule differs from the one on the document.
+  const changed =
+    recurrence !== (doc.recurrence ?? 'none') ||
+    (recurrence !== 'none' && ((endDate ?? '') !== (doc.recurrenceEndDate ?? '') || autoSend !== !!doc.recurrenceAutoSend));
+
   const save = async () => {
+    if (!changed) return;
     setSaving(true);
     try {
       const { data, error } = await api.PUT('/companies/{companyId}/documents/{id}/recurrence', {
@@ -84,7 +90,7 @@ export function RecurrenceSheet({ doc, visible, onClose }: { doc: BusinessDocume
           </Text>
         ) : null}
         {/* A desktop dialog's button sits at the right at its own width. */}
-        <Button title={tr('sales:recurring.save')} onPress={() => void save()} loading={saving} disabled={saving} fullWidth={!desktop} style={desktop ? { alignSelf: 'flex-end' } : undefined} />
+        <Button title={tr('sales:recurring.save')} onPress={() => void save()} loading={saving} disabled={saving || !changed} fullWidth={!desktop} style={desktop ? { alignSelf: 'flex-end' } : undefined} />
       </View>
     </Sheet>
   );

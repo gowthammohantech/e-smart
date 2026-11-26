@@ -20,6 +20,7 @@ import { useServerSave } from '../../../components/useServerSave';
 import { useAppStore } from '../../../store/appStore';
 import { useCustomFields } from '../../../features/customFields/CustomFieldsSection';
 import { SheetActions } from '../../../features/company/SheetActions';
+import { useDirty } from '../../../components/useDirty';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const ENTITIES: CustomFieldEntity[] = ['party', 'item', 'document'];
@@ -47,8 +48,12 @@ export default function CustomFieldsScreen() {
     setOptions((next.options ?? []).join(', '));
   };
   const isNew = editing ? !fields.some((f) => f.id === editing.id) : false;
+  // The field is edited in place, so its id (empty while the sheet is closed) marks each opening.
+  const changed = useDirty([editing, options], editing?.id ?? null);
+  // An existing field is saved only once something on it has changed.
+  const canSave = !!editing?.label.trim() && (isNew || changed);
   const save = async () => {
-    if (!editing) return;
+    if (!editing || !canSave) return;
     const record = { ...editing, label: editing.label.trim(), options: editing.kind === 'select' ? options.split(',').map((o) => o.trim()).filter(Boolean) : [] };
     const res = await serverSave(() => saveField(record), tr('settings:customFields.saved'), { icon: 'text-box-check-outline', detail: record.label });
     if (res) setEditing(null);
@@ -117,7 +122,7 @@ export default function CustomFieldsScreen() {
               saveLabel={tr('settings:customFields.save')}
               onSave={save}
               saving={saving}
-              saveDisabled={!editing.label.trim()}
+              saveDisabled={!canSave}
               deleteLabel={tr('settings:customFields.delete')}
               onDelete={
                 isNew

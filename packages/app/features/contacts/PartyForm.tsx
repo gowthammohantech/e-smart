@@ -13,6 +13,7 @@ import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { CityField } from '@esmart/ui/components/pickers/CityField';
 import { useServerSave } from '../../components/useServerSave';
 import { useSaveShortcut } from '../../components/useSaveShortcut';
+import { useDirty } from '../../components/useDirty';
 import { GstRegistrationType, MsmeType, Party, PartyKind } from '@esmart/core/types';
 import { TDS_SECTIONS, tdsSection } from '@esmart/core/data/tdsSections';
 import { TCS_SECTIONS, tcsSection } from '@esmart/core/data/tcsSections';
@@ -253,7 +254,17 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
   // Set as the form renders, not in an effect: it is this form's own state, and it never paints with the old state first.
   if (gstinState && stateCode !== gstinState.code) changeState(gstinState.code);
 
+  // An existing contact is saved only once something on it has changed; a new one is checked on Save.
+  const changed = useDirty([
+    kind, name, contact, taxId, registration, country, region, email, phone.value, currency, terms, creditLimit, creditLimitBlocks,
+    openingBalance, openingDate, openingSide, customFields, line1, city, stateCode, postalCode, sameShipping, shipLine1, shipCity,
+    notes, pan, msmeType, udyam, reverseCharge, tdsSectionCode, tcsApplicable, tcsSectionCode, certRate, certValidTill,
+    certValidFrom, certLimit, active,
+  ]);
+  const canSave = !party || changed;
+
   const save = async (another = false) => {
+    if (!canSave) return;
     const gstin = needsGstin ? taxId.trim().toUpperCase() : '';
     const next: Errors<'name' | 'email' | 'phone' | 'taxId' | 'pan' | 'udyam' | 'country' | 'stateCode' | 'postalCode' | 'tcsSection'> = {
       name: required(name, nameLabel),
@@ -368,7 +379,7 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
     }
     else router.replace(kind === 'supplier' ? `/(app)/parties/suppliers/${id}` : `/(app)/parties/customers/${id}`);
   };
-  useSaveShortcut(() => void save(), !saving, offersAnother ? () => void save(true) : undefined);
+  useSaveShortcut(() => void save(), !saving && canSave, offersAnother ? () => void save(true) : undefined);
 
   // Every field is built once and placed twice: stacked in one column on a
   // phone, grouped into cards across two columns on a desktop browser.
@@ -815,16 +826,16 @@ export function PartyForm({ kind: routeKind, party }: { kind: PartyKind; party?:
                   variant="secondary"
                   onPress={() => void save(true)}
                   loading={saving}
-                  disabled={blocked || invalid}
+                  disabled={blocked || invalid || !canSave}
                 />
               ) : null}
-              <Button shortcut="S" title={submitTitle} onPress={() => void save()} loading={saving} disabled={blocked || invalid} />
+              <Button shortcut="S" title={submitTitle} onPress={() => void save()} loading={saving} disabled={blocked || invalid || !canSave} />
             </>
           ) : (
             <>
-              <Button shortcut="S" title={submitTitle} onPress={() => void save()} loading={saving} disabled={blocked || invalid} fullWidth />
+              <Button shortcut="S" title={submitTitle} onPress={() => void save()} loading={saving} disabled={blocked || invalid || !canSave} fullWidth />
               {offersAnother ? (
-                <Button title={tr('common:action.saveAndAddAnother')} variant="ghost" onPress={() => void save(true)} loading={saving} disabled={blocked || invalid} fullWidth />
+                <Button title={tr('common:action.saveAndAddAnother')} variant="ghost" onPress={() => void save(true)} loading={saving} disabled={blocked || invalid || !canSave} fullWidth />
               ) : null}
             </>
           )}

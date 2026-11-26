@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useDirty } from '../../../../components/useDirty';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -55,8 +56,12 @@ export default function CostCentres() {
     setActive(c?.status !== 'inactive');
   };
 
+  // An existing cost centre is saved only once something on it has changed.
+  const changed = useDirty([name, category, parentId, active], editing);
+  const canSave = !!name.trim() && (!editing?.id || changed);
+
   const save = async () => {
-    if (!editing || !name.trim()) return;
+    if (!editing || !canSave) return;
     const record: CostCentre = { ...editing, id: editing.id || uid('ccn'), name: name.trim(), category: category.trim() || undefined, parentId, status: active ? 'active' : 'inactive' };
     const res = await serverSave(() => saveCostCentre(record), tr('books:costCentres.saved'), { icon: 'sitemap-outline' });
     if (res) setEditing(null);
@@ -97,7 +102,7 @@ export default function CostCentres() {
         title={editing?.id ? tr('books:costCentres.edit') : tr('books:costCentres.add')}
         // A drawer on a desktop, beside the list it adds to.
         desktopAs="drawer"
-        footer={<Button title={tr('books:costCentres.save')} onPress={() => void save()} loading={saving} disabled={blocked || !name.trim()} />}
+        footer={<Button title={tr('books:costCentres.save')} onPress={() => void save()} loading={saving} disabled={blocked || !canSave} />}
       >
         <View style={{ padding: t.spacing.lg, gap: t.spacing.lg }}>
           <TextField label={tr('books:costCentres.name')} value={name} onChangeText={setName} placeholder={tr('books:costCentres.namePlaceholder')} required />

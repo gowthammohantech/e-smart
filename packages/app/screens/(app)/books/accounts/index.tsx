@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useDirty } from '../../../../components/useDirty';
 import { useTranslation } from 'react-i18next';
 import { Pressable, View } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
@@ -115,8 +116,12 @@ export default function ChartOfAccounts() {
     setOpeningDate(a?.openingBalanceDate);
   };
 
+  // An existing account is saved only once something on it has changed.
+  const changed = useDirty([name, group, opening, side, openingDate], editing);
+  const canSave = !!name.trim() && (!editing?.id || changed);
+
   const save = async () => {
-    if (!editing || !name.trim()) return;
+    if (!editing || !canSave) return;
     const amount = fromMajor(opening || '0', baseCurrency);
     const record: LedgerAccount = {
       ...editing,
@@ -397,7 +402,7 @@ export default function ChartOfAccounts() {
         title={editing?.id ? tr('books:accounts.edit') : tr('books:accounts.add')}
         // A drawer on a desktop, beside the list it adds to.
         desktopAs="drawer"
-        footer={<Button title={tr('books:accounts.save')} onPress={() => void save()} loading={saving} disabled={blocked || !name.trim()} />}
+        footer={<Button title={tr('books:accounts.save')} onPress={() => void save()} loading={saving} disabled={blocked || !canSave} />}
       >
         <View style={{ padding: t.spacing.lg, gap: t.spacing.lg }}>
           <TextField label={tr('books:accounts.name')} value={name} onChangeText={setName} placeholder={tr('books:accounts.namePlaceholder')} required />

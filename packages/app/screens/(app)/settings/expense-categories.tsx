@@ -23,6 +23,7 @@ import { money } from '@esmart/core/lib/money';
 import { uid } from '@esmart/core/lib/id';
 import { DIALOG_WIDTH, SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { SheetActions } from '../../../features/company/SheetActions';
+import { useDirty } from '../../../components/useDirty';
 import { useServerSave } from '../../../components/useServerSave';
 
 export default function ExpenseCategorySettings() {
@@ -52,6 +53,10 @@ export default function ExpenseCategorySettings() {
     () => Object.fromEntries(Object.entries(usage?.expenseCategories ?? {}).map(([id, v]) => [id, { total: v.total.minor, count: v.count }])) as Record<string, { total: number; count: number }>,
     [usage],
   );
+
+  // An existing category is saved only once its name has changed; a new one is checked on Save.
+  const changed = useDirty([name], editing);
+  const canSave = !editing?.id || changed;
 
   const open = (c?: ExpenseCategory) => {
     setEditing(c ?? ({ id: '', companyId: company.id, name: '', icon: 'shape-outline', color: '#8E98AC' } as ExpenseCategory));
@@ -164,7 +169,7 @@ export default function ExpenseCategorySettings() {
           <SheetActions
             saveLabel={tr('settings:categories.save')}
             onSave={async () => {
-                if (!editing) return;
+                if (!editing || !canSave) return;
     if (!name.trim()) {
       setNameError(tr('errors:validation.required', { field: tr('settings:categories.name') }));
       return;
@@ -175,7 +180,8 @@ export default function ExpenseCategorySettings() {
                 if (res) setEditing(null);
               }}
             saving={saving}
-                        deleteLabel={tr('settings:categories.delete')}
+            saveDisabled={!canSave}
+            deleteLabel={tr('settings:categories.delete')}
             // A category with expenses filed under it is refused by the server: not offered.
             onDelete={
               editing?.id && !totals[editing.id]?.count
