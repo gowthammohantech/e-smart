@@ -112,7 +112,7 @@ export function DateField({
           ...webFocusHalo(t, focused && !error && !stray),
         }}
       >
-        <Pressable onPress={openCalendar} accessibilityLabel={tr('common:component.selectDate')} {...({ tabIndex: -1 } as object)}>
+        <Pressable onPress={openCalendar} accessibilityRole="button" accessibilityLabel={tr('common:component.selectDate')} {...({ tabIndex: -1 } as object)}>
           <Icon name="calendar-outline" size={18} color={t.c.muted} />
         </Pressable>
         {/* The browser's calendar, opened from the button; the box beside it is what shows. */}
