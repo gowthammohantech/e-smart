@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@esmart/ui/theme/ThemeProvider';
 import { Card } from '@esmart/ui/components/Card';
 import { Badge } from '@esmart/ui/components/Badge';
+import { Segmented } from '@esmart/ui/components/Field';
 import { Text } from '@esmart/ui/components/Text';
 import { StatTile } from '@esmart/ui/components/StatTile';
 import { Cell, Column, DataTable, TABLE_PAGE_SIZE } from '@esmart/ui/components/DataTable';
@@ -65,6 +66,8 @@ export function ReportDesktop({ report, data }: { report: string; data: ReportDa
   const t = useTheme();
   const { t: tr } = useTranslation(['domain', 'reports', 'common']);
   const router = useRouter();
+  // The summary's invoices (or bills): the period's live ones, or those cancelled in it.
+  const [docTab, setDocTab] = useState<'active' | 'cancelled'>('active');
   const partyName = (id?: string | null) => (id ? data.partyNames?.[id] : undefined) ?? data.parties.find((p) => p.id === id)?.name ?? '';
   const colorFor = (i: number) => seriesColor(t.scheme, i);
   const monthBars = (rows: { key: string; value: Money }[]) => rows.map((r) => ({ label: monthLabelNarrow(r.key), value: r.value }));
@@ -82,6 +85,7 @@ export function ReportDesktop({ report, data }: { report: string; data: ReportDa
     const notesOf = (r: Doc) => notes.filter((n) => n.sourceDocumentId === r.id).sort((a, b) => a.date.localeCompare(b.date));
     // The period's other notes: against an invoice outside it, or against no one invoice. A table of their own.
     const others = notes.filter((n) => !n.sourceDocumentId || !listed.has(n.sourceDocumentId));
+    const cancelled = d.cancelled ?? [];
     const isNote = (r: Doc) => ADJUSTMENT_KINDS.includes(r.kind);
     const credit = (r: Doc) => CREDIT_KINDS.includes(r.kind);
     // A credit note or return takes away from the sale: shown less.
@@ -209,6 +213,29 @@ export function ReportDesktop({ report, data }: { report: string; data: ReportDa
             </SectionCard>
           </ReportSection>
         </ReportRow>
+        {/* Active or cancelled, as Customers and Payment accounts tab theirs. Cancelled ones count in no total. */}
+        <View style={{ alignSelf: 'flex-start', width: 240, marginBottom: t.spacing.sm }}>
+          <Segmented
+            options={[
+              { value: 'active', label: tr('reports:detail.activeTab') },
+              { value: 'cancelled', label: tr('reports:detail.cancelledTab', { count: cancelled.length }) },
+            ]}
+            value={docTab}
+            onChange={(v) => setDocTab(v as 'active' | 'cancelled')}
+          />
+        </View>
+        {docTab === 'cancelled' ? (
+          <TableSection
+            title={tr('reports:detail.withCount', { title: isSales ? tr('reports:detail.cancelledInvoices') : tr('reports:detail.cancelledBills'), count: cancelled.length })}
+            subtitle={tr('reports:detail.cancelledHint')}
+            columns={columns}
+            rows={cancelled}
+            rowKey={(r) => r.id}
+            onRowPress={(r) => router.push(detailRouteFor(r.kind, r.id) as never)}
+            initialSort={{ key: 'date', dir: 'desc' }}
+          />
+        ) : (
+          <>
         <TableSection
           title={tr('reports:detail.withCount', { title: isSales ? tr('reports:detail.invoices') : tr('reports:detail.bills'), count: d.documents.length })}
           columns={columns}
@@ -234,6 +261,8 @@ export function ReportDesktop({ report, data }: { report: string; data: ReportDa
             initialSort={{ key: 'date', dir: 'desc' }}
           />
         ) : null}
+          </>
+        )}
       </>
     );
   }

@@ -81,6 +81,8 @@ export type TransactionSummary = {
    * Listed beside the documents, not counted in the totals above, which stay what was invoiced.
    */
   notes: BusinessDocument[];
+  /** The period's cancelled invoices (or bills): listed on their own, counted in nothing. */
+  cancelled: BusinessDocument[];
 };
 
 /** Notes that adjust an invoice or a bill: listed with it in a summary, never added into its totals. */
@@ -97,6 +99,7 @@ export function summarizeDocuments(
   const live = docs.filter((d) => isLive(d) && matches(d, filters));
   const selected = live.filter((d) => !ADJUSTMENT_KINDS.includes(d.kind));
   const notes = live.filter((d) => ADJUSTMENT_KINDS.includes(d.kind));
+  const cancelled = docs.filter((d) => d.status === 'cancelled' && !ADJUSTMENT_KINDS.includes(d.kind) && matches(d, filters));
 
   const total = sum(selected.map((d) => inBase(d.totals.grandTotal, d.exchangeRate, baseCurrency)), baseCurrency);
   const taxable = sum(selected.map((d) => inBase(d.totals.taxableAmount, d.exchangeRate, baseCurrency)), baseCurrency);
@@ -165,6 +168,7 @@ export function summarizeDocuments(
     byBranch: toRows(branchMap, (id) => branchNames[id] ?? 'Unknown'),
     documents: selected,
     notes,
+    cancelled,
   };
 }
 
