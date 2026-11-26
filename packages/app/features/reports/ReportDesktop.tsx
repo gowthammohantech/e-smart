@@ -86,6 +86,19 @@ export function ReportDesktop({ report, data }: { report: string; data: ReportDa
     // The period's other notes: against an invoice outside it, or against no one invoice. A table of their own.
     const others = notes.filter((n) => !n.sourceDocumentId || !listed.has(n.sourceDocumentId));
     const cancelled = d.cancelled ?? [];
+    // Active or cancelled, as Customers and Payment accounts tab theirs. Cancelled ones count in no total.
+    const docTabs = (
+      <View style={{ width: 240 }}>
+        <Segmented
+          options={[
+            { value: 'active', label: tr('reports:detail.activeTab') },
+            { value: 'cancelled', label: tr('reports:detail.cancelledTab', { count: cancelled.length }) },
+          ]}
+          value={docTab}
+          onChange={(v) => setDocTab(v as 'active' | 'cancelled')}
+        />
+      </View>
+    );
     const isNote = (r: Doc) => ADJUSTMENT_KINDS.includes(r.kind);
     const credit = (r: Doc) => CREDIT_KINDS.includes(r.kind);
     // A credit note or return takes away from the sale: shown less.
@@ -213,21 +226,11 @@ export function ReportDesktop({ report, data }: { report: string; data: ReportDa
             </SectionCard>
           </ReportSection>
         </ReportRow>
-        {/* Active or cancelled, as Customers and Payment accounts tab theirs. Cancelled ones count in no total. */}
-        <View style={{ alignSelf: 'flex-start', width: 240, marginBottom: t.spacing.sm }}>
-          <Segmented
-            options={[
-              { value: 'active', label: tr('reports:detail.activeTab') },
-              { value: 'cancelled', label: tr('reports:detail.cancelledTab', { count: cancelled.length }) },
-            ]}
-            value={docTab}
-            onChange={(v) => setDocTab(v as 'active' | 'cancelled')}
-          />
-        </View>
         {docTab === 'cancelled' ? (
           <TableSection
             title={tr('reports:detail.withCount', { title: isSales ? tr('reports:detail.cancelledInvoices') : tr('reports:detail.cancelledBills'), count: cancelled.length })}
             subtitle={tr('reports:detail.cancelledHint')}
+            aside={docTabs}
             columns={columns}
             rows={cancelled}
             rowKey={(r) => r.id}
@@ -240,6 +243,7 @@ export function ReportDesktop({ report, data }: { report: string; data: ReportDa
           title={tr('reports:detail.withCount', { title: isSales ? tr('reports:detail.invoices') : tr('reports:detail.bills'), count: d.documents.length })}
           columns={columns}
           rows={d.documents}
+          aside={docTabs}
           subRows={notesOf}
           total={sumOf(d.documents.flatMap((r) => [r, ...notesOf(r)]), (r) => r.totals.grandTotal)}
           footer={footerOf(d.documents.flatMap((r) => [r, ...notesOf(r)]))}
@@ -587,8 +591,11 @@ function TableSection<T>({
   subtitle,
   total,
   footer,
+  aside,
 }: {
   title: string;
+  /** Beside the title, on its right: the table's tabs. */
+  aside?: React.ReactNode;
   /** What the table comes to, on the right above it (as on a customer's account). */
   total?: Money;
   /** A totals row at the foot, by column key. */
@@ -606,7 +613,7 @@ function TableSection<T>({
   const t = useTheme();
   const { t: tr } = useTranslation(['reports', 'common']);
   return (
-    <ReportSection title={title}>
+    <ReportSection title={title} aside={aside}>
       {subtitle ? (
         <Text variant="caption" tone="muted" style={{ marginTop: -t.spacing.xs, marginBottom: t.spacing.sm }}>
           {subtitle}
