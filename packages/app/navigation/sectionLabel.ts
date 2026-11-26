@@ -12,7 +12,7 @@ export function useSectionLabel() {
   const hasSuppliers = useHasModule('purchases');
   return useCallback(
     (name: string, short = false) => {
-      if (name === 'parties' && !hasSuppliers) return tr('nav:tab.partiesCustomersOnly');
+      if (name === 'parties' && !hasSuppliers) return short ? tr('nav:tabBar.partiesCustomersOnly') : tr('nav:tab.partiesCustomersOnly');
       return short ? tr(`nav:tabBar.${name}` as 'nav:tabBar.parties') : tr(`nav:tab.${name}` as 'nav:tab.index');
     },
     [tr, hasSuppliers],

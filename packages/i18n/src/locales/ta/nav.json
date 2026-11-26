@@ -1,6 +1,7 @@
 {
   "tabBar": {
-    "parties": "வாடிக்கையாளர்கள் / சப்ளையர்கள்"
+    "parties": "தரப்புகள்",
+    "partiesCustomersOnly": "வாங்குநர்"
   },
   "overviewOf": {
     "money": "வருமான மேலோட்டம்"
