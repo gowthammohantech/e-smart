@@ -82,6 +82,10 @@ const PATHS = {
   // until a run against Adaequare's sandbox, like the standalone routes above.
   ewayBillByDocument: '/enriched/ewb/ewayapi/GetEwayBillGeneratedByConsigner',
   irnDetails: '/enriched/ei/api/invoice/irn',
+  // The taxpayer's own record from the e-invoice portal. It needs the full portal login, so it answers "is this login good?".
+  masterGstin: '/enriched/ei/api/master/gstin',
+  // The same for the e-way bill portal, whose login is separate (`username` header, and the sandbox's own test taxpayer).
+  ewayMasterGstin: '/enriched/ewb/master/GetGSTINDetails',
 } as const;
 
 /**
@@ -224,11 +228,10 @@ export class AdaequareGateway implements GspGateway {
   // ------------------------------------------------------------ ComplianceProvider
 
   async testConnection(logins: PortalLogins): Promise<ConnectionResult> {
-    const check = async (login: PortalCredentials | null, portal: string) => {
+    const gatewayOnly = async (login: PortalCredentials | null, portal: string) => {
       if (!login) return { ok: false, message: `No ${portal} credentials are stored yet` };
       try {
         if (this.config.TAXATION_GSP_AUTH_REQUIRED) await this.token(this.application(login));
-        // Adaequare has no standalone login route: the portal login is only checked when a document is filed.
         return {
           ok: true,
           message: this.config.TAXATION_GSP_AUTH_REQUIRED
@@ -239,7 +242,25 @@ export class AdaequareGateway implements GspGateway {
         return { ok: false, message: failureFrom(error, this.log).errors[0]?.message ?? 'Failed' };
       }
     };
-    return { irp: await check(logins.einvoice, 'e-invoice'), ewb: await check(logins.ewaybill, 'e-way bill') };
+    // Each portal's login is checked for real: the portal's own record of the taxpayer is fetched with it, and a
+    // success means the username, password and GSTIN are all accepted. Against the sandbox the GSTIN is that API's
+    // test taxpayer's (see `login`), exactly as when a document is filed.
+    const portalCheck = async (creds: PortalCredentials | null, portal: string, api: 'ei' | 'ewb') => {
+      if (!creds) return { ok: false, message: `No ${portal} credentials are stored yet` };
+      if (!this.config.TAXATION_GSP_AUTH_REQUIRED) return gatewayOnly(creds, portal);
+      try {
+        const login = this.login(creds, api);
+        const envelope =
+          api === 'ei'
+            ? await this.call<Record<string, unknown>>('get', login, PATHS.masterGstin, { query: { gstin: login.gstin } })
+            : await this.call<Record<string, unknown>>('get', login, PATHS.ewayMasterGstin, { query: { GSTIN: login.gstin } });
+        if (!unwrapResult(envelope)) return { ok: false, message: 'The GST portal sent no record for this GSTIN, so the login could not be confirmed' };
+        return { ok: true, message: `The ${portal} login was accepted by the GST portal.` };
+      } catch (error) {
+        return { ok: false, message: failureFrom(error, this.log).errors[0]?.message ?? 'Failed' };
+      }
+    };
+    return { irp: await portalCheck(logins.einvoice, 'e-invoice', 'ei'), ewb: await portalCheck(logins.ewaybill, 'e-way bill', 'ewb') };
   }
 
   submitInvoice(creds: PortalCredentials | null, req: Parameters<ComplianceProvider['submitInvoice']>[1]): Promise<SubmitInvoiceResult> {

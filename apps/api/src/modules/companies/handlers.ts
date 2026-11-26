@@ -2,6 +2,7 @@ import { and, asc, eq, inArray, isNotNull, isNull, ne } from 'drizzle-orm';
 import { applyProfileLocks } from '@esmart/core/domain/companyLock';
 import { approvalKindAvailable, moduleForApprovalKind, type Module } from '@esmart/core/domain/plan';
 import { isValidGstin, normalizeGstin } from '@esmart/core/domain/gstin';
+import { INDIAN_STATES } from '@esmart/core/data/masters';
 import type { Company as CoreCompany } from '@esmart/core/types';
 import { schema } from '@esmart/db';
 import type { Schema } from '@esmart/api-contract';
@@ -34,6 +35,18 @@ async function validateCompany(db: DbOrTx, body: { country: string; baseCurrency
   if (issues.length) throw unprocessable(issues);
 }
 
+/**
+ * A registered Indian business's home state is its GSTIN's first two digits. Whatever state the app sent, the GSTIN's wins,
+ * so a profile can't say one state and be registered in another. Returns the state the GSTIN names, when it differs from `body`'s.
+ */
+function gstinHomeState(body: { country: string; address?: { stateCode?: string | null } | null; taxRegistration?: { regime: string; registered?: boolean; identifier?: string | null } | null }) {
+  const tax = body.taxRegistration;
+  if (body.country !== 'IN' || tax?.regime !== 'GST' || !tax.registered || !tax.identifier) return undefined;
+  const gstin = normalizeGstin(tax.identifier);
+  if (!isValidGstin(gstin)) return undefined;
+  return INDIAN_STATES.find((s) => s.code === gstin.slice(0, 2));
+}
+
 export const companiesHandlers = defineHandlers({
   async listCompanies(ctx) {
     const ids = ctx.user.companyIds;
@@ -48,6 +61,11 @@ export const companiesHandlers = defineHandlers({
     // A new business has no payment accounts yet, so its invoice details can't be linked to one.
     const body = ctx.body.bankDetails?.paymentAccountId ? { ...ctx.body, bankDetails: { ...ctx.body.bankDetails, paymentAccountId: '' } } : ctx.body;
     await validateCompany(ctx.db, body);
+    const home = gstinHomeState(body);
+    if (home) {
+      body.address = { ...body.address, stateCode: home.code, state: home.name };
+      if (body.taxRegistration) body.taxRegistration = { ...body.taxRegistration, placeOfSupplyStateCode: home.code };
+    }
     const branches = body.branches?.length
       ? body.branches
       : [{ name: body.address.city || body.name, code: 'HO', address: body.address, isPrimary: true }];
@@ -117,6 +135,15 @@ export const companiesHandlers = defineHandlers({
     const next = applyProfileLocks(prev as CoreCompany, { ...ctx.body, id: current.id, accountId: current.accountId, plan: current.plan } as CoreCompany, posted);
     const body = next as unknown as Schema<'Company'>;
     await validateCompany(ctx.db, body);
+    const home = gstinHomeState(body);
+    if (home && body.address.stateCode !== home.code) {
+      // Entries posted keep the state they were computed under, so a GSTIN from another state can't be taken on.
+      if (posted && prev.address.stateCode) {
+        throw unprocessable([{ field: 'taxRegistration.identifier', message: `This GSTIN is registered in ${home.name}, but the business's state is locked to ${prev.address.state} because entries are posted`, severity: 'blocking' }]);
+      }
+      body.address = { ...body.address, stateCode: home.code, state: home.name };
+      if (body.taxRegistration) body.taxRegistration = { ...body.taxRegistration, placeOfSupplyStateCode: home.code };
+    }
     // The account the invoice details belong to must be one of this business's bank accounts.
     const linked = body.bankDetails?.paymentAccountId?.trim();
     if (linked) {
