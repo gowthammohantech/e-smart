@@ -589,6 +589,13 @@
       "when": 1795093891104,
       "tag": "0083_tax_rate_validity",
       "breakpoints": true
+    },
+    {
+      "idx": 84,
+      "version": "7",
+      "when": 1795700000000,
+      "tag": "0084_stock_only_returns",
+      "breakpoints": true
     }
   ]
 }

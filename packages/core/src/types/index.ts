@@ -378,6 +378,14 @@ export type SeriesDocumentKind = Exclude<DocumentKind, 'openingInvoice' | 'openi
 /** Why a credit or debit note was raised, as GSTR-1 and the e-invoice describe it. */
 export type NoteReason = 'discount' | 'priceChange' | 'taxCorrection' | 'deficiency' | 'other';
 
+/** Why goods came back on a sales return. */
+export type ReturnReason = 'damaged' | 'defective' | 'wrongItem' | 'excessQuantity' | 'qualityIssue' | 'notRequired' | 'other';
+export const RETURN_REASONS: ReturnReason[] = ['damaged', 'defective', 'wrongItem', 'excessQuantity', 'qualityIssue', 'notRequired', 'other'];
+
+/** The state goods came back in on a sales return: only good goods go back into stock. */
+export type StockCondition = 'good' | 'damaged' | 'rejected';
+export const STOCK_CONDITIONS: StockCondition[] = ['good', 'damaged', 'rejected'];
+
 export type DocStatus =
   | 'draft'
   | 'sent'
@@ -437,6 +445,8 @@ export type DocumentLine = {
   expenseId?: string;
   /** On a purchase: this non-stock line's own cost centre; absent takes the document's. */
   costCentreId?: string;
+  /** On a sales return: what came back. Only good goods go back into stock; absent reads as good. */
+  stockCondition?: StockCondition;
   /**
    * This line's share of the document's charges, taxed with it (RULES 1.10). Never stored or sent:
    * worked out from the document by `linesWithCharges`.
@@ -523,6 +533,16 @@ export type BusinessDocument = {
   mergedSourceIds?: string[];
   /** Why a credit or debit note was raised. */
   noteReason?: NoteReason;
+  /**
+   * A sales return that records goods only: quantities, their condition and where they went, with no
+   * value or GST of its own. Its money and GST go through the credit note made from it. Older returns
+   * (before this) carried their value and GST themselves, and keep doing so.
+   */
+  stockOnly?: boolean;
+  /** Why the goods came back, on a sales return. */
+  returnReason?: ReturnReason;
+  /** A credit note made from a stock-only sales return: that return. Its source is still the invoice. */
+  returnDocumentId?: string;
   /**
    * A direct note's GST treatment (RULES 6.24): `withGst` (s.34, the default) or `noGst`, a financial
    * or commercial note with no tax, posted to discount and left out of GSTR-1 and GSTR-3B.

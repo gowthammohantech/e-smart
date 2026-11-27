@@ -2546,7 +2546,7 @@ paths:
     post:
       tags: [Documents]
       operationId: convertDocument
-      summary: Create a draft of another kind from this one (quote → order → delivery → invoice, PO → receipt → bill, invoice → return)
+      summary: Create a draft of another kind from this one (quote → order → delivery → invoice, PO → receipt → bill, invoice → return or note, stock-only sales return → credit note)
       x-roles: [owner, admin, accountant, sales]
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
@@ -8193,6 +8193,7 @@ components:
         gst: { allOf: [{ $ref: '#/components/schemas/GstFlags' }], description: "Defaults to the item's; kept as it was once the document is finalised" }
         expenseId: { type: string, description: "A reimbursement line: the customer's billable expense it recovers. An expense is recovered once (409 EXPENSE_ALREADY_RECOVERED)" }
         costCentreId: { type: string, description: "On a purchase document: this line's cost centre, for a line that is not stock (an item that tracks stock takes the document's). Left out takes the document's." }
+        stockCondition: { type: string, enum: [good, damaged, rejected], description: 'On a sales return: the state the goods came back in. Only good goods go back into stock; damaged and rejected are recorded on the return. Left out is good.' }
     TaxComponent:
       type: object
       properties:
@@ -8279,6 +8280,14 @@ components:
         sourceDocumentId: { type: string }
         mergedSourceIds: { type: array, items: { type: string }, readOnly: true, description: 'Made from several documents at once (sales orders into one challan, and so on): the others, after sourceDocumentId' }
         noteReason: { type: string, enum: [discount, priceChange, taxCorrection, deficiency, other], description: Why a credit or debit note was raised }
+        returnReason: { type: string, enum: [damaged, defective, wrongItem, excessQuantity, qualityIssue, notRequired, other], description: 'Why the goods came back, on a sales return. A stock-only return needs one to be approved (422 RETURN_REASON_REQUIRED).' }
+        returnDocumentId:
+          type: string
+          readOnly: true
+          description: >-
+            On a credit note made from a stock-only sales return (convertDocument from the return): that
+            return. Its lines are the return's quantities at the invoice's price and tax, and can't be
+            changed; its source is still the invoice. One live credit note per return.
         noteGst:
           type: string
           enum: [withGst, noGst]
@@ -8345,6 +8354,14 @@ components:
             itcReclaimedOn: { type: string, format: date, readOnly: true, description: 'Credit claimed again once paid' }
             itcClaimPeriod: { type: string, readOnly: true, description: 'The GSTR-2B period (MMYYYY) whose line this bill matched; its credit is claimed in that return' }
             partyStateCode: { type: string, readOnly: true }
+            stockOnly:
+              type: boolean
+              readOnly: true
+              description: >-
+                A sales return that records goods only: quantities, their condition and the branch they came
+                back to, with no value or GST (its lines carry no price). Its money and GST go through the
+                credit note made from it (convertDocument to creditNote), so they are counted once. Every
+                sales return made now is stock-only; older ones carry their own value and GST.
             recurrence: { type: string, enum: [none, weekly, monthly, quarterly, yearly], readOnly: true, description: Set with setDocumentRecurrence }
             tcs:
               type: object

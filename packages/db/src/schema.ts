@@ -691,6 +691,13 @@ export const documents = pgTable("documents", {
 	// Made from several documents at once (orders into one challan, and so on): the others after source_document_id.
 	mergedSourceIds: varchar("merged_source_ids", { length: 40 }).array().default([]).notNull(),
 	noteReason: noteReason("note_reason"),
+	// A sales return that records goods only (quantities, condition, where they went), with no value or GST:
+	// its money and GST go through the credit note made from it. Returns finalised before 0084 carry their own.
+	stockOnly: boolean("stock_only").default(false).notNull(),
+	// Why goods came back on a sales return: damaged, defective, wrongItem, excessQuantity, qualityIssue, notRequired, other.
+	returnReason: varchar("return_reason", { length: 20 }),
+	// A credit note made from a stock-only sales return: that return (its source is still the invoice).
+	returnDocumentId: varchar("return_document_id", { length: 40 }),
 	// A direct note (no source document): 'withGst' (s.34, the default) or 'noGst' (a financial or
 	// commercial note: no tax, posted to discount, out of the returns).
 	noteGst: varchar("note_gst", { length: 8 }),
@@ -775,6 +782,7 @@ export const documents = pgTable("documents", {
 	index("documents_company_id_kind_status_date_idx").using("btree", table.companyId.asc().nullsLast(), table.kind.asc().nullsLast(), table.status.asc().nullsLast(), table.date.asc().nullsLast()),
 	index("documents_company_id_party_id_date_idx").using("btree", table.companyId.asc().nullsLast(), table.partyId.asc().nullsLast(), table.date.asc().nullsLast()),
 	index("documents_source_document_id_idx").using("btree", table.sourceDocumentId.asc().nullsLast()),
+	index("documents_return_document_id_idx").using("btree", table.returnDocumentId.asc().nullsLast()),
 	index("documents_merged_source_ids_idx").using("gin", table.mergedSourceIds),
 	index("documents_next_recurrence_date_idx").using("btree", table.nextRecurrenceDate.asc().nullsLast()),
 	index("documents_recurring_parent_id_date_idx").using("btree", table.recurringParentId.asc().nullsLast(), table.date.asc().nullsLast()),
@@ -802,6 +810,11 @@ export const documents = pgTable("documents", {
 			columns: [table.sourceDocumentId],
 			foreignColumns: [table.id],
 			name: "documents_source_document_id_fkey"
+		}),
+	foreignKey({
+			columns: [table.returnDocumentId],
+			foreignColumns: [table.id],
+			name: "documents_return_document_id_fkey"
 		}),
 	foreignKey({
 			columns: [table.currentEwayBillId],
@@ -846,6 +859,8 @@ export const documentLines = pgTable("document_lines", {
 	lineTotalMinor: bigint("line_total_minor", { mode: "number" }).default(0).notNull(),
 	// A purchase line's own cost centre (non-stock lines only); null takes the document's.
 	costCentreId: varchar("cost_centre_id", { length: 40 }),
+	// On a sales return: good, damaged or rejected. Only good goods go back into stock; null reads as good.
+	stockCondition: varchar("stock_condition", { length: 10 }),
 }, (table): PgTableExtraConfigValue[] => [
 	uniqueIndex("document_lines_document_id_position_idx").using("btree", table.documentId.asc().nullsLast(), table.position.asc().nullsLast()),
 	index("document_lines_item_id_idx").using("btree", table.itemId.asc().nullsLast()),
