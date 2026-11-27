@@ -165,6 +165,26 @@ export default function ContactsTab() {
     </View>
   );
 
+  // Count and balance read together. No "0 customers" before the count is in.
+  const countView =
+    !summary && !summaryQuery.isError ? (
+      <View style={desktop ? { width: 200, flexShrink: 1 } : undefined}>
+        <Skeleton height={12} width={180} />
+      </View>
+    ) : (
+      <Text variant="caption" tone="muted" numberOfLines={1} style={{ flexShrink: 1 }}>
+        {countLabel}
+        {!general && summary ? (
+          <Text variant="caption" weight="600" tone={asCustomer ? 'warn' : 'bad'}>
+            {'  ·  '}
+            {asCustomer
+              ? tr('contacts:hub.receivable', { amount: formatMoney(totalOutstanding) })
+              : tr('contacts:hub.payable', { amount: formatMoney(totalOutstanding) })}
+          </Text>
+        ) : null}
+      </Text>
+    );
+
   return (
     <View style={{ flex: 1 }}>
       <AppHeader
@@ -195,37 +215,21 @@ export default function ContactsTab() {
           </View>
         ) : null}
         {statusTabs}
-        <View style={desktop ? { flexBasis: 380, flexShrink: 1, minWidth: 220 } : undefined}>
-          <SearchBar
-            compact
-            value={query}
-            onChangeText={setQuery}
-            placeholder={general ? tr('contacts:hub.searchOther') : asCustomer ? tr('contacts:hub.searchCustomers') : tr('contacts:hub.searchSuppliers')}
-          />
+        {/* Search, the count and Import share one line, Import right-aligned at its end. On a phone the
+            count reads on a line of its own under it. */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md, ...(desktop ? { flexGrow: 1, flexBasis: 560, flexShrink: 1, minWidth: 320 } : null) }}>
+          <View style={desktop ? { flexBasis: 380, flexShrink: 1, minWidth: 200 } : { flex: 1 }}>
+            <SearchBar
+              compact
+              value={query}
+              onChangeText={setQuery}
+              placeholder={general ? tr('contacts:hub.searchOther') : asCustomer ? tr('contacts:hub.searchCustomers') : tr('contacts:hub.searchSuppliers')}
+            />
+          </View>
+          {desktop ? countView : null}
+          <Button title={tr('contacts:import.action')} icon="upload" variant="ghost" size="sm" style={{ flexShrink: 0, marginLeft: 'auto' }} onPress={() => router.push('/(app)/parties/import' as never)} />
         </View>
-        {/* Count and balance read together, with Import at the far right of the search line. The count
-            shrinks before Import would drop to a line of its own. */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md, ...(desktop ? { flexGrow: 1, flexShrink: 1, minWidth: 200, justifyContent: 'flex-end' } : null) }}>
-          {/* No "0 customers" before the count is in. */}
-          {!summary && !summaryQuery.isError ? (
-            <View style={desktop ? { width: 200 } : { flex: 1 }}>
-              <Skeleton height={12} width={180} />
-            </View>
-          ) : (
-          <Text variant="caption" tone="muted" numberOfLines={1} style={{ flexShrink: 1, ...(desktop ? null : { flex: 1 }) }}>
-            {countLabel}
-            {!general && summary ? (
-              <Text variant="caption" weight="600" tone={asCustomer ? 'warn' : 'bad'}>
-                {'  ·  '}
-                {asCustomer
-                  ? tr('contacts:hub.receivable', { amount: formatMoney(totalOutstanding) })
-                  : tr('contacts:hub.payable', { amount: formatMoney(totalOutstanding) })}
-              </Text>
-            ) : null}
-          </Text>
-          )}
-          <Button title={tr('contacts:import.action')} icon="upload" variant="ghost" size="sm" style={{ flexShrink: 0 }} onPress={() => router.push('/(app)/parties/import' as never)} />
-        </View>
+        {desktop ? null : countView}
       </View>
 
       {desktop ? (
