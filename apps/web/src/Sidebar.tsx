@@ -748,12 +748,6 @@ export function Sidebar() {
   const tipProps = (label: string) =>
     compact ? { onHoverIn: (rect: Rect) => setTip({ label, rect, on: pathname }), onHoverOut: () => setTip(null) } : {};
 
-  // The menu's free room: the list's box, what the rows fill of it, and the due card's height.
-  const [room, setRoom] = useState({ box: 0, content: 0, card: 0 });
-  // An empty card (still loading, or nothing to show) measures as its padding alone.
-  // It stays mounted (invisible) until it has something in it, so the loaded card gets measured.
-  const measuring = room.card <= t.spacing.sm * 2;
-  const fits = !measuring && room.box > 0 && room.content + room.card + t.spacing.md <= room.box;
 
   const labelFor = (name: TabName) => sectionLabel(name);
   // A section shows while the plan can open any of its pages (Stock on Free has Items & services).
@@ -784,11 +778,10 @@ export function Sidebar() {
         >
           <HomeLogo compact={!!compact} />
         </View>
-        <View style={{ flex: 1 }} onLayout={(e) => setRoom((r) => ({ ...r, box: e.nativeEvent.layout.height }))}>
+        <View style={{ flex: 1 }}>
         <ScrollView
           style={{ flex: 1 }}
           contentContainerStyle={{ padding: t.spacing.sm, gap: t.spacing.xxs }}
-          onContentSizeChange={(_, h) => setRoom((r) => ({ ...r, content: h }))}
         >
           {groups.map((group, i) => (
             <React.Fragment key={group.key ?? 'top'}>
@@ -846,22 +839,9 @@ export function Sidebar() {
             </React.Fragment>
           ))}
         </ScrollView>
-        {/* The next filing, in the room the menu leaves free: a section dropping down takes the
-            room back and the card goes, closing it brings the card back. Measured once while
-            invisible, then shown only when it fits. Folded, the GST row's badge stands for it. */}
-        {!compact && (measuring || fits) ? (
-          <View
-            pointerEvents={fits ? 'box-none' : 'none'}
-            aria-hidden={!fits}
-            onLayout={(e) => {
-              const h = Math.ceil(e.nativeEvent.layout.height);
-              setRoom((r) => (r.card === h ? r : { ...r, card: h }));
-            }}
-            style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: t.spacing.sm, opacity: fits ? 1 : 0 }}
-          >
-            <SidebarDueCard />
-          </View>
-        ) : null}
+        {/* The next filing, always at the foot of the open sidebar: the menu above it scrolls when a
+            section's pages drop down, and the card stays. Folded, the GST row's badge stands for it. */}
+        {!compact ? <SidebarDueCard /> : null}
         </View>
         <View
           style={{

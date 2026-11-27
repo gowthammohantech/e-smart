@@ -80,6 +80,9 @@ export function SidebarDueCard() {
       style={(state) => {
         const { pressed, hovered, focused } = state as WebPressState;
         return {
+          // Its own margin, so nothing is left behind while it loads or when it has nothing to show.
+          margin: t.spacing.sm,
+          marginTop: t.spacing.xs,
           gap: t.spacing.xs,
           padding: t.spacing.md,
           borderRadius: t.radius.md,
