@@ -16,6 +16,14 @@ import { leaveGuarded } from '@esmart/app/components/useLeaveGuard';
 const RETURNS = '/gst/returns';
 const GSTR1 = '/gst/gstr1';
 
+/** The GSTR-1 page for one month (MMYYYY): its first to its last day. */
+function gstr1Href(period: string): string {
+  const yy = Number(period.slice(2));
+  const mm = Number(period.slice(0, 2));
+  const last = new Date(Date.UTC(yy, mm, 0)).toISOString().slice(0, 10);
+  return `${GSTR1}?range=custom&from=${period.slice(2)}-${period.slice(0, 2)}-01&to=${last}`;
+}
+
 /**
  * The next return or deposit due, at the foot of the open sidebar: what it is, for which
  * period, and how long is left (or how late it is). It reads the same filing calendar as Home's
@@ -57,13 +65,15 @@ export function SidebarDueCard() {
   const period = next ? (next.kind === 'tds' ? formatDate(`${next.period}-01`, 'MMM yyyy') : gstPeriodLabel(next.period)) : '';
   const title = next ? tr(`reports:dash.filings.kind.${next.kind}` as 'reports:dash.filings.kind.gstr1') : tr('nav:shell.dueCard.allFiled');
   const label = next ? tr('nav:shell.dueCard.a11y', { title, period, when }) : title;
+  // GSTR-1 opens on the card's month (MMYYYY), as a custom range the page reads from its address.
+  const href = target === GSTR1 && next && (next.kind === 'gstr1' || next.kind === 'iff') ? gstr1Href(next.period) : target;
 
   return (
     <Pressable
-      {...({ href: target } as object)}
+      {...({ href } as object)}
       onPress={(e) => {
         e.preventDefault();
-        leaveGuarded(() => router.navigate(appHref(target) as never));
+        leaveGuarded(() => router.navigate(appHref(href) as never));
       }}
       accessibilityRole="link"
       accessibilityLabel={label}
