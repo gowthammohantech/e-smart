@@ -195,9 +195,9 @@ export default function ContactsTab() {
           </View>
         ) : null}
         {statusTabs}
-        {/* Import sits in the search field's row, right-aligned beside it. */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm, ...(desktop ? { flexBasis: 480, flexShrink: 1, minWidth: 320 } : null) }}>
-          <View style={{ flex: 1 }}>
+        {/* Import sits in the search field's row, right-aligned at its far end with a gap after the field. */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm, ...(desktop ? { flexGrow: 1, flexBasis: 480, flexShrink: 1, minWidth: 320 } : null) }}>
+          <View style={desktop ? { flexBasis: 380, flexShrink: 1, minWidth: 200 } : { flex: 1 }}>
             <SearchBar
               compact
               value={query}
@@ -207,9 +207,9 @@ export default function ContactsTab() {
           </View>
           <Button title={tr('contacts:import.action')} icon="upload" variant="ghost" size="sm" style={{ flexShrink: 0, marginLeft: 'auto' }} onPress={() => router.push('/(app)/parties/import' as never)} />
         </View>
-        {/* Count and balance read together on one centred line. On a narrow desktop (a tablet, or a small
-            laptop with the sidebar open) it drops to a line of its own. */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md, ...(desktop ? { flexGrow: 1, flexShrink: 0, justifyContent: 'flex-end' } : null) }}>
+        {/* Count and balance read together on a line of their own, so Import stays the right-most item of
+            the search line. */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md, ...(desktop ? { flexBasis: '100%', justifyContent: 'flex-end' } : null) }}>
           {/* No "0 customers" before the count is in. */}
           {!summary && !summaryQuery.isError ? (
             <View style={desktop ? { width: 200 } : { flex: 1 }}>
