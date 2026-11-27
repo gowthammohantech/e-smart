@@ -20,7 +20,10 @@
     "api": "npm run dev -w @esmart/api",
     "site": "npm run dev -w @esmart/site",
     "desktop": "npm run tauri:dev -w @esmart/desktop",
-    "desktop:build": "npm run tauri:build -w @esmart/desktop"
+    "desktop:build": "npm run tauri:build -w @esmart/desktop",
+    "migrator": "npm run dev -w @esmart/migrator",
+    "migrator:app": "npm run tauri:dev -w @esmart/migrator",
+    "migrator:build": "npm run tauri:build -w @esmart/migrator"
   },
   "devDependencies": {
     "@esmart/eslint-config": "*",

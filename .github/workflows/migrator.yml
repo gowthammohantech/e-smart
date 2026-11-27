@@ -1,0 +1,41 @@
+name: Migrator installers
+
+# Builds the Migrator desktop app for Windows and macOS. Run it by hand (Actions → Migrator installers),
+# or push a tag like migrator-v1.0.0. The installers are attached to the run as artifacts.
+on:
+  workflow_dispatch:
+  push:
+    tags: ['migrator-v*']
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: Windows, os: windows-latest, args: '--bundles nsis' }
+          - { name: macOS, os: macos-latest, args: '--bundles dmg' }
+    runs-on: ${{ matrix.os }}
+    env:
+      # The server the installer talks to by default; people can change it on the first screen.
+      VITE_API_URL: ${{ vars.MIGRATOR_API_URL }}
+      # The quick-to-build default is for local work; the installer gets the smaller, optimised build.
+      CARGO_PROFILE_RELEASE_LTO: 'true'
+      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - run: npm ci
+      - run: npm run tauri:build -w @esmart/migrator -- ${{ matrix.args }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: migrator-${{ matrix.name }}
+          path: |
+            apps/migrator/src-tauri/target/release/bundle/nsis/*.exe
+            apps/migrator/src-tauri/target/release/bundle/dmg/*.dmg
+          if-no-files-found: error
