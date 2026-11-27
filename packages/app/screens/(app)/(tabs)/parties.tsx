@@ -195,21 +195,17 @@ export default function ContactsTab() {
           </View>
         ) : null}
         {statusTabs}
-        {/* Import sits right beside the search field. */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.sm, ...(desktop ? { flexBasis: 480, flexShrink: 1, minWidth: 320 } : null) }}>
-          <View style={{ flex: 1 }}>
-            <SearchBar
-              compact
-              value={query}
-              onChangeText={setQuery}
-              placeholder={general ? tr('contacts:hub.searchOther') : asCustomer ? tr('contacts:hub.searchCustomers') : tr('contacts:hub.searchSuppliers')}
-            />
-          </View>
-          <Button title={tr('contacts:import.action')} icon="upload" variant="ghost" size="sm" style={{ flexShrink: 0 }} onPress={() => router.push('/(app)/parties/import' as never)} />
+        <View style={desktop ? { flexBasis: 380, flexShrink: 1, minWidth: 220 } : undefined}>
+          <SearchBar
+            compact
+            value={query}
+            onChangeText={setQuery}
+            placeholder={general ? tr('contacts:hub.searchOther') : asCustomer ? tr('contacts:hub.searchCustomers') : tr('contacts:hub.searchSuppliers')}
+          />
         </View>
-        {/* Count and balance read together on the right. On a narrow desktop (a tablet, or a small laptop
-            with the sidebar open) they drop to a line of their own. */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md, ...(desktop ? { flexGrow: 1, flexShrink: 0, justifyContent: 'flex-end' } : null) }}>
+        {/* Count and balance read together, with Import at the far right of the search line. The count
+            shrinks before Import would drop to a line of its own. */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md, ...(desktop ? { flexGrow: 1, flexShrink: 1, minWidth: 200, justifyContent: 'flex-end' } : null) }}>
           {/* No "0 customers" before the count is in. */}
           {!summary && !summaryQuery.isError ? (
             <View style={desktop ? { width: 200 } : { flex: 1 }}>
@@ -228,6 +224,7 @@ export default function ContactsTab() {
             ) : null}
           </Text>
           )}
+          <Button title={tr('contacts:import.action')} icon="upload" variant="ghost" size="sm" style={{ flexShrink: 0 }} onPress={() => router.push('/(app)/parties/import' as never)} />
         </View>
       </View>
 
