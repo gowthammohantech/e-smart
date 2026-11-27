@@ -639,6 +639,8 @@ export type EwbPayload = {
   cgstValue: number;
   sgstValue: number;
   igstValue: number;
+  /** Charges, round-off and anything else between the taxed value and the invoice total (can be negative). */
+  otherValue: number;
   totInvValue: number;
   mainHsnCode?: string;
   itemCount: number;
@@ -682,6 +684,8 @@ export function buildEwbPayload(bill: Omit<EwayBill, 'id' | 'ewayBillNumber' | '
     cgstValue: toMajorUnits(bill.cgst.minor),
     sgstValue: toMajorUnits(bill.sgst.minor),
     igstValue: toMajorUnits(bill.igst.minor),
+    // NIC: totInvValue = totalValue + taxes + otherValue, so the rest of the invoice total goes here.
+    otherValue: toMajorUnits(bill.consignmentValue.minor - bill.taxableValue.minor - bill.cgst.minor - bill.sgst.minor - bill.igst.minor),
     totInvValue: toMajorUnits(bill.consignmentValue.minor),
     mainHsnCode: bill.mainHsnCode,
     itemCount: bill.itemCount,

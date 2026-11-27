@@ -172,7 +172,7 @@ export function nativeEwayBillBody(payload: EwbPayload): Record<string, unknown>
     igstValue: payload.igstValue,
     cessValue: 0,
     cessNonAdvolValue: 0,
-    otherValue: 0,
+    otherValue: payload.otherValue ?? 0,
     totInvValue: payload.totInvValue,
     transporterId: payload.transporterId,
     transporterName: payload.transporterName,
