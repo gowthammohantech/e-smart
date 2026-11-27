@@ -23,6 +23,7 @@ import { conflict, planUpgradeRequired, unprocessable, type Issue } from '../../
 import type { DbOrTx } from '../../lib/audit';
 import { newId } from '../../lib/ids';
 import { kindName } from '../../lib/names';
+import { formatMoney } from '@esmart/core/lib/format';
 import { taxHistories, taxUnavailableWhy } from '../../lib/taxRates';
 import { gstColumns, gstFlagsFrom, iso, requiredAddressFrom } from '../../lib/wire';
 import { tdsOn, tdsSectionFor } from '../../lib/tds';
@@ -637,12 +638,15 @@ export async function prepareDocument(
   const returned = new Map<string, number>();
   /** How much of each item the source carried: a credit note credits no item it didn't, nor more of one. */
   const sourceQty = new Map<string, number>();
+  /** What the source charged per unit of each item: a credit note gives back no more per unit. */
+  const sourceRate = new Map<string, number>();
   let sourceRates: Set<number> | null = null;
   if (f.sourceDocumentId && (f.kind === 'salesReturn' || f.kind === 'purchaseReturn' || NOTE_KINDS.includes(f.kind))) {
     const stored = await db.select().from(schema.documentLines).where(eq(schema.documentLines.documentId, f.sourceDocumentId));
     for (const s of stored) returned.set(s.itemId ?? s.name, Number(s.taxRate));
     sourceRates = new Set(stored.map((s) => Number(s.taxRate)));
     for (const s of stored) sourceQty.set(s.itemId ?? s.name, (sourceQty.get(s.itemId ?? s.name) ?? 0) + Number(s.quantity));
+    for (const s of stored) sourceRate.set(s.itemId ?? s.name, Math.max(sourceRate.get(s.itemId ?? s.name) ?? 0, s.unitPriceMinor));
   }
   // A category changed since the document's date charged its earlier rate then.
   const histories = await taxHistories(db, categories.filter((c) => c.effectiveFrom > f.date).map((c) => c.id));
@@ -703,16 +707,25 @@ export async function prepareDocument(
   // A service that follows the highest GST rate keeps the rate sent for it: the app sets it to the highest
   // (applyHighestRate), and it may have been changed by hand on the document since.
 
-  // A credit note against an invoice lowers a quantity or a rate on what it charged: only its items, and no
-  // more of each than it carried. It never adds goods (a debit note does, for supply not billed before).
-  if (f.kind === 'creditNote' && f.sourceDocumentId && !f.returnDocumentId && sourceQty.size) {
+  // A note against an invoice works on the invoice's own quantities and rates, never a lump sum (1 × an amount).
+  // A credit note goes down from them: only the invoice's items, no more of each than it carried, and no more per
+  // unit than it charged. A debit note goes up: an item the invoice carried never below what was billed (more is
+  // supply not billed before), and it may add items the invoice didn't carry.
+  if ((f.kind === 'creditNote' || f.kind === 'debitNote') && f.sourceDocumentId && !f.returnDocumentId && sourceQty.size) {
     const key = (l: DocumentLine) => l.itemId ?? l.name;
     const onNote = new Map<string, number>();
     for (const l of coreLines) onNote.set(key(l), (onNote.get(key(l)) ?? 0) + l.quantity);
     coreLines.forEach((l, i) => {
       const carried = sourceQty.get(key(l));
-      if (carried === undefined) blocking(`lines[${i}].itemId`, `${l.name} isn't on the invoice; a credit note credits only what the invoice charged`);
-      else if (onNote.get(key(l))! > carried + 1e-9) blocking(`lines[${i}].quantity`, `${l.name}: the invoice carried ${carried}; a credit note can't credit more than that`);
+      if (f.kind === 'creditNote') {
+        if (carried === undefined) blocking(`lines[${i}].itemId`, `${l.name} isn't on the invoice; a credit note credits only what the invoice charged`);
+        else if (onNote.get(key(l))! > carried + 1e-9) blocking(`lines[${i}].quantity`, `${l.name}: the invoice carried ${carried}; a credit note can't credit more than that`);
+        else if (l.unitPrice.minor > (sourceRate.get(key(l)) ?? 0)) {
+          blocking(`lines[${i}].unitPrice`, `${l.name}: the invoice charged ${formatMoney({ minor: sourceRate.get(key(l)) ?? 0, currency: f.currency })} a unit; a credit note can't give back more per unit`);
+        }
+      } else if (carried !== undefined && onNote.get(key(l))! < carried - 1e-9) {
+        blocking(`lines[${i}].quantity`, `${l.name}: the invoice billed ${carried}; a debit note can't go below that, only add to it`);
+      }
     });
   }
 

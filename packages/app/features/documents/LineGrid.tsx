@@ -49,6 +49,8 @@ export function LineGrid({
   onEdit,
   onAddRequest,
   maxQuantity,
+  minQuantity,
+  maxRateMinor,
   purchase = false,
   note = false,
   focusLine,
@@ -67,8 +69,12 @@ export function LineGrid({
   onEdit: (line: DocumentLine) => void;
   /** Enter on the last line (outside its quantity): add another (the item picker). */
   onAddRequest: () => void;
-  /** A return can't take back more than its source line carried. */
+  /** A return or credit note can't take back more than its source line carried. */
   maxQuantity?: (line: DocumentLine) => number | undefined;
+  /** A debit note's invoice item never goes below what the invoice carried. */
+  minQuantity?: (line: DocumentLine) => number | undefined;
+  /** A credit note gives back per unit at most what the invoice charged (minor units). */
+  maxRateMinor?: (line: DocumentLine) => number | undefined;
   /** A purchase: each line also says reverse charge, capital goods and whether its credit can be claimed. */
   purchase?: boolean;
   /** A credit or debit note: the rate is the difference in rate. */
@@ -175,6 +181,10 @@ export function LineGrid({
         const calc = calculateLine(line, currency, taxContext);
         const lineTotal = subtract(calc.gross, calc.discount);
         const max = maxQuantity?.(line);
+        const min = minQuantity?.(line);
+        const maxRate = maxRateMinor?.(line);
+        // Within what the note allows: no more than its invoice carried (a credit note), no less (a debit note).
+        const bounded = (q: number) => Math.max(min ?? 0, max !== undefined ? Math.min(q, max) : q);
         const n = row + 1;
         const label = (column: string) => tr('sales:grid.cellLabel', { column, n });
         return (
@@ -248,7 +258,7 @@ export function LineGrid({
                 onCommit={(v) => {
                   const q = Number(v);
                   if (!Number.isFinite(q) || q <= 0) return;
-                  const next = max !== undefined ? Math.min(q, max) : q;
+                  const next = bounded(q);
                   if (next !== line.quantity) onUpdate(line.id, { quantity: next });
                 }}
                 onEnter={() => onEnter(row, 'qty')}
@@ -259,12 +269,12 @@ export function LineGrid({
                 {([['chevron-up', 1, 'sales:grid.increaseQuantity'], ['chevron-down', -1, 'sales:grid.decreaseQuantity']] as const).map(([icon, delta, key]) => {
                   const dec = unitDecimals(line.unit);
                   const next = Number((line.quantity + delta).toFixed(dec));
-                  const blocked = next <= 0 || (max !== undefined && delta > 0 && line.quantity >= max);
+                  const blocked = next <= 0 || (max !== undefined && delta > 0 && line.quantity >= max) || (min !== undefined && delta < 0 && line.quantity <= min);
                   return (
                     <Pressable
                       key={icon}
                       disabled={blocked}
-                      onPress={() => onUpdate(line.id, { quantity: max !== undefined ? Math.min(next, max) : next })}
+                      onPress={() => onUpdate(line.id, { quantity: bounded(next) })}
                       accessibilityRole="button"
                       accessibilityLabel={label(tr(key))}
                       hitSlop={2}
@@ -334,7 +344,9 @@ export function LineGrid({
                 invalid={line.unitPrice.minor <= 0}
                 placeholder="0"
                 onCommit={(v) => {
-                  const price = fromMajor(v || '0', currency);
+                  const typed = fromMajor(v || '0', currency);
+                  // A credit note gives back per unit no more than the invoice charged.
+                  const price = maxRate !== undefined && typed.minor > maxRate ? { ...typed, minor: maxRate } : typed;
                   if (price.minor !== line.unitPrice.minor) onUpdate(line.id, { unitPrice: price });
                 }}
                 onEnter={() => onEnter(row, 'rate')}

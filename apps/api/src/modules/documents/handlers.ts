@@ -1013,10 +1013,9 @@ export const documentsHandlers = defineHandlers({
     // The new draft keeps the source's tax rates: a return must reverse exactly what was charged.
     // A credit or debit note is for a difference in rate: each line starts at 0, rate and discount, for the person to fill.
     const note = ['creditNote', 'debitNote', 'supplierCreditNote', 'supplierDebitNote'].includes(target);
-    // A credit note from an invoice is an amount first (a discount, a price correction): each line starts at
-    // one, for the amount to be typed; the quantity is raised only for a per-unit difference. Goods that came
-    // back are credited from their return instead.
-    const copied = lines.map((l) => ({ ...l, id: undefined, ...(note && { unitPriceMinor: 0, discountValue: 0 }), ...(target === 'creditNote' && { quantity: 1 }) }));
+    // A note works on the invoice's own quantities, never a lump sum: it starts at what was billed, a credit
+    // note to go down from there and a debit note up (prepareDocument holds them to it).
+    const copied = lines.map((l) => ({ ...l, id: undefined, ...(note && { unitPriceMinor: 0, discountValue: 0 }) }));
     const row = await insertDocument(ctx, f, copied, requestedStatus(target, 'draft') as DocStatus, {
       snapshotRates: false,
       action: `converted from ${numbers}`,

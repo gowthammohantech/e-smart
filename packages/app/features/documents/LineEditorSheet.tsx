@@ -36,8 +36,12 @@ type EditorProps = {
   onRemove?: () => void;
   /** HSN/SAC is mandatory (GST-registered business). */
   hsnRequired?: boolean;
-  /** Upper bound on quantity, e.g. what the source invoice carried for a return. */
+  /** Upper bound on quantity, e.g. what the source invoice carried for a return or credit note. */
   maxQuantity?: number;
+  /** Lower bound on quantity: a debit note's invoice item never goes below what the invoice carried. */
+  minQuantity?: number;
+  /** Upper bound on the rate, in minor units: a credit note gives back per unit at most what the invoice charged. */
+  maxRateMinor?: number;
   /** A purchase line: it also says reverse charge, capital goods and whether its credit can be claimed. */
   purchase?: boolean;
   /** A credit or debit note: the rate is the difference in rate. */
@@ -67,6 +71,8 @@ function LineEditorForm({
   onRemove,
   hsnRequired = false,
   maxQuantity,
+  minQuantity,
+  maxRateMinor,
   purchase = false,
   note = false,
 }: EditorProps & { line: DocumentLine }) {
@@ -141,9 +147,16 @@ function LineEditorForm({
       quantity:
         maxQuantity !== undefined && quantity > maxQuantity
           ? tr('sales:line.quantityTooHigh', { max: maxQuantity })
-          : undefined,
+          : minQuantity !== undefined && quantity < minQuantity
+            ? tr('sales:line.quantityTooLow', { min: minQuantity })
+            : undefined,
       // No line is worth nothing: the rate, and what's left after the discount, must be above 0.
-      rate: fromMajor(price || '0', currency).minor > 0 ? undefined : tr('sales:line.rateRequired'),
+      rate:
+        fromMajor(price || '0', currency).minor <= 0
+          ? tr('sales:line.rateRequired')
+          : maxRateMinor !== undefined && fromMajor(price || '0', currency).minor > maxRateMinor
+            ? tr('sales:line.rateTooHigh', { max: formatMoney({ minor: maxRateMinor, currency }) })
+            : undefined,
       discount:
         fromMajor(price || '0', currency).minor > 0 && preview.taxable.minor <= 0 ? tr('sales:line.discountTooHigh') : undefined,
     };
@@ -219,7 +232,7 @@ function LineEditorForm({
         <View style={{ flexDirection: 'row', gap: t.spacing.md, alignItems: 'flex-end' }}>
           <View style={{ flex: 1, gap: 6 }}>
             <Text variant="caption" tone="muted" weight="600">{tr('sales:line.quantity')}</Text>
-            <QuantityStepper key={unit} value={quantity} onChange={setQuantity} min={0} decimals={decimals} />
+            <QuantityStepper key={unit} value={quantity} onChange={setQuantity} min={minQuantity ?? 0} decimals={decimals} />
           </View>
           <PickerField
             label={tr('sales:line.unit')}
@@ -236,6 +249,10 @@ function LineEditorForm({
         ) : maxQuantity !== undefined ? (
           <Text variant="caption" tone="muted">
             {tr('sales:line.quantityMaxHint', { max: maxQuantity })}
+          </Text>
+        ) : minQuantity !== undefined ? (
+          <Text variant="caption" tone="muted">
+            {tr('sales:line.quantityMinHint', { min: minQuantity })}
           </Text>
         ) : null}
 
