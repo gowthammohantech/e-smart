@@ -279,6 +279,17 @@ async function challanEwayBill(db: DbOrTx, companyId: string, sourceId: string):
 }
 
 /**
+ * What only one kind carries, left off a document made from it as another kind: an export invoice's
+ * shipping bill, and an import bill's bill of entry or ISD flag (a note or return against them has none).
+ */
+function onlyOnItsKind(target: DocumentKind): Partial<Pick<DocFields, 'shippingBill' | 'billOfEntry' | 'isdInvoice'>> {
+  return {
+    ...(target !== 'invoice' && { shippingBill: null }),
+    ...(target !== 'purchaseBill' && { billOfEntry: null, isdInvoice: false }),
+  };
+}
+
+/**
  * A credit note from a stock-only sales return: the return's money and GST, counted once. Against the
  * return's invoice, its lines are the return's quantities at the invoice's price, discount and tax
  * (prepareDocument rebuilds them), and can't be changed. One live credit note per return.
@@ -312,6 +323,7 @@ async function creditNoteFromReturn(ctx: AnyCtx, ret: DocRow, status: DocStatus)
     originalDate: null,
     tdsSection: undefined,
     notes: null,
+    ...onlyOnItsKind('creditNote'),
   };
   // The lines come from the return and the invoice: prepareDocument builds them.
   const row = await insertDocument(ctx, f, [], requestedStatus('creditNote', 'draft') as DocStatus, { snapshotRates: false, action: `made from return ${name}` });
@@ -996,6 +1008,7 @@ export const documentsHandlers = defineHandlers({
       returnReason: null,
       returnDocumentId: null,
       ...(!reverses && { exchangeRate: null }),
+      ...onlyOnItsKind(target),
     };
     // The new draft keeps the source's tax rates: a return must reverse exactly what was charged.
     // A credit or debit note is for a difference in rate: each line starts at 0, rate and discount, for the person to fill.
