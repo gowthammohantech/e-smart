@@ -983,7 +983,8 @@ export const useAppStore = create<AppState>()(
             // A credit or debit note is for a difference in rate: each line starts at 0, rate and discount.
             lines: sourceLines
               .filter((l) => !lineIds?.length || lineIds.includes(l.id))
-              .map((l) => ({ ...l, id: uid('ln'), ...(NOTE_KINDS.includes(target) && { unitPrice: zero(l.unitPrice.currency), discountValue: 0 }) })),
+              // A credit note from an invoice is an amount first: each line starts at one, as the server makes it.
+              .map((l) => ({ ...l, id: uid('ln'), ...(NOTE_KINDS.includes(target) && { unitPrice: zero(l.unitPrice.currency), discountValue: 0 }), ...(target === 'creditNote' && { quantity: 1 }) })),
             documentDiscountMode: src.documentDiscountMode,
             documentDiscountValue: src.documentDiscountValue,
             charges: src.charges,
