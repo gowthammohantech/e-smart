@@ -89,6 +89,20 @@ async function validate(db: DbOrTx, body: Schema<'PaymentAccount'>, today: strin
   }
   const [cur] = await db.select().from(schema.currencies).where(eq(schema.currencies.code, body.currency));
   if (!cur) issues.push({ field: 'currency', message: 'Choose a currency from the list', severity: 'blocking' });
+  // A bank account is what customers pay into: its holder, bank, branch, number and IFSC are all needed.
+  if (body.type === 'bank') {
+    const needed: [keyof typeof body, string][] = [
+      ['accountHolderName', 'Account holder name'],
+      ['bankName', 'Bank name'],
+      ['branchName', 'Branch'],
+      ['accountNumber', 'Account number'],
+      ['ifsc', 'IFSC code'],
+    ];
+    for (const [field, label] of needed) {
+      const v = body[field];
+      if (typeof v !== 'string' || !v.trim()) issues.push({ field, message: `${label} is required for a bank account`, severity: 'blocking' });
+    }
+  }
   // The same shapes the business profile checked when these were typed there.
   if (body.type === 'bank' && body.ifsc?.trim() && !/^[A-Za-z]{4}0[A-Za-z0-9]{6}$/.test(body.ifsc.trim())) {
     issues.push({ field: 'ifsc', message: 'An IFSC is 4 letters, a 0, then 6 letters or digits', severity: 'blocking' });
