@@ -273,6 +273,16 @@ export async function generateEway(ctx: GenerateCtx, input: GenerateInput, opts:
       if (!(err instanceof ApiError && err.code === 'FEATURE_UNAVAILABLE')) throw err;
     }
   }
+  // A typed distance may run at most 10% over the road distance between the PINs (NIC). Checked against the
+  // portal's own distance (GSTIN_PROVIDER=gsp); the simulator's is made up, and without a lookup the portal checks it.
+  let roadDistanceKm: number | undefined;
+  if (ctx.deps.config.GSTIN_PROVIDER === 'gsp' && input.distanceKm > 0 && !validPincode(input.from.pincode) && !validPincode(input.to.pincode)) {
+    try {
+      roadDistanceKm = (await ctx.deps.providers.gstin.distance(input.from.pincode, input.to.pincode)).distanceKm;
+    } catch {
+      roadDistanceKm = undefined;
+    }
+  }
 
   const prepared = await ctx.db.transaction(async (tx) => {
     const doc = await findDocument(tx, ctx.company, ctx.user, input.documentId, { lock: true });
@@ -313,6 +323,7 @@ export async function generateEway(ctx: GenerateCtx, input: GenerateInput, opts:
       transportDocNumber: input.transportDocNumber,
       transportDocDate: input.transportDocDate,
       distanceKm,
+      roadDistanceKm,
       now,
     });
     const issues = [...partA, ...partB];

@@ -511,8 +511,18 @@ export type EwayPartBInput = {
   transportDocNumber?: string;
   transportDocDate?: string;
   distanceKm: number;
+  /** The road distance between the two PINs, where it could be looked up; a typed distance may be at most 10% over it. */
+  roadDistanceKm?: number;
   now: string;
 };
+
+/** NIC lets a typed distance run at most 10% over the road distance between the PINs. */
+export const EWAY_DISTANCE_ALLOWANCE = 0.1;
+
+/** The most a typed distance may be, given the road distance between the PINs. */
+export function maxDistanceKm(roadDistanceKm: number): number {
+  return Math.floor(roadDistanceKm * (1 + EWAY_DISTANCE_ALLOWANCE));
+}
 
 export function validatePartB(input: EwayPartBInput): ComplianceIssue[] {
   const out: ComplianceIssue[] = [];
@@ -524,6 +534,8 @@ export function validatePartB(input: EwayPartBInput): ComplianceIssue[] {
     // Rail, air and ship move under a transport document, not a vehicle number.
     if (!input.transportDocNumber?.trim()) {
       out.push(issue('EWB202', 'transportDocNumber', 'Enter the transport document number'));
+    } else if (input.transportDocNumber.trim().length > EWAY_TRANS_DOC_NO_MAX) {
+      out.push(issue('EWB209', 'transportDocNumber', `The portal takes a transport document number of at most ${EWAY_TRANS_DOC_NO_MAX} characters`));
     }
     if (!input.transportDocDate) {
       out.push(issue('EWB203', 'transportDocDate', 'Enter the transport document date'));
@@ -547,6 +559,14 @@ export function validatePartB(input: EwayPartBInput): ComplianceIssue[] {
   } else if (input.distanceKm > EWAY_MAX_DISTANCE_KM) {
     out.push(
       issue('EWB208', 'distanceKm', `The portal accepts at most ${EWAY_MAX_DISTANCE_KM} km on one bill`),
+    );
+  } else if (input.roadDistanceKm && input.roadDistanceKm > 0 && input.distanceKm > maxDistanceKm(input.roadDistanceKm)) {
+    out.push(
+      issue(
+        'EWB210',
+        'distanceKm',
+        `The road distance between the PIN codes is ${input.roadDistanceKm} km; the portal allows at most ${maxDistanceKm(input.roadDistanceKm)} km. Enter 0 to let the portal work it out`,
+      ),
     );
   }
 
