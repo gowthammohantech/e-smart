@@ -164,7 +164,7 @@ export function nativeEwayBillBody(payload: EwbPayload): Record<string, unknown>
     toAddr2: payload.toAddr2,
     toPlace: payload.toPlace,
     toPincode: payload.toPincode,
-    actToStateCode: Number(payload.toStateCode),
+    actToStateCode: Number(payload.actToStateCode),
     toStateCode: Number(payload.toStateCode),
     totalValue: payload.totalValue,
     cgstValue: payload.cgstValue,

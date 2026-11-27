@@ -50,6 +50,8 @@
     "lines": "Lines",
     "from": "From",
     "to": "To",
+    "toPort": "To: port of export",
+    "toPortHint": "The port, airport or land customs station the goods leave India from, with its state and PIN. The bill names the buyer abroad, and sends their state as Other Country.",
     "mode": "Mode",
     "cargo": "Cargo",
     "vehicle": "Vehicle",

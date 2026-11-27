@@ -366,6 +366,7 @@ export type EwayPartAInput = {
 
 export function validatePartA(input: EwayPartAInput): ComplianceIssue[] {
   const out: ComplianceIssue[] = [];
+  const exported = input.subSupplyType === 'export';
 
   ([
     ['from', input.from],
@@ -379,11 +380,22 @@ export function validatePartA(input: EwayPartAInput): ComplianceIssue[] {
 
     if (!place.place?.trim()) out.push(issue('EWB103', `${side}.place`, 'Enter the place'));
     if (!place.address1?.trim()) out.push(issue('EWB104', `${side}.address1`, 'Enter the address'));
-    // The consignee of an export is in Other Country (99); the goods leave from a state in India.
-    if (!INDIAN_STATES.some((s) => s.code === place.stateCode) && !(side === 'to' && place.stateCode === EWB_OTHER_COUNTRY_CODE)) {
-      out.push(issue('EWB105', `${side}.stateCode`, 'Choose a state'));
+    // Both ends are in India: an export's "to" is the port it leaves from; the bill names Other Country itself.
+    if (!INDIAN_STATES.some((s) => s.code === place.stateCode)) {
+      out.push(
+        issue(
+          'EWB105',
+          `${side}.stateCode`,
+          side === 'to' && exported ? 'Choose the state of the port, airport or land customs station the goods leave India from' : 'Choose a state',
+        ),
+      );
     }
   });
+
+  // An export (NIC): the consignee is URP, and its address, place and PIN are the port of export's.
+  if (exported && input.to.gstin.trim().toUpperCase() !== 'URP') {
+    out.push(issue('EWB112', 'to.gstin', 'For an export, enter URP: the buyer abroad has no GSTIN'));
+  }
 
   if (input.subSupplyType === 'others' && !input.subSupplyDescription?.trim()) {
     out.push(issue('EWB106', 'subSupplyDescription', 'Describe the sub-supply type'));
@@ -525,7 +537,10 @@ export type EwbPayload = {
   toAddr2?: string;
   toPlace: string;
   toPincode: number;
+  /** Bill-to state: Other Country (99) on an export. */
   toStateCode: string;
+  /** Ship-to state, where the goods actually go in India: on an export, the port of export's. */
+  actToStateCode: string;
   totalValue: number;
   cgstValue: number;
   sgstValue: number;
@@ -566,7 +581,9 @@ export function buildEwbPayload(bill: Omit<EwayBill, 'id' | 'ewayBillNumber' | '
     toAddr2: bill.to.address2,
     toPlace: bill.to.place,
     toPincode: Number(bill.to.pincode) || 0,
-    toStateCode: bill.to.stateCode,
+    // An export's "to" is the port it leaves India from: billed to Other Country, shipped to the port's state.
+    toStateCode: bill.subSupplyType === 'export' ? EWB_OTHER_COUNTRY_CODE : bill.to.stateCode,
+    actToStateCode: bill.to.stateCode,
     totalValue: toMajorUnits(bill.taxableValue.minor),
     cgstValue: toMajorUnits(bill.cgst.minor),
     sgstValue: toMajorUnits(bill.sgst.minor),

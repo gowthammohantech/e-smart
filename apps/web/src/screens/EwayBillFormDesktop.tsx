@@ -17,7 +17,6 @@ import type { BusinessDocument, EwayPlace } from '@esmart/core/types';
 import { EWAY_SUB_SUPPLY_TYPES, normalizeVehicleNumber } from '@esmart/core/domain/ewayBill';
 import { mainHsnCodeOf } from '@esmart/core/domain/eInvoice';
 import { stateName } from '@esmart/core/data/masters';
-import { EWB_OTHER_COUNTRY_CODE } from '@esmart/core/domain/stateCodes';
 import { formatDate } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
 import { useDocument, useParties } from '@esmart/app/store/selectors';
@@ -36,6 +35,7 @@ function Label({ children }: { children: string }) {
 /** One end of the journey: its heading, then the fields in pairs. */
 function PlaceColumn({
   title,
+  hint,
   icon,
   place,
   onChange,
@@ -44,6 +44,8 @@ function PlaceColumn({
   onPickState,
 }: {
   title: string;
+  /** A line under the heading: what this end is (an export's port). */
+  hint?: string;
   icon: IconName;
   place: EwayPlace;
   onChange: (p: EwayPlace) => void;
@@ -61,6 +63,11 @@ function PlaceColumn({
         </View>
         <Text weight="700">{title}</Text>
       </View>
+      {hint ? (
+        <Text variant="caption" tone="muted" style={{ marginTop: -t.spacing.sm }}>
+          {hint}
+        </Text>
+      ) : null}
       <TextField
         label={tr('compliance:ewb.legalName')}
         value={place.legalName}
@@ -102,18 +109,13 @@ function PlaceColumn({
           icon="map-marker-outline"
           error={errors[`${prefix}.stateCode`]}
         />
-        {/* Abroad there's no city list: the place is typed. */}
-        {place.stateCode === EWB_OTHER_COUNTRY_CODE ? (
-          <TextField label={tr('compliance:ewb.place')} value={place.place ?? ''} onChangeText={(v) => onChange({ ...place, place: v })} error={errors[`${prefix}.place`]} />
-        ) : (
-          <CityField
-            label={tr('compliance:ewb.place')}
-            value={place.place}
-            onChange={(v) => onChange({ ...place, place: v })}
-            stateCode={place.stateCode}
-            error={errors[`${prefix}.place`]}
-          />
-        )}
+        <CityField
+          label={tr('compliance:ewb.place')}
+          value={place.place}
+          onChange={(v) => onChange({ ...place, place: v })}
+          stateCode={place.stateCode}
+          error={errors[`${prefix}.place`]}
+        />
       </FieldRow>
     </View>
   );
@@ -274,7 +276,8 @@ function EwayBillFormDesktop({ doc }: { doc: BusinessDocument }) {
           />
           <View style={{ width: 1, backgroundColor: t.c.line }} />
           <PlaceColumn
-            title={tr('compliance:ewb.to')}
+            title={subSupplyType === 'export' ? tr('compliance:ewb.toPort') : tr('compliance:ewb.to')}
+            hint={subSupplyType === 'export' ? tr('compliance:ewb.toPortHint') : undefined}
             icon="map-marker-radius-outline"
             place={to}
             onChange={setTo}

@@ -462,7 +462,7 @@ export class WhitebooksGateway implements GspGateway {
           ...req.payload,
           ...(seller ? { fromGstin: String(seller.Gstin), fromTrdName: String(seller.LglNm), fromAddr1: String(seller.Addr1), fromAddr2: seller.Addr2 ? String(seller.Addr2) : undefined, fromPlace: String(seller.Loc), fromPincode: Number(seller.Pin), fromStateCode: String(seller.Stcd) } : {}),
           docNo: this.sandbox ? sandboxDocNo(this.config, login.gstin, req.payload.docNo, req.payload.docDate, req.companyId) : req.payload.docNo,
-          ...(party ? { toGstin: String(party.Gstin), toTrdName: String(party.LglNm), toAddr1: String(party.Addr1), toAddr2: party.Addr2 ? String(party.Addr2) : undefined, toPlace: String(party.Loc), toPincode: Number(party.Pin), toStateCode: String(party.Stcd) } : {}),
+          ...(party ? { toGstin: String(party.Gstin), toTrdName: String(party.LglNm), toAddr1: String(party.Addr1), toAddr2: party.Addr2 ? String(party.Addr2) : undefined, toPlace: String(party.Loc), toPincode: Number(party.Pin), toStateCode: String(party.Stcd), actToStateCode: String(party.Stcd) } : {}),
         };
         // The test buyer sits in a state of its own, so the bill can flip between intra- and inter-state, and NIC
         // refuses IGST on an intra-state bill (218, with 623) and CGST/SGST on an inter-state one. The same tax is
