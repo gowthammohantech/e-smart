@@ -43,6 +43,7 @@ export function assertOpeningOpen(company: CompanyRow, date: string | null | und
     'PERIOD_LOCKED',
     date
       ? `The books are closed through ${locked}; an opening balance dated ${date} sits in them (it counts from ${posts}). An owner must reopen them to change it`
-      : `The books are closed through ${locked}; an undated opening balance sits at the start of the books. Give it a date after ${locked}, or an owner must reopen them`,
+      : // It counts from the day before its date, so the first date that clears the lock is two days after it.
+        `The books are closed through ${locked}; an undated opening balance sits at the start of the books. Give it a date on or after ${addDaysISO(locked, 2)}, or an owner must reopen them`,
   );
 }
