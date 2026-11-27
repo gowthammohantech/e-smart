@@ -278,6 +278,48 @@ async function challanEwayBill(db: DbOrTx, companyId: string, sourceId: string):
   return bill && bill.status !== 'cancelled' ? src.bill : null;
 }
 
+/**
+ * A credit note from a stock-only sales return: the return's money and GST, counted once. Against the
+ * return's invoice, its lines are the return's quantities at the invoice's price, discount and tax
+ * (prepareDocument rebuilds them), and can't be changed. One live credit note per return.
+ */
+async function creditNoteFromReturn(ctx: AnyCtx, ret: DocRow, status: DocStatus) {
+  const name = ret.number.trim();
+  if (!ret.stockOnly) throw conflict('INVALID_CONVERSION', `${name} carries its own credit: it was raised before returns and credit notes were kept apart`);
+  if (status === 'cancelled' || status === 'rejected') throw conflict('INVALID_CONVERSION', `${name} is ${status}`);
+  if (!isFinalized(status)) throw conflict('INVALID_CONVERSION', 'A return is approved before a credit note is made from it');
+  if (!ret.sourceDocumentId) throw conflict('INVALID_CONVERSION', `${name} names no invoice`);
+  const [made] = await ctx.db
+    .select({ number: D.number, status: D.status })
+    .from(D)
+    .where(and(eq(D.companyId, ctx.company.id), eq(D.returnDocumentId, ret.id), eq(D.kind, 'creditNote'), notInArray(D.status, ['cancelled', 'rejected'])))
+    .limit(1);
+  if (made) throw conflict('RETURN_ALREADY_CREDITED', made.status === 'draft' ? `${name} already has a credit note in draft; open it from the return` : `${name} is already credited by ${made.number.trim()}`);
+  const invoice = await findDocument(ctx, ctx.db, ret.sourceDocumentId);
+  const f: DocFields = {
+    ...fieldsFromRow(invoice),
+    kind: 'creditNote',
+    date: today(ctx.now),
+    dueDate: null,
+    validUntil: null,
+    sourceDocumentId: invoice.id,
+    returnDocumentId: ret.id,
+    stockOnly: false,
+    returnReason: null,
+    noteReason: null,
+    noteGst: null,
+    originalNumber: null,
+    originalDate: null,
+    tdsSection: undefined,
+    notes: null,
+  };
+  // The lines come from the return and the invoice: prepareDocument builds them.
+  const row = await insertDocument(ctx, f, [], requestedStatus('creditNote', 'draft') as DocStatus, { snapshotRates: false, action: `made from return ${name}` });
+  track(ctx, 'document_converted', { fromKind: 'salesReturn', toKind: 'creditNote' });
+  setEtag(ctx.reply, row.version);
+  return toWire(ctx, row);
+}
+
 export async function insertDocument(
   ctx: AnyCtx,
   f: DocFields,
@@ -751,6 +793,9 @@ export const documentsHandlers = defineHandlers({
               arrayContains(D.mergedSourceIds, [row.id]),
               row.sourceDocumentId ? eq(D.id, row.sourceDocumentId) : undefined,
               row.mergedSourceIds.length ? inArray(D.id, row.mergedSourceIds) : undefined,
+              // A return's credit note, and a credit note's return.
+              eq(D.returnDocumentId, row.id),
+              row.returnDocumentId ? eq(D.id, row.returnDocumentId) : undefined,
             ),
           ),
         )
@@ -760,6 +805,11 @@ export const documentsHandlers = defineHandlers({
     const open = isFinalized(status) && status !== 'cancelled';
     const conversions = CONVERSIONS[row.kind].filter((target) => {
       if (isPurchaseKind(target) && !hasModule(ctx.company.plan, 'purchases')) return false;
+      // A stock-only return gets one credit note; an older return carries its own credit.
+      if (row.kind === 'salesReturn') {
+        const credited = related.some((d) => d.kind === 'creditNote' && d.returnDocumentId === row.id && d.status !== 'cancelled' && d.status !== 'rejected');
+        if (!row.stockOnly || credited || !open) return false;
+      }
       return !conversionBlock({ id: row.id, status }, target, related);
     });
     // Others of the party's that could go into the same challan, invoice, receipt or bill with it.
@@ -905,6 +955,7 @@ export const documentsHandlers = defineHandlers({
     assertKindAllowed(ctx.company, target);
     const status = effectiveStatus(src, today(ctx.now));
     if (!CONVERSIONS[src.kind].includes(target)) throw conflict('INVALID_CONVERSION', `A ${src.kind} cannot be converted to a ${target}`);
+    if (src.kind === 'salesReturn') return creditNoteFromReturn(ctx, src, status);
     // Nothing from a draft or a cancelled document, and an order or quote is carried forward once.
     const made = await madeFromAny(ctx.db, ctx.company.id, [src.id]);
     const block = conversionBlock({ id: src.id, status }, target, made);
@@ -932,7 +983,20 @@ export const documentsHandlers = defineHandlers({
     // Dated today, at today's rate: the source's rate was for its own day. A return or note reverses
     // its source, so it keeps the source's rate.
     const reverses = ['salesReturn', 'purchaseReturn', 'creditNote', 'debitNote', 'supplierCreditNote', 'supplierDebitNote'].includes(target);
-    const f: DocFields = { ...fieldsFromRow(src), kind: target, date: today(ctx.now), dueDate: null, validUntil: null, sourceDocumentId: src.id, tdsSection: undefined, ...(!reverses && { exchangeRate: null }) };
+    // A sales return made now records goods only; its credit note is made from it later.
+    const f: DocFields = {
+      ...fieldsFromRow(src),
+      kind: target,
+      date: today(ctx.now),
+      dueDate: null,
+      validUntil: null,
+      sourceDocumentId: src.id,
+      tdsSection: undefined,
+      stockOnly: target === 'salesReturn',
+      returnReason: null,
+      returnDocumentId: null,
+      ...(!reverses && { exchangeRate: null }),
+    };
     // The new draft keeps the source's tax rates: a return must reverse exactly what was charged.
     // A credit or debit note is for a difference in rate: each line starts at 0, rate and discount, for the person to fill.
     const note = ['creditNote', 'debitNote', 'supplierCreditNote', 'supplierDebitNote'].includes(target);
@@ -950,7 +1014,8 @@ export const documentsHandlers = defineHandlers({
   async duplicateDocument(ctx) {
     const src = await findDocument(ctx, ctx.db, ctx.params.id);
     const stored = linesFromRows(await ctx.db.select().from(schema.documentLines).where(eq(schema.documentLines.documentId, src.id)));
-    const f: DocFields = { ...fieldsFromRow(src), date: today(ctx.now), dueDate: null, validUntil: null, sourceDocumentId: null, tdsSection: src.tdsSection ?? undefined, exchangeRate: null };
+    // A copy is a new document: a sales return is stock-only now, and a copied credit note is no longer from its return.
+    const f: DocFields = { ...fieldsFromRow(src), date: today(ctx.now), dueDate: null, validUntil: null, sourceDocumentId: null, tdsSection: src.tdsSection ?? undefined, exchangeRate: null, stockOnly: src.kind === 'salesReturn', returnDocumentId: null };
     const row = await insertDocument(ctx, f, stored.map((l) => ({ ...l, id: undefined, taxRate: undefined })), requestedStatus(src.kind, 'draft') as DocStatus, {
       action: `duplicated from ${src.number}`,
     });
