@@ -14,22 +14,24 @@ import { gstPeriodLabel } from '@esmart/app/features/dashboard/labels';
 import { leaveGuarded } from '@esmart/app/components/useLeaveGuard';
 
 const RETURNS = '/gst/returns';
+const GSTR1 = '/gst/gstr1';
 
 /**
  * The next return or deposit due, at the foot of the open sidebar: what it is, for which
- * period, and how long is left (or how late it is), linking to GST returns. It reads the same
- * filing calendar as Home's card (one request between them). Nothing shows until it has loaded,
- * on a failure, or for a plan that can't open GST returns; with nothing left to file it says so.
+ * period, and how long is left (or how late it is). It reads the same filing calendar as Home's
+ * card (one request between them), on every plan. It links to GST returns, or to GSTR-1 on a plan
+ * without them (Free). Nothing shows until it has loaded, on a failure, or with GST switched off;
+ * with nothing left to file it says so.
  */
 export function SidebarDueCard() {
   const t = useTheme();
   const { t: tr } = useTranslation(['nav', 'reports']);
   const router = useRouter();
   const canOpen = useCanOpen();
-  const allowed = canOpen(RETURNS);
+  const target = canOpen(RETURNS) ? RETURNS : canOpen(GSTR1) ? GSTR1 : null;
   const { branchId } = useDashboardScope();
-  const q = useFilingsHub(branchId, allowed);
-  if (!allowed || !q.data) return null;
+  const q = useFilingsHub(branchId, !!target);
+  if (!target || !q.data) return null;
 
   const today = businessDate();
   // Overdue first, then the nearest date.
@@ -58,10 +60,10 @@ export function SidebarDueCard() {
 
   return (
     <Pressable
-      {...({ href: RETURNS } as object)}
+      {...({ href: target } as object)}
       onPress={(e) => {
         e.preventDefault();
-        leaveGuarded(() => router.navigate(appHref(RETURNS) as never));
+        leaveGuarded(() => router.navigate(appHref(target) as never));
       }}
       accessibilityRole="link"
       accessibilityLabel={label}
