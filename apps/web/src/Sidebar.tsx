@@ -408,7 +408,7 @@ function SectionDropdown({ tab, pathname }: { tab: TabName; pathname: string }) 
   const sectionLabel = useSectionLabel();
   const plan = usePlan();
   const disabled = useDisabledModules();
-  const badges = useMenuBadges();
+  const badges = useSidebarBadges();
   const { columns, actions } = sectionLayout(tab, plan, disabled);
   const name = sectionLabel(tab);
   const hub: MenuPage = { key: `hub-${tab}`, labelKey: '', icon: 'view-dashboard-outline', route: tabPath(tab) };
@@ -489,7 +489,7 @@ function SectionPanel({
   const router = useRouter();
   const plan = usePlan();
   const disabled = useDisabledModules();
-  const badges = useMenuBadges();
+  const badges = useSidebarBadges();
   const window = useWindowDimensions();
   const panel = useRef<View>(null);
   const [height, setHeight] = useState(0);
@@ -660,6 +660,14 @@ function SectionPanel({
   );
 }
 
+/**
+ * The sidebar's badges: the menu's, without the count of failed e-invoices on GST → E-invoice & E-way
+ * bills (those show on the compliance register itself). The phone's More menu keeps it.
+ */
+function useSidebarBadges(): ReturnType<typeof useMenuBadges> {
+  return { ...useMenuBadges(), eInvoiceFailed: undefined };
+}
+
 /** A section's badges, summed: the count when they're counts, a dot otherwise. */
 function rollUp(pages: MenuPage[], badges: ReturnType<typeof useMenuBadges>): BadgeValue {
   const values = pages.map((p) => (p.badge ? badges[p.badge] : undefined)).filter((v): v is string => !!v);
@@ -685,7 +693,7 @@ export function Sidebar() {
   const pathname = usePathname();
   const plan = usePlan();
   const disabled = useDisabledModules();
-  const badges = useMenuBadges();
+  const badges = useSidebarBadges();
   const breakpoint = useBreakpoint();
   const [collapsed, toggleCollapsed] = useSidebarCollapsed();
   // A narrow window, such as a tablet, starts icons-only and opens by hand
