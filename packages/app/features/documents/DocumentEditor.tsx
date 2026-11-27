@@ -64,6 +64,7 @@ import { addChargeName, useChargeNames } from '../../remote/chargeNames';
 import { describeError } from '../../remote/errors';
 import {
   DraftState,
+  atRate,
   blankLine,
   emptyDraft,
   inCurrency,
@@ -753,7 +754,18 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
 
   const canAdvance = step === 0 ? !!draft.partyId : step === 1 ? draft.lines.length > 0 : true;
 
-  const rateText = useDecimalText(draft.exchangeRate, (exchangeRate) => patch({ exchangeRate }));
+  // A new exchange rate restates the lines' rates, the charges and fixed discounts at it, each keeping its value
+  // in the base currency. A rate is typed digit by digit, so each is worked from where the prices stood before
+  // the typing began (not from the last digit's), or they'd be rounded again on every keystroke. Any other
+  // change in between starts afresh. A purchase keeps the supplier's prices as billed.
+  const rateAnchor = useRef<{ from: DraftState; made: DraftState } | null>(null);
+  const rateText = useDecimalText(draft.exchangeRate, (exchangeRate) => {
+    if (isPurchase) return patch({ exchangeRate });
+    const from = rateAnchor.current && rateAnchor.current.made === draft ? rateAnchor.current.from : draft;
+    const made = atRate(from, exchangeRate);
+    rateAnchor.current = { from, made };
+    setDraft(made);
+  });
 
   const [, setParams] = useQueryParams();
   const takeParty = (p: Party) => {
