@@ -57,9 +57,9 @@ export type ReportData = {
 
 /**
  * A report laid out for a desktop browser: the headline figures in a row
- * across the top, charts and short lists side by side, and anything that
- * grows with the books (documents, items, payments) in one full-width table
- * that sorts and pages, so a long list never leaves half the page empty.
+ * across the top, then anything that grows with the books (documents, items,
+ * payments) in one full-width table that sorts and pages, so a long list never
+ * leaves half the page empty, and the charts and short lists side by side below it.
  * The phone keeps its own single column; this never renders there.
  */
 export function ReportDesktop({ report, data }: { report: string; data: ReportData }) {
@@ -200,32 +200,6 @@ export function ReportDesktop({ report, data }: { report: string; data: ReportDa
           <StatTile label={tr('common:table.tax')} value={d.tax} icon="percent-outline" caption={money(d.tax)} />
           <StatTile label={isSales ? tr('reports:figure.discountsGiven') : tr('reports:figure.discountsReceived')} value={d.discount} tone="good" icon="tag-outline" caption={money(d.discount)} />
         </Kpis>
-        <ReportRow>
-          <ReportSection title={tr('reports:detail.byMonth')}>
-            <SectionCard>
-              <BarChart data={monthBars(d.byMonth)} caption={isSales ? tr('reports:figure.invoicedValue') : tr('reports:figure.purchaseValue')} />
-            </SectionCard>
-          </ReportSection>
-          {data.branches.length > 1 ? (
-            <ReportSection title={tr('reports:detail.byBranch')}>
-              <SectionCard>
-                <RankedBars rows={d.byBranch} colorFor={colorFor} />
-              </SectionCard>
-            </ReportSection>
-          ) : null}
-        </ReportRow>
-        <ReportRow>
-          <ReportSection title={isSales ? tr('reports:detail.topCustomers') : tr('reports:detail.topSuppliers')}>
-            <SectionCard>
-              <RankedBars rows={d.byParty.slice(0, 8).map((r) => ({ label: r.label, value: r.value, sublabel: tr('reports:caption.documents', { count: r.count }) }))} colorFor={colorFor} />
-            </SectionCard>
-          </ReportSection>
-          <ReportSection title={tr('reports:detail.topItems')}>
-            <SectionCard>
-              <RankedBars rows={d.byItem.slice(0, 8).map((r) => ({ label: r.label, value: r.value, sublabel: tr('reports:caption.units', { qty: formatQty(r.count) }) }))} colorFor={colorFor} />
-            </SectionCard>
-          </ReportSection>
-        </ReportRow>
         {docTab === 'cancelled' ? (
           <TableSection
             title={tr('reports:detail.withCount', { title: isSales ? tr('reports:detail.cancelledInvoices') : tr('reports:detail.cancelledBills'), count: cancelled.length })}
@@ -267,6 +241,32 @@ export function ReportDesktop({ report, data }: { report: string; data: ReportDa
         ) : null}
           </>
         )}
+        <ReportRow>
+          <ReportSection title={tr('reports:detail.byMonth')}>
+            <SectionCard>
+              <BarChart data={monthBars(d.byMonth)} caption={isSales ? tr('reports:figure.invoicedValue') : tr('reports:figure.purchaseValue')} />
+            </SectionCard>
+          </ReportSection>
+          {data.branches.length > 1 ? (
+            <ReportSection title={tr('reports:detail.byBranch')}>
+              <SectionCard>
+                <RankedBars rows={d.byBranch} colorFor={colorFor} />
+              </SectionCard>
+            </ReportSection>
+          ) : null}
+        </ReportRow>
+        <ReportRow>
+          <ReportSection title={isSales ? tr('reports:detail.topCustomers') : tr('reports:detail.topSuppliers')}>
+            <SectionCard>
+              <RankedBars rows={d.byParty.slice(0, 8).map((r) => ({ label: r.label, value: r.value, sublabel: tr('reports:caption.documents', { count: r.count }) }))} colorFor={colorFor} />
+            </SectionCard>
+          </ReportSection>
+          <ReportSection title={tr('reports:detail.topItems')}>
+            <SectionCard>
+              <RankedBars rows={d.byItem.slice(0, 8).map((r) => ({ label: r.label, value: r.value, sublabel: tr('reports:caption.units', { qty: formatQty(r.count) }) }))} colorFor={colorFor} />
+            </SectionCard>
+          </ReportSection>
+        </ReportRow>
       </>
     );
   }
@@ -290,6 +290,14 @@ export function ReportDesktop({ report, data }: { report: string; data: ReportDa
           <StatTile label={tr('reports:figure.inputTax')} value={e.tax} icon="percent-outline" caption={money(e.tax)} />
           <StatTile label={tr('reports:figure.largestCategory')} value={top ? top.label : '—'} icon="chart-donut" caption={top ? money(top.value) : undefined} />
         </Kpis>
+        <TableSection
+          title={tr('reports:detail.withCount', { title: tr('reports:detail.expenses'), count: e.expenses.length })}
+          columns={columns}
+          rows={e.expenses}
+          rowKey={(r) => r.id}
+          onRowPress={(r) => router.push(`/(app)/expenses/${r.id}`)}
+          initialSort={{ key: 'date', dir: 'desc' }}
+        />
         <ReportRow>
           <ReportSection title={tr('reports:detail.byCategory')}>
             <SectionCard>
@@ -302,14 +310,6 @@ export function ReportDesktop({ report, data }: { report: string; data: ReportDa
             </SectionCard>
           </ReportSection>
         </ReportRow>
-        <TableSection
-          title={tr('reports:detail.withCount', { title: tr('reports:detail.expenses'), count: e.expenses.length })}
-          columns={columns}
-          rows={e.expenses}
-          rowKey={(r) => r.id}
-          onRowPress={(r) => router.push(`/(app)/expenses/${r.id}`)}
-          initialSort={{ key: 'date', dir: 'desc' }}
-        />
       </>
     );
   }
@@ -340,11 +340,6 @@ export function ReportDesktop({ report, data }: { report: string; data: ReportDa
           <StatTile label={tr('reports:figure.overdue')} value={a.summary.overdue} tone={a.summary.overdue.minor > 0 ? 'bad' : 'good'} icon="alert-circle-outline" caption={tr('reports:caption.documentsLate', { count: overdueCount })} />
           <StatTile label={tr('reports:figure.openDocuments')} value={String(a.outstanding.length)} icon="file-document-multiple-outline" caption={tr('reports:caption.notYetDue', { count: a.outstanding.length - overdueCount })} />
         </Kpis>
-        <ReportSection title={tr('reports:detail.aging')}>
-          <Card>
-            <AgingBars buckets={a.summary.buckets.map((b) => ({ key: b.key, label: b.label, amount: b.amount, count: b.count }))} />
-          </Card>
-        </ReportSection>
         <TableSection
           title={tr('reports:detail.withCount', { title: tr('reports:figure.openDocuments'), count: a.outstanding.length })}
           columns={columns}
@@ -353,6 +348,11 @@ export function ReportDesktop({ report, data }: { report: string; data: ReportDa
           onRowPress={(r) => router.push(detailRouteFor(r.document.kind, r.document.id) as never)}
           initialSort={{ key: 'days', dir: 'desc' }}
         />
+        <ReportSection title={tr('reports:detail.aging')}>
+          <Card>
+            <AgingBars buckets={a.summary.buckets.map((b) => ({ key: b.key, label: b.label, amount: b.amount, count: b.count }))} />
+          </Card>
+        </ReportSection>
       </>
     );
   }
@@ -381,14 +381,6 @@ export function ReportDesktop({ report, data }: { report: string; data: ReportDa
           <StatTile label={tr('reports:figure.lowStock')} value={String(s.lowCount)} tone={s.lowCount > 0 ? 'warn' : 'default'} icon="alert-outline" caption={tr('reports:caption.atOrBelowReorder')} />
           <StatTile label={tr('reports:figure.outOfStock')} value={String(s.outCount)} tone={s.outCount > 0 ? 'bad' : 'default'} icon="package-variant-remove" caption={tr('reports:caption.nothingOnHand')} />
         </Kpis>
-        <ReportSection title={tr('reports:detail.mostValuable')}>
-          <Card>
-            <RankedBars
-              rows={s.rows.slice(0, 8).map((r) => ({ label: r.item.name, value: r.value, sublabel: tr('reports:caption.onHand', { qty: formatQty(r.onHand), unit: r.item.unit }) }))}
-              colorFor={colorFor}
-            />
-          </Card>
-        </ReportSection>
         <TableSection
           title={tr('reports:detail.withCount', { title: tr('reports:detail.allTracked'), count: s.rows.length })}
           columns={columns}
@@ -397,6 +389,14 @@ export function ReportDesktop({ report, data }: { report: string; data: ReportDa
           onRowPress={(r) => router.push(`/(app)/catalog/items/${r.item.id}`)}
           initialSort={{ key: 'value', dir: 'desc' }}
         />
+        <ReportSection title={tr('reports:detail.mostValuable')}>
+          <Card>
+            <RankedBars
+              rows={s.rows.slice(0, 8).map((r) => ({ label: r.item.name, value: r.value, sublabel: tr('reports:caption.onHand', { qty: formatQty(r.onHand), unit: r.item.unit }) }))}
+              colorFor={colorFor}
+            />
+          </Card>
+        </ReportSection>
       </>
     );
   }
@@ -457,6 +457,14 @@ export function ReportDesktop({ report, data }: { report: string; data: ReportDa
           <StatTile label={tr('reports:figure.moneyOut')} value={p.paid} icon="arrow-top-right" caption={money(p.paid)} />
           <StatTile label={tr('reports:figure.payments')} value={String(p.payments.length)} icon="format-list-numbered" caption={tr('reports:caption.accounts', { count: p.byAccount.length })} />
         </Kpis>
+        <TableSection
+          title={tr('reports:detail.withCount', { title: tr('reports:figure.payments'), count: p.payments.length })}
+          columns={columns}
+          rows={p.payments}
+          rowKey={(r) => r.id}
+          onRowPress={(r) => router.push(`/(app)/payments/${r.id}`)}
+          initialSort={{ key: 'date', dir: 'desc' }}
+        />
         <ReportRow>
           <ReportSection title={tr('reports:detail.byMonth')}>
             <SectionCard>
@@ -474,14 +482,6 @@ export function ReportDesktop({ report, data }: { report: string; data: ReportDa
             <RankedBars rows={p.byAccount} colorFor={colorFor} />
           </Card>
         </ReportSection>
-        <TableSection
-          title={tr('reports:detail.withCount', { title: tr('reports:figure.payments'), count: p.payments.length })}
-          columns={columns}
-          rows={p.payments}
-          rowKey={(r) => r.id}
-          onRowPress={(r) => router.push(`/(app)/payments/${r.id}`)}
-          initialSort={{ key: 'date', dir: 'desc' }}
-        />
       </>
     );
   }
@@ -546,6 +546,7 @@ export function ReportDesktop({ report, data }: { report: string; data: ReportDa
           <StatTile label={tr('reports:figure.operatingExpenses')} value={pr.expenses} tone="warn" icon="receipt-text-outline" caption={money(pr.expenses)} />
           <StatTile label={tr('reports:detail.netProfit')} value={pr.netProfit} tone={pr.netProfit.minor >= 0 ? 'good' : 'bad'} icon="chart-line" caption={tr('reports:caption.ofRevenue', { percent: formatPercent(pr.margin) })} />
         </Kpis>
+        <TableSection title={tr('reports:detail.monthlyDetail')} columns={columns} rows={pr.byMonth} rowKey={(r) => r.key} initialSort={{ key: 'month', dir: 'asc' }} />
         <ReportRow>
           <ReportSection title={tr('reports:detail.byMonth')}>
             <SectionCard>
@@ -565,7 +566,6 @@ export function ReportDesktop({ report, data }: { report: string; data: ReportDa
             />
           </ReportSection>
         </ReportRow>
-        <TableSection title={tr('reports:detail.monthlyDetail')} columns={columns} rows={pr.byMonth} rowKey={(r) => r.key} initialSort={{ key: 'month', dir: 'asc' }} />
       </>
     );
   }

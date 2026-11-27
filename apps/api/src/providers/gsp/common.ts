@@ -1,7 +1,7 @@
 import type { ComplianceIssue, EwayBill, EwayExtendReasonCode, TransportMode } from '@esmart/core/types';
 import type { IrpInvoicePayload } from '@esmart/core/domain/eInvoice';
 import { portalDate } from '@esmart/core/domain/eInvoice';
-import { validUptoFor, type EwbPayload } from '@esmart/core/domain/ewayBill';
+import { EWAY_SUB_SUPPLY_TYPES, validUptoFor, type EwbPayload } from '@esmart/core/domain/ewayBill';
 import { whitebooksSettings, type Config } from '../../config';
 import type { ComplianceProvider, PartBUpdateRequest, PortalCredentials } from '../compliance';
 import { asCode, nicErrorsOf, parsePortalDateAny, toPortalDateTime } from './envelope';
@@ -132,6 +132,11 @@ export function ewayBillByIrnBody(irn: string, payload: EwbPayload, docNoKey: 'T
     VehType: payload.vehicleType,
     // A whole integer: the portal rejects a decimal distance rather than truncating it.
     Distance: whole(payload.transDistance),
+    // An export ships to the port it leaves India from. Its GSTIN is mandatory from the GSTN advisory of
+    // 17 June 2026 (effective 1 August 2026): a port has none, so URP.
+    ...(payload.subSupplyType === EWAY_SUB_SUPPLY_TYPES.export.code
+      ? { ExpShipDtls: { Gstin: 'URP', Addr1: payload.toAddr1, Addr2: payload.toAddr2, Loc: payload.toPlace, Pin: payload.toPincode, Stcd: payload.actToStateCode } }
+      : {}),
   });
 }
 
@@ -164,7 +169,7 @@ export function nativeEwayBillBody(payload: EwbPayload): Record<string, unknown>
     toAddr2: payload.toAddr2,
     toPlace: payload.toPlace,
     toPincode: payload.toPincode,
-    actToStateCode: Number(payload.toStateCode),
+    actToStateCode: Number(payload.actToStateCode),
     toStateCode: Number(payload.toStateCode),
     totalValue: payload.totalValue,
     cgstValue: payload.cgstValue,
@@ -172,7 +177,7 @@ export function nativeEwayBillBody(payload: EwbPayload): Record<string, unknown>
     igstValue: payload.igstValue,
     cessValue: 0,
     cessNonAdvolValue: 0,
-    otherValue: 0,
+    otherValue: payload.otherValue ?? 0,
     totInvValue: payload.totInvValue,
     transporterId: payload.transporterId,
     transporterName: payload.transporterName,

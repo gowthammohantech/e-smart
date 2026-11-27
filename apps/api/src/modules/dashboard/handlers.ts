@@ -427,7 +427,10 @@ export const dashboardHandlers = defineHandlers({
     const window = { from: addDaysISO(today, -45), to: addDaysISO(today, 60) };
     const calendar: Schema<'FilingDue'>[] = [];
     const due = gstins.flatMap((gstin) =>
-      filingCalendar({ ...window, frequency: ctx.company.returnFrequency, stateCode: gstin.slice(0, 2), deductsTds: false }).map((f) => ({ ...f, gstin })),
+      filingCalendar({ ...window, frequency: ctx.company.returnFrequency, stateCode: gstin.slice(0, 2), deductsTds: false })
+        // GST returns come with the paid plans: Free's calendar leaves GSTR-3B out.
+        .filter((f) => !(plan === 'free' && f.kind === 'gstr3b'))
+        .map((f) => ({ ...f, gstin })),
     );
     const recorded = gstins.length
       ? await ctx.db

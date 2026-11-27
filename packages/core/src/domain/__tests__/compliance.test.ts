@@ -1200,7 +1200,7 @@ describe('e-way bill Part-A (FRD 16)', () => {
   });
 
   it('accepts URP in place of a GSTIN for an unregistered party', () => {
-    expect(partA({ to: place({ gstin: 'URP', stateCode: '29' }) })).toHaveLength(0);
+    expect(partA({ to: place({ gstin: 'URP', stateCode: '29', place: 'Bengaluru', pincode: '560001' }) })).toHaveLength(0);
   });
 
   it('rejects a malformed GSTIN', () => {

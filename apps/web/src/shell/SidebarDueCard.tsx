@@ -14,22 +14,32 @@ import { gstPeriodLabel } from '@esmart/app/features/dashboard/labels';
 import { leaveGuarded } from '@esmart/app/components/useLeaveGuard';
 
 const RETURNS = '/gst/returns';
+const GSTR1 = '/gst/gstr1';
+
+/** The GSTR-1 page for one month (MMYYYY): its first to its last day. */
+function gstr1Href(period: string): string {
+  const yy = Number(period.slice(2));
+  const mm = Number(period.slice(0, 2));
+  const last = new Date(Date.UTC(yy, mm, 0)).toISOString().slice(0, 10);
+  return `${GSTR1}?range=custom&from=${period.slice(2)}-${period.slice(0, 2)}-01&to=${last}`;
+}
 
 /**
  * The next return or deposit due, at the foot of the open sidebar: what it is, for which
- * period, and how long is left (or how late it is), linking to GST returns. It reads the same
- * filing calendar as Home's card (one request between them). Nothing shows until it has loaded,
- * on a failure, or for a plan that can't open GST returns; with nothing left to file it says so.
+ * period, and how long is left (or how late it is). It reads the same filing calendar as Home's
+ * card (one request between them), on every plan. It links to GST returns, or to GSTR-1 on a plan
+ * without them (Free). Nothing shows until it has loaded, on a failure, or with GST switched off;
+ * with nothing left to file it says so.
  */
 export function SidebarDueCard() {
   const t = useTheme();
   const { t: tr } = useTranslation(['nav', 'reports']);
   const router = useRouter();
   const canOpen = useCanOpen();
-  const allowed = canOpen(RETURNS);
+  const target = canOpen(RETURNS) ? RETURNS : canOpen(GSTR1) ? GSTR1 : null;
   const { branchId } = useDashboardScope();
-  const q = useFilingsHub(branchId, allowed);
-  if (!allowed || !q.data) return null;
+  const q = useFilingsHub(branchId, !!target);
+  if (!target || !q.data) return null;
 
   const today = businessDate();
   // Overdue first, then the nearest date.
@@ -55,19 +65,23 @@ export function SidebarDueCard() {
   const period = next ? (next.kind === 'tds' ? formatDate(`${next.period}-01`, 'MMM yyyy') : gstPeriodLabel(next.period)) : '';
   const title = next ? tr(`reports:dash.filings.kind.${next.kind}` as 'reports:dash.filings.kind.gstr1') : tr('nav:shell.dueCard.allFiled');
   const label = next ? tr('nav:shell.dueCard.a11y', { title, period, when }) : title;
+  // GSTR-1 opens on the card's month (MMYYYY), as a custom range the page reads from its address.
+  const href = target === GSTR1 && next && (next.kind === 'gstr1' || next.kind === 'iff') ? gstr1Href(next.period) : target;
 
   return (
     <Pressable
-      {...({ href: RETURNS } as object)}
+      {...({ href } as object)}
       onPress={(e) => {
         e.preventDefault();
-        leaveGuarded(() => router.navigate(appHref(RETURNS) as never));
+        leaveGuarded(() => router.navigate(appHref(href) as never));
       }}
       accessibilityRole="link"
       accessibilityLabel={label}
       style={(state) => {
         const { pressed, hovered, focused } = state as WebPressState;
         return {
+          // Clear of the last menu row; nothing is left behind while it loads or has nothing to show.
+          marginTop: t.spacing.sm,
           gap: t.spacing.xs,
           padding: t.spacing.md,
           borderRadius: t.radius.md,

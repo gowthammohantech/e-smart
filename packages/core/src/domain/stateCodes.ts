@@ -48,9 +48,11 @@ export const GST_STATE_CODES: GstState[] = [
 /** Place-of-supply code used on an export invoice. */
 export const OTHER_COUNTRY_CODE = '96';
 
-/** On an e-way bill, an export goes to state 99, Other Country, at PIN 999999 (NIC's masters). */
+/**
+ * On an e-way bill, an export is billed to state 99, Other Country (NIC's masters). It is shipped to the
+ * port of export: that state, PIN and address are the consignee's on the bill.
+ */
 export const EWB_OTHER_COUNTRY_CODE = '99';
-export const EWB_EXPORT_PINCODE = '999999';
 
 export function stateNameOf(code?: string): string {
   if (code === OTHER_COUNTRY_CODE) return 'Other country';
