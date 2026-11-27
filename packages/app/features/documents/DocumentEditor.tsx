@@ -759,7 +759,9 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   // the typing began (not from the last digit's), or they'd be rounded again on every keystroke. Any other
   // change in between starts afresh. A purchase keeps the supplier's prices as billed.
   const rateAnchor = useRef<{ from: DraftState; made: DraftState } | null>(null);
-  const rateText = useDecimalText(draft.exchangeRate, (exchangeRate) => {
+  const rateText = useDecimalText(draft.exchangeRate, (typed) => {
+    // Never empty (or 0): the box falls back to 1, and the lines are worked out at that.
+    const exchangeRate = typed > 0 ? typed : 1;
     if (isPurchase) return patch({ exchangeRate });
     const from = rateAnchor.current && rateAnchor.current.made === draft ? rateAnchor.current.from : draft;
     const made = atRate(from, exchangeRate);
