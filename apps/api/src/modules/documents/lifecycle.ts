@@ -16,6 +16,7 @@ import { kindName, monthName } from '../../lib/names';
 import { assignNumber } from '../../lib/numbering';
 import { replayQueuedAt } from '../../lib/replay';
 import { gstFlagsFrom } from '../../lib/wire';
+import { factorOf } from '@esmart/core/lib/money';
 import type { DocRow } from './engine';
 
 const D = schema.documents;
@@ -604,6 +605,55 @@ async function checkAgainstSource(tx: DbOrTx, row: DocRow) {
   if (row.grandTotalMinor > room) {
     blocking('lines', `${source.number} has ${(Math.max(room, 0) / 100).toFixed(2)} left to credit; this note is ${(row.grandTotalMinor / 100).toFixed(2)}`, 'NOTE_EXCEEDS_SOURCE');
   }
+  await checkItemCredit(tx, row, source);
+}
+
+/**
+ * No item is credited for more than it was charged: across the source's credit notes (those made from returns
+ * included) and its returns that carried their own credit, an item's credit can't pass what the source and its
+ * debit notes charged for it. A price correction on every unit still fits; the same goods credited twice don't.
+ * Each line is taken at its value before tax (quantity × rate, less its own discount), the same on both sides.
+ */
+async function checkItemCredit(tx: DbOrTx, row: DocRow, source: DocRow) {
+  const L = schema.documentLines;
+  type Valued = { itemId: string | null; name: string; quantity: string; unitPriceMinor: number; discountMode: string; discountValue: string };
+  const keyOf = (l: Valued) => l.itemId ?? l.name.trim().toLowerCase();
+  const factor = factorOf(row.currency.trim());
+  const valueOf = (l: Valued) => {
+    const gross = Number(l.quantity) * l.unitPriceMinor;
+    const discount = l.discountMode === 'percent' ? (gross * Number(l.discountValue)) / 100 : Number(l.discountValue) * factor;
+    return Math.max(Math.round(gross - discount), 0);
+  };
+  const add = (into: Map<string, number>, lines: Valued[]) => {
+    for (const l of lines) into.set(keyOf(l), (into.get(keyOf(l)) ?? 0) + valueOf(l));
+  };
+  const cols = { documentId: L.documentId, itemId: L.itemId, name: L.name, quantity: L.quantity, unitPriceMinor: L.unitPriceMinor, discountMode: L.discountMode, discountValue: L.discountValue };
+  // What was charged for each item: the source, and the debit notes raised on it.
+  const charged = new Map<string, number>();
+  add(charged, await tx.select(cols).from(L).where(eq(L.documentId, source.id)));
+  const others = await tx
+    .select({ id: D.id, kind: D.kind, stockOnly: D.stockOnly })
+    .from(D)
+    .where(and(eq(D.sourceDocumentId, source.id), inArray(D.kind, AGAINST_SOURCE), LIVE_RETURN, ne(D.id, row.id)));
+  const debitIds = others.filter((o) => !isCredit(o)).map((o) => o.id);
+  if (debitIds.length) add(charged, await tx.select(cols).from(L).where(inArray(L.documentId, debitIds)));
+  // What earlier credit gave back for each item: credit notes, and returns that carried their own value.
+  const credited = new Map<string, number>();
+  const creditIds = others.filter((o) => isCredit(o) && !o.stockOnly).map((o) => o.id);
+  if (creditIds.length) add(credited, await tx.select(cols).from(L).where(inArray(L.documentId, creditIds)));
+  const lines = await tx.select({ ...cols, position: L.position }).from(L).where(eq(L.documentId, row.id));
+  const mine = new Map<string, number>();
+  add(mine, lines);
+  const money = (minor: number) => `${row.currency.trim()} ${(minor / factor).toFixed(2)}`;
+  // A line for something the source didn't charge (a goodwill amount, say) is held by the note's total alone.
+  const issues = [...mine]
+    .filter(([key, value]) => charged.has(key) && value > 0 && value + (credited.get(key) ?? 0) > charged.get(key)!)
+    .map(([key, value]) => {
+      const line = lines.find((l) => keyOf(l) === key)!;
+      const left = Math.max(charged.get(key)! - (credited.get(key) ?? 0), 0);
+      return { field: `lines[${line.position - 1}].unitPrice`, message: `${line.name.trim()}: ${money(left)} left to credit on ${source.number.trim()}; this note credits ${money(value)}`, severity: 'blocking' as const };
+    });
+  if (issues.length) throw unprocessable(issues, 'ITEM_CREDIT_EXCEEDS_SOURCE');
 }
 
 /** A document can't be cancelled while a return or note stands against it. */

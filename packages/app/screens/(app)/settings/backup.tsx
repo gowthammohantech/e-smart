@@ -38,6 +38,10 @@ function BackupExportBody() {
   const { t: tr } = useTranslation(['nav', 'settings', 'auth', 'reports']);
   // Suppliers come with purchases: without them (Free, Basic) the words are about customers only.
   const hasSuppliers = useHasModule('purchases');
+  // What the plan includes: stock and expenses come with Pro and Business, and so do the books the Tally file holds.
+  const hasStock = useHasModule('inventory');
+  const hasExpenses = useHasModule('expenses');
+  const hasBooks = useHasModule('books');
   const toast = useToast();
 
   const company = useActiveCompany();
@@ -84,11 +88,11 @@ function BackupExportBody() {
       { label: tr('settings:backup.count.items'), value: usage?.counts.items, icon: 'tag-outline' as const },
       { label: tr('settings:backup.count.documents'), value: usage?.counts.documents, icon: 'file-document-outline' as const },
       { label: tr('settings:backup.count.payments'), value: usage?.counts.payments, icon: 'cash' as const },
-      { label: tr('nav:title.expenses'), value: usage?.counts.expenses, icon: 'receipt-text-outline' as const },
-      { label: tr('nav:title.stockMovements'), value: usage?.counts.stockMovements, icon: 'swap-vertical' as const },
+      ...(hasExpenses ? [{ label: tr('nav:title.expenses'), value: usage?.counts.expenses, icon: 'receipt-text-outline' as const }] : []),
+      ...(hasStock ? [{ label: tr('nav:title.stockMovements'), value: usage?.counts.stockMovements, icon: 'swap-vertical' as const }] : []),
       { label: tr('settings:backup.count.auditEvents'), value: usage?.counts.auditEvents, icon: 'history' as const },
     ],
-    [usage, tr],
+    [usage, tr, hasSuppliers, hasExpenses, hasStock],
   );
 
   /** The server builds the package (every record of this business) and hands back a signed download link. */
@@ -161,8 +165,11 @@ function BackupExportBody() {
         <Text variant="caption" tone="muted" weight="600" style={{ textTransform: 'uppercase', letterSpacing: 0.6, marginTop: t.spacing.xl, marginBottom: t.spacing.sm }}>{tr('settings:backup.formats')}</Text>
         <Card padded={false}>
           <ListRow title={tr('settings:backup.json')} subtitle={tr('settings:backup.jsonHint')} icon="code-json" chevron onPress={() => setConfirmExport('json-backup')} />
-          <ListRow title={tr('settings:backup.csv')} subtitle={tr('settings:backup.csvHint')} icon="file-delimited-outline" chevron onPress={() => setConfirmExport('csv-zip')} />
-          <ListRow title={tr('settings:backup.tally')} subtitle={tr('settings:backup.tallyHint')} icon="file-code-outline" chevron divider={false} onPress={() => setConfirmExport('tally-xml')} />
+          <ListRow title={tr('settings:backup.csv')} subtitle={tr('settings:backup.csvHint')} icon="file-delimited-outline" chevron divider={hasBooks} onPress={() => setConfirmExport('csv-zip')} />
+          {/* The Tally file is the books' vouchers and ledgers: only on the plans that keep books. */}
+          {hasBooks ? (
+            <ListRow title={tr('settings:backup.tally')} subtitle={tr('settings:backup.tallyHint')} icon="file-code-outline" chevron divider={false} onPress={() => setConfirmExport('tally-xml')} />
+          ) : null}
         </Card>
 
         <Card variant="flat" style={{ marginTop: t.spacing.lg, gap: t.spacing.sm }}>

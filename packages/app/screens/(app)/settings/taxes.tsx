@@ -82,6 +82,12 @@ export default function TaxSettings() {
   };
 
   const usageOf = (id: string) => usage?.taxCategoryUse[id] ?? 0;
+  // A used tax keeps its dates (moving them would change what it charged on documents already made); only a new
+  // rate may start on a later day. Until the count is in, an existing one is taken as used.
+  const used = !!editing?.id && (usagePending || usageOf(editing.id) > 0);
+  const newRate = !!editing?.id && rate.trim() !== '' && Number(rate) !== editing.rate;
+  const fromLocked = used && !newRate;
+  const datesLockedHint = editing?.id ? tr('settings:taxes.datesLocked', { count: usageOf(editing.id) }) : undefined;
 
   const save = async () => {
     if (!editing || !canSave) return;
@@ -296,7 +302,18 @@ export default function TaxSettings() {
             icon="percent-outline"
             required
           />
-          <DateField label={tr('settings:taxes.effectiveFrom')} value={effectiveFrom} onChange={setEffectiveFrom} hint={tr('settings:taxes.effectiveHint')} />
+          {fromLocked ? (
+            <TextField label={tr('settings:taxes.effectiveFrom')} value={formatDate(effectiveFrom)} editable={false} hint={datesLockedHint} />
+          ) : (
+            <DateField
+              label={tr('settings:taxes.effectiveFrom')}
+              value={effectiveFrom}
+              onChange={setEffectiveFrom}
+              // A used tax's new rate starts after its current one.
+              minimumDate={used && editing ? new Date(`${editing.effectiveFrom}T00:00:00`) : undefined}
+              hint={used ? tr('settings:taxes.newRateFrom') : tr('settings:taxes.effectiveHint')}
+            />
+          )}
           </FieldRow>
           {/* Inactive takes effect at once, so it has no end date to set; an active rate may end on a day. */}
           <SwitchField label={tr('settings:taxes.active')} description={tr('settings:taxes.activeHint')} value={active} onValueChange={setActive} />
@@ -304,12 +321,17 @@ export default function TaxSettings() {
             <>
               <SwitchField
                 label={tr('settings:taxes.hasEnd')}
-                description={tr('settings:taxes.hasEndHint')}
+                description={used ? datesLockedHint : tr('settings:taxes.hasEndHint')}
                 value={!!effectiveTo}
                 onValueChange={(on) => setEffectiveTo(on ? (effectiveFrom > today() ? effectiveFrom : today()) : undefined)}
+                disabled={used}
               />
               {effectiveTo ? (
-                <DateField label={tr('settings:taxes.validTill')} value={effectiveTo} onChange={setEffectiveTo} minimumDate={new Date(`${effectiveFrom}T00:00:00`)} hint={tr('settings:taxes.validTillHint')} />
+                used ? (
+                  <TextField label={tr('settings:taxes.validTill')} value={formatDate(effectiveTo)} editable={false} hint={datesLockedHint} />
+                ) : (
+                  <DateField label={tr('settings:taxes.validTill')} value={effectiveTo} onChange={setEffectiveTo} minimumDate={new Date(`${effectiveFrom}T00:00:00`)} hint={tr('settings:taxes.validTillHint')} />
+                )
               ) : null}
             </>
           ) : null}

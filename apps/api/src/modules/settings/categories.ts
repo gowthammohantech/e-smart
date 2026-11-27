@@ -38,6 +38,16 @@ function validateTax(body: Schema<'TaxCategory'>) {
   if (issues.length) throw unprocessable(issues);
 }
 
+/** Where a tax is used, if anywhere: items, documents or expenses. Used, it can't be deleted or have its dates moved. */
+function taxInUse(db: DbOrTx, id: string) {
+  return firstUse(db, [
+    ['items', sql`select 1 from items where tax_category_id = ${id} limit 1`],
+    ['document lines', sql`select 1 from document_lines where tax_category_id = ${id} limit 1`],
+    ['document tax lines', sql`select 1 from document_tax_lines where tax_category_id = ${id} limit 1`],
+    ['expenses', sql`select 1 from expenses where tax_category_id = ${id} limit 1`],
+  ]);
+}
+
 async function taxColumns(tx: DbOrTx, body: Schema<'TaxCategory'>) {
   return {
     name: body.name.trim(),
@@ -96,6 +106,17 @@ export const categoryHandlers = defineHandlers({
     const current = await findTax(ctx.db, ctx.company.id, ctx.params.id);
     checkIfMatch(ctx.req, current.version);
     validateTax(ctx.body);
+    // Once a tax is used, its dates stand: moving them would change what it charged on documents already
+    // made. A new rate may still start on a later day (the old one stays for the days before).
+    const fromChanged = ctx.body.effectiveFrom !== current.effectiveFrom;
+    const toChanged = (ctx.body.effectiveTo ?? null) !== (current.effectiveTo ?? null);
+    if (fromChanged || toChanged) {
+      const used = await taxInUse(ctx.db, current.id);
+      const revision = Number(ctx.body.rate) !== Number(current.rate) && !toChanged && ctx.body.effectiveFrom > current.effectiveFrom;
+      if (used && !revision) {
+        throw conflict('TAX_DATES_LOCKED', `${current.name} is already used on ${used}, so its dates can't change. A new rate can start on a later date.`);
+      }
+    }
     const row = await ctx.db.transaction(async (tx) => {
       // Documents dated before the new rate still charge the old one.
       if (Number(ctx.body.rate) !== Number(current.rate)) {
@@ -118,12 +139,7 @@ export const categoryHandlers = defineHandlers({
     const current = await findTax(ctx.db, ctx.company.id, ctx.params.id);
     checkIfMatch(ctx.req, current.version);
     const id = current.id;
-    const used = await firstUse(ctx.db, [
-      ['items', sql`select 1 from items where tax_category_id = ${id} limit 1`],
-      ['document lines', sql`select 1 from document_lines where tax_category_id = ${id} limit 1`],
-      ['document tax lines', sql`select 1 from document_tax_lines where tax_category_id = ${id} limit 1`],
-      ['expenses', sql`select 1 from expenses where tax_category_id = ${id} limit 1`],
-    ]);
+    const used = await taxInUse(ctx.db, id);
     if (used) throw conflict('TAX_CATEGORY_IN_USE', `${used} use this tax category`);
     await ctx.db.transaction(async (tx) => {
       await tx.delete(T).where(eq(T.id, id));

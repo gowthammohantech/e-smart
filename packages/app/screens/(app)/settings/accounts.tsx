@@ -69,6 +69,8 @@ export default function AccountSettings() {
   const [branchName, setBranchName] = useState('');
   const [ifsc, setIfsc] = useState('');
   const [upiId, setUpiId] = useState('');
+  // Save was pressed with a needed bank detail empty: those fields say so.
+  const [triedSave, setTriedSave] = useState(false);
   const [openingBalance, setOpeningBalance] = useState('');
   // Blank: the balance stands at the start of the books. A date: it stands on that day.
   const [openingBalanceDate, setOpeningBalanceDate] = useState<string | undefined>(undefined);
@@ -125,6 +127,7 @@ export default function AccountSettings() {
     setName(a?.name ?? '');
     setType(a?.type ?? 'bank');
     setCurrency(a?.currency ?? baseCurrency);
+    setTriedSave(false);
     setAccountNumber(a?.accountNumber ?? '');
     setHolderName(a?.accountHolderName ?? '');
     setBankName(a?.bankName ?? '');
@@ -143,8 +146,23 @@ export default function AccountSettings() {
     upiId: type === 'bank' && upiId.trim() && !/^[A-Za-z0-9.\-_]{2,256}@[A-Za-z][A-Za-z0-9]{1,63}$/.test(upiId.trim()) ? tr('settings:company.upiInvalid') : undefined,
   };
 
+  // A bank account is what customers pay into: its holder, bank, branch, number and IFSC are all needed.
+  // Each says so on its field once Save has been pressed with it empty.
+  const bankMissing = {
+    holderName: !holderName.trim(),
+    bankName: !bankName.trim(),
+    branchName: !branchName.trim(),
+    accountNumber: !accountNumber.trim(),
+    ifsc: !ifsc.trim(),
+  };
+  const requiredError = (missing: boolean, field: string) => (type === 'bank' && triedSave && missing ? tr('errors:validation.required', { field }) : undefined);
+
   const save = async () => {
     if (!editing || !name.trim() || !canSave) return;
+    if (type === 'bank' && Object.values(bankMissing).some(Boolean)) {
+      setTriedSave(true);
+      return;
+    }
     if (live.ifsc || live.upiId) return;
     const text = (v: string) => v.trim() || undefined;
     const account = {
@@ -359,21 +377,54 @@ export default function AccountSettings() {
                   {onInvoices ? tr('settings:accounts.payDetailsOnInvoices') : tr('settings:accounts.payDetailsHint')}
                 </Text>
               </View>
-              <TextField label={tr('settings:company.accountName')} value={holderName} onChangeText={setHolderName} icon="account-outline" placeholder="Elixir Books" />
+              <TextField
+                label={tr('settings:company.accountName')}
+                value={holderName}
+                onChangeText={setHolderName}
+                icon="account-outline"
+                placeholder="Elixir Books"
+                required
+                error={requiredError(bankMissing.holderName, tr('settings:company.accountName'))}
+              />
               <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
-                <TextField label={tr('settings:company.bankName')} value={bankName} onChangeText={setBankName} icon="bank-outline" containerStyle={{ flex: 1 }} />
-                <TextField label={tr('settings:company.branchName')} value={branchName} onChangeText={setBranchName} containerStyle={{ flex: 1 }} />
+                <TextField
+                  label={tr('settings:company.bankName')}
+                  value={bankName}
+                  onChangeText={setBankName}
+                  icon="bank-outline"
+                  containerStyle={{ flex: 1 }}
+                  required
+                  error={requiredError(bankMissing.bankName, tr('settings:company.bankName'))}
+                />
+                <TextField
+                  label={tr('settings:company.branchName')}
+                  value={branchName}
+                  onChangeText={setBranchName}
+                  containerStyle={{ flex: 1 }}
+                  required
+                  error={requiredError(bankMissing.branchName, tr('settings:company.branchName'))}
+                />
               </View>
               <View style={{ flexDirection: 'row', gap: t.spacing.md }}>
-                <TextField label={tr('settings:accounts.number')} value={accountNumber} onChangeText={setAccountNumber} keyboardType="number-pad" icon="pound" containerStyle={{ flex: 1 }} />
+                <TextField
+                  label={tr('settings:accounts.number')}
+                  value={accountNumber}
+                  onChangeText={setAccountNumber}
+                  keyboardType="number-pad"
+                  icon="pound"
+                  containerStyle={{ flex: 1 }}
+                  required
+                  error={requiredError(bankMissing.accountNumber, tr('settings:accounts.number'))}
+                />
                 <TextField
                   label={tr('settings:company.ifsc')}
                   value={ifsc}
                   onChangeText={(v) => setIfsc(v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 11))}
                   autoCapitalize="characters"
                   placeholder="HDFC0001234"
-                  error={live.ifsc}
+                  error={live.ifsc ?? requiredError(bankMissing.ifsc, tr('settings:company.ifsc'))}
                   containerStyle={{ flex: 1 }}
+                  required
                 />
               </View>
               <TextField

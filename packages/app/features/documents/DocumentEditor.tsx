@@ -478,7 +478,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   const [itemQuery, setItemQuery] = useState('');
   // A new document picks from active parties only; an existing one keeps showing them all.
   const partySearch = usePartySearch(isPurchase ? 'supplier' : 'customer', useDebounced(partyQuery), partyOpen, existing ? undefined : 'active');
-  const itemSearch = useItemSearch(useDebounced(itemQuery), itemOpen && !(isReturn && draft.sourceDocumentId));
+  const itemSearch = useItemSearch(useDebounced(itemQuery), itemOpen && !((isReturn || kind === 'creditNote') && draft.sourceDocumentId));
   const partyOptions = partySearch.data ?? [];
   // Looked up in the store, where the search keeps what it found, for stock and opening-date checks.
   // Products and services on tabs of their own in the picker, All showing both.
@@ -572,7 +572,10 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   const branchId = draft.branchId ?? defaultBranchId ?? undefined;
   const branch = branches.find((b) => b.id === branchId);
   // A return is raised against one invoice/bill: only its lines, up to the quantities it carried.
-  const sourceDoc = isReturn && draft.sourceDocumentId ? documents.find((d) => d.id === draft.sourceDocumentId) : undefined;
+  // A return, or a credit note against an invoice, is held to the invoice's lines: only its items, and no more
+  // of each than it charged (a credit note lowers a quantity or a rate; it never adds goods). A debit note may
+  // add an item or more of one, for supply not billed before.
+  const sourceDoc = (isReturn || kind === 'creditNote') && draft.sourceDocumentId ? documents.find((d) => d.id === draft.sourceDocumentId) : undefined;
   // What this one was made from (the PO behind a goods receipt, say): it can't be dated before that.
   const madeFrom = draft.sourceDocumentId ? documents.find((d) => d.id === draft.sourceDocumentId) : undefined;
   const dateBeforeSource =
@@ -661,6 +664,14 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
     const src = sourceDoc.lines.find((l) => (line.itemId ? l.itemId === line.itemId : l.name === line.name));
     return src?.quantity;
   };
+  // A note made from an invoice works on the invoice's own quantities and rates, never a lump sum: a credit
+  // note goes down from them (no more of an item, nor more per unit, than was charged), a debit note up
+  // (an item it carried never below what was billed; items it didn't carry, any quantity).
+  const noteInvoice = isNote && draft.sourceDocumentId && !fromReturn ? documents.find((d) => d.id === draft.sourceDocumentId) : undefined;
+  const invoiceLineOf = (line: DocumentLine | null) =>
+    line && noteInvoice ? noteInvoice.lines.find((l) => (line.itemId ? l.itemId === line.itemId : l.name === line.name)) : undefined;
+  const minNoteQty = (line: DocumentLine | null) => (kind === 'debitNote' ? invoiceLineOf(line)?.quantity : undefined);
+  const maxNoteRate = (line: DocumentLine | null) => (kind === 'creditNote' ? invoiceLineOf(line)?.unitPrice.minor : undefined);
 
   const docTaxContext = draftTaxContext(draft);
   // An export, a document with an SEZ unit or developer, or an import bill charges IGST or goes without,
@@ -1528,6 +1539,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           onEdit={setEditingLine}
           onAddRequest={() => setItemOpen(true)}
           maxQuantity={(line) => maxReturnQty(line)}
+          minQuantity={(line) => minNoteQty(line)}
+          maxRateMinor={(line) => maxNoteRate(line)}
           purchase={isPurchase}
           note={isNote}
           focusLine={focusLine}
@@ -1557,6 +1570,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
             const calc = calculateLine(line, draft.currency, docTaxContext);
             const lineTotal = subtract(calc.gross, calc.discount);
             const maxQty = maxReturnQty(line);
+            const minQty = minNoteQty(line);
             return (
               <View key={line.id} style={{ borderBottomWidth: i < draft.lines.length - 1 ? 0.5 : 0, borderBottomColor: t.c.line }}>
                 <Pressable
@@ -1605,8 +1619,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
                     compact
                     positive
                     value={line.quantity}
-                    onChange={(q) => updateLine(line.id, { quantity: maxQty !== undefined ? Math.min(q, maxQty) : q })}
-                    min={0}
+                    onChange={(q) => updateLine(line.id, { quantity: Math.max(minQty ?? 0, maxQty !== undefined ? Math.min(q, maxQty) : q) })}
+                    min={minQty ?? 0}
                     decimals={unitDecimals(line.unit)}
                   />
                   <Text variant="caption" tone="muted">
@@ -2282,8 +2296,9 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
                   return;
                 }
                 if (!src) return;
-                // From the source too, the quantity starts at 0 for the person to type.
-                const added = noteStart({ ...src, id: uid('ln'), quantity: 0 });
+                // From the source too, a return's quantity starts at 0 for the person to type; a credit note's at
+                // the invoice's, to be lowered (as when it was made from the invoice).
+                const added = noteStart({ ...src, id: uid('ln'), quantity: kind === 'creditNote' ? src.quantity : 0 });
                 addLine(added);
                 first = first ?? added.id;
                 return;
@@ -2295,8 +2310,10 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
                 return;
               }
               // An item is priced in base; the line takes the document's currency.
-              const line = item && lineFromItem(item, isPurchase, taxCategories);
-              if (!line) return;
+              const made = item && lineFromItem(item, isPurchase, taxCategories);
+              if (!made) return;
+              // A debit note's item that the invoice carried starts at what was billed, and only goes up.
+              const line = { ...made, quantity: Math.max(made.quantity, minNoteQty(made) ?? 0) };
               const added = newLineInclusive(noteStart({ ...line, unitPrice: reprice(line.unitPrice, draft.currency, 1, draft.exchangeRate) }), draft);
               addLine(added);
               first = first ?? added.id;
@@ -2416,6 +2433,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           onRemove={editingIsNew ? undefined : () => editingLine && removeLine(editingLine.id)}
           hsnRequired={needsHsn}
           maxQuantity={maxReturnQty(editingLine)}
+          minQuantity={minNoteQty(editingLine)}
+          maxRateMinor={maxNoteRate(editingLine)}
           purchase={isPurchase}
           note={isNote}
         />
