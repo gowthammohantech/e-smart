@@ -9,7 +9,17 @@ const SERVER = 'esmart.migrator.server';
 const PRODUCTION_SERVER = 'https://api-production-4abd.up.railway.app';
 
 /** A server address as people write it: with or without the trailing slash or `/v1` (the app adds `/v1` itself). */
-export const cleanServerUrl = (url: string) => url.trim().replace(/\/+$/, '').replace(/\/v1$/i, '').replace(/\/+$/, '');
+export function cleanServerUrl(url: string): string {
+  // Plain string steps, not a regular expression: a pasted address is untrusted, and a pattern like /\/+$/
+  // takes quadratic time on a string with thousands of slashes.
+  const withoutSlashes = (s: string) => {
+    let end = s.length;
+    while (end > 0 && s[end - 1] === '/') end -= 1;
+    return s.slice(0, end);
+  };
+  const clean = withoutSlashes(url.trim());
+  return clean.toLowerCase().endsWith('/v1') ? withoutSlashes(clean.slice(0, -3)) : clean;
+}
 
 // `VITE_API_URL` at build time wins. Otherwise the live server, except in development (`npm run migrator`),
 // which talks to the local one so trying things out never reaches live data. `env` is missing under tsx.

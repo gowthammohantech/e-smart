@@ -349,7 +349,17 @@ describe('the server address', () => {
     ['  https://api.example.com/  ', 'https://api.example.com'],
     ['http://localhost:4000/V1', 'http://localhost:4000'],
     ['https://example.com/api', 'https://example.com/api'],
+    ['https://example.com//v1//', 'https://example.com'],
+    ['/v1', ''],
+    ['', ''],
   ])('%s is %s', (typed, clean) => {
     expect(cleanServerUrl(typed)).toBe(clean);
+  });
+
+  it('stays fast on a string of many slashes', () => {
+    const started = Date.now();
+    expect(cleanServerUrl(`https://example.com${'/'.repeat(200_000)}x`)).toBe(`https://example.com${'/'.repeat(200_000)}x`);
+    expect(cleanServerUrl(`https://example.com${'/'.repeat(200_000)}`)).toBe('https://example.com');
+    expect(Date.now() - started).toBeLessThan(500);
   });
 });
