@@ -98,7 +98,8 @@ export function summarizeDocuments(
 ): TransactionSummary {
   const live = docs.filter((d) => isLive(d) && matches(d, filters));
   const selected = live.filter((d) => !ADJUSTMENT_KINDS.includes(d.kind));
-  const notes = live.filter((d) => ADJUSTMENT_KINDS.includes(d.kind));
+  // A stock-only return adjusts no value: its credit note is listed instead.
+  const notes = live.filter((d) => ADJUSTMENT_KINDS.includes(d.kind) && !d.stockOnly);
   const cancelled = docs.filter((d) => d.status === 'cancelled' && !ADJUSTMENT_KINDS.includes(d.kind) && matches(d, filters));
 
   const total = sum(selected.map((d) => inBase(d.totals.grandTotal, d.exchangeRate, baseCurrency)), baseCurrency);
@@ -297,7 +298,7 @@ export function summarizeTax(
   company?: Company,
 ): TaxSummary {
   const outward = taxRows(
-    docEntries(documents.filter((d) => GSTR1_KINDS.includes(d.kind)), filters, (d) => noteTypeOf(d.kind) === 'C'),
+    docEntries(documents.filter((d) => GSTR1_KINDS.includes(d.kind) && !d.stockOnly), filters, (d) => noteTypeOf(d.kind) === 'C'),
     baseCurrency,
   );
   const expenseEntries: TaxEntry[] = expenses

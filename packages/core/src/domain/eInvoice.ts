@@ -186,6 +186,8 @@ export function isEInvoiceApplicable(ctx: EInvoiceContext): EInvoiceApplicabilit
   if (!docType) return no('Only invoices and credit notes are reported');
   // A financial or commercial note without GST (RULES 6.24) is not a supply: it stays out of GSTR-1, so out of the IRP too.
   if (doc.noteGst === 'noGst') return no('A note without GST is not reported');
+  // A stock-only return moves goods, not value: the credit note made from it is what is reported.
+  if (doc.stockOnly) return no('A sales return records goods only; its credit note is e-invoiced');
 
   if (doc.status === 'draft' || doc.status === 'requested') {
     return no('The document has not been finalised yet');

@@ -56,7 +56,8 @@ export async function partyStatement(db: DbOrTx, company: CompanyRow, party: Par
   const docs = await db
     .select()
     .from(D)
-    .where(and(eq(D.companyId, company.id), eq(D.partyId, party.id), kinds.length ? inArray(D.kind, [...kinds]) : sql`false`, notInArray(D.status, ['draft', 'requested', 'cancelled', 'rejected'])));
+    // A stock-only return changes nothing owed: its credit note stands on the statement instead.
+    .where(and(eq(D.companyId, company.id), eq(D.partyId, party.id), kinds.length ? inArray(D.kind, [...kinds]) : sql`false`, eq(D.stockOnly, false), notInArray(D.status, ['draft', 'requested', 'cancelled', 'rejected'])));
   const PAY = schema.payments;
   const pays = await db.select().from(PAY).where(and(eq(PAY.companyId, company.id), eq(PAY.partyId, party.id)));
   // TDS deducted, discounts and write-offs settle the party's documents along with the cash.

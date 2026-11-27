@@ -116,7 +116,8 @@ export async function gstr1ForRange(
       : await db
           .select()
           .from(D)
-          .where(and(eq(D.companyId, company.id), inArray(D.kind, GSTR1_KINDS), notInArray(D.status, ['draft', 'requested', 'rejected']), gte(D.date, range.from), lte(D.date, range.to), branchIds ? inArray(D.branchId, branchIds) : undefined, opts.documentIds ? inArray(D.id, opts.documentIds) : undefined))
+          // A stock-only return reports nothing: its credit note does.
+          .where(and(eq(D.companyId, company.id), inArray(D.kind, GSTR1_KINDS), eq(D.stockOnly, false), notInArray(D.status, ['draft', 'requested', 'rejected']), gte(D.date, range.from), lte(D.date, range.to), branchIds ? inArray(D.branchId, branchIds) : undefined, opts.documentIds ? inArray(D.id, opts.documentIds) : undefined))
           .orderBy(D.date, D.number);
   // A note's invoice may be from an earlier period; its value decides the note's table.
   const sourceIds = [...new Set(rows.map((r) => r.sourceDocumentId).filter((id): id is string => !!id && !rows.some((x) => x.id === id)))];

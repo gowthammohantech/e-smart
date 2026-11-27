@@ -354,7 +354,8 @@ export function gstr1Summary(args: {
   // A financial note without GST is no supply (RULES 6.24): it is in no table. A return still
   // awaiting approval (or turned down) was never issued: the books and GSTR-3B leave it out too.
   const issued = documents.filter(
-    (d) => GSTR1_KINDS.includes(d.kind) && !NOT_ISSUED.includes(d.status) && d.noteGst !== 'noGst' && inRange(d.date, period),
+    // A stock-only return reports nothing: its credit note does.
+    (d) => GSTR1_KINDS.includes(d.kind) && !NOT_ISSUED.includes(d.status) && d.noteGst !== 'noGst' && !d.stockOnly && inRange(d.date, period),
   );
   const reportable = issued.filter((d) => !isCancelled(d.status));
 
