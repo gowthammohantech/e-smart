@@ -478,7 +478,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   const [itemQuery, setItemQuery] = useState('');
   // A new document picks from active parties only; an existing one keeps showing them all.
   const partySearch = usePartySearch(isPurchase ? 'supplier' : 'customer', useDebounced(partyQuery), partyOpen, existing ? undefined : 'active');
-  const itemSearch = useItemSearch(useDebounced(itemQuery), itemOpen && !(isReturn && draft.sourceDocumentId));
+  const itemSearch = useItemSearch(useDebounced(itemQuery), itemOpen && !((isReturn || kind === 'creditNote') && draft.sourceDocumentId));
   const partyOptions = partySearch.data ?? [];
   // Looked up in the store, where the search keeps what it found, for stock and opening-date checks.
   // Products and services on tabs of their own in the picker, All showing both.
@@ -572,7 +572,10 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   const branchId = draft.branchId ?? defaultBranchId ?? undefined;
   const branch = branches.find((b) => b.id === branchId);
   // A return is raised against one invoice/bill: only its lines, up to the quantities it carried.
-  const sourceDoc = isReturn && draft.sourceDocumentId ? documents.find((d) => d.id === draft.sourceDocumentId) : undefined;
+  // A return, or a credit note against an invoice, is held to the invoice's lines: only its items, and no more
+  // of each than it charged (a credit note lowers a quantity or a rate; it never adds goods). A debit note may
+  // add an item or more of one, for supply not billed before.
+  const sourceDoc = (isReturn || kind === 'creditNote') && draft.sourceDocumentId ? documents.find((d) => d.id === draft.sourceDocumentId) : undefined;
   // What this one was made from (the PO behind a goods receipt, say): it can't be dated before that.
   const madeFrom = draft.sourceDocumentId ? documents.find((d) => d.id === draft.sourceDocumentId) : undefined;
   const dateBeforeSource =
@@ -2282,8 +2285,9 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
                   return;
                 }
                 if (!src) return;
-                // From the source too, the quantity starts at 0 for the person to type.
-                const added = noteStart({ ...src, id: uid('ln'), quantity: 0 });
+                // From the source too, the quantity starts at 0 for the person to type; a credit note's at 1,
+                // for the amount to be typed (as when it was made from the invoice).
+                const added = noteStart({ ...src, id: uid('ln'), quantity: kind === 'creditNote' ? 1 : 0 });
                 addLine(added);
                 first = first ?? added.id;
                 return;

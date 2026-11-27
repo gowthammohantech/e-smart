@@ -635,11 +635,14 @@ export async function prepareDocument(
   // A return, or a note against an invoice or bill, reverses exactly what was charged, whatever the
   // category says now: the note's line takes its source line's rate when it names the same item.
   const returned = new Map<string, number>();
+  /** How much of each item the source carried: a credit note credits no item it didn't, nor more of one. */
+  const sourceQty = new Map<string, number>();
   let sourceRates: Set<number> | null = null;
   if (f.sourceDocumentId && (f.kind === 'salesReturn' || f.kind === 'purchaseReturn' || NOTE_KINDS.includes(f.kind))) {
     const stored = await db.select().from(schema.documentLines).where(eq(schema.documentLines.documentId, f.sourceDocumentId));
     for (const s of stored) returned.set(s.itemId ?? s.name, Number(s.taxRate));
     sourceRates = new Set(stored.map((s) => Number(s.taxRate)));
+    for (const s of stored) sourceQty.set(s.itemId ?? s.name, (sourceQty.get(s.itemId ?? s.name) ?? 0) + Number(s.quantity));
   }
   // A category changed since the document's date charged its earlier rate then.
   const histories = await taxHistories(db, categories.filter((c) => c.effectiveFrom > f.date).map((c) => c.id));
@@ -699,6 +702,19 @@ export async function prepareDocument(
 
   // A service that follows the highest GST rate keeps the rate sent for it: the app sets it to the highest
   // (applyHighestRate), and it may have been changed by hand on the document since.
+
+  // A credit note against an invoice lowers a quantity or a rate on what it charged: only its items, and no
+  // more of each than it carried. It never adds goods (a debit note does, for supply not billed before).
+  if (f.kind === 'creditNote' && f.sourceDocumentId && !f.returnDocumentId && sourceQty.size) {
+    const key = (l: DocumentLine) => l.itemId ?? l.name;
+    const onNote = new Map<string, number>();
+    for (const l of coreLines) onNote.set(key(l), (onNote.get(key(l)) ?? 0) + l.quantity);
+    coreLines.forEach((l, i) => {
+      const carried = sourceQty.get(key(l));
+      if (carried === undefined) blocking(`lines[${i}].itemId`, `${l.name} isn't on the invoice; a credit note credits only what the invoice charged`);
+      else if (onNote.get(key(l))! > carried + 1e-9) blocking(`lines[${i}].quantity`, `${l.name}: the invoice carried ${carried}; a credit note can't credit more than that`);
+    });
+  }
 
   // A note line that isn't one of the source's items still adjusts tax only at a rate the source charged.
   if (sourceRates?.size) {
