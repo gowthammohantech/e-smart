@@ -4,11 +4,12 @@ import type { Schema } from '@esmart/api-contract';
 import { defineHandlers, type AuthUser, type Deps } from '../../context';
 import { enqueue } from '../../jobs/queue';
 import { notify } from '../../lib/notify';
-import { invalid, notFound } from '../../http/errors';
+import { invalid, notFound, planUpgradeRequired } from '../../http/errors';
 import { recordChange, type DbOrTx } from '../../lib/audit';
 import { newId } from '../../lib/ids';
 import { compact, iso } from '../../lib/wire';
-import { buildExport } from './build';
+import { FULL_PLAN, hasModule } from '@esmart/core/domain/plan';
+import { buildExport, tablesOffPlan } from './build';
 
 const J = schema.exportJobs;
 const BS = schema.backupSettings;
@@ -71,7 +72,8 @@ export async function runExport(deps: Deps, input: { exportId: string; from?: st
   if (!company) return null;
   await deps.db.update(J).set({ status: 'running' }).where(eq(J.id, job.id));
   try {
-    const file = await buildExport(deps.db, deps, job.format, job.companyId, { from: input.from, to: input.to, includeAttachments: input.includeAttachments }, now);
+    // A CSV export holds only what the plan includes (no stock movements or expenses on Free and Basic).
+    const file = await buildExport(deps.db, deps, job.format, job.companyId, { from: input.from, to: input.to, includeAttachments: input.includeAttachments, skipTables: tablesOffPlan(company.plan) }, now);
     // Short keys: the memory store serves them as one path segment (Fastify caps those at 100 characters).
     const key = `exports/${job.companyId}/${job.id}.${file.extension}`;
     await deps.providers.storage.put(key, file.body, file.contentType);
@@ -177,6 +179,8 @@ export const exportsHandlers = defineHandlers({
   async createExport(ctx) {
     const { format, from, to, includeAttachments } = ctx.body;
     if (from && to && from > to) throw invalid('to', 'The end date is before the start date');
+    // The Tally file is the books' vouchers and ledgers: it comes with the plans that keep books.
+    if (format === 'tally-xml' && !hasModule(ctx.company.plan, 'books')) throw planUpgradeRequired(FULL_PLAN, 'books');
     const job = await ctx.db.transaction(async (tx) => {
       const [row] = await tx
         .insert(J)

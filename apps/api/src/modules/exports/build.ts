@@ -2,11 +2,30 @@ import { sql, type SQL } from 'drizzle-orm';
 import { strToU8, zipSync } from 'fflate';
 import type { Deps } from '../../context';
 import type { DbOrTx } from '../../lib/audit';
+import { hasModule, type Module } from '@esmart/core/domain/plan';
+import type { PlanTier } from '@esmart/core/types';
 import { tallyXml } from './tally';
 
 type Row = Record<string, unknown>;
 export type ExportFormat = 'json-backup' | 'csv-zip' | 'tally-xml';
-export type ExportOptions = { from?: string; to?: string; includeAttachments?: boolean };
+export type ExportOptions = {
+  from?: string;
+  to?: string;
+  includeAttachments?: boolean;
+  /** Tables the company's plan doesn't include (stock without inventory, expenses without expenses): left out of a CSV export. */
+  skipTables?: string[];
+};
+
+/** The CSV tables each plan module brings: on a plan without it, they aren't exported. */
+export const MODULE_TABLES: Partial<Record<Module, string[]>> = {
+  inventory: ['stock_movements'],
+  expenses: ['expenses', 'expense_categories'],
+};
+
+/** The CSV tables a plan leaves out. A JSON backup keeps every table, so nothing kept from a higher plan is lost. */
+export function tablesOffPlan(plan: PlanTier): string[] {
+  return (Object.entries(MODULE_TABLES) as [Module, string[]][]).filter(([m]) => !hasModule(plan, m)).flatMap(([, tables]) => tables);
+}
 export type BuiltFile = { body: Buffer; contentType: string; extension: string };
 
 /**
@@ -146,7 +165,7 @@ async function csvZip(db: DbOrTx, deps: Deps, companyId: string, opts: ExportOpt
   const files: Record<string, Uint8Array> = {};
   for (const name of MAIN_TABLES) {
     const s = tables.get(name);
-    if (!s) continue;
+    if (!s || opts.skipTables?.includes(name)) continue;
     // Lines follow their document's date range.
     const range = name === 'document_lines' || name === 'payment_allocations' ? undefined : opts;
     let rows = await rowsOf(db, s, companyId, range);
