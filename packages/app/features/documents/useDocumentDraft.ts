@@ -229,6 +229,30 @@ export function inCurrency(d: DraftState, currency: string, rate: number): Draft
 }
 
 /**
+ * The same draft at another exchange rate: every price, the charges and the fixed discounts are restated so
+ * each keeps its value in the base currency (an item priced ₹8,300 reads $100 at 83 and $98.81 at 84).
+ * A rate of 0 (the box being retyped) leaves them as they are.
+ */
+export function atRate(d: DraftState, rate: number): DraftState {
+  if (!(rate > 0) || !(d.exchangeRate > 0) || rate === d.exchangeRate) return { ...d, exchangeRate: rate };
+  const f = d.exchangeRate / rate;
+  const scale = (m: Money): Money => (m.currency === d.currency ? money(Math.round(m.minor * f), d.currency) : m);
+  const fixed = (v: number) => roundTo(v * f, d.currency);
+  return {
+    ...d,
+    exchangeRate: rate,
+    charges: scale(d.charges),
+    roundOffManual: undefined,
+    documentDiscountValue: d.documentDiscountMode === 'amount' ? fixed(d.documentDiscountValue) : d.documentDiscountValue,
+    lines: d.lines.map((l) => ({
+      ...l,
+      unitPrice: scale(l.unitPrice),
+      discountValue: l.discountMode === 'amount' ? fixed(l.discountValue) : l.discountValue,
+    })),
+  };
+}
+
+/**
  * Puts every price on the draft in the draft's currency, which the server
  * insists on. A price in the base currency (an item's own price) is converted
  * at the draft's rate; any other mismatch is re-tagged, as picking a currency does.
