@@ -781,7 +781,8 @@ export function Sidebar() {
         <View style={{ flex: 1 }}>
         <ScrollView
           style={{ flex: 1 }}
-          contentContainerStyle={{ padding: t.spacing.sm, gap: t.spacing.xxs }}
+          // Grows to the box, so the due card below the rows sits at the foot while the menu is short.
+          contentContainerStyle={{ flexGrow: 1, padding: t.spacing.sm, gap: t.spacing.xxs }}
         >
           {groups.map((group, i) => (
             <React.Fragment key={group.key ?? 'top'}>
@@ -838,10 +839,16 @@ export function Sidebar() {
               })}
             </React.Fragment>
           ))}
+          {/* The next filing, at the end of the menu: at the foot while the rows leave room, and after
+              the last row, scrolling with them, when a section's pages drop down. Folded, the GST row's
+              badge stands for it. */}
+          {!compact ? (
+            <>
+              <View style={{ flexGrow: 1 }} />
+              <SidebarDueCard />
+            </>
+          ) : null}
         </ScrollView>
-        {/* The next filing, always at the foot of the open sidebar: the menu above it scrolls when a
-            section's pages drop down, and the card stays. Folded, the GST row's badge stands for it. */}
-        {!compact ? <SidebarDueCard /> : null}
         </View>
         <View
           style={{
