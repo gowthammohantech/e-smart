@@ -13,7 +13,8 @@ import { FULL_PLAN, hasModule, saleTdsOnPlan, tcsOnPlan } from '@esmart/core/dom
 import { OTHER_COUNTRY_CODE } from '@esmart/core/domain/stateCodes';
 import { buildTaxContext, taxRateOn, type CrossBorderTax } from '@esmart/core/domain/taxEngine';
 import { addDaysISO } from '@esmart/core/lib/date';
-import type { Branch, ChargesKind, Company, ShipTo, DocumentKind, DocumentLine, DocumentTotals, GstFlags, Party, TaxCategory } from '@esmart/core/types';
+import type { Branch, ChargesKind, Company, ShipTo, DocumentKind, DocumentLine, DocumentTotals, GstFlags, Party, ReturnReason, StockCondition, TaxCategory } from '@esmart/core/types';
+import { RETURN_REASONS, STOCK_CONDITIONS } from '@esmart/core/types';
 import { factorOf } from '@esmart/core/lib/money';
 import { schema } from '@esmart/db';
 import type { Schema } from '@esmart/api-contract';
@@ -21,6 +22,7 @@ import type { CompanyRow } from '../../context';
 import { conflict, planUpgradeRequired, unprocessable, type Issue } from '../../http/errors';
 import type { DbOrTx } from '../../lib/audit';
 import { newId } from '../../lib/ids';
+import { kindName } from '../../lib/names';
 import { taxHistories, taxUnavailableWhy } from '../../lib/taxRates';
 import { gstColumns, gstFlagsFrom, iso, requiredAddressFrom } from '../../lib/wire';
 import { tdsOn, tdsSectionFor } from '../../lib/tds';
@@ -140,6 +142,8 @@ export type LineInput = {
   expenseId?: string | null;
   /** On a purchase: a non-stock line's own cost centre; null takes the document's. */
   costCentreId?: string | null;
+  /** On a sales return: good, damaged or rejected; only good goes back into stock. */
+  stockCondition?: StockCondition | null;
 };
 
 /** The header of a document, after defaults are applied. */
@@ -194,6 +198,12 @@ export type DocFields = {
   notes: string | null;
   terms: string | null;
   sourceDocumentId: string | null;
+  /** A sales return that records goods only, with no value or GST: every new one. Set by the server, never sent. */
+  stockOnly?: boolean;
+  /** Why goods came back, on a sales return. */
+  returnReason?: ReturnReason | null;
+  /** A credit note made from a stock-only sales return: that return. Set by the conversion, never sent. */
+  returnDocumentId?: string | null;
 };
 
 export function linesFromWire(lines: Schema<'DocumentLine'>[]): LineInput[] {
@@ -214,6 +224,7 @@ export function linesFromWire(lines: Schema<'DocumentLine'>[]): LineInput[] {
     gst: l.gst,
     expenseId: l.expenseId ?? null,
     costCentreId: l.costCentreId ?? null,
+    stockCondition: l.stockCondition ?? null,
   }));
 }
 
@@ -237,6 +248,7 @@ export function linesFromRows(rows: LineRow[]): LineInput[] {
       gst: gstFlagsFrom(l) ?? {},
       expenseId: l.expenseId,
       costCentreId: l.costCentreId,
+      stockCondition: (l.stockCondition as StockCondition | null) ?? null,
     }));
 }
 
@@ -299,6 +311,11 @@ export function fieldsFromWire(body: Schema<'NewDocumentInput'>, base?: DocRow):
     notes: keep(body.notes, base?.notes),
     terms: keep(body.terms, base?.terms),
     sourceDocumentId: keep(body.sourceDocumentId, base?.sourceDocumentId),
+    // Every sales return made now records goods only; a stored one keeps what it was (older returns carry value).
+    stockOnly: base ? base.stockOnly : body.kind === 'salesReturn',
+    returnReason: keep(body.returnReason, base?.returnReason as ReturnReason | null | undefined),
+    // Only the conversion from a return sets it; an edit keeps it.
+    returnDocumentId: base?.returnDocumentId ?? null,
   };
 }
 
@@ -350,6 +367,9 @@ export function fieldsFromRow(row: DocRow): DocFields {
     notes: row.notes,
     terms: row.terms,
     sourceDocumentId: row.sourceDocumentId,
+    stockOnly: row.stockOnly,
+    returnReason: row.returnReason as ReturnReason | null,
+    returnDocumentId: row.returnDocumentId,
   };
 }
 
@@ -419,13 +439,31 @@ export type Prepared = {
 export async function prepareDocument(
   db: DbOrTx,
   company: CompanyRow,
-  f: DocFields,
-  lines: LineInput[],
+  fields: DocFields,
+  sentLines: LineInput[],
   opts: { snapshotRates: boolean; documentId?: string },
 ): Promise<Prepared> {
   const issues: Issue[] = [];
   const blocking = (field: string, message: string) => issues.push({ field, message, severity: 'blocking' });
   const baseCurrency = company.baseCurrency.trim();
+  // A return or note made from an invoice (or bill) takes some of its header from it, and a credit note made
+  // from a stock-only return takes its lines from the return; the rest is as sent.
+  let f = fields;
+  let lines = sentLines;
+  // A sales return made now records goods only: no price, discount, charges or tax, so it adds nothing to
+  // the customer's account, the books or GST. Its money goes through the credit note made from it.
+  const stockOnly = f.kind === 'salesReturn' && !!f.stockOnly;
+  if (stockOnly) {
+    f = { ...f, documentDiscountValue: 0, chargesMinor: 0, roundOffManualMinor: null };
+    lines = lines.map((l) => ({ ...l, unitPriceMinor: 0, discountValue: 0 }));
+  }
+  if (f.returnReason && !RETURN_REASONS.includes(f.returnReason)) blocking('returnReason', 'Choose a reason from the list');
+  if (f.returnReason && f.kind !== 'salesReturn') blocking('returnReason', 'Only a sales return has a return reason');
+  lines.forEach((l, i) => {
+    if (!l.stockCondition) return;
+    if (f.kind !== 'salesReturn') blocking(`lines[${i}].stockCondition`, 'Only a sales return records the condition goods came back in');
+    else if (!STOCK_CONDITIONS.includes(l.stockCondition)) blocking(`lines[${i}].stockCondition`, 'Good, damaged or rejected');
+  });
 
   const [party] = await db.select().from(schema.parties).where(and(eq(schema.parties.companyId, company.id), eq(schema.parties.id, f.partyId)));
   if (!party) blocking('partyId', 'No such party in this company');
@@ -488,14 +526,75 @@ export async function prepareDocument(
   if (f.roundOffManualMinor !== null && Math.abs(f.roundOffManualMinor) > 10 * factorOf(f.currency)) blocking('roundOffManual', `Round off is at most ${f.currency} 10 either way`);
   if (f.sourceDocumentId) {
     const [src] = await db
-      .select({ id: D.id, date: D.date, number: D.number, crossBorderTax: D.crossBorderTax, placeOfSupplyStateCode: D.placeOfSupplyStateCode, reverseCharge: D.reverseCharge })
+      .select({
+        id: D.id,
+        kind: D.kind,
+        date: D.date,
+        number: D.number,
+        partyId: D.partyId,
+        branchId: D.branchId,
+        currency: D.currency,
+        exchangeRate: D.exchangeRate,
+        crossBorderTax: D.crossBorderTax,
+        placeOfSupplyStateCode: D.placeOfSupplyStateCode,
+        reverseCharge: D.reverseCharge,
+        documentDiscountMode: D.documentDiscountMode,
+        documentDiscountValue: D.documentDiscountValue,
+        subtotalMinor: D.subtotalMinor,
+        lineDiscountMinor: D.lineDiscountMinor,
+      })
       .from(D)
       .where(and(eq(D.companyId, company.id), eq(D.id, f.sourceDocumentId)));
-    if (src?.crossBorderTax && (f.kind === 'salesReturn' || f.kind === 'purchaseReturn' || NOTE_KINDS.includes(f.kind))) crossBorderTax = src.crossBorderTax as CrossBorderTax;
+    const against = f.kind === 'salesReturn' || f.kind === 'purchaseReturn' || NOTE_KINDS.includes(f.kind);
+    if (src?.crossBorderTax && against) crossBorderTax = src.crossBorderTax as CrossBorderTax;
     // A return or note reverses tax under the heads it was charged under: the source's place of supply
     // (IGST or CGST and SGST) and reverse charge, not the party's state today.
-    if (src && (f.kind === 'salesReturn' || f.kind === 'purchaseReturn' || NOTE_KINDS.includes(f.kind))) {
+    if (src && against) {
       fromSource = { placeOfSupply: src.placeOfSupplyStateCode, reverseCharge: src.reverseCharge };
+      // It belongs to its source: the same party and currency, at the source's rate, from the source's
+      // branch (its GSTIN). A stock-only return may bring the goods back to another branch: it has no GST.
+      const name = src.number.trim();
+      if (src.partyId !== f.partyId) blocking('partyId', `${name} is another party's; a ${kindName(f.kind)} against it is for the same party`);
+      if (src.currency.trim() !== f.currency) blocking('currency', `${name} is in ${src.currency.trim()}; a ${kindName(f.kind)} against it is too`);
+      f = { ...f, exchangeRate: Number(src.exchangeRate), ...(!stockOnly && { branchId: src.branchId }) };
+      if (!stockOnly && branchId !== src.branchId) {
+        branchId = src.branchId;
+        [branch] = await db.select().from(schema.branches).where(and(eq(schema.branches.companyId, company.id), eq(schema.branches.id, branchId)));
+      }
+    }
+    // A credit note made from a stock-only return credits exactly what came back: the return's quantities,
+    // at the invoice's price, discount and tax. Its lines are rebuilt from them, whatever was sent.
+    if (src && f.returnDocumentId) {
+      const [ret] = await db.select().from(D).where(and(eq(D.companyId, company.id), eq(D.id, f.returnDocumentId)));
+      if (f.kind !== 'creditNote') blocking('returnDocumentId', 'Only a credit note is made from a sales return');
+      else if (!ret || ret.kind !== 'salesReturn' || !ret.stockOnly) blocking('returnDocumentId', 'No such sales return in this company');
+      else if (ret.sourceDocumentId !== src.id) blocking('returnDocumentId', `${ret.number.trim()} was raised against another invoice`);
+      else {
+        const L = schema.documentLines;
+        const retLines = linesFromRows(await db.select().from(L).where(eq(L.documentId, ret.id)));
+        const invLines = linesFromRows(await db.select().from(L).where(eq(L.documentId, src.id)));
+        const keyOf = (l: LineInput) => l.itemId ?? l.name;
+        let net = 0;
+        const rebuilt: LineInput[] = [];
+        for (const r of retLines) {
+          const inv = invLines.find((l) => keyOf(l) === keyOf(r));
+          if (!inv) {
+            blocking('lines', `${r.name} is not on ${src.number.trim()}`);
+            continue;
+          }
+          // An amount discount is the invoice line's, in proportion to what came back.
+          const discountValue = inv.discountMode === 'amount' && inv.quantity > 0 ? Math.round((inv.discountValue * r.quantity * 100) / inv.quantity) / 100 : inv.discountValue;
+          const gross = r.quantity * inv.unitPriceMinor;
+          net += gross - (inv.discountMode === 'percent' ? (gross * discountValue) / 100 : discountValue * 100);
+          rebuilt.push({ ...inv, id: undefined, quantity: r.quantity, discountValue, expenseId: null, stockCondition: null });
+        }
+        lines = rebuilt;
+        // The invoice's own discount, as a percentage of what came back, or its amount in proportion.
+        const invoiceNet = src.subtotalMinor - src.lineDiscountMinor;
+        const documentDiscountValue =
+          src.documentDiscountMode === 'percent' ? Number(src.documentDiscountValue) : invoiceNet > 0 ? Math.round((Number(src.documentDiscountValue) * net * 100) / invoiceNet) / 100 : 0;
+        f = { ...f, documentDiscountMode: src.documentDiscountMode, documentDiscountValue, chargesMinor: 0, roundOffManualMinor: null };
+      }
     }
     if (!src) blocking('sourceDocumentId', 'No such document in this company');
     // What a document is made from (the quote behind an order, the invoice behind a return) came first.
@@ -593,6 +692,8 @@ export async function prepareDocument(
       gst,
       expenseId: l.expenseId ?? undefined,
       costCentreId: l.costCentreId ?? undefined,
+      // What came back on a sales return; good unless said otherwise.
+      stockCondition: f.kind === 'salesReturn' ? (l.stockCondition ?? 'good') : undefined,
     };
   });
 
@@ -626,19 +727,20 @@ export async function prepareDocument(
   await checkRecoveredExpenses(db, company.id, f, coreLines, opts.documentId, blocking);
   if (issues.length) throw unprocessable(issues);
 
-  // Place of supply: what was sent, else the buyer's state, else "other
-  // country" for a party abroad, else the company's own state.
+  // Place of supply: a return or note's source's (it reverses the same heads, whatever was sent), else what
+  // was sent, else the buyer's state, else "other country" for a party abroad, else the company's own state.
   const partyCountry = party!.billingCountry.trim();
   const placeOfSupply =
-    f.placeOfSupplyStateCode ??
     fromSource?.placeOfSupply ??
+    f.placeOfSupplyStateCode ??
     (party!.billingStateCode ||
       (partyCountry !== company.country.trim() ? OTHER_COUNTRY_CODE : company.placeOfSupplyStateCode) ||
       null);
 
   const coreCompany = companyCore(company);
   // A supplier marked reverse charge puts the whole bill under it unless the document says otherwise.
-  const reverseCharge = noGst ? false : (f.reverseCharge ?? fromSource?.reverseCharge ?? (isPurchaseKind(f.kind) && party!.reverseCharge));
+  // A return or note is under reverse charge exactly when its source was.
+  const reverseCharge = noGst ? false : fromSource ? fromSource.reverseCharge : (f.reverseCharge ?? (isPurchaseKind(f.kind) && party!.reverseCharge));
   const taxContext = buildTaxContext(coreCompany, {
     placeOfSupply: placeOfSupply ?? undefined,
     party: partyCore(party!),
@@ -679,7 +781,7 @@ export async function prepareDocument(
   let tcsRate = f.kind === 'invoice' && tcsOnPlan(company.plan) && tcsAskedOn(f.date) ? tcsRateFor(tcsCode, !!(party!.pan || party!.taxId), totals.grandTotalBase.minor) : 0;
   // A credit note or return against an invoice that collected TCS gives it back in proportion: at the
   // invoice's rate and under its section, on the note's own value (RULES 6.13, pending CA).
-  if ((f.kind === 'creditNote' || f.kind === 'salesReturn') && f.sourceDocumentId) {
+  if ((f.kind === 'creditNote' || f.kind === 'salesReturn') && f.sourceDocumentId && !stockOnly) {
     const [src] = await db.select({ section: D.tcsSection, rate: D.tcsRate }).from(D).where(and(eq(D.companyId, company.id), eq(D.id, f.sourceDocumentId)));
     if (src?.section && Number(src.rate) > 0) {
       tcsCode = src.section;
@@ -769,6 +871,9 @@ export async function prepareDocument(
       notes: f.notes,
       terms: f.terms,
       sourceDocumentId: f.sourceDocumentId,
+      stockOnly,
+      returnReason: f.kind === 'salesReturn' ? (f.returnReason ?? null) : null,
+      returnDocumentId: f.kind === 'creditNote' ? (f.returnDocumentId ?? null) : null,
       subtotalMinor: totals.subtotal.minor,
       lineDiscountMinor: totals.lineDiscount.minor,
       documentDiscountMinor: totals.documentDiscount.minor,
@@ -798,6 +903,7 @@ export async function prepareDocument(
       ...gstColumns(l.gst),
       expenseId: l.expenseId ?? null,
       costCentreId: l.costCentreId ?? null,
+      stockCondition: l.stockCondition ?? null,
       lineTotalMinor: calculateLine(l, f.currency, taxContext).total.minor,
     })),
   };

@@ -53,7 +53,8 @@ export const CONVERSIONS: Record<DocumentKind, DocumentKind[]> = {
   salesOrder: ['delivery', 'invoice'],
   delivery: ['invoice'],
   invoice: ['salesReturn', 'creditNote', 'debitNote'],
-  salesReturn: [],
+  // A stock-only return's money and GST go through the credit note made from it (one live one per return).
+  salesReturn: ['creditNote'],
   purchaseOrder: ['goodsReceipt', 'purchaseBill'],
   goodsReceipt: ['purchaseBill'],
   purchaseBill: ['purchaseReturn', 'supplierCreditNote', 'supplierDebitNote'],
@@ -227,6 +228,8 @@ export async function postStock(tx: DbOrTx, company: CompanyRow, row: DocRow, ac
 
   const values = lines
     .filter((l) => l.itemId && tracked.has(l.itemId))
+    // Only good goods go back into stock on a sales return; damaged and rejected stay recorded on it.
+    .filter((l) => !(type === 'salesReturn' && (l.stockCondition === 'damaged' || l.stockCondition === 'rejected')))
     .map((l) => {
       const item = tracked.get(l.itemId!)!;
       const quantity = Number(l.quantity);
@@ -400,7 +403,8 @@ export async function finalizeInTx(
     throw unprocessable([{ field: 'date', message: `A ${row.kind} cannot be dated ${row.date}, in the future`, severity: 'blocking' }], 'DOCUMENT_DATED_IN_FUTURE');
   }
   // A sale dated into a month whose GSTR-1 is filed would never be reported: it goes in an open month.
-  if (GSTR1_KINDS.includes(row.kind) && (await gstr1Closed(tx, company.id, row.date))) {
+  // A stock-only return reports nothing: its credit note does.
+  if (GSTR1_KINDS.includes(row.kind) && !row.stockOnly && (await gstr1Closed(tx, company.id, row.date))) {
     throw conflict('RETURN_FILED', `The GSTR-1 return for ${monthName(row.date)} is already filed, so a ${kindName(row.kind)} dated in that month would never be reported. Choose a date in a month whose GSTR-1 is still open.`);
   }
   if (row.kind === 'invoice') {
@@ -410,6 +414,10 @@ export async function finalizeInTx(
   await checkSupplierNumberUnique(tx, row);
   if (isReturn(row) && row.sourceDocumentId) await checkReturnWithinSource(tx, row);
   if (againstSource(row)) await checkAgainstSource(tx, row);
+  if (row.stockOnly && !row.returnReason) {
+    throw unprocessable([{ field: 'returnReason', message: 'Say why the goods came back', severity: 'blocking' }], 'RETURN_REASON_REQUIRED');
+  }
+  if (row.returnDocumentId) await checkCreditFromReturn(tx, row);
   // A draft made before the customer went on hold isn't issued while they are on it.
   await checkCreditHold(tx, row, now);
   await checkCreditLimit(tx, row, now, { override: opts.overrideCreditLimit });
@@ -511,6 +519,23 @@ async function checkInvoiceLimit(tx: DbOrTx, company: CompanyRow, now: Date) {
   if (used >= limit + (queued ? OFFLINE_GRACE_COUNT : 0)) throw invoiceLimitReached(company.plan, limit, nextInvoicePlan(company.plan));
 }
 
+/**
+ * A credit note made from a stock-only return credits that return once: the return must still stand,
+ * and no other live credit note may have been made from it.
+ */
+async function checkCreditFromReturn(tx: DbOrTx, row: DocRow) {
+  const [ret] = await tx.select({ number: D.number, status: D.status }).from(D).where(eq(D.id, row.returnDocumentId!)).for('update');
+  if (!ret || ret.status === 'cancelled' || ret.status === 'rejected') {
+    throw unprocessable([{ field: 'returnDocumentId', message: `${ret?.number.trim() ?? 'The return'} is cancelled; its goods are no longer credited`, severity: 'blocking' }], 'RETURN_NOT_LIVE');
+  }
+  const [other] = await tx
+    .select({ number: D.number })
+    .from(D)
+    .where(and(eq(D.returnDocumentId, row.returnDocumentId!), eq(D.kind, 'creditNote'), LIVE_RETURN, ne(D.id, row.id)))
+    .limit(1);
+  if (other) throw conflict('RETURN_ALREADY_CREDITED', `${ret.number.trim()} is already credited by ${other.number.trim()}`);
+}
+
 /** What's returned against a document can't add up to more than it had, per item, across all its returns. */
 async function checkReturnWithinSource(tx: DbOrTx, row: DocRow) {
   const L = schema.documentLines;
@@ -564,7 +589,8 @@ async function checkAgainstSource(tx: DbOrTx, row: DocRow) {
   if (!isFinalized(source.status) || source.status === 'cancelled') return blocking('sourceDocumentId', `${source.number} is ${source.status}`);
   if (source.partyId !== row.partyId) return blocking('partyId', `${source.number} belongs to another party`);
   if (source.currency.trim() !== row.currency.trim()) return blocking('currency', `${source.number} is in ${source.currency.trim()}`);
-  if ((row.kind === 'creditNote' || row.kind === 'salesReturn') && row.date > creditNoteDeadline(source.date)) {
+  // A stock-only return moves goods, not tax: the deadline is its credit note's.
+  if ((row.kind === 'creditNote' || (row.kind === 'salesReturn' && !row.stockOnly)) && row.date > creditNoteDeadline(source.date)) {
     return blocking('date', `A credit note for ${source.number} had to be issued by ${creditNoteDeadline(source.date)} (CGST s.34(2))`, 'NOTE_TIME_BARRED');
   }
   if (!isCredit(row)) return;
@@ -584,6 +610,9 @@ async function checkAgainstSource(tx: DbOrTx, row: DocRow) {
 export async function assertNoLiveReturns(tx: DbOrTx, row: DocRow) {
   const [live] = await tx.select({ number: D.number, kind: D.kind }).from(D).where(and(eq(D.sourceDocumentId, row.id), inArray(D.kind, AGAINST_SOURCE), LIVE_RETURN)).limit(1);
   if (live) throw conflict('DOCUMENT_HAS_RETURNS', `Cancel ${isReturn(live) ? 'return' : 'note'} ${live.number} before cancelling ${row.number}`);
+  // A return stands while the credit note made from it does: cancelling it would leave the credit without its goods.
+  const [credited] = await tx.select({ number: D.number }).from(D).where(and(eq(D.returnDocumentId, row.id), eq(D.kind, 'creditNote'), LIVE_RETURN)).limit(1);
+  if (credited) throw conflict('DOCUMENT_HAS_RETURNS', `Cancel credit note ${credited.number.trim()} before cancelling ${row.number.trim()}`);
   // A direct note applied to an invoice (or an invoice a note was applied to) holds the other up.
   const CA = schema.creditApplications;
   const [applied] = await tx.select({ id: CA.id }).from(CA).where(or(eq(CA.noteId, row.id), eq(CA.documentId, row.id))).limit(1);

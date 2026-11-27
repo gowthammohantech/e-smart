@@ -104,6 +104,8 @@ export function postDocument(doc: BusinessDocument, baseCurrency: string): Posti
   }
   const sales = SALES.includes(doc.kind);
   if (!sales && !PURCHASES.includes(doc.kind)) return [];
+  // A stock-only return posts no sale or tax (its credit note does); its goods post through the stock ledger.
+  if (doc.stockOnly) return [];
   const rate = doc.currency === baseCurrency ? 1 : doc.exchangeRate || 1;
   const b = (minor: number) => minor * rate;
   // A return or credit note runs the other way from its invoice or bill.

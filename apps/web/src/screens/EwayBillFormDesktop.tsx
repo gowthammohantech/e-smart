@@ -17,6 +17,7 @@ import type { BusinessDocument, EwayPlace } from '@esmart/core/types';
 import { EWAY_SUB_SUPPLY_TYPES, normalizeVehicleNumber } from '@esmart/core/domain/ewayBill';
 import { mainHsnCodeOf } from '@esmart/core/domain/eInvoice';
 import { stateName } from '@esmart/core/data/masters';
+import { EWB_EXPORT_PINCODE, EWB_OTHER_COUNTRY_CODE } from '@esmart/core/domain/stateCodes';
 import { formatDate } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
 import { useDocument, useParties } from '@esmart/app/store/selectors';
@@ -42,9 +43,10 @@ function PlaceColumn({
   errors,
   prefix,
   onPickState,
+  exported,
 }: {
   title: string;
-  /** A line under the heading: what this end is (an export's port). */
+  /** A line under the heading. */
   hint?: string;
   icon: IconName;
   place: EwayPlace;
@@ -52,6 +54,8 @@ function PlaceColumn({
   errors: Record<string, string>;
   prefix: 'from' | 'to';
   onPickState: () => void;
+  /** An export's "to": the buyer abroad (fixed Other Country, 999999), then the port of export. */
+  exported?: boolean;
 }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['compliance']);
@@ -68,6 +72,61 @@ function PlaceColumn({
           {hint}
         </Text>
       ) : null}
+      {exported ? (
+        <>
+          {/* Billed to the buyer abroad: name, then URP, Other Country (99) and 999999, fixed. */}
+          <TextField
+            label={tr('compliance:ewb.legalName')}
+            value={place.legalName}
+            onChangeText={(v) => onChange({ ...place, legalName: v })}
+            error={errors[`${prefix}.legalName`]}
+          />
+          <FieldRow>
+            <TextField label="GSTIN" value="URP" editable={false} />
+            <TextField label={tr('compliance:ewb.pinCode')} value={EWB_EXPORT_PINCODE} editable={false} />
+          </FieldRow>
+          <TextField label={tr('compliance:ewb.state')} value={tr('compliance:ewb.otherCountry', { code: EWB_OTHER_COUNTRY_CODE })} editable={false} />
+          {/* Shipped to the port of export: what the portal takes as the ship-to. */}
+          <Text weight="700" style={{ marginTop: t.spacing.sm }}>
+            {tr('compliance:ewb.portOfExport')}
+          </Text>
+          <Text variant="caption" tone="muted" style={{ marginTop: -t.spacing.sm }}>
+            {tr('compliance:ewb.toPortHint')}
+          </Text>
+          <TextField
+            label={tr('compliance:ewb.address')}
+            value={place.address1}
+            onChangeText={(v) => onChange({ ...place, address1: v })}
+            error={errors[`${prefix}.address1`]}
+          />
+          <FieldRow>
+            <PickerField
+              label={tr('compliance:ewb.state')}
+              value={place.stateCode ? stateName(place.stateCode) : undefined}
+              placeholder={tr('compliance:ewb.chooseState')}
+              onPress={onPickState}
+              icon="map-marker-outline"
+              error={errors[`${prefix}.stateCode`]}
+            />
+            <CityField
+              label={tr('compliance:ewb.place')}
+              value={place.place}
+              onChange={(v) => onChange({ ...place, place: v })}
+              stateCode={place.stateCode}
+              error={errors[`${prefix}.place`]}
+            />
+          </FieldRow>
+          <TextField
+            label={tr('compliance:ewb.pinCode')}
+            value={place.pincode}
+            onChangeText={(v) => onChange({ ...place, pincode: v })}
+            keyboardType="number-pad"
+            maxLength={6}
+            error={errors[`${prefix}.pincode`]}
+          />
+        </>
+      ) : (
+        <>
       <TextField
         label={tr('compliance:ewb.legalName')}
         value={place.legalName}
@@ -117,6 +176,8 @@ function PlaceColumn({
           error={errors[`${prefix}.place`]}
         />
       </FieldRow>
+        </>
+      )}
     </View>
   );
 }
@@ -276,8 +337,8 @@ function EwayBillFormDesktop({ doc }: { doc: BusinessDocument }) {
           />
           <View style={{ width: 1, backgroundColor: t.c.line }} />
           <PlaceColumn
-            title={subSupplyType === 'export' ? tr('compliance:ewb.toPort') : tr('compliance:ewb.to')}
-            hint={subSupplyType === 'export' ? tr('compliance:ewb.toPortHint') : undefined}
+            title={subSupplyType === 'export' ? tr('compliance:ewb.toBuyer') : tr('compliance:ewb.to')}
+            exported={subSupplyType === 'export'}
             icon="map-marker-radius-outline"
             place={to}
             onChange={setTo}

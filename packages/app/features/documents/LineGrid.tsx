@@ -9,7 +9,8 @@ import { Menu, MenuItem, useMenuAnchor } from '@esmart/ui/components/Menu';
 import { WEB_INPUT_RESET } from '@esmart/ui/components/Field';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { ConfirmDialog } from '@esmart/ui/components/ConfirmDialog';
-import type { DocumentLine, GstFlags, ItcEligibility, TaxCategory } from '@esmart/core/types';
+import type { DocumentLine, GstFlags, ItcEligibility, StockCondition, TaxCategory } from '@esmart/core/types';
+import { STOCK_CONDITIONS } from '@esmart/core/types';
 import { calculateLine, shownCessRate } from '@esmart/core/domain/lineCalc';
 import type { TaxContext } from '@esmart/core/domain/taxEngine';
 import { formatMoney, formatPercent, sanitizeAmountInput } from '@esmart/core/lib/format';
@@ -24,9 +25,11 @@ type Col = 'name' | 'qty' | 'rate' | 'discount';
 // Sized to fit the editor's main column (about 730px) with the item name taking the rest.
 // The discount takes its % / currency dropdown beside the box, so it is the widest of the three.
 // The quantity takes its - / + stepper; the tax keeps its rate and Incl. on one line.
-const W = { no: 32, qty: 128, rate: 108, discount: 124, tax: 100, amount: 116, actions: 40 };
+const W = { no: 32, qty: 128, rate: 108, discount: 124, tax: 100, amount: 116, actions: 40, condition: 160 };
 const ITEM_MIN = 100;
 const MIN_WIDTH = W.no + ITEM_MIN + W.qty + W.rate + W.discount + W.tax + W.amount + W.actions;
+/** A stock-only sales return: the item, how many came back and in what condition. */
+const STOCK_MIN_WIDTH = W.no + ITEM_MIN + W.qty + W.condition + W.actions;
 
 /**
  * A desktop document's lines as an editable grid: name, quantity, rate and
@@ -49,6 +52,8 @@ export function LineGrid({
   purchase = false,
   note = false,
   focusLine,
+  stockOnly = false,
+  readOnly = false,
 }: {
   lines: DocumentLine[];
   currency: string;
@@ -70,10 +75,16 @@ export function LineGrid({
   note?: boolean;
   /** A line just added: its quantity takes the cursor (`at` tells one request from the next). */
   focusLine?: { id: string; at: number } | null;
+  /** A stock-only sales return: quantities and the condition goods came back in, with no price or tax. */
+  stockOnly?: boolean;
+  /** Lines that can't change (a credit note made from a return): shown, not edited. */
+  readOnly?: boolean;
 }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['sales', 'common', 'inventory']);
   const [taxFor, setTaxFor] = useState<DocumentLine | null>(null);
+  const [conditionFor, setConditionFor] = useState<DocumentLine | null>(null);
+  const minWidth = stockOnly ? STOCK_MIN_WIDTH : MIN_WIDTH;
   // An export (or SEZ supply) without tax: no line charges GST, whatever its item's rate. The rate
   // stays on the line, and shows again when the document is switched to with tax.
   const zeroRated = !!taxContext.zeroRated;
@@ -141,16 +152,22 @@ export function LineGrid({
       onLayout={(e) => setBoxWidth(Math.round(e.nativeEvent.layout.width))}
     >
     {/* A narrow window scrolls the grid sideways rather than clipping its totals. */}
-    <ScrollView horizontal contentContainerStyle={{ flexGrow: 1, minWidth: MIN_WIDTH }} showsHorizontalScrollIndicator>
-    <View role="table" style={{ flexGrow: 1, width: boxWidth ? Math.max(MIN_WIDTH, boxWidth - 2) : undefined }}>
+    <ScrollView horizontal contentContainerStyle={{ flexGrow: 1, minWidth }} showsHorizontalScrollIndicator>
+    <View role="table" style={{ flexGrow: 1, width: boxWidth ? Math.max(minWidth, boxWidth - 2) : undefined }}>
       <View role="row" style={{ flexDirection: 'row', alignItems: 'center', minHeight: 36, backgroundColor: t.c.card2, borderBottomWidth: 1, borderBottomColor: t.c.line }}>
         {headerCell(tr('sales:grid.lineNo'), W.no)}
         {headerCell(tr('sales:line.itemOrService'))}
         {headerCell(tr('sales:line.quantity'), W.qty, 'right')}
-        {headerCell(tr(note ? 'sales:line.rateDiff' : 'sales:line.rate'), W.rate, 'right')}
-        {headerCell(tr('sales:line.discount'), W.discount, 'right')}
-        {headerCell(tr('sales:line.tax'), W.tax)}
-        {headerCell(tr('sales:line.lineTotal'), W.amount, 'right')}
+        {stockOnly ? (
+          headerCell(tr('sales:return.condition'), W.condition)
+        ) : (
+          <>
+            {headerCell(tr(note ? 'sales:line.rateDiff' : 'sales:line.rate'), W.rate, 'right')}
+            {headerCell(tr('sales:line.discount'), W.discount, 'right')}
+            {headerCell(tr('sales:line.tax'), W.tax)}
+            {headerCell(tr('sales:line.lineTotal'), W.amount, 'right')}
+          </>
+        )}
         <View role="columnheader" aria-label={tr('common:table.actions')} style={{ width: W.actions }} />
       </View>
 
@@ -179,7 +196,7 @@ export function LineGrid({
             </View>
             <View role="cell" style={{ flex: 1, minWidth: ITEM_MIN, paddingHorizontal: 4 }}>
               {/* A catalogue line takes its name from the item, as in the line editor; only a one-off line types one. */}
-              {line.itemId ? (
+              {line.itemId || readOnly ? (
                 <Text
                   variant="small"
                   numberOfLines={1}
@@ -216,6 +233,10 @@ export function LineGrid({
               ) : null}
             </View>
             <View role="cell" style={{ width: W.qty, paddingHorizontal: 4, flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+              {readOnly ? (
+                <ReadCell text={`${line.quantity} ${unitShortName(line.unit)}`} label={label(tr('sales:line.quantity'))} />
+              ) : (
+              <>
               <View style={{ flex: 1 }}>
               <GridInput
                 id={cellId(row, 'qty')}
@@ -259,7 +280,50 @@ export function LineGrid({
               <Text variant="micro" tone="muted" numberOfLines={1} style={{ width: 34 }}>
                 {unitShortName(line.unit)}
               </Text>
+              </>
+              )}
             </View>
+            {stockOnly ? (
+              <View role="cell" style={{ width: W.condition, paddingHorizontal: 4 }}>
+                <Pressable
+                  onPress={() => setConditionFor(line)}
+                  disabled={readOnly}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${label(tr('sales:return.condition'))}: ${tr(`sales:return.conditionOption.${line.stockCondition ?? 'good'}`)}`}
+                  style={(state) => [
+                    { flexDirection: 'row', alignItems: 'center', gap: 4, height: 32, paddingHorizontal: 6, borderRadius: t.radius.sm, borderWidth: 1, borderColor: (state as WebPressState).hovered ? t.c.inputBorder : 'transparent' },
+                    focusRing(t, (state as WebPressState).focused),
+                  ]}
+                >
+                  <Text variant="small" numberOfLines={1} style={{ flex: 1 }} tone={(line.stockCondition ?? 'good') === 'good' ? undefined : 'warn'}>
+                    {tr(`sales:return.conditionOption.${line.stockCondition ?? 'good'}`)}
+                  </Text>
+                  {readOnly ? null : <Icon name="chevron-down" size={12} color={t.c.muted} />}
+                </Pressable>
+              </View>
+            ) : readOnly ? (
+              <>
+                <View role="cell" style={{ width: W.rate, paddingHorizontal: 4 }}>
+                  <ReadCell text={formatMoney(line.unitPrice)} label={label(tr('sales:line.rate'))} align="right" />
+                </View>
+                <View role="cell" style={{ width: W.discount, paddingHorizontal: 4 }}>
+                  <ReadCell
+                    text={line.discountValue ? (line.discountMode === 'percent' ? formatPercent(line.discountValue) : formatMoney(fromMajor(String(line.discountValue), currency))) : '—'}
+                    label={label(tr('sales:line.discount'))}
+                    align="right"
+                  />
+                </View>
+                <View role="cell" style={{ width: W.tax, paddingHorizontal: 4 }}>
+                  <ReadCell text={formatPercent(zeroRated ? 0 : line.taxRate)} label={label(tr('sales:line.tax'))} />
+                </View>
+                <View role="cell" style={{ width: W.amount, paddingHorizontal: 8, alignItems: 'flex-end' }}>
+                  <Text variant="small" weight="600" style={{ fontVariant: ['tabular-nums'] }} numberOfLines={1}>
+                    {formatMoney(lineTotal)}
+                  </Text>
+                </View>
+              </>
+            ) : (
+            <>
             <View role="cell" style={{ width: W.rate, paddingHorizontal: 4 }}>
               <GridInput
                 id={cellId(row, 'rate')}
@@ -352,7 +416,10 @@ export function LineGrid({
                 {formatMoney(lineTotal)}
               </Text>
             </View>
+            </>
+            )}
             <View role="cell" style={{ width: W.actions, alignItems: 'center' }}>
+              {readOnly ? null : (
               <LineMenu
                 label={tr('sales:grid.lineActions', { n })}
                 name={line.name}
@@ -371,6 +438,7 @@ export function LineGrid({
                       : undefined
                 }
               />
+              )}
             </View>
           </View>
         );
@@ -380,9 +448,22 @@ export function LineGrid({
     </ScrollView>
       <View style={{ paddingHorizontal: 12, paddingVertical: 8, borderTopWidth: 1, borderTopColor: t.c.line, backgroundColor: t.c.card2 }}>
         <Text variant="micro" tone="muted">
-          {tr('sales:grid.enterHint')}
+          {readOnly ? tr('sales:return.linesFromReturn') : stockOnly ? tr('sales:return.conditionHint') : tr('sales:grid.enterHint')}
         </Text>
       </View>
+
+      <SelectSheet
+        visible={!!conditionFor}
+        onClose={() => setConditionFor(null)}
+        title={tr('sales:return.condition')}
+        options={STOCK_CONDITIONS.map((c) => ({ value: c, label: tr(`sales:return.conditionOption.${c}`), description: tr(`sales:return.conditionHelp.${c}`) }))}
+        value={conditionFor?.stockCondition ?? 'good'}
+        onSelect={(v) => {
+          if (conditionFor) onUpdate(conditionFor.id, { stockCondition: v as StockCondition });
+          setConditionFor(null);
+        }}
+        searchable={false}
+      />
 
       <SelectSheet
         visible={!!taxFor}
@@ -420,6 +501,15 @@ export function LineGrid({
         }}
       />
     </View>
+  );
+}
+
+/** A value shown in a cell that can't be edited here. */
+function ReadCell({ text, label, align = 'left' }: { text: string; label: string; align?: 'left' | 'right' }) {
+  return (
+    <Text variant="small" numberOfLines={1} accessibilityLabel={`${label}: ${text}`} style={{ paddingHorizontal: 7, lineHeight: 32, textAlign: align, fontVariant: ['tabular-nums'], flex: 1 }}>
+      {text}
+    </Text>
   );
 }
 

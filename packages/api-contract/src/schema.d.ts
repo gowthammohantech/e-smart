@@ -1758,7 +1758,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Create a draft of another kind from this one (quote → order → delivery → invoice, PO → receipt → bill, invoice → return) */
+        /** Create a draft of another kind from this one (quote → order → delivery → invoice, PO → receipt → bill, invoice → return or note, stock-only sales return → credit note) */
         post: operations["convertDocument"];
         delete?: never;
         options?: never;
@@ -6171,6 +6171,11 @@ export interface components {
             expenseId?: string;
             /** @description On a purchase document: this line's cost centre, for a line that is not stock (an item that tracks stock takes the document's). Left out takes the document's. */
             costCentreId?: string;
+            /**
+             * @description On a sales return: the state the goods came back in. Only good goods go back into stock; damaged and rejected are recorded on the return. Left out is good.
+             * @enum {string}
+             */
+            stockCondition?: "good" | "damaged" | "rejected";
         };
         TaxComponent: {
             /** @enum {string} */
@@ -6280,6 +6285,13 @@ export interface components {
              */
             noteReason?: "discount" | "priceChange" | "taxCorrection" | "deficiency" | "other";
             /**
+             * @description Why the goods came back, on a sales return. A stock-only return needs one to be approved (422 RETURN_REASON_REQUIRED).
+             * @enum {string}
+             */
+            returnReason?: "damaged" | "defective" | "wrongItem" | "excessQuantity" | "qualityIssue" | "notRequired" | "other";
+            /** @description On a credit note made from a stock-only sales return (convertDocument from the return): that return. Its lines are the return's quantities at the invoice's price and tax, and can't be changed; its source is still the invoice. One live credit note per return. */
+            readonly returnDocumentId?: string;
+            /**
              * @description A direct note's GST treatment (no sourceDocumentId; RULES 6.24). withGst (the default) is a s.34 note: it names the original invoice or bill (originalNumber, originalDate), goes to GSTR-1 CDNR/CDNUR and, for a credit note, must be issued by 30 November after the end of the original invoice's financial year (422 NOTE_TIME_BARRED). noGst is a financial or commercial note: no tax on any line, posted to discount allowed (or received), and left out of GSTR-1 and GSTR-3B.
              * @enum {string}
              */
@@ -6356,6 +6368,8 @@ export interface components {
             /** @description The GSTR-2B period (MMYYYY) whose line this bill matched; its credit is claimed in that return */
             readonly itcClaimPeriod?: string;
             readonly partyStateCode?: string;
+            /** @description A sales return that records goods only: quantities, their condition and the branch they came back to, with no value or GST (its lines carry no price). Its money and GST go through the credit note made from it (convertDocument to creditNote), so they are counted once. Every sales return made now is stock-only; older ones carry their own value and GST. */
+            readonly stockOnly?: boolean;
             /**
              * @description Set with setDocumentRecurrence
              * @enum {string}

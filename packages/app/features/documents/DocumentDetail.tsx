@@ -26,7 +26,7 @@ import { useSingleFlight } from '../../components/useSingleFlight';
 import { useLogoSrc } from '../../remote/logoSrc';
 import { useCessRows } from './cessRows';
 
-import { BusinessDocument, DocStatus, DocumentKind } from '@esmart/core/types';
+import { BusinessDocument, DocStatus, DocumentKind, DocumentLine } from '@esmart/core/types';
 import { tdsSection } from '@esmart/core/data/tdsSections';
 import { CREDIT_KINDS, NOTE_SOURCE, RECEIVABLE_KINDS, STATUS_TONE, canCancelDocument, canMerge, conversionBlock, isAwaitingApproval, isFinalized, isPayableDocument, nextStatuses } from '@esmart/core/domain/documentStates';
 import { documentKindLabel, paymentMethodLabel, statusLabel } from '@esmart/core/labels';
@@ -64,7 +64,7 @@ import { ComplianceNextSteps } from '../compliance/ComplianceNextSteps';
 import { canCancelEInvoice, isEInvoiceApplicable } from '@esmart/core/domain/eInvoice';
 import { ewayBillStatusAt, isEwayBillRequired } from '@esmart/core/domain/ewayBill';
 import { DIALOG_WIDTH, SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
-import { Cell, DataTable, TABLE_PAGE_SIZE, TABLE_PAGE_SIZES } from '@esmart/ui/components/DataTable';
+import { Cell, DataTable, TABLE_PAGE_SIZE, TABLE_PAGE_SIZES, type Column } from '@esmart/ui/components/DataTable';
 import { SplitPane } from '@esmart/ui/components/Layout';
 import { Menu, MenuDivider, MenuItem, MenuSection, useMenuAnchor } from '@esmart/ui/components/Menu';
 import { Segmented } from '@esmart/ui/components/Field';
@@ -138,6 +138,14 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
       return d?.kind && d.number && d.date ? [{ id, kind: d.kind, number: d.number, date: d.date }] : [];
     }),
   ];
+  // A credit note made from a stock-only return names it; the return names its live credit note.
+  const returnLinks = (record?.linkedDocuments ?? [])
+    .filter((d) =>
+      doc.kind === 'creditNote' && doc.returnDocumentId
+        ? d.id === doc.returnDocumentId
+        : doc.kind === 'salesReturn' && doc.stockOnly && d.kind === 'creditNote' && d.status !== 'cancelled' && d.status !== 'rejected',
+    )
+    .flatMap((d) => (d.id && d.kind && d.number ? [{ id: d.id, kind: d.kind as DocumentKind, number: d.number }] : []));
   // Until the server's copy lands, what it owes and what was made from it would be worked out from
   // whatever the device happens to hold, which can be wrong: those wait for it.
   const recordPending = !record && recordQuery.isFetching;
@@ -181,7 +189,7 @@ export function DocumentDetail({ document: doc }: { document: BusinessDocument }
   const desktop = useIsDesktop();
   const [desktopTab, setDesktopTab] = useState<'details' | 'preview'>('details');
   // On a desktop invoice or bill: its lines, or what stands against it (notes, payments).
-  const [relatedTab, setRelatedTab] = useState<'items' | 'credit' | 'debit' | 'payments'>('items');
+  const [relatedTab, setRelatedTab] = useState<'items' | 'returns' | 'credit' | 'debit' | 'payments'>('items');
   // A desktop drops the actions, and then the statuses, down from the header's Actions button.
   const { setAnchor: setActionsAnchor, rect: actionsRect, open: openActionsMenu, close: closeActionsMenu } = useMenuAnchor();
   const [menuKind, setMenuKind] = useState<'actions' | 'status'>('actions');
@@ -481,7 +489,8 @@ ${url}`;
   const convert = async (target: DocumentKind, alsoFrom: string[] = [], picked = false) => {
     setActionsOpen(false);
     // A return or note against several lines picks which, as from the Returns or Notes list: one way to make them.
-    if (NOTE_SOURCE[target] && doc.lines.length > 1) {
+    // A credit note from a return takes all of it: nothing to pick.
+    if (NOTE_SOURCE[target] && doc.lines.length > 1 && doc.kind !== 'salesReturn') {
       router.push(`${listRouteFor(target)}/new?partyId=${doc.partyId}&sourceId=${doc.id}` as never);
       return;
     }
@@ -550,7 +559,10 @@ ${url}`;
                       { target: 'supplierCreditNote', label: tr('sales:detail.recordSupplierCreditNote'), icon: 'file-document-minus-outline' },
                       { target: 'supplierDebitNote', label: tr('sales:detail.recordSupplierDebitNote'), icon: 'file-document-plus-outline' },
                     ]
-                  : [];
+                  : // A stock-only return's money and GST go through one credit note made from it.
+                    doc.kind === 'salesReturn' && doc.stockOnly && !returnLinks.length
+                    ? [{ target: 'creditNote', label: tr('sales:return.createCreditNote'), icon: 'file-document-minus-outline' }]
+                    : [];
   // Only what can be made now: nothing from a draft or a cancelled document,
   // and an order or quote carried forward once (conversionBlock).
   // The server says what it allows (it reads which linked documents were made from this one, and
@@ -674,10 +686,34 @@ ${url}`;
                 </Text>
               </Pressable>
             ))}
+            {/* A credit note made from a return, and a return's credit note: each links to the other. */}
+            {returnLinks.map((s) => (
+              <Pressable
+                key={s.id}
+                onPress={() => router.push(detailRouteFor(s.kind, s.id) as never)}
+                accessibilityRole="link"
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', marginTop: 2 }}
+              >
+                <Icon name="link-variant" size={14} color={t.c.primary} />
+                <Text variant="caption" tone="primary" weight="600">
+                  {s.kind === 'salesReturn' ? tr('sales:return.fromReturn', { number: s.number }) : tr('sales:return.creditedBy', { number: s.number })}
+                </Text>
+              </Pressable>
+            ))}
+            {doc.stockOnly ? (
+              <Text variant="caption" tone="muted">
+                {[
+                  doc.returnReason ? tr('sales:return.reasonLine', { reason: tr(`sales:return.reasonOption.${doc.returnReason}`) }) : null,
+                  isFinalized(doc.status) && doc.status !== 'cancelled' && !returnLinks.length ? tr('sales:return.notCredited') : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </Text>
+            ) : null}
           </View>
           <View style={{ alignItems: 'flex-end', gap: 6 }}>
             <StatusBadge status={doc.status} />
-            {doc.kind === 'salesReturn' && sourceDoc && doc.date > creditNoteDeadline(sourceDoc.date) ? <Badge label={tr('common:component.pastCreditNoteDeadline')} tone="warning" size="sm" /> : null}
+            {doc.kind === 'salesReturn' && !doc.stockOnly && sourceDoc && doc.date > creditNoteDeadline(sourceDoc.date) ? <Badge label={tr('common:component.pastCreditNoteDeadline')} tone="warning" size="sm" /> : null}
             {doc.status !== 'draft' && !knownToServer(doc.id) ? <Badge label={tr('common:component.provisional')} tone="warning" size="sm" /> : null}
             {doc.status === 'overdue' && overdueDays > 0 ? (
               <Text variant="micro" tone="bad" weight="600">
@@ -868,18 +904,25 @@ ${url}`;
               <Text variant="body" weight="600">
                 {line.name}
               </Text>
+              {/* A stock-only return: how many came back and in what condition; its credit note has the value. */}
               <Text variant="caption" tone="muted">
-                {formatQty(line.quantity)} {unitShortName(line.unit)} × {formatMoney(line.unitPrice)}
-                {line.discountValue > 0 ? ` · −${discountText(line)}` : ''}
+                {doc.stockOnly ? `${formatQty(line.quantity)} ${unitShortName(line.unit)}` : `${formatQty(line.quantity)} ${unitShortName(line.unit)} × ${formatMoney(line.unitPrice)}`}
+                {!doc.stockOnly && line.discountValue > 0 ? ` · −${discountText(line)}` : ''}
               </Text>
               <View style={{ flexDirection: 'row', gap: 5, marginTop: 2 }}>
-                <Badge label={lineRateLabel(line)} tone="neutral" size="sm" />
+                {doc.stockOnly ? (
+                  <Badge label={tr(`sales:return.conditionOption.${line.stockCondition ?? 'good'}`)} tone={(line.stockCondition ?? 'good') === 'good' ? 'neutral' : 'warning'} size="sm" />
+                ) : (
+                  <Badge label={lineRateLabel(line)} tone="neutral" size="sm" />
+                )}
                 {line.hsnCode ? <Badge label={`HSN ${line.hsnCode}`} tone="neutral" size="sm" /> : null}
               </View>
             </View>
-            <Text variant="body" weight="700" style={{ fontVariant: ['tabular-nums'] }}>
-              {formatMoney(lineAmount(line))}
-            </Text>
+            {doc.stockOnly ? null : (
+              <Text variant="body" weight="700" style={{ fontVariant: ['tabular-nums'] }}>
+                {formatMoney(lineAmount(line))}
+              </Text>
+            )}
           </View>
         ))}
       </Card>
@@ -1125,6 +1168,34 @@ ${url}`;
     </>
   );
 
+  // A line's price, discount, tax and amount: every document but a stock-only return, which has none.
+  const itemMoneyColumns: Column<DocumentLine>[] = [
+    { key: 'rate', header: tr('sales:detail.rate'), width: 130, align: 'right', render: (line) => <Cell mono>{formatMoney(line.unitPrice)}</Cell> },
+    {
+      key: 'discount',
+      header: tr('sales:detail.discount'),
+      width: 110,
+      align: 'right',
+      render: (line) => (
+        <Cell tone="muted" mono>
+          {line.discountValue > 0 ? discountText(line) : '—'}
+        </Cell>
+      ),
+    },
+    { key: 'tax', header: tr('sales:detail.taxRate'), width: 80, align: 'right', render: (line) => <Cell tone="muted">{lineRateLabel(line)}</Cell> },
+    {
+      key: 'amount',
+      header: tr('sales:detail.lineAmount'),
+      width: 140,
+      align: 'right',
+      render: (line) => (
+        <Cell weight="700" mono>
+          {formatMoney(lineAmount(line))}
+        </Cell>
+      ),
+    },
+  ];
+
   // A desktop lays the lines out as a table, with the actions in the page
   // header instead of a sticky footer.
   const itemsTable = (
@@ -1146,44 +1217,32 @@ ${url}`;
           ),
         },
         { key: 'qty', header: tr('sales:detail.qty'), width: 100, align: 'right', render: (line) => <Cell mono>{`${formatQty(line.quantity)} ${unitShortName(line.unit)}`}</Cell> },
-        { key: 'rate', header: tr('sales:detail.rate'), width: 130, align: 'right', render: (line) => <Cell mono>{formatMoney(line.unitPrice)}</Cell> },
-        {
-          key: 'discount',
-          header: tr('sales:detail.discount'),
-          width: 110,
-          align: 'right',
-          render: (line) => (
-            <Cell tone="muted" mono>
-              {line.discountValue > 0 ? discountText(line) : '—'}
-            </Cell>
-          ),
-        },
-        { key: 'tax', header: tr('sales:detail.taxRate'), width: 80, align: 'right', render: (line) => <Cell tone="muted">{lineRateLabel(line)}</Cell> },
-        {
-          key: 'amount',
-          header: tr('sales:detail.lineAmount'),
-          width: 140,
-          align: 'right',
-          render: (line) => (
-            <Cell weight="700" mono>
-              {formatMoney(lineAmount(line))}
-            </Cell>
-          ),
-        },
+        // A stock-only return: what came back and in what condition; no price (its credit note has the value).
+        ...(doc.stockOnly
+          ? [
+              {
+                key: 'condition',
+                header: tr('sales:return.condition'),
+                width: 160,
+                render: (line: DocumentLine) => <Cell tone={(line.stockCondition ?? 'good') === 'good' ? undefined : 'warn'}>{tr(`sales:return.conditionOption.${line.stockCondition ?? 'good'}`)}</Cell>,
+              },
+            ]
+          : itemMoneyColumns),
       ]}
       rows={doc.lines}
       rowKey={(line) => line.id}
     />
   );
-
   // What stands against an invoice or bill, a table each beside its lines: the returns and credit notes
   // made from it and the direct notes applied to it, the debit notes made from it, and the payments on it.
   type RelatedRow = { id: string; kind?: DocumentKind; number: string; date?: string; status?: DocStatus; total?: Money; outstanding?: Money; applicationId?: string };
   const madeFromThis: RelatedRow[] = (record?.linkedDocuments ?? allDocuments.filter((d) => d.sourceDocumentId === doc.id).map((d) => ({ id: d.id, kind: d.kind, number: d.number, date: d.date, status: d.status, grandTotal: d.totals.grandTotal })))
     .filter((d) => d.id && d.number)
     .map((d) => ({ id: d.id!, kind: d.kind as DocumentKind | undefined, number: d.number!, date: d.date, status: d.status as DocStatus | undefined, total: d.grandTotal as Money | undefined, outstanding: (d as { outstanding?: Money }).outstanding }));
+  // Returns are goods back, apart from the credit notes that carry the money (an older return carried its own).
+  const returnRows = madeFromThis.filter((d) => d.kind === 'salesReturn' || d.kind === 'purchaseReturn');
   const creditRows: RelatedRow[] = [
-    ...madeFromThis.filter((d) => d.kind && CREDIT_KINDS.includes(d.kind)),
+    ...madeFromThis.filter((d) => d.kind && CREDIT_KINDS.includes(d.kind) && d.kind !== 'salesReturn' && d.kind !== 'purchaseReturn'),
     ...applications
       .filter((a) => a.documentId === doc.id)
       .map((a) => ({ id: a.noteId, kind: (receivable ? 'creditNote' : 'supplierCreditNote') as DocumentKind, number: a.noteNumber, date: a.date, total: a.amount as Money, applicationId: a.id })),
@@ -1223,6 +1282,20 @@ ${url}`;
       // A direct note applied here can be taken off again.
       rowActions={(r) => (r.applicationId ? [{ key: 'undo', label: tr('sales:detail.creditApplications.undo'), icon: 'undo-variant', onPress: () => undoApplication(r.applicationId!, r.number) }] : [])}
       empty={emptyText(tr('sales:detail.related.noCreditNotes'))}
+    />
+  );
+  const returnsTable = (
+    <DataTable
+      pageSize={TABLE_PAGE_SIZE}
+      pageSizeOptions={TABLE_PAGE_SIZES}
+      tableKey="document-returns"
+      scroll={false}
+      // A stock-only return has no amount of its own: its credit note, in the next tab, does.
+      columns={noteColumns(false).map((c) => (c.key === 'amount' ? { ...c, render: (r: RelatedRow) => <Cell weight="700" mono>{r.total?.minor ? formatMoney(r.total) : '—'}</Cell> } : c))}
+      rows={returnRows}
+      rowKey={(r) => r.id}
+      onRowPress={(r) => router.push(detailRouteFor(r.kind ?? 'salesReturn', r.id) as never)}
+      empty={emptyText(tr('sales:return.noReturns'))}
     />
   );
   const debitTable = (
@@ -1294,6 +1367,7 @@ ${url}`;
             size="sm"
             options={[
               { value: 'items', label: counted(tr('sales:detail.items'), doc.lines.length) },
+              { value: 'returns', label: counted(tr('sales:return.returnsTab'), returnRows.length) },
               { value: 'credit', label: counted(tr('sales:detail.settlement.creditNotes'), creditRows.length) },
               { value: 'debit', label: counted(tr('sales:detail.related.debitNotes'), debitRows.length) },
               { value: 'payments', label: counted(tr(receivable ? 'sales:detail.receipts' : 'sales:detail.payments'), relatedPayments.length) },
@@ -1307,7 +1381,7 @@ ${url}`;
           {tr('sales:detail.items')}
         </Text>
       )}
-      {!isPayable || relatedTab === 'items' ? itemsTable : relatedTab === 'credit' ? creditTable : relatedTab === 'debit' ? debitTable : paymentsTable}
+      {!isPayable || relatedTab === 'items' ? itemsTable : relatedTab === 'returns' ? returnsTable : relatedTab === 'credit' ? creditTable : relatedTab === 'debit' ? debitTable : paymentsTable}
     </View>
   );
 
@@ -1479,7 +1553,7 @@ ${url}`;
                   <>
                     {paymentCard}
                     {/* The totals beside the lines, as the editor shows them, rather than a wide card half empty. */}
-                    {totalsCard}
+                    {doc.stockOnly ? null : totalsCard}
                     {/* An invoice's or bill's payments and notes are tabs beside its lines; a note keeps where it was applied here. */}
                     {isPayable ? null : paymentsSection}
                     {complianceSection}
@@ -1498,7 +1572,7 @@ ${url}`;
           {headerCard}
           {paymentCard}
           {linesSection}
-          {totalsCard}
+          {doc.stockOnly ? null : totalsCard}
           {paymentsSection}
           {complianceSection}
           {notesCard}

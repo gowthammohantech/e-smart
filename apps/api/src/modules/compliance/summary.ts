@@ -41,6 +41,8 @@ async function unattempted(s: Scope, settings: SettingsRow, extra?: SQL): Promis
       and(
         docsInScope(s),
         inArray(D.kind, [...E_INVOICE_KINDS]),
+        // A stock-only return is not e-invoiced: its credit note is.
+        eq(D.stockOnly, false),
         notInArray(D.status, ['draft', 'requested']),
         isNull(E.documentId),
         or(

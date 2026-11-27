@@ -38,7 +38,7 @@ import {
 } from '@esmart/core/domain/ewayBill';
 import { mainHsnCodeOf } from '@esmart/core/domain/eInvoice';
 import { INDIAN_STATES, stateName } from '@esmart/core/data/masters';
-import { OTHER_COUNTRY_CODE } from '@esmart/core/domain/stateCodes';
+import { EWB_EXPORT_PINCODE, EWB_OTHER_COUNTRY_CODE, OTHER_COUNTRY_CODE } from '@esmart/core/domain/stateCodes';
 import { citiesForState } from '@esmart/core/data/cities';
 import { formatDate, nowISO } from '@esmart/core/lib/date';
 import { formatMoney } from '@esmart/core/lib/format';
@@ -175,7 +175,8 @@ export function useEwayBillForm(doc: BusinessDocument) {
       subSupplyDescription: subSupplyDescription.trim() || undefined,
       transactionType: 1,
       from,
-      to,
+      // An export's consignee is always URP, whoever the GSTIN field held before Export was picked.
+      to: subSupplyType === 'export' ? { ...to, gstin: 'URP' } : to,
       transporterId: transporterId.trim() || undefined,
       transporterName: transporterName.trim() || undefined,
       transportMode,
@@ -347,19 +348,23 @@ export function EwayBillForm({ document: doc }: { document: BusinessDocument }) 
             onPickState={() => setStateSheet('from')}
           />
 
-          <SectionHeader title={subSupplyType === 'export' ? tr('compliance:ewb.toPort') : tr('compliance:ewb.to')} />
           {subSupplyType === 'export' ? (
-            <Text variant="caption" tone="muted" style={{ marginTop: -t.spacing.sm, marginBottom: t.spacing.sm }}>
-              {tr('compliance:ewb.toPortHint')}
-            </Text>
-          ) : null}
-          <PlaceFields
-            place={to}
-            onChange={setTo}
-            errors={errors}
-            prefix="to"
-            onPickState={() => setStateSheet('to')}
-          />
+            <>
+              {/* An export: billed to the buyer abroad (Other Country, 999999), shipped to the port of export. */}
+              <SectionHeader title={tr('compliance:ewb.toBuyer')} />
+              <ExportBuyerFields place={to} onChange={setTo} errors={errors} />
+              <SectionHeader title={tr('compliance:ewb.portOfExport')} />
+              <Text variant="caption" tone="muted" style={{ marginTop: -t.spacing.sm, marginBottom: t.spacing.sm }}>
+                {tr('compliance:ewb.toPortHint')}
+              </Text>
+              <PlaceFields place={to} onChange={setTo} errors={errors} prefix="to" onPickState={() => setStateSheet('to')} portOnly />
+            </>
+          ) : (
+            <>
+              <SectionHeader title={tr('compliance:ewb.to')} />
+              <PlaceFields place={to} onChange={setTo} errors={errors} prefix="to" onPickState={() => setStateSheet('to')} />
+            </>
+          )}
 
           {/* ---------------- Part-B ---------------- */}
           <SectionHeader title={tr('compliance:ewb.transport')} />
@@ -569,38 +574,66 @@ export function EwayBillFormSheets({ form }: { form: EwayBillFormState }) {
   );
 }
 
-function PlaceFields({
-  place,
-  onChange,
-  errors,
-  prefix,
-  onPickState,
-}: {
-  place: EwayPlace;
-  onChange: (p: EwayPlace) => void;
-  errors: Record<string, string>;
-  prefix: 'from' | 'to';
-  onPickState: () => void;
-}) {
-  const { t: tr } = useTranslation(['compliance', 'common', 'domain']);
+/**
+ * An export's bill-to: the buyer abroad, by name. Its GSTIN (URP), state (Other Country, 99) and PIN
+ * (999999) are fixed, so they show locked; the port's state and PIN below are what the portal ships to.
+ */
+export function ExportBuyerFields({ place, onChange, errors }: { place: EwayPlace; onChange: (p: EwayPlace) => void; errors: Record<string, string> }) {
+  const { t: tr } = useTranslation(['compliance']);
   return (
     <>
       <TextField
         label={tr('compliance:ewb.legalName')}
         value={place.legalName}
         onChangeText={(v) => onChange({ ...place, legalName: v })}
-        error={errors[`${prefix}.legalName`]}
+        error={errors['to.legalName']}
       />
-      <TextField
-        label="GSTIN"
-        value={place.gstin}
-        onChangeText={(v) => onChange({ ...place, gstin: v.toUpperCase() })}
-        autoCapitalize="characters"
-        autoCorrect={false}
-        // URP (unregistered) is typed in here too; anything else is checked as a GSTIN as it is typed.
-        error={errors[`${prefix}.gstin`]}
-        hint={tr('compliance:ewb.urpHint')}
-      />
+      <TextField label="GSTIN" value="URP" editable={false} />
+      <TextField label={tr('compliance:ewb.state')} value={tr('compliance:ewb.otherCountry', { code: EWB_OTHER_COUNTRY_CODE })} editable={false} />
+      <TextField label={tr('compliance:ewb.pinCode')} value={EWB_EXPORT_PINCODE} editable={false} />
+    </>
+  );
+}
+
+function PlaceFields({
+  place,
+  onChange,
+  errors,
+  prefix,
+  onPickState,
+  portOnly,
+}: {
+  place: EwayPlace;
+  onChange: (p: EwayPlace) => void;
+  errors: Record<string, string>;
+  prefix: 'from' | 'to';
+  onPickState: () => void;
+  /** An export's port: only where it is, the buyer's name and GSTIN being above. */
+  portOnly?: boolean;
+}) {
+  const { t: tr } = useTranslation(['compliance', 'common', 'domain']);
+  return (
+    <>
+      {portOnly ? null : (
+        <>
+          <TextField
+            label={tr('compliance:ewb.legalName')}
+            value={place.legalName}
+            onChangeText={(v) => onChange({ ...place, legalName: v })}
+            error={errors[`${prefix}.legalName`]}
+          />
+          <TextField
+            label="GSTIN"
+            value={place.gstin}
+            onChangeText={(v) => onChange({ ...place, gstin: v.toUpperCase() })}
+            autoCapitalize="characters"
+            autoCorrect={false}
+            // URP (unregistered) is typed in here too; anything else is checked as a GSTIN as it is typed.
+            error={errors[`${prefix}.gstin`]}
+            hint={tr('compliance:ewb.urpHint')}
+          />
+        </>
+      )}
       <TextField
         label={tr('compliance:ewb.address')}
         value={place.address1}
