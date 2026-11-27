@@ -1,0 +1,22 @@
+[package]
+name = "esmart-migrator"
+version = "1.0.0"
+description = "Brings a business's existing data into Elixir Books Smart"
+edition = "2021"
+publish = false
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+
+# A quick-to-build release. The installer workflow turns link-time optimisation on
+# (CARGO_PROFILE_RELEASE_LTO=true, CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1) for a smaller file.
+[profile.release]
+codegen-units = 16
+lto = false
+opt-level = "s"
+panic = "abort"
+strip = true
