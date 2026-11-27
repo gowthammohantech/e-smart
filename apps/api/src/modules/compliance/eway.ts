@@ -300,6 +300,10 @@ export async function generateEway(ctx: GenerateCtx, input: GenerateInput, opts:
       documentDate: core.date,
       consignmentValueMinor: core.totals.grandTotal.minor,
       mainHsnCode: mainHsnCodeOf(core),
+      cgstMinor: componentTotal('CGST'),
+      sgstMinor: componentTotal('SGST'),
+      igstMinor: componentTotal('IGST'),
+      now,
     });
     const partB = validatePartB({
       transportMode: input.transportMode,

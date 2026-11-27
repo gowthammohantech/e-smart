@@ -17,9 +17,11 @@ import {
   VehicleType,
 } from '../types';
 import { isValidGstin } from './gstin';
-import { INDIAN_STATES } from '../data/masters';
+import { INDIAN_STATES, stateName } from '../data/masters';
 import { EWB_OTHER_COUNTRY_CODE } from './stateCodes';
+import { pincodeContradictsState } from './pincodeStates';
 import { PINCODE_RE } from '../lib/validators';
+import { daysBetween } from '../lib/date';
 
 /**
  * E-way bills (FRD 16).
@@ -362,7 +364,22 @@ export type EwayPartAInput = {
   documentDate: string;
   consignmentValueMinor: number;
   mainHsnCode?: string;
+  /** The tax heads on the document; with them, a bill carrying both CGST/SGST and IGST is refused. */
+  cgstMinor?: number;
+  sgstMinor?: number;
+  igstMinor?: number;
+  /** The instant of generating; with it, the document date's window is checked. */
+  now?: string;
 };
+
+/** NIC's GENEWAYBILL limits (API v1.03). */
+export const EWAY_DOC_NO_RE = /^[A-Za-z1-9][A-Za-z0-9/-]{0,15}$/;
+export const EWAY_DOC_MAX_AGE_DAYS = 180;
+export const EWAY_SUB_SUPPLY_DESC_MAX = 20;
+export const EWAY_NAME_MAX = 100;
+export const EWAY_ADDRESS_MAX = 120;
+export const EWAY_PLACE_MAX = 50;
+export const EWAY_TRANS_DOC_NO_MAX = 15;
 
 export function validatePartA(input: EwayPartAInput): ComplianceIssue[] {
   const out: ComplianceIssue[] = [];
@@ -380,6 +397,23 @@ export function validatePartA(input: EwayPartAInput): ComplianceIssue[] {
 
     if (!place.place?.trim()) out.push(issue('EWB103', `${side}.place`, 'Enter the place'));
     if (!place.address1?.trim()) out.push(issue('EWB104', `${side}.address1`, 'Enter the address'));
+    // The portal's field lengths: a longer value is refused, not cut.
+    if ((place.legalName?.trim().length ?? 0) > EWAY_NAME_MAX) {
+      out.push(issue('EWB118', `${side}.legalName`, `Keep the name to ${EWAY_NAME_MAX} characters`));
+    }
+    if ((place.address1?.trim().length ?? 0) > EWAY_ADDRESS_MAX) {
+      out.push(issue('EWB119', `${side}.address1`, `Keep the address to ${EWAY_ADDRESS_MAX} characters`));
+    }
+    if ((place.address2?.trim().length ?? 0) > EWAY_ADDRESS_MAX) {
+      out.push(issue('EWB119', `${side}.address2`, `Keep the second address line to ${EWAY_ADDRESS_MAX} characters`));
+    }
+    if ((place.place?.trim().length ?? 0) > EWAY_PLACE_MAX) {
+      out.push(issue('EWB120', `${side}.place`, `Keep the place to ${EWAY_PLACE_MAX} characters`));
+    }
+    // The PIN must belong to the state (NIC checks it against the state code).
+    if (!pin && pincodeContradictsState(place.pincode, place.stateCode)) {
+      out.push(issue('EWB121', `${side}.pincode`, `This PIN code isn’t in ${stateName(place.stateCode)}. Check the PIN or the state`));
+    }
     // Both ends are in India: an export's "to" is the port it leaves from; the bill names Other Country itself.
     if (!INDIAN_STATES.some((s) => s.code === place.stateCode)) {
       out.push(
@@ -399,6 +433,8 @@ export function validatePartA(input: EwayPartAInput): ComplianceIssue[] {
 
   if (input.subSupplyType === 'others' && !input.subSupplyDescription?.trim()) {
     out.push(issue('EWB106', 'subSupplyDescription', 'Describe the sub-supply type'));
+  } else if (input.subSupplyType === 'others' && input.subSupplyDescription!.trim().length > EWAY_SUB_SUPPLY_DESC_MAX) {
+    out.push(issue('EWB113', 'subSupplyDescription', `Keep the description to ${EWAY_SUB_SUPPLY_DESC_MAX} characters`));
   }
   const docType = input.docType ?? (input.documentKind ? ewayDocTypeFor(input.documentKind) : undefined);
   if (docType && !EWAY_OUTWARD_DOC_TYPES[input.subSupplyType].includes(docType)) {
@@ -413,17 +449,55 @@ export function validatePartA(input: EwayPartAInput): ComplianceIssue[] {
       ),
     );
   }
-  if (!input.documentNumber?.trim()) {
+  const docNo = input.documentNumber?.trim() ?? '';
+  if (!docNo) {
     out.push(issue('EWB107', 'documentNumber', 'The document number is missing'));
+  } else if (docNo.length > 16) {
+    out.push(issue('EWB114', 'documentNumber', `The portal takes a document number of at most 16 characters; ${docNo} has ${docNo.length}`));
+  } else if (!EWAY_DOC_NO_RE.test(docNo)) {
+    out.push(issue('EWB115', 'documentNumber', 'The portal takes only letters, numbers, / and - in a document number, and not 0, / or - first'));
   }
   if (!input.documentDate) {
     out.push(issue('EWB108', 'documentDate', 'The document date is missing'));
+  } else if (input.now) {
+    // Not in the future, and not more than 180 days old.
+    const today = input.now.slice(0, 10);
+    if (input.documentDate > today) {
+      out.push(issue('EWB116', 'documentDate', 'The document is dated in the future; the portal refuses it until that date'));
+    } else if (daysBetween(input.documentDate, today) > EWAY_DOC_MAX_AGE_DAYS) {
+      out.push(issue('EWB117', 'documentDate', `The portal refuses an e-way bill for a document more than ${EWAY_DOC_MAX_AGE_DAYS} days old`));
+    }
   }
   if (!(input.consignmentValueMinor > 0)) {
     out.push(issue('EWB109', 'consignmentValue', 'The consignment value must be above zero'));
   }
-  if (!input.mainHsnCode) {
+  const hsn = input.mainHsnCode?.trim();
+  if (!hsn) {
     out.push(issue('EWB110', 'mainHsnCode', 'No HSN code could be read from the document lines'));
+  } else if (!/^[0-9]{4,8}$/.test(hsn)) {
+    out.push(issue('EWB122', 'mainHsnCode', `The main HSN code ${hsn} must be 4 to 8 digits`));
+  } else if (hsn.startsWith('99')) {
+    // Chapter 99 is services (SAC): an e-way bill moves goods.
+    out.push(issue('EWB123', 'mainHsnCode', `The main HSN code ${hsn} is a service (chapter 99); an e-way bill needs the HSN of the goods`));
+  }
+
+  // CGST + SGST within a state, IGST across states and on exports: never both on one bill.
+  const cgst = input.cgstMinor ?? 0;
+  const sgst = input.sgstMinor ?? 0;
+  const igst = input.igstMinor ?? 0;
+  const local = cgst !== 0 || sgst !== 0;
+  if (local && igst !== 0) {
+    out.push(issue('EWB124', 'tax', 'The document carries both CGST/SGST and IGST; the portal takes one or the other'));
+  } else if (local && exported) {
+    out.push(issue('EWB125', 'tax', 'An export carries IGST (or no tax under LUT), not CGST/SGST'));
+  } else if (!exported && input.from.stateCode && input.to.stateCode) {
+    const sameState = input.from.stateCode === input.to.stateCode;
+    // Warnings only: an SEZ supply carries IGST within a state, and a bill-to in another state can differ.
+    if (sameState && igst !== 0) {
+      out.push(issue('EWB126', 'tax', 'Both ends are in one state but the document carries IGST; the portal expects CGST + SGST unless it is an SEZ supply', 'warning'));
+    } else if (!sameState && local) {
+      out.push(issue('EWB127', 'tax', 'The ends are in different states but the document carries CGST + SGST; the portal expects IGST', 'warning'));
+    }
   }
 
   return out;
