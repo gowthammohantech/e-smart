@@ -9,6 +9,9 @@ export type ImportSample = { columns: string[]; row: string[] };
 
 const CELL_WIDTH = 140;
 
+/** The web app hides scrollbars everywhere but here (apps/web/src/hideScrollbars.ts): the sheet is wider than the page. */
+const SAMPLE_SHEET_ID = 'import-sample-sheet';
+
 /**
  * What the import file should look like: the column names on its first row and one record under
  * them, drawn as a spreadsheet would, scrolling sideways when the columns don't fit.
@@ -38,7 +41,7 @@ export function SampleSheet({ sample }: { sample: ImportSample }) {
       <Text variant="caption" tone="muted" weight="600">
         {tr('banking:importFlow.sampleTitle')}
       </Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={SHOW_SCROLLBAR} style={{ borderWidth: 0.5, borderColor: t.c.line, borderRadius: t.radius.sm }}>
+      <ScrollView nativeID={SAMPLE_SHEET_ID} horizontal showsHorizontalScrollIndicator={SHOW_SCROLLBAR} style={{ borderWidth: 0.5, borderColor: t.c.line, borderRadius: t.radius.sm }}>
         <View>
           <View style={{ flexDirection: 'row', borderBottomWidth: 0.5, borderBottomColor: t.c.line }}>{sample.columns.map((c, i) => cell(c, i, true))}</View>
           <View style={{ flexDirection: 'row' }}>{sample.columns.map((_, i) => cell(sample.row[i] ?? '', i, false))}</View>
