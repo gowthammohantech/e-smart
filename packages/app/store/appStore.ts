@@ -288,6 +288,7 @@ export type NewDocumentInput = {
   reverseCharge?: boolean;
   crossBorderTax?: BusinessDocument['crossBorderTax'];
   noteReason?: BusinessDocument['noteReason'];
+  returnReason?: BusinessDocument['returnReason'];
   tdsSection?: string;
   tcsSection?: string;
   branchId?: string;
@@ -806,6 +807,9 @@ export const useAppStore = create<AppState>()(
             reverseCharge: draft.reverseCharge,
             crossBorderTax: draft.crossBorderTax,
             noteReason: draft.noteReason,
+            returnReason: draft.returnReason,
+            // A sales return made now records goods only, as the server makes it.
+            stockOnly: draft.kind === 'salesReturn' || undefined,
             tdsSection: draft.tdsSection,
             tcsSection: draft.tcsSection,
             notes: draft.notes,

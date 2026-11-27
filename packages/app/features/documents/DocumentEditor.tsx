@@ -21,7 +21,7 @@ import { DateField } from '@esmart/ui/components/pickers/DateField';
 import { SelectSheet } from '@esmart/ui/components/pickers/SelectSheet';
 import { Avatar } from '@esmart/ui/components/Avatar';
 
-import { CHARGES_KINDS, ChargesKind, ShipTo, DocStatus, DocumentKind, DocumentLine, NoteReason, Party, ShippingBill, TaxCategory } from '@esmart/core/types';
+import { CHARGES_KINDS, ChargesKind, ShipTo, DocStatus, DocumentKind, DocumentLine, NoteReason, Party, RETURN_REASONS, ReturnReason, ShippingBill, TaxCategory } from '@esmart/core/types';
 import { NOTE_KINDS, PURCHASE_KINDS, isAwaitingApproval, isFinalized } from '@esmart/core/domain/documentStates';
 import { TDS_SECTIONS, tdsSection } from '@esmart/core/data/tdsSections';
 import { TCS_SECTIONS, partyTcsSection, tcsAskedOn, tcsRateFor, tcsSection } from '@esmart/core/data/tcsSections';
@@ -75,6 +75,7 @@ import {
 } from './useDocumentDraft';
 import { LineEditorSheet } from './LineEditorSheet';
 import { LineGrid } from './LineGrid';
+import { ReturnLineRow } from './ReturnLineRow';
 import { SHOW_SCROLLBAR, useIsDesktop } from '@esmart/ui/theme/breakpoints';
 import { useQueryParams } from '../../navigation/queryParams';
 import { useCanWrite } from '../../remote/connectivity';
@@ -402,6 +403,16 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
 
   // A note raised against no one invoice or bill (?direct=1): it chooses its GST treatment.
   const directNote = isNote && !draft.sourceDocumentId;
+  // A return or note made from an invoice (or bill) belongs to it: its party, currency and rate, its place of
+  // supply and reverse charge, and its branch (a stock-only return may bring goods back to another). The
+  // server takes them from the invoice too; here they show locked.
+  const fromSource = (isReturn || isNote) && !!draft.sourceDocumentId;
+  // A sales return made now records goods only: quantities, the condition they came back in and where.
+  // Its money and GST go through the credit note made from it. A stored return says which it is.
+  const stockOnly = kind === 'salesReturn' && (documentId ? !!draft.stockOnly : true);
+  // A credit note made from a stock-only return credits exactly what came back: its lines can't change.
+  const fromReturn = kind === 'creditNote' && !!draft.returnDocumentId;
+  const [returnReasonOpen, setReturnReasonOpen] = useState(false);
 
   // What the person has picked or typed, to tell an untouched form from one with changes to lose.
   const entered = JSON.stringify([
@@ -790,12 +801,16 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
     if (unnamed) return tr('sales:line.nameRequired');
     // Every line, and the document, must be worth something: rate, gross and
     // net (after discount) above 0. Catches a ₹0 item added straight from the list.
-    const zero = draft.lines.filter((l) => {
-      const b = calculateLine(l, draft.currency, docTaxContext);
-      return l.unitPrice.minor <= 0 || b.gross.minor <= 0 || b.taxable.minor <= 0;
-    });
+    // A stock-only return records goods, not value: its lines carry no price.
+    const zero = stockOnly
+      ? []
+      : draft.lines.filter((l) => {
+          const b = calculateLine(l, draft.currency, docTaxContext);
+          return l.unitPrice.minor <= 0 || b.gross.minor <= 0 || b.taxable.minor <= 0;
+        });
     if (zero.length) return tr('sales:editor.zeroValueLines', { names: zero.map((l) => l.name).join(', ') });
-    if (totals.grandTotal.minor <= 0) return tr('sales:editor.zeroTotal');
+    if (!stockOnly && totals.grandTotal.minor <= 0) return tr('sales:editor.zeroTotal');
+    if (stockOnly && !draft.returnReason) return tr('sales:return.reasonRequired');
     if (needsHsn) {
       const missing = draft.lines.filter((l) => validHsn(l.hsnCode, { required: true }));
       if (missing.length) return tr('sales:editor.linesMissingHsn', { count: missing.length, names: missing.map((l) => l.name).join(', ') });
@@ -905,6 +920,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       // Sent as false too: left out, the server keeps the supplier's (or the stored) reverse charge.
       reverseCharge: TAX_KINDS.includes(kind) ? !!draft.reverseCharge : undefined,
       noteReason: isNote ? draft.noteReason : undefined,
+      returnReason: kind === 'salesReturn' ? draft.returnReason : undefined,
       // A direct note says how it stands with GST; with GST it names the supply it adjusts (RULES 6.24).
       noteGst: directNote ? (draft.noteGst ?? 'withGst') : undefined,
       // Sent as chosen (or the default shown), so the server applies what the form showed.
@@ -1107,6 +1123,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
         emptyTitle={tr(isPurchase ? 'sales:editor.selectSupplier' : 'sales:editor.selectCustomer')}
         accessibilityLabel={partyA11y}
         onPress={() => setPartyOpen(true)}
+        locked={fromSource}
         badges={
           party ? (
             <>
@@ -1117,7 +1134,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
         }
       />
     ) : (
-      <Pressable onPress={() => setPartyOpen(true)} accessibilityRole="button" accessibilityLabel={partyA11y}>
+      <Pressable onPress={() => setPartyOpen(true)} disabled={fromSource} accessibilityRole="button" accessibilityState={{ disabled: fromSource }} accessibilityLabel={partyA11y}>
         <Card style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md }}>
           {party ? (
             partyDetails
@@ -1213,10 +1230,23 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
         icon="link-variant"
       />
     );
-    const branchField = branches.length > 1 ? <PickerField label={tr('sales:editor.branch')} value={branch?.name} onPress={() => setBranchOpen(true)} icon="warehouse" /> : null;
-    const posField =
-      taxContext.regime === 'GST' ? (
+    // A stock-only return's branch is where the goods come back to; any other return or note keeps its invoice's.
+    const branchField =
+      branches.length > 1 ? (
         <PickerField
+          label={stockOnly ? tr('sales:return.returnTo') : tr('sales:editor.branch')}
+          value={branch?.name}
+          onPress={() => setBranchOpen(true)}
+          icon="warehouse"
+          disabled={fromSource && !stockOnly}
+          hint={stockOnly ? tr('sales:return.returnToHint') : undefined}
+        />
+      ) : null;
+    // A stock-only return has no tax: no place of supply to show.
+    const posField =
+      taxContext.regime === 'GST' && !stockOnly ? (
+        <PickerField
+          disabled={fromSource}
           label={tr('sales:editor.placeOfSupply')}
           value={
             draft.placeOfSupplyStateCode === OTHER_COUNTRY_CODE
@@ -1242,8 +1272,20 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           value={`${draft.currency}${draft.currency !== baseCurrency ? ` · 1 ${draft.currency} = ${draft.exchangeRate.toFixed(4)} ${baseCurrency}` : ''}`}
           onPress={() => setCurrencyOpen(true)}
           icon="cash-multiple"
+          disabled={fromSource}
         />
       ) : null;
+    // Why the goods came back: a stock-only return is approved only with one.
+    const returnReasonField = stockOnly ? (
+      <PickerField
+        label={tr('sales:return.reason')}
+        value={draft.returnReason ? tr(`sales:return.reasonOption.${draft.returnReason}`) : undefined}
+        onPress={() => setReturnReasonOpen(true)}
+        icon="text-box-outline"
+        required
+        hint={tr('sales:return.reasonHint')}
+      />
+    ) : null;
     const noteReasonField = isNote ? (
       <PickerField
         label={tr('sales:editor.noteReason')}
@@ -1260,6 +1302,8 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           {...rateText}
           keyboardType="decimal-pad"
           icon="swap-horizontal"
+          // A return or note keeps its invoice's rate.
+          editable={!fromSource}
           hint={tr('sales:editor.rateStored')}
         />
       ) : null;
@@ -1371,6 +1415,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           {shipBlock}
           {currencyField}
           {noteReasonField}
+          {returnReasonField}
           {directNoteBlock}
           {fxField}
         </View>
@@ -1379,7 +1424,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
 
     // A desktop: who across the top, then the document's dates and numbers and where it is supplied,
     // in rows of equal columns: three to a row, or four when that leaves no row short.
-    const fields = [dateField, dueField ?? validField ?? noteReasonField, supplierDocField, referenceField, branchField, posField, currencyField, fxField].filter(Boolean);
+    const fields = [dateField, dueField ?? validField ?? noteReasonField ?? returnReasonField, supplierDocField, referenceField, branchField, posField, currencyField, fxField].filter(Boolean);
     const perRow = fields.length % 3 === 0 || fields.length % 4 !== 0 ? 3 : 4;
     const fieldRows: React.ReactNode[][] = [];
     for (let i = 0; i < fields.length; i += perRow) fieldRows.push(fields.slice(i, i + perRow));
@@ -1419,15 +1464,22 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
 
   const renderItems = () => (
     <View style={{ gap: t.spacing.md }}>
-      {/* With no lines yet, the empty state's own button is the one way to add; two would repeat. */}
-      {draft.lines.length > 0 ? (
+      {/* With no lines yet, the empty state's own button is the one way to add; two would repeat.
+          A credit note made from a return credits what came back: nothing is added to it. */}
+      {draft.lines.length > 0 && !fromReturn ? (
         <Button title={tr('sales:editor.addItem')} icon="plus" variant="secondary" onPress={() => setItemOpen(true)} fullWidth={!desktop} />
+      ) : null}
+      {fromReturn ? (
+        <Text variant="caption" tone="muted">
+          {tr('sales:return.linesFromReturn')}
+        </Text>
       ) : null}
 
       {kind === 'invoice' ? <BillableExpenses partyId={draft.partyId ?? undefined} currency={draft.currency} documentId={documentId} lines={draft.lines} onAdd={addLine} /> : null}
 
-      {/* Whether rates are typed with tax in them, for the whole document; a line can still differ. */}
-      {draft.lines.length > 0 && taxContext.regime !== 'NONE' ? (
+      {/* Whether rates are typed with tax in them, for the whole document; a line can still differ.
+          A stock-only return has no rates, and a credit note from a return takes the invoice's. */}
+      {draft.lines.length > 0 && taxContext.regime !== 'NONE' && !stockOnly && !fromReturn ? (
         <View style={{ gap: 4 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: t.spacing.md, flexWrap: 'wrap' }}>
             <Text variant="small" tone="muted" weight="500">
@@ -1479,7 +1531,25 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           purchase={isPurchase}
           note={isNote}
           focusLine={focusLine}
+          stockOnly={stockOnly}
+          readOnly={fromReturn}
         />
+      ) : stockOnly || fromReturn ? (
+        <Card padded={false}>
+          {draft.lines.map((line, i) => (
+            <ReturnLineRow
+              key={line.id}
+              line={line}
+              last={i === draft.lines.length - 1}
+              stockOnly={stockOnly}
+              currency={draft.currency}
+              taxContext={docTaxContext}
+              maxQuantity={maxReturnQty(line)}
+              onUpdate={fromReturn ? undefined : (p) => updateLine(line.id, p)}
+              onRemove={fromReturn ? undefined : () => removeLine(line.id)}
+            />
+          ))}
+        </Card>
       ) : (
         <Card padded={false}>
           {draft.lines.map((line, i) => {
@@ -1553,8 +1623,9 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
         </Card>
       )}
 
-      {/* A desktop has the full totals beside the lines, kept in view; a phone shows them here. */}
-      {draft.lines.length > 0 && !desktop ? (
+      {/* A desktop has the full totals beside the lines, kept in view; a phone shows them here.
+          A stock-only return has no money to total: its credit note carries it. */}
+      {draft.lines.length > 0 && !desktop && !stockOnly ? (
         <Card>
           <TotalsPanel
             totals={totals}
@@ -1578,12 +1649,14 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
   const renderExtras = () => (
     <View style={{ gap: t.spacing.lg }}>
       {/* Tax and bookkeeping details: kept off the first step so a phone's Who step is just who and when. */}
-      {taxContext.regime === 'GST' && TAX_KINDS.includes(kind) ? (
+      {taxContext.regime === 'GST' && TAX_KINDS.includes(kind) && !stockOnly ? (
         <SwitchField
           label={tr('sales:editor.reverseCharge')}
           description={tr(isPurchase ? 'sales:editor.reverseChargeBillHint' : 'sales:editor.reverseChargeSaleHint')}
           value={!!draft.reverseCharge}
           onValueChange={(reverseCharge) => patch({ reverseCharge })}
+          // A return or note is under reverse charge exactly when its invoice was.
+          disabled={fromSource}
         />
       ) : null}
       {/* TDS kept on a bill, TDS a customer deducts and its rate, TCS on an invoice: two to a row on a desktop. */}
@@ -1820,7 +1893,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
       {crossBorderBlock}
 
       {/* A desktop keeps the totals in the summary beside the form; shown here too, they'd be there twice. */}
-      {desktop ? null : (
+      {desktop || stockOnly ? null : (
         <Card>
           <TotalsPanel
             totals={totals}
@@ -1861,8 +1934,9 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           { label: tr('common:table.date'), value: formatDate(draft.date) },
           ...(draft.dueDate ? [{ label: tr('common:table.due'), value: formatDate(draft.dueDate) }] : []),
           ...(draft.validUntil ? [{ label: tr('sales:editor.validUntil'), value: formatDate(draft.validUntil) }] : []),
-          { label: tr('sales:editor.branch'), value: branch?.name ?? '—' },
+          { label: stockOnly ? tr('sales:return.returnTo') : tr('sales:editor.branch'), value: branch?.name ?? '—' },
           { label: tr('sales:editor.lines'), value: String(draft.lines.length) },
+          ...(stockOnly ? [{ label: tr('sales:return.reason'), value: draft.returnReason ? tr(`sales:return.reasonOption.${draft.returnReason}`) : '—' }] : []),
         ].map((r) => (
           <View key={r.label} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
             <Text variant="small" tone="muted">
@@ -1875,6 +1949,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
         ))}
       </Card>
 
+      {stockOnly ? null : (
       <Card>
         <TotalsPanel
           totals={totals}
@@ -1887,6 +1962,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           cess={cessRows}
         />
       </Card>
+      )}
 
       {/* Shown on the draft too, not only when finalising. */}
       {creditNotice ? (
@@ -2021,7 +2097,7 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
               gap: t.spacing.sm,
             }}
           >
-            {draft.lines.length > 0 ? (
+            {draft.lines.length > 0 && !stockOnly ? (
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
                 <Text variant="caption" tone="muted">{tr('sales:editor.total')}</Text>
                 <Text variant="title" weight="700">
@@ -2108,6 +2184,18 @@ function DocumentEditorForm({ kind, documentId, initialDraft, prefill, onSaved }
           options={NOTE_REASONS.map((r) => ({ value: r, label: tr(`domain:noteReason.${r}`) }))}
           value={draft.noteReason}
           onSelect={(r) => patch({ noteReason: r as NoteReason })}
+          searchable={false}
+        />
+        <SelectSheet
+          visible={returnReasonOpen}
+          onClose={() => setReturnReasonOpen(false)}
+          title={tr('sales:return.reason')}
+          options={RETURN_REASONS.map((r) => ({ value: r, label: tr(`sales:return.reasonOption.${r}`) }))}
+          value={draft.returnReason}
+          onSelect={(r) => {
+            patch({ returnReason: r as ReturnReason });
+            setReturnReasonOpen(false);
+          }}
           searchable={false}
         />
         <SelectSheet

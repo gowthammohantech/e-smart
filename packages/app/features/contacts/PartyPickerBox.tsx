@@ -30,6 +30,7 @@ export function PartyPickerBox({
   accessibilityLabel,
   onPress,
   required = true,
+  locked = false,
 }: {
   label: string;
   party?: Party;
@@ -41,6 +42,8 @@ export function PartyPickerBox({
   accessibilityLabel: string;
   onPress: () => void;
   required?: boolean;
+  /** Fixed by what the document was made from (a return or note's invoice): shown with a lock, not picked. */
+  locked?: boolean;
 }) {
   const t = useTheme();
   const { t: tr } = useTranslation(['sales', 'contacts']);
@@ -80,7 +83,9 @@ export function PartyPickerBox({
           ];
         }}
         onPress={onPress}
+        disabled={locked}
         accessibilityRole="button"
+        accessibilityState={{ disabled: locked }}
         accessibilityLabel={accessibilityLabel}
       >
         {party ? (
@@ -113,7 +118,7 @@ export function PartyPickerBox({
               </View>
             ))}
             <View style={{ justifyContent: 'center' }}>
-              <Icon name="chevron-right" size={20} color={t.c.muted} />
+              <Icon name={locked ? 'lock-outline' : 'chevron-right'} size={locked ? 16 : 20} color={t.c.muted} />
             </View>
           </>
         ) : pending ? (

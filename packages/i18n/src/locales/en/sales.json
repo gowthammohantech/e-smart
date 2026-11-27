@@ -820,5 +820,42 @@
     "date": "Shipping bill date",
     "portInvalid": "A port code is 6 letters or digits, like INMAA1",
     "portRequired": "Port code is required on an export invoice with goods. An invoice of services alone needs none."
+  },
+  "return": {
+    "condition": "Condition",
+    "conditionOption": {
+      "good": "Good",
+      "damaged": "Damaged",
+      "rejected": "Rejected"
+    },
+    "conditionHelp": {
+      "good": "Back in sellable stock",
+      "damaged": "Recorded on the return; not added to stock",
+      "rejected": "Recorded on the return; not added to stock"
+    },
+    "conditionHint": "Only goods in good condition go back into stock. The credit note made from this return carries its value and GST.",
+    "linesFromReturn": "These lines are the return’s quantities at the invoice’s price and tax, and can’t be changed.",
+    "returnTo": "Return to branch",
+    "returnToHint": "Where the goods come back into stock",
+    "reason": "Return reason",
+    "reasonHint": "Why the goods came back",
+    "reasonRequired": "Choose why the goods came back",
+    "reasonLine": "Reason: {{reason}}",
+    "reasonOption": {
+      "damaged": "Damaged in transit",
+      "defective": "Defective",
+      "wrongItem": "Wrong item sent",
+      "excessQuantity": "Excess quantity",
+      "qualityIssue": "Quality issue",
+      "notRequired": "No longer needed",
+      "other": "Other"
+    },
+    "removeLine": "Remove {{name}}",
+    "fromReturn": "From return {{number}}",
+    "creditedBy": "Credit note {{number}}",
+    "notCredited": "No credit note yet",
+    "createCreditNote": "Create credit note",
+    "returnsTab": "Returns",
+    "noReturns": "No goods have come back against this."
   }
 }

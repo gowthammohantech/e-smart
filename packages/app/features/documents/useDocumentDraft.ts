@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { BusinessDocument, ChargesKind, ShipTo, DiscountMode, DocumentKind, DocumentLine, Item, NoteReason, Party, TaxCategory } from '@esmart/core/types';
+import { BusinessDocument, ChargesKind, ShipTo, DiscountMode, DocumentKind, DocumentLine, Item, NoteReason, Party, ReturnReason, TaxCategory } from '@esmart/core/types';
 import { Money, factorOf, fromMajor, money, zero } from '@esmart/core/lib/money';
 import { addDaysISO, today } from '@esmart/core/lib/date';
 import { uid } from '@esmart/core/lib/id';
@@ -39,6 +39,12 @@ export type DraftState = {
   reverseCharge?: boolean;
   /** Why a credit or debit note was raised. */
   noteReason?: NoteReason;
+  /** Why the goods came back, on a sales return. */
+  returnReason?: ReturnReason;
+  /** A sales return that records goods only (every new one); a stored one says which it is. */
+  stockOnly?: boolean;
+  /** A credit note made from a stock-only sales return: that return. Its lines are the return's and can't change. */
+  returnDocumentId?: string;
   /** A direct note's GST treatment, and (with GST) the original invoice or bill it adjusts (RULES 6.24). */
   noteGst?: 'withGst' | 'noGst';
   /** With an SEZ party: IGST charged or none (LUT or bond); unset takes the default (`defaultCrossBorderTax`). */
@@ -134,6 +140,9 @@ export function draftFromDocument(doc: BusinessDocument): DraftState {
     placeOfSupplyStateCode: doc.placeOfSupplyStateCode,
     reverseCharge: doc.reverseCharge,
     noteReason: doc.noteReason,
+    returnReason: doc.returnReason,
+    stockOnly: !!doc.stockOnly,
+    returnDocumentId: doc.returnDocumentId,
     noteGst: doc.noteGst,
     crossBorderTax: doc.crossBorderTax,
     originalNumber: doc.originalNumber,
